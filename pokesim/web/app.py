@@ -286,8 +286,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                                            'perfect_found': goals['perfect_found'],
                                            'perfect_count_is_minimum': goals['perfect_count_is_minimum'],
                                            'shiny': shinies},
-                    # The Kanto Marathon is a Red, Blue and Yellow race.
-                    'mew_returns': mew_status(store), 'marathon': None, 'tallies': tallies(store),
+                    'mew_returns': mew_status(store), 'tallies': tallies(store),
+                    'marathon': ((current.get('strategy') or {}).get('collection') or {}).get('marathon', {}),
                     'money_flow': money_flow(store), 'goal_time': goal_time(store)}
         from ..legendary_returns import status as returns_status
         current = emu.status()

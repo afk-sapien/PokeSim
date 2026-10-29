@@ -69,19 +69,20 @@ class Statistics:
         self.flush(snapshot, now)
 
     def flush(self, snapshot, now=None):
-        from ..statistics import compact
+        from ..statistics import compact, marathons
         if snapshot is None or not snapshot.started or self.value['started_at'] is None:
             return
         now = time.time() if now is None else now
         captures = self.store.get('capture-statistics-v1') or {}
         self.value['counters']['steps'] = (self.store.get('cartridge-steps-v1') or {}).get('total', 0)
-        # The Kanto Marathon is a Red, Blue and Yellow race, so Gen II has no count to keep.
         current = {**self.value['counters'], **(self.gauges or {}),
                    'recorded_hours': round(self.value['counters']['active_frames'] / 216000, 3),
-                   'captures': captures.get('total', 0), 'marathons': None}
-        self.value.setdefault('baseline', {'ts': now, **current})
-        self.value.update(current=current, updated_at=now)
+                   'captures': captures.get('total', 0)}
         with self.store.lock, self.store.db:
+            # Johto Marathons finished, from the journal as in Gen I.
+            current['marathons'] = marathons(self.store.db, 'Johto Marathon')
+            self.value.setdefault('baseline', {'ts': now, **current})
+            self.value.update(current=current, updated_at=now)
             self.store.db.execute('INSERT OR REPLACE INTO statistics_history VALUES (?, ?, ?)',
                                   (int(now // 3600), now, json.dumps(current)))
             compact(self.store.db, self.value, now)

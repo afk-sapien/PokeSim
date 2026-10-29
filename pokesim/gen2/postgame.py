@@ -35,13 +35,18 @@ SHINY_MAX_FRAMES = 60 * 60 * 60
 HUNT_BALLS = 5
 # A copy below this level with an ordinary DV draw waits for its better-DV hunts before training.
 HUNT_FIRST_BELOW = 80
-WEIGHTS = {'quality': 4, 'train': 4, 'shiny': 2}
+# A Johto Marathon keeps Gen I's low weight. Its six hour cooldown keeps it rare as well.
+WEIGHTS = {'quality': 4, 'train': 4, 'shiny': 2, 'marathon': 1}
 RECENT = 6
 
 
 def state(policy):
-    return policy.collection.setdefault('postgame', {'activity': None, 'recent': [], 'searches': {},
+    data = policy.collection.setdefault('postgame', {'activity': None, 'recent': [], 'searches': {},
                                                      'shiny_break': 0, 'shiny_maps': []})
+    # Activities finished, which a marathon waits on. Older saves only kept the recent ones, so they
+    # count those.
+    data.setdefault('finished', len(data['recent']))
+    return data
 
 
 def potential(data, mon):
@@ -142,8 +147,18 @@ def shiny_session(policy, snapshot):
 
 
 def observe(policy, snapshot):
-    """Count each wild battle once, including across a checkpoint restored during that battle."""
+    """Count each wild battle once, including across a checkpoint restored during that battle.
+
+    A marathon is observed on every step too, so its race clock runs on while other work suspends it.
+    """
     activity = (policy.collection.get('postgame') or {}).get('activity')
+    if activity and activity['kind'] == 'marathon':
+        from . import marathon
+        marathon.observe(policy, snapshot, activity)
+        # The race ends here even while other work holds the plan, so it never outruns its budget.
+        if snapshot.valid and marathon.done(policy, snapshot, activity):
+            finish(policy)
+        return
     if not activity or activity['kind'] != 'shiny':
         return
     wild = snapshot.in_battle == 1
@@ -173,6 +188,11 @@ def drop(policy):
 def finish(policy):
     data = state(policy)
     activity = data['activity']
+    if activity and activity['kind'] == 'marathon':
+        from . import marathon
+        marathon.finish(policy, activity)
+    elif activity:
+        data['finished'] += 1
     if activity and activity['kind'] == 'quality':
         searches = data['searches']
         searches[str(activity['species'])] = searches.get(str(activity['species']), 0) + 1
@@ -219,10 +239,16 @@ def step(policy, snapshot, mem, Goal, current_time):
     if kind == 'league':
         # The League loop in collection.journey carries the run on until its Hall of Fame entry.
         data['activity'] = None
+        data['finished'] += 1
         policy.collection['league_loop'] = snapshot.hall_of_fame_count + 1
         policy.collection['phase'] = 'league'
         from .collection import league_funding
         return league_funding(policy, snapshot, Goal, again=True)
+    if kind == 'marathon':
+        # A race goes straight to the next checkpoint. Clock-gated filler waits until it is over.
+        from . import marathon
+        policy.collection['phase'] = 'racing'
+        return marathon.goal(policy, activity, Goal)
     if kind == 'train':
         goal = train(policy, snapshot, mem, Goal, activity)
     else:
@@ -246,6 +272,9 @@ def done(policy, snapshot, activity, current_time):
         return not project or not project.get('postgame') or project['identity'] != activity['identity']
     if kind == 'league':
         return True
+    if kind == 'marathon':
+        from . import marathon
+        return marathon.done(policy, snapshot, activity)
     if policy.no_room(snapshot) or not snapshot.can_catch or balls(policy, snapshot) < 1:
         return True
     from .collection import matching_time
@@ -278,6 +307,9 @@ def choose(policy, snapshot, mem, current_time):
     if hunting:
         options['quality'] = lambda: quality(policy, snapshot, current_time)
     options['train'] = lambda: trainee(policy, snapshot)
+    from . import marathon
+    if marathon.eligible(policy, snapshot, data['finished']):
+        options['marathon'] = lambda: marathon.candidate(snapshot)
     recent = data['recent']
     rng = random.Random(policy.decisions)
     while options:
@@ -337,6 +369,11 @@ def candidates(policy, snapshot, current_time, chosen):
     if hunting and data.get('shiny_break', 0) == 0 or chosen['kind'] == 'shiny':
         result.append(Candidate('shiny', Tier.FILLER, values.SMALL, SHINY_ENCOUNTERS * DECISIONS_PER_BATTLE,
                                 goal='postgame shiny'))
+    if chosen['kind'] == 'marathon':
+        from ..planning.cost import FRAMES_PER_BATTLE
+        from ..policies.marathon import BUDGET
+        result.append(Candidate('marathon', Tier.FILLER, values.SMALL,
+                                BUDGET // (FRAMES_PER_BATTLE // DECISIONS_PER_BATTLE), goal='postgame marathon'))
     if chosen['kind'] == 'league':
         result.append(Candidate('league', Tier.FILLER, values.rematch(False), LEAGUE_DECISIONS, goal='postgame league'))
     return result

@@ -221,7 +221,7 @@
       node.classList.toggle('readout--missing', node.textContent === 'Not tracked')
     })
 
-    // Gold, Silver and Crystal have no Kanto Marathon, so the server sends null.
+    // Red, Blue, Yellow, Gold, Silver and Crystal all race. A game with no course sends null and hides the panel.
     document.querySelector('#marathon-records').hidden = data.marathon === null
     const marathon = data.marathon || {}
     document.querySelector('#marathon-best').textContent = marathon.best_frames == null
@@ -318,7 +318,7 @@
     const date = ts => new Date(ts * 1000).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})
     document.querySelector('#statistics-window').textContent = `${date(data.history[0].ts)} → ${date(until)}`
     target.innerHTML = groups.map((group, index) => {
-      // Gold, Silver and Crystal send no marathon, since the Kanto Marathon is a Red, Blue and Yellow race.
+      // A game with no marathon course sends null, so it gets no marathon chart.
       const series = group.series.filter(series => !series.marathon || data.marathon !== null)
         .map(series => data.generation === 2 && series.gen2Label ? {...series, label: series.gen2Label} : series)
       const rows = Progress.describe(data.history, until, series).map(series => {

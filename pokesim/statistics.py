@@ -17,6 +17,17 @@ def initialize(db):
                '(bucket INTEGER PRIMARY KEY, ts REAL NOT NULL, data TEXT NOT NULL)')
     db.execute("CREATE INDEX IF NOT EXISTS statistics_marathons ON events(id) "
                "WHERE type='marathon' AND title='Kanto Marathon finished!'")
+    db.execute("CREATE INDEX IF NOT EXISTS statistics_johto_marathons ON events(id) "
+               "WHERE type='marathon' AND title='Johto Marathon finished!'")
+
+
+def marathons(db, course='Kanto Marathon'):
+    """Races finished on ``course``, counted from the journal, which outlasts checkpoint restores."""
+    if course == 'Johto Marathon':
+        query = "SELECT COUNT(*) FROM events WHERE type='marathon' AND title='Johto Marathon finished!'"
+    else:
+        query = "SELECT COUNT(*) FROM events WHERE type='marathon' AND title='Kanto Marathon finished!'"
+    return db.execute(query).fetchone()[0]
 
 
 def collection(snapshot):
@@ -158,8 +169,7 @@ class StatisticsTracker:
                    'captures': value['captures'] if captures['available'] else None}
         with self.store.lock, self.store.db:
             # The journal is durable across checkpoint restores and includes pre-upgrade races.
-            current['marathons'] = self.store.db.execute(
-                "SELECT COUNT(*) FROM events WHERE type='marathon' AND title='Kanto Marathon finished!'").fetchone()[0]
+            current['marathons'] = marathons(self.store.db)
             value.setdefault('baseline', {'ts': now, **current})
             value.update(current=current, updated_at=now)
             self.store.db.execute('INSERT OR REPLACE INTO statistics_history VALUES (?, ?, ?)',

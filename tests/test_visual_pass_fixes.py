@@ -34,7 +34,8 @@ def test_gen2_statistics_report_overview_recent_and_sixteen_badge_milestones(tmp
     labels = [row['label'] for row in result['milestone_records']['milestones']]
     assert 'All sixteen badges' in labels and 'All 251 registered' in labels
     assert result['collection_records']['shiny']['held'] == 1
-    assert result['marathon'] is None
+    # The Johto Marathon panel is sent even before the planner reports a race.
+    assert result['marathon'] == {}
 
 
 def test_gen2_records_need_all_sixteen_badges_and_ignore_shiny_eggs(tmp_path):
@@ -54,9 +55,11 @@ def test_pages_print_the_cartridge_dex_size_region_and_marathon(tmp_path):
     assert 'Johto and Kanto, 251 entries' in gold.get('/pokedex').text
     stats = gold.get('/stats').text
     assert '<meta name="pokesim-dex-total" content="251">' in stats
-    assert 'aria-labelledby="marathon-heading" hidden>' in stats
+    # Both generations show the marathon panel, named for their own course.
+    assert 'aria-labelledby="marathon-heading">' in stats and '>Johto Marathon</h2>' in stats
     assert '/151</span>' in red.get('/').text and 'Somewhere in Kanto' in red.get('/').text
-    assert 'aria-labelledby="marathon-heading">' in red.get('/stats').text
+    red_stats = red.get('/stats').text
+    assert 'aria-labelledby="marathon-heading">' in red_stats and '>Kanto Marathon</h2>' in red_stats
 
 
 def test_version_label_names_the_short_commit(monkeypatch):
