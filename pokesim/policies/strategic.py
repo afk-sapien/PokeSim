@@ -438,6 +438,10 @@ class StrategicPolicy(Policy):
                 self.last_kind = 'shortcut'
                 self.last_action = (pos, actions[0].button)
                 return actions
+            if self.intent and self.shortcut.last.completed:
+                # The game took the battle decision. The turn that follows can run past the
+                # pending limit with knockouts, switches and level ups, and that is not a stuck action.
+                self.intent_since = None
         if s.map != self.observed_map:
             self.observed_map = s.map
             self.settle_until = frame + 60
@@ -568,7 +572,7 @@ class StrategicPolicy(Policy):
             if kind != 'overworld':
                 return tap('b')
             return self._recover(s)
-        if self.intent and frame - self.intent_since > 900:
+        if self.intent and self.intent_since is not None and frame - self.intent_since > 900:
             self.intent = None
             self.recoveries += 1
             self.reason = "The action did not complete, return to a known menu"
