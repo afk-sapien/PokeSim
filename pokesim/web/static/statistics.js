@@ -116,6 +116,18 @@
     }
     renderRecent()
   }
+  function renderShinyLog(log) {
+    const list = document.querySelector('#shiny-log-list')
+    list.replaceChildren()
+    document.querySelector('#shiny-log').hidden = !log?.length
+    // Newest first. Receipts kept before dates were recorded say so rather than guess.
+    for (const entry of [...(log || [])].reverse()) {
+      const row = add(list, 'li', 'milestone-row shiny-log-row', '')
+      row.dataset.dex = entry.dex
+      add(row, 'strong', '', entry.name)
+      add(row, 'span', 'note', `${entry.kind === 'seen' ? 'Seen in the wild' : 'Acquired'}, ${date(entry.ts)}`)
+    }
+  }
   function render(data) {
     renderOverview(data)
     const records = data.collection_records || {}
@@ -145,6 +157,12 @@
     document.querySelector('#stats-shiny-held-cell').hidden = useHeld
     // Only Red, Blue and Yellow send this, and only off keeps the cartridge's wild DV limits.
     document.querySelector('#stats-wild-dv-note').hidden = records.fair_wild_dvs !== false
+    const rates = records.rates || {}
+    document.querySelector('#stats-catch-pace').textContent = Number.isFinite(rates.catches_per_hour) ? number(rates.catches_per_hour) : 'Not tracked'
+    document.querySelector('#stats-catch-pace-note').textContent = rates.partial
+      ? 'Catches since tracking began, over all playtime' : 'Per hour of simulated playtime'
+    document.querySelector('#stats-per-catch').textContent = Number.isFinite(rates.encounters_per_catch) ? number(rates.encounters_per_catch) : 'Not tracked'
+    renderShinyLog(shiny?.log)
 
     document.querySelectorAll('.stats-overview .readout, #collection-details .readout').forEach(node => {
       node.classList.toggle('readout--missing', node.textContent === 'Not tracked')

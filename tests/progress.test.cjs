@@ -32,11 +32,12 @@ test('rows without a value, like backfilled seen counts, are skipped', () => {
   assert.equal(Progress.stepPath([{ts: 0, seen: null}], 'seen', 0, 10, 8), '')
 })
 
-test('badges give way to the long goals, which start where their history does', () => {
+test('badges lead the long goals, which start where their history does', () => {
   const {Progress} = load()
-  const rows = [{ts: 0, owned: 10, level100: null, perfect: null, league: 0},
-    {ts: 5, owned: 9, level100: 3, perfect: 0, league: 4}]
-  const [owned, level100, perfect, league] = Progress.describe(rows, 10)
+  const rows = [{ts: 0, badges: 2, owned: 10, level100: null, perfect: null, league: 0},
+    {ts: 5, badges: 8, owned: 9, level100: 3, perfect: 0, league: 4}]
+  const [badges, owned, level100, perfect, league] = Progress.describe(rows, 10)
+  assert.deepEqual([badges.first, badges.last, badges.max, badges.fixed], [2, 8, 8, true])
   assert.deepEqual([owned.first, owned.last, owned.max], [10, 9, 151])
   assert.deepEqual([level100.first, level100.last, level100.max], [3, 3, 151])
   assert.deepEqual([perfect.last, perfect.max, perfect.fixed], [0, 1, false])
@@ -57,7 +58,8 @@ test('the section stays hidden until there is history, then describes each line'
   assert.match(html, />40<span class="unit">\/151<\/span>/)
   assert.match(html, /aria-label="Perfect finds: 1 throughout"/)
   assert.match(html, />1<\/strong>/)
-  assert.doesNotMatch(html, /Badges/)
+  assert.match(html, /aria-label="Badges: from 0 to 3"/)
+  assert.match(html, />3<span class="unit">\/8<\/span>/)
 })
 
 test('missing observations leave gaps instead of extending a stale value', () => {
@@ -76,8 +78,8 @@ test('focused DV scale shows small improvements within labeled bounds', () => {
   assert.equal(series.path, 'M0.0,41.7H600.0V22.3H600')
 })
 
-test('Gold and Silver charts measure the Pokédex against 251', () => {
+test('Gold and Silver charts measure the Pokédex against 251 and badges against 16', () => {
   const {Progress} = load(false, 251)
-  const [owned, level100] = Progress.describe([{ts: 0, owned: 146, level100: 3}], 10)
-  assert.deepEqual([owned.max, level100.max], [251, 251])
+  const [badges, owned, level100] = Progress.describe([{ts: 0, badges: 9, owned: 146, level100: 3}], 10)
+  assert.deepEqual([badges.max, owned.max, level100.max], [16, 251, 251])
 })

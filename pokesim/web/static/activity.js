@@ -2,7 +2,7 @@
   const $ = selector => document.querySelector(selector)
   const pokemon = document.body.dataset.ledger === 'pokemon'
   const columns = pokemon
-    ? [['wild', 'Wild encounters'], ['trainer', 'Trainer opponents'], ['defeated', 'Defeated'], ['caught', 'Caught'], ['gift', 'Custom gifts'], ['traded_in', 'Traded in'], ['traded_out', 'Traded out'], ['held', 'Held now']]
+    ? [['wild', 'Wild encounters'], ['trainer', 'Trainer opponents'], ['defeated', 'Defeated'], ['caught', 'Caught'], ['gift', 'Custom gifts'], ['traded_in', 'Traded in'], ['traded_out', 'Traded out'], ['held', 'Held now'], ['per_catch', 'Encounters per catch']]
     : [['bought', 'Purchased'], ['used', 'Used'], ['bag', 'In bag now']]
   const params = new URLSearchParams(location.search)
   let rows = []
@@ -40,12 +40,15 @@
     }
   }
   const help = () => pokemon
-    ? 'Encounters count each wild Pokémon or trainer opponent entering battle. Defeated includes both. Caught excludes gifts and trades. Custom gifts include PokeSim League rewards. Trades count completed cable and NPC exchanges, using the received form after evolution and the sent form before evolution. Held now includes the party and every PC box.'
+    ? 'Encounters count each wild Pokémon or trainer opponent entering battle. Defeated includes both. Caught excludes gifts and trades. Encounters per catch divides wild encounters by catches. Custom gifts include PokeSim League rewards. Trades count completed cable and NPC exchanges, using the received form after evolution and the sent form before evolution. Held now includes the party and every PC box.'
     : `Purchased counts quantities bought at shops and vending machines. Used counts consumed items, including balls thrown, healing items, stones, and TMs. Reusable items show “Not counted”. Moving, selling, discarding, or giving items away does not count as use.`
   $('#ledger-help').textContent = help(1)
   function blank(cell, key) {
     // Say why a cell has no number, so a missing count never reads as zero.
-    if (!counted.has(key)) {
+    if (key === 'per_catch') {
+      cell.textContent = 'No catches'
+      cell.title = 'Shown once this species is caught while wild encounters are counted.'
+    } else if (!counted.has(key)) {
       cell.textContent = 'Not running'
       cell.title = 'Shown while this adventure is running.'
     } else if (key === 'used' && ledger.started_at) {

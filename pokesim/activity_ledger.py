@@ -172,6 +172,12 @@ class ActivityLedger:
                 increment(self.store.db, kind, subject, amount)
 
 
+def rated(row):
+    """Add the wild encounters it took per catch of this species, once one is caught."""
+    from .catch_rates import per_catch
+    return {**row, 'per_catch': per_catch(row['wild'], row['caught'])}
+
+
 def counting_since(db, metadata):
     """When counting began, for an adventure that was already under way, else None."""
     started = metadata.get('started_at')
@@ -206,12 +212,12 @@ def status(store, game=None):
         return counts.get((kind, subject), 0) if metadata['started_at'] is not None else None
     return {**metadata, 'trade_records': trades, 'captures_since': captures['started_at'],
             'captures_available': captures['available'],
-            'pokemon': [{'id': dex, 'name': name, 'wild': count('wild', dex),
-                         'trainer': count('trainer', dex), 'defeated': count('defeated', dex),
-                         'caught': counts.get(('caught', dex), 0) if captures['available'] else None,
-                         'gift': counts.get(('gift', dex), 0),
-                         'traded_in': counts.get(('traded_in', dex), 0),
-                         'traded_out': counts.get(('traded_out', dex), 0), 'held': held[dex] if game else None}
+            'pokemon': [rated({'id': dex, 'name': name, 'wild': count('wild', dex),
+                               'trainer': count('trainer', dex), 'defeated': count('defeated', dex),
+                               'caught': counts.get(('caught', dex), 0) if captures['available'] else None,
+                               'gift': counts.get(('gift', dex), 0),
+                               'traded_in': counts.get(('traded_in', dex), 0),
+                               'traded_out': counts.get(('traded_out', dex), 0), 'held': held[dex] if game else None})
                         for dex, name in sorted(DEX_NAMES.items()) if 1 <= dex <= 151],
             'items': [{'id': item, 'name': name, 'bought': count('bought', item),
                        'used': count('used', item) if item in CONSUMABLES else None,
@@ -249,10 +255,10 @@ def gen2_status(data, game=None, store=None):
     return {'counting_since': None, **metadata, 'generation': 2, 'trade_records': trades,
             'captures_since': captures.get('started_at') if not captures.get('complete_history') else None,
             'captures_available': metadata['started_at'] is not None,
-            'pokemon': [{'id': dex, 'name': name, 'wild': count('wild', dex), 'trainer': count('trainer', dex),
-                         'defeated': count('defeated', dex), 'caught': count('caught', dex),
-                         'gift': count('gift', dex), 'traded_in': count('traded_in', dex),
-                         'traded_out': count('traded_out', dex), 'held': held[dex] if game else None}
+            'pokemon': [rated({'id': dex, 'name': name, 'wild': count('wild', dex), 'trainer': count('trainer', dex),
+                               'defeated': count('defeated', dex), 'caught': count('caught', dex),
+                               'gift': count('gift', dex), 'traded_in': count('traded_in', dex),
+                               'traded_out': count('traded_out', dex), 'held': held[dex] if game else None})
                         for dex, name in sorted(names.items())],
             'items': [{'id': item, 'name': name, 'bought': count('bought', item),
                        'used': count('used', item) if consumable(data, item) else None,
