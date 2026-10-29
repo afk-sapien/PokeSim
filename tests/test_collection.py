@@ -358,6 +358,49 @@ def test_moving_between_familiar_maps_cannot_extend_a_failed_expedition():
     assert 'No encounter' in c.history[-1]
 
 
+def support_trip(walk_back):
+    """A grass hunt that walked to Route 2, searched there, left on a trip of 5000 frames over a familiar
+    route, then walked back on it for ``walk_back`` frames."""
+    c = Collection()
+    c.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
+    c.remaining = 36000
+    frame = 0
+    for route, frames, support in (('ROUTE_1', 1200, False), ('ROUTE_2', 1800, False), ('ROUTE_2', 120, True),
+                                   ('ROUTE_1', 4880, True), ('ROUTE_1', walk_back, False)):
+        for _ in range(frames // 120):
+            frame += 120
+            c.observe(state(frame=frame, map=MAPS[route], x=frame % 20), support=support)
+    return c, frame
+
+
+def test_support_trips_and_the_walk_back_are_not_idle_time():
+    # A heal, restock or box change the project needs is part of the project, and so is the walk back
+    # to the map it left. Only the search itself spends the two minutes and the expedition budget.
+    # Reaching Route 2 was the last progress. Its search spent 1680 frames, the whole hunt 2880.
+    c, frame = support_trip(2000)
+    assert c.project is not None
+    assert c.director.monitor.spent('ditto') == 1680
+    assert c.director.monitor.spent('budget:ditto') == 2880
+    for _ in range(3000 // 120):
+        frame += 120
+        c.observe(state(frame=frame, map=MAPS['ROUTE_2'], x=frame % 20))
+    assert c.project is not None
+    assert c.director.monitor.spent('ditto') == 4680
+    for _ in range(3000 // 120):
+        frame += 120
+        c.observe(state(frame=frame, map=MAPS['ROUTE_2'], x=frame % 20))
+    assert c.project is None
+    assert 'No encounter' in c.history[-1]
+
+
+def test_a_walk_back_that_never_arrives_counts_again():
+    c, _ = support_trip(7000)
+    assert c.project is not None
+    assert c.director.monitor.spent('ditto') == 1680
+    c, _ = support_trip(14000)
+    assert c.project is None
+
+
 def test_training_gains_keep_an_expedition_alive_and_idle_budget_survives_restore():
     c = Collection()
     c.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
