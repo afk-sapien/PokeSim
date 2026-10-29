@@ -242,6 +242,9 @@ def run_one(args):
     span = None  # [row, frames, progressed]
     seeded = None  # The goal key the last reseed was for. Seeds follow goal keys, not rows.
     released = []
+    # The shadow arbiter's picks, read only (planner design S3): frames by the kind it would have chosen.
+    shadow = getattr(run.policy, 'shadow', None)
+    would = Counter()
     while run.frame - start < args.frames:
         before = run.frame
         try:
@@ -275,6 +278,8 @@ def run_one(args):
         monitor.observe(line, spent, found)
         span[1] += spent
         span[2] = span[2] or bool(found)
+        if shadow is not None:
+            would[shadow.pick or 'none'] += spent
         for stood in _stand_downs(run, seen):
             stand_downs.append({'key': stood, 'goal': line, 'frame': run.frame})
         if current is not None and run.generation == 2 and key == 'collection_release':
@@ -292,6 +297,8 @@ def run_one(args):
         'recoveries': getattr(run.policy, 'recoveries', 0) - recoveries,
         'released': released, 'reseed_goals': bool(seeds), 'lead_in': args.lead_in, 'rows': True,
     }
+    if shadow is not None:
+        result['shadow'] = {**shadow.summary(), 'frames_by_pick': dict(would)}
     Path(args.out).write_text(json.dumps(result, indent=1), encoding='utf-8')
 
 
@@ -313,7 +320,34 @@ def load(folder):
             game['titles'].setdefault(name(key), ALL_TARGETS if name(key) != key else title)
         game['stalls'].update(name(entry['goal']) for entry in data['stand_downs'])
         game['stalls']['(reloads)'] += data.get('reloads', 0)
+        # Run files from before shadow mode have no shadow section.
+        for field, counts in data.get('shadow', {}).items():
+            if isinstance(counts, dict):
+                game.setdefault('shadow', defaultdict(Counter))[field].update(counts)
     return games
+
+
+def shadow_lines(game):
+    """The shadow arbiter's agreement per point, frame share by would-have-chosen kind, difference
+    counts and top three disagreements per point, or no lines for a game without shadow data."""
+    shadow = game.get('shadow') if game else None
+    if not shadow:
+        return []
+    lines = ['| point | decisions | agreed |', '|---|---|---|']
+    for point, count in sorted(shadow['decisions'].items()):
+        agreed = shadow['agreed'][point]
+        lines.append(f'| {point} | {count} | {100 * agreed / max(count, 1):.1f}% |')
+    total = sum(shadow['frames_by_pick'].values())
+    shares = ', '.join(f'{kind} {100 * frames / max(total, 1):.1f}%'
+                       for kind, frames in shadow['frames_by_pick'].most_common(8))
+    lines.append(f'would have chosen: {shares or "none"}')
+    differences = ', '.join(f'{key} {count}' for key, count in sorted(shadow['differences'].items()))
+    lines.append(f'differences: {differences or "none"}')
+    for point in sorted(shadow['decisions']):
+        top = [(key, count) for key, count in shadow['disagreements'].most_common() if key.startswith(f'{point}: ')][:3]
+        if top:
+            lines.append(f'top {point} disagreements: ' + ', '.join(f'{key[len(point) + 2:]} {count}' for key, count in top))
+    return lines
 
 
 def _older(key):
@@ -357,6 +391,10 @@ def report(args):
                 flags.append(f'{name} {key}: share {share0:.1f} to {share1:.1f}, wasted {waste0:.1f} to {waste1:.1f}')
             if share1 > 100 * LARGE_SHARE:
                 flags.append(f'{name} {key}: {share1:.1f}% of frames ({title})')
+        lines = shadow_lines(new)
+        if lines:
+            print('\n### Shadow arbiter (after)')
+            print('\n'.join(lines))
     print('\n## Flags')
     for line in flags or ['none']:
         print('-', line)

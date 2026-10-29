@@ -20,12 +20,13 @@ from pokecore.dvs import dv_probabilities
 from pokecore.gen2.ram import calculated_stats, experience_at
 
 from ..investment import GOOD_TAIL, MIN_UPGRADE, SEARCH_BUDGET
+from ..planning.values import QUALITY, quality_catch
 from .standdown import DECISIONS_PER_BATTLE, forget, hunt_key, search_expected, stand_down, standing_down, train_key
 
 # Copies a better-DV hunt catches at most before it moves on. Its decisions are budgeted per catch by the monitor.
 QUALITY_CATCHES = 3
 # What a better copy is worth, per unit of drop in the species' best DV tail (planner design S3).
-QUALITY_WEIGHT = 0.5
+QUALITY_WEIGHT = QUALITY
 SHINY_ENCOUNTERS = 100
 SHINY_BREAK_ACTIVITIES = 2
 # The adventure play clock uses 60 frames per second. Pauses and playback speed do not affect this limit.
@@ -55,12 +56,8 @@ def tail(mon):
 
 
 def catch_value(odds):
-    """What the next catch is worth to a species whose best copy has DV tail ``odds``.
-
-    A wild copy's own tail is uniform from 0 to 1, so it beats the best copy with chance ``odds`` and
-    then lowers the tail by ``odds / 2`` on average: an expected drop of ``odds ** 2 / 2``.
-    """
-    return QUALITY_WEIGHT * odds * odds / 2
+    """What the next catch is worth to a species whose best copy has DV tail ``odds``, as the arbiter values it."""
+    return quality_catch(odds)
 
 
 # The value per decision a better-DV catch has to earn. A species met in every wild battle is worth
@@ -211,6 +208,9 @@ def step(policy, snapshot, mem, Goal, current_time):
         activity = choose(policy, snapshot, mem, current_time)
         if activity is None:
             return None
+        shadow = getattr(policy, 'shadow', None)
+        if shadow is not None:
+            shadow.compare('postgame', lambda: candidates(policy, snapshot, current_time, activity), activity['kind'])
         data['activity'] = activity
         data['recent'] = (data['recent'] + [activity['kind']])[-RECENT:]
         if activity['kind'] != 'shiny':
@@ -301,6 +301,45 @@ def choose(policy, snapshot, mem, current_time):
     if not any(mon.egg for mon in snapshot.party) and postgame_league(policy, snapshot, mem, current_time):
         return {'kind': 'league'}
     return None
+
+
+# Shadow mode estimates in decisions, the unit of the postgame's own search costs, which step 5
+# tightens: ten levels of training, from the Silver Charmander above, and one League run.
+TRAIN_DECISIONS = 3400
+LEAGUE_DECISIONS = 20000
+
+
+def candidates(policy, snapshot, current_time, chosen):
+    """The arbiter's candidates for the postgame rotation, for shadow mode only.
+
+    The rotation draws one activity at random, so the others are asked here for what they would
+    start. Asking a better-DV hunt or a trainee changes no saved state. A shiny search is only
+    offered, never asked, since asking it records its map, and a League run only when it was drawn.
+    """
+    from ..planning.arbiter import Candidate, Tier
+    from ..planning import values
+    data = state(policy)
+    hunting = not policy.no_room(snapshot) and snapshot.can_catch and balls(policy, snapshot) >= HUNT_BALLS
+    found = {'quality': quality(policy, snapshot, current_time) if hunting and chosen['kind'] != 'quality' else None,
+             'train': trainee(policy, snapshot) if chosen['kind'] != 'train' else None}
+    found[chosen['kind']] = chosen
+    result = []
+    hunt = found.get('quality')
+    if hunt:
+        mon = max((mon for mon in held(snapshot) if mon.species == hunt['species']), key=lambda mon: potential(policy.data, mon))
+        result.append(Candidate('quality', Tier.PROGRESS, catch_value(tail(mon)), hunt['expected'], goal='postgame quality'))
+    trainee_found = found.get('train')
+    if trainee_found:
+        level = max((mon.level for mon in held(snapshot) if ident(mon) == trainee_found['identity']), default=0)
+        steps = max(1, trainee_found['level_goal'] - level)
+        result.append(Candidate('train', Tier.PROGRESS, values.level_step(level, trainee_found['level_goal']),
+                                TRAIN_DECISIONS * steps / 10, goal='postgame train'))
+    if hunting and data.get('shiny_break', 0) == 0 or chosen['kind'] == 'shiny':
+        result.append(Candidate('shiny', Tier.FILLER, values.SMALL, SHINY_ENCOUNTERS * DECISIONS_PER_BATTLE,
+                                goal='postgame shiny'))
+    if chosen['kind'] == 'league':
+        result.append(Candidate('league', Tier.FILLER, values.rematch(False), LEAGUE_DECISIONS, goal='postgame league'))
+    return result
 
 
 def huntable(policy, snapshot, current_time=None):

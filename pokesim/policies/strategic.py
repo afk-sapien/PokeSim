@@ -21,7 +21,9 @@ from .menus import select, tap
 from .shopping import ShoppingController
 from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
-from .collection import CENTERS, Collection, LEAGUE, SUPPORT_TRIPS, legendary_project, snorlax_project
+from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, legendary_project, snorlax_project
+from ..planning import values
+from ..planning.arbiter import Candidate, Tier
 from .awareness import ActionWatch
 from .team import development_candidate, potential, readiness, reserve_to_deposit, storage_headroom
 from ..screen import Screen, W_PLAYER_MON_NUMBER
@@ -76,8 +78,67 @@ def individual(mon):
     return mon.species, mon.level, mon.nick, mon.max_hp, tuple(mon.moves)
 
 
+# Shadow mode estimate, which step 5 tightens: the frames of a short errand such as a Pokémon Center
+# visit, a shop trip, a pickup or a passage that unblocks the goal behind it.
+ERRAND_FRAMES = 3000
+# The kind of a goal the plan hands the overworld chain, by key prefix.
+PLAN_KINDS = (('party_', 'party'), ('teach_', 'moves'), ('buy_tm', 'moves'), ('restock', 'supplies'),
+              ('collect_plan', 'collection plan'))
+
+
+def overworld_candidates(offers, collection):
+    """The arbiter's candidates for the Gen I overworld chain, for shadow mode only.
+
+    ``offers`` lists each goal the chain offered, in order. A heal, a restock, a cleared passage or the
+    Power Plant trash cans unblock the goal before them, so they take its tier and value at an
+    errand's frames. A collection goal stands for the project the collection pick would have chosen,
+    with that candidate's tier, value, frames and kind.
+    """
+    shadow = collection.shadow
+    project = collection.project or {}
+    champion = collection.completed_champion
+    candidates = []
+    previous = None
+    for stage, goal in offers:
+        key = goal.key
+        if stage == 'collection' or key.startswith(('collect_', 'party_collection', 'party_league')) and project:
+            inner = (shadow.picked.get('collection') if shadow.last.get('collection') == project.get('key')
+                     else shadow.built.get('collection', {}).get(project.get('key')))
+            candidate = (Candidate(key, inner.tier, inner.value, inner.expected_frames, goal=inner.goal) if inner
+                         else Candidate(key, Tier.PROGRESS, values.SMALL, EXPECTED_FRAMES['other'], goal='collection'))
+        elif stage == 'plan':
+            kind = next((kind for prefix, kind in PLAN_KINDS if key.startswith(prefix)), 'story')
+            if kind == 'story':
+                candidate = Candidate(key, Tier.PROGRESS if champion else Tier.STORY, values.NEW_ENTRY,
+                                      EXPECTED_FRAMES['other'], goal=kind)
+            elif kind == 'party':
+                candidate = Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal=kind)
+            else:
+                candidate = Candidate(key, Tier.FILLER if kind == 'collection plan' else Tier.PROGRESS,
+                                      values.SMALL, ERRAND_FRAMES, goal=kind)
+        elif stage == 'pickup':
+            candidate = Candidate(key, Tier.FILLER, values.SMALL, ERRAND_FRAMES, goal='pickup')
+        elif stage == 'upgrade':
+            candidate = Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal='party')
+        elif stage == 'moves':
+            candidate = Candidate(key, Tier.PROGRESS, values.SMALL, 2 * ERRAND_FRAMES, goal='moves')
+        elif previous is not None:
+            candidate = Candidate(key, previous.tier, previous.value, ERRAND_FRAMES, goal=stage)
+        else:
+            candidate = Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal=stage)
+        candidates.append(candidate)
+        previous = candidate
+    return candidates
+
+
 class StrategicPolicy(Policy):
     name = "strategic"
+
+    @property
+    def shadow(self):
+        """The shadow arbiter, which the collection holds so that it outlives a reload."""
+        collection = getattr(self, 'collection', None)
+        return getattr(collection, 'shadow', None)
 
     def __init__(self, seed=None, starter=None):
         self.seed = seed
@@ -604,6 +665,8 @@ class StrategicPolicy(Policy):
         league_rooms = {MAPS[n] for n in ("LORELEIS_ROOM", "BRUNOS_ROOM", "AGATHAS_ROOM", "LANCES_ROOM", "CHAMPIONS_ROOM")}
         in_league = s.map in league_rooms
         goal = healing_goal(s) if self.heal_latch and not in_league else self.goal
+        # Each goal the chain offers, in order, for the shadow arbiter. Only the log and the audit read it.
+        offers = [('plan', self.goal)] + ([('heal', goal)] if goal is not self.goal else [])
         if not s.box_full and not self.heal_latch and not goal.key.startswith(('party_', 'teach_', 'catch_', 'collect_')) and 'Pokecenter' in WORLD.get(s.map, {}).get('name', '') and WORLD[s.map]['width'] == 14:
             weakest = reserve_to_deposit(s)
             if weakest is not None:
@@ -616,6 +679,7 @@ class StrategicPolicy(Policy):
                     self.pc.destination = s.map
                     goal = Goal('party_upgrade', 'Bring a stronger reserve onto the team',
                                 'Swap an underused reserve for a useful Pokémon already in storage', ((s.map, 13, 4),), 'up', True)
+                    offers.append(('upgrade', goal))
         if in_league:
             for target in sorted(range(len(s.party)), key=lambda i: s.party[i].level, reverse=True):
                 mon = s.party[target]
@@ -663,6 +727,8 @@ class StrategicPolicy(Policy):
                                   healing=self.heal_latch, in_league=in_league,
                                   has_pokedex=self.completed.get('pokedex', False),
                                   completed_champion=self.collection.completed_champion)
+        if supplies.goal is not goal:
+            offers.append(('supplies', supplies.goal))
         goal = supplies.goal
         if supplies.prepared and self.collection.project:
             self.collection.project['supplies_prepared'] = True
@@ -689,20 +755,26 @@ class StrategicPolicy(Policy):
                 actions = self._use_item(s, item, target)
                 if actions:
                     return actions
+        before = goal
         goal, tm_action = self._tm_development(s, goal, in_league)
         if tm_action:
             return tm_action
+        if goal is not before:
+            offers.append(('moves', goal))
         if goal.key == "thunder" and not event_set(s.event_flags, "EVENT_2ND_LOCK_OPENED"):
             goal = self._trash_goal(s)
+            offers.append(('trash', goal))
         if not self.heal_latch and not in_league and not self.pickups.active and goal.key not in ('restock','party_box','buy_tm'):
             collection_goal = self.collection.choose(s, self.nav, self.rng, goal)
             if collection_goal:
                 self.next_goal = goal.to_dict() if not goal.key.startswith(('collect_', 'party_collection', 'party_league')) else self.next_goal
                 goal = collection_goal
+                offers.append(('collection', goal))
         pickup = None if goal.key == 'buy_tm' or legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon' else self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
         if pickup and not self.heal_latch and not in_league:
             self.next_goal = goal.to_dict()
             goal = pickup
+            offers.append(('pickup', goal))
         if (goal.key == 'collect_plan' and
                 (s.map == MAPS['INDIGO_PLATEAU']
                  or (s.map == MAPS['ROUTE_23'] and (s.y < 32 or s.x >= 14 and s.y < 40))
@@ -728,6 +800,11 @@ class StrategicPolicy(Policy):
                         ((s.map, 1, 2) if rocket_lift else (s.map, 3, 1),), "up", True)
         else:
             self.elevator_exit = False
+        if goal.key in ('collect_passage', 'hideout_elevator'):
+            offers.append(('passage', goal))
+        shadow = self.shadow
+        if shadow is not None and shadow.changed('overworld', (goal.key, (self.collection.project or {}).get('key'))):
+            shadow.compare('overworld', lambda: overworld_candidates(offers, self.collection), goal.key, outer=True)
         self.goal = goal
         if self.next_goal and self.next_goal['id'] == goal.key:
             next_badge = next((row['title'] for row in self.journey if not row['done']), 'Celebrate the Champion victory')

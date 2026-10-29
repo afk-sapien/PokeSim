@@ -16,7 +16,11 @@ YELLOW = current_variant() == 'yellow'
 # the player caught as its partner, so Raichu only arrives through a link trade.
 REFUSES_EVOLUTION = {25} if YELLOW else set()
 from .navigation import DIRS
-from .director import AdventureDirector
+from .director import AdventureDirector, category, new_entry
+from ..planning import values
+from ..planning.arbiter import Candidate, Tier
+from ..planning.cost import FRAMES_PER_TILE
+from ..planning.shadow import Shadow
 from ..planning.conditions import Can, Count, Item, Requirements, feasible
 from ..planning.ledger import MONEY, Need
 from ..planning.monitor import CONTINUE, SPENT, ProgressEvent
@@ -50,6 +54,54 @@ def expected_frames(project):
     if project['method'] == 'evolve':
         return EXPECTED_FRAMES['evolve']
     return EXPECTED_FRAMES['dv_hunt' if project.get('dv_hunt') else 'other']
+
+
+def shadow_kind(project):
+    """The kind of a project for the audit's share by would-have-chosen kind."""
+    kind = category(project)
+    if kind == 'collection':
+        return 'collection quality' if project.get('dv_hunt') else 'collection repeat' if (
+            project.get('repeat') and not project.get('needed_capture')) else 'collection new entry'
+    return kind
+
+
+def shadow_candidate(project, travel, tails, short, owned):
+    """The arbiter's candidate for a project, for shadow mode only.
+
+    Values come from planning/values.py. Expected frames are the per-kind EXPECTED_FRAMES, or the
+    training and marathon clocks, plus the walk to the project at the shared tile estimate in
+    planning/cost.py. Step 5 of the planner design swaps in encounter odds from Core's ROM wild
+    tables, pokecore.romdata.load(rom).encounters, which carry randomizer overrides, so no committed
+    Gen I table is read here.
+    """
+    method, sid = project['method'], project.get('species')
+    tier = Tier.PROGRESS
+    if method == 'rematch':
+        tier = Tier.UPKEEP if short else Tier.FILLER
+        value = values.rematch(short)
+    elif method in ('marathon', 'explore', 'trainer'):
+        tier, value = Tier.FILLER, values.SMALL
+    elif method == 'train':
+        value = (values.level_step(project['initial_level'], project['target_level'])
+                 if project.get('mastery_needed') else values.SMALL)
+    elif legendary_project(project):
+        # A returned legendary the Pokédex already has is a repeat, not an entry.
+        value = values.NEW_ENTRY if dex(sid) not in owned else values.SMALL
+    elif new_entry(project) or project.get('needed_capture') or method in ('rod', 'amber', 'return_fossil'):
+        # A rod or the Old Amber opens new entries, and a needed repeat is another adventure's entry.
+        value = values.NEW_ENTRY
+    elif project.get('dv_hunt') and tails.get(sid) is not None:
+        value = values.quality_catch(tails[sid] / 100)
+    else:
+        value = values.SMALL
+    if method == 'train':
+        frames = training.TRAINING_BUDGET
+    elif method == 'marathon':
+        frames = marathon.BUDGET
+    else:
+        frames = expected_frames(project)
+    frames += (travel or 0) * FRAMES_PER_TILE
+    return Candidate(project.get('key', method), tier, value, frames, goal=shadow_kind(project))
 
 
 def project_budget(project):
@@ -317,6 +369,8 @@ class Collection:
         self.marathon_records = {}
         self.activity_events = []
         self.marathon_previous = None
+        # The arbiter's picks beside the director's, for the log and the replay audit. Never saved.
+        self.shadow = Shadow()
 
     def demand(self):
         return self.peer_demand if time.monotonic() < self.demand_until else {}
@@ -838,6 +892,7 @@ class Collection:
         bag = dict(s.items)
         held = [(p.species,p.level,None) for p in s.party] + [(sid,level,box) for box,sid,level,nick in s.stored_pokemon]
         candidates = []
+        travel = {}
         def add(project,weight):
             key = str(project.get('species',0)) + ':' + project['method'] + ':' + str(project.get('map',0)) + ':' + str(project.get('fragment',''))
             if legendary_project(project):
@@ -859,6 +914,7 @@ class Collection:
                         preparation = distance + 80 if project.get('box') is not None else 0
                         project['travel_distance'] = work_distance + preparation
                         weight /= 1 + project['travel_distance'] / 80
+                    travel[key] = project.get('travel_distance', distance)
                     candidates.append((weight,{**project,'key':key}))
         sources = self.sources()
         held_individuals = [asdict(mon) for mon in s.party] + s.storage_entries()
@@ -1071,6 +1127,7 @@ class Collection:
         if fossil and not bag.get(ITEMS[fossil['item']]):
             add({'method': 'return_fossil', 'map': fossil['room'], 'item': fossil['item'],
                  'event_return': 'fossil'}, 5)
+        offered = candidates
         if any(project.get('needed_capture') for weight, project in candidates):
             candidates = [(weight, project) for weight, project in candidates
                           if not project.get('repeat') or project.get('needed_capture')]
@@ -1078,6 +1135,12 @@ class Collection:
             self.cooldown = 3600
             return None
         self.project = self.director.select(candidates, rng, urgent=short)
+        shadow = getattr(self, 'shadow', None)
+        if shadow is not None:
+            shadow.changed('collection', self.project['key'])
+            shadow.compare('collection', lambda: [shadow_candidate(project, travel.get(project['key']), best_tails, short,
+                                                                   s.owned) for _, project in offered],
+                           self.project['key'])
         if self.project['method'] == 'rematch':
             self.prepare_league_rotation(s)
         if self.project['method'] == 'marathon':
