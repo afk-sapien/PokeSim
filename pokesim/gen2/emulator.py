@@ -263,6 +263,7 @@ class Emulator:
         self.activity = Ledger(store, self.data, fresh=not bool(store.autosaves()))
         from .statistics import Statistics
         self.statistics = Statistics(store, clock=lambda: self.play_clock.status())
+        self.releases = journal.Releases()
         from .legendary import Recovery
         self.legendary_recovery = Recovery()
         from .steps import StepTracker
@@ -674,6 +675,8 @@ class Emulator:
         before = self.previous
         self._note_league_entry(before, snapshot)
         for event in journal.events(before, snapshot, self.history, self.data, Event):
+            self._event(event, snapshot)
+        for event in self.releases.observe(self.policy.menu, snapshot, self.data, Event):
             self._event(event, snapshot)
         if before:
             for mon in snapshot.party:

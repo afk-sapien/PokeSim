@@ -13,7 +13,8 @@
     ]},
     {title: 'Life on the road', series: [
       {key: 'captures', label: 'Pokémon caught'},
-      {key: 'steps', label: 'Sampled steps (legacy)'},
+      // Gold, Silver and Crystal count every step the cartridge takes. Red, Blue and Yellow sample them.
+      {key: 'steps', label: 'Sampled steps (legacy)', gen2Label: 'Steps walked'},
       {key: 'battles', label: 'Battles entered'},
       {key: 'marathons', label: 'Marathons completed', marathon: true},
       {key: 'recorded_hours', label: 'Sampled game hours (legacy)'},
@@ -228,6 +229,7 @@
     target.innerHTML = groups.map((group, index) => {
       // Gold, Silver and Crystal send no marathon, since the Kanto Marathon is a Red, Blue and Yellow race.
       const series = group.series.filter(series => !series.marathon || data.marathon !== null)
+        .map(series => data.generation === 2 && series.gen2Label ? {...series, label: series.gen2Label} : series)
       const rows = Progress.describe(data.history, until, series).map(series => {
         const available = data.current[series.key] != null
         const value = available ? number(data.current[series.key]) + (series.unit || '') : 'Not recorded'

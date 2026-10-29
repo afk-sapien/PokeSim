@@ -263,7 +263,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             held = [mon for mon in game.get('party', []) + (game.get('storage') or {}).get('pokemon', [])
                     if not mon.get('egg')]
             shinies['held'] = sum(bool(mon.get('shiny')) for mon in held)
-            return {**status(store),
+            return {**status(store), 'generation': 2,
                     'overview': overview(current, {'milestones': goals}, {
                         'steps': walked.get('total'), 'available': bool(walked), 'started_at': walked.get('started_at')}),
                     'milestone_records': record_status(store, 2), 'recent': recent(store),
