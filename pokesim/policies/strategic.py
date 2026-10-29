@@ -41,6 +41,13 @@ EXPLORATION_CHANCE = 0.12
 # A trip to buy a TM or Champion shop supplies is expected to take 20000 frames. It is dropped once it
 # spent three times that, counted only while the trip is under way, without the item.
 TM_TRIP_FRAMES = 20000
+# Teaching an owned HM takes only menus. Red's seeded batch taught Strength in 1250 frames.
+TEACH_FRAMES = 1250
+# The HMs whose battle moves ``hm_upgrade`` weighs, Surf and Strength.
+HM_TEACH_ITEMS = frozenset((ITEMS['HM03'], ITEMS['HM04']))
+# A development excursion lasts until its partner gains a level. It ends sooner once this many frames
+# pass without the partner gaining any experience, so grass without encounters cannot hold it.
+DEVELOPMENT_STALL = 2400
 
 W_WALK_COUNTER = 0xCFC5
 W_FACING = 0xC109
@@ -297,14 +304,18 @@ class StrategicPolicy(Policy):
         self.watch = ActionWatch()
         self.last_action = None
         self.excursion = None
-        self.development_until = 0
+        # The partner a development excursion trains, with its level and experience at the start and the
+        # frame it last gained experience.
+        self.development = None
         self.development_cooldown = 0
         self.development_index = None
         self.assessment_token = None
         self.menu_context = None
         self.pending_social = None
         self.supply_attempts = set()
-        self.move_teaching_after = 0
+        # The HM teach last scored, and the party and HMs it was scored for.
+        self.hm_token = None
+        self.hm_option = None
         self.tm_plan = None
         self.tm_frame = None
         # The TM and supply options last scored, and the party, bag and purse they were scored for.
@@ -547,7 +558,7 @@ class StrategicPolicy(Policy):
             return wait()
         walking_state = mem[0xD700] | ((mem[0xD728] & 1) << 2)
         failure = self.watch.observe(s, kind, scr.cursor, walking_state,
-                                     self.goal.key.startswith(('train_', 'catch_', 'collect_hunt', 'collect_train')) or s.frame < self.development_until)
+                                     self.goal.key.startswith(('train_', 'catch_', 'collect_hunt', 'collect_train')) or self.developing)
         if failure:
             self._remember_failure(s, failure)
             self.intent = None
@@ -836,20 +847,23 @@ class StrategicPolicy(Policy):
                     actions = self._use_item(s, s.items[index][0], target, "Treat the party before walking farther")
                     if actions:
                         return actions
-        teach = choice.errand_candidate('teach_battle', 'moves')
-        if not self.heal_latch and not in_league and s.frame >= self.move_teaching_after and choice.wins(teach):
-            upgrade = hm_upgrade(s)
-            # Bound failures and avoid rescoring every overworld frame.
-            self.move_teaching_after = s.frame + 3600
+        if not self.heal_latch and not in_league:
+            upgrade = self._hm_option(s)
             if upgrade:
-                _, target, item, move = upgrade
-                self.goal = choice.offer(Goal('teach_battle', f'Teach {move_name(move)}',
-                                              f'Improve {s.party[target].nick or s.party[target].name} using an owned HM'),
-                                         teach)
-                self.reason = self.goal.reason
-                actions = self._use_item(s, item, target)
-                if actions:
-                    return actions
+                _, target, item, move, _ = upgrade
+                mon = s.party[target]
+                attempt = ('hm', item, target, individual(mon))
+                teach = Goal('teach_battle', f'Teach {move_name(move)}',
+                             f'Improve {mon.nick or mon.name} using an owned HM')
+                # Each teach is tried once for a party member and its moves, so one that fails does not
+                # start again until the moves change.
+                if attempt not in self.supply_attempts and choice.offer(teach, self.teach_candidate(choice, upgrade)) is teach:
+                    self.supply_attempts.add(attempt)
+                    self.goal = teach
+                    self.reason = teach.reason
+                    actions = self._use_item(s, item, target)
+                    if actions:
+                        return actions
         goal, tm_action = self._tm_development(s, goal, in_league, choice)
         if tm_action:
             return tm_action
@@ -999,7 +1013,7 @@ class StrategicPolicy(Policy):
                 action = self._use_item(s, repel)
                 if action:
                     return action
-        if not goal.key.startswith(("collect_", "party_collection", "party_league")) and (goal.key == "train_league_partner" or self.development_index is not None and s.frame < self.development_until):
+        if not goal.key.startswith(("collect_", "party_collection", "party_league")) and (goal.key == "train_league_partner" or self.development_index is not None and self.developing):
             target = league_partner(s) if goal.key == 'train_league_partner' else self.development_index
             if target is not None and target != 0:
                 actions = self._reorder(s, target, "Give the partner the lead position while training")
@@ -1337,6 +1351,26 @@ class StrategicPolicy(Policy):
         return Candidate('buy_tm', Tier.UPGRADE, values.move_gain(plan['before'], plan['after']), TM_TRIP_FRAMES,
                          interrupt_frames=interrupt, goal='moves')
 
+    def teach_candidate(self, choice, upgrade):
+        """The arbiter's candidate for teaching an owned HM, from ``hm_upgrade``.
+
+        The teach serves the goal under way, so it takes the pick's tier, and it is worth the move it
+        gives: its share of a level 100 credit by the battle power it adds. It runs in the menus, and
+        cutting into a project under way pays its frames again, as a purchase pays its trip again.
+        """
+        gain, _, _, _, before = upgrade
+        interrupt = TEACH_FRAMES if self.collection.project else 0.0
+        return Candidate('teach_battle', choice.pick.tier, values.move_gain(before, before + gain), TEACH_FRAMES,
+                         interrupt_frames=interrupt, goal='moves')
+
+    def _hm_option(self, s):
+        """The best HM teach for the party, scored again only when the party or its HMs change."""
+        token = (tuple((p.species, p.level, p.moves, p.hp > 0, p.status) for p in s.party),
+                 tuple(qty for item, qty in s.items if item in HM_TEACH_ITEMS))
+        if token != self.hm_token:
+            self.hm_token, self.hm_option = token, hm_upgrade(s)
+        return self.hm_option
+
     def _buy_goal(self, s, plan):
         from .. import tm_shop, champion_shop
         item, target = plan['item'], plan['target']
@@ -1630,6 +1664,23 @@ class StrategicPolicy(Policy):
                 self.nav.path.clear()
         self.reason = message
 
+    @property
+    def developing(self):
+        """Whether a development excursion is under way."""
+        return self.excursion is not None and self.excursion[2] == 'development'
+
+    def _development_done(self, s):
+        """Whether the development excursion has ended: its partner gained a level, left the party, or went
+        ``DEVELOPMENT_STALL`` frames without gaining experience. The partner is found by who it is, since
+        the excursion moves it to the lead."""
+        progress = self.development
+        mon = next((p for p in s.party if progress and (p.species, p.nick, p.dvs) == progress['partner']), None)
+        if mon is None:
+            return True
+        if mon.experience > progress['experience']:
+            progress['experience'], progress['since'] = mon.experience, s.frame
+        return mon.level > progress['level'] or s.frame - progress['since'] >= DEVELOPMENT_STALL
+
     def _purposeful_detour(self, s, mem, main_goal):
         pos = (s.map, s.x, s.y)
         if self.heal_latch or main_goal.key.startswith(('heal', 'restock', 'train_', 'catch_', 'party_', 'teach_', 'league', 'collect_')) or s.map in MANSION_MAPS | VICTORY_MAPS:
@@ -1637,7 +1688,8 @@ class StrategicPolicy(Policy):
             return None
         if self.excursion:
             goal, expires, key = self.excursion
-            if s.frame >= expires or s.map != goal.targets[0][0]:
+            ended = self._development_done(s) if key == 'development' else s.frame >= expires
+            if ended or s.map != goal.targets[0][0]:
                 self.excursion = None
                 self.next_conversation = s.frame + 3600
                 return None
@@ -1683,10 +1735,12 @@ class StrategicPolicy(Policy):
             goal = Goal('train_partner', 'Give a promising partner some experience',
                         f'Train {s.party[trainee].nick or s.party[trainee].name} in nearby manageable encounters', grass,
                         kind=TRAIN)
-            self.development_until = s.frame + 2400
+            mon = s.party[trainee]
+            self.development = {'partner': (mon.species, mon.nick, mon.dvs), 'level': mon.level,
+                                'experience': mon.experience, 'since': s.frame}
             self.development_cooldown = s.frame + 18000
             self.development_index = trainee
-            self.excursion = (goal, self.development_until, 'development')
+            self.excursion = (goal, None, 'development')
             if trainee != 0:
                 actions = self._reorder(s, trainee, goal.reason)
                 if actions:

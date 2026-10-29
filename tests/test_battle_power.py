@@ -93,7 +93,7 @@ def test_existing_surf_user_does_not_prevent_teaching_starmie():
     weak = live(partner())
     other = live(partner('LAPRAS', moves=[57, 58, 34, 47]))
     s = state(party=(weak, other), items=((ITEMS['HM03'], 1),))
-    _, target, item, move = hm_upgrade(s)
+    _, target, item, move, _ = hm_upgrade(s)
     assert (target, item, move) == (0, ITEMS['HM03'], 57)
     taught = replace(weak, moves=(33, 57, 0, 0))
     assert hm_upgrade(replace(s, party=(taught, other))) is None
@@ -110,4 +110,48 @@ def test_policy_opens_hm_menu_for_specific_partner_and_bounds_retries():
     policy._overworld(s, bytearray(65536))
     assert policy.goal.key == 'teach_battle'
     assert (shortcuts.last.kind, shortcuts.last.item, shortcuts.last.target) == ('use_item', ITEMS['HM03'], 0)
-    assert policy.move_teaching_after > s.frame
+    # A teach that failed is not tried again for the same partner and moves, however long it waits.
+    shortcuts.finish(False, 'refused', s.frame)
+    shortcuts.started.clear()
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy._overworld(replace(s, frame=s.frame + 20000), bytearray(65536))
+    assert policy.goal.key != 'teach_battle'
+    assert not any(getattr(machine, 'item', None) == ITEMS['HM03'] for machine in shortcuts.started)
+    # New moves make it a new teach.
+    other = replace(s.party[0], moves=(33, 98, 0, 0), pp=(35, 30, 0, 0))
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy._overworld(replace(s, party=(other,), frame=s.frame + 20100), bytearray(65536))
+    assert policy.goal.key == 'teach_battle'
+
+
+def test_hm_teach_is_worth_the_move_it_gives():
+    from pokesim.planning import values
+    from pokesim.planning.arbiter import Tier
+    from pokesim.policies.strategic import TEACH_FRAMES, Choice, goal_candidate
+    s = state(party=(live(partner()),), items=((ITEMS['HM03'], 1),), map=MAPS['PALLET_TOWN'], frame=10000)
+    policy = StrategicPolicy(1)
+    upgrade = hm_upgrade(s)
+    gain, before = upgrade[0], upgrade[4]
+    plan = Goal('collect_plan', 'Plan', 'Plan')
+    candidate = policy.teach_candidate(Choice(plan, goal_candidate(plan, policy.collection)), upgrade)
+    assert candidate.value == values.move_gain(before, before + gain)
+    assert candidate.tier == Tier.FILLER and candidate.interrupt_frames == 0
+    # A project under way pays the teach's frames again.
+    policy.collection.project = {'key': 'hunt', 'method': 'wild'}
+    story = Goal('story', 'Story', 'Story')
+    choice = Choice(story, goal_candidate(story, policy.collection))
+    candidate = policy.teach_candidate(choice, upgrade)
+    assert candidate.interrupt_frames == TEACH_FRAMES and candidate.tier == choice.pick.tier
+
+
+def test_a_small_hm_gain_does_not_cut_into_the_story():
+    from pokesim.policies.strategic import Choice, goal_candidate
+    s = state(party=(live(partner()),), items=((ITEMS['HM03'], 1),), map=MAPS['PALLET_TOWN'], frame=10000)
+    policy = StrategicPolicy(1)
+    gain, target, item, move, before = hm_upgrade(s)
+    story = Goal('story', 'Story', 'Story')
+    choice = Choice(story, goal_candidate(story, policy.collection))
+    # Starmie's Surf more than doubles its damage, so it goes before a story step.
+    assert choice.wins(policy.teach_candidate(choice, (gain, target, item, move, before)))
+    # A gain worth a few percent of its power loses to the story step.
+    assert not choice.wins(policy.teach_candidate(choice, (before * 0.05, target, item, move, before)))

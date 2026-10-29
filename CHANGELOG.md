@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Retire the last Red, Blue and Yellow goal timers in the overworld. Teaching Surf or Strength from the bag is now a candidate worth the move it gives, its share of a level 100 credit by the battle power it adds, so it goes when that is worth more per frame than the goal under way, and it pays its frames again to cut into a project. The 3600 frame teach timer is gone. A teach is tried once for a partner and its moves, and the best teach is scored again only when the party or its HMs change. A partner's training detour in nearby grass now lasts until the partner gains a level, instead of a fixed 2400 frames. It still ends after 2400 frames without any experience, or when the partner leaves the party. Gold, Silver and Crystal play as before.
+
 - Take the wait before a missed legendary returns from the planner's shared backoff in all six games. It is still 36000 frames for each miss in a row, at most 180000, and older saves keep their waits. The Red, Blue and Yellow retreat from a legendary with no balls left, or after 50 throws, is now a rule of the resource ledger. Both play as before.
 
 - Give the hunt's run from wild battles real scenario coverage in all six games. Red, Blue and Yellow stuck scenarios can now take a species out of the Pokédex, hold the first badges and set story events by name. A scenario can wait for a Pokédex entry by number (owned:46), which counts once two reads in a row show it, and can ask for a least number of run attempts (min_flees). Three new private scenarios use this. A weak Red party with Cut hunts Paras on Route 2 for a Cut carrier, a Yellow Hall of Fame save hunts Paras again, and a Gold postgame save hunts Mareep on Route 42. Each one runs from most of the other wild battles on its way.
