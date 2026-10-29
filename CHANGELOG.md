@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a utility arbiter to the planner, shared by all six games. It takes candidate goals in four tiers (story, upkeep, progress and filler), picks the highest tier first and then the most value per frame, counts the frames lost by cutting into a running goal, never picks a passive wait such as Day Care steps, and breaks ties on the goal key. It can also report how its pick differs from the goal the current planner chose. Nothing uses it yet, so no game plays differently.
+
 - Stop counting the heals, restocks and box changes a Red, Blue or Yellow project needs, and the walk back from them, against its two minutes without progress or its expedition budget. A hunt in Seafoam Islands walked to Cinnabar for a box change, a Route 23 fishing trip went back to Viridian three times to heal, and a hunt in Mt. Moon walked back from a restock in Saffron. Each stood down on the walk back. A Yellow hunt on Route 21 ran out of its expedition budget after three box changes. Maps first reached on such a trip no longer count as a new route either. The walk back ends on the map the trip left from, and a walk back longer than the trip, or than two minutes, counts again. Gold, Silver and Crystal already spend a hunt's or training trip's budget only while that goal is active.
 
 - Stop counting wild battles on the way to a Gold, Silver or Crystal hunt's map against its search budget. A Gold hunt fishing for a better Goldeen in Silver Cave Room 2 walked back through Room 1 after each trip to the PC, and the cave battles there spent the whole budget, so the hunt stood down on all three seeded replays while Goldeen bit at 70%. Battles on the hunt's own map still count.
