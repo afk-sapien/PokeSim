@@ -179,13 +179,44 @@ def test_a_refused_step_stands_the_spare_down():
 
 
 def test_a_wanted_item_never_leaves_with_its_holder():
-    # The Everstone is a breeding item, so its holder is offered only with the item taken off first.
+    # The Everstone is a breeding item and this is the only one, so its holder is offered only with the
+    # item taken off first.
     stone = mon(3, held_item=EVERSTONE)
     for party in (PARTY, PARTY + [mon(None, box=None, species=2)]):
         units = ledger.box_units(Policy(), snapshot([BEST, stone], party))
         assert [unit.action for unit in units] == ['unequip']
         unit = ledger.storage_unit(Policy(), snapshot([BEST, stone], party))
         assert unit is None or unit.action == 'unequip'
+
+
+FULL = PARTY + [mon(None, box=None, species=2)]
+
+
+def test_a_full_party_and_full_boxes_let_a_wanted_item_go_while_a_copy_stays():
+    # The holder can never be withdrawn, so its Everstone cannot come off. A second Everstone held by
+    # another Pokémon, or one in the bag, keeps the item, so the spare may go with its stone.
+    stone, other = mon(3, held_item=EVERSTONE), mon(4, species=19, held_item=EVERSTONE)
+    found = rows(Policy(), snapshot([BEST, stone, other], FULL))
+    assert found == {(3, 'release'): ledger.HELD + ledger.PLAIN + 200, (3, 'unequip'): ledger.HELD + ledger.PLAIN}
+    unit = ledger.storage_unit(Policy(), snapshot([BEST, stone, other], FULL))
+    assert (unit.action, unit.detail) == ('release', stone)
+    bagged = rows(Policy(), snapshot([BEST, stone], FULL, items=[(EVERSTONE, 1)]))
+    assert bagged[(3, 'release')] == ledger.HELD + ledger.PLAIN + 100
+    # A plain spare still goes first.
+    plain = mon(1)
+    assert ledger.storage_unit(Policy(), snapshot([BEST, plain, stone, other], FULL)).detail == plain
+
+
+def test_the_last_wanted_item_stays_and_a_free_slot_keeps_the_unequip_route():
+    stone, other = mon(3, held_item=EVERSTONE), mon(4, species=19, held_item=EVERSTONE)
+    # The only Everstone never leaves.
+    assert ledger.storage_unit(Policy(), snapshot([BEST, stone], FULL)) is None
+    # With a free party slot the stone comes off first instead.
+    assert [unit.action for unit in ledger.box_units(Policy(), snapshot([BEST, stone, other], PARTY))] == ['unequip']
+    # A free box slot also means no release is needed to take the item off later.
+    room = snapshot([BEST, stone, other], FULL)
+    room.box_counts = (BOX_CAPACITY - 1,) + (BOX_CAPACITY,) * 13
+    assert [unit.action for unit in ledger.box_units(Policy(), room)] == ['unequip']
 
 
 def test_a_spare_in_another_box_costs_a_box_change():

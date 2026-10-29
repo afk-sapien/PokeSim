@@ -9,6 +9,8 @@ Money is held back as reservations: Day Care fees with a margin for the walk bac
 The shop restocks what ``supplies`` lists, keeping balls to catch with before the cash reserve, and a
 run sells valuables and spare TMs only when it has no ball and no money for one.
 """
+from collections import Counter
+
 from ..planning.ledger import BOX, MONEY, PARTY, PRICELESS, Ledger, Need, Resources, Shortfall, Unit
 from .champion_shop import SUPPLIES
 from .menus import Release
@@ -109,7 +111,9 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
     A plain spare goes as it is. A spare holding an item no plan wants may go with its item, worth the
     item's price as well. Any held spare may also have its item taken off first, which keeps the item
     but needs a free party slot and a bag entry, so it is chosen only when both are free. A spare
-    holding an item some plan wants goes only that way.
+    holding an item some plan wants goes only that way, unless the party and every box are full so
+    the item can never come off. It then goes with its item while the bag or another Pokémon keeps a
+    copy, so a full box frees a slot as it does in Red, Blue and Yellow.
     """
     from pokecore.gen2.breeding import breeding_stock
     from .release import TRAINED_STAT_EXP, plan_partners, spares
@@ -123,6 +127,8 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
     lenient = spares(snapshot, policy.demand, keep, preferences, partners, lenient=True, owners=owners)
     wanted = wanted_items(data)
     bag = dict(snapshot.pockets.get('items', ()))
+    sealed = len(snapshot.party) >= PARTY_SIZE and headroom(snapshot) == 0
+    holders = Counter(row.held_item for row in snapshot.party + snapshot.stored if row.held_item)
     rows = []
     for rank, mon in enumerate(plain):
         if allowed(mon):
@@ -138,8 +144,13 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
             rows.append(Unit(key, BOX, base, 'release', detail=mon, order=(1, rank)))
             continue
         price = data.item_attributes.get(mon.held_item, {}).get('price', 0)
+        lost = price // 2 if bag.get(mon.held_item) else price
         if mon.held_item not in wanted:
-            lost = price // 2 if bag.get(mon.held_item) else price
+            rows.append(Unit(key, BOX, HELD + base + lost, 'release', detail=mon, order=(1, rank)))
+        elif sealed and (bag.get(mon.held_item) or holders[mon.held_item] > 1):
+            # A full party with every box full can never withdraw the holder to take its item off, so
+            # the spare goes with it, as Red, Blue and Yellow let any spare duplicate go. Another copy of
+            # the item stays in the bag or on another Pokémon, so no plan loses it.
             rows.append(Unit(key, BOX, HELD + base + lost, 'release', detail=mon, order=(1, rank)))
         if standing_down(policy, unequip_key(mon)):
             continue
