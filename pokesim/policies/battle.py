@@ -304,11 +304,12 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     collection_target = (collect_missing or legendary) and missing_species and allowed_capture
     repeat_target = enemy.species == repeat_species and not missing_species
     collection_target |= repeat_target or shiny
-    capture_limit = float('inf') if shiny else 50 if legendary else 5 if repeat_target else 20
+    from .ledger import LEGENDARY_THROWS, battle_ledger, catch_spent, legendary_retreat
+    capture_limit = float('inf') if shiny else LEGENDARY_THROWS if legendary else 5 if repeat_target else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)
     wild = snapshot.in_battle == 1 and snapshot.battle_type == 0
-    exhausted = not snapshot.can_catch or not balls and master is None or catch_attempts >= capture_limit
-    if wild and not shiny and legendary and (missing_species or repeat_target) and exhausted:
+    exhausted = catch_spent(snapshot, catch_attempts, capture_limit)
+    if legendary and legendary_retreat(snapshot, catch_attempts, missing_species or repeat_target):
         return Decision('run', reason='Retreat and prepare another legendary attempt with balls and storage space')
     # What the run wants and can catch now: a collection target, or an incidental capture the
     # collection counts as useful, exactly when a catch rule below fires. The stance catches it
@@ -318,7 +319,6 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
         # A field-move carrier stays wanted while the catcher is unsafe, so its hunt fights for it.
         or useful and balls and (safe or required) and catch_attempts < (12 if required else 5))
     encounter = Encounter(wild=wild, wanted=bool(wanted), shiny=bool(wild and shiny and exhausted), tries=flee_tries)
-    from .ledger import battle_ledger
     books = battle_ledger()
     if stance(kind, encounter, books, goal=kind, resources=lambda: books.snapshot(snapshot.party)) is FLEE:
         return Decision('run', reason=FLEE_REASONS.get(kind if not encounter.shiny else 'shiny', FLEE_REASONS[STORY]),
