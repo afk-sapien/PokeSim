@@ -5,7 +5,8 @@ from dataclasses import asdict
 from ..duplicates import quality
 from pokecore.identity import same
 from .move_development import evolution_wait, move_name
-from ..investment import automatic_trade_protected, training_investment, potential_power, assessment, SEARCH_BUDGET
+from ..pokemon import experience_at_level
+from ..investment import automatic_trade_protected,training_investment, potential_power, assessment, SEARCH_BUDGET
 from functools import lru_cache
 from ..game_data import current_variant, load
 
@@ -41,9 +42,11 @@ IDLE_BUDGET = 7200
 # it spent three times its expected frames, travel included, without progress. Training keeps its own
 # clock and a marathon its race clock.
 EXPECTED_FRAMES = {'rematch': 100000, 'special': 60000, 'evolve': 60000, 'other': 12000}
-# Frames a training step is expected to take per level. Postgame training on three Red and three
-# Yellow saves took about 30000 and 46000.
-FRAMES_PER_LEVEL = 36000
+# Frames a training step is expected to take per point of experience, heals included. A flat price per
+# level made a level 50 Dragonair's step look as cheap as a level 25 partner's, though it needs four
+# times the experience, and Red's heal share rose from 1% to 9% while it trained on Route 23. Postgame
+# training on three Red and three Yellow saves took about 36000 frames for a level near 50.
+FRAMES_PER_EXPERIENCE = 5
 # The tier of a hunt for another copy of a registered species, a quality or a plain repeat, so a family
 # still short of its level 100 credit trains first. At the approved weights a quality catch earns about
 # ten times what a training step earns per frame, and Red's training share fell from 57% to 2% while its
@@ -100,12 +103,21 @@ def can_train(mon):
     return sum(MOVES.get(move, {}).get('pp', 0) for move in moves if MOVES.get(move, {}).get('power')) >= TRAINING_PP
 
 
+def training_frames(project):
+    """The frames ``project``'s training step is expected to take, from the experience its trainee's
+    growth rate needs between the two levels."""
+    growth = SPECIES.get(project.get('parent'), {}).get('growth')
+    needed = (experience_at_level(project['target_level'], growth)
+              - experience_at_level(project['initial_level'], growth))
+    return max(0, needed) * FRAMES_PER_EXPERIENCE
+
+
 def candidate(project, travel, tails, short, owned, wild=None):
     """The arbiter's candidate for a project.
 
     Values come from planning/values.py. Expected frames are the walk to the project at the shared
     tile estimate in planning/cost.py, plus a catch priced from ``wild``, the cartridge's own encounter
-    odds, or the per-kind EXPECTED_FRAMES, the training step at FRAMES_PER_LEVEL or the race clock. A
+    odds, or the per-kind EXPECTED_FRAMES, the training step at FRAMES_PER_EXPERIENCE or the race clock. A
     quality hunt is worth each catch's expected drop in the species' best DV tail, once per catch. A
     hunt for another copy of a registered species sits in HUNT_TIER, below training for a credit.
     """
@@ -132,7 +144,7 @@ def candidate(project, travel, tails, short, owned, wild=None):
     else:
         tier, value = (HUNT_TIER if project.get('repeat') else tier), values.SMALL
     if method == 'train':
-        frames = (project['target_level'] - project['initial_level']) * FRAMES_PER_LEVEL
+        frames = training_frames(project)
     elif method == 'marathon':
         frames = marathon.BUDGET
     else:

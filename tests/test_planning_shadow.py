@@ -9,7 +9,7 @@ from pokesim.planning import values
 from pokesim.planning.arbiter import Candidate, Tier
 from pokesim.planning.shadow import Shadow
 from pokesim.planning import cost
-from pokesim.policies.collection import EXPECTED_FRAMES, FRAMES_PER_LEVEL, Collection, candidate
+from pokesim.policies.collection import EXPECTED_FRAMES, FRAMES_PER_EXPERIENCE, Collection, candidate
 from pokesim.policies.progression import Goal
 from pokesim.policies.strategic import ERRAND_FRAMES, StrategicPolicy, overworld_candidates
 from tools.replay_audit import load, shadow_lines
@@ -92,7 +92,7 @@ def test_gen1_projects_take_the_approved_values():
     train = candidate({'method': 'train', 'key': 't', 'initial_level': 90, 'target_level': 100,
                        'mastery_needed': True}, 0, {}, False, set())
     assert train.value == values.LEVEL_100 and train.goal == 'training'
-    assert train.expected_frames == 10 * FRAMES_PER_LEVEL
+    assert train.expected_frames == (100 ** 3 - 90 ** 3) * FRAMES_PER_EXPERIENCE
 
 
 def test_gen1_catches_are_priced_from_the_cartridge_odds():

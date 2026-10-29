@@ -102,13 +102,13 @@ MONEY = {'method': 'rematch', 'key': 'money'}
 
 def test_director_prioritizes_training_but_keeps_other_activities():
     rows = [train('near100', 95), train('low', 10), REPEAT, MONEY]
-    # The last step to a level 100 credit buys the most per frame.
-    assert pick(*rows) == 'near100'
+    # A low partner's step needs the least experience, so it buys the most of the climb per frame.
+    assert pick(*rows) == 'low'
     # A hunt for another copy waits for training toward a level 100 credit, however long the climb.
-    assert pick(*rows[1:]) == 'low'
+    assert pick(rows[0], REPEAT, MONEY) == 'near100' and pick(*rows[1:]) == 'low'
     assert pick(REPEAT, MONEY) == 'repeat'
     # Once the family has its credit, training is filler and the hunt goes first.
-    assert pick(train('done', 10, mastery=False), REPEAT) == 'repeat'
+    assert pick(train('done', 50, mastery=False), REPEAT) == 'repeat'
     # A rematch only gets a turn when money is short or nothing else is on offer.
     assert pick(train('low', 10), MONEY) == 'low' and pick(MONEY) == 'money'
     assert pick(*rows, short=True) == 'money'
@@ -140,11 +140,11 @@ def test_a_new_pokedex_entry_comes_before_the_level_100_grind():
     tauros = {'method': 'safari', 'key': 'tauros', 'species': sid(128), 'map': 220}
     assert pick(train('grind', 59), victreebel, tauros, MONEY) == 'tauros'
     assert pick(train('grind', 59), victreebel, MONEY) == 'victreebel'
-    # An evolution that only improves a registered species is no new entry, so the last climb to a
+    # An evolution that only improves a registered species is no new entry, so the last level to a
     # level 100 credit leads again.
     better = {'method': 'evolve', 'key': 'better', 'upgrade_evolution': True}
     assert candidate(better, 0, {}, False, set()).value == values.SMALL
-    assert pick(train('grind', 90), better, REPEAT) == 'grind'
+    assert pick(train('grind', 99), better, REPEAT) == 'grind'
 
 
 def test_a_partner_with_too_few_attacks_between_heals_is_not_trained():
@@ -158,6 +158,17 @@ def test_a_partner_with_too_few_attacks_between_heals_is_not_trained():
     rows = candidates(postgame(party=(fighter,)), searches=3)
     assert [p['initial_level'] for _, p in rows if p['method'] == 'train'] == [53]
     assert can_train({'species': 1})
+
+
+def test_a_step_is_priced_by_the_experience_it_needs():
+    from pokesim.policies.collection import FRAMES_PER_EXPERIENCE, training_frames
+    # Red trained a level 50 Dragonair on Route 23 ahead of level 25 partners, since a flat price per
+    # level made its step look as cheap, and it walked to the Pokémon Center every few battles.
+    dragonair = {**train('dragonair', 50), 'parent': sid(148)}
+    pidgeotto = {**train('pidgeotto', 25), 'parent': sid(17)}
+    assert training_frames(dragonair) == (5 * 60 ** 3 // 4 - 5 * 50 ** 3 // 4) * FRAMES_PER_EXPERIENCE
+    assert training_frames(dragonair) > 4 * training_frames(pidgeotto)
+    assert pick(dragonair, pidgeotto) == 'pidgeotto'
 
 
 def test_training_climbs_in_steps_of_ten_and_resumes_from_where_it_stopped():
