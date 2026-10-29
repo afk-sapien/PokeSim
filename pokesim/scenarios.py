@@ -519,7 +519,7 @@ def play(scenario, rom=None, progress=None):
         budget = scenario.budget_game_minutes * MINUTE
         battle_frame = None
         worst, reloads, achieved, failure, reached = 0, 0, [], None, scenario.until is None
-        end, reached_frame, followed = start + budget, None, scenario.then is None
+        end, reached_frame, followed, followed_frame = start + budget, None, scenario.then is None, None
         marks = getattr(watch, 'marks', None)
         while run.frame < end:
             snapshot = read()
@@ -532,7 +532,9 @@ def play(scenario, rom=None, progress=None):
                     progress(f'{scenario.name}: {achieved[-1]["minute"]}m {title}')
             seen = [(kind, None, title) for kind, title in gained] + (marks() if marks else [])
             if reached and not followed and any(matches(scenario.then, kind, detail) for kind, detail, _ in seen):
-                followed = True
+                followed, followed_frame = True, run.frame - start
+                if progress:
+                    progress(f'{scenario.name}: {scenario.then} followed at frame {followed_frame}')
             if not reached and any(matches(scenario.until, kind, detail) for kind, detail, _ in seen):
                 reached, reached_frame = True, run.frame - start
                 if progress:
@@ -577,7 +579,7 @@ def play(scenario, rom=None, progress=None):
         details = run.policy.details()
         return {'name': scenario.name, 'generation': run.generation, 'passed': failure is None, 'failure': failure,
                 'game_minutes': (run.frame - start) // MINUTE, 'worst_quiet_minutes': worst // MINUTE,
-                'reached_frame': reached_frame, 'reloads': reloads, 'policy_recoveries': run.policy.recoveries, 'achieved': achieved[-12:],
+                'reached_frame': reached_frame, 'followed_frame': followed_frame, 'reloads': reloads, 'policy_recoveries': run.policy.recoveries, 'achieved': achieved[-12:],
                 'achievements': len(achieved), 'final_map': final.map_name,
                 'final_party': [[mon.name, mon.level, mon.hp, mon.status] for mon in final.party],
                 'objective': (details.get('objective') or {}).get('title'), 'reason': details.get('reason')}

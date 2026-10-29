@@ -264,6 +264,14 @@ def test_a_scenario_passes_when_other_work_follows_the_stand_down(tmp_path, monk
                     after_game_minutes=1, then='rung')
     assert result['passed'], result
     assert result['reached_frame'] == 600
+    assert result['followed_frame'] == 1200
+
+
+def test_a_scenario_can_wait_for_the_same_stand_down_once_it_expired(tmp_path, monkeypatch):
+    result = replay(tmp_path, monkeypatch, {600: [stand(1)], 1800: [stand(2)]},
+                    after_game_minutes=1, then='stand_down:tower:room')
+    assert result['passed'], result
+    assert (result['reached_frame'], result['followed_frame']) == (600, 1800)
 
 
 def test_a_scenario_fails_when_nothing_follows_the_stand_down(tmp_path, monkeypatch):
