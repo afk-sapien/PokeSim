@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Nightly watch: runs Core's real-cartridge tests, runs PokeSim's suite with the
-# private saves CI lacks, and checks that the hosted PokeSim app is up. Writes
-# one log per night and keeps the newest 14.
+# private saves CI lacks, checks that the hosted PokeSim app is up, and checks that
+# Gen 2 adventures go back to quality hunts once training runs out. Writes one log
+# per night and keeps the newest 14.
 # Settings come from POKESIM_WATCH_* environment variables. HOST and SITE have no default.
 set -uo pipefail
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CORE=${POKESIM_WATCH_CORE:-$HOME/.local/share/pokesim-overnight/pokesim-core}
 CORE_REPO=${POKESIM_WATCH_CORE_REPO:-https://github.com/afk-sapien/pokesim-core.git}
 POKESIM=${POKESIM_WATCH_POKESIM:-$HOME/.local/share/pokesim-overnight/pokesim}
@@ -122,6 +124,14 @@ running = sum((a.get("status") or a.get("state")) == "running" for a in adventur
 print(len(adventures), "adventures,", running, "running")
 '; then
   failed+=(app)
+fi
+
+echo "-- Gen 2 quality hunts on $HOST"
+# A Gold, Silver or Crystal adventure with no trainee left must start a better-DV hunt within 6 game
+# hours. The state file keeps the game hour at which each one was first seen without a trainee.
+if ! ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST" "docker exec -i $CONTAINER python - collect $SITE" \
+    <"$HERE/quality_hunt_watch.py" | python3 "$HERE/quality_hunt_watch.py" judge "$LOGS/quality-hunts.json"; then
+  failed+=(quality)
 fi
 
 ls -1t "$LOGS"/*.log | tail -n +$((KEEP + 1)) | xargs -r rm --
