@@ -65,6 +65,9 @@ CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'
 CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
 LEAGUE = {MAPS[n] for n in ('LORELEIS_ROOM','BRUNOS_ROOM','AGATHAS_ROOM','LANCES_ROOM','CHAMPIONS_ROOM','HALL_OF_FAME')}
 REPEATABLE = {'grass', 'surf', 'fish', 'safari'}
+# Goals the adventure runs for a project while the project stays chosen: a heal after its battles,
+# supplies for its catches, a box with room for them, or a reserve swapped in at the Center on the way.
+SUPPORT_TRIPS = ('heal', 'restock', 'party_box', 'party_upgrade')
 
 
 def place(map_id):
@@ -500,7 +503,32 @@ class Collection:
             key = str(project['species'])
             self.quality_searches[key] = min(SEARCH_BUDGET, self.quality_searches.get(key, 0) + 1)
 
-    def observe(self,s, suspended=False, training_ready=True, training_active=None, overworld=True):
+    @staticmethod
+    def support_trip(project, s, support, delta):
+        """Whether this frame is part of a support trip the project started, or of the walk back from one.
+
+        A heal after the project's battles, supplies for its catches and a box with room for them are
+        the project's own errands, so they are not time it idled. The walk back ends on the map the
+        trip left from. A walk back longer than the trip, or than two minutes when the trip was shorter,
+        counts again from there. A restock in Saffron for a hunt in Mt. Moon walked back for over two
+        minutes, and the hunt stood down on Route 4 before it reached the cave.
+        """
+        trip = project.get('support_trip')
+        if support:
+            if trip is None:
+                trip = project['support_trip'] = {'map': s.map, 'frames': 0, 'return': 0}
+            trip['frames'] += trip['return'] + delta
+            trip['return'] = 0
+            return True
+        if trip is None:
+            return False
+        if s.map == trip['map'] or trip['return'] >= max(IDLE_BUDGET, trip['frames']):
+            project.pop('support_trip')
+            return False
+        trip['return'] += 0 if s.in_battle else delta
+        return True
+
+    def observe(self,s, suspended=False, training_ready=True, training_active=None, overworld=True, support=False):
         delta = max(0,min(120,s.frame - self.last_frame)) if self.last_frame is not None else 0
         self.last_frame = s.frame
         self.elapsed += delta
@@ -515,6 +543,10 @@ class Collection:
             project = self.project
             training_reason = None
             marathon_finished = False
+            # Frames that count against the project's idle time and budget. A support trip's frames do
+            # not. A Yellow hunt on Route 21 ran out of its expedition budget after three box changes.
+            away = self.support_trip(project, s, support, delta)
+            spent = 0 if away else delta
             if project['method'] == 'marathon':
                 before = project['checkpoint']
                 progressed, marathon_finished = marathon.observe(
@@ -567,7 +599,7 @@ class Collection:
                 active = (trainee is not None and not suspended
                           and (training_active if training_active is not None else training_ready))
                 self.remaining, training_reason = training.observe(
-                    project, delta, self.remaining, active, gained, arrived)
+                    project, spent, self.remaining, active, gained, arrived)
                 clock = project['training_session']
                 self.idle_frames = clock['active_idle'] if active else clock['preparation_idle']
             else:
@@ -579,12 +611,13 @@ class Collection:
                 # A marathon is still observed while another goal's visit suspends it, so its race clock
                 # runs on. That visit is not idle time for the marathon. A release visit of over two
                 # minutes deferred it once the PC list could reach every slot.
+                # A map first reached on a support trip is not a new route for the project either.
                 moved = ((token is not None and self.progress_token is not None and token != self.progress_token)
-                         or new_flags or s.map not in self.project_maps
+                         or new_flags or s.map not in self.project_maps and not away
                          or (self.project['method'] in ('grass', 'surf', 'fish', 'safari', 'trade') or legendary_project(self.project))
                          and self.was_in_battle and not s.in_battle)
                 self.director.monitor.start(self.project_key, budget=IDLE_BUDGET)
-                idle = self.director.monitor.observe(self.project_key, 0 if s.in_battle or suspended else delta,
+                idle = self.director.monitor.observe(self.project_key, 0 if s.in_battle or suspended else spent,
                                                      (ProgressEvent('project'),) if moved else ())
                 if s.map not in self.project_maps:
                     self.project_maps.append(s.map)
@@ -645,7 +678,7 @@ class Collection:
                 self.abandon(training_reason)
                 return
             if budgeted(project):
-                self.spend_budget(project, s, delta, new_flags)
+                self.spend_budget(project, s, spent, new_flags)
             if finished or (self.remaining <= 0 and (project['method'] != 'train' or not s.in_battle)):
                 # A project done or out of budget starts its next turn with the whole budget.
                 self.director.monitor._table(SPENT).pop(budget_key(project), None)

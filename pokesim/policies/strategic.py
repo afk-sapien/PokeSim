@@ -21,7 +21,7 @@ from .menus import select, tap
 from .shopping import ShoppingController
 from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
-from .collection import CENTERS, Collection, LEAGUE, legendary_project, snorlax_project
+from .collection import CENTERS, Collection, LEAGUE, SUPPORT_TRIPS, legendary_project, snorlax_project
 from .awareness import ActionWatch
 from .team import development_candidate, potential, readiness, reserve_to_deposit, storage_headroom
 from ..screen import Screen, W_PLAYER_MON_NUMBER
@@ -257,9 +257,11 @@ class StrategicPolicy(Policy):
         # PC transfers briefly combine a new partner with the old slot's level.
         # Accept training gains in battle or after returning to the overworld.
         # A release visit to the PC is storage work, so its frames do not count against the project.
+        # Nor do the heals, restocks and box changes the project needs, or the walk back from them.
         self.collection.observe(s, overworld=kind == 'overworld',
                                 suspended=self.pickups.active is not None or self.tm_plan is not None
                                 or self.goal.key == 'party_release',
+                                support=self.goal.key in SUPPORT_TRIPS,
                                 training_ready=bool(s.in_battle) or kind == 'overworld',
                                 training_active=(self.goal.key == 'collect_train' and not self.heal_latch
                                                  and not needs_healing(s.party)
