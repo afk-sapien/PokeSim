@@ -110,7 +110,7 @@ def test_legacy_projects_get_one_migration_and_counters_survive_later_restores()
     assert again.remaining == 1000
 
 
-def test_ready_nearby_partners_score_above_distant_boxed_partners():
+def test_ready_nearby_partners_train_before_distant_boxed_partners():
     c = Collection()
     nav = Navigator()
     nav.visits = {(m, 0, 0): 1 for m in WORLD}
@@ -126,9 +126,9 @@ def test_ready_nearby_partners_score_above_distant_boxed_partners():
     c.director.select = select
     c.observe(s)
     c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
-    # The boxed partner's walk to the PC and back counts against it.
+    # A boxed partner in the party trainee's tier is not offered, so no PC trip swaps them.
     scores = {p['parent']: option.score for option, p in captured if p['method'] == 'train'}
-    assert scores[sid(113)] > scores[sid(115)]
+    assert sid(113) in scores and sid(115) not in scores
     assert c.remaining == training.TRAINING_BUDGET
 
 
