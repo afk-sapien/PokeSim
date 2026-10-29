@@ -343,3 +343,27 @@ def test_money_panel_shows_earned_spent_and_each_source(page, game, width):
     expect(page.locator('[data-money="blackouts"]')).to_contain_text('₽6,001,000')
     expect(page.locator('[data-money="other"]')).to_contain_text('₽0')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1280, 320])
+def test_goal_panel_shows_the_current_goal_shares_and_stand_downs(page, game, width):
+    from pokesim.goal_time import GoalTime
+    from pokesim.planning.monitor import STAND_DOWNS, STOOD_DOWN
+    url, store, _, _ = game
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(url + '/stats')
+    expect(page.locator('#goal-current')).to_contain_text('No goal recorded yet')
+    expect(page.locator('#goal-note')).to_contain_text('once this version runs')
+    tracker = GoalTime(store)
+    now = time.time()
+    long = 'Catch a Pikachu in Viridian Forest before the next Gym Leader rematch comes around again'
+    tracker.observe(('heal', 'Heal at the Pokémon Center'), {}, 0, now=now)
+    tracker.observe(('hunt', long), {}, 570, now=now)
+    tracker.observe(('hunt', long), {STOOD_DOWN: {'hunt:25': 5}, STAND_DOWNS: {'hunt:25': 2}}, 600, now=now)
+    tracker.flush(now=now)
+    page.reload()
+    expect(page.locator('#goal-current')).to_contain_text('Now: ' + long)
+    expect(page.locator('[data-goal="heal"]')).to_contain_text('95%')
+    expect(page.locator('[data-goal="hunt"]')).to_contain_text('5%')
+    expect(page.locator('[data-stand-down="hunt:25"]')).to_contain_text('2 in a row')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

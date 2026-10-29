@@ -77,6 +77,8 @@ class Emulator:
         self.milestones = MilestoneTracker(store)
         from .statistics import StatisticsTracker
         self.statistics = StatisticsTracker(store)
+        from .goal_time import GoalTime
+        self.goal_time = GoalTime(store)
         self.rom = Path(config.ROM_PATH)
         self.speed = config.SPEED
         self.palette = validate_palette(getattr(config, 'PALETTE', 'original'))
@@ -591,6 +593,9 @@ class Emulator:
                 self.policy.collection.milestones = milestone_status(self.store)
         if hasattr(self, 'statistics'):
             self.statistics.observe(snap, self.pb.memory, clock=self.play_clock.status())
+        if hasattr(self, 'goal_time') and snap.valid and snap.started:
+            from .goal_time import gen1_view
+            self.goal_time.observe(*gen1_view(self.policy), self.frame)
         with self.lock:
             self.snapshot = snap
         if snap.valid and snap.started:

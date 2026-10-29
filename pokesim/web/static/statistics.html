@@ -17,7 +17,7 @@
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=pass2-1">
-<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=money-1">
+<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=goals-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="stats">
@@ -89,6 +89,15 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="column-head"><h2 class="legend legend--ink" id="money-heading">Money earned and spent</h2></div>
 <div class="progress-panel stats-activity" id="money-list"></div><p class="note" id="money-note"></p>
 </section>
+<section class="statistics-section" id="goal-details" aria-labelledby="goal-heading">
+<div class="column-head"><h2 class="legend legend--ink" id="goal-heading">What the bot is working on</h2></div>
+<p id="goal-current"></p>
+<h3 class="micro">Share of play by goal</h3>
+<ol class="goal-list" id="goal-shares"></ol>
+<h3 class="micro">Recent stand-downs</h3>
+<ol class="goal-list" id="goal-stand-downs"></ol>
+<p class="note" id="goal-note"></p>
+</section>
 <section class="statistics-section progress" id="road" aria-labelledby="road-heading" hidden>
 <div class="column-head"><h2 class="legend legend--ink" id="road-heading">Collection and League history</h2><span class="micro" id="road-span"></span></div>
 <div class="progress-panel" id="road-charts"></div>
@@ -119,6 +128,6 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <script src="${game_base}/static/app.js?v=pass2-1"></script>
 <script src="${game_base}/static/progress.js?v=badges-1"></script>
-<script src="${game_base}/static/statistics.js?v=money-1"></script>
+<script src="${game_base}/static/statistics.js?v=goals-1"></script>
 </body>
 </html>

@@ -418,3 +418,45 @@ def test_both_generations_count_money_earned_and_spent_by_source(tmp_path, gen2_
     assert found[0] == found[1] == {
         'available': True, 'complete_history': True, 'earned': 600, 'spent': 1900, 'net': -1300,
         'sources': {'battles': 500, 'other': 100, 'shops': 200, 'blackouts': 1700}}
+
+
+def test_both_generations_show_goal_shares_and_stand_downs(tmp_path, gen2_data):
+    """Two goals take 60 frames each, and the second stands down a hunt while it runs."""
+    from pokesim import goal_time
+    from pokesim.gen2 import standdown
+    from pokesim.gen2.policy import Goal as Gen2Goal
+    from pokesim.policies.progression import Goal as Gen1Goal
+    found = []
+    for generation, (emu, store) in ((1, gen1_adventure(tmp_path)), (2, gen2_adventure(tmp_path, gen2_data))):
+        try:
+            policy = emu.policy
+            if generation == 1:
+                goals = Gen1Goal('heal', 'Heal at the Pokémon Center', ''), Gen1Goal('hunt', 'Catch Pikachu', '')
+                view = goal_time.gen1_view
+
+                def stand_down():
+                    policy.collection.director.monitor.stand_down('hunt:25', 500)
+            else:
+                goals = Gen2Goal('heal', 'Heal at the Pokémon Center', 'X', 0, 0), Gen2Goal('hunt', 'Catch Pikachu', 'X', 0, 0)
+                view = goal_time.gen2_view
+
+                def stand_down():
+                    standdown.stand_down(policy, 'hunt:25')
+            tracker = goal_time.GoalTime(store)
+            for frame, goal, event in ((100, 0, None), (160, 1, None), (190, 1, stand_down), (220, 1, None)):
+                policy.goal = goals[goal]
+                if event:
+                    event()
+                tracker.observe(*view(policy), frame, now=1000 + frame)
+            tracker.flush(now=2000)
+            result = payloads(emu, store)['statistics']['goal_time']
+            found.append({**result, 'stand_downs': [{key: row[key] for key in ('key', 'label', 'in_a_row')}
+                                                    for row in result['stand_downs']]})
+        finally:
+            store.close()
+    assert found[0] == found[1] == {
+        'available': True, 'since': 1100, 'current': {'key': 'hunt', 'label': 'Catch Pikachu', 'since': 1160},
+        'frames': 120, 'other_frames': 0,
+        'shares': [{'key': 'heal', 'label': 'Heal at the Pokémon Center', 'frames': 60, 'share': 0.5},
+                   {'key': 'hunt', 'label': 'Catch Pikachu', 'frames': 60, 'share': 0.5}],
+        'stand_downs': [{'key': 'hunt:25', 'label': 'Catch Pikachu', 'in_a_row': 1}]}

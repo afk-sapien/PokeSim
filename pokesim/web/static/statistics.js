@@ -93,6 +93,37 @@
       ? 'Money is counted once this version runs the adventure.'
       : `${flow.complete_history ? 'Counted for the whole adventure.' : `Counted since ${date(flow.since)}.`} Prize money is any rise during a battle. A drop just after the whole party fainted is the blackout penalty. Other drops are shops and fees, such as the Safari Zone or Day Care.`
   }
+  function renderGoals(record) {
+    const counted = record?.available
+    const current = record?.current
+    document.querySelector('#goal-current').textContent = !current ? 'No goal recorded yet.'
+      : `Now: ${current.label}, since ${date(current.since)}.`
+    const shares = document.querySelector('#goal-shares')
+    shares.replaceChildren()
+    const rows = [...(record?.shares || [])]
+    if (record?.other_frames > 0) rows.push({key: 'other', label: 'Other goals', frames: record.other_frames, share: record.other_frames / record.frames})
+    for (const row of rows) {
+      const item = add(shares, 'li', 'goal-row', '')
+      item.dataset.goal = row.key
+      add(item, 'span', '', row.label)
+      add(item, 'strong', '', `${Math.round(row.share * 100)}%`)
+      add(item, 'span', 'note', duration(row.frames / 60))
+    }
+    if (!rows.length) add(shares, 'li', 'note', 'Nothing counted yet.')
+    const stood = document.querySelector('#goal-stand-downs')
+    stood.replaceChildren()
+    for (const row of record?.stand_downs || []) {
+      const item = add(stood, 'li', 'goal-row', '')
+      item.dataset.standDown = row.key
+      add(item, 'span', '', row.label || row.key)
+      add(item, 'strong', '', row.in_a_row > 1 ? `${row.in_a_row} in a row` : 'Once')
+      add(item, 'span', 'note', date(row.at))
+    }
+    if (!record?.stand_downs?.length) add(stood, 'li', 'note', 'No stand-downs recorded.')
+    document.querySelector('#goal-note').textContent = !counted
+      ? 'Goals are counted once this version runs the adventure.'
+      : `Counted in game time since ${date(record.since)}. A goal stands down when it spends its budget without progress, and waits before it is tried again.`
+  }
   function renderOverview(data) {
     latest = data
     const overview = data.overview || {}
@@ -123,6 +154,7 @@
     document.querySelector('#activity-note').textContent = `Steps use the return-visit counter${overview.steps_since ? ', tracked since ' + date(overview.steps_since) : ''}. Battles are sampled observations. Money is the current balance.`
     renderTallies(data.tallies)
     renderMoney(data.money_flow)
+    renderGoals(data.goal_time)
     const highlights = document.querySelector('#stats-highlights')
     highlights.replaceChildren()
     for (const [key, title] of [['battle', 'Strongest Battle Power'], ['dvs', 'Highest DV score']]) {
