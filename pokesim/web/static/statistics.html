@@ -17,7 +17,7 @@
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=pass2-1">
-<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=pass2-1">
+<link rel="stylesheet" href="${game_base}/static/panel-journal.css?v=tallies-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="stats">
@@ -75,6 +75,10 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="column-head"><h2 class="legend legend--ink" id="activity-heading">Activity</h2></div>
 <div class="progress-panel stats-activity" id="activity-list"></div><p class="note" id="activity-note"></p>
 </section>
+<section class="statistics-section" id="tally-details" aria-labelledby="tally-heading">
+<div class="column-head"><h2 class="legend legend--ink" id="tally-heading">Battles and moments</h2><span class="micro">Whole adventure</span></div>
+<div class="progress-panel stats-activity" id="tally-list"></div><p class="note" id="tally-note"></p>
+</section>
 <section class="statistics-section progress" id="road" aria-labelledby="road-heading" hidden>
 <div class="column-head"><h2 class="legend legend--ink" id="road-heading">Collection and League history</h2><span class="micro" id="road-span"></span></div>
 <div class="progress-panel" id="road-charts"></div>
@@ -105,6 +109,6 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <script src="${game_base}/static/app.js?v=pass2-1"></script>
 <script src="${game_base}/static/progress.js?v=2"></script>
-<script src="${game_base}/static/statistics.js?v=gen2-parity-1"></script>
+<script src="${game_base}/static/statistics.js?v=tallies-1"></script>
 </body>
 </html>

@@ -339,3 +339,28 @@ def test_gen2_planner_releases_reach_the_journal_as_gen1_releases_do():
     refused = Releases()
     refused.observe(task, held, data, Event)
     assert refused.observe(None, held, data, Event) == [] and refused.member is None
+
+
+def test_both_generations_keep_the_same_battle_and_moment_tallies(tmp_path, gen2_data):
+    """Each generation writes its own journal entries. The Stats page counts them the same way
+    and keeps them after the journal is pruned."""
+    from pokesim.events import Event as Gen1Event
+    from pokesim.gen2.emulator import Event as Gen2Event
+    moments = [('faint', 'BULBASAUR fainted', ''), ('blackout', 'Blacked out!', 'fainted fighting a RATTATA.'),
+               ('blackout', 'Blacked out!', 'The whole party fainted.'), ('trainer', 'Defeated a Youngster', ''),
+               ('evolve', 'BULBASAUR evolved!', ''), ('release', 'Said goodbye to a spare Rattata', '')]
+    tallies = []
+    for emu, store, event in (gen1_adventure(tmp_path) + (Gen1Event,), gen2_adventure(tmp_path, gen2_data) + (Gen2Event,)):
+        try:
+            for kind, title, body in moments:
+                store.add_event(event(kind, title, body), emu.snapshot, None, None)
+            with store.lock, store.db:
+                store.db.execute('UPDATE events SET ts = 0')
+            store.prune_events(1)
+            tallies.append(payloads(emu, store)['statistics']['tallies'])
+        finally:
+            store.close()
+    gen1, gen2 = tallies
+    assert gen1 == gen2
+    assert (gen1['faints'], gen1['blackouts'], gen1['trainers_defeated'], gen1['trainer_losses']) == (1, 2, 1, 1)
+    assert (gen1['evolutions'], gen1['releases'], gen1['trainer_win_rate']) == (1, 1, 50.0)

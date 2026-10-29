@@ -12,7 +12,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import progress
+from . import adventure_counters, progress
 from .checkpoints import CheckpointStore, compress_state
 
 log = logging.getLogger(__name__)
@@ -94,6 +94,7 @@ class Store:
             initialize_activity(self.db)
             from .trade_statistics import initialize as initialize_trade_statistics
             initialize_trade_statistics(self.db)
+            adventure_counters.initialize(self.db)
 
     def _migrate(self):
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(events)")}
@@ -135,6 +136,7 @@ class Store:
                         from .league_partners import record
                         won = record(self.db, snapshot, ev.title, eid)
                     progress.record(self.db, ts, snapshot, won)
+                    adventure_counters.record(self.db, eid, ev.type)
                     shot = f"{eid}.png" if shot_png else None
                     state = f"event-{eid}.state" if state_bytes else None
                     # A save state is about 167 KB of mostly zeroed RAM and compresses

@@ -54,6 +54,25 @@
       : `Real-world time window. ${period.partial ? `Partial history. Catch records from ${date(period.catches_since)}, collection records from ${date(period.progress_since)}.` : 'Collection changes are net changes over this period.'}${period.undated_gifts ? ' Older gifts without dates are excluded.' : ''}`
   }
   document.querySelector('#recent-period').onchange = renderRecent
+  function renderTallies(tallies) {
+    const list = document.querySelector('#tally-list')
+    list.replaceChildren()
+    const rate = tallies?.trainer_win_rate
+    for (const [key, label, text] of [
+      ['trainers_defeated', 'Trainers defeated'],
+      ['trainer_win_rate', 'Trainer win rate', !tallies ? null : rate == null ? 'No battles yet' : `${number(rate)}%`],
+      ['blackouts', 'Blackouts'], ['faints', 'Faints'], ['evolutions', 'Evolutions'], ['releases', 'Releases']]) {
+      const row = add(list, 'div', '', '')
+      row.dataset.tally = key
+      add(row, 'span', 'micro', label)
+      const shown = text ?? display(tallies?.[key])
+      // Words wrap like any missing value, so a phone keeps them inside the panel.
+      const missing = !tallies || (key === 'trainer_win_rate' ? rate == null : !Number.isFinite(tallies[key]))
+      add(row, 'strong', missing ? 'readout readout--missing' : 'readout', shown)
+    }
+    document.querySelector('#tally-note').textContent = !tallies ? 'Tallies are not available yet.'
+      : `Counted from journal entries and kept when old entries are pruned${tallies.complete_history ? '.' : `, from the entries kept since ${date(tallies.since)}.`} The win rate counts a blackout outside a wild battle as a trainer loss.`
+  }
   function renderOverview(data) {
     latest = data
     const overview = data.overview || {}
@@ -82,6 +101,7 @@
       add(row, 'strong', Number.isFinite(value) ? 'readout' : 'readout readout--missing', display(value))
     }
     document.querySelector('#activity-note').textContent = `Steps use the return-visit counter${overview.steps_since ? ', tracked since ' + date(overview.steps_since) : ''}. Battles are sampled observations. Money is the current balance.`
+    renderTallies(data.tallies)
     const highlights = document.querySelector('#stats-highlights')
     highlights.replaceChildren()
     for (const [key, title] of [['battle', 'Strongest Battle Power'], ['dvs', 'Highest DV score']]) {

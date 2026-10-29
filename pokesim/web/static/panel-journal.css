@@ -502,6 +502,8 @@
 }
 
 /* Repeat encounters use the same panel language as the adventure records. */
+#tally-details .column-head { flex-wrap: wrap }
+#tally-details .column-head { gap: var(--s2) }
 #event-returns .column-head { flex-wrap: wrap }
 #event-returns .column-head { gap: var(--s2) }
 .return-grid { display: grid }
