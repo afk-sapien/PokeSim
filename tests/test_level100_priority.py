@@ -171,6 +171,21 @@ def test_a_step_is_priced_by_the_experience_it_needs():
     assert pick(dragonair, pidgeotto) == 'pidgeotto'
 
 
+def test_a_boxed_partner_pays_the_switch_and_a_withdrawn_trainee_keeps_training():
+    from pokesim.policies.collection import BOX_SWITCH_FRAMES
+    # Red and Yellow withdrew a new low level partner every few minutes, since a switch was priced only
+    # by a few tiles of walking. Box 0 is a box like any other.
+    withdrawn = {**train('b-withdrawn', 24), 'parent': sid(17), 'box': None}
+    boxed = {**train('a-boxed', 24), 'parent': sid(17), 'box': 0}
+    assert (candidate(boxed, 10, {}, False, set()).expected_frames
+            == candidate(withdrawn, 10, {}, False, set()).expected_frames + BOX_SWITCH_FRAMES)
+    assert pick(withdrawn, boxed) == 'b-withdrawn'
+    # A boxed partner whose step is worth far more per frame is still worth the switch.
+    low = {**train('a-boxed', 4), 'parent': sid(17), 'box': 0}
+    high = {**train('b-withdrawn', 54), 'parent': sid(17), 'box': None}
+    assert pick(high, low) == 'a-boxed'
+
+
 def test_training_climbs_in_steps_of_ten_and_resumes_from_where_it_stopped():
     """A finished step re-enters selection aiming ten higher, not at 100 again."""
     for level, expected in ((37, 40), (40, 50), (60, 70), (95, 100), (99, 100)):

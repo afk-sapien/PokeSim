@@ -76,13 +76,13 @@ def test_a_cartridge_that_is_not_a_pokemon_game_gives_unpriced_odds(monkeypatch,
     from pokesim import randomized
     monkeypatch.delenv(randomized.ENV, raising=False)
     monkeypatch.setattr(cost, '_WARNED', set())
-    # The demo ROM is too short for the base stat table, so the planner falls back to unpriced costs.
+    # Core refuses the demo ROM before reading it, so the planner falls back to unpriced costs.
     rom = emulator.demo_rom()
     with caplog.at_level('WARNING', logger=cost.__name__):
         assert cost.wild_odds(rom, 'red') is None
         assert cost.wild_odds(rom, 'red') is None
     warnings = [record.getMessage() for record in caplog.records]
-    assert len(warnings) == 1 and str(rom) in warnings[0] and 'IndexError' in warnings[0]
+    assert len(warnings) == 1 and str(rom) in warnings[0] and 'header title' in warnings[0]
 
 
 def test_a_recognised_game_whose_tables_fail_to_read_raises(tmp_path, monkeypatch):
