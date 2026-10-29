@@ -54,13 +54,6 @@ def slot_chance(slots, species, chances):
     return 100 * sum(chance for (_, name), chance in zip(slots, chances) if name == species) / total
 
 
-def recognised(raw):
-    """Whether ``raw`` is a Pokémon game core knows, by its exact dump or by the header title a patched
-    or trimmed copy keeps."""
-    from pokecore import cartridges
-    return cartridges.identify(raw) is not None or cartridges.resembles(raw) is not None
-
-
 _WARNED = set()
 
 
@@ -80,19 +73,19 @@ def game_data(rom_path, version):
         raw = Path(rom_path).read_bytes()
     except OSError:
         return None
-    if not recognised(raw):
-        try:
-            return romdata.load_cached(raw, version)
-        except Exception as error:  # noqa: BLE001
-            if str(rom_path) not in _WARNED:
-                _WARNED.add(str(rom_path))
-                log.warning('%s is not a Pokémon game core recognises (%s: %s), so catch costs are unpriced',
-                            rom_path, type(error).__name__, error)
-            return None
     cartridge = cartridges.identify(raw)
     if cartridge is not None and cartridge.version != version:
         return None
-    return romdata.load_cached(raw, version)
+    try:
+        return romdata.load_cached(raw, version)
+    except romdata.UnsupportedCartridge as error:
+        # Core refuses a cartridge whose header names no Pokémon game before reading it. Any other read
+        # error is a Pokémon game's and raises.
+        if str(rom_path) not in _WARNED:
+            _WARNED.add(str(rom_path))
+            log.warning('%s is not a Pokémon game core recognises (header title %r: %s), so catch costs are unpriced',
+                        rom_path, error.title, error)
+        return None
 
 
 class WildOdds:
