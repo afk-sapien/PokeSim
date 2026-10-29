@@ -5,7 +5,6 @@ from dataclasses import asdict
 from ..duplicates import quality
 from pokecore.identity import same
 from .move_development import evolution_wait, move_name
-from ..pokemon import experience_at_level
 from ..investment import automatic_trade_protected,training_investment, potential_power, assessment, SEARCH_BUDGET
 from functools import lru_cache
 from ..game_data import current_variant, load
@@ -42,11 +41,22 @@ IDLE_BUDGET = 7200
 # it spent three times its expected frames, travel included, without progress. Training keeps its own
 # clock and a marathon its race clock.
 EXPECTED_FRAMES = {'rematch': 100000, 'special': 60000, 'evolve': 60000, 'other': 12000}
-# Frames a training step is expected to take per point of experience, heals included. A flat price per
-# level made a level 50 Dragonair's step look as cheap as a level 25 partner's, though it needs four
-# times the experience, and Red's heal share rose from 1% to 9% while it trained on Route 23. Postgame
-# training on three Red and three Yellow saves took about 36000 frames for a level near 50.
-FRAMES_PER_EXPERIENCE = 5
+# Frames a training step is expected to take for each level, in battle with heals included: the floor
+# every level pays, even at level 1, plus the slope for each level the trainee already has. Over 77
+# finished training projects on five Red and one Yellow postgame saves that are not the audit batch
+# saves, a level below 10 took about 11000 frames, a level from 10 to 30 about 18000 and a level past 30
+# about 27000, and a least squares fit of frames per level against level gives these two. Pricing by
+# experience put a level 4 partner's climb to 10 at about 2300 frames when it took 8000 to 150000, so
+# after the Champion Red and Yellow kept withdrawing new low level partners. A flat price per level made
+# a level 50 Dragonair's step look as cheap as a level 25 partner's, and the slope keeps it dearer.
+LEVEL_FRAMES_FLOOR = 9800
+LEVEL_FRAMES_SLOPE = 450
+# Frames a training step pays to bring its trainee out of a box: the walk to the PC, the box change and
+# the swap, up to the first step toward the training grounds. After step 5 Red and Yellow withdrew a new
+# low level partner every few minutes, each priced only by a few tiles of walking. On one Red and one
+# Yellow postgame save on main the 19 withdrawals took 2580 to 10532 frames, 4787 on average. A trainee
+# already in the party pays none, so it keeps training unless a boxed partner is worth the switch.
+BOX_SWITCH_FRAMES = 4800
 # The tier of a hunt for another copy of a registered species, a quality or a plain repeat, so a family
 # still short of its level 100 credit trains first. At the approved weights a quality catch earns about
 # ten times what a training step earns per frame, and Red's training share fell from 57% to 2% while its
@@ -104,12 +114,10 @@ def can_train(mon):
 
 
 def training_frames(project):
-    """The frames ``project``'s training step is expected to take, from the experience its trainee's
-    growth rate needs between the two levels."""
-    growth = SPECIES.get(project.get('parent'), {}).get('growth')
-    needed = (experience_at_level(project['target_level'], growth)
-              - experience_at_level(project['initial_level'], growth))
-    return max(0, needed) * FRAMES_PER_EXPERIENCE
+    """The frames ``project``'s training step is expected to take: each level from the initial one up to
+    the target pays LEVEL_FRAMES_FLOOR plus LEVEL_FRAMES_SLOPE for every level the trainee has."""
+    start, target = project['initial_level'], project['target_level']
+    return sum(LEVEL_FRAMES_FLOOR + LEVEL_FRAMES_SLOPE * level for level in range(start, target))
 
 
 def candidate(project, travel, tails, short, owned, wild=None):
@@ -117,7 +125,8 @@ def candidate(project, travel, tails, short, owned, wild=None):
 
     Values come from planning/values.py. Expected frames are the walk to the project at the shared
     tile estimate in planning/cost.py, plus a catch priced from ``wild``, the cartridge's own encounter
-    odds, or the per-kind EXPECTED_FRAMES, the training step at FRAMES_PER_EXPERIENCE or the race clock. A
+    odds, or the per-kind EXPECTED_FRAMES, the training step by its levels with BOX_SWITCH_FRAMES
+    for a trainee still in a box, or the race clock. A
     quality hunt is worth each catch's expected drop in the species' best DV tail, once per catch. A
     hunt for another copy of a registered species sits in HUNT_TIER, below training for a credit.
     """
@@ -144,7 +153,7 @@ def candidate(project, travel, tails, short, owned, wild=None):
     else:
         tier, value = (HUNT_TIER if project.get('repeat') else tier), values.SMALL
     if method == 'train':
-        frames = training_frames(project)
+        frames = training_frames(project) + (BOX_SWITCH_FRAMES if project.get('box') is not None else 0)
     elif method == 'marathon':
         frames = marathon.BUDGET
     else:
@@ -940,8 +949,8 @@ class Collection:
                         work_distance = distance_to(training_targets(self.version, project['initial_level']))
                         if work_distance is None:
                             return
-                        preparation = distance + 80 if project.get('box') is not None else 0
-                        project['travel_distance'] = work_distance + preparation
+                        # A boxed trainee's walk to the PC is in BOX_SWITCH_FRAMES.
+                        project['travel_distance'] = work_distance
                     travel[key] = project.get('travel_distance', distance)
                     candidates.append({**project,'key':key})
         sources = self.sources()

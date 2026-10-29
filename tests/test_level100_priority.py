@@ -102,8 +102,8 @@ MONEY = {'method': 'rematch', 'key': 'money'}
 
 def test_director_prioritizes_training_but_keeps_other_activities():
     rows = [train('near100', 95), train('low', 10), REPEAT, MONEY]
-    # A low partner's step needs the least experience, so it buys the most of the climb per frame.
-    assert pick(*rows) == 'low'
+    # Five levels that finish a credit buy more of the climb per frame than ten from level 10.
+    assert pick(*rows) == 'near100'
     # A hunt for another copy waits for training toward a level 100 credit, however long the climb.
     assert pick(rows[0], REPEAT, MONEY) == 'near100' and pick(*rows[1:]) == 'low'
     assert pick(REPEAT, MONEY) == 'repeat'
@@ -160,15 +160,34 @@ def test_a_partner_with_too_few_attacks_between_heals_is_not_trained():
     assert can_train({'species': 1})
 
 
-def test_a_step_is_priced_by_the_experience_it_needs():
-    from pokesim.policies.collection import FRAMES_PER_EXPERIENCE, training_frames
+def test_a_step_is_priced_by_the_frames_its_levels_took():
+    from pokesim.policies.collection import LEVEL_FRAMES_FLOOR, LEVEL_FRAMES_SLOPE, training_frames
     # Red trained a level 50 Dragonair on Route 23 ahead of level 25 partners, since a flat price per
     # level made its step look as cheap, and it walked to the Pokémon Center every few battles.
     dragonair = {**train('dragonair', 50), 'parent': sid(148)}
     pidgeotto = {**train('pidgeotto', 25), 'parent': sid(17)}
-    assert training_frames(dragonair) == (5 * 60 ** 3 // 4 - 5 * 50 ** 3 // 4) * FRAMES_PER_EXPERIENCE
-    assert training_frames(dragonair) > 4 * training_frames(pidgeotto)
+    assert training_frames(dragonair) == sum(LEVEL_FRAMES_FLOOR + LEVEL_FRAMES_SLOPE * level for level in range(50, 60))
+    assert training_frames(dragonair) / 10 > 1.5 * training_frames(pidgeotto) / 5
     assert pick(dragonair, pidgeotto) == 'pidgeotto'
+    # A level below 10 still pays the floor. Pricing by experience put a level 4 climb to 10 at about
+    # 2300 frames when replays took 8000 to 150000.
+    low = {**train('low', 4), 'parent': sid(17)}
+    assert training_frames(low) >= 6 * LEVEL_FRAMES_FLOOR > 50000
+
+
+def test_a_boxed_partner_pays_the_switch_and_a_withdrawn_trainee_keeps_training():
+    from pokesim.policies.collection import BOX_SWITCH_FRAMES
+    # Red and Yellow withdrew a new low level partner every few minutes, since a switch was priced only
+    # by a few tiles of walking. Box 0 is a box like any other.
+    withdrawn = {**train('b-withdrawn', 24), 'parent': sid(17), 'box': None}
+    boxed = {**train('a-boxed', 24), 'parent': sid(17), 'box': 0}
+    assert (candidate(boxed, 10, {}, False, set()).expected_frames
+            == candidate(withdrawn, 10, {}, False, set()).expected_frames + BOX_SWITCH_FRAMES)
+    assert pick(withdrawn, boxed) == 'b-withdrawn'
+    # A boxed partner whose step is worth far more per frame is still worth the switch.
+    low = {**train('a-boxed', 4), 'parent': sid(17), 'box': 0}
+    high = {**train('b-withdrawn', 54), 'parent': sid(17), 'box': None}
+    assert pick(high, low) == 'a-boxed'
 
 
 def test_training_climbs_in_steps_of_ten_and_resumes_from_where_it_stopped():
