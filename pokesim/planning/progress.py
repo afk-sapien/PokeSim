@@ -23,6 +23,12 @@ def _flags_set(before, after):
     return sum(bin(~a & b & 255).count('1') for a, b in zip(before, after))
 
 
+def encounters(counted, met):
+    """The target event of a search for any wild Pokémon, such as a shiny search: the battles met
+    since ``counted``. Meeting one is the search's progress, whatever it turns out to be."""
+    return [ProgressEvent('encounter', met - counted)] if met > counted else []
+
+
 def events(previous, snapshot):
     """What ``snapshot`` gained over ``previous``. A missing or unreadable snapshot gains nothing."""
     if previous is None or snapshot is None or not getattr(snapshot, 'valid', True) \

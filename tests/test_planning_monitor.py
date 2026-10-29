@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
 from pokesim.planning.monitor import CONTINUE, Backoff, Monitor, ProgressEvent
-from pokesim.planning.progress import events
+from pokesim.planning.progress import encounters, events
 
 
 def test_budget_is_a_multiple_of_expected_frames():
@@ -93,3 +93,14 @@ def test_events_from_two_snapshots():
     # Letting two Pokémon go frees two slots, which is what a release visit is for.
     released = Snap(party=before.party, items=before.items, box_counts=(1, 0))
     assert [(event.kind, event.detail) for event in events(before, released)] == [('room', 2)]
+
+
+def test_a_search_for_any_wild_pokemon_progresses_with_each_battle_met():
+    assert encounters(3, 3) == [] and encounters(3, 2) == []
+    assert encounters(3, 5) == [ProgressEvent('encounter', 2)]
+    # The event clears what the search spent toward its budget.
+    monitor = Monitor({})
+    monitor.start('shiny:5', budget=10)
+    monitor.observe('shiny:5', 9)
+    monitor.observe('shiny:5', 1, encounters(0, 1))
+    assert monitor.spent('shiny:5') == 0

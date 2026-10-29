@@ -2658,13 +2658,13 @@ def test_postgame_searches_flee_plain_battles_and_catch_their_species(real_data)
     assert policy.battle(snapshot, mem).button == ('Attack', 0)
     session = {'kind': 'shiny', 'row': {'map': snapshot.map, 'method': 'grass', 'time': 'any', 'species': None},
                'started': 0, 'shinies': 0}
-    policy.collection['postgame'] = {'activity': session, 'recent': [], 'searches': {}, 'shiny_break': 0, 'shiny_maps': []}
+    policy.collection['postgame'] = {'activity': session, 'searches': {}, 'shiny_maps': []}
     assert policy.battle(snapshot, mem).button == ('Flee',) and policy.shiny_missed is None
     # A trap that forbids running leaves the turn to be fought.
     bytes_['wEnemySubStatus5'] = 128
     assert policy.battle(snapshot, mem).button == ('Attack', 0)
     bytes_.clear()
-    # Encounter 100 still gets its capture attempt when it is shiny. The outing ends after battle.
+    # A shiny met deep into a search still gets its capture attempt.
     session['encounters'] = 100
     snapshot.enemy_shiny = True
     assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])

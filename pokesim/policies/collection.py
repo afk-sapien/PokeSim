@@ -120,29 +120,32 @@ def candidate(project, travel, tails, short, owned, wild=None):
     odds, or the per-kind EXPECTED_FRAMES, the training step at FRAMES_PER_EXPERIENCE or the race clock. A
     quality hunt is worth each catch's expected drop in the species' best DV tail, once per catch. A
     hunt for another copy of a registered species sits in HUNT_TIER, below training for a credit.
+    A due marathon sits in Tier.RACE, after new entries and before training. It is only offered once due.
     """
     method, sid = project['method'], project.get('species')
     tier = Tier.PROGRESS
     if method == 'rematch':
         tier = Tier.UPKEEP if short else Tier.FILLER
         value = values.rematch(short)
-    elif method in ('marathon', 'explore', 'trainer'):
+    elif method == 'marathon':
+        tier, value = Tier.RACE, values.SMALL
+    elif method in ('explore', 'trainer'):
         tier, value = Tier.FILLER, values.SMALL
     elif method == 'train' and project.get('mastery_needed'):
-        value = values.level_step(project['initial_level'], project['target_level'])
+        tier, value = Tier.UPGRADE, values.level_step(project['initial_level'], project['target_level'])
     elif method == 'train':
         # A family with its level 100 credit gains nothing the Pokédex counts, so its training is filler.
         tier, value = Tier.FILLER, values.SMALL
     elif legendary_project(project):
         # A returned legendary the Pokédex already has is a repeat, not an entry.
-        value = values.NEW_ENTRY if dex(sid) not in owned else values.SMALL
+        tier, value = (Tier.PROGRESS, values.NEW_ENTRY) if dex(sid) not in owned else (Tier.UPGRADE, values.SMALL)
     elif new_entry(project) or project.get('needed_capture') or method in ('rod', 'amber', 'return_fossil'):
         # A rod or the Old Amber opens new entries, and a needed repeat is another adventure's entry.
         value = values.NEW_ENTRY
     elif project.get('dv_hunt') and tails.get(sid) is not None:
         tier, value = HUNT_TIER, values.quality_catch(tails[sid] / 100) * project.get('catch_goal', 1)
     else:
-        tier, value = (HUNT_TIER if project.get('repeat') else tier), values.SMALL
+        tier, value = (HUNT_TIER if project.get('repeat') else Tier.UPGRADE), values.SMALL
     if method == 'train':
         frames = training_frames(project)
     elif method == 'marathon':

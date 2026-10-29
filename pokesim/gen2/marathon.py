@@ -30,7 +30,7 @@ TOWNS = (
     ('CHERRYGROVE_CITY', 29, 4),
     ('NEW_BARK_TOWN', 6, 4),
 )
-# Activities the postgame rotation finishes before the first race, as Gen I waits for four projects.
+# Activities the postgame finishes before the first race, as Gen I waits for four projects.
 PROJECTS = 4
 
 
