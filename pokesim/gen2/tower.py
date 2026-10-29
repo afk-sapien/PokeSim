@@ -6,6 +6,7 @@ from .menus import Give, Lead, Take, Teach, choose
 from pokecore.gen2.ram import Memory, calculated_stats
 from ..planning.ledger import FIELD_MOVES
 from ..planning.monitor import STAND_DOWNS, STOOD_DOWN, Backoff
+from ..planning.stance import TRAVEL
 from .standdown import monitor, stand_down, standing_down
 from .teams import assemble, assembled, key, no_room
 
@@ -244,7 +245,10 @@ def journey(policy, snapshot, Goal):
             goal = assemble(policy, snapshot, state['original'], Goal, 'Prepare the adventure team for travel to Olivine')
             if goal:
                 return goal
-            return Goal('tower_travel', 'Travel to Olivine before preparing the Tower team', 'OLIVINE_POKECENTER_1F', 5, 6)
+            # The walk is travel, so it runs from plain wild battles. Its lead is the adventure team's,
+            # often a slow staller, and long fights there sent it back to heal.
+            return Goal('tower_travel', 'Travel to Olivine before preparing the Tower team', 'OLIVINE_POKECENTER_1F', 5, 6,
+                        kind=TRAVEL)
     goal = assemble(policy, snapshot, state['team'], Goal, 'Prepare three partners for the Battle Tower')
     if goal:
         return goal

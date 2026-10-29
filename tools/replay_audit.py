@@ -245,6 +245,9 @@ def run_one(args):
     # The shadow arbiter's picks, read only (planner design S3): frames by the kind it would have chosen.
     shadow = getattr(run.policy, 'shadow', None)
     would = Counter()
+    # Run attempts the battle stance made and the ones that failed, per row (planner design S5).
+    flees = defaultdict(Counter)
+    counted = Counter(getattr(run.policy, 'flees', None) or {})
     while run.frame - start < args.frames:
         before = run.frame
         try:
@@ -280,6 +283,10 @@ def run_one(args):
         span[2] = span[2] or bool(found)
         if shadow is not None:
             would[shadow.pick or 'none'] += spent
+        now = Counter(getattr(run.policy, 'flees', None) or {})
+        if now != counted:
+            flees[line].update(now - counted)
+            counted = now
         for stood in _stand_downs(run, seen):
             stand_downs.append({'key': stood, 'goal': line, 'frame': run.frame})
         if current is not None and run.generation == 2 and key == 'collection_release':
@@ -296,6 +303,7 @@ def run_one(args):
         'stand_downs': stand_downs, 'reloads': 0, 'party_levels': party,
         'recoveries': getattr(run.policy, 'recoveries', 0) - recoveries,
         'released': released, 'reseed_goals': bool(seeds), 'lead_in': args.lead_in, 'rows': True,
+        'flees': {line: dict(counts) for line, counts in flees.items()},
     }
     if shadow is not None:
         result['shadow'] = {**shadow.summary(), 'frames_by_pick': dict(would)}
@@ -320,6 +328,9 @@ def load(folder):
             game['titles'].setdefault(name(key), ALL_TARGETS if name(key) != key else title)
         game['stalls'].update(name(entry['goal']) for entry in data['stand_downs'])
         game['stalls']['(reloads)'] += data.get('reloads', 0)
+        # Run files from before the battle stance count no run attempts.
+        for key, counts in data.get('flees', {}).items():
+            game.setdefault('flees', defaultdict(Counter))[name(key)].update(counts)
         # Run files from before shadow mode have no shadow section.
         for field, counts in data.get('shadow', {}).items():
             if isinstance(counts, dict):
@@ -347,6 +358,19 @@ def shadow_lines(game):
         top = [(key, count) for key, count in shadow['disagreements'].most_common() if key.startswith(f'{point}: ')][:3]
         if top:
             lines.append(f'top {point} disagreements: ' + ', '.join(f'{key[len(point) + 2:]} {count}' for key, count in top))
+    return lines
+
+
+def flee_lines(old, new):
+    """Run attempts, failed runs and wasted share for each row where the battle stance ran."""
+    rows = sorted({key for game in (old, new) if game for key in game.get('flees', {})})
+    if not rows:
+        return []
+    lines = ['| goal | attempts | failures | wasted before | wasted after |', '|---|---|---|---|---|']
+    for key in rows:
+        counts = (new or {}).get('flees', {}).get(key, Counter())
+        lines.append(f'| {key} | {counts["attempts"]} | {counts["failures"]} | '
+                     f'{_row(old, key)[2]:.1f} | {_row(new, key)[2]:.1f} |')
     return lines
 
 
@@ -391,6 +415,10 @@ def report(args):
                 flags.append(f'{name} {key}: share {share0:.1f} to {share1:.1f}, wasted {waste0:.1f} to {waste1:.1f}')
             if share1 > 100 * LARGE_SHARE:
                 flags.append(f'{name} {key}: {share1:.1f}% of frames ({title})')
+        lines = flee_lines(old, new)
+        if lines:
+            print('\n### Battle stance runs')
+            print('\n'.join(lines))
         lines = shadow_lines(new)
         if lines:
             print('\n### Shadow arbiter (after)')

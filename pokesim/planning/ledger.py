@@ -21,6 +21,10 @@ log = logging.getLogger('pokesim.ledger')
 MONEY = 'money'
 BOX = 'box'
 PARTY = 'party'
+# Battle resources: the HP the weakest Pokémon has above the heal line, and the attack uses the
+# Pokémon with the fewest have left. A goal that walks somewhere spends them in wild battles.
+HP = 'hp'
+PP = 'pp'
 # A unit worth this much is never given up, whatever the shortfall.
 PRICELESS = float('inf')
 # Move slots the ledger keeps in Gold, Silver and Crystal: Cut, Fly, Surf, Strength, Flash, Whirlpool and
@@ -52,11 +56,14 @@ class Need:
     money: int = 0
     move_slot: str | None = None   # a move such as "SURF" that no plan may overwrite
     keep: frozenset = frozenset()
+    hp: int = 0
+    pp: int = 0
 
     def amounts(self):
-        """The need as one table of kinds: pocket names, ``box``, ``party`` and ``money``."""
+        """The need as one table of kinds: pocket names, ``box``, ``party``, ``money``, ``hp`` and ``pp``."""
         table = {pocket: count for pocket, count in self.pocket_slots.items() if count > 0}
-        for kind, count in ((BOX, self.box_slots), (PARTY, self.party_slots), (MONEY, self.money)):
+        for kind, count in ((BOX, self.box_slots), (PARTY, self.party_slots), (MONEY, self.money),
+                            (HP, self.hp), (PP, self.pp)):
             if count > 0:
                 table[kind] = count
         return table

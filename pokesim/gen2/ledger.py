@@ -10,12 +10,15 @@ The shop restocks what ``supplies`` lists, keeping balls to catch with before th
 run sells valuables and spare TMs only when it has no ball and no money for one.
 """
 from collections import Counter
+import math
 
-from ..planning.ledger import BOX, MONEY, PARTY, PRICELESS, Ledger, Need, Resources, Shortfall, Unit
+from ..planning.ledger import BOX, HP, MONEY, PARTY, PP, PRICELESS, Ledger, Need, Resources, Shortfall, Unit
 from .champion_shop import SUPPLIES
 from .menus import Release
 from .release import headroom
 
+# A Pokémon under this share of its HP sends the run to a Pokémon Center.
+HEAL_LINE = 0.6
 # Distinct entries each Gen 2 pocket holds.
 POCKET_SLOTS = {'items': 20, 'balls': 12}
 PARTY_SIZE = 6
@@ -86,6 +89,34 @@ def read(data, snapshot, kinds=None, boxes=None):
 
 def ledger(data, boxes=None):
     return Ledger(lambda snapshot, kinds: read(data, snapshot, kinds, boxes))
+
+
+def battle_room(data, snapshot):
+    """The HP and PP the party can spend before a Pokémon Center is due.
+
+    HP is the fewest points any Pokémon has left above the heal line, and none for one with a status.
+    PP is the fewest attack uses left to any Pokémon that has an attack. A party with no attack at all
+    is never sent to heal for PP, so its PP room is one. Either at zero means the heal walk is due.
+    """
+    def power(move):
+        return data.moves.get(move, {}).get('power', 0)
+    mons = [mon for mon in snapshot.party if not mon.egg]
+    hp = min((0 if mon.status else max(0, mon.hp - math.ceil(mon.max_hp * HEAL_LINE) + 1) for mon in mons), default=0)
+    pp = min((sum(pp for move, pp in zip(mon.moves, mon.pp) if power(move))
+              for mon in mons if any(power(move) for move in mon.moves)), default=1)
+    return {HP: hp, PP: pp}
+
+
+def battle_ledger(data):
+    """A ledger of the party's HP and PP alone, which the battle stance and the heal walk read."""
+    return Ledger(lambda snapshot, kinds: Resources(battle_room(data, snapshot)))
+
+
+def walk_spent(data, snapshot, goal='walk'):
+    """Whether the party has spent the HP and PP a walk needs, which also sends it to heal."""
+    from ..planning.stance import budget_spent
+    books = battle_ledger(data)
+    return budget_spent(books, goal, books.snapshot(snapshot))
 
 
 # Worth of a boxed spare: a plain duplicate, a trained one, and more for one holding an item. Training

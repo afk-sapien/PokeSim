@@ -68,3 +68,14 @@ def test_report_prints_one_row_per_hunt(tmp_path, capsys):
     assert '| collection_hunt quality Larvitar Search for a stronger Larvitar | 0.0 | 70.0 |' in out
     assert '| collection_hunt shiny Search for a shiny | 0.0 | 30.0 |' in out
     assert f'| collection_hunt (all) {ALL_TARGETS} | 100.0 | 0.0 |' in out
+
+
+def test_report_counts_the_battle_stance_runs_per_row(tmp_path, capsys):
+    before, after = tmp_path / 'before', tmp_path / 'after'
+    before.mkdir()
+    after.mkdir()
+    _write(before, 'old.json', rows=True, frames_by_goal={'tower_travel': 1000}, titles={}, wasted={'tower_travel': 50})
+    _write(after, 'new.json', rows=True, frames_by_goal={'tower_travel': 1000}, titles={}, wasted={'tower_travel': 20},
+           flees={'tower_travel': {'attempts': 7, 'failures': 2}})
+    report(SimpleNamespace(before=before, after=after))
+    assert '| tower_travel | 7 | 2 | 5.0 | 2.0 |' in capsys.readouterr().out
