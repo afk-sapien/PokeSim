@@ -37,7 +37,7 @@ from ..web.security import VIEWER_HEADER, protect_response, public_origin, viewe
 from .assets import Assets
 from . import trade_settings
 from .registry import Registry, identifier, validate_id
-from .supervisor import Supervisor
+from .supervisor import AdventureRunning, Supervisor
 
 log = logging.getLogger(__name__)
 STATIC = Path(__file__).parents[1] / 'web' / 'static'
@@ -919,6 +919,15 @@ def create_app(manager, shutdown=lambda: None):
             # A stopped adventure is shown read only from its newest save.
             try:
                 stopped_view = await run_in_threadpool(manager.supervisor.viewer, aid)
+            except AdventureRunning:
+                # The registry still says stopped while a start brings the worker up. The page
+                # asks again once the adventure reports running.
+                log.info('Adventure %s is starting, so it has no stopped view', aid)
+                retry = {'Retry-After': '2'}
+                if path in GAME_PAGES:
+                    return HTMLResponse('<!doctype html><title>PokeSim</title><p>This adventure is starting. Reload in a moment.</p>',
+                                        status_code=503, headers=retry)
+                raise HTTPException(503, 'This adventure is starting', headers=retry)
             except (RuntimeError, OSError, KeyError):
                 log.info('Adventure %s has no stopped view', aid, exc_info=True)
         if stopped_view is None and adventure['state'] not in {'running', 'recovering'}:

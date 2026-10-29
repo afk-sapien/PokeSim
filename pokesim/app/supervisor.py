@@ -170,6 +170,10 @@ class Child:
             raise RuntimeError(f'Worker exited with code {self.process.returncode}. Inspect its diagnostics.')
 
 
+class AdventureRunning(RuntimeError):
+    """A stopped view was asked for while the adventure's worker was already starting or running."""
+
+
 class Supervisor:
     def __init__(self, registry, assets, public_url, child_factory=Child):
         self.registry = registry
@@ -231,7 +235,7 @@ class Supervisor:
                 entry = self.viewers.get(aid)
                 running = aid in self.children
             if running:
-                raise RuntimeError('This adventure is running')
+                raise AdventureRunning('This adventure is running')
             if entry and entry[0].url and entry[0].process.poll() is None:
                 entry[1] = time.monotonic()
                 return entry[0]
