@@ -38,3 +38,23 @@ def test_the_indigo_plateau_shop_is_not_a_restock_plan_without_every_badge():
                     event_flags=flags('EVENT_GOT_POKEDEX'))
     plan = ShoppingController().plan(champion, goal, None, **options).goal
     assert plan.key == 'restock' and plan.targets == ((MAPS['INDIGO_PLATEAU_LOBBY'], 2, 5),)
+
+
+def test_a_full_bag_restock_planned_outside_the_lobby_still_holds_inside_it():
+    # A Red postgame save with a full bag and stocked supplies walked in and out of the Indigo Plateau
+    # Lobby door for 90 minutes: outside the full bag planned a trip, inside only the league stock counted.
+    stocked = tuple((ITEMS[name], qty) for name, qty in (
+        ('ULTRA_BALL', 15), ('FULL_RESTORE', 10), ('REVIVE', 5), ('FULL_HEAL', 3)))
+    junk = tuple((ITEMS[name], 1) for name in ('S_S_TICKET', 'HM01', 'LIFT_KEY', 'SILPH_SCOPE', 'POKE_FLUTE', 'CARD_KEY',
+                                               'HM03', 'HM04', 'SECRET_KEY', 'SUPER_ROD', 'OLD_ROD', 'COIN_CASE',
+                                               'GOOD_ROD', 'MAX_ELIXER', 'MAX_REVIVE')) + ((205, 1),)  # 205 is TM05
+    goal = Goal('collect_hunt', 'Catch Ditto', 'Search the grass')
+    options = dict(requested_goal=goal.key, healing=False, in_league=False, has_pokedex=True)
+    shop = ShoppingController()
+    outside = snap(map=MAPS['INDIGO_PLATEAU'], x=9, y=6, money=50000, badges=255, party=(mon(level=60),),
+                   items=stocked + junk, event_flags=flags('EVENT_GOT_POKEDEX'))
+    assert shop.plan(outside, goal, None, **options).goal.key == 'restock'
+    inside = snap(map=MAPS['INDIGO_PLATEAU_LOBBY'], x=7, y=11, money=50000, badges=255, party=(mon(level=60),),
+                  items=stocked + junk, event_flags=flags('EVENT_GOT_POKEDEX'))
+    plan = shop.plan(inside, goal, None, **options).goal
+    assert plan.key == 'restock' and plan.targets == ((MAPS['INDIGO_PLATEAU_LOBBY'], 2, 5),)

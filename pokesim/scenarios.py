@@ -213,7 +213,8 @@ class Gen1Watch:
 
 class Gen2Watch:
     """Achievements as the Gen II runtime counts them: a new best for badges, story events, the
-    Pokédex, areas, experience or League wins restarts its stall watch."""
+    Pokédex, areas, experience or League wins restarts its stall watch. So does a Johto Marathon
+    checkpoint, since a race runs longer than the scenario's quiet window and earns nothing else."""
 
     def __init__(self, run):
         self.run = run
@@ -224,7 +225,7 @@ class Gen2Watch:
         self.reset()
 
     def reset(self):
-        self.previous, self.opponents = None, set()
+        self.previous, self.opponents, self.checkpoint = None, set(), None
 
     def observe(self, snapshot):
         if not snapshot.valid or not snapshot.started:
@@ -255,6 +256,13 @@ class Gen2Watch:
             old = previous.get((mon.trainer_id, tuple(mon.dvs or ())))
             if old and mon.level > old.level and not mon.egg:
                 gained.append(('level', f'{mon.nick} grew to level {mon.level}'))
+        policy = getattr(self.run, 'policy', None)
+        if policy is not None:
+            from .gen2 import marathon
+            reached = marathon.checkpoint(policy)
+            if reached is not None and self.checkpoint is not None and reached > self.checkpoint:
+                earned = True
+            self.checkpoint = reached
         self.previous = snapshot
         return gained, earned
 

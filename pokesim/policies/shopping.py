@@ -101,7 +101,9 @@ class ShoppingController:
             self.restocking = False
         if snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY']:
             counts = dict(snapshot.items)
-            self.restocking = (balls < ball_reserve or medicine < 10 or counts.get(ITEMS['REVIVE'], 0) < 5
+            # A full bag still needs the clerk to sell from it. Without it, a trip planned outside for the
+            # full bag ended at the lobby door, which saw nothing to buy and sent the player back out.
+            self.restocking = (bag_full or balls < ball_reserve or medicine < 10 or counts.get(ITEMS['REVIVE'], 0) < 5
                                or counts.get(ITEMS['FULL_HEAL'], 0) < 3)
         if self.restocking and hunting(project) and balls < ball_reserve and not bag_full and unfunded(snapshot, balls):
             # A trip the purse cannot fund is not started. The hunt goes on with the balls in hand and

@@ -1135,7 +1135,14 @@ class StrategicPolicy(Policy):
                     self.mode = "using the statue switch"
                     return tap("up", 4, 12) if mem[W_FACING] != FACING["up"] else tap("a")
             else:
-                direction = self.nav.guided(pos, goal.targets, s.frame, self.rng, curiosity) if goal.targets else None
+                # Route 23 is the way into Victory Road, and a search from here assumes each floor's
+                # boulder switch can be solved on the way. Inside, the run follows only open gates, so
+                # a nearer target past an unsolved switch sent it in and straight back out, again and
+                # again. Take the same open route here and keep the hopeful one for when none exists.
+                direction = (self.nav.open_route(s, goal.targets)
+                             if s.map == MAPS['ROUTE_23'] and goal.targets else None)
+                if direction is None:
+                    direction = self.nav.guided(pos, goal.targets, s.frame, self.rng, curiosity) if goal.targets else None
             self.mode = "following objective"
             path = self.mansion.path if s.map in MANSION_MAPS else self.nav.path
             remaining = len(path) if path else None

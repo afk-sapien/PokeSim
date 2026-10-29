@@ -79,8 +79,13 @@ def candidate(snapshot):
 
 def racing(policy):
     """True once the runner is past the starting line, where the clock runs and the course is on foot."""
+    return bool(checkpoint(policy))
+
+
+def checkpoint(policy):
+    """The checkpoints the current race has reached, counting the starting line, or None outside a race."""
     activity = (policy.collection.get('postgame') or {}).get('activity')
-    return bool(activity and activity['kind'] == 'marathon' and activity['checkpoint'] > 0)
+    return activity['checkpoint'] if activity and activity['kind'] == 'marathon' else None
 
 
 def observe(policy, snapshot, activity):
