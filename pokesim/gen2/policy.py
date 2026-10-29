@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
-from collections import deque
+from collections import Counter, deque
 import random
 import re
 from types import SimpleNamespace
 
 from ..planning.ledger import FIELD_MOVES, LEARN_KEPT
 from ..planning.shadow import Shadow
+from ..planning.stance import FLEE, STORY, Encounter, stance
 from .navigation import DIRS, Navigator
 from pokecore.gen2.ram import Memory
 from pokecore.gen2.screens import ScreenText, mask_roster
@@ -57,6 +58,8 @@ class Goal:
     x: int
     y: int
     face: str | None = None
+    # The goal kind the battle stance follows (planning/stance.py): story, travel, train or hunt.
+    kind: str = STORY
 
 
 class Policy:
@@ -105,6 +108,10 @@ class Policy:
         self.rescue = deque()
         # Why the wild shiny in this battle cannot be caught, read by the emulator for its notice.
         self.shiny_missed = None
+        # Run attempts the battle stance made: failed tries in this battle, whether one is under
+        # way, and counts over the whole run that the replay audit reads.
+        self.flee_tries, self.fleeing = 0, False
+        self.flees = Counter()
         self.failure = None
         self.menu_ref, self.menu_steps = None, 0
         self.partner_move = None
@@ -917,11 +924,8 @@ class Policy:
                      and not snapshot.event('EVENT_EUSINE_IN_BURNED_TOWER'))):
             return None
         healthy = [mon for mon in snapshot.party if not mon.egg]
-        if not healthy or not any(mon.hp < mon.max_hp * 0.6 or mon.status
-                                  or (any(self.data.moves.get(move, {}).get('power', 0) for move in mon.moves)
-                                      and not any(pp for move, pp in zip(mon.moves, mon.pp)
-                                                  if self.data.moves.get(move, {}).get('power', 0)))
-                                  for mon in healthy):
+        from .ledger import walk_spent
+        if not healthy or not walk_spent(self.data, snapshot):
             self.healing_map = None
             return None
         choices = []
@@ -1067,6 +1071,8 @@ class Policy:
         observe_training(self, snapshot)
         self.backing_out = False
         self.shiny_missed = None
+        if not snapshot.in_battle:
+            self.flee_tries, self.fleeing = 0, False
         if self.rescue:
             self.mode = 'finding another approach'
             self.backing_out = True
@@ -1472,7 +1478,7 @@ class Policy:
         # A wild shiny is always caught, an owned species too. Trainers' Pokémon never count.
         shiny = self.wild_shiny(snapshot)
         # A postgame better-DV hunt catches every copy it meets, and the boxes keep the best one.
-        from .postgame import quality_species, shiny_session
+        from .postgame import quality_species
         upgrade = snapshot.in_battle == 1 and catch_species == quality_species(self)
         catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or requested or shiny
                                               or upgrade or catch_species in self.returned)
@@ -1522,17 +1528,9 @@ class Policy:
             cursor = mem.byte('wMenuCursorY')
             return Action('a' if target + 1 == cursor else 'down' if cursor < target + 1 else 'up')
         if 'FIGHT' in text and 'TYPE' not in text:
-            # A shiny session runs from every plain wild battle, which brings the next encounter sooner.
-            # The walk to Olivine before a Battle Tower challenge runs from them too: its lead is the
-            # adventure team's, often a slow staller, and long fights there sent it back to heal.
-            travel = self.goal is not None and self.goal.key == 'tower_travel'
-            if (self.shiny_missed or snapshot.in_battle == 1 and not catch and not shiny
-                    and (travel or shiny_session(self, snapshot))) and can_escape:
-                # A failed escape brings the menu back and Run is tried again. Only a trap that
-                # forbids running leaves the fight below.
-                action = self.battle_task(Flee(), snapshot, mem)
-                if action:
-                    return action
+            action = self.stance_flee(snapshot, mem, catch=catch, shiny=shiny, escape=can_escape)
+            if action:
+                return action
             active = mem.byte('wCurBattleMon')
             switch = None
             # A static legendary only ever calls for the sleeper, and only while it is awake and
@@ -1712,6 +1710,35 @@ class Policy:
             return 'keep'
         return min(range(4), key=lambda i: 999 if mon.moves[i] in self.LEARN_PROTECTED
                    else self.data.moves.get(mon.moves[i], {}).get('power', 0))
+
+    def stance_flee(self, snapshot, mem, *, catch, shiny, escape):
+        """Start running from this battle when the goal's stance says to flee, else None.
+
+        The stance (planning/stance.py) decides from the goal's kind and the party's HP and PP. A
+        failed run brings the FIGHT menu back, which counts one failed try. After ``FLEE_TRIES`` of
+        them the battle is fought out.
+        """
+        if self.fleeing:
+            # The FIGHT menu came back after a run attempt, so the escape failed.
+            self.fleeing = False
+            self.flee_tries += 1
+            self.flees['failures'] += 1
+        # A shiny the Bug-Catching Contest cannot catch is not a plain battle, and contest.control
+        # owns it, so the stance sees no wild battle there.
+        wild = snapshot.in_battle == 1 and (not shiny or catch or bool(self.shiny_missed))
+        encounter = Encounter(wild=wild, wanted=catch, shiny=bool(self.shiny_missed), escape=escape,
+                              tries=self.flee_tries)
+        kind = getattr(self.goal, 'kind', STORY)
+        from .ledger import battle_ledger
+        books = battle_ledger(self.data)
+        if stance(kind, encounter, books, goal=getattr(self.goal, 'key', kind),
+                  resources=lambda: books.snapshot(snapshot)) is not FLEE:
+            return None
+        action = self.battle_task(Flee(), snapshot, mem)
+        if action:
+            self.fleeing = True
+            self.flees['attempts'] += 1
+        return action
 
     def battle_task(self, task, snapshot, mem):
         """Start a Core battle shortcut now, or return None when the game refused it recently."""

@@ -2,6 +2,7 @@
 from .menus import ChangeBox, Give, PutAway, Release, Remedy, Storage, Take, Toss
 from pokecore.gen2.ram import calculated_stats, experience_at
 from ..planning.ledger import FIELD_MOVES
+from ..planning.stance import TRAIN
 from .ledger import fits, tidy_goal
 from .standdown import TRAINING_DECISIONS, exhausted, spend, stand_down, standing_down, train_key
 
@@ -285,7 +286,7 @@ def walk_goal(policy, snapshot, Goal, label, *, map_name='SILVER_CAVE_ROOM_1'):
             x, y, _ = points[0]
     else:
         x, y = (9, 31) if map_name == 'SILVER_CAVE_ROOM_1' else points[0][:2]
-    return Goal('collection_train', label(), map_name, x, y)
+    return Goal('collection_train', label(), map_name, x, y, kind=TRAIN)
 
 
 def arrive(policy, snapshot):

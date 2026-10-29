@@ -6,6 +6,7 @@ from ..planning import arbiter
 from ..planning.arbiter import Candidate, Tier
 from ..planning.cost import DECISIONS_PER_BATTLE, FRAMES_PER_BATTLE, FRAMES_PER_TILE
 from ..planning.ledger import FIELD_MOVES
+from ..planning.stance import HUNT
 from .menus import ChangeBox, FieldMove, Storage, Teach, Use
 from .navigation import DIRS
 from pokecore.gen2.ram import Memory
@@ -1086,7 +1087,9 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
     key = 'collection_fish' if method.endswith('rod') else 'collection_field' if method in {'headbutt', 'rock smash'} else 'collection_hunt'
     if postgame:
         forget(policy, LOADING)
-    return Goal(key, f'{label} in {data.maps[mid]["name"]}', data.maps[mid]['constant'], x, y, face)
+    # Every hunt runs from the battles it cannot catch from (planner design S5). This is the one place
+    # that sets the hunt scope: Pokédex, carrier, better-copy and shiny searches alike.
+    return Goal(key, f'{label} in {data.maps[mid]["name"]}', data.maps[mid]['constant'], x, y, face, kind=HUNT)
 
 
 # Steps a postgame outing waits for its encounter map to finish loading before it is abandoned.

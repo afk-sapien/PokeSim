@@ -141,7 +141,10 @@ def quality_species(policy):
 
 
 def shiny_session(policy, snapshot):
-    """Whether a shiny session is walking its map, where plain wild battles are run from."""
+    """Whether a shiny session is walking its map, where its wild battles count as encounters.
+
+    Running from the plain ones is the battle stance's work, since the session walks a hunt goal.
+    """
     activity = (policy.collection.get('postgame') or {}).get('activity')
     return bool(activity and activity['kind'] == 'shiny' and not activity.get('suspended') and not policy.collection.get('target')
                 and snapshot.map == activity['row']['map'])

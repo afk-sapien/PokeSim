@@ -1227,6 +1227,9 @@ def test_tower_prepares_near_entrance_before_removing_field_partners(real_data):
     goal = journey(policy, snapshot, Goal)
     assert goal.map_name == 'OLIVINE_POKECENTER_1F'
     assert goal.key == 'tower_travel'
+    # The walk is travel, so the battle stance runs it past plain wild battles.
+    from pokesim.planning.stance import TRAVEL
+    assert goal.kind == TRAVEL
     assert 'activity_team' not in policy.collection
 
 
@@ -2644,9 +2647,10 @@ def test_a_missed_shiny_is_reported_once_per_battle_like_red_blue_and_yellow(rea
 
 
 def test_postgame_searches_flee_plain_battles_and_catch_their_species(real_data):
-    """A shiny session runs from ordinary wild battles to meet the next one sooner, and a better-DV
-    hunt catches every copy of its species, owned or not."""
-    from pokesim.gen2.policy import Policy
+    """A shiny session walks a hunt goal, so the battle stance runs from ordinary wild battles to
+    meet the next one sooner. A better-DV hunt catches every copy of its species, owned or not."""
+    from pokesim.gen2.policy import Goal, Policy
+    from pokesim.planning.stance import HUNT
     policy = started(Policy(real_data))
     policy.needed_move = lambda snapshot: 0
     policy.capture_move = lambda *args: None
@@ -2655,10 +2659,12 @@ def test_postgame_searches_flee_plain_battles_and_catch_their_species(real_data)
     snapshot.party = (_shiny_lead(),)
     bytes_ = {}
     mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), word=lambda name: 0, read=lambda name, size: bytes(size))
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
     session = {'kind': 'shiny', 'row': {'map': snapshot.map, 'method': 'grass', 'time': 'any', 'species': None},
                'started': 0, 'shinies': 0}
     policy.collection['postgame'] = {'activity': session, 'searches': {}, 'shiny_maps': []}
+    # The session alone no longer runs: the goal under way decides.
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    policy.goal = Goal('postgame_hunt', 'Look for shiny Pokémon in Route 36', 'ROUTE_36', 5, 5, kind=HUNT)
     assert policy.battle(snapshot, mem).button == ('Flee',) and policy.shiny_missed is None
     # A trap that forbids running leaves the turn to be fought.
     bytes_['wEnemySubStatus5'] = 128
@@ -2686,10 +2692,16 @@ def test_the_walk_to_olivine_for_the_battle_tower_flees_plain_wild_battles(real_
     snapshot.map, snapshot.party = real_data.map_ids['VICTORY_ROAD'], (_shiny_lead(),)
     bytes_ = {}
     mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), word=lambda name: 0, read=lambda name, size: bytes(size))
+    from pokesim.planning.stance import TRAVEL
     policy.goal = Goal('heal', 'Restore the team at a Pokémon Center', 'INDIGO_PLATEAU_POKECENTER_1F', 5, 6)
     assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    # The goal's kind decides, never its key.
     policy.goal = Goal('tower_travel', 'Travel to Olivine before preparing the Tower team', 'OLIVINE_POKECENTER_1F', 5, 6)
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    policy.goal = Goal('tower_travel', 'Travel to Olivine before preparing the Tower team', 'OLIVINE_POKECENTER_1F', 5, 6,
+                       kind=TRAVEL)
     assert policy.battle(snapshot, mem).button == ('Flee',)
+    policy.fleeing = False
     # A trap that forbids running leaves the turn to be fought.
     bytes_['wEnemySubStatus5'] = 128
     assert policy.battle(snapshot, mem).button == ('Attack', 0)
@@ -2699,3 +2711,76 @@ def test_the_walk_to_olivine_for_the_battle_tower_flees_plain_wild_battles(real_
     assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
     snapshot.owned, snapshot.enemy_shiny = {19}, True
     assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+
+
+def _stance_battle(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = started(Policy(real_data))
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda *args: None
+    policy.remedy = lambda *args, **kwargs: False
+    snapshot = shiny_battle(real_data, 19, shiny=False)
+    snapshot.party = (_shiny_lead(),)
+    bytes_ = {}
+    mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), word=lambda name: 0, read=lambda name, size: bytes(size))
+    return policy, snapshot, mem, bytes_
+
+
+@pytest.mark.parametrize('kind,button', [('story', ('Attack', 0)), ('travel', ('Flee',)),
+                                         ('train', ('Attack', 0)), ('hunt', ('Flee',))])
+def test_each_goal_kind_meets_a_plain_wild_battle_its_own_way(real_data, kind, button):
+    """Travel and hunts run, training and the story fight while the party has HP and PP to spare."""
+    from pokesim.gen2.policy import Goal
+    policy, snapshot, mem, _ = _stance_battle(real_data)
+    policy.goal = Goal('goal', 'A goal', 'ROUTE_37', 5, 5, kind=kind)
+    assert policy.battle(snapshot, mem).button == button
+
+
+def test_a_goal_whose_hp_or_pp_is_spent_runs_before_it_reaches_its_destination(real_data):
+    """A walk under the heal line, or out of attack PP, runs from wild battles on its way to heal."""
+    from pokesim.gen2.policy import Goal
+    policy, snapshot, mem, _ = _stance_battle(real_data)
+    policy.goal = Goal('heal', 'Restore the team at a Pokémon Center', 'ROUTE_36', 5, 5)
+    snapshot.party = (SimpleNamespace(**{**vars(_shiny_lead()), 'hp': 72}),)
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    snapshot.party = (SimpleNamespace(**{**vars(_shiny_lead()), 'hp': 71}),)
+    assert policy.battle(snapshot, mem).button == ('Flee',)
+    policy.fleeing = False
+    snapshot.party = (SimpleNamespace(**{**vars(_shiny_lead()), 'pp': (0, 0, 0, 0)}),)
+    assert policy.battle(snapshot, mem).button == ('Flee',)
+    policy.fleeing = False
+    # Training spends HP and PP on purpose, so it fights until the heal walk takes over.
+    policy.goal = Goal('collection_train', 'Train', 'ROUTE_36', 5, 5, kind='train')
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+
+
+def test_a_hunt_runs_twice_then_fights_a_battle_it_cannot_escape(real_data):
+    """Two failed run attempts in one battle and it is fought out. The next battle runs again."""
+    from pokesim.gen2.policy import Goal
+    from pokesim.planning.stance import HUNT
+    policy, snapshot, mem, _ = _stance_battle(real_data)
+    policy.goal = Goal('collection_hunt', 'Look for MON in Route 36', 'ROUTE_36', 5, 5, kind=HUNT)
+    assert policy.battle(snapshot, mem).button == ('Flee',)
+    policy.menu = None
+    assert policy.battle(snapshot, mem).button == ('Flee',)
+    policy.menu = None
+    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert (policy.flee_tries, policy.flees) == (2, {'attempts': 2, 'failures': 2})
+
+
+def test_a_shiny_the_run_cannot_catch_is_run_from_whatever_the_goal(real_data):
+    from pokesim.gen2.policy import Goal
+    from pokesim.planning.stance import TRAIN
+    policy, snapshot, mem, _ = _stance_battle(real_data)
+    snapshot.enemy_shiny, snapshot.pockets = True, {'balls': []}
+    policy.goal = Goal('collection_train', 'Train', 'ROUTE_36', 5, 5, kind=TRAIN)
+    assert policy.battle(snapshot, mem).button == ('Flee',) and policy.shiny_missed == 'no balls'
+
+
+def test_every_hunt_goal_is_a_hunt_and_the_old_flee_rules_are_gone():
+    """The hunt scope lives in collection.hunt alone, and no goal key or session decides a flee."""
+    import inspect
+    from pokesim.gen2 import collection, policy
+    assert 'kind=HUNT' in inspect.getsource(collection.hunt)
+    source = inspect.getsource(policy.Policy.battle) + inspect.getsource(policy.Policy.stance_flee)
+    assert "'tower_travel'" not in source and 'shiny_session' not in source
