@@ -2,14 +2,16 @@
 import hashlib
 import json
 import os
+import sys
 import traceback
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from pokesim.ram import PARTY_STRUCT, W_BAG_ITEMS, W_IS_IN_BATTLE, W_MONEY, W_NUM_BAG_ITEMS, W_PARTY_COUNT, W_PARTY_MONS, read_snapshot
-from pokesim.scenarios import (W_BATTLE_MON_HP, W_BATTLE_MON_STATUS, W_PLAYER_MON_NUMBER, Scenario, apply_edits,
-                               discover, find_rom, gen2_data_root, play, rom_candidates)
+from pokesim.scenarios import (W_BATTLE_MON_HP, W_BATTLE_MON_STATUS, W_PLAYER_MON_NUMBER, Scenario, WorkerDied, apply_edits,
+                               discover, find_rom, gen2_data_root, play, replay_all, rom_candidates)
 from pokesim.scenarios import cartridge as checkpoint_cartridge, gen1_variant
 from pokesim.strategy_data import ITEMS
 
@@ -89,6 +91,8 @@ def _replay(folder):
     # A scenario that raises fails its own test. Raising here would error the shared fixture and every scenario with it.
     try:
         return play(Scenario.load(folder))
+    except WorkerDied:
+        raise                                       # replay_all plays it once more
     except Exception:  # noqa: BLE001
         return {'error': traceback.format_exc()}
 
@@ -96,7 +100,6 @@ def _replay(folder):
 @pytest.fixture(scope='module')
 def replays():
     """Every scenario this machine can replay, played in parallel once for the whole module."""
-    from concurrent.futures import ProcessPoolExecutor
     playable, skipped = [], {}
     for scenario in SCENARIOS:
         generation, sha1 = checkpoint_cartridge(scenario.checkpoint)
@@ -107,14 +110,14 @@ def replays():
         else:
             playable.append(scenario)
     jobs = int(os.environ.get('POKESIM_SCENARIO_JOBS') or max(1, (os.cpu_count() or 2) // 2))
+    names = {scenario.folder: scenario.name for scenario in playable}
     results = {}
-    with ProcessPoolExecutor(max_workers=jobs) as pool:
-        futures = {scenario.name: pool.submit(_replay, scenario.folder) for scenario in playable}
-        for name, future in futures.items():
-            try:
-                results[name] = future.result()
-            except Exception as error:  # noqa: BLE001  a worker that died takes only its own scenarios down
-                results[name] = {'error': f'{type(error).__name__}: {error}'}
+    def retrying(folders):
+        print(f'a replay worker died during {", ".join(names[folder] for folder in folders)}, '
+              f'playing them once more', file=sys.stderr, flush=True)
+
+    for folder, result in replay_all(_replay, list(names), jobs, retrying):
+        results[names[folder]] = {'error': f'{type(result).__name__}: {result}'} if isinstance(result, Exception) else result
     return results, skipped
 
 
@@ -137,6 +140,53 @@ def test_a_scenario_that_raises_fails_alone(tmp_path):
     (tmp_path / 'scenario.json').write_text(json.dumps({'name': 'broken', 'checkpoint': 'missing.state'}))
     result = _replay(tmp_path)
     assert set(result) == {'error'} and 'FileNotFoundError' in result['error']
+
+
+def _dies_once(folder):
+    marker = Path(folder).parent / 'died'
+    if not marker.exists():
+        marker.write_text('', encoding='utf-8')
+        os._exit(9)                                 # as a segfault would, with no exception to send back
+    return Path(folder).name
+
+
+def _always_dies(folder):
+    os._exit(9)
+
+
+def _raises(folder):
+    raise ValueError(f'{Path(folder).name} is broken')
+
+
+def test_a_dead_replay_worker_plays_its_scenarios_once_more(tmp_path):
+    # A worker that died broke the pool, and every replay still in it failed with a bare BrokenProcessPool.
+    folders = [tmp_path / 'yellow-fuchsia', tmp_path / 'yellow-vermilion']
+    retried = []
+    results = dict(replay_all(_dies_once, folders, 1, retried.append))
+    assert results == {folder: folder.name for folder in folders}
+    assert len(retried) == 1 and set(retried[0]) <= set(folders) and retried[0]
+
+
+def test_a_replay_that_dies_twice_is_named_and_one_that_raises_is_not_retried(tmp_path):
+    retried = []
+    (folder, died), = replay_all(_always_dies, [tmp_path / 'yellow-fuchsia'], 1, retried.append)
+    assert isinstance(died, WorkerDied) and 'yellow-fuchsia' in str(died) and 'both tries' in str(died)
+    assert len(retried) == 1
+    (folder, error), = replay_all(_raises, [tmp_path / 'red'], 1, retried.append)
+    assert isinstance(error, ValueError) and len(retried) == 1
+
+
+def test_a_replay_interpreter_killed_by_a_signal_counts_as_a_dead_worker(tmp_path, monkeypatch):
+    import subprocess
+    from pokesim.scenarios import _play_elsewhere
+    scenario = SimpleNamespace(folder=tmp_path, name='yellow-fuchsia')
+    monkeypatch.setattr(subprocess, 'run', lambda *a, **k: subprocess.CompletedProcess(a, -11, '', 'Fatal Python error'))
+    with pytest.raises(WorkerDied, match='signal 11'):
+        _play_elsewhere(scenario, None, 'yellow')
+    monkeypatch.setattr(subprocess, 'run', lambda *a, **k: subprocess.CompletedProcess(a, 1, '', 'Traceback'))
+    with pytest.raises(RuntimeError) as caught:
+        _play_elsewhere(scenario, None, 'yellow')
+    assert not isinstance(caught.value, WorkerDied)
 
 
 def test_the_cartridge_comes_from_the_checkpoint_rom_hash(tmp_path):

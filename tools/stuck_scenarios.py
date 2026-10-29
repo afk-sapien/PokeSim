@@ -14,7 +14,7 @@ pokesim/scenarios.py describes.
 Scenario folders hold private game data and must stay outside the checkout or under data/.
 """
 import argparse
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from pokesim.ram import ITEM_NAMES, read_snapshot
-from pokesim.scenarios import STATUS, Scenario, discover, open_run, play
+from pokesim.scenarios import STATUS, Scenario, WorkerDied, discover, open_run, play, replay_all
 
 DEFAULT_ROOT = ROOT / 'data' / 'scenarios'
 
@@ -120,17 +120,26 @@ def run(args):
     scenarios = [s for s in discover(args.root) if not args.only or any(word in s.name for word in args.only)]
     if not scenarios:
         raise SystemExit(f'No scenarios under {args.root}')
+    names = {scenario.folder: scenario.name for scenario in scenarios}
     results = []
-    with ProcessPoolExecutor(max_workers=args.jobs) as pool:
-        jobs = {pool.submit(_play, scenario.folder, args.rom): scenario for scenario in scenarios}
-        for job in as_completed(jobs):
-            result = job.result()
-            results.append(result)
-            verdict = 'ok   ' if result['passed'] else 'STUCK'
-            print(f'{verdict} {result["name"]:<44} {result["game_minutes"]:>4}m played, quiet {result["worst_quiet_minutes"]:>3}m, '
-                  f'{result["reloads"]} reloads, {result["wall_seconds"]}s'
-                  + ('' if result['passed'] else f'\n      {result["failure"]} on {result["final_map"]}: '
-                                                 f'{result["objective"]} ({result["reason"]})'), flush=True)
+
+    def retrying(folders):
+        print(f'RETRY a replay worker died during {", ".join(names[folder] for folder in folders)}, '
+              f'playing them once more in a fresh pool', flush=True)
+
+    for folder, result in replay_all(partial(_play, rom=args.rom), list(names), args.jobs, retrying):
+        if isinstance(result, Exception):
+            # A scenario that raises, or whose worker died twice, fails alone and the run goes on.
+            label = 'DIED ' if isinstance(result, WorkerDied) else 'ERROR'
+            results.append({'name': names[folder], 'passed': False, 'error': f'{type(result).__name__}: {result}'})
+            print(f'{label} {names[folder]:<44}\n      {type(result).__name__}: {str(result)[-1000:]}', flush=True)
+            continue
+        results.append(result)
+        verdict = 'ok   ' if result['passed'] else 'STUCK'
+        print(f'{verdict} {result["name"]:<44} {result["game_minutes"]:>4}m played, quiet {result["worst_quiet_minutes"]:>3}m, '
+              f'{result["reloads"]} reloads, {result["wall_seconds"]}s'
+              + ('' if result['passed'] else f'\n      {result["failure"]} on {result["final_map"]}: '
+                                             f'{result["objective"]} ({result["reason"]})'), flush=True)
     results.sort(key=lambda row: row['name'])
     if args.output:
         args.output.write_text(json.dumps(results, indent=2) + '\n', encoding='utf-8')
