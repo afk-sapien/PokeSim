@@ -8,17 +8,17 @@ The shared ``Monitor`` keeps the record in the policy's collection state, counte
 """
 import json
 
+# search_expected is shared now. Hunts and the postgame still take it from here.
+from ..planning.cost import DECISIONS_PER_BATTLE, DECISIONS_PER_MAP
+from ..planning.cost import search_expected as search_expected
 from ..planning.monitor import SPENT, STAND_DOWNS, STOOD_DOWN, Backoff, Monitor
 
 # Decisions an objective that stood down waits before it is tried again.
 STAND_DOWN = 50000
 BACKOFF = Backoff(STAND_DOWN)
 
-# What a search is expected to cost, in decisions. A wild battle takes about 75 with the walking that
-# finds it, and crossing one map on the way takes about 150. A goal stands down once it spent three
-# times its expected decisions without progress, and never later than about two game hours.
-DECISIONS_PER_BATTLE = 75
-DECISIONS_PER_MAP = 150
+# A goal stands down once it spent three times its expected decisions (planning/cost.py) without
+# progress, and never later than about two game hours.
 MOST_DECISIONS = 14000
 # A training trip is expected to cross a few maps and then win a battle before the trainee gains experience.
 TRAINING_DECISIONS = 4 * DECISIONS_PER_MAP + DECISIONS_PER_BATTLE
@@ -26,13 +26,6 @@ TRAINING_DECISIONS = 4 * DECISIONS_PER_MAP + DECISIONS_PER_BATTLE
 
 def monitor(policy, backoff=BACKOFF):
     return Monitor(policy.collection, backoff=backoff)
-
-
-def search_expected(chance, maps=0, odds=1.0):
-    """Decisions a search is expected to take: the maps on the way, then the wild battles it takes to meet
-    a Pokémon found in ``chance`` percent of them, of which ``odds`` hold what the search is for."""
-    battles = 1 / (min(100, max(1, chance)) / 100 * odds)
-    return maps * DECISIONS_PER_MAP + battles * DECISIONS_PER_BATTLE
 
 
 def exhausted(policy, key, budget, amount=1, events=()):
