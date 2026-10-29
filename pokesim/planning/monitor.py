@@ -40,12 +40,24 @@ CONTINUE = Verdict()
 
 @dataclass(frozen=True)
 class Backoff:
-    """The wait after a stand-down: ``base``, doubled once per stand-down in a row, ``doublings`` times at most."""
+    """The wait after a stand-down: ``base``, doubled once per stand-down in a row, ``doublings`` times at most.
+
+    A ``linear`` backoff adds ``base`` for each stand-down in a row instead, and ``limit`` caps either wait.
+    """
     base: float
     doublings: int = 0
+    linear: bool = False
+    limit: float | None = None
 
     def wait(self, count):
-        return self.base * 2 ** min(max(count - 1, 0), self.doublings)
+        count = max(count, 1)
+        wait = self.base * count if self.linear else self.base * 2 ** min(count - 1, self.doublings)
+        return wait if self.limit is None else min(self.limit, wait)
+
+
+# A missed legendary encounter returns after 36000 frames for each miss in a row, at most 180000. Both
+# generations count it down only while no battle runs.
+LEGENDARY_RETRY = Backoff(36000, linear=True, limit=180000)
 
 
 class Monitor:

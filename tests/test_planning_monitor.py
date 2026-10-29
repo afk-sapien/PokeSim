@@ -50,6 +50,12 @@ def test_backoff_doubles_for_stand_downs_in_a_row():
     assert monitor.stand_down('rematch', 0) == 60000
 
 
+def test_a_linear_backoff_adds_its_base_up_to_the_limit():
+    backoff = Backoff(100, linear=True, limit=350)
+    assert [backoff.wait(count) for count in range(6)] == [100, 100, 200, 300, 350, 350]
+    assert Backoff(100, doublings=5, limit=300).wait(4) == 300
+
+
 def test_a_fixed_wait_matches_the_gen2_stand_down():
     state = {'stood_down': {'hunt:223': 900}}
     monitor = Monitor(state, backoff=Backoff(50000))

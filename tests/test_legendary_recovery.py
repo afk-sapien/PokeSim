@@ -3,13 +3,55 @@ from dataclasses import replace
 
 import pytest
 
-from pokesim.legendary import ENCOUNTERS, LegendaryRecovery, RETRY_FRAMES
+from pokesim.legendary import ENCOUNTERS, LegendaryRecovery
+from pokesim.planning.monitor import LEGENDARY_RETRY
 from pokesim.policies.battle import choose_battle
+from pokesim.policies.ledger import LEGENDARY_THROWS, catch_spent, legendary_retreat
 from pokesim.policies.navigation import Navigator
 from pokesim.ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
 from pokesim.strategy_data import DATA, EVENTS, MAPS, normalize_toggle_objects
 from test_collection import sid, state
 from test_strategy import mon
+
+RETRY_FRAMES = LEGENDARY_RETRY.base
+
+
+def test_retry_wait_matches_the_old_timers():
+    # Both generations waited min(180000, 36000 * misses) before reopening a missed encounter.
+    assert [LEGENDARY_RETRY.wait(count) for count in range(1, 7)] == [min(180000, 36000 * count) for count in range(1, 7)]
+    assert [LEGENDARY_RETRY.wait(count) for count in range(1, 7)] == [36000, 72000, 108000, 144000, 180000, 180000]
+
+
+@pytest.mark.parametrize('misses', range(1, 7))
+def test_each_miss_in_a_row_waits_as_before(misses):
+    s, memory = failed()
+    recovery = LegendaryRecovery({'attempts': {'150': misses - 1}})
+    recovery.observe(s, memory)
+    assert recovery.pending == {'150': min(180000, 36000 * misses)}
+    assert recovery.attempts == {'150': misses}
+
+
+def test_an_older_save_keeps_its_wait_and_misses():
+    s, memory = failed()
+    saved = {'pending': {'150': 5000, '144': 0}, 'attempts': {'150': 3, '144': 1, '146': 2}}
+    recovery = LegendaryRecovery(saved)
+    assert recovery.state_dict() == saved
+    recovery.observe(s, memory)
+    recovery.observe(replace(s, frame=120), memory)
+    assert recovery.pending['150'] == 5000 - 120
+    assert recovery.attempts == saved['attempts']
+
+
+def test_the_retreat_is_a_ledger_rule():
+    s = state(party=(mon(),), in_battle=1)
+    assert not catch_spent(s, 0, LEGENDARY_THROWS)
+    assert catch_spent(s, LEGENDARY_THROWS, LEGENDARY_THROWS)
+    assert catch_spent(replace(s, items=()), 0, LEGENDARY_THROWS)
+    assert not catch_spent(replace(s, items=((1, 1),)), 0, LEGENDARY_THROWS)
+    assert legendary_retreat(replace(s, items=()), 0, True)
+    assert not legendary_retreat(replace(s, items=()), 0, False)
+    assert not legendary_retreat(replace(s, items=(), enemy_shiny=True), 0, True)
+    assert not legendary_retreat(replace(s, items=(), battle_type=1), 0, True)
 
 
 def failed(dex=150, **changes):

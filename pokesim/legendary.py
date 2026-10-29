@@ -3,11 +3,9 @@ from copy import deepcopy
 from pokecore.resets import Flag, update_flags
 
 from .events import Event, LOW
+from .planning.monitor import LEGENDARY_RETRY
 from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
 from .strategy_data import DATA, EVENTS, MAPS, SPECIES, WORLD, event_set, object_hidden
-
-RETRY_FRAMES = 36000
-MAX_RETRY_FRAMES = 180000
 
 
 def encounters():
@@ -57,7 +55,7 @@ class LegendaryRecovery:
             if key not in self.pending:
                 count = self.attempts.get(key, 0) + 1
                 self.attempts[key] = count
-                self.pending[key] = min(MAX_RETRY_FRAMES, RETRY_FRAMES * count)
+                self.pending[key] = LEGENDARY_RETRY.wait(count)
                 events.append(Event('legendary_retry', f'{name} will have another encounter',
                     'The encounter ended without a catch. Leave the area and prepare another attempt. '
                     'Used items, damage, and adventure progress are preserved.', priority=LOW))

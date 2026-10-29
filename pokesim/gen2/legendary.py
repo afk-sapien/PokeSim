@@ -2,6 +2,7 @@
 from copy import deepcopy
 
 from .. import config
+from ..planning.monitor import LEGENDARY_RETRY
 from pokecore.gen2.ram import Memory
 
 NOTICES = 'gen2-legendary-retry-notices-v1'
@@ -63,7 +64,7 @@ class Recovery:
                 continue
             if key not in self.pending:
                 self.attempts[key] = self.attempts.get(key, 0) + 1
-                self.pending[key] = min(180000, 36000 * self.attempts[key])
+                self.pending[key] = LEGENDARY_RETRY.wait(self.attempts[key])
             self.pending[key] = max(0, self.pending[key] - delta)
             if (self.pending[key] or snapshot.map in rooms(data, species)
                     or mem.byte('wScriptRunning') or '┌' in snapshot.tiles[12]):

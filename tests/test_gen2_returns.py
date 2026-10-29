@@ -184,6 +184,22 @@ def test_recovery_repeats_returned_legendaries_and_rearms_missed_roamers(world):
     assert world.memory.raw[data.symbols['wRoamMon2'][1]:][:5] == bytes((244, 40, mid >> 8, mid & 0xFF, 0))
 
 
+@pytest.mark.parametrize('misses', range(1, 7))
+def test_recovery_waits_as_before_and_reads_older_saves(world, misses):
+    from pokesim.gen2.legendary import Recovery
+    world.flag('EVENT_FOUGHT_HO_OH')
+    snap = world.snapshot
+    saved = {'pending': {}, 'attempts': {'250': misses - 1}}
+    recovery = Recovery(saved)
+    assert recovery.state_dict() == saved
+    recovery.observe(snap, world.memory)
+    assert recovery.pending == {'250': min(180000, 36000 * misses)}
+    assert recovery.attempts == {'250': misses}
+    snap.frame = 120
+    recovery.observe(snap, world.memory)
+    assert Recovery(recovery.state_dict()).pending == {'250': min(180000, 36000 * misses) - 120}
+
+
 def test_recovery_restarts_the_gs_ball_quest_after_a_first_celebi_miss(world, monkeypatch):
     from pokesim import config
     from pokesim.gen2.legendary import Recovery

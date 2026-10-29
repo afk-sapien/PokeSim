@@ -153,6 +153,28 @@ def battle_ledger():
     return Ledger(lambda party, kinds: Resources(battle_room(party)))
 
 
+# Balls thrown at one legendary in one battle before the expedition retreats to try again.
+LEGENDARY_THROWS = 50
+
+
+def catch_spent(snapshot, attempts, limit):
+    """Whether this battle has nothing left to catch with: no room to keep a catch, no ball and no
+    Master Ball in the bag, or ``limit`` throws already made."""
+    balls = any(item in BALLS and count > 0 for item, count in snapshot.items)
+    master = any(item == ITEMS['MASTER_BALL'] and count for item, count in snapshot.items)
+    return not snapshot.can_catch or not balls and not master or attempts >= limit
+
+
+def legendary_retreat(snapshot, attempts, wanted):
+    """Whether to run from a wanted wild legendary because the catch supplies are spent.
+
+    ``wanted`` is a legendary the Pokédex misses or a returned one to catch again. A shiny is left to
+    the battle stance. The miss reopens the encounter later (legendary.py), so the run keeps it.
+    """
+    wild = snapshot.in_battle == 1 and snapshot.battle_type == 0
+    return wild and not snapshot.enemy_shiny and wanted and catch_spent(snapshot, attempts, LEGENDARY_THROWS)
+
+
 def walk_spent(party, goal='walk'):
     """Whether the party has spent the HP and PP a walk needs, which also sends it to heal."""
     books = battle_ledger()
