@@ -99,6 +99,26 @@ def test_open_route_rechecks_remote_switches_after_a_map_change():
     assert nav.open_route(closed, targets) is None
 
 
+def test_route_23_takes_the_open_route_south_instead_of_a_closed_victory_road():
+    # A Red postgame save walked into Victory Road 1F and straight back out for 90 minutes: from
+    # Route 23 the Indigo Plateau looked nearer past unsolved switches, and inside only open gates count.
+    policy = StrategicPolicy(7)
+    state = snap(map=MAPS['ROUTE_23'], x=4, y=33, frame=1000,
+                 badges=255, party=(mon(level=100, hp=10, moves=(57, 70, 33)),))
+    targets = healing_goal(state).targets
+    policy.nav.update_story(state)
+    assert policy.nav.route((state.map, state.x, state.y), targets, state.frame) is not None
+    assert policy.nav.path[-1][2][0] == MAPS['INDIGO_PLATEAU_LOBBY']
+    policy.nav.path.clear()
+    for _ in range(3):
+        action = policy._overworld(state, bytearray(65536))[0]
+        assert policy.goal.key == 'heal'
+        assert action.button in ('up', 'down', 'left', 'right')
+        assert policy.nav.path[-1][2][0] != MAPS['INDIGO_PLATEAU_LOBBY']
+        assert all(q[0] not in (MAPS['VICTORY_ROAD_1F'], MAPS['VICTORY_ROAD_2F'], MAPS['VICTORY_ROAD_3F'])
+                   for _, _, q in policy.nav.path)
+
+
 def test_learned_walk_does_not_pass_through_a_boulder_that_moved_back():
     nav = Navigator()
     state = snap(map=MAPS['VICTORY_ROAD_2F'], x=22, y=16)

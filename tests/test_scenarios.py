@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import traceback
 from pathlib import Path
 
 import pytest
@@ -85,7 +86,11 @@ def test_a_key_from_a_newer_checkout_is_ignored_with_a_warning(tmp_path):
 
 
 def _replay(folder):
-    return play(Scenario.load(folder))
+    # A scenario that raises fails its own test. Raising here would error the shared fixture and every scenario with it.
+    try:
+        return play(Scenario.load(folder))
+    except Exception:  # noqa: BLE001
+        return {'error': traceback.format_exc()}
 
 
 @pytest.fixture(scope='module')
@@ -102,8 +107,14 @@ def replays():
         else:
             playable.append(scenario)
     jobs = int(os.environ.get('POKESIM_SCENARIO_JOBS') or max(1, (os.cpu_count() or 2) // 2))
+    results = {}
     with ProcessPoolExecutor(max_workers=jobs) as pool:
-        results = dict(zip((scenario.name for scenario in playable), pool.map(_replay, [s.folder for s in playable])))
+        futures = {scenario.name: pool.submit(_replay, scenario.folder) for scenario in playable}
+        for name, future in futures.items():
+            try:
+                results[name] = future.result()
+            except Exception as error:  # noqa: BLE001  a worker that died takes only its own scenarios down
+                results[name] = {'error': f'{type(error).__name__}: {error}'}
     return results, skipped
 
 
@@ -116,7 +127,16 @@ def test_the_player_gets_going_again(scenario, replays):
     if scenario.name in skipped:
         pytest.skip(skipped[scenario.name])
     result = results[scenario.name]
+    if 'error' in result:
+        pytest.fail(f'{scenario.name} raised during its replay:\n{result["error"]}', pytrace=False)
     assert result['passed'], f'{result["failure"]} on {result["final_map"]}: {result["objective"]} ({result["reason"]})'
+
+
+def test_a_scenario_that_raises_fails_alone(tmp_path):
+    # A Yellow replay that raised in core errored the shared fixture, so all 35 scenarios errored with it.
+    (tmp_path / 'scenario.json').write_text(json.dumps({'name': 'broken', 'checkpoint': 'missing.state'}))
+    result = _replay(tmp_path)
+    assert set(result) == {'error'} and 'FileNotFoundError' in result['error']
 
 
 def test_the_cartridge_comes_from_the_checkpoint_rom_hash(tmp_path):
@@ -159,6 +179,27 @@ def test_gen2_progress_counts_what_the_runtime_stall_watch_counts():
     assert [kind for kind, _ in gained] == ['map', 'catch', 'champion', 'level']
     assert watch.observe(gen2_snapshot(experience=1600, level=61, map=2, event_flags=b'\x03')) == ([], True)
     assert watch.observe(gen2_snapshot(valid=False)) == ([], False)
+
+
+def test_gen2_marathon_checkpoints_count_as_progress():
+    # A Silver race runs longer than the scenario's quiet window and earns nothing else on its way.
+    from types import SimpleNamespace
+    from pokesim.scenarios import Gen2Watch
+    activity = {'kind': 'marathon', 'checkpoint': 0}
+    policy = SimpleNamespace(collection={'postgame': {'activity': activity}})
+    run = SimpleNamespace(data=None, history={'maps': [1], 'owned': [134], 'badges': 0xFFFF, 'league': 3},
+                          policy=policy)
+    watch = Gen2Watch(run)
+    assert watch.observe(gen2_snapshot()) == ([], False)
+    activity['checkpoint'] = 1
+    assert watch.observe(gen2_snapshot()) == ([], True)
+    assert watch.observe(gen2_snapshot()) == ([], False)          # standing at a checkpoint is not progress
+    activity['checkpoint'] = 2
+    assert watch.observe(gen2_snapshot()) == ([], True)
+    policy.collection['postgame']['activity'] = {'kind': 'trade', 'checkpoint': 9}
+    assert watch.observe(gen2_snapshot()) == ([], False)
+    policy.collection['postgame']['activity'] = {'kind': 'marathon', 'checkpoint': 1}
+    assert watch.observe(gen2_snapshot()) == ([], False)          # a new race starts from no baseline
 
 
 def test_gen2_battle_clock_restarts_for_each_new_opponent():
