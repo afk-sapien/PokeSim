@@ -659,15 +659,53 @@ def play(scenario, rom=None, progress=None):
         run.stop()
 
 
+class WorkerDied(RuntimeError):
+    """A replay's process ended on a signal, such as a segfault or the out of memory killer."""
+
+
 def _play_elsewhere(scenario, rom, variant):
     roms = [rom] if isinstance(rom, (str, Path)) else list(rom or ())
     command = [sys.executable, '-m', 'pokesim.scenarios', str(scenario.folder)]
     command += [part for path in roms for part in ('--rom', str(path))]
     done = subprocess.run(command, env={**os.environ, VARIANT_ENV: variant}, cwd=Path(__file__).resolve().parents[1],
                           capture_output=True, text=True, check=False)
+    if done.returncode < 0:
+        raise WorkerDied(f'{scenario.name} replay process died on signal {-done.returncode}: {done.stderr.strip()[-2000:]}')
     if done.returncode:
         raise RuntimeError(f'{scenario.name} failed to replay: {done.stderr.strip()[-2000:]}')
     return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def replay_all(work, folders, jobs, retrying=None):
+    """Run work(folder) for every scenario folder in a process pool, yielding (folder, result or exception).
+
+    A pool worker that dies breaks the whole pool. Every replay still in it then fails with
+    BrokenProcessPool, which names neither the scenario nor the cause. Those replays, and any whose
+    own interpreter ended on a signal, run once more in a fresh pool, and retrying(folders) hears
+    about them first. A replay that dies again is yielded as WorkerDied naming its scenario.
+    """
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+    from concurrent.futures.process import BrokenProcessPool
+    pending, last = list(folders), False
+    while pending:
+        died = []
+        with ProcessPoolExecutor(max_workers=jobs) as pool:
+            futures = {pool.submit(work, folder): folder for folder in pending}
+            for future in as_completed(futures):
+                folder = futures[future]
+                try:
+                    yield folder, future.result()
+                except (BrokenProcessPool, WorkerDied) as error:
+                    if last:
+                        yield folder, WorkerDied(f'{Path(folder).name}: the replay process died on both tries '
+                                                 f'({type(error).__name__}: {error})')
+                    else:
+                        died.append(folder)
+                except Exception as error:  # noqa: BLE001  a scenario that raises fails alone
+                    yield folder, error
+        if died and retrying is not None:
+            retrying(died)
+        pending, last = died, True
 
 
 if __name__ == '__main__':

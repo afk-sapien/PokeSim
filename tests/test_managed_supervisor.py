@@ -291,8 +291,21 @@ def test_readiness_timeout_names_the_last_cause_and_the_log_not_forty_lines(tmp_
               "[print('noise %d' % i, file=sys.stderr, flush=True) for i in range(60)]\n"
               "print('ROM header checksum is wrong', file=sys.stderr, flush=True)\n"
               "time.sleep(30)\n")
+    import queue
+    import time
+
+    class TimesOutOnceTheCauseIsLogged(queue.Queue):
+        """A fixed 1.5 second wait raced the child's start. A loaded macOS Intel runner had not printed one line by then."""
+
+        def get(self, timeout=None):
+            deadline = time.monotonic() + 30
+            while not any('checksum' in line for line in child.logs) and time.monotonic() < deadline:
+                time.sleep(0.02)
+            raise queue.Empty
+
     bootstrap = {'token': 't', 'generation': 1, 'adventure_id': 'a', 'settings': {'data_dir': str(tmp_path)}}
     child = Child(bootstrap, command=[sys.executable, '-c', script])
+    child.ready = TimesOutOnceTheCauseIsLogged(maxsize=1)
     with pytest.raises(RuntimeError) as caught:
         child.start(timeout=1.5)
     message = str(caught.value)

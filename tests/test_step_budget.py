@@ -23,10 +23,35 @@ from pokesim.strategy_data import EVENTS, ITEMS, MAPS, SPECIES, WORLD
 MEDIAN_MS = 5
 MAX_MS = 50
 STEPS = 60
-# Shared CI runners are slower and noisier than a workstation, so the clock is scaled there.
-SCALE = float(os.environ.get('POKESIM_STEP_BUDGET_SCALE', '1'))
 # CPU time of this thread, so a runner that deschedules the test mid-step does not count as a slow step.
 clock = time.thread_time
+# The budgets above are workstation milliseconds. A step is timed next to a fixed piece of pure Python
+# work, and the budget grows by how much slower that work ran than on the workstation, so a slow or
+# busy runner gets a larger budget while a policy that got slower for itself still fails anywhere.
+REFERENCE_MS = 0.25
+
+
+class Reference:
+    """Dictionary lookups on tuple keys and small tuples, the kind of work a policy step does."""
+
+    def __init__(self):
+        rng = random.Random(11)
+        self.table = {(m, x, y): (x + y, m) for m in range(40) for x in range(40) for y in range(40)}
+        keys = list(self.table)
+        self.keys = [rng.choice(keys) for _ in range(2000)]
+
+    def run(self):
+        total = 0
+        for key in self.keys:
+            value = self.table.get(key)
+            if value is not None:
+                total += value[0] + len((key, value))
+        return total
+
+    def time(self):
+        start = clock()
+        self.run()
+        return clock() - start
 
 
 def settle():
@@ -41,11 +66,32 @@ def settle():
     gc.collect()
 
 
-def budget(times):
+def slowdown(references):
+    """How many times slower than the workstation this runner did the reference work, at least 1."""
+    return max(1.0, statistics.median(references) * 1000 / REFERENCE_MS)
+
+
+def budget(times, references):
     ms = [t * 1000 for t in times[1:]]
-    median, worst = statistics.median(ms), max(ms)
-    assert median <= MEDIAN_MS * SCALE, f'median step {median:.2f} ms over {MEDIAN_MS} ms'
-    assert worst <= MAX_MS * SCALE, f'slowest step {worst:.1f} ms over {MAX_MS} ms'
+    median, worst, scale = statistics.median(ms), max(ms), slowdown(references[1:])
+    runner = f'reference work {scale:.1f} times slower than the workstation'
+    import warnings  # TEMPORARY CI PROBE
+    warnings.warn(f'BUDGETPROBE median {median:.2f} max {worst:.1f} ref {statistics.median(references[1:]) * 1000:.3f} {runner}', RuntimeWarning)
+    assert median <= MEDIAN_MS * scale, f'median step {median:.2f} ms over {MEDIAN_MS * scale:.1f} ms ({runner})'
+    assert worst <= MAX_MS * scale, f'slowest step {worst:.1f} ms over {MAX_MS * scale:.0f} ms ({runner})'
+
+
+def test_the_budget_grows_with_the_runner_and_not_with_the_policy():
+    workstation, three_times = [REFERENCE_MS / 1000] * 5, [3 * REFERENCE_MS / 1000] * 5
+    steps = [0.1] + [0.012] * 4
+    with pytest.raises(AssertionError, match='median step 12.00 ms over 5.0 ms'):
+        budget(steps, workstation)
+    budget(steps, three_times)                      # a runner three times slower gets 15 ms
+    with pytest.raises(AssertionError, match='over 15.0 ms .reference work 3.0 times slower'):
+        budget([0.1] + [0.016] * 4, three_times)
+    budget([0.1] + [0.001] * 4, [REFERENCE_MS / 4000] * 5)     # a faster machine keeps the workstation budget
+    with pytest.raises(AssertionError, match='slowest step 60.0 ms over 50 ms'):
+        budget([0.1, 0.001, 0.001, 0.06], workstation)
 
 
 def flags(*names):
@@ -125,17 +171,19 @@ def test_gen1_step_stays_within_budget_on_a_large_state():
     policy.nav.edges = walked_graph()
     policy.observed_map = snapshot.map
     memory = bytearray(65536)
+    reference = Reference()
     settle()
-    times = []
+    times, references = [], []
     for step in range(STEPS):
         snapshot = replace(snapshot, frame=100 + step * 16)
+        references.append(reference.time())
         start = clock()
         actions = policy.step(PolicyContext(snapshot, 0, step / 4, memory))
         times.append(clock() - start)
         if actions and actions[0].button:
             snapshot = walk(policy, snapshot, actions[0])
     assert len(policy.nav.edges) > 20000
-    budget(times)
+    budget(times, references)
 
 
 class Gen2Memory:
@@ -224,10 +272,12 @@ def test_gen2_step_stays_within_budget_on_a_large_state(game):
         playtime=(100, 0, 0), hall_of_fame_count=0, event_flags=bytes([255] * 256), tiles=(' ' * 20,) * 18,
         objects=(), valid=True, data=data)
     policy = Policy(data, starter='totodile', seed=7)
+    reference = Reference()
     settle()
-    times, maps = [], {mid}
+    times, references, maps = [], [], {mid}
     for step in range(120):
         snapshot = replace(snapshot, frame=100 + step * 16)
+        references.append(reference.time())
         start = clock()
         action = policy.step(snapshot, memory)
         times.append(clock() - start)
@@ -235,4 +285,4 @@ def test_gen2_step_stays_within_budget_on_a_large_state(game):
             snapshot = gen2_walk(policy, snapshot, memory, action.button)
             maps.add(snapshot.map)
     assert len(maps) >= 3, 'the walk should cross Victory Road into the maps beyond it'
-    budget(times)
+    budget(times, references)
