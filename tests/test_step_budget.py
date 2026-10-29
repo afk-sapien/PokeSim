@@ -84,8 +84,6 @@ def budget(times, references):
     ms = [t * 1000 for t in times[1:]]
     median, worst, scale = statistics.median(ms), max(ms), slowdown(references[1:])
     runner = f'reference work {scale:.1f} times slower than the workstation'
-    import warnings  # TEMPORARY CI PROBE
-    warnings.warn(f'BUDGETPROBE median {median:.2f} max {worst:.1f} ref {statistics.fmean(references[1:]) * 1000:.3f} {runner}', RuntimeWarning)
     assert median <= MEDIAN_MS * scale, f'median step {median:.2f} ms over {MEDIAN_MS * scale:.1f} ms ({runner})'
     assert worst <= MAX_MS * scale, f'slowest step {worst:.1f} ms over {MAX_MS * scale:.0f} ms ({runner})'
 
