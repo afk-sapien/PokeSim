@@ -62,6 +62,23 @@ def test_training_takes_the_best_copy_ten_levels_at_a_time(data, monkeypatch):
     assert postgame.trainee(policy, snapshot([lead()], [best, done])) is None
 
 
+def test_a_party_copy_trains_before_a_boxed_one_only_a_little_stronger(data, monkeypatch):
+    from pokesim.gen2 import postgame
+    monkeypatch.setattr(postgame, 'huntable', lambda *args: {})
+    policy = expedition(data)
+    near, boxed = (0, 14, 14, 14, 14), (0, 15, 15, 15, 15)
+    party = mon(156, box=None, level=20, dvs=near, experience=8000)
+    stored = [mon(156, level=22, dvs=boxed, experience=10000), mon(155, position=1, level=5, experience=150)]
+    assert postgame.potential(data, party) * (1 + postgame.MIN_UPGRADE) >= postgame.potential(data, stored[0])
+    # The party copy trains instead of a boxed Cyndaquil coming out, so no PC trip is made.
+    assert postgame.trainee(policy, snapshot([lead(), party], stored)) == {
+        'kind': 'train', 'identity': [4321, list(near)], 'species': 156, 'level_goal': 30}
+    # A boxed copy clearly stronger is still the one trained.
+    weak = mon(156, box=None, level=20, dvs=ORDINARY, experience=8000, trainer_id=7)
+    assert postgame.potential(data, weak) * (1 + postgame.MIN_UPGRADE) < postgame.potential(data, stored[0])
+    assert postgame.trainee(policy, snapshot([lead(), weak], stored))['identity'] != [7, list(ORDINARY)]
+
+
 def test_ordinary_copies_wait_for_their_better_dv_hunts(data, monkeypatch):
     from pokesim.gen2 import postgame
     monkeypatch.setattr(postgame, 'huntable', lambda *args: {16: [row(5)]})

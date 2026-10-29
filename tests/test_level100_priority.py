@@ -171,6 +171,28 @@ def test_a_step_is_priced_by_the_experience_it_needs():
     assert pick(dragonair, pidgeotto) == 'pidgeotto'
 
 
+def test_the_party_trainee_trains_before_a_boxed_one_comes_out():
+    from pokesim.policies.collection import party_first
+    # After step 5 Yellow withdrew a new low level partner every few minutes, since its step needs
+    # little experience, and each swap took a PC trip the price did not show.
+    party = {**train('party', 60), 'parent': sid(17)}
+    boxed = {**train('boxed', 5), 'parent': sid(17), 'box': 3}
+    rows = (party, boxed, REPEAT)
+    projects = {row['key']: row for row in rows}
+
+    def chosen(*rows):
+        options = party_first([candidate(row, 10, {}, False, frozenset(range(1, 152))) for row in rows], projects)
+        return AdventureDirector.select(options, projects)['key']
+    assert pick(party, boxed) == 'boxed'
+    assert chosen(party, boxed, REPEAT) == 'party'
+    # With no trainee in the party the boxed one comes out as before.
+    assert chosen(boxed, REPEAT) == 'boxed'
+    # A boxed trainee short of a level 100 credit still beats a party trainee whose family has its credit.
+    done = {**train('done', 60, mastery=False), 'parent': sid(17)}
+    projects['done'] = done
+    assert chosen(done, boxed) == 'boxed'
+
+
 def test_training_climbs_in_steps_of_ten_and_resumes_from_where_it_stopped():
     """A finished step re-enters selection aiming ten higher, not at 100 again."""
     for level, expected in ((37, 40), (40, 50), (60, 70), (95, 100), (99, 100)):

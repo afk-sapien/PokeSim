@@ -156,6 +156,26 @@ def candidate(project, travel, tails, short, owned, wild=None):
     return Candidate(project.get('key', method), tier, value, frames, goal=shadow_kind(project))
 
 
+def boxed_trainee(project):
+    return project['method'] == 'train' and project.get('box') is not None
+
+
+def party_first(options, projects):
+    """``options`` without the boxed trainees that a party trainee matches or beats on tier.
+
+    A trainee in the party keeps training before a boxed one comes out. After step 5 a boxed low level
+    partner's step looked cheap by experience, so Red and Yellow withdrew a new one every few minutes, and
+    each swap took a PC trip of about 10000 frames that the walk price did not show. A boxed trainee in a
+    higher tier, such as one still short of a level 100 credit while the party trainee is not, still comes
+    out. ``projects`` maps each option's key to its project.
+    """
+    party = [option.tier for option in options
+             if projects[option.key]['method'] == 'train' and not boxed_trainee(projects[option.key])]
+    if not party:
+        return options
+    return [option for option in options if not (boxed_trainee(projects[option.key]) and option.tier >= min(party))]
+
+
 def project_budget(project):
     return 3 * expected_frames(project)
 
@@ -1153,8 +1173,8 @@ class Collection:
             add({'method': 'return_fossil', 'map': fossil['room'], 'item': fossil['item'],
                  'event_return': 'fossil'})
         projects = {project['key']: project for project in candidates}
-        options = [candidate(project, travel.get(project['key']), best_tails, short, s.owned, self.wild)
-                   for project in candidates]
+        options = party_first([candidate(project, travel.get(project['key']), best_tails, short, s.owned, self.wild)
+                               for project in candidates], projects)
         self.project = self.director.select(options, projects)
         if self.project is None:
             # Nothing to do until the game changes, so the plan is not drawn again until then.
