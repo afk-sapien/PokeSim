@@ -57,6 +57,20 @@ def test_marathons_chart_is_only_for_games_with_the_race(page, game, marathon, s
     expect(rows).to_have_count(1 if shown else 0)
 
 
+@pytest.mark.parametrize('generation, label', [(None, 'Sampled steps (legacy)'), (2, 'Steps walked')])
+def test_steps_chart_names_what_each_generation_counts(page, game, generation, label):
+    url, _, _, _ = game
+    now = time.time()
+    page.route('**/api/statistics', lambda route: route.fulfill(json={
+        'started_at': now - 3600, 'updated_at': now, 'generation': generation, 'marathon': None,
+        'current': {'steps': 40}, 'history': [{'ts': now - 3600, 'steps': 10}, {'ts': now, 'steps': 40}],
+    }))
+    page.goto(url + '/stats')
+    rows = page.locator('#statistics-charts .progress-row').filter(has_text=label)
+    expect(rows).to_have_count(1)
+    expect(rows.locator('.readout')).to_have_text('40')
+
+
 def test_unavailable_current_value_is_not_replaced_by_historical_value(page, game):
     url, _, _, _ = game
     now = time.time()

@@ -105,3 +105,43 @@ def events(before, snapshot, history, data, event):
                          f'{len(snapshot.owned)} owned, {bin(snapshot.badges).count("1")} badges, on {snapshot.map_name}.',
                          priority=LOW))
     return out
+
+
+def _member(mon):
+    return [mon.species, mon.trainer_id, list(mon.dvs)]
+
+
+class Releases:
+    """Journal a spare that a planner Release task let go, as Red, Blue and Yellow do.
+
+    The spare is named while the task is open. It counts as released once it is gone from the
+    party and every box on two observations in a row, so a half-written box read is not a
+    release. Link preparation logs its own releases and runs them outside the planner menu.
+    """
+    def __init__(self):
+        self.member = self.mon = None
+        self.missing = 0
+
+    def observe(self, menu, snapshot, data, event):
+        from .menus import Release
+        task = menu if isinstance(menu, Release) and menu.member else None
+        if task is not None and task.member != self.member:
+            mon = next((mon for mon in snapshot.stored if _member(mon) == task.member), None)
+            if mon is not None:
+                self.member, self.mon, self.missing = task.member, mon, 0
+        if self.member is None:
+            return []
+        if any(_member(mon) == self.member for mon in snapshot.party + snapshot.stored):
+            self.missing = 0
+            if task is None:
+                # The task ended with the spare still here, so the game refused it.
+                self.member = self.mon = None
+            return []
+        self.missing += 1
+        if self.missing < 2:
+            return []
+        mon, self.member, self.mon = self.mon, None, None
+        name = _species(data, mon.species)
+        return [event('release', f'Said goodbye to a spare {name}',
+                      f'Storage was nearly full, so a duplicate {name} Lv {mon.level} was let go on {snapshot.map_name}.',
+                      priority=MINIMAL, notable=False)]

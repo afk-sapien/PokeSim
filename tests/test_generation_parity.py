@@ -26,6 +26,8 @@ ALLOWED = {
     'statistics.collection_records.fair_wild_dvs': 'Gen 1 only, the same setting as state.fair_wild_dvs.',
     'state.palette': 'Gen 1 only. Gold, Silver and Crystal draw their own colors, as Yellow does.',
     'statistics.marathon': 'Gen 2 sends marathon: null on purpose. The Kanto Marathon is a Red, Blue and Yellow race.',
+    'statistics.current.marathons': 'Gen 2 keeps no marathon count, the same race as statistics.marathon.',
+    'statistics.history[].marathons': 'Gen 2 keeps no marathon count, the same race as statistics.marathon.',
     'statistics.collection_records.perfect_count_is_minimum': 'Perfect DVs are counted from what is held, '
                                                               'so either generation may send only a minimum.',
     'state.clock': 'Gen 2 only. Gold, Silver and Crystal keep a real-time clock.',
@@ -33,6 +35,7 @@ ALLOWED = {
     # Labels a Red, Blue or Yellow payload leaves to the page defaults.
     'state.generation': 'Only Gen 2 names its generation. The pages read a missing one as Gen 1.',
     'activity.generation': 'Only Gen 2 names its generation. The pages read a missing one as Gen 1.',
+    'statistics.generation': 'Only Gen 2 names its generation. The Stats page reads a missing one as Gen 1.',
     'state.game.generation': 'Only Gen 2 names its generation. The pages read a missing one as Gen 1.',
     'state.game.version': 'Gen 1 names its cartridge in strategy.collection.version.',
     'state.game.badge_total': 'Gen 2 sends 16. The pages default to 8 for Gen 1.',
@@ -268,3 +271,71 @@ def test_gen2_sales_contest_catches_and_session_trades_reach_the_pages(tmp_path,
     assert (pokemon[4]['traded_out'], pokemon[7]['traded_out'], pokemon[152]['traded_in'], pokemon[155]['traded_in']) == (1, 1, 1, 1)
     catches = pages['statistics']['collection_records']['catches']
     assert catches['total'] == sum(row['caught'] for row in pokemon.values()) == 1
+
+
+def sixty_days_of_hours(store):
+    import json
+    with store.lock, store.db:
+        store.db.executemany('INSERT OR REPLACE INTO statistics_history VALUES (?, ?, ?)',
+                             [(hour, hour * 3600, json.dumps({'steps': hour})) for hour in range(24 * 60)])
+
+
+def test_both_generations_compact_old_history(tmp_path, gen2_data):
+    """Each keeps hourly rows for 30 days and one a day before that, so history stops growing by the hour."""
+    from pokesim.gen2.statistics import Statistics
+    from pokesim.statistics import DAY, StatisticsTracker
+    red, red_store = gen1_adventure(tmp_path)
+    gold, gold_store = gen2_adventure(tmp_path, gen2_data)
+    try:
+        for store in (red_store, gold_store):
+            sixty_days_of_hours(store)
+        StatisticsTracker(red_store).flush(now=60 * DAY)
+        Statistics(gold_store).flush(gold.snapshot, now=60 * DAY)
+        counts = [store.db.execute('SELECT COUNT(*) FROM statistics_history').fetchone()[0]
+                  for store in (red_store, gold_store)]
+    finally:
+        red_store.close()
+        gold_store.close()
+    # 30 daily rows, 30 days of hourly rows, the new row and the fixture's own flush.
+    assert all(24 * 30 <= count <= 30 + 24 * 30 + 2 for count in counts), counts
+
+
+def test_gen2_collection_waits_for_two_matching_reads_as_gen1_does(tmp_path, gen2_data):
+    """A box read in the middle of a PC transfer is not charted until the next read agrees."""
+    from pokesim.gen2.statistics import Statistics
+    gold, store = gen2_adventure(tmp_path, gen2_data)
+    try:
+        statistics = Statistics(store)
+        assert statistics.gauges['held'] == 1
+        statistics.observe(replace(gold.snapshot, party=()))
+        assert statistics.gauges['held'] == 1
+        statistics.observe(replace(gold.snapshot, frame=3630, party=()))
+        assert statistics.gauges['held'] == 0
+        history = store.db.execute('SELECT data FROM statistics_history').fetchall()
+    finally:
+        store.close()
+    # Gold, Silver and Crystal have no Kanto Marathon, so history keeps no count for it.
+    assert all('"marathons": null' in row[0] for row in history)
+
+
+def test_gen2_planner_releases_reach_the_journal_as_gen1_releases_do():
+    from pokesim.gen2.emulator import Event
+    from pokesim.gen2.journal import Releases
+    from pokesim.gen2.menus import Release
+    data = SimpleNamespace(species={16: {'name': 'Pidgey'}})
+    spare = SimpleNamespace(species=16, trainer_id=100, dvs=(1, 2, 3, 4), level=7, box=0, position=0)
+    keep = SimpleNamespace(species=16, trainer_id=100, dvs=(9, 9, 9, 9), level=9, box=0, position=1)
+    held = SimpleNamespace(party=(), stored=(spare, keep), map_name='Route 30')
+    gone = SimpleNamespace(party=(), stored=(keep,), map_name='Route 30')
+    task = Release(0, 0, [16, 100, [1, 2, 3, 4]])
+    releases = Releases()
+    assert releases.observe(task, held, data, Event) == []
+    # One read without the spare could be a box half written, so it waits for a second.
+    assert releases.observe(task, gone, data, Event) == []
+    [event] = releases.observe(None, gone, data, Event)
+    assert (event.type, event.title, event.notable) == ('release', 'Said goodbye to a spare Pidgey', False)
+    assert releases.observe(None, gone, data, Event) == []
+    # A refused release ends the task with the spare still in its box, and nothing is logged.
+    refused = Releases()
+    refused.observe(task, held, data, Event)
+    assert refused.observe(None, held, data, Event) == [] and refused.member is None

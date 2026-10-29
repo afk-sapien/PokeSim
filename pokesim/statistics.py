@@ -37,6 +37,17 @@ def collection(snapshot):
     }
 
 
+def compact(db, value, now):
+    """Thin old history once a day inside the caller's transaction. Both generations share it."""
+    if int(now // DAY) == value.get('compacted_day'):
+        return
+    # Retain hourly endpoints for 30 days, then one endpoint per day indefinitely.
+    db.execute('DELETE FROM statistics_history WHERE ts < ? AND bucket NOT IN ('
+               'SELECT MAX(bucket) FROM statistics_history GROUP BY CAST(ts / ? AS INTEGER))',
+               (now - 30 * DAY, DAY))
+    value['compacted_day'] = int(now // DAY)
+
+
 def history(db, limit=600):
     # Select in SQL so an old adventure never sends an unbounded history to the browser.
     bounds = db.execute('SELECT MIN(ts), MAX(ts) FROM statistics_history').fetchone()
@@ -149,12 +160,7 @@ class StatisticsTracker:
             value.update(current=current, updated_at=now)
             self.store.db.execute('INSERT OR REPLACE INTO statistics_history VALUES (?, ?, ?)',
                                   (int(now // 3600), now, json.dumps(current)))
-            if int(now // DAY) != value.get('compacted_day'):
-                # Retain hourly endpoints for 30 days, then one endpoint per day indefinitely.
-                self.store.db.execute('DELETE FROM statistics_history WHERE ts < ? AND bucket NOT IN ('
-                                      'SELECT MAX(bucket) FROM statistics_history GROUP BY CAST(ts / ? AS INTEGER))',
-                                      (now - 30 * DAY, DAY))
-                value['compacted_day'] = int(now // DAY)
+            compact(self.store.db, value, now)
             self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
         self.value = value
         self.last_flush = now
