@@ -842,16 +842,17 @@ class StrategicPolicy(Policy):
         if goal.key == "thunder" and not event_set(s.event_flags, "EVENT_2ND_LOCK_OPENED"):
             goal = choice.replace(self._trash_goal(s), choice.errand_candidate('trash', 'trash'))
         if not self.heal_latch and not in_league and not choice.errand:
-            # The collection pick weighs its own projects against the goal it is handed, and commits the
-            # one it picks, so an errand under way is never handed to it.
+            # The collection pick weighs its own projects on the arbiter against the goal it is handed, and
+            # commits the one it picks, so its pick is taken as it is. An errand under way is never handed
+            # to it.
             collection_goal = self.collection.choose(s, self.nav, self.rng, goal)
             if collection_goal:
                 collection_kind = goal_kind(collection_goal.key)
                 candidate = (choice.errand_candidate(collection_goal.key, collection_kind) if collection_kind in ERRANDS
                              else goal_candidate(collection_goal, self.collection, 'collection'))
-                if choice.wins(candidate):
-                    self.next_goal = goal.to_dict() if choice.kind not in ('collection', 'plan') else self.next_goal
-                    goal = choice.offer(collection_goal, candidate)
+                if choice.kind not in ('collection', 'plan'):
+                    self.next_goal = goal.to_dict()
+                goal = choice.replace(collection_goal, candidate)
         # A legendary or a marathon under way loses its run when it leaves, so no pickup cuts into one.
         committed = legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon'
         pickup_errand = choice.errand_candidate('collect_pickup', 'pickup')
