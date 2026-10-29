@@ -73,6 +73,26 @@
     document.querySelector('#tally-note').textContent = !tallies ? 'Tallies are not available yet.'
       : `Counted from journal entries and kept when old entries are pruned${tallies.complete_history ? '.' : `, from the entries kept since ${date(tallies.since)}.`} The win rate counts a blackout outside a wild battle as a trainer loss.`
   }
+  function renderMoney(flow) {
+    const list = document.querySelector('#money-list')
+    list.replaceChildren()
+    const counted = flow?.available
+    const sources = flow?.sources || {}
+    const money = value => counted && Number.isFinite(value) ? `₽${number(value)}` : 'Not tracked'
+    for (const [key, label, value] of [
+      ['earned', 'Earned', flow?.earned], ['spent', 'Spent', flow?.spent], ['net', 'Net change', flow?.net],
+      ['battles', 'Prize money', sources.battles], ['other', 'Sales and other income', sources.other],
+      ['shops', 'Shops and fees', sources.shops], ['blackouts', 'Lost in blackouts', sources.blackouts]]) {
+      const row = add(list, 'div', '', '')
+      row.dataset.money = key
+      add(row, 'span', 'micro', label)
+      const shown = key === 'net' && counted && value < 0 ? `−₽${number(-value)}` : money(value)
+      add(row, 'strong', shown === 'Not tracked' ? 'readout readout--missing' : 'readout', shown)
+    }
+    document.querySelector('#money-note').textContent = !counted
+      ? 'Money is counted once this version runs the adventure.'
+      : `${flow.complete_history ? 'Counted for the whole adventure.' : `Counted since ${date(flow.since)}.`} Prize money is any rise during a battle. A drop just after the whole party fainted is the blackout penalty. Other drops are shops and fees, such as the Safari Zone or Day Care.`
+  }
   function renderOverview(data) {
     latest = data
     const overview = data.overview || {}
@@ -102,6 +122,7 @@
     }
     document.querySelector('#activity-note').textContent = `Steps use the return-visit counter${overview.steps_since ? ', tracked since ' + date(overview.steps_since) : ''}. Battles are sampled observations. Money is the current balance.`
     renderTallies(data.tallies)
+    renderMoney(data.money_flow)
     const highlights = document.querySelector('#stats-highlights')
     highlights.replaceChildren()
     for (const [key, title] of [['battle', 'Strongest Battle Power'], ['dvs', 'Highest DV score']]) {

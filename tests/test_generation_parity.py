@@ -393,3 +393,28 @@ def test_both_generations_report_catch_pace_and_a_dated_shiny_log(tmp_path, gen2
     assert found[0] == found[1]
     assert found[0] == ({'catches_per_hour': 3.0, 'encounters_per_catch': 10.0, 'partial': False}, 10.0,
                         [('seen', 16, 'PIDGEY', True)])
+
+
+def test_both_generations_count_money_earned_and_spent_by_source(tmp_path, gen2_data):
+    """A trainer battle pays 500, a shop takes 200, a sale gives 100 and a blackout halves the purse."""
+    from pokesim.gen2.statistics import Statistics
+    from pokesim.statistics import StatisticsTracker
+    steps = [(100, 3000, 0, False), (130, 3000, 2, False), (160, 3500, 2, False), (190, 3500, 0, False),
+             (220, 3300, 0, False), (250, 3400, 0, False), (280, 3400, 0, True), (310, 1700, 0, False)]
+    found = []
+    for generation, (emu, store) in ((1, gen1_adventure(tmp_path)), (2, gen2_adventure(tmp_path, gen2_data))):
+        try:
+            tracker = StatisticsTracker(store) if generation == 1 else Statistics(store)
+            for frame, money, in_battle, fainted in steps:
+                party = tuple(replace(mon, hp=0) for mon in emu.snapshot.party) if fainted else emu.snapshot.party
+                snapshot = replace(emu.snapshot, frame=frame, money=money, in_battle=in_battle, party=party)
+                # The Gen 1 fixture keeps statistics on a clock that started at 100 seconds.
+                tracker.observe(snapshot) if generation == 2 else tracker.observe(snapshot, now=101)
+            tracker.flush(now=102) if generation == 1 else tracker.flush(emu.snapshot)
+            found.append({key: value for key, value in payloads(emu, store)['statistics']['money_flow'].items()
+                          if key != 'since'})
+        finally:
+            store.close()
+    assert found[0] == found[1] == {
+        'available': True, 'complete_history': True, 'earned': 600, 'spent': 1900, 'net': -1300,
+        'sources': {'battles': 500, 'other': 100, 'shops': 200, 'blackouts': 1700}}

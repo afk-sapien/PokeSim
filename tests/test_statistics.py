@@ -152,6 +152,8 @@ def test_stats_routes_are_scoped_and_entries_do_not_load_charts(tmp_path):
     assert returns['interval'] == 1000000 and not returns['available']
     tallies = result.pop('tallies')
     assert tallies['complete_history'] and tallies['faints'] == 0 and tallies['trainer_win_rate'] is None
+    money = result.pop('money_flow')
+    assert not money['available'] and money['net'] is None
     assert result == {
         'started_at': None, 'updated_at': None, 'current': {}, 'history': [], 'marathon': {}}
 

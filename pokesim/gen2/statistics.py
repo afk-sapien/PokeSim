@@ -31,10 +31,13 @@ class Statistics:
         self.gauges = {key: current[key] for key in GAUGES if key in current} or None
         self.previous = self.candidate = None
         self.last_flush = self.last_collection = 0
+        from ..money_flow import MoneyFlow
+        self.money = MoneyFlow()
 
     def observe(self, snapshot):
         if not snapshot.started or not snapshot.valid or self.store.get('trade_hold'):
             self.previous = self.candidate = None
+            self.money.reset()
             return
         now = time.time()
         if self.value['started_at'] is None:
@@ -43,6 +46,7 @@ class Statistics:
         before, counters = self.previous, self.value['counters']
         if before and 0 < snapshot.frame - before.frame <= 120:
             counters['active_frames'] += snapshot.frame - before.frame
+            self.money.observe(self.value, before, snapshot, now)
             if snapshot.in_battle and not before.in_battle:
                 counters['battles'] += 1
             if snapshot.in_battle and snapshot.in_battle == before.in_battle:

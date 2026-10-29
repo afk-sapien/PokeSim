@@ -502,6 +502,9 @@
 }
 
 /* Repeat encounters use the same panel language as the adventure records. */
+/* A lifetime purse can run to eight digits, so it may break on a phone. */
+#money-list .readout { white-space: normal }
+#money-list .readout { overflow-wrap: anywhere }
 #tally-details .column-head { flex-wrap: wrap }
 #tally-details .column-head { gap: var(--s2) }
 #event-returns .column-head { flex-wrap: wrap }

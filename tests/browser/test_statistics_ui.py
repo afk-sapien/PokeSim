@@ -316,3 +316,30 @@ def test_shiny_log_lists_each_shiny_newest_first_with_its_date(page, game, width
     expect(rows.first).to_have_attribute('data-dex', '25')
     expect(rows.last).to_contain_text('Seen in the wild, Date unknown')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1280, 320])
+def test_money_panel_shows_earned_spent_and_each_source(page, game, width):
+    url, store, emu, _ = game
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(url + '/stats')
+    expect(page.locator('[data-money="earned"]')).to_contain_text('Not tracked')
+    expect(page.locator('#money-note')).to_contain_text('once this version runs')
+    tracker = StatisticsTracker(store)
+    now = time.time()
+    party = tuple(replace(mon, hp=0) for mon in emu.snapshot.party)
+    for frame, money, in_battle, fainted in ((10, 3000, 0, False), (40, 12_003_000, 2, False),
+                                             (70, 12_002_000, 0, False), (100, 12_002_000, 0, True),
+                                             (130, 6_001_000, 0, False)):
+        snapshot = replace(emu.snapshot, frame=frame, money=money, in_battle=in_battle,
+                           party=party if fainted else emu.snapshot.party)
+        tracker.observe(snapshot, now=now)
+    tracker.flush(now=now)
+    page.reload()
+    expect(page.locator('[data-money="earned"]')).to_contain_text('₽12,000,000')
+    expect(page.locator('[data-money="spent"]')).to_contain_text('₽6,002,000')
+    expect(page.locator('[data-money="net"]')).to_contain_text('₽5,998,000')
+    expect(page.locator('[data-money="shops"]')).to_contain_text('₽1,000')
+    expect(page.locator('[data-money="blackouts"]')).to_contain_text('₽6,001,000')
+    expect(page.locator('[data-money="other"]')).to_contain_text('₽0')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

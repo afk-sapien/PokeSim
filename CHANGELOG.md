@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Count money earned and spent in all six games, in a new Money earned and spent panel on the Stats page. Each change in the purse is counted once, by source: prize money is any rise during a battle, Pay Day included, other income is any other rise, the blackout penalty is a drop within 30 seconds of the whole party fainting, and shops and fees are any other drop. Counting starts when this version first runs an adventure, and the panel says from when. `/api/statistics` adds a `money_flow` object in both generations.
+
 - Answer a page asked for in the moment an adventure starts with a short "starting" reply, status 503 and a retry hint of two seconds, and log one line. The library still listed the adventure as stopped while its worker came up, so the page tried to open a read only view, failed because the adventure was running, and logged a full traceback.
 
 - Show how fast each adventure catches, in all six games. Collection details on the Stats page now give catches per hour of simulated playtime and wild encounters per catch, and the Pokémon page gives wild encounters per catch for each species. When catches were only counted from part way through, the pace says it is set against all of the playtime. The Collection and League history chart now starts with badges, out of 8 in Red, Blue and Yellow and 16 in Gold, Silver and Crystal. A new Shiny log lists each shiny seen or acquired by species and date. Shiny receipts now keep their date, and receipts from before this change show Date unknown. `/api/statistics` adds `collection_records.rates` and `collection_records.shiny.log`, and each species on `/api/statistics/activity` adds `per_catch`, in both generations.
