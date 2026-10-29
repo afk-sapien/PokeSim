@@ -236,6 +236,10 @@ The lead approved the plan as picked and confirmed these on 2026-10-29.
 - Shiny progress belongs to S4. A target species encounter counts as progress for the monitor, so a live shiny search is not stood down as idle. The planner's own shiny search stays `FILLER`, and the value weights give it no extra worth.
 - The value weights are approved as written under Scoring: a new dex entry 1.0 (a legendary counts as one), a species' first level 100 credit 0.5, a perfect species 0.5, and a quality catch 0.5 times the expected drop in the best DV tail. The rematch is worth its prize while `funds_short` holds and a small constant otherwise.
 - Step 4 went first (#186, with the #188 fix).
+- Step 6 (2026-10-29). Gold Golduck, Silver Girafarig and the Crystal shiny search are held to the standard bar, no rise over 2 points. The step 6 numbers above came from older saves, and on the step 6 baseline those rows waste almost nothing.
+- Step 6 keeps the shadow tiers in Gen II, with quality hunts and training both in `PROGRESS`, because Gen II `trainee` already makes ordinary copies under level 80 wait for their hunts. If Gen II training share falls by more than half or wasted goes over the bar, the one retry is option C as in Gen I.
+- The marathon runs whenever it is eligible, with its own cooldown as the cadence, under the same rule in both generations.
+- A shiny search stays ahead of the League, the League is the last fallback, and the arbiter asks again after each shiny search battle.
 
 #### As built
 
