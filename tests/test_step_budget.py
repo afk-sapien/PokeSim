@@ -7,6 +7,7 @@ run and no breeding project. Each step after the first must stay inside the budg
 being the one that builds the caches.
 """
 import gc
+import math
 import os
 import random
 import statistics
@@ -39,6 +40,9 @@ class Reference:
         self.table = {(m, x, y): (x + y, m) for m in range(40) for x in range(40) for y in range(40)}
         keys = list(self.table)
         self.keys = [rng.choice(keys) for _ in range(2000)]
+        # Windows counts thread time in 15.6 ms ticks, so there the work repeats for about one tick a step.
+        resolution_ms = time.get_clock_info('thread_time').resolution * 1000
+        self.repeats = max(1, math.ceil(resolution_ms / REFERENCE_MS))
 
     def run(self):
         total = 0
@@ -50,8 +54,9 @@ class Reference:
 
     def time(self):
         start = clock()
-        self.run()
-        return clock() - start
+        for _ in range(self.repeats):
+            self.run()
+        return (clock() - start) / self.repeats
 
 
 def settle():
@@ -67,8 +72,12 @@ def settle():
 
 
 def slowdown(references):
-    """How many times slower than the workstation this runner did the reference work, at least 1."""
-    return max(1.0, statistics.median(references) * 1000 / REFERENCE_MS)
+    """How many times slower than the workstation this runner did the reference work, at least 1.
+
+    The mean, because on a clock that ticks coarsely each sample is a whole number of ticks while the
+    total over all steps stays close to the time the work took.
+    """
+    return max(1.0, statistics.fmean(references) * 1000 / REFERENCE_MS)
 
 
 def budget(times, references):
@@ -76,7 +85,7 @@ def budget(times, references):
     median, worst, scale = statistics.median(ms), max(ms), slowdown(references[1:])
     runner = f'reference work {scale:.1f} times slower than the workstation'
     import warnings  # TEMPORARY CI PROBE
-    warnings.warn(f'BUDGETPROBE median {median:.2f} max {worst:.1f} ref {statistics.median(references[1:]) * 1000:.3f} {runner}', RuntimeWarning)
+    warnings.warn(f'BUDGETPROBE median {median:.2f} max {worst:.1f} ref {statistics.fmean(references[1:]) * 1000:.3f} {runner}', RuntimeWarning)
     assert median <= MEDIAN_MS * scale, f'median step {median:.2f} ms over {MEDIAN_MS * scale:.1f} ms ({runner})'
     assert worst <= MAX_MS * scale, f'slowest step {worst:.1f} ms over {MAX_MS * scale:.0f} ms ({runner})'
 
