@@ -11,7 +11,7 @@ from pokesim.planning.shadow import Shadow
 from pokesim.planning import cost
 from pokesim.policies.collection import EXPECTED_FRAMES, FRAMES_PER_EXPERIENCE, Collection, candidate
 from pokesim.policies.progression import Goal
-from pokesim.policies.strategic import ERRAND_FRAMES, StrategicPolicy, overworld_candidates
+from pokesim.policies.strategic import ERRAND_FRAMES, Choice, StrategicPolicy, goal_candidate
 from tools.replay_audit import load, shadow_lines
 
 
@@ -116,12 +116,12 @@ def test_an_overworld_errand_takes_the_tier_and_value_of_the_goal_it_unblocks():
     inner = Candidate('grass:1', Tier.PROGRESS, values.NEW_ENTRY, 12000, goal='collection new entry')
     collection.shadow.compare('collection', lambda: [inner], 'grass:1')
     collection.shadow.changed('collection', 'grass:1')
-    offers = [('plan', Goal('collect_catch', 'Catch', 'Catch')), ('collection', Goal('collect_catch', 'Catch', 'Catch')),
-              ('supplies', Goal('restock', 'Buy balls', 'Restock'))]
-    plan, catch, restock = overworld_candidates(offers, collection)
-    assert catch.goal == 'collection new entry' and catch.value == values.NEW_ENTRY
+    catch = goal_candidate(Goal('collect_catch', 'Catch', 'Catch'), collection)
+    assert catch.goal == 'collection' and (catch.tier, catch.value) == (Tier.PROGRESS, values.NEW_ENTRY)
+    choice = Choice(Goal('collect_catch', 'Catch', 'Catch'), catch)
+    restock = choice.errand_candidate('restock', 'supplies')
     assert (restock.tier, restock.value, restock.expected_frames) == (Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES)
-    story = overworld_candidates([('plan', Goal('misty', 'Beat Misty', 'Badge'))], collection)[0]
+    story = goal_candidate(Goal('misty', 'Beat Misty', 'Badge'), collection)
     assert story.tier == Tier.STORY and story.goal == 'story'
 
 

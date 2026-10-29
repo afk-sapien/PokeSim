@@ -31,6 +31,12 @@ def rematch(short):
     return NEW_ENTRY if short else SMALL
 
 
+def move_gain(before, after):
+    """A move taught to a partner, as its share of a level 100 credit: the battle power it adds over
+    ``before``, the partner's battle power at level 100 without it."""
+    return LEVEL_100 * max(0, after - before) / max(1, before)
+
+
 def level_step(level, target):
     """A training step from ``level`` to ``target``, as its share of the climb to the level 100 credit."""
     return LEVEL_100 * max(0, target - level) / max(1, 100 - level)

@@ -87,26 +87,32 @@ def projected_upgrade(mon, item, moves, compatible):
     return {'before': before, 'after': after, 'gain': gain, 'current_gain': current_gain}
 
 
-def choose(snapshot, moves, compatible, *, owned):
-    """Greedily choose the largest mature Battle Power gain, one upgrade at a time."""
+def choose(snapshot, moves, compatible, *, owned, skip=()):
+    """Greedily choose the largest mature Battle Power gain, one upgrade at a time.
+
+    ``skip`` lists the items left out, such as a purchase standing down. The plan carries the
+    partner's battle power at level 100 ``before`` and ``after`` the move, which the move is worth.
+    """
     if not champion(snapshot):
         return None
     bag = dict(snapshot.items)
     options = []
     for item in sorted(LIMITED):
-        if bool(bag.get(item)) != owned:
+        if bool(bag.get(item)) != owned or item in skip:
             continue
         if not owned and (len(bag) >= PURCHASE_BAG_LIMIT or snapshot.money < PRICES[item] + RESERVE):
             continue
         for index, mon in enumerate(snapshot.party):
             upgrade = projected_upgrade(mon, item, moves, compatible)
             if upgrade is not None:
-                options.append((upgrade['gain'], upgrade['current_gain'], -PRICES[item], -index, -item))
+                options.append((upgrade['gain'], upgrade['current_gain'], -PRICES[item], -index, -item,
+                                upgrade['before'], upgrade['after']))
     if not options:
         return None
-    _, _, _, index, item = max(options)
+    _, _, _, index, item, before, after = max(options)
     index, item = -index, -item
-    return {'item': item, 'target': index, 'signature': signature(snapshot.party[index])}
+    return {'item': item, 'target': index, 'signature': signature(snapshot.party[index]),
+            'before': before, 'after': after}
 
 
 def valid_plan(snapshot, plan, moves, compatible, offers=()):

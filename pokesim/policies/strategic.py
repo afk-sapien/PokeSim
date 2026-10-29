@@ -23,7 +23,9 @@ from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
 from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, legendary_project, snorlax_project
 from ..planning import values
+from ..planning import arbiter
 from ..planning.arbiter import Candidate, Tier
+from ..planning.monitor import STOOD_DOWN
 from .awareness import ActionWatch
 from .team import development_candidate, potential, readiness, reserve_to_deposit, storage_headroom
 from ..screen import Screen, W_PLAYER_MON_NUMBER
@@ -78,57 +80,111 @@ def individual(mon):
     return mon.species, mon.level, mon.nick, mon.max_hp, tuple(mon.moves)
 
 
-# Shadow mode estimate, which step 5 tightens: the frames of a short errand such as a Pokémon Center
-# visit, a shop trip, a pickup or a passage that unblocks the goal behind it.
+# The frames of a short errand such as a Pokémon Center visit, a shop trip, a pickup or a passage that
+# unblocks the goal behind it. An errand cutting into another one under way pays these frames again.
 ERRAND_FRAMES = 3000
-# The kind of a goal the plan hands the overworld chain, by key prefix.
-PLAN_KINDS = (('party_', 'party'), ('teach_', 'moves'), ('buy_tm', 'moves'), ('restock', 'supplies'),
-              ('collect_plan', 'collection plan'))
+# The kind of a goal, by key prefix, in the order they are tried. Each kind's candidate is built once,
+# here, and the arbiter weighs it against the others. The first match wins.
+GOAL_KINDS = (('heal', 'heal'), ('party_collection', 'collection'), ('party_league', 'collection'),
+              ('party_', 'party'), ('teach_', 'moves'), ('buy_tm', 'moves'), ('restock', 'supplies'),
+              ('collect_plan', 'plan'), ('collect_pickup', 'pickup'), ('collect_passage', 'passage'),
+              ('hideout_elevator', 'passage'), ('collect_', 'collection'), ('catch_', 'catch'))
+# Short goals that serve the goal behind them.
+ERRANDS = frozenset(('heal', 'party', 'moves', 'supplies', 'pickup', 'passage', 'trash'))
+# Goals that pick the party members they need, so no party upgrade cuts into them.
+OWNS_PARTY = frozenset(('collection', 'catch', 'plan'))
 
 
-def overworld_candidates(offers, collection):
-    """The arbiter's candidates for the Gen I overworld chain, for shadow mode only.
+def goal_kind(key):
+    return next((kind for prefix, kind in GOAL_KINDS if key.startswith(prefix)), 'story')
 
-    ``offers`` lists each goal the chain offered, in order. A heal, a restock, a cleared passage or the
-    Power Plant trash cans unblock the goal before them, so they take its tier and value at an
-    errand's frames. A collection goal stands for the project the collection pick would have chosen,
-    with that candidate's tier, value, frames and kind.
+
+def goal_candidate(goal, collection, kind=None):
+    """The arbiter's candidate for ``goal``.
+
+    A collection goal stands for the project the collection pick chose, with that candidate's tier,
+    value and frames. The plan placeholder is worth nothing, so any real goal beats it. A story goal is
+    worth a new entry in the story tier until the Champion is beaten. An errand is short upkeep.
     """
-    shadow = collection.shadow
-    project = collection.project or {}
-    champion = collection.completed_champion
-    candidates = []
-    previous = None
-    for stage, goal in offers:
-        key = goal.key
-        if stage == 'collection' or key.startswith(('collect_', 'party_collection', 'party_league')) and project:
-            inner = (shadow.picked.get('collection') if shadow.last.get('collection') == project.get('key')
-                     else shadow.built.get('collection', {}).get(project.get('key')))
-            candidate = (Candidate(key, inner.tier, inner.value, inner.expected_frames, goal=inner.goal) if inner
-                         else Candidate(key, Tier.PROGRESS, values.SMALL, EXPECTED_FRAMES['other'], goal='collection'))
-        elif stage == 'plan':
-            kind = next((kind for prefix, kind in PLAN_KINDS if key.startswith(prefix)), 'story')
-            if kind == 'story':
-                candidate = Candidate(key, Tier.PROGRESS if champion else Tier.STORY, values.NEW_ENTRY,
-                                      EXPECTED_FRAMES['other'], goal=kind)
-            elif kind == 'party':
-                candidate = Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal=kind)
-            else:
-                candidate = Candidate(key, Tier.FILLER if kind == 'collection plan' else Tier.PROGRESS,
-                                      values.SMALL, ERRAND_FRAMES, goal=kind)
-        elif stage == 'pickup':
-            candidate = Candidate(key, Tier.FILLER, values.SMALL, ERRAND_FRAMES, goal='pickup')
-        elif stage == 'upgrade':
-            candidate = Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal='party')
-        elif stage == 'moves':
-            candidate = Candidate(key, Tier.PROGRESS, values.SMALL, 2 * ERRAND_FRAMES, goal='moves')
-        elif previous is not None:
-            candidate = Candidate(key, previous.tier, previous.value, ERRAND_FRAMES, goal=stage)
-        else:
-            candidate = Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal=stage)
-        candidates.append(candidate)
-        previous = candidate
-    return candidates
+    key = goal.key
+    kind = kind or goal_kind(key)
+    if kind == 'collection':
+        shadow = collection.shadow
+        project = collection.project or {}
+        inner = (shadow.picked.get('collection') if shadow.last.get('collection') == project.get('key')
+                 else shadow.built.get('collection', {}).get(project.get('key'))) if project else None
+        if inner:
+            return Candidate(key, inner.tier, inner.value, inner.expected_frames, goal=kind)
+        return Candidate(key, Tier.PROGRESS, values.SMALL, EXPECTED_FRAMES['other'], goal=kind)
+    if kind == 'plan':
+        return Candidate(key, Tier.FILLER, 0.0, ERRAND_FRAMES, goal=kind)
+    if kind in ERRANDS:
+        return Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal=kind)
+    tier = Tier.PROGRESS if collection.completed_champion else Tier.STORY
+    return Candidate(key, tier, values.NEW_ENTRY, EXPECTED_FRAMES['other'], goal=kind)
+
+
+class Choice:
+    """The goal sources of one overworld decision, weighed on the arbiter.
+
+    ``pick`` is the best candidate offered so far and ``goal`` its goal. Each source offers its goal as a
+    candidate, and the arbiter keeps the better of it and the pick. A failed precondition, such as a
+    hurt party or a full box, cannot be weighed: the goal behind it cannot run until it is met, so its
+    enabler replaces the pick. ``candidates`` lists what was weighed since the last replacement, so its
+    arbiter pick is always ``pick``.
+    """
+
+    def __init__(self, goal, candidate):
+        self.goal, self.pick = goal, candidate
+        self.candidates = [candidate]
+
+    @property
+    def kind(self):
+        return self.pick.goal
+
+    @property
+    def errand(self):
+        """Whether the pick is an errand, which nothing short cuts into."""
+        return self.kind in ERRANDS
+
+    @property
+    def owns_party(self):
+        return self.kind in OWNS_PARTY
+
+    def errand_candidate(self, key, kind, frames=ERRAND_FRAMES):
+        """An errand that serves the pick. It takes the pick's tier and value, at least a small one, so it
+        goes before the longer pick. It pays an errand's frames again to cut into another errand."""
+        held = self.pick
+        return Candidate(key, held.tier, max(held.value, values.SMALL), frames,
+                         interrupt_frames=ERRAND_FRAMES if self.errand else 0.0, goal=kind)
+
+    def wins(self, candidate):
+        """Whether ``candidate`` would replace the pick. A goal under the pick's own key is its update.
+
+        Nothing cuts into an errand under way except a step of the same errand. Only a failed
+        precondition, through ``replace``, puts another goal first.
+        """
+        if candidate.key == self.pick.key:
+            return True
+        if self.errand:
+            return candidate.goal == self.kind
+        return arbiter.choose([self.pick, candidate]) is candidate
+
+    def offer(self, goal, candidate):
+        """Offer ``goal`` as ``candidate`` and return the goal the arbiter keeps. An errand under way
+        weighs nothing but its own steps, so any other offer is left out of ``candidates``."""
+        if self.wins(candidate):
+            self.candidates.append(candidate)
+            self.goal, self.pick = goal, candidate
+        elif not self.errand:
+            self.candidates.append(candidate)
+        return self.goal
+
+    def replace(self, goal, candidate):
+        """Put ``goal`` first, as the enabler of a failed precondition."""
+        self.goal, self.pick = goal, candidate
+        self.candidates = [candidate]
+        return goal
 
 
 class StrategicPolicy(Policy):
@@ -244,9 +300,12 @@ class StrategicPolicy(Policy):
         self.supply_attempts = set()
         self.move_teaching_after = 0
         self.tm_plan = None
-        self.tm_check_after = 0
-        self.tm_teach_after = 0
         self.tm_frame = None
+        # The TM and supply options last scored, and the party, bag and purse they were scored for.
+        self.tm_token = None
+        self.tm_options = None
+        # The step's choice, which the overworld chain goes on weighing.
+        self.choice = None
 
     def describe(self):
         return f"strategic ({self.mode})"
@@ -386,22 +445,34 @@ class StrategicPolicy(Policy):
             if len(families) == 1:
                 self.starter = families.pop()
             self.starter_confirmed = True
-        self.goal = story_goal(s, self.starter, self.fossil) if s.started else self.goal
+        # The story, the collection plan, the project under way and the errands under way are candidates.
+        # Collection projects only start once the Champion is beaten, so the story and a project never
+        # meet: the story is the pick until then and inside the League, and the plan placeholder after.
         if self.collection.completed_champion and s.map not in LEAGUE:
-            self.goal = Goal('collect_plan', 'Plan the next adventure project',
-                             'Choose a collecting, evolution, training, or exploration objective')
+            base = Goal('collect_plan', 'Plan the next adventure project',
+                        'Choose a collecting, evolution, training, or exploration objective')
+        else:
+            base = story_goal(s, self.starter, self.fossil) if s.started else self.goal
+        choice = Choice(base, goal_candidate(base, self.collection))
         if self.collection.project and s.map not in LEAGUE:
-            self.goal = self.collection.goal(s) or self.goal
+            project_goal = self.collection.goal(s)
+            if project_goal:
+                # The collection weighed the project against the plan when it committed it, so the
+                # project under way is the pick, as before, even in a test that starts one early.
+                choice.replace(project_goal, goal_candidate(project_goal, self.collection, 'collection'))
         if self.pickups.active and s.map not in LEAGUE:
-            self.goal = self.pickups.goal(self.pickups.active)
+            choice.offer(self.pickups.goal(self.pickups.active), choice.errand_candidate('collect_pickup', 'pickup'))
         if self.pc.species:
             if any(p.species == self.pc.species for p in s.party) or self.pc.destination is None:
                 self.pc.species = None
                 self.pc.destination = None
             else:
-                self.goal = Goal('party_upgrade', 'Bring a stronger reserve onto the team',
-                                 'Swap an underused reserve for a useful Pokémon already in storage',
-                                 ((self.pc.destination, 13, 4),), 'up', True)
+                # The swap is under way, and the reserve it withdraws is the one the goal behind it needs.
+                choice.replace(Goal('party_upgrade', 'Bring a stronger reserve onto the team',
+                                    'Swap an underused reserve for a useful Pokémon already in storage',
+                                    ((self.pc.destination, 13, 4),), 'up', True),
+                               choice.errand_candidate('party_upgrade', 'party'))
+        self.goal = choice.goal
         self.next_goal = self.goal.to_dict()
         league_rooms = {MAPS[n] for n in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM')}
         withdrawing_partner = (
@@ -423,17 +494,20 @@ class StrategicPolicy(Policy):
         release = self._release_target(s) if box_wanted(storage_headroom(s), self.release_spare is not None) else None
         self.release_spare = release
         if release and not withdrawing_partner and s.map not in league_rooms:
+            # Room to catch is a precondition of every catch, so its enabler replaces the pick.
             self.pc.species = None
             self.pc.destination = None
-            self.goal = Goal('party_release', 'Make room in storage',
-                             'Let a spare duplicate go so there is room for new catches',
-                             CENTERS, 'up', True)
+            self.goal = choice.replace(Goal('party_release', 'Make room in storage',
+                                            'Let a spare duplicate go so there is room for new catches',
+                                            CENTERS, 'up', True), choice.errand_candidate('party_release', 'party'))
         elif s.box_full and not withdrawing_partner and s.next_free_box is not None and s.map not in league_rooms:
             self.pc.species = None
             self.pc.destination = None
-            self.goal = Goal('party_box', 'Make room for new catches',
-                             f'Box {s.active_box + 1} is full. Visit a PC and switch to Box {s.next_free_box + 1}',
-                             CENTERS, 'up', True)
+            self.goal = choice.replace(Goal('party_box', 'Make room for new catches',
+                                            f'Box {s.active_box + 1} is full. Visit a PC and switch to Box '
+                                            f'{s.next_free_box + 1}', CENTERS, 'up', True),
+                                       choice.errand_candidate('party_box', 'party'))
+        self.choice = choice
         token = (s.badges, tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
         if s.party and token != self.assessment_token:
             self.readiness = readiness(s)
@@ -664,10 +738,15 @@ class StrategicPolicy(Policy):
             self.escape_attempted = False
         league_rooms = {MAPS[n] for n in ("LORELEIS_ROOM", "BRUNOS_ROOM", "AGATHAS_ROOM", "LANCES_ROOM", "CHAMPIONS_ROOM")}
         in_league = s.map in league_rooms
-        goal = healing_goal(s) if self.heal_latch and not in_league else self.goal
-        # Each goal the chain offers, in order, for the shadow arbiter. Only the log and the audit read it.
-        offers = [('plan', self.goal)] + ([('heal', goal)] if goal is not self.goal else [])
-        if not s.box_full and not self.heal_latch and not goal.key.startswith(('party_', 'teach_', 'catch_', 'collect_')) and 'Pokecenter' in WORLD.get(s.map, {}).get('name', '') and WORLD[s.map]['width'] == 14:
+        choice = self.choice
+        if choice is None or choice.goal is not self.goal:
+            choice = Choice(self.goal, goal_candidate(self.goal, self.collection))
+        self.choice = None
+        if self.heal_latch and not in_league:
+            choice.replace(healing_goal(s), choice.errand_candidate('heal', 'heal'))
+        swap = choice.errand_candidate('party_upgrade', 'party')
+        if (not s.box_full and not self.heal_latch and not choice.owns_party and choice.wins(swap)
+                and 'Pokecenter' in WORLD.get(s.map, {}).get('name', '') and WORLD[s.map]['width'] == 14):
             weakest = reserve_to_deposit(s)
             if weakest is not None:
                 p = s.party[weakest]
@@ -677,9 +756,10 @@ class StrategicPolicy(Policy):
                 if upgrades and max(upgrades)[0] > potential(p.species, [mon for i, mon in enumerate(s.party) if i != weakest]) + p.level * 10 + 80:
                     self.pc.species = max(upgrades)[1]
                     self.pc.destination = s.map
-                    goal = Goal('party_upgrade', 'Bring a stronger reserve onto the team',
-                                'Swap an underused reserve for a useful Pokémon already in storage', ((s.map, 13, 4),), 'up', True)
-                    offers.append(('upgrade', goal))
+                    choice.offer(Goal('party_upgrade', 'Bring a stronger reserve onto the team',
+                                      'Swap an underused reserve for a useful Pokémon already in storage',
+                                      ((s.map, 13, 4),), 'up', True), swap)
+        goal = choice.goal
         if in_league:
             for target in sorted(range(len(s.party)), key=lambda i: s.party[i].level, reverse=True):
                 mon = s.party[target]
@@ -728,8 +808,8 @@ class StrategicPolicy(Policy):
                                   has_pokedex=self.completed.get('pokedex', False),
                                   completed_champion=self.collection.completed_champion)
         if supplies.goal is not goal:
-            offers.append(('supplies', supplies.goal))
-        goal = supplies.goal
+            # The shop plans a restock only for supplies the goal cannot go on without.
+            goal = choice.replace(supplies.goal, choice.errand_candidate(supplies.goal.key, 'supplies'))
         if supplies.prepared and self.collection.project:
             self.collection.project['supplies_prepared'] = True
         if supplies.abandon:
@@ -742,51 +822,59 @@ class StrategicPolicy(Policy):
                     actions = self._use_item(s, s.items[index][0], target, "Treat the party before walking farther")
                     if actions:
                         return actions
-        if (not self.heal_latch and not in_league and s.frame >= self.move_teaching_after
-                and not goal.key.startswith(('party_', 'teach_', 'restock'))):
+        teach = choice.errand_candidate('teach_battle', 'moves')
+        if not self.heal_latch and not in_league and s.frame >= self.move_teaching_after and choice.wins(teach):
             upgrade = hm_upgrade(s)
             # Bound failures and avoid rescoring every overworld frame.
             self.move_teaching_after = s.frame + 3600
             if upgrade:
                 _, target, item, move = upgrade
-                self.goal = Goal('teach_battle', f'Teach {move_name(move)}',
-                                 f'Improve {s.party[target].nick or s.party[target].name} using an owned HM')
+                self.goal = choice.offer(Goal('teach_battle', f'Teach {move_name(move)}',
+                                              f'Improve {s.party[target].nick or s.party[target].name} using an owned HM'),
+                                         teach)
                 self.reason = self.goal.reason
                 actions = self._use_item(s, item, target)
                 if actions:
                     return actions
-        before = goal
-        goal, tm_action = self._tm_development(s, goal, in_league)
+        goal, tm_action = self._tm_development(s, goal, in_league, choice)
         if tm_action:
             return tm_action
-        if goal is not before:
-            offers.append(('moves', goal))
         if goal.key == "thunder" and not event_set(s.event_flags, "EVENT_2ND_LOCK_OPENED"):
-            goal = self._trash_goal(s)
-            offers.append(('trash', goal))
-        if not self.heal_latch and not in_league and not self.pickups.active and goal.key not in ('restock','party_box','buy_tm'):
+            goal = choice.replace(self._trash_goal(s), choice.errand_candidate('trash', 'trash'))
+        if not self.heal_latch and not in_league and not choice.errand:
+            # The collection pick weighs its own projects against the goal it is handed, and commits the
+            # one it picks, so an errand under way is never handed to it.
             collection_goal = self.collection.choose(s, self.nav, self.rng, goal)
             if collection_goal:
-                self.next_goal = goal.to_dict() if not goal.key.startswith(('collect_', 'party_collection', 'party_league')) else self.next_goal
-                goal = collection_goal
-                offers.append(('collection', goal))
-        pickup = None if goal.key == 'buy_tm' or legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon' else self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
-        if pickup and not self.heal_latch and not in_league:
-            self.next_goal = goal.to_dict()
-            goal = pickup
-            offers.append(('pickup', goal))
+                collection_kind = goal_kind(collection_goal.key)
+                candidate = (choice.errand_candidate(collection_goal.key, collection_kind) if collection_kind in ERRANDS
+                             else goal_candidate(collection_goal, self.collection, 'collection'))
+                if choice.wins(candidate):
+                    self.next_goal = goal.to_dict() if choice.kind not in ('collection', 'plan') else self.next_goal
+                    goal = choice.offer(collection_goal, candidate)
+        # A legendary or a marathon under way loses its run when it leaves, so no pickup cuts into one.
+        committed = legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon'
+        pickup_errand = choice.errand_candidate('collect_pickup', 'pickup')
+        if not self.heal_latch and not in_league and not committed and choice.wins(pickup_errand):
+            pickup = self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
+            if pickup:
+                self.next_goal = goal.to_dict()
+                goal = choice.offer(pickup, pickup_errand)
+        # A plan made north of Victory Road cannot reach most of Kanto, so the passage replaces it.
         if (goal.key == 'collect_plan' and
                 (s.map == MAPS['INDIGO_PLATEAU']
                  or (s.map == MAPS['ROUTE_23'] and (s.y < 32 or s.x >= 14 and s.y < 40))
                  or (s.map == MAPS['VICTORY_ROAD_3F'] and s.x >= 24 and s.y >= 7)
                  or (s.map == MAPS['VICTORY_ROAD_2F'] and s.x >= 24 and s.y >= 7))):
-            goal = Goal('collect_passage', 'Open a route back through Victory Road',
-                        'Clear the east corridor boulder to reach more collecting locations',
-                        ((MAPS['VICTORY_ROAD_3F'], 27, 15),))
+            goal = choice.replace(Goal('collect_passage', 'Open a route back through Victory Road',
+                                       'Clear the east corridor boulder to reach more collecting locations',
+                                       ((MAPS['VICTORY_ROAD_3F'], 27, 15),)),
+                                  choice.errand_candidate('collect_passage', 'passage'))
         elif goal.key == 'collect_plan' and s.map in VICTORY_MAPS:
-            goal = Goal('collect_passage', 'Return to Kanto for another expedition',
-                        'Solve the remaining passage puzzles and leave through the southern entrance',
-                        ((MAPS['ROUTE_23'], 8, 138),))
+            goal = choice.replace(Goal('collect_passage', 'Return to Kanto for another expedition',
+                                       'Solve the remaining passage puzzles and leave through the southern entrance',
+                                       ((MAPS['ROUTE_23'], 8, 138),)),
+                                  choice.errand_candidate('collect_passage', 'passage'))
         if s.map in (MAPS["ROCKET_HIDEOUT_ELEVATOR"], MAPS["CELADON_MART_ELEVATOR"], MAPS["SILPH_CO_ELEVATOR"]):
             rocket_lift = s.map == MAPS["ROCKET_HIDEOUT_ELEVATOR"]
             if self.elevator_exit and not rocket_lift:
@@ -796,15 +884,16 @@ class StrategicPolicy(Policy):
                 self.mode = "leaving the elevator"
                 return tap("left" if s.x > 2 else "right" if s.x < 2 else "up", 8, 12)
             self.elevator_floor = "B4F" if goal.key == "hideout_elevator" else "B1F"
-            goal = Goal("hideout_elevator", "Use the Rocket Hideout elevator", f"Select {self.elevator_floor} and leave the lift",
-                        ((s.map, 1, 2) if rocket_lift else (s.map, 3, 1),), "up", True)
+            # Inside a lift, the only way on is to ride it.
+            goal = choice.replace(Goal("hideout_elevator", "Use the Rocket Hideout elevator",
+                                       f"Select {self.elevator_floor} and leave the lift",
+                                       ((s.map, 1, 2) if rocket_lift else (s.map, 3, 1),), "up", True),
+                                  choice.errand_candidate('hideout_elevator', 'passage'))
         else:
             self.elevator_exit = False
-        if goal.key in ('collect_passage', 'hideout_elevator'):
-            offers.append(('passage', goal))
         shadow = self.shadow
         if shadow is not None and shadow.changed('overworld', (goal.key, (self.collection.project or {}).get('key'))):
-            shadow.compare('overworld', lambda: overworld_candidates(offers, self.collection), goal.key, outer=True)
+            shadow.compare('overworld', lambda: list(choice.candidates), goal.key, outer=True)
         self.goal = goal
         if self.next_goal and self.next_goal['id'] == goal.key:
             next_badge = next((row['title'] for row in self.journey if not row['done']), 'Celebrate the Champion victory')
@@ -1194,66 +1283,113 @@ class StrategicPolicy(Policy):
 
     _sale_index = staticmethod(ShoppingController.sale_index)
 
-    def _tm_development(self, s, goal, in_league):
+    def _tm_options(self, s, standing):
+        """The owned supplies and TMs the party could use and the purchase it could make, as
+        ``(supplies, owned, purchase)``. They are scored again only when the party, the bag, the purse,
+        the Champion counter's offers or the items standing down change, not on a timer."""
         from .. import tm_shop, champion_shop
-        if (not self.tm_moves or self.heal_latch or in_league
-                or goal.key.startswith(('party_', 'teach_', 'restock'))):
+        from .collection import champion
+        token = (tuple((individual(p), p.hp > 0, p.status, tuple(p.max_pp)) for p in s.party), s.items, s.money,
+                 frozenset(self.shop_offers), standing, self.tm_plan is None, champion(s))
+        if token != self.tm_token:
+            bag = dict(s.items)
+            supplies = [(item, target) for item in (ITEMS['PP_UP'], ITEMS['RARE_CANDY'])
+                        if bag.get(item) and (target := champion_shop.recipient(s, item)) is not None]
+            owned = tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=True)
+            purchase = None if self.tm_plan else (
+                tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=False, skip=standing)
+                or champion_shop.choose(s, self.shop_offers, skip=standing))
+            self.tm_token, self.tm_options = token, (supplies, owned, purchase)
+        return self.tm_options
+
+    def purchase_candidate(self, plan):
+        """The arbiter's candidate for a trip to the Champion counter to buy ``plan``.
+
+        A TM is worth the move it gives: its share of a level 100 credit by the battle power it adds.
+        Supplies are filler. Leaving a project under way costs the trip again, the walk back to it.
+        """
+        interrupt = TM_TRIP_FRAMES if self.collection.project else 0.0
+        if plan.get('supply'):
+            return Candidate('buy_tm', Tier.FILLER, values.SMALL, TM_TRIP_FRAMES, interrupt_frames=interrupt,
+                             goal='moves')
+        return Candidate('buy_tm', Tier.UPGRADE, values.move_gain(plan['before'], plan['after']), TM_TRIP_FRAMES,
+                         interrupt_frames=interrupt, goal='moves')
+
+    def _buy_goal(self, s, plan):
+        from .. import tm_shop, champion_shop
+        item, target = plan['item'], plan['target']
+        name = champion_shop.NAMES[item] if plan.get('supply') else tm_shop.label(item, self.tm_moves)
+        quantity = plan.get('quantity', 1)
+        price = champion_shop.PRICES[item] if plan.get('supply') else tm_shop.PRICES[item]
+        if quantity > 1:
+            name = f'{quantity} × {name}'
+        purpose = ('Replenish useful supplies' if plan.get('supply')
+                   else f'Improve {s.party[target].nick or s.party[target].name}')
+        return Goal('buy_tm', f'Buy {name}',
+                    f'{purpose} at the Champion counter. '
+                    f'Price ₽{price:,}, keeping ₽{tm_shop.RESERVE:,} for supplies',
+                    (tm_shop.COUNTER,))
+
+    def _tm_development(self, s, goal, in_league, choice=None):
+        """Offer what the party could gain from its bag and the Champion counter as candidates on
+        ``choice``, and return the goal it keeps and the action that starts it, if any."""
+        from .. import tm_shop, champion_shop
+        if choice is None or choice.goal is not goal:
+            choice = Choice(goal, goal_candidate(goal, self.collection))
+        teach = choice.errand_candidate('teach_tm', 'moves')
+        # Every option here is an errand or an upgrade, and neither cuts into an errand under way.
+        if not self.tm_moves or self.heal_latch or in_league or not choice.wins(teach):
             return goal, None
         monitor = self.collection.director.monitor
+        now = self.collection.elapsed
         if self.tm_plan:
             key = 'tm:' + str(self.tm_plan['item'])
             delta = max(0, min(120, s.frame - self.tm_frame)) if self.tm_frame is not None else 0
             self.tm_frame = s.frame
             monitor.start(key, expected_frames=TM_TRIP_FRAMES)
-            if (monitor.observe(key, delta).stand_down
-                    or not tm_shop.valid_plan(s, self.tm_plan, self.tm_moves, self.tm_compatible, self.shop_offers)):
+            if not tm_shop.valid_plan(s, self.tm_plan, self.tm_moves, self.tm_compatible, self.shop_offers):
                 monitor.clear(key)
                 self.tm_plan = None
-                self.tm_check_after = s.frame + 18000
-        if s.frame >= self.tm_teach_after:
-            self.tm_teach_after = s.frame + 3600
-            bag = dict(s.items)
-            for item in (ITEMS['PP_UP'], ITEMS['RARE_CANDY']):
-                target = champion_shop.recipient(s, item) if bag.get(item) else None
-                if target is not None:
-                    mon = s.party[target]
-                    attempt = (item, bag[item], champion_shop.signature(mon), mon.level, tuple(mon.max_pp))
-                    if attempt not in self.supply_attempts:
-                        self.supply_attempts.add(attempt)
-                        self.goal = Goal('teach_supply', f'Use {champion_shop.NAMES[item]}',
-                                         f'Improve {mon.nick or mon.name} using an owned item')
-                        return self.goal, self._use_item(s, item, target)
-            owned = tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=True)
-            if owned:
+            elif monitor.observe(key, delta, now=now).stand_down:
+                # The monitor's backoff keeps this item aside, and the next best purchase may go instead.
                 self.tm_plan = None
-                item, target = owned['item'], owned['target']
+        stood = monitor._table(STOOD_DOWN)
+        standing = frozenset(int(key[3:]) for key in stood if key.startswith('tm:') and monitor.standing_down(key, now))
+        supplies, owned, purchase = self._tm_options(s, standing)
+        bag = dict(s.items)
+        for item, target in supplies:
+            mon = s.party[target]
+            attempt = (item, bag[item], champion_shop.signature(mon), mon.level, tuple(mon.max_pp))
+            if attempt not in self.supply_attempts:
+                self.supply_attempts.add(attempt)
+                self.goal = choice.offer(Goal('teach_supply', f'Use {champion_shop.NAMES[item]}',
+                                              f'Improve {mon.nick or mon.name} using an owned item'),
+                                         choice.errand_candidate('teach_supply', 'moves'))
+                return self.goal, self._use_item(s, item, target)
+        if owned:
+            item, target = owned['item'], owned['target']
+            mon = s.party[target]
+            attempt = ('tm', item, bag.get(item), owned['signature'], tuple(mon.moves))
+            if attempt not in self.supply_attempts:
+                self.supply_attempts.add(attempt)
+                self.tm_plan = None
                 name = tm_shop.label(item, self.tm_moves)
-                self.goal = Goal('teach_tm', f'Teach {name}',
-                                 f'Improve {s.party[target].nick or s.party[target].name} using an owned TM')
+                self.goal = choice.offer(Goal('teach_tm', f'Teach {name}',
+                                              f'Improve {mon.nick or mon.name} using an owned TM'), teach)
                 self.reason = self.goal.reason
                 return self.goal, self._use_item(s, item, target)
-        if (not self.tm_plan and s.frame >= self.tm_check_after and goal.key == 'collect_plan'
-                and not self.collection.project and not self.pickups.active):
-            self.tm_check_after = s.frame + 3600
-            self.tm_plan = (tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=False)
-                            or champion_shop.choose(s, self.shop_offers))
-            self.tm_frame = s.frame
         if self.tm_plan:
-            item, target = self.tm_plan['item'], self.tm_plan['target']
-            if dict(s.items).get(item):
-                return goal, None
-            name = champion_shop.NAMES[item] if self.tm_plan.get('supply') else tm_shop.label(item, self.tm_moves)
-            quantity = self.tm_plan.get('quantity', 1)
-            price = champion_shop.PRICES[item] if self.tm_plan.get('supply') else tm_shop.PRICES[item]
-            if quantity > 1:
-                name = f'{quantity} × {name}'
-            purpose = ('Replenish useful supplies' if self.tm_plan.get('supply')
-                       else f'Improve {s.party[target].nick or s.party[target].name}')
-            goal = Goal('buy_tm', f'Buy {name}',
-                        f'{purpose} at the Champion counter. '
-                        f'Price ₽{price:,}, keeping ₽{tm_shop.RESERVE:,} for supplies',
-                        (tm_shop.COUNTER,))
-        return goal, None
+            if bag.get(self.tm_plan['item']):
+                return choice.goal, None
+            # A trip under way is an errand, so only another errand's precondition stops it.
+            return choice.offer(self._buy_goal(s, self.tm_plan), choice.errand_candidate('buy_tm', 'moves')), None
+        if purchase:
+            candidate = self.purchase_candidate(purchase)
+            if choice.wins(candidate):
+                self.tm_plan = purchase
+                self.tm_frame = s.frame
+            return choice.offer(self._buy_goal(s, purchase), candidate), None
+        return choice.goal, None
 
     @staticmethod
     def _box_count(s):
