@@ -7,7 +7,10 @@ three times it is the budget the progress monitor gives the goal.
 The encounter odds come from core's tables read from the adventure's own cartridge, with a randomized
 run's overrides applied, never from a committed table. Each host loads them once per adventure.
 """
+import logging
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 # What a search is expected to cost, in decisions. A wild battle takes about 75 with the walking that
 # finds it, and crossing one map on the way takes about 150.
@@ -51,19 +54,45 @@ def slot_chance(slots, species, chances):
     return 100 * sum(chance for (_, name), chance in zip(slots, chances) if name == species) / total
 
 
+def recognised(raw):
+    """Whether ``raw`` is a Pokémon game core knows, by its exact dump or by the header title a patched
+    or trimmed copy keeps."""
+    from pokecore import cartridges
+    return cartridges.identify(raw) is not None or cartridges.resembles(raw) is not None
+
+
+_WARNED = set()
+
+
 def game_data(rom_path, version):
-    """Core's tables for the cartridge at ``rom_path``, with a randomized run's overrides applied, or None
-    when the file cannot be read as ``version``."""
-    from pokecore import romdata
+    """Core's tables for the cartridge at ``rom_path``, with a randomized run's overrides applied.
+
+    None when the file is missing, is a known cartridge of another version, or is not a Pokémon game
+    core recognises, such as the demo ROM. The planner then uses unpriced costs, with one warning per
+    cartridge. A recognised Pokémon game whose tables fail to read raises, since its plan would be wrong.
+    """
+    from pokecore import cartridges, romdata
     from .. import randomized
     try:
         run = randomized.current(rom_path)
         if run is not None and run.version == version:
             return run.effective
-        return romdata.load_cached(Path(rom_path).read_bytes(), version)
-    # A cartridge that is not a Pokémon game, such as the demo ROM, reads past its tables.
-    except (OSError, ValueError, KeyError, IndexError):
+        raw = Path(rom_path).read_bytes()
+    except OSError:
         return None
+    if not recognised(raw):
+        try:
+            return romdata.load_cached(raw, version)
+        except Exception as error:  # noqa: BLE001
+            if str(rom_path) not in _WARNED:
+                _WARNED.add(str(rom_path))
+                log.warning('%s is not a Pokémon game core recognises (%s: %s), so catch costs are unpriced',
+                            rom_path, type(error).__name__, error)
+            return None
+    cartridge = cartridges.identify(raw)
+    if cartridge is not None and cartridge.version != version:
+        return None
+    return romdata.load_cached(raw, version)
 
 
 class WildOdds:

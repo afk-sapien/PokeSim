@@ -71,12 +71,33 @@ def test_gen1_odds_come_from_the_cartridge(version):
     assert cost.wild_odds(rom, other) is None
 
 
-def test_a_cartridge_that_is_not_a_pokemon_game_gives_unpriced_odds(monkeypatch):
+def test_a_cartridge_that_is_not_a_pokemon_game_gives_unpriced_odds(monkeypatch, caplog):
     from pokecore import emulator
     from pokesim import randomized
     monkeypatch.delenv(randomized.ENV, raising=False)
+    monkeypatch.setattr(cost, '_WARNED', set())
     # The demo ROM is too short for the base stat table, so the planner falls back to unpriced costs.
-    assert cost.wild_odds(emulator.demo_rom(), 'red') is None
+    rom = emulator.demo_rom()
+    with caplog.at_level('WARNING', logger=cost.__name__):
+        assert cost.wild_odds(rom, 'red') is None
+        assert cost.wild_odds(rom, 'red') is None
+    warnings = [record.getMessage() for record in caplog.records]
+    assert len(warnings) == 1 and str(rom) in warnings[0] and 'IndexError' in warnings[0]
+
+
+def test_a_recognised_game_whose_tables_fail_to_read_raises(tmp_path, monkeypatch):
+    import os
+    from pathlib import Path
+    from pokesim import randomized
+    rom = os.environ.get('ROM_PATH')
+    if not rom or not Path(rom).exists():
+        pytest.skip('Set ROM_PATH to a clean Red cartridge')
+    monkeypatch.delenv(randomized.ENV, raising=False)
+    # A trimmed Red keeps its header, so it is a Pokémon game whose plan would be wrong without its tables.
+    trimmed = tmp_path / 'trimmed.gb'
+    trimmed.write_bytes(Path(rom).read_bytes()[:0x8000])
+    with pytest.raises(IndexError):
+        cost.wild_odds(trimmed, 'red')
 
 
 def test_slot_chance_adds_the_shares_of_every_slot_holding_the_species():
