@@ -11,8 +11,7 @@ cannot catch is run from rather than knocked out. A battle that forbids running 
 one where running already failed ``FLEE_TRIES`` times, rather than burn more turns and HP.
 
 The stance keeps no game knowledge. Each generation's adapter reads the encounter from its battle
-memory and gives the goal's kind. Gold, Silver and Crystal use it now. Red, Blue and Yellow keep
-their own battle choices until step 2 of S5.
+memory and gives the goal's kind. Gold, Silver and Crystal use it, and so do Red, Blue and Yellow.
 """
 from __future__ import annotations
 

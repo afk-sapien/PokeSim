@@ -3,6 +3,7 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 
 from .battle import replacement_slot
+from ..planning.stance import STORY, TRAIN
 from .navigation import CINNABAR_GYM_DOORS, cinnabar_gate_open
 from .team import readiness
 
@@ -20,6 +21,8 @@ class Goal:
     interact: bool = False
     help: str = ""
     approaches: tuple[tuple[int, int, int, str], ...] = ()
+    # The goal kind the battle stance follows (planning/stance.py): story, travel, train or hunt.
+    kind: str = STORY
 
     def facing_at(self, pos):
         return next((direction for m, x, y, direction in self.approaches if (m, x, y) == pos), self.facing)
@@ -101,7 +104,8 @@ def story_goal(snapshot, starter="bulbasaur", fossil="HELIX_FOSSIL"):
                 w = WORLD[m]
                 grass.extend((m, x, y) for y, row in enumerate(w["tiles"]) for x, tile in enumerate(row)
                              if tile == (0x52 if name == "ROUTE_2" else 0x20))
-            return Goal("train_brock", "Prepare for Brock", "Build a useful matchup against Brock before entering the gym", tuple(grass))
+            return Goal("train_brock", "Prepare for Brock", "Build a useful matchup against Brock before entering the gym", tuple(grass),
+                        kind=TRAIN)
         return at("boulder", "Challenge Brock", "Earn the Boulder Badge to continue east", "PEWTER_GYM", 4, 2, "up")
     return campaign_goal(snapshot, fossil)
 
@@ -142,7 +146,7 @@ def training_goal(key, title, reason, map_name):
     grass = GRASS_TILES.get(w["tileset"])
     targets = tuple((m, x, y) for y, row in enumerate(w["tiles"]) for x, tile in enumerate(row)
                     if tile == grass or (map_name == "POKEMON_MANSION_1F" and tile in w["passable"]))
-    return Goal("train_" + key, title, reason, targets)
+    return Goal("train_" + key, title, reason, targets, kind=TRAIN)
 
 
 def gym_goal(s, bit):

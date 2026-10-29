@@ -3,6 +3,7 @@ from .navigation import Navigator
 from .progression import Goal
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, boulder_task
 from .strategic import FACING, W_FACING, StrategicPolicy, tap, wait
+from ..planning.stance import TRAVEL
 from ..strategy_data import MAPS, WORLD, event_set
 
 
@@ -45,8 +46,9 @@ class TravelPolicy(StrategicPolicy):
         self.targets = tuple(targets)
 
     def _overworld(self, s, mem):
+        # The walk is travel, so it runs from plain wild battles (planner design S5).
         self.goal = Goal('cable_travel', 'Travel to the Cable Club',
-                         'Reach the Pokémon Center for the agreed exchange', self.targets)
+                         'Reach the Pokémon Center for the agreed exchange', self.targets, kind=TRAVEL)
         self.reason = self.goal.reason
         self.intent = None
         pos = (s.map, s.x, s.y)

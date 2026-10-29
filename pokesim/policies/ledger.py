@@ -9,8 +9,11 @@ finite TMs never sell for money.
 Money held back from the shop is the ledger's standing reservations: a cash reserve, and the Safari
 Zone fee while the story still needs it.
 """
-from ..planning.ledger import BOX, MONEY, PARTY, Ledger, Need, Resources, Shortfall, Unit
-from ..strategy_data import ITEMS, PRICES
+import math
+
+from ..planning.ledger import BOX, HP, MONEY, PARTY, PP, Ledger, Need, Resources, Shortfall, Unit
+from ..planning.stance import budget_spent
+from ..strategy_data import ITEMS, MOVES, PRICES
 from ..tm_shop import PRICES as REPLACEMENT_PRICES
 from .battle import BALLS
 from .team import storage_headroom
@@ -36,6 +39,14 @@ REPELS = tuple(ITEMS[name] for name in ('MAX_REPEL', 'SUPER_REPEL', 'REPEL'))
 # prizes (Surf and the Gold Teeth), so an unaffordable fee is a permanent roadblock, not a delay.
 SAFARI_FEE = 500
 CASH_RESERVE = 300
+
+# The Gen I heal line. A party under this share of its total HP, with a fainted Pokémon or a status, or
+# with attack uses under PP_LINE of their total (at least PP_FLOOR) or under LEAD_PP for its lead, is
+# sent to a Pokémon Center.
+HEAL_LINE = 0.55
+PP_LINE = 0.15
+PP_FLOOR = 3
+LEAD_PP = 2
 
 
 def tier(item):
@@ -112,6 +123,40 @@ def read(snapshot, kinds=None):
 
 def ledger():
     return Ledger(read)
+
+
+def battle_room(party):
+    """The HP and PP the party can spend before a Pokémon Center is due, above the Gen I heal line.
+
+    HP is the party's total HP above HEAL_LINE of its total, and none while any Pokémon has fainted or
+    has a status. PP is the fewest uses of attacks left above either floor: the whole party's
+    (``PP_LINE`` of its total, at least ``PP_FLOOR``), and the lead's own ``LEAD_PP`` when it has an
+    attack. Either at zero means the heal walk is due.
+    """
+    def power(move):
+        return MOVES.get(move, {}).get('power', 0)
+    if not party:
+        return {HP: 1, PP: 1}
+    hp = 0 if any(mon.hp == 0 or mon.status for mon in party) else max(
+        0, sum(mon.hp for mon in party) - math.ceil(sum(mon.max_hp for mon in party) * HEAL_LINE) + 1)
+    available = sum(uses for mon in party if mon.hp for move, uses in zip(mon.moves, mon.pp) if power(move))
+    maximum = sum(MOVES.get(move, {}).get('pp', 0) for mon in party if mon.hp for move in mon.moves if power(move))
+    room = available - math.ceil(max(PP_FLOOR, maximum * PP_LINE)) + 1
+    lead = party[0]
+    if any(power(move) for move in lead.moves):
+        room = min(room, sum(uses for move, uses in zip(lead.moves, lead.pp) if power(move)) - LEAD_PP + 1)
+    return {HP: hp, PP: max(0, room)}
+
+
+def battle_ledger():
+    """A ledger of the party's HP and PP alone, which the battle stance and the heal walk read."""
+    return Ledger(lambda party, kinds: Resources(battle_room(party)))
+
+
+def walk_spent(party, goal='walk'):
+    """Whether the party has spent the HP and PP a walk needs, which also sends it to heal."""
+    books = battle_ledger()
+    return budget_spent(books, goal, books.snapshot(party))
 
 
 def first_sale(snapshot, kind, goal):

@@ -5,6 +5,7 @@ live battle stats, Generation I type categories, accuracy, and special effects.
 """
 from dataclasses import dataclass
 
+from ..planning.stance import FLEE, HUNT, STORY, TRAVEL, Encounter, stance
 from ..ram import PartyMon
 from ..strategy_data import ITEMS, MAPS, MATCHUPS, MOVES, PRICES, SPECIES
 
@@ -177,13 +178,9 @@ def needs_healing(party):
     # The nurse repairs this through normal play before the party leaves the Center.
     if any(p.hp > p.max_hp for p in party):
         return True
-    available = sum(pp for p in party if p.hp for mid, pp in zip(p.moves, p.pp) if MOVES.get(mid, {}).get("power", 0))
-    maximum = sum(MOVES.get(mid, {}).get("pp", 0) for p in party if p.hp for mid in p.moves if MOVES.get(mid, {}).get("power", 0))
-    lead = party[0]
-    lead_pp = sum(pp for mid, pp in zip(lead.moves, lead.pp) if MOVES.get(mid, {}).get("power", 0))
-    return ((lead_pp < 2 and any(MOVES.get(mid, {}).get("power",0) for mid in lead.moves)) or any(p.hp == 0 or p.status for p in party)
-            or sum(p.hp for p in party) < sum(p.max_hp for p in party) * 0.55
-            or available < max(3, maximum * 0.15))
+    # The heal line is the battle stance's HP and PP budget (planner design S5), so one rule decides both.
+    from .ledger import walk_spent
+    return walk_spent(party)
 
 
 def healing_item(items, mon, incoming=0):
@@ -249,6 +246,17 @@ class Decision:
     target: int = 0
     reason: str = ""
     partner_key: str | None = None
+    # A run the battle stance chose, which the policy counts as a flee attempt.
+    stance: bool = False
+
+
+# Why the battle stance runs, by goal kind, with the shiny case first.
+FLEE_REASONS = {
+    'shiny': 'Run from the shiny rather than knock it out without a way to catch it',
+    TRAVEL: 'Run from the wild battle and keep travelling',
+    HUNT: 'Run from the wild battle and keep hunting for the target',
+    STORY: 'Run from the wild battle to save HP and PP for the walk to the next stop',
+}
 
 
 def useful_capture(snapshot, species, level, required_move=None):
@@ -272,16 +280,15 @@ def useful_capture(snapshot, species, level, required_move=None):
     return bool(set(known.get('types', ())) - covered) and level >= team_level * 0.5
 
 
-def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False, capture_species=None, repeat_species=None, training_index=None):
+def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False, capture_species=None, repeat_species=None, training_index=None,
+                  kind=STORY, flee_tries=0):
+    """The next battle decision. ``kind`` is the goal kind the battle stance follows (planning/stance.py)
+    and ``flee_tries`` counts the failed runs in this battle."""
     if (snapshot.in_battle == 1
             and MAPS['POKEMON_TOWER_1F'] <= snapshot.map <= MAPS['POKEMON_TOWER_7F']
             and not dict(snapshot.items).get(ITEMS['SILPH_SCOPE'])):
         return Decision('run', reason='Leave the unidentified ghost until the Silph Scope is obtained')
     shiny = snapshot.in_battle == 1 and snapshot.enemy_shiny
-    if (not shiny and capture_species is not None and snapshot.in_battle == 1 and snapshot.battle_type == 0
-            and enemy.species != capture_species
-            and SPECIES.get(enemy.species, {}).get('dex') not in (144, 145, 146, 150)):
-        return Decision('run', reason='Save time and supplies for the legendary expedition')
     moves = ranked_moves(me, enemy, used_status)
     slot = moves[0][1] if moves else 0
     incoming = max((damage(mid, enemy, me) for mid in enemy.moves if mid), default=me.max_hp * 0.2)
@@ -299,9 +306,22 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     collection_target |= repeat_target or shiny
     capture_limit = float('inf') if shiny else 50 if legendary else 5 if repeat_target else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)
-    if (snapshot.in_battle == 1 and snapshot.battle_type == 0 and (shiny or legendary and (missing_species or repeat_target))
-            and (not snapshot.can_catch or not balls and master is None or catch_attempts >= capture_limit)):
+    wild = snapshot.in_battle == 1 and snapshot.battle_type == 0
+    exhausted = not snapshot.can_catch or not balls and master is None or catch_attempts >= capture_limit
+    if wild and not shiny and legendary and (missing_species or repeat_target) and exhausted:
         return Decision('run', reason='Retreat and prepare another legendary attempt with balls and storage space')
+    # What the run wants and can catch now: a collection target, or an incidental capture the
+    # collection counts as useful, exactly when a catch rule below fires. The stance catches it
+    # whatever the goal, and runs from a shiny it cannot catch.
+    wanted = wild and snapshot.can_catch and (
+        collection_target and catch_attempts < capture_limit and (balls or (legendary or shiny) and master is not None)
+        or useful and balls and safe and catch_attempts < (12 if required else 5))
+    encounter = Encounter(wild=wild, wanted=bool(wanted), shiny=bool(wild and shiny and exhausted), tries=flee_tries)
+    from .ledger import battle_ledger
+    books = battle_ledger()
+    if stance(kind, encounter, books, goal=kind, resources=lambda: books.snapshot(snapshot.party)) is FLEE:
+        return Decision('run', reason=FLEE_REASONS.get(kind if not encounter.shiny else 'shiny', FLEE_REASONS[STORY]),
+                        stance=True)
     if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and collection_target and catch_attempts < capture_limit and (balls or (legendary or shiny) and master is not None):
         if (legendary or shiny) and master is not None:
             return Decision('item',master,reason='Secure the shiny with the Master Ball' if shiny else 'Secure the legendary with the Master Ball')

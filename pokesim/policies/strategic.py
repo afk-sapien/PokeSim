@@ -1,5 +1,6 @@
 """An objective-driven policy that observes the game after every action."""
 import random
+from collections import Counter
 from dataclasses import asdict
 
 from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositPokemon, FieldMove, LearnMove, ReleasePokemon,
@@ -26,6 +27,7 @@ from ..planning import values
 from ..planning import arbiter
 from ..planning.arbiter import Candidate, Tier
 from ..planning.monitor import STOOD_DOWN
+from ..planning.stance import FLEE_TRIES, STORY, TRAIN
 from .awareness import ActionWatch
 from .team import development_candidate, potential, readiness, reserve_to_deposit, storage_headroom
 from ..screen import Screen, W_PLAYER_MON_NUMBER
@@ -236,6 +238,8 @@ class StrategicPolicy(Policy):
         self.map_view = None
         self.escape_attempted = False
         self.shortcut = ShortcutRunner()
+        # Run attempts the battle stance made over the whole run, which the replay audit reads.
+        self.flees = Counter()
         self.on_restore()
 
     def reset(self):
@@ -267,6 +271,8 @@ class StrategicPolicy(Policy):
         self.turns = 0
         self.last_switch_turn = -5
         self.catch_attempts = 0
+        # Failed stance runs in this battle, and whether one is under way.
+        self.flee_tries, self.fleeing = 0, False
         self.heal_latch = False
         self.shop = ShoppingController()
         self.pc = StorageController()
@@ -613,6 +619,7 @@ class StrategicPolicy(Policy):
             self.turns = 0
             self.catch_attempts = 0
             self.last_switch_turn = -5
+            self.flee_tries, self.fleeing = 0, False
         if kind == "safari":
             missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
             targeted = self.collection.repeat_target(s.enemy_species, s.map) == s.enemy_species
@@ -636,11 +643,17 @@ class StrategicPolicy(Policy):
                 self.used_status.clear()
                 self.catch_attempts = 0
                 self.battle_key = key
+                self.flee_tries, self.fleeing = 0, False
             if self.last_kind not in ("battle", None):
                 self.intent = None
                 self.turns += 1
             if self.intent and self.intent.kind == "fight" and not me.pp[self.intent.index]:
                 self.intent = None
+            if self.intent is None and self.fleeing:
+                # The battle menu came back after a stance run, so the escape failed.
+                self.fleeing = False
+                self.flee_tries += 1
+                self.flees['failures'] += 1
             if self.intent is None:
                 self.intent = choose_battle(s, me, enemy, active, self.used_status,
                                             self.turns - self.last_switch_turn >= 3, self.catch_attempts,
@@ -649,7 +662,8 @@ class StrategicPolicy(Policy):
                                             if legendary_project(self.collection.project) else None,
                                             repeat_species=self.collection.repeat_target(enemy.species, s.map),
                                             training_index=self.collection.trainee(s, self.collection.project)
-                                            if self.collection.project and self.collection.project['method'] == 'train' else None)
+                                            if self.collection.project and self.collection.project['method'] == 'train' else None,
+                                            kind=getattr(self.goal, 'kind', STORY), flee_tries=self.flee_tries)
                 self.intent_since = s.frame
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
@@ -1521,12 +1535,17 @@ class StrategicPolicy(Policy):
         elif intent.kind == 'run':
             actions = self._run(s)
             if actions:
+                if intent.stance and not self.fleeing:
+                    self.fleeing = True
+                    self.flees['attempts'] += 1
                 return actions
         return self._fight(s, me, enemy)
 
     def _fight(self, s, me, enemy):
         intent = self.intent
-        protected = (s.in_battle == 1 and (s.enemy_shiny or SPECIES.get(enemy.species, {}).get('dex') in (144, 145, 146, 150)
+        # A shiny is run from until the stance has failed FLEE_TRIES runs, then fought like any battle.
+        protected = (s.in_battle == 1 and (s.enemy_shiny and self.flee_tries < FLEE_TRIES
+                     or SPECIES.get(enemy.species, {}).get('dex') in (144, 145, 146, 150)
                      and SPECIES[enemy.species]['dex'] not in s.owned))
         if protected and (not intent or intent.kind != 'fight' or MOVES.get(
                 me.moves[intent.index], {}).get('effect') not in ('SLEEP_EFFECT', 'PARALYZE_EFFECT')):
@@ -1662,7 +1681,8 @@ class StrategicPolicy(Policy):
                       if tile == 0x52 and abs(x - s.x) + abs(y - s.y) <= 8)
         if trainee is not None and grass and s.frame >= self.development_cooldown:
             goal = Goal('train_partner', 'Give a promising partner some experience',
-                        f'Train {s.party[trainee].nick or s.party[trainee].name} in nearby manageable encounters', grass)
+                        f'Train {s.party[trainee].nick or s.party[trainee].name} in nearby manageable encounters', grass,
+                        kind=TRAIN)
             self.development_until = s.frame + 2400
             self.development_cooldown = s.frame + 18000
             self.development_index = trainee
