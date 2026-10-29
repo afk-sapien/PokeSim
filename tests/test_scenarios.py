@@ -214,12 +214,12 @@ def test_gen2_battle_clock_restarts_for_each_new_opponent():
     assert watch.battle_clock(gen2_snapshot(), None, 2200) == 2200
 
 
-def test_gen2_scenarios_refuse_edits_made_for_the_gen1_memory_layout(tmp_path):
+def test_gen2_scenarios_refuse_the_gen1_bag_edit_before_booting(tmp_path):
     from pokesim.scenarios import open_run
     checkpoint = tmp_path / 'start.state'
     checkpoint.with_suffix('.json').write_text(json.dumps({'generation': 2, 'rom_sha1': hashlib.sha1(b'gold').hexdigest()}))
     (tmp_path / 'gold.gbc').write_bytes(b'gold')
-    scenario = Scenario(folder=tmp_path, name='edited', checkpoint=checkpoint, edits={'money': 0})
+    scenario = Scenario(folder=tmp_path, name='edited', checkpoint=checkpoint, edits={'money': 0, 'items': {'POTION': 0}})
     with pytest.raises(ValueError):
         open_run(scenario, tmp_path / 'gold.gbc')
     with pytest.raises(FileNotFoundError):
