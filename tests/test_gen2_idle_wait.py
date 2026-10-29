@@ -144,7 +144,7 @@ def test_a_losing_tower_cap_backs_off_and_other_caps_are_tried():
     assert tower.resting_caps(policy) == {100}
     until = tower.monitor(policy, tower.CAP_BACKOFF).until
     first = until('tower:100')
-    assert first - 1000 == 2 * tower.RETRY_AFTER
+    assert first - 1000 == 100000 and not hasattr(tower, 'RETRY_AFTER')
     tower.record_result(policy, 100, 3)
     assert until('tower:100') - 1000 == 2 * (first - 1000)
     policy.decisions = until('tower:100')

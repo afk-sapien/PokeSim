@@ -117,7 +117,8 @@ def test_tower_challenge_stands_down_when_its_team_cannot_be_assembled(real_data
     assert 'tower' not in policy.collection
     assert 'tower' not in policy.completed
     assert policy.collection['training'] == previous
-    assert policy.collection['tower_after'] > policy.decisions
+    # No timer holds the next challenge back. The collection arbiter weighs it as filler.
+    assert 'tower_after' not in policy.collection
 
 
 def test_tower_trip_stays_home_while_a_full_party_has_nowhere_to_deposit(real_data):
@@ -143,7 +144,12 @@ def test_tower_trip_stays_home_while_a_full_party_has_nowhere_to_deposit(real_da
     assert journey(policy, full, RealGoal) is None
     assert 'tower' not in policy.collection
     assert policy.collection['training'] == previous
-    assert policy.collection['tower_after'] > policy.decisions
+    # A new challenge waits for the storage stand-down, not a timer.
+    assert 'tower_after' not in policy.collection
+    from pokesim.gen2.standdown import standing_down
+    from pokesim.gen2.tower import ROOM_KEY
+    assert standing_down(policy, ROOM_KEY)
+    assert journey(policy, full, RealGoal) is None
     # Three freed slots let the three spare party members be deposited again.
     roomy = SimpleNamespace(**{**vars(full), 'box_counts': (20,) * 13 + (17,)})
     assert not no_room(policy, roomy, [key(m) for m in party[:3]])

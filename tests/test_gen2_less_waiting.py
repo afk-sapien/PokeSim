@@ -155,19 +155,27 @@ def test_patrol_labels_say_what_the_walk_does_and_waits_for(data):
 
 def test_full_boxes_with_nothing_to_release_wait_for_no_catch_and_free_the_league(data):
     """A Gold run with all 14 boxes full walked Route 29 for 98% of a replay "while Lapras waits for
-    Friday", and the same wait kept the postgame League run from starting. Lapras could not be kept."""
-    from pokesim.gen2.collection import clock_wait, postgame_league, waiting_label
+    Friday", and the same wait kept the postgame League run from starting. Lapras could not be kept.
+
+    The wait is a passive candidate worth the catch it ends in, so with nowhere to keep that catch it is
+    worth nothing and goes unnamed. It never holds back the League run, whatever it is worth."""
+    from pokesim.gen2.collection import clock_wait, named_wait, postgame_league, waiting, waiting_label
+    from pokesim.planning import values
     policy = expedition(data)
     policy.completed = {'champion': 1}
     full = snapshot([lead()], owned=set(range(1, 252)) - {131})
     assert clock_wait(policy, full, clock(), 'day') == 'Lapras waits for Friday'
+    wait = waiting(policy, full, clock(), 'day')
+    assert wait.passive and wait.value == values.NEW_ENTRY
+    assert postgame_league(policy, full, clock(), 'day')
     # A full party and full boxes still leave room while the ledger has a spare to let go.
     full = snapshot([lead()] * 6, owned=set(range(1, 252)) - {131})
     full.box_counts, full.can_catch = (20,) * 14, False
     policy.storage_target = lambda snapshot: 'spare'
-    assert clock_wait(policy, full, clock(), 'day') == 'Lapras waits for Friday'
+    assert named_wait(policy, full, clock(), 'day') == 'Lapras waits for Friday'
     policy.storage_target = lambda snapshot: None
-    assert clock_wait(policy, full, clock(), 'day') is None
+    assert clock_wait(policy, full, clock(), 'day') == 'Lapras waits for Friday'
+    assert waiting(policy, full, clock(), 'day').value == 0 and named_wait(policy, full, clock(), 'day') is None
     assert waiting_label(policy, full, clock(), 'day') == 'Walk the grass until a trade or a return brings new collection work'
     assert postgame_league(policy, full, clock(), 'day')
 

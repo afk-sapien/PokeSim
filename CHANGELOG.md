@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Let the utility arbiter climb the Gold, Silver and Crystal collection ladder. Each rung, from the Super Rod and move tutors through gifts, trades, the contest, breeding, training, legendaries and Pokédex hunts to the postgame, now offers a candidate with its value and expected frames, and the arbiter keeps the best of them. A rung that loses leaves no trace, so its plan is made again next time. The Day-Care walk and the wait for the clock are passive candidates, so they run only when nothing else is offered and never win over real work. A rung that cuts into the one under way pays for the walk back to it. The 18000 frame hunt retry, the 50000 frame Battle Tower retry and the rules that held a hunt or a League run back while a timed catch was coming are gone. A hunt with no tile to stand on and a Tower with no room now stand down on the planner's own backoff, and a timed catch counts as a passive candidate worth its new entry. The shop trip no longer skips a fixed list of maps. It weighs its walk against how much the bag needs it and never breaks off an ice or boulder puzzle, a story dungeon or the League, which the map data now names. Red, Blue and Yellow play as before.
+
 - Require pokecore 0.10.2.
 
 - Take the open way south from Route 23 in Red, Blue and Yellow. The route search counts Victory Road boulder switches that are still unsolved as solvable, so a detour or a new goal on Route 23 could route through Victory Road to the Indigo Plateau, and inside Victory Road only open gates count, which sent the player straight back out. A Red postgame save walked in and out of Victory Road for 90 minutes. Route 23 now tries the route through open gates first and falls back to the full search when there is none.
