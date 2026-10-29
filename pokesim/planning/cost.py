@@ -61,7 +61,8 @@ def game_data(rom_path, version):
         if run is not None and run.version == version:
             return run.effective
         return romdata.load_cached(Path(rom_path).read_bytes(), version)
-    except (OSError, ValueError, KeyError):
+    # A cartridge that is not a Pokémon game, such as the demo ROM, reads past its tables.
+    except (OSError, ValueError, KeyError, IndexError):
         return None
 
 

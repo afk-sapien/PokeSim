@@ -71,6 +71,14 @@ def test_gen1_odds_come_from_the_cartridge(version):
     assert cost.wild_odds(rom, other) is None
 
 
+def test_a_cartridge_that_is_not_a_pokemon_game_gives_unpriced_odds(monkeypatch):
+    from pokecore import emulator
+    from pokesim import randomized
+    monkeypatch.delenv(randomized.ENV, raising=False)
+    # The demo ROM is too short for the base stat table, so the planner falls back to unpriced costs.
+    assert cost.wild_odds(emulator.demo_rom(), 'red') is None
+
+
 def test_slot_chance_adds_the_shares_of_every_slot_holding_the_species():
     slots = ((3, 'PIDGEY'), (3, 'RATTATA'), (4, 'PIDGEY'))
     assert cost.slot_chance(slots, 'PIDGEY', (2, 1, 1)) == 75
