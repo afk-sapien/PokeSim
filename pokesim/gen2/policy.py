@@ -8,6 +8,7 @@ import re
 from types import SimpleNamespace
 
 from ..planning.ledger import FIELD_MOVES, LEARN_KEPT
+from ..planning.shadow import Shadow
 from .navigation import DIRS, Navigator
 from pokecore.gen2.ram import Memory
 from pokecore.gen2.screens import ScreenText, mask_roster
@@ -115,6 +116,8 @@ class Policy:
         self.sp = None
         self.resetting_puzzle = None
         self.unreachable_waits = 0
+        # The arbiter's picks beside the ladder's, for the log and the replay audit. Never saved.
+        self.shadow = Shadow()
 
     def state_dict(self):
         return {'starter': self.starter, 'completed': self.completed, 'collection': self.collection, 'demand': self.demand, 'decisions': self.decisions,
@@ -1123,9 +1126,15 @@ class Policy:
             journey_goal = self.goal
         else:
             self.goal = journey_goal = self.journey(snapshot, mem)
+        shadow = getattr(self, 'shadow', None)
+        inner = shadow.take() if shadow is not None else None
         release = self.release_goal(snapshot, mem, releasing)
         if release:
             self.goal = journey_goal = release
+            inner = None
+        if shadow is not None and journey_goal is not None and shadow.changed('ladder', journey_goal.key):
+            from .collection import ladder_candidates
+            shadow.compare('ladder', lambda: ladder_candidates(journey_goal, inner), journey_goal.key, outer=True)
         if isinstance(self.menu, Storage) and (self.menu.box_full or 'BOX is full' in snapshot.text):
             box = next((box for box, count in enumerate(snapshot.box_counts) if count < 20), None)
             if box is not None:

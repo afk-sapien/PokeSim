@@ -1,6 +1,9 @@
 """Persistent postgame expeditions using version and time specific encounters."""
 from collections import Counter
 
+from ..planning import values
+from ..planning.arbiter import Candidate, Tier
+from ..planning.cost import FRAMES_PER_BATTLE, FRAMES_PER_TILE
 from ..planning.ledger import FIELD_MOVES
 from .menus import ChangeBox, FieldMove, Storage, Teach, Use
 from .navigation import DIRS
@@ -498,6 +501,37 @@ def league_loop(policy, snapshot, Goal):
     return None
 
 
+def choice_key(row):
+    return f"{row['species']}:{row['map']}:{row['method']}"
+
+
+def hunt_candidates(choices):
+    """The arbiter's candidates for the hunt pick, for shadow mode only.
+
+    A species the Pokédex lacks, or one a request, prerequisite or carried item asks for, is worth a
+    new entry. Any other is a repeat. Frames are the walk there and the wild battles the encounter
+    chance says it takes, at the shared estimates in planning/cost.py.
+    """
+    candidates = []
+    for elsewhere, owned, _, route, species, mid, method, row in choices:
+        walk = route - 50 / max(1, row['chance'])
+        kind = 'hunt new entry' if not owned else 'hunt repeat' if elsewhere else 'hunt request'
+        frames = walk * FRAMES_PER_TILE + search_expected(row['chance'], per_battle=FRAMES_PER_BATTLE + 10 * FRAMES_PER_TILE)
+        candidates.append(Candidate(choice_key(row), Tier.PROGRESS, values.SMALL if kind == 'hunt repeat' else values.NEW_ENTRY,
+                                    frames, goal=kind))
+    return candidates
+
+
+def ladder_candidates(goal, inner):
+    """The ladder's own pick as the arbiter's only candidate, for shadow mode only.
+
+    The ladder takes the first rung with a goal, and asking the rungs below it could change their
+    saved state, so the ladder point is uncontested. Its kind is what an inner point, the hunt or
+    postgame pick, would have chosen in the same decision, or else the rung named by the goal's key.
+    """
+    return [Candidate(goal.key, Tier.PROGRESS, values.SMALL, 1, goal=inner or goal.key.split(' ')[0])]
+
+
 def journey(policy, snapshot, mem, Goal):
     data, state = policy.data, policy.collection
     from .npc_trades import requests as trade_requests
@@ -689,6 +723,9 @@ def journey(policy, snapshot, mem, Goal):
             target = dict(min(choices, key=lambda row: row[:-1])[-1], started=policy.decisions)
             target['expected'] = target_expected(policy, snapshot, target, distances.get(target['map'], 0) % 9999)
             state['target'] = target
+            shadow = getattr(policy, 'shadow', None)
+            if shadow is not None:
+                shadow.compare('hunt', lambda: hunt_candidates(choices), choice_key(target))
         else:
             goal = tower(policy, snapshot, Goal)
             if goal:

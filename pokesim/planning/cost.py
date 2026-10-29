@@ -9,6 +9,10 @@ three times it is the budget the progress monitor gives the goal.
 # finds it, and crossing one map on the way takes about 150.
 DECISIONS_PER_BATTLE = 75
 DECISIONS_PER_MAP = 150
+# Shadow mode estimates in frames for both generations, which step 5 of the planner design tightens:
+# one walking step and one wild battle with its catch attempt.
+FRAMES_PER_TILE = 16
+FRAMES_PER_BATTLE = 1500
 
 
 def search_expected(chance, maps=0, odds=1.0, needed=1.0, per_map=DECISIONS_PER_MAP, per_battle=DECISIONS_PER_BATTLE):
