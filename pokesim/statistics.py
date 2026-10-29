@@ -83,10 +83,13 @@ class StatisticsTracker:
         self.gauges = {key: self.value['current'][key] for key in GAUGES if key in self.value['current']} or None
         self.candidate = None
         self.last_collection = self.last_flush = 0
+        from .money_flow import MoneyFlow
+        self.money = MoneyFlow()
 
     def reset_baseline(self):
         self.previous = self.enemy = self.candidate = None
         self.records.previous = None
+        self.money.reset()
         self.last_collection = 0
 
     def observe(self, snapshot, memory=None, *, now=None, clock=None):
@@ -103,6 +106,7 @@ class StatisticsTracker:
         continuous = previous is not None and 0 < snapshot.frame - previous.frame <= 120
         if continuous:
             counters['active_frames'] += snapshot.frame - previous.frame
+            self.money.observe(self.value, previous, snapshot, now)
             walking = (not snapshot.in_battle and not previous.in_battle
                        and not snapshot.start_menu and not previous.start_menu
                        and snapshot.map == previous.map)
