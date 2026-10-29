@@ -5,10 +5,11 @@
   show  describe the party, bag and place a checkpoint holds, after the scenario's edits
 
 Red, Blue, Yellow, Gold, Silver and Crystal checkpoints all replay, each on the cartridge its manifest
-names. The party and money edits work in all six games and the bag edit in Red, Blue and Yellow only.
-Gold, Silver and Crystal scenarios can also take a species out of the Pokédex (unowned), run the clock
-forward (clock), fill every box (boxes) and offer the Battle Tower again (tower), which scenario.json
-names, as pokesim/scenarios.py describes.
+names. The party and money edits work in all six games, and so does taking a species out of the Pokédex
+(unowned). Red, Blue and Yellow scenarios can also edit the bag (items), hold the first badges (badges)
+and set story events by name (events). Gold, Silver and Crystal scenarios can also run the clock forward
+(clock), fill every box (boxes) and offer the Battle Tower again (tower), which scenario.json names, as
+pokesim/scenarios.py describes.
 
 Scenario folders hold private game data and must stay outside the checkout or under data/.
 """

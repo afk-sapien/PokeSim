@@ -22,9 +22,10 @@ import warnings
 from .events import diff
 from .game_data import VARIANT_ENV, current_variant
 from .headless import HeadlessRun
-from .ram import PARTY_STRUCT, W_BAG_ITEMS, W_IS_IN_BATTLE, W_MONEY, W_NUM_BAG_ITEMS, W_PARTY_COUNT, W_PARTY_MONS, read_snapshot
+from .ram import (PARTY_STRUCT, W_BADGES, W_BAG_ITEMS, W_DEX_OWNED, W_EVENT_FLAGS, W_IS_IN_BATTLE, W_MONEY, W_NUM_BAG_ITEMS,
+                  W_PARTY_COUNT, W_PARTY_MONS, read_snapshot)
 from .stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, advanced
-from .strategy_data import ITEMS
+from .strategy_data import EVENTS, ITEMS
 from .trade.partners import valid as valid_partner
 from .yellow import YELLOW_SHA1
 
@@ -83,7 +84,26 @@ def edit_bag(mem, changes):
     mem[W_BAG_ITEMS + len(bag) * 2] = 0xFF
 
 
+def edit_unowned(mem, species):
+    """Clear Pokédex numbers from the owned list, so the player hunts them again."""
+    for dex in species:
+        mem[W_DEX_OWNED + (dex - 1) // 8] &= ~(1 << (dex - 1) % 8) & 0xFF
+
+
+def edit_story(mem, badges=None, events=()):
+    """Move the story on: hold the first ``badges`` badges, and set story events by name."""
+    if badges is not None:
+        mem[W_BADGES] = (1 << min(badges, 8)) - 1
+    for name in events:
+        index = EVENTS[name]
+        mem[W_EVENT_FLAGS + index // 8] |= 1 << index % 8
+
+
 def apply_edits(mem, edits):
+    if edits.get('unowned'):
+        edit_unowned(mem, edits['unowned'])
+    if edits.get('badges') is not None or edits.get('events'):
+        edit_story(mem, edits.get('badges'), edits.get('events', ()))
     for change in edits.get('party', ()):
         slots = range(min(mem[W_PARTY_COUNT], 6)) if change['slot'] == 'all' else [change['slot']]
         for slot in slots:
@@ -246,9 +266,10 @@ class Scenario:
     max_quiet_game_minutes: int = 90
     battle_timeout_game_minutes: int = 30
     max_reloads: int = 2
-    # An event type that must happen, such as badge or champion. Gen II also marks a timed hunt
-    # (timed_hunt), a stand-down (stand_down) and a ladder pick (rung). Add a colon and a detail to
-    # name one, as in timed_hunt:191 or stand_down:tower:room.
+    # An event type that must happen, such as badge or champion. Both generations also mark a new
+    # Pokédex entry (owned) and a stand-down (stand_down), and Gen II a timed hunt (timed_hunt) and a
+    # ladder pick (rung). Add a colon and a detail to name one, as in owned:61, timed_hunt:191 or
+    # stand_down:tower:room.
     until: str | None = None
     # Game minutes to keep playing after ``until``, in which ``then`` must happen if it is set.
     after_game_minutes: int = 0
@@ -258,6 +279,9 @@ class Scenario:
     # Trainer ids of linked adventures whose Pokémon the run may release (trade/partners.py). A live
     # adventure learns them from its trades and the coordinator. A scenario has neither, so it names them.
     trade_partners: list = field(default_factory=list)
+    # Run attempts the battle stance must make (planner design S5), so a hunt shows it ran from
+    # the battles it could not catch from.
+    min_flees: int = 0
 
     @classmethod
     def load(cls, folder):
@@ -326,7 +350,45 @@ def gen2_data_root(environ=None):
     return directory()
 
 
-class Gen1Watch:
+class PlannerMarks:
+    """Marks both generations share: a Pokédex entry the run gained, and a stand-down.
+
+    An entry counts once it holds on two snapshots in a row, as half-written RAM can show one for a
+    frame. The same goal standing down more than three times in a row is a retry loop, which
+    ``loop`` names.
+    """
+
+    def reset_marks(self):
+        self.entries, self.unconfirmed = None, frozenset()
+        self.stood = dict(self.stand_downs())
+        self.streak, self.loop = (None, 0), None
+
+    def stand_downs(self):
+        """The planner's stand-down table, goal key to retry time."""
+        raise NotImplementedError
+
+    def shared_marks(self, snapshot):
+        found = []
+        if snapshot is not None and getattr(snapshot, 'valid', True) and getattr(snapshot, 'started', True):
+            owned = frozenset(snapshot.owned)
+            if self.entries is None:
+                self.entries = owned
+            for dex in sorted(owned & self.unconfirmed - self.entries):
+                found.append(('owned', str(dex), f'Pokédex entry {dex} gained'))
+                self.entries |= {dex}
+            self.unconfirmed = owned - self.entries
+        stood = dict(self.stand_downs())
+        for key in sorted(key for key, when in stood.items() if self.stood.get(key) != when):
+            found.append(('stand_down', key, f'{key} stood down'))
+            count = self.streak[1] + 1 if self.streak[0] == key else 1
+            self.streak = (key, count)
+            if count > 3 and self.loop is None:
+                self.loop = f'{key} stood down {count} times in a row'
+        self.stood = stood
+        return found
+
+
+class Gen1Watch(PlannerMarks):
     """Achievements as the Red, Blue and Yellow application counts them for its stall watch."""
 
     def __init__(self, run):
@@ -335,6 +397,16 @@ class Gen1Watch:
 
     def reset(self):
         self.previous, self.pending = None, []
+        self.reset_marks()
+
+    def stand_downs(self):
+        from .planning.monitor import STOOD_DOWN
+        director = getattr(getattr(self.run.policy, 'collection', None), 'director', None)
+        return director.monitor._table(STOOD_DOWN) if director is not None else {}
+
+    def marks(self, snapshot=None):
+        """What the planner just did, as (kind, detail, title): a Pokédex entry or a stand-down."""
+        return self.shared_marks(snapshot)
 
     def observe(self, snapshot):
         events = [event for event in self.pending if event.still(snapshot)]
@@ -357,7 +429,7 @@ class Gen1Watch:
         return False
 
 
-class Gen2Watch:
+class Gen2Watch(PlannerMarks):
     """Achievements as the Gen II runtime counts them: a new best for badges, story events, the
     Pokédex, areas, experience or League wins restarts its stall watch. So does a Johto Marathon
     checkpoint, since a race runs longer than the scenario's quiet window and earns nothing else."""
@@ -376,11 +448,16 @@ class Gen2Watch:
         collection = getattr(policy, 'collection', {})
         # A reload restores the policy, so the marks count from what it holds now.
         self.rung, self.timed = getattr(policy, 'ladder_rung', None), None
-        self.stood = dict(collection.get('stood_down') or {})
-        self.streak, self.loop = (None, 0), None
+        self.collection = collection
+        self.reset_marks()
 
-    def marks(self):
-        """What the planner just did, as (kind, detail, title): a ladder pick, a timed hunt or a stand-down.
+    def stand_downs(self):
+        policy = getattr(self.run, 'policy', None)
+        return getattr(policy, 'collection', self.collection).get('stood_down') or {}
+
+    def marks(self, snapshot=None):
+        """What the planner just did, as (kind, detail, title): a ladder pick, a timed hunt, a Pokédex
+        entry or a stand-down.
 
         These are not progress. A scenario can wait for one, and the same goal standing down more than
         three times in a row is a retry loop, which ``loop`` names.
@@ -397,15 +474,7 @@ class Gen2Watch:
             name = self.run.data.species.get(timed[0], {}).get('name', timed[0])
             found.append(('timed_hunt', str(timed[0]), f'Hunting {name} in the {timed[1]}'))
         self.timed = timed
-        stood = dict(policy.collection.get('stood_down') or {})
-        for key in sorted(key for key, when in stood.items() if self.stood.get(key) != when):
-            found.append(('stand_down', key, f'{key} stood down'))
-            count = self.streak[1] + 1 if self.streak[0] == key else 1
-            self.streak = (key, count)
-            if count > 3 and self.loop is None:
-                self.loop = f'{key} stood down {count} times in a row'
-        self.stood = stood
-        return found
+        return found + self.shared_marks(snapshot)
 
     def observe(self, snapshot):
         if not snapshot.valid or not snapshot.started:
@@ -530,7 +599,7 @@ def play(scenario, rom=None, progress=None):
                 achieved.append({'minute': (run.frame - start) // MINUTE, 'type': kind, 'title': title})
                 if progress:
                     progress(f'{scenario.name}: {achieved[-1]["minute"]}m {title}')
-            seen = [(kind, None, title) for kind, title in gained] + (marks() if marks else [])
+            seen = [(kind, None, title) for kind, title in gained] + (marks(snapshot) if marks else [])
             if reached and not followed and any(matches(scenario.then, kind, detail) for kind, detail, _ in seen):
                 followed, followed_frame = True, run.frame - start
                 if progress:
@@ -575,12 +644,15 @@ def play(scenario, rom=None, progress=None):
             failure = f'no {scenario.until} within {scenario.budget_game_minutes} game minutes'
         elif failure is None and not followed:
             failure = f'no {scenario.then} within {scenario.after_game_minutes} game minutes after {scenario.until}'
+        flees = dict(getattr(run.policy, 'flees', None) or {})
+        if failure is None and flees.get('attempts', 0) < scenario.min_flees:
+            failure = f'{flees.get("attempts", 0)} run attempts, fewer than {scenario.min_flees}'
         final = read()
         details = run.policy.details()
         return {'name': scenario.name, 'generation': run.generation, 'passed': failure is None, 'failure': failure,
                 'game_minutes': (run.frame - start) // MINUTE, 'worst_quiet_minutes': worst // MINUTE,
                 'reached_frame': reached_frame, 'followed_frame': followed_frame, 'reloads': reloads, 'policy_recoveries': run.policy.recoveries, 'achieved': achieved[-12:],
-                'achievements': len(achieved), 'final_map': final.map_name,
+                'achievements': len(achieved), 'final_map': final.map_name, 'flees': flees,
                 'final_party': [[mon.name, mon.level, mon.hp, mon.status] for mon in final.party],
                 'objective': (details.get('objective') or {}).get('title'), 'reason': details.get('reason')}
     finally:
