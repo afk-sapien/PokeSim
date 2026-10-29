@@ -267,6 +267,29 @@ def test_stats_overview_milestones_and_recent_selector(page, game, monkeypatch, 
     expect(page.locator('#collection-details .readout').first).to_be_visible()
     expect(page.locator('#activity-list')).to_be_visible()
     expect(page.locator('#activity-list')).to_contain_text('123,456')
+    expect(page.locator('[data-tally="trainer_win_rate"]')).to_contain_text('No battles yet')
     page.evaluate('scrollTo(0, 0)')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     page.screenshot(path=f'/tmp/pokesim-stats-overview-{width}.png', full_page=True)
+
+
+@pytest.mark.parametrize('width', [1280, 320])
+def test_battle_tallies_outlive_a_pruned_journal(page, game, width):
+    from pokesim.events import Event
+    url, store, emu, _ = game
+    for kind, title in (('trainer', 'Defeated Brock'), ('trainer', 'Defeated Misty'), ('blackout', 'Blacked out!'),
+                        ('faint', 'BULBASAUR fainted'), ('evolve', 'BULBASAUR evolved into Ivysaur!')):
+        store.add_event(Event(kind, title), emu.snapshot, None, None)
+    with store.lock, store.db:
+        store.db.execute('UPDATE events SET ts = 0')
+    store.prune_events(1)
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(url + '/stats')
+    expect(page.locator('[data-tally="trainers_defeated"]')).to_contain_text('2')
+    expect(page.locator('[data-tally="trainer_win_rate"]')).to_contain_text('66.7%')
+    expect(page.locator('[data-tally="blackouts"]')).to_contain_text('1')
+    expect(page.locator('[data-tally="faints"]')).to_contain_text('1')
+    expect(page.locator('[data-tally="evolutions"]')).to_contain_text('1')
+    expect(page.locator('[data-tally="releases"]')).to_contain_text('0')
+    expect(page.locator('#tally-note')).to_contain_text('kept when old entries are pruned')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
