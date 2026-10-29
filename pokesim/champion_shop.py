@@ -101,11 +101,14 @@ def valid_plan(snapshot, plan, offers):
             and plan.get('quantity') == quantity and (item not in OFFERS or item in offers))
 
 
-def choose(snapshot, offers):
+def choose(snapshot, offers, skip=()):
+    """The supply to buy next, or None. ``skip`` lists the items left out, such as one standing down."""
     if not champion(snapshot):
         return None
     # Capped walking offers take priority over ordinary supplies.
     for item in (*OFFERS, ITEMS['MOON_STONE'], ITEMS['PP_UP'], ITEMS['MAX_ELIXER'], ITEMS['ELIXER']):
+        if item in skip:
+            continue
         target = recipient(snapshot, item)
         if target is None:
             continue

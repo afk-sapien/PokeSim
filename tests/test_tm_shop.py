@@ -171,7 +171,7 @@ def test_policy_routes_to_counter_then_uses_owned_tm(shop_data):
     assert recorder.last.kind == 'use_item' and recorder.last.item == item and recorder.last.target == 0
 
 
-def test_tm_trips_wait_for_healing_league_and_active_projects(shop_data):
+def test_tm_trips_wait_for_healing_league_and_new_entry_projects(shop_data):
     policy = StrategicPolicy(1)
     policy.tm_moves, policy.tm_compatible = shop_data
     goal = Goal('collect_plan', 'Plan', 'Choose a project')
@@ -180,9 +180,70 @@ def test_tm_trips_wait_for_healing_league_and_active_projects(shop_data):
     policy.heal_latch = True
     assert policy._tm_development(s, goal, False) == (goal, None)
     policy.heal_latch = False
-    policy.collection.project = {'method': 'train'}
-    assert policy._tm_development(s, goal, False) == (goal, None)
+    # A project for a new entry is a higher tier than any move.
+    policy.collection.project = {'method': 'grass', 'species': 1, 'key': 'grass:1'}
+    hunt = Goal('collect_catch', 'Catch', 'Catch a new entry')
+    assert policy._tm_development(s, hunt, False) == (hunt, None)
     assert policy.tm_plan is None
+
+
+def project_pick(policy, key, tier, value, frames):
+    from pokesim.planning.arbiter import Candidate
+    policy.collection.project = {'method': 'train', 'key': key}
+    pick = Candidate(key, tier, value, frames, goal='collection training')
+    policy.collection.shadow.compare('collection', lambda: [pick], key)
+    policy.collection.shadow.changed('collection', key)
+
+
+def test_a_tm_purchase_is_worth_the_move_it_gives(shop_data):
+    from pokesim.planning import values
+    from pokesim.planning.arbiter import Tier
+    policy = StrategicPolicy(1)
+    policy.tm_moves, policy.tm_compatible = shop_data
+    plan = tm_shop.choose(shopper(), *shop_data, owned=False)
+    upgrade = tm_shop.projected_upgrade(shopper().party[0], plan['item'], *shop_data)
+    assert (plan['before'], plan['after']) == (upgrade['before'], upgrade['after'])
+    candidate = policy.purchase_candidate(plan)
+    assert candidate.value == values.move_gain(plan['before'], plan['after'])
+    assert candidate.value == values.LEVEL_100 * upgrade['gain'] / upgrade['before'] > 0
+    assert (candidate.tier, candidate.expected_frames, candidate.interrupt_frames) == (Tier.UPGRADE, TM_TRIP_FRAMES, 0)
+    # Leaving a project under way costs the walk back to it.
+    policy.collection.project = {'method': 'train', 'key': 'train:a:50'}
+    assert policy.purchase_candidate(plan).interrupt_frames == TM_TRIP_FRAMES
+    supply = policy.purchase_candidate({'item': ITEMS['PP_UP'], 'supply': True})
+    assert (supply.tier, supply.value) == (Tier.FILLER, values.SMALL)
+
+
+def test_a_tm_trip_cuts_into_training_only_when_the_move_is_worth_more(shop_data):
+    from pokesim.planning.arbiter import Tier
+    s = shopper()
+    goal = Goal('collect_train', 'Train', 'Train a partner')
+    slow = StrategicPolicy(1)
+    slow.tm_moves, slow.tm_compatible = shop_data
+    project_pick(slow, 'train:a:50', Tier.UPGRADE, 0.001, 10 ** 6)
+    assert slow._tm_development(s, goal, False)[0].key == 'buy_tm'
+    quick = StrategicPolicy(1)
+    quick.tm_moves, quick.tm_compatible = shop_data
+    project_pick(quick, 'train:a:50', Tier.UPGRADE, 0.5, 1000)
+    assert quick._tm_development(s, goal, False) == (goal, None)
+    assert quick.tm_plan is None
+
+
+def test_no_tm_timer_remains(shop_data):
+    policy = StrategicPolicy(1)
+    policy.tm_moves, policy.tm_compatible = shop_data
+    assert not any(name.startswith('tm_') and name.endswith('_after') for name in vars(policy))
+    goal = Goal('collect_plan', 'Plan', 'Choose a project')
+    s = shopper()
+    assert policy._tm_development(s, goal, False)[0].key == 'buy_tm'
+    item = policy.tm_plan['item']
+    # The bought TM is taught on the same frame, with no wait.
+    Recorder.on(policy)
+    taught, action = policy._tm_development(replace(s, items=((item, 1),)), goal, False)
+    assert taught.key == 'teach_tm' and action[0] == PRESS
+    # A failed teach is not retried until the party or the bag changes.
+    again, action = policy._tm_development(replace(s, items=((item, 1),)), goal, False)
+    assert again.key != 'teach_tm' and action is None
 
 
 @pytest.fixture
@@ -300,8 +361,11 @@ def test_future_natural_move_is_saved_and_trip_survives_local_recovery(shop_data
     for frame in range(s.frame + 120, s.frame + 3 * TM_TRIP_FRAMES, 120):
         policy._tm_development(replace(s, frame=frame), goal, False)
         assert policy.tm_plan == planned
-    policy._tm_development(replace(s, frame=s.frame + 3 * TM_TRIP_FRAMES), goal, False)
-    assert policy.tm_plan is None
+    after, _ = policy._tm_development(replace(s, frame=s.frame + 3 * TM_TRIP_FRAMES), goal, False)
+    # That item stands down on the monitor's backoff, and the next best purchase goes at once.
+    monitor = policy.collection.director.monitor
+    assert monitor.standing_down(f'tm:{planned["item"]}', policy.collection.elapsed)
+    assert after.key == 'buy_tm' and policy.tm_plan['item'] != planned['item']
 
 
 def test_tm_trip_is_not_overridden_by_collection_or_ground_pickups(shop_data, monkeypatch):
