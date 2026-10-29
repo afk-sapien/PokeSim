@@ -352,6 +352,36 @@ def test_gen2_planner_releases_reach_the_journal_as_gen1_releases_do():
     assert refused.observe(None, held, data, Event) == [] and refused.member is None
 
 
+def test_a_full_box_frees_a_slot_from_an_own_spare_in_both_generations(monkeypatch):
+    """Red, Blue and Yellow let the weaker own Snorlax go when every box is full. Gold, Silver and
+    Crystal do the same with a full party, even though each Snorlax holds Leftovers a plan wants,
+    since the stronger copy keeps one. A stranger's copy stays in both."""
+    from test_gen2_storage_ledger import BOX_CAPACITY, Owned, mon
+    from test_release_origins import STRANGER, snapshot as gen1_snapshot, stored
+
+    from pokesim.gen2 import ledger
+    from pokesim.policies.team import release_target
+    best, weak = stored(0, 143, dvs=(14,) * 5), stored(1, 143, dvs=(3,) * 5)
+    stranger = stored(2, 143, dvs=(1,) * 5, trainer_id=STRANGER)
+    assert release_target(gen1_snapshot([best, weak, stranger])) == (0, 1)
+    assert release_target(gen1_snapshot([best, stranger])) is None
+
+    monkeypatch.setattr('pokecore.gen2.breeding.breeding_stock', lambda data, species: set())
+    leftovers = 146
+    policy = Owned(frozenset())
+    policy.data.items['LEFTOVERS'] = leftovers
+    policy.data.item_attributes[leftovers] = {'price': 200, 'pocket': 'ITEM'}
+    held = dict(species=143, held_item=leftovers)
+    party = [mon(None, box=None, species=index) for index in range(1, 7)]
+    copies = [mon(0, dvs=(15,) * 5, **held), mon(1, dvs=(3,) * 5, **held)]
+    view = SimpleNamespace(party=party, stored=copies, active_box=0, money=0,
+                           box_counts=(BOX_CAPACITY,) * 14, pockets={'items': ()})
+    unit = ledger.storage_unit(policy, view)
+    assert (unit.action, unit.detail.position) == ('release', 1)
+    view.stored = [copies[0], mon(1, dvs=(1,) * 5, trainer_id=STRANGER, **held)]
+    assert ledger.storage_unit(policy, view) is None
+
+
 def test_both_generations_keep_the_same_battle_and_moment_tallies(tmp_path, gen2_data):
     """Each generation writes its own journal entries. The Stats page counts them the same way
     and keeps them after the journal is pruned."""
