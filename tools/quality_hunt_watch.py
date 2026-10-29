@@ -69,7 +69,7 @@ def collect(site):
 
     rows = []
     for path in sorted(root.glob('adventures/*/adventure.json')):
-        meta = json.loads(path.read_text())
+        meta = json.loads(path.read_text(encoding='utf-8'))
         if meta.get('version') not in GEN2 or meta.get('archived'):
             continue
         row = {'id': meta['id'], 'name': meta.get('name'), 'version': meta['version'], 'state': meta.get('state')}
@@ -179,10 +179,10 @@ def main(argv):
         print(__doc__)
         return 2
     path = Path(argv[2])
-    saved = json.loads(path.read_text()) if path.exists() else {}
+    saved = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
     lines, failed, kept = judge(json.load(sys.stdin), saved)
     print('\n'.join(lines))
-    path.write_text(json.dumps(kept, indent=1, sort_keys=True))
+    path.write_text(json.dumps(kept, indent=1, sort_keys=True), encoding='utf-8')
     return 1 if failed else 0
 
 
