@@ -160,28 +160,4 @@ def gen1_opponents(opponents, species):
 
 # Gen II ---------------------------------------------------------------------------------------
 
-GRASS_CHANCES = (30, 30, 20, 10, 5, 4, 1)
-SURF_CHANCES = (60, 30, 10)
-TIMES = {'morn': 'morning', 'day': 'day', 'nite': 'night'}
-
-
-def gen2_encounters(encounters, game):
-    """Gen II grass and surf rows after the wild shuffle. Other methods keep their rows."""
-    run = current()
-    if run is None or run.effective.generation != 2 or run.version != game or not run.options.wild:
-        return encounters
-    rows = [row for row in encounters if row['method'] not in ('grass', 'surf')]
-    for table in run.effective.encounters.values():
-        # Swarms replace a route's table for a day. The planner never counted on them.
-        if table['kind'].startswith('swarm'):
-            continue
-        if table['kind'].endswith('grass'):
-            for time, slots in table['slots'].items():
-                for (level, species), chance in zip(slots, GRASS_CHANCES):
-                    rows.append({'map': table['map'], 'species': species, 'level': level, 'method': 'grass',
-                                 'time': TIMES[time], 'chance': chance})
-        else:
-            for (level, species), chance in zip(table['slots'], SURF_CHANCES):
-                rows.append({'map': table['map'], 'species': species, 'level': level, 'method': 'surf',
-                             'time': 'any', 'chance': chance})
-    return rows
+# Gen II grass and surf rows come from the cartridge's own tables in planning/cost.py, shuffled or not.

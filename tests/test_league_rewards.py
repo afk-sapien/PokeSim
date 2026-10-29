@@ -220,9 +220,9 @@ def test_later_eevees_can_fill_remaining_evolutions_and_rematches_stay_available
     collection.eevee_choice = 134
     monkeypatch.setattr(collection, 'sources', lambda: {})
     candidates = []
-    def select(options, rng, urgent):
-        candidates.extend(project for weight, project in options)
-        return next(project for weight, project in options if project["method"] == "rematch")
+    def select(options, projects):
+        candidates.extend(projects.values())
+        return next(project for project in projects.values() if project["method"] == "rematch")
     monkeypatch.setattr(collection.director, 'select', select)
     nav = Mock()
     nav.distance_lookup.return_value = lambda targets: 1

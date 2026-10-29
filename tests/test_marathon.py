@@ -3,7 +3,7 @@ import random
 from dataclasses import replace
 
 from pokesim.policies import marathon
-from pokesim.policies.collection import Collection
+from pokesim.policies.collection import Collection, candidate
 from pokesim.policies.director import AdventureDirector, category, new_entry
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
@@ -164,15 +164,19 @@ def test_absolute_budget_stops_a_moving_race():
 
 
 def test_marathon_never_displaces_missing_entries_or_urgent_supplies():
-    director = AdventureDirector()
     recreation = dict(marathon.candidate(), key='race')
     missing = {'method': 'grass', 'species': 1, 'key': 'missing'}
     supplies = {'method': 'rematch', 'key': 'supplies'}
     assert category(recreation) == 'recreation'
     assert not new_entry(recreation)
-    for seed in range(10):
-        assert director.select([(10000, recreation), (1, missing)], random.Random(seed)) == missing
-        assert director.select([(10000, recreation), (1, supplies)], random.Random(seed), urgent=True) == supplies
+
+    def pick(*projects, short=False):
+        options = [candidate(project, 0, {}, short, set()) for project in projects]
+        return AdventureDirector.select(options, {project['key']: project for project in projects})
+    assert pick(recreation, missing) == missing
+    assert pick(recreation, supplies, short=True) == supplies
+    # Nothing else to do, so the race runs.
+    assert pick(recreation) == recreation
 
 
 def test_candidate_requires_postgame_prior_work_cut_open_gates_and_cooldown():
@@ -182,8 +186,8 @@ def test_candidate_requires_postgame_prior_work_cut_open_gates_and_cooldown():
             self.candidates = []
             self.completed = {'training': 4}
 
-        def select(self, candidates, rng, urgent=False):
-            self.candidates = [p for _, p in candidates]
+        def select(self, candidates, projects):
+            self.candidates = list(projects.values())
             return next((p for p in self.candidates if p['method'] == 'marathon'), self.candidates[0])
 
     for eligible, champion, cut, gates, completed, deadline in (

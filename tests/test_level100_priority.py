@@ -5,7 +5,8 @@ from dataclasses import asdict, replace
 from unittest.mock import Mock
 
 from pokesim.policies.battle import choose_battle
-from pokesim.policies.collection import EVOS, Collection
+from pokesim.planning import values
+from pokesim.policies.collection import EVOS, Collection, candidate
 from pokesim.policies.director import AdventureDirector
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
@@ -31,7 +32,14 @@ def candidates(snapshot, searches=0):
     c.observe(snapshot)
     c.director.select = Mock(wraps=c.director.select)
     c.choose(snapshot, nav, random.Random(4), Goal('collect_plan', 'Plan', 'Plan'))
-    return c.director.select.call_args.args[0]
+    options, projects = c.director.select.call_args.args
+    return [(option, projects[option.key]) for option in options]
+
+
+def pick(*projects, short=False, tails=None, owned=frozenset(range(1, 152))):
+    """The director's pick among ``projects`` as the collection prices them, each ten tiles away."""
+    options = [candidate(project, 10, tails or {}, short, owned) for project in projects]
+    return AdventureDirector.select(options, {project['key']: project for project in projects})['key']
 
 
 def postgame(**changes):
@@ -83,22 +91,27 @@ def test_ambiguous_individuals_are_not_selected_for_training():
     assert not any(p['method'] == 'train' for _, p in rows)
 
 
+def train(key, level, mastery=True):
+    return {'method': 'train', 'key': key, 'initial_level': level,
+            'target_level': min(100, level - level % 10 + 10), 'mastery_needed': mastery}
+
+
+REPEAT = {'method': 'grass', 'key': 'repeat', 'species': sid(16), 'map': 12, 'repeat': True}
+MONEY = {'method': 'rematch', 'key': 'money'}
+
+
 def test_director_prioritizes_training_but_keeps_other_activities():
-    d = AdventureDirector()
-    rng = random.Random(19)
-    rows = [(1, {'method': 'train', 'key': 'near100', 'initial_level': 95}),
-            (10000, {'method': 'train', 'key': 'low', 'initial_level': 10}),
-            (1, {'method': 'grass', 'key': 'repeat', 'repeat': True}),
-            (1, {'method': 'rematch', 'key': 'money'})]
-    selected = Counter(d.select(rows, rng)['key'] for _ in range(500))
-    # Training leads by a wide margin, but it decays with use now, so it is not exempt from
-    # taking turns the way it was when it could hold a partner for hundreds of game hours.
-    assert selected['near100'] > 250
-    assert selected['near100'] > selected['repeat'] + selected['money']
-    assert selected['low'] == 0
+    rows = [train('near100', 95), train('low', 10), REPEAT, MONEY]
+    # A low partner's step needs the least experience, so it buys the most of the climb per frame.
+    assert pick(*rows) == 'low'
+    # A hunt for another copy waits for training toward a level 100 credit, however long the climb.
+    assert pick(rows[0], REPEAT, MONEY) == 'near100' and pick(*rows[1:]) == 'low'
+    assert pick(REPEAT, MONEY) == 'repeat'
+    # Once the family has its credit, training is filler and the hunt goes first.
+    assert pick(train('done', 50, mastery=False), REPEAT) == 'repeat'
     # A rematch only gets a turn when money is short or nothing else is on offer.
-    assert selected['repeat'] > 0 and selected['money'] == 0
-    assert d.select(rows, rng, urgent=True)['key'] == 'money'
+    assert pick(train('low', 10), MONEY) == 'low' and pick(MONEY) == 'money'
+    assert pick(*rows, short=True) == 'money'
 
 
 def test_completed_reserve_yields_party_space_while_field_move_carrier_stays():
@@ -123,20 +136,39 @@ def test_safe_trainee_keeps_experience_instead_of_an_unneeded_level100_switch():
 def test_a_new_pokedex_entry_comes_before_the_level_100_grind():
     # Two adventures spent most of 400 game hours training in Pokémon Mansion while 27 entries they
     # could have had, most of them one evolution away, went missing.
-    d, rng = AdventureDirector(), random.Random(19)
-    rows = [(8, {'method': 'train', 'key': 'grind', 'initial_level': 59}),
-            (3, {'method': 'evolve', 'key': 'victreebel'}),
-            (3, {'method': 'safari', 'key': 'tauros'}),
-            (1, {'method': 'rematch', 'key': 'money'})]
-    selected = Counter(d.select(rows, rng)['key'] for _ in range(500))
-    assert selected['victreebel'] + selected['tauros'] == 500
-    assert selected['victreebel'] > 100 and selected['tauros'] > 100
-    # An evolution that only improves a registered species is no new entry, so training leads again.
-    settled = [rows[0], (3, {'method': 'evolve', 'key': 'better', 'upgrade_evolution': True}),
-               (1, {'method': 'grass', 'key': 'repeat', 'repeat': True})]
-    d = AdventureDirector()
-    selected = Counter(d.select(settled, rng)['key'] for _ in range(500))
-    assert selected['grind'] > 200 and selected['grind'] > selected['better']
+    victreebel = {'method': 'evolve', 'key': 'victreebel'}
+    tauros = {'method': 'safari', 'key': 'tauros', 'species': sid(128), 'map': 220}
+    assert pick(train('grind', 59), victreebel, tauros, MONEY) == 'tauros'
+    assert pick(train('grind', 59), victreebel, MONEY) == 'victreebel'
+    # An evolution that only improves a registered species is no new entry, so the last level to a
+    # level 100 credit leads again.
+    better = {'method': 'evolve', 'key': 'better', 'upgrade_evolution': True}
+    assert candidate(better, 0, {}, False, set()).value == values.SMALL
+    assert pick(train('grind', 99), better, REPEAT) == 'grind'
+
+
+def test_a_partner_with_too_few_attacks_between_heals_is_not_trained():
+    from pokesim.policies.collection import can_train
+    # Double Slap, 10 uses, was a Red Chansey's only attack, and it walked to the Pokémon Center
+    # a hundred times in one training step.
+    chansey = replace(individual(53, 1), moves=(39, 135, 3, 107), pp=(30, 10, 10, 20))
+    rows = candidates(postgame(party=(chansey,)), searches=3)
+    assert not [p for _, p in rows if p['method'] == 'train']
+    fighter = replace(chansey, moves=(34, 3), pp=(15, 10))
+    rows = candidates(postgame(party=(fighter,)), searches=3)
+    assert [p['initial_level'] for _, p in rows if p['method'] == 'train'] == [53]
+    assert can_train({'species': 1})
+
+
+def test_a_step_is_priced_by_the_experience_it_needs():
+    from pokesim.policies.collection import FRAMES_PER_EXPERIENCE, training_frames
+    # Red trained a level 50 Dragonair on Route 23 ahead of level 25 partners, since a flat price per
+    # level made its step look as cheap, and it walked to the Pokémon Center every few battles.
+    dragonair = {**train('dragonair', 50), 'parent': sid(148)}
+    pidgeotto = {**train('pidgeotto', 25), 'parent': sid(17)}
+    assert training_frames(dragonair) == (5 * 60 ** 3 // 4 - 5 * 50 ** 3 // 4) * FRAMES_PER_EXPERIENCE
+    assert training_frames(dragonair) > 4 * training_frames(pidgeotto)
+    assert pick(dragonair, pidgeotto) == 'pidgeotto'
 
 
 def test_training_climbs_in_steps_of_ten_and_resumes_from_where_it_stopped():
@@ -147,28 +179,15 @@ def test_training_climbs_in_steps_of_ten_and_resumes_from_where_it_stopped():
         assert [p['target_level'] for p in projects] == [expected], (level, projects)
 
 
-def test_a_finished_training_step_hands_the_turn_to_other_work():
-    """Training used to be exempt from recency decay, so it never gave the turn back."""
-    d, rng = AdventureDirector(), random.Random(5)
-    rows = [(30, {'method': 'train', 'key': 'grind', 'initial_level': 90}),
-            (3, {'method': 'evolve', 'key': 'upgrade', 'upgrade_evolution': True}),
-            (1, {'method': 'grass', 'key': 'repeat', 'repeat': True})]
-    selected = Counter(d.select(rows, rng)['key'] for _ in range(500))
-    assert selected['grind'] > selected['upgrade']          # still the leading activity
-    assert selected['upgrade'] + selected['repeat'] > 150   # but no longer the only one
-
-
 def test_a_missing_species_always_wins_over_hunts_rematches_and_the_grind():
     # Red and Blue passed 1,500 game hours with Dragonite one evolution away: DV hunts, rematches
     # and the variety rule kept taking turns from the Dragonair.
-    d, rng = AdventureDirector(), random.Random(3)
-    rows = [(3, {'method': 'evolve', 'key': 'dragonite'}),
-            (8, {'method': 'train', 'key': 'grind', 'initial_level': 90}),
-            (5, {'method': 'safari', 'key': 'hunt', 'repeat': True, 'dv_hunt': True}),
-            (10, {'method': 'rematch', 'key': 'money'})]
-    assert {d.select(rows, rng)['key'] for _ in range(50)} == {'dragonite'}
+    rows = [{'method': 'evolve', 'key': 'dragonite'}, train('grind', 90),
+            {'method': 'safari', 'key': 'hunt', 'species': sid(128), 'map': 220, 'repeat': True, 'dv_hunt': True},
+            MONEY]
+    assert pick(*rows, tails={sid(128): 100}) == 'dragonite'
     # Money still comes first when it has run out.
-    assert d.select(rows, rng, urgent=True)['key'] == 'money'
+    assert pick(*rows, short=True) == 'money'
 
 
 def test_a_level_evolution_turn_that_gains_experience_is_progress_not_a_failure():

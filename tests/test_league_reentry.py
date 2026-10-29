@@ -73,23 +73,23 @@ def postgame_policy(**changes):
                                  (ITEMS['REVIVE'], 5), (ITEMS['FULL_HEAL'], 3)), **changes)
     p = StrategicPolicy(7)
     p.observed_map = s.map
-    p.collection.cooldown = 1200
+    # A plan with nothing to do, as when every project stands down.
+    p.collection.choose = lambda *args: None
     return p, s
 
 
-def test_postgame_cooldown_does_not_start_an_accidental_league_attempt():
+def test_an_empty_postgame_plan_does_not_start_an_accidental_league_attempt():
     p, s = postgame_policy()
     for frame in range(100, 1100, 12):
-        actions = p.step(PolicyContext(replace(s, frame=frame), 0, frame / 60,
-                                       bytearray(65536)))
-        assert p.goal.key == 'collect_plan'
-        assert all(action.button is None for action in actions)
+        p.step(PolicyContext(replace(s, frame=frame), 0, frame / 60, bytearray(65536)))
+        # It wanders the lobby between expeditions and never heads for Lorelei.
+        assert p.goal.key == 'collect_plan' and p.mode == 'exploring between expeditions'
     assert p.recoveries == 0
 
 
 def test_postgame_planning_still_selects_the_next_expedition():
     p, s = postgame_policy()
-    p.collection.cooldown = 0
+    del p.collection.choose
     p.step(PolicyContext(s, 0, 0, bytearray(65536)))
     assert p.collection.project is not None
     assert p.goal.key != 'collect_plan'

@@ -8,7 +8,8 @@ from pokesim.gen2.postgame import QUALITY_WEIGHT, catch_value
 from pokesim.planning import values
 from pokesim.planning.arbiter import Candidate, Tier
 from pokesim.planning.shadow import Shadow
-from pokesim.policies.collection import EXPECTED_FRAMES, Collection, shadow_candidate
+from pokesim.planning import cost
+from pokesim.policies.collection import EXPECTED_FRAMES, FRAMES_PER_EXPERIENCE, Collection, candidate
 from pokesim.policies.progression import Goal
 from pokesim.policies.strategic import ERRAND_FRAMES, StrategicPolicy, overworld_candidates
 from tools.replay_audit import load, shadow_lines
@@ -77,19 +78,36 @@ def test_the_shadow_is_never_saved():
 
 def test_gen1_projects_take_the_approved_values():
     entry = {'method': 'grass', 'species': 1, 'key': 'grass:1', 'map': 12}
-    candidate = shadow_candidate(entry, 10, {}, False, set())
-    assert (candidate.tier, candidate.value, candidate.goal) == (Tier.PROGRESS, values.NEW_ENTRY, 'collection new entry')
-    assert candidate.expected_frames == EXPECTED_FRAMES['other'] + 10 * 16
-    quality = shadow_candidate({**entry, 'repeat': True, 'dv_hunt': True}, 0, {1: 40}, False, {1})
-    assert quality.value == values.quality_catch(0.4) and quality.goal == 'collection quality'
-    assert quality.expected_frames == EXPECTED_FRAMES['dv_hunt']
-    rematch = shadow_candidate({'method': 'rematch', 'key': 'rematch'}, 0, {}, True, set())
+    built = candidate(entry, 10, {}, False, set())
+    assert (built.tier, built.value, built.goal) == (Tier.PROGRESS, values.NEW_ENTRY, 'collection new entry')
+    assert built.expected_frames == cost.catch_frames(None, 'grass', 12, 1) + 10 * 16
+    quality = candidate({**entry, 'repeat': True, 'dv_hunt': True, 'catch_goal': 3}, 0, {1: 40}, False, {1})
+    assert quality.value == 3 * values.quality_catch(0.4) and quality.goal == 'collection quality'
+    assert quality.expected_frames == cost.catch_frames(None, 'grass', 12, 1, needed=3)
+    rematch = candidate({'method': 'rematch', 'key': 'rematch'}, 0, {}, True, set())
     assert (rematch.tier, rematch.value) == (Tier.UPKEEP, values.NEW_ENTRY)
-    idle = shadow_candidate({'method': 'rematch', 'key': 'rematch'}, 0, {}, False, set())
+    assert rematch.expected_frames == EXPECTED_FRAMES['rematch']
+    idle = candidate({'method': 'rematch', 'key': 'rematch'}, 0, {}, False, set())
     assert (idle.tier, idle.value) == (Tier.FILLER, values.SMALL)
-    train = shadow_candidate({'method': 'train', 'key': 't', 'initial_level': 90, 'target_level': 100,
-                              'mastery_needed': True}, 0, {}, False, set())
+    train = candidate({'method': 'train', 'key': 't', 'initial_level': 90, 'target_level': 100,
+                       'mastery_needed': True}, 0, {}, False, set())
     assert train.value == values.LEVEL_100 and train.goal == 'training'
+    assert train.expected_frames == (100 ** 3 - 90 ** 3) * FRAMES_PER_EXPERIENCE
+
+
+def test_gen1_catches_are_priced_from_the_cartridge_odds():
+    class Odds:
+        def encounter(self, method, map_id, species):
+            return (50, 10) if species == 1 else (5, 10)
+
+        def cast(self, rod, map_id, species):
+            return 25, 0.5
+    common = candidate({'method': 'grass', 'species': 1, 'key': 'a', 'map': 12}, 0, {}, False, set(), Odds())
+    rare = candidate({'method': 'grass', 'species': 2, 'key': 'b', 'map': 12}, 0, {}, False, set(), Odds())
+    assert common.expected_frames == cost.catch_frames(Odds(), 'grass', 12, 1) < rare.expected_frames
+    rod = candidate({'method': 'fish', 'species': 1, 'key': 'c', 'map': 12, 'rod': 'SUPER_ROD'}, 0, {}, False,
+                    set(), Odds())
+    assert rod.expected_frames == 4 * (cost.FRAMES_PER_CAST + cost.FRAMES_PER_BATTLE / 2) + cost.FRAMES_PER_CATCH
 
 
 def test_an_overworld_errand_takes_the_tier_and_value_of_the_goal_it_unblocks():

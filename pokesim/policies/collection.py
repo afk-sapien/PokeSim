@@ -5,7 +5,8 @@ from dataclasses import asdict
 from ..duplicates import quality
 from pokecore.identity import same
 from .move_development import evolution_wait, move_name
-from ..investment import automatic_trade_protected, training_investment, potential_power, assessment, GOOD_TAIL, SEARCH_BUDGET
+from ..pokemon import experience_at_level
+from ..investment import automatic_trade_protected,training_investment, potential_power, assessment, SEARCH_BUDGET
 from functools import lru_cache
 from ..game_data import current_variant, load
 
@@ -19,45 +20,73 @@ from .navigation import DIRS
 from .director import AdventureDirector, category, new_entry
 from ..planning import values
 from ..planning.arbiter import Candidate, Tier
+from ..planning import cost
 from ..planning.cost import FRAMES_PER_TILE
 from ..planning.shadow import Shadow
 from ..planning.conditions import Can, Count, Item, Requirements, feasible
 from ..planning.ledger import MONEY, Need
-from ..planning.monitor import CONTINUE, SPENT, ProgressEvent
+from ..planning.monitor import CONTINUE, SPENT, STOOD_DOWN, ProgressEvent
 from . import training, marathon, league_rotation
 from ..shiny import is_shiny
 from ..milestones import is_perfect, level_credit
-from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, EVENTS, event_set, object_hidden
+from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, EVENTS, event_set, object_hidden
 from ..ram import MAP_NAMES
 
 DATA = load('collection.json')
 EVOS = {int(sid): rows for sid, rows in DATA['evolutions'].items()}
-PROJECT_COOLDOWN = 12000
 # Frames out of battle a project other than training may go without an encounter, a training gain,
 # a new map or another sign of progress before it stands down. Two minutes of play.
 IDLE_BUDGET = 7200
-# Frames a project is expected to take, travel included, by kind. collection.json has no encounter
-# odds yet, so these are declared per kind. A project stands down once it spent three times its
-# expected frames without progress. Training keeps its own clock and a marathon its race clock.
-EXPECTED_FRAMES = {'rematch': 100000, 'special': 60000, 'evolve': 60000, 'dv_hunt': 36000, 'other': 12000}
+# Frames a project that meets no wild Pokémon is expected to take once there, by kind. A catch is
+# priced from the cartridge's encounter odds in planning/cost.py instead. A project stands down once
+# it spent three times its expected frames, travel included, without progress. Training keeps its own
+# clock and a marathon its race clock.
+EXPECTED_FRAMES = {'rematch': 100000, 'special': 60000, 'evolve': 60000, 'other': 12000}
+# Frames a training step is expected to take per point of experience, heals included. A flat price per
+# level made a level 50 Dragonair's step look as cheap as a level 25 partner's, though it needs four
+# times the experience, and Red's heal share rose from 1% to 9% while it trained on Route 23. Postgame
+# training on three Red and three Yellow saves took about 36000 frames for a level near 50.
+FRAMES_PER_EXPERIENCE = 5
+# The tier of a hunt for another copy of a registered species, a quality or a plain repeat, so a family
+# still short of its level 100 credit trains first. At the approved weights a quality catch earns about
+# ten times what a training step earns per frame, and Red's training share fell from 57% to 2% while its
+# hunts walked to marts and PCs. The trade-off is set out in docs/design/planner-systems.md.
+HUNT_TIER = Tier.FILLER
+# Fewest uses a trainee's attacking moves must hold between heals. A Red Chansey whose only attack was
+# Double Slap, 10 uses, trained for 600000 frames and walked to the Pokémon Center a hundred times.
+TRAINING_PP = 20
 
 
 def budgeted(project):
     return project['method'] not in ('train', 'marathon')
 
 
-def expected_frames(project):
-    if project['method'] == 'rematch':
+def kind_frames(project, wild=None):
+    """What a project is expected to take once there. ``wild`` is the cartridge's WildOdds, or None to
+    price a catch with the unpriced estimate."""
+    method = project['method']
+    if method in REPEATABLE and project.get('map') is not None:
+        return cost.catch_frames(wild, method, project['map'], project['species'],
+                                 needed=project.get('catch_goal', 1), rod=project.get('rod'))
+    if method == 'rematch':
         return EXPECTED_FRAMES['rematch']
-    if legendary_project(project) or project.get('event_return') or project['method'] in ('trade', 'fossil'):
+    if legendary_project(project) or project.get('event_return') or method in ('trade', 'fossil'):
         return EXPECTED_FRAMES['special']
-    if project['method'] == 'evolve':
+    if method == 'evolve':
         return EXPECTED_FRAMES['evolve']
-    return EXPECTED_FRAMES['dv_hunt' if project.get('dv_hunt') else 'other']
+    return EXPECTED_FRAMES['other']
+
+
+def expected_frames(project):
+    """The frames expected to ``project``'s first catch or its end, travel included, kept when it was
+    chosen. A project from an older save, chosen before they were kept, is priced again without the walk."""
+    if project.get('expected_frames') is not None:
+        return project['expected_frames']
+    return kind_frames({**project, 'catch_goal': 1})
 
 
 def shadow_kind(project):
-    """The kind of a project for the audit's share by would-have-chosen kind."""
+    """The kind of a project for the audit's share by chosen kind."""
     kind = category(project)
     if kind == 'collection':
         return 'collection quality' if project.get('dv_hunt') else 'collection repeat' if (
@@ -65,14 +94,32 @@ def shadow_kind(project):
     return kind
 
 
-def shadow_candidate(project, travel, tails, short, owned):
-    """The arbiter's candidate for a project, for shadow mode only.
+def can_train(mon):
+    """True unless ``mon``'s attacking moves hold fewer than TRAINING_PP uses between heals. A row
+    without its moves, from an older snapshot, is not judged."""
+    moves = mon.get('moves')
+    if moves is None:
+        return True
+    return sum(MOVES.get(move, {}).get('pp', 0) for move in moves if MOVES.get(move, {}).get('power')) >= TRAINING_PP
 
-    Values come from planning/values.py. Expected frames are the per-kind EXPECTED_FRAMES, or the
-    training and marathon clocks, plus the walk to the project at the shared tile estimate in
-    planning/cost.py. Step 5 of the planner design swaps in encounter odds from Core's ROM wild
-    tables, pokecore.romdata.load(rom).encounters, which carry randomizer overrides, so no committed
-    Gen I table is read here.
+
+def training_frames(project):
+    """The frames ``project``'s training step is expected to take, from the experience its trainee's
+    growth rate needs between the two levels."""
+    growth = SPECIES.get(project.get('parent'), {}).get('growth')
+    needed = (experience_at_level(project['target_level'], growth)
+              - experience_at_level(project['initial_level'], growth))
+    return max(0, needed) * FRAMES_PER_EXPERIENCE
+
+
+def candidate(project, travel, tails, short, owned, wild=None):
+    """The arbiter's candidate for a project.
+
+    Values come from planning/values.py. Expected frames are the walk to the project at the shared
+    tile estimate in planning/cost.py, plus a catch priced from ``wild``, the cartridge's own encounter
+    odds, or the per-kind EXPECTED_FRAMES, the training step at FRAMES_PER_EXPERIENCE or the race clock. A
+    quality hunt is worth each catch's expected drop in the species' best DV tail, once per catch. A
+    hunt for another copy of a registered species sits in HUNT_TIER, below training for a credit.
     """
     method, sid = project['method'], project.get('species')
     tier = Tier.PROGRESS
@@ -81,9 +128,11 @@ def shadow_candidate(project, travel, tails, short, owned):
         value = values.rematch(short)
     elif method in ('marathon', 'explore', 'trainer'):
         tier, value = Tier.FILLER, values.SMALL
+    elif method == 'train' and project.get('mastery_needed'):
+        value = values.level_step(project['initial_level'], project['target_level'])
     elif method == 'train':
-        value = (values.level_step(project['initial_level'], project['target_level'])
-                 if project.get('mastery_needed') else values.SMALL)
+        # A family with its level 100 credit gains nothing the Pokédex counts, so its training is filler.
+        tier, value = Tier.FILLER, values.SMALL
     elif legendary_project(project):
         # A returned legendary the Pokédex already has is a repeat, not an entry.
         value = values.NEW_ENTRY if dex(sid) not in owned else values.SMALL
@@ -91,15 +140,15 @@ def shadow_candidate(project, travel, tails, short, owned):
         # A rod or the Old Amber opens new entries, and a needed repeat is another adventure's entry.
         value = values.NEW_ENTRY
     elif project.get('dv_hunt') and tails.get(sid) is not None:
-        value = values.quality_catch(tails[sid] / 100)
+        tier, value = HUNT_TIER, values.quality_catch(tails[sid] / 100) * project.get('catch_goal', 1)
     else:
-        value = values.SMALL
+        tier, value = (HUNT_TIER if project.get('repeat') else tier), values.SMALL
     if method == 'train':
-        frames = training.TRAINING_BUDGET
+        frames = training_frames(project)
     elif method == 'marathon':
         frames = marathon.BUDGET
     else:
-        frames = expected_frames(project)
+        frames = kind_frames(project, wild)
     frames += (travel or 0) * FRAMES_PER_TILE
     return Candidate(project.get('key', method), tier, value, frames, goal=shadow_kind(project))
 
@@ -342,10 +391,14 @@ class Collection:
         self.version = 'red'
         self.project = None
         self.remaining = 0
-        self.cooldown = 0
         self.elapsed = 0
         self.last_frame = None
-        self.last_choice = -600
+        # The cartridge's encounter odds, which the host attaches once per adventure. None prices
+        # every catch with the unpriced estimate.
+        self.wild = None
+        # What the game looked like when the last plan found nothing to do. The plan is not drawn
+        # again until something in it changes.
+        self.idle_token = None
         self.report = {}
         self.report_key = None
         self.eevee_choice = 134
@@ -379,20 +432,6 @@ class Collection:
         self.peer_demand = dict(requests)
         self.demand_until = time.monotonic() + 180
 
-    def capture_weight(self, snapshot, species):
-        count = held_count(snapshot, species)
-        needed = self.demand().get(dex(species), 0)
-        if dex(species) not in snapshot.owned:
-            return 8.0
-        if count < needed:
-            return 12.0 / (1 + count)
-        if not count:
-            return 2.0
-        weight = (1.5 if dex(species) not in self.milestones.get('perfect_species', ()) else 0.75) / (1 + min(count, 10) / 10)
-        if self.elapsed - self.last_repeat.get(str(species), -216000) < 216000:
-            weight *= 0.05
-        return weight
-
     def repeat_target(self, species, map_id=None):
         if dex(species) in getattr(self, 'returned_legendaries', ()):
             return species
@@ -402,7 +441,7 @@ class Collection:
         return project.get('species') if project.get('repeat') else None
 
     def state_dict(self):
-        return {**{k:getattr(self,k) for k in ('project','remaining','cooldown','elapsed','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','next_marathon','marathon_records','activity_events')},
+        return {**{k:getattr(self,k) for k in ('project','remaining','elapsed','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','next_marathon','marathon_records','activity_events')},
                 'director': self.director.state_dict()}
 
     @property
@@ -479,10 +518,7 @@ class Collection:
         self.report_key = None
         self.progress_token = None
         self.was_in_battle = False
-        # A reload rewinds `elapsed` to the checkpoint's value while `last_choice` keeps the
-        # in-memory high-water mark. Left alone, the spacing guard in choose() would then hold
-        # for as long as the rewind and the planner would pick nothing at all.
-        self.last_choice = min(self.last_choice, self.elapsed - 600)
+        self.idle_token = None
 
     def abandon(self, reason):
         if not self.project:
@@ -496,8 +532,7 @@ class Collection:
         self.history = (self.history + [f'Changed plan: {label}. {reason}'])[-6:]
         self.project = None
         self.remaining = 0
-        self.cooldown = 0
-        self.last_choice = self.elapsed - 600
+        self.idle_token = None
         self.idle_frames = 0
         self.project_maps = []
         self.project_flags = []
@@ -586,7 +621,6 @@ class Collection:
         delta = max(0,min(120,s.frame - self.last_frame)) if self.last_frame is not None else 0
         self.last_frame = s.frame
         self.elapsed += delta
-        self.cooldown = max(0,self.cooldown-delta)
         self.completed_champion |= champion(s)
         for chosen, flag in ((106, 'EVENT_GOT_HITMONLEE'), (107, 'EVENT_GOT_HITMONCHAN')):
             if event_set(s.event_flags, flag):
@@ -748,7 +782,6 @@ class Collection:
                 self.director.finish(project, self.elapsed, bool(finished),
                                      'Target reached' if finished else 'Expedition time budget reached', progressed)
                 self.project = None
-                self.cooldown = 1200 if self.completed_champion else PROJECT_COOLDOWN
             elif idle.stand_down and not s.in_battle:
                 self.abandon('No encounter, training gain, or new route in two minutes')
         key = (s.owned, s.items, s.stored_pokemon, tuple((p.species,p.level) for p in s.party), s.event_flags, s.hidden_objects, self.completed_champion, self.version)
@@ -872,6 +905,20 @@ class Collection:
                 'marathon': marathon.details(self.marathon_records, self.project),
                 'reason':'Collect, evolve, train, and explore in bounded projects. Repeated failures wait longer before retrying.'}
 
+    def marathon_due(self, s, nav):
+        return (self.elapsed >= self.next_marathon and s.saffron_open and nav.can_cut
+                and sum(self.director.completed.values()) >= 4)
+
+    def plan_token(self, s):
+        """What the plan reads that can turn up a new project: the Pokédex, the bag, the boxes, the
+        party, the event flags, the map, the projects still standing down, the marathon's turn, the
+        purse and the other adventures' requests."""
+        from .ledger import funds_short
+        stood = self.director.monitor._table(STOOD_DOWN)
+        return (s.owned, s.items, s.stored_pokemon, tuple((p.species, p.level) for p in s.party), s.event_flags,
+                s.map, frozenset(key for key in stood if self.director.waiting(key, self.elapsed)),
+                self.elapsed >= self.next_marathon, funds_short(s), tuple(sorted(self.demand().items())))
+
     def choose(self,s,nav,rng,main):
         from ..trade.preferences import identity
         if s.map in LEAGUE or not s.party or not s.owned or not event_set(s.event_flags,'EVENT_GOT_POKEDEX') or main.key.startswith(('heal','party_','teach_','restock')):
@@ -886,14 +933,14 @@ class Collection:
             return None
         if self.project:
             return self.goal(s)
-        if self.cooldown or self.elapsed-self.last_choice < 600:
+        token = self.plan_token(s)
+        if token == self.idle_token:
             return None
-        self.last_choice = self.elapsed
         bag = dict(s.items)
         held = [(p.species,p.level,None) for p in s.party] + [(sid,level,box) for box,sid,level,nick in s.stored_pokemon]
         candidates = []
         travel = {}
-        def add(project,weight):
+        def add(project):
             key = str(project.get('species',0)) + ':' + project['method'] + ':' + str(project.get('map',0)) + ':' + str(project.get('fragment',''))
             if legendary_project(project):
                 key = f'legendary:{project["species"]}:{project["map"]}'
@@ -913,9 +960,8 @@ class Collection:
                             return
                         preparation = distance + 80 if project.get('box') is not None else 0
                         project['travel_distance'] = work_distance + preparation
-                        weight /= 1 + project['travel_distance'] / 80
                     travel[key] = project.get('travel_distance', distance)
-                    candidates.append((weight,{**project,'key':key}))
+                    candidates.append({**project,'key':key})
         sources = self.sources()
         held_individuals = [asdict(mon) for mon in s.party] + s.storage_entries()
         best_tails = {}
@@ -982,28 +1028,22 @@ class Collection:
                     project.update(repeat=True, initial_count=held_count(s, sid),
                                    catch_goal=1 if project['needed_capture'] else 3,
                                    dv_hunt=not project['needed_capture'],
-                                   last_hunt=self.last_hunt.get(str(sid), -1),
-                                   capture_priority=self.capture_weight(s, sid))
-                    tail = best_tails.get(sid)
-                    project['quality_search_needed'] = bool(tail is not None and tail > GOOD_TAIL * 100
-                                                            and self.quality_searches.get(str(sid), 0) < SEARCH_BUDGET)
-                    if tail is not None:
-                        project['capture_priority'] *= max(0.1, min(3, tail / (GOOD_TAIL * 100)))
+                                   last_hunt=self.last_hunt.get(str(sid), -1))
                 if offered is not None:
                     project.update(parent=source['give'], box=offered.get('box'),
                                    give_key=identity(offered))
                 if legendary_project(project):
                     project['legendary'] = True
                     if dex(sid) in getattr(self, 'returned_legendaries', ()):
-                        project.update(legendary_return=True, repeat=True, initial_count=held_count(s, sid), catch_goal=1)
+                        project.update(legendary_return=True, repeat=True, initial_count=held_count(s, sid), catch_goal=1,
+                                       needed_capture=dex(sid) not in s.owned)
                 goal = self.project_goal(s,project)
                 if not goal or not goal.targets:
                     continue
                 distance = distance_to(goal.targets)
                 if distance is None:
                     continue
-                weight = self.capture_weight(s, sid) if mode in REPEATABLE else 5 if mode in ('gift','fossil','static') else 1
-                add(project, 5 if legendary_project(project) else weight / (1+distance/40))
+                add(project)
         individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
         preferences = self.trade_preferences()
         best_potential = {}
@@ -1044,8 +1084,8 @@ class Collection:
                            'perfect_partner': is_perfect(mon)}
                 if key and len(self.partner_matches(s, project)) != 1:
                     continue
-                add(project, 3)
-        huntable = {p['species'] for _, p in candidates if p.get('dv_hunt')}
+                add(project)
+        huntable = {p['species'] for p in candidates if p.get('dv_hunt')}
         counts = Counter(sid for sid, level, box in held)
         individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
         preferences = self.trade_preferences()
@@ -1071,6 +1111,8 @@ class Collection:
                 continue
             if box is not None and not partner_exchange_possible(s):
                 continue
+            if not can_train(mon):
+                continue
             # Prefer missing evolutions before a general level milestone for this partner. A stone
             # counts too: a Weepinbell was being trained to level 100 with Victreebel unregistered.
             if any(evo['method'] != 'trade' and dex(evo['species']) not in s.owned for evo in EVOS.get(sid, [])):
@@ -1088,22 +1130,20 @@ class Collection:
                  'investment_priority': investment['priority'],
                  'investment_reason': investment['reason'],
                  'perfect_partner': is_perfect(mon),
-                 'mastery_needed': any(level_credit(relative) - set(self.milestones.get('level_100', ())) for relative in family)},
-                investment['weight'])
-        if (self.elapsed >= self.next_marathon and s.saffron_open and nav.can_cut
-                and sum(self.director.completed.values()) >= 4):
-            add(marathon.candidate(), 1)
+                 'mastery_needed': any(level_credit(relative) - set(self.milestones.get('level_100', ())) for relative in family)})
+        if self.marathon_due(s, nav):
+            add(marathon.candidate())
         from .ledger import funds_short
         short = funds_short(s)
-        add({'method':'rematch','hof_count':s.hall_of_fame_count}, 10 if short else 2)
+        add({'method':'rematch','hof_count':s.hall_of_fame_count})
         porygon = next(sid for sid,mon in SPECIES.items() if mon['dex']==137)
         if 137 not in s.owned and (s.money >= 20000 or s.coins >= PORYGON_COINS.get(self.version, 9999)):
-            add({'method':'prize','species':porygon,'map':MAPS['GAME_CORNER_PRIZE_ROOM']},0.5)
+            add({'method':'prize','species':porygon,'map':MAPS['GAME_CORNER_PRIZE_ROOM']})
         for trainer in DATA.get('trainers',[]):
             if trainer['map'] in LEAGUE or event_set(s.event_flags,trainer['flag']):
                 continue
             if trainer['map'] == s.map:
-                add(dict(trainer,method='trainer'),1.5)
+                add(dict(trainer,method='trainer'))
         unseen = []
         visited = {m for m,x,y in nav.visits}
         for m,w in WORLD.items():
@@ -1115,32 +1155,35 @@ class Collection:
         rng.shuffle(unseen)
         for m,target in unseen[:8]:
             if distance_to((target,)) is not None:
-                add({'method':'explore','map':m,'target':target},0.3)
+                add({'method':'explore','map':m,'target':target})
                 break
         for rod,room in RODS.items():
             if not bag.get(ITEMS[rod]):
-                add({'method':'rod','item':rod,'map':MAPS[room],'room':room},2)
+                add({'method':'rod','item':rod,'map':MAPS[room],'room':room})
         if not bag.get(ITEMS['OLD_AMBER']) and 142 not in s.owned:
             if not event_set(s.event_flags,'EVENT_GOT_OLD_AMBER'):
-                add({'method':'amber','item':'OLD_AMBER','map':MAPS['MUSEUM_1F']},1)
+                add({'method':'amber','item':'OLD_AMBER','map':MAPS['MUSEUM_1F']})
         fossil = getattr(self, 'returned_events', {}).get('fossil')
         if fossil and not bag.get(ITEMS[fossil['item']]):
             add({'method': 'return_fossil', 'map': fossil['room'], 'item': fossil['item'],
-                 'event_return': 'fossil'}, 5)
-        offered = candidates
-        if any(project.get('needed_capture') for weight, project in candidates):
-            candidates = [(weight, project) for weight, project in candidates
-                          if not project.get('repeat') or project.get('needed_capture')]
-        if not candidates:
-            self.cooldown = 3600
+                 'event_return': 'fossil'})
+        projects = {project['key']: project for project in candidates}
+        options = [candidate(project, travel.get(project['key']), best_tails, short, s.owned, self.wild)
+                   for project in candidates]
+        self.project = self.director.select(options, projects)
+        if self.project is None:
+            # Nothing to do until the game changes, so the plan is not drawn again until then.
+            self.idle_token = token
             return None
-        self.project = self.director.select(candidates, rng, urgent=short)
+        # A catch is progress that gives the budget back, so a hunt's budget covers its first catch.
+        self.project['expected_frames'] = ((travel.get(self.project['key']) or 0) * FRAMES_PER_TILE
+                                           + kind_frames({**self.project, 'catch_goal': 1}, self.wild))
         shadow = getattr(self, 'shadow', None)
         if shadow is not None:
+            # The arbiter decides here, so this point always agrees. The overworld chain around it
+            # still reuses these candidates for its own comparison.
             shadow.changed('collection', self.project['key'])
-            shadow.compare('collection', lambda: [shadow_candidate(project, travel.get(project['key']), best_tails, short,
-                                                                   s.owned) for _, project in offered],
-                           self.project['key'])
+            shadow.compare('collection', lambda: options, self.project['key'])
         if self.project['method'] == 'rematch':
             self.prepare_league_rotation(s)
         if self.project['method'] == 'marathon':

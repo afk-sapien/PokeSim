@@ -5,7 +5,8 @@ import random
 
 import pytest
 
-from pokesim.policies.collection import Collection
+from pokesim.policies.collection import Collection, candidate
+from pokesim.policies.director import AdventureDirector
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
 from pokesim.policies.strategic import StrategicPolicy
@@ -64,7 +65,7 @@ def test_planner_includes_trade_from_a_boxed_reserve(target, give):
     c = Collection()
     c.completed_champion = True
     c.sources = lambda: {sid(target): [trade(Collection(), target)]}
-    c.director.select = lambda candidates, rng, urgent: next(p for _, p in candidates if p['method'] == 'trade')
+    c.director.select = lambda options, projects: next(p for p in projects.values() if p['method'] == 'trade')
     nav = Navigator()
     nav.distance_lookup = Mock(return_value=lambda targets: 10)
     s = with_storage(state(), stored(give))
@@ -159,8 +160,8 @@ def test_planner_only_offers_selected_dojo_gift(chosen):
     all_sources = c.sources()
     c.sources = lambda: {sid(d): all_sources[sid(d)] for d in (106, 107)}
     candidates_seen = []
-    def select(candidates, rng, urgent):
-        candidates_seen.extend(p for _, p in candidates if p['method'] == 'gift')
+    def select(options, projects):
+        candidates_seen.extend(p for p in projects.values() if p['method'] == 'gift')
         return candidates_seen[0]
     c.director.select = select
     nav = Navigator()
@@ -257,13 +258,26 @@ def test_completed_travel_battles_keep_npc_expedition_alive():
     assert c.idle_frames < 600
 
 
+def test_the_dojo_gift_outranks_a_quality_hunt_and_its_budget_covers_the_visit():
+    c = Collection()
+    c.dojo_choice = 106
+    source = dict(c.sources()[sid(106)][0], species=sid(106), key='43:gift:177:HITMONLEE')
+    hunt = {'method': 'grass', 'species': sid(16), 'map': 12, 'key': 'hunt', 'repeat': True, 'dv_hunt': True,
+            'catch_goal': 3}
+    options = [candidate(project, 300, {sid(16): 100}, False, {16, 106}) for project in (source, hunt)]
+    assert AdventureDirector.select(options, {'43:gift:177:HITMONLEE': source, 'hunt': hunt}) is source
+    # Yellow's Dojo visits took 16000 to 41000 frames from 300 tiles away. The budget is three times
+    # what the visit is expected to take.
+    assert 3 * options[0].expected_frames > 41000
+
+
 def test_owned_dojo_species_does_not_skip_its_unclaimed_gift():
     c = Collection()
     c.completed_champion = True
     c.dojo_choice = 107
     source = c.sources()[sid(107)][0]
     c.sources = lambda: {sid(107): [source]}
-    c.director.select = lambda candidates, rng, urgent: next(p for _, p in candidates if p['method'] == 'gift')
+    c.director.select = lambda options, projects: next(p for p in projects.values() if p['method'] == 'gift')
     nav = Navigator()
     nav.distance_lookup = Mock(return_value=lambda targets: 10)
     s = state(owned=frozenset({1, 107}))

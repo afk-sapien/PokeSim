@@ -32,6 +32,8 @@ class HeadlessRun:
         profile = identify(rom.read_bytes())
         self.rom_sha1, self.game = profile.sha1, profile.game
         self.data = GameData.load(data_root, self.game)
+        from ..planning.cost import gen2_cartridge_rows
+        self.data.encounters = gen2_cartridge_rows(rom, self.game, self.data.encounters)
         self.pb = boot(str(rom), sound=False)
         self.pb.set_emulation_speed(0)
         follow_game_time(self.pb)

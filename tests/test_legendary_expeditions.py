@@ -4,22 +4,26 @@ from dataclasses import replace
 from unittest.mock import Mock
 
 from pokesim.policies.battle import choose_battle, shopping_item
-from pokesim.policies.collection import Collection
-from pokesim.policies.director import AdventureDirector, category
+from pokesim.planning import values
+from pokesim.planning.cost import FRAMES_PER_TILE
+from pokesim.policies.collection import EXPECTED_FRAMES, Collection, candidate
+from pokesim.policies.director import AdventureDirector, category, new_entry
 from pokesim.policies.progression import Goal
 from pokesim.strategy_data import ITEMS, MAPS
 from test_collection import sid, state
 from test_strategy import mon
 
 
-def test_mewtwo_is_a_distinct_priority_and_rotates_after_repeated_attempts():
+def test_mewtwo_is_a_new_entry_only_while_unowned_and_waits_after_a_stand_down():
     director = AdventureDirector()
     target = {'method': 'static', 'species': sid(150), 'legendary': True, 'key': 'mewtwo'}
-    nearby = {'method': 'grass', 'species': sid(16), 'key': 'pidgey'}
-    assert category(target) == 'legendary'
-    for _ in range(2):
-        director.select([(1, target)], random.Random(1))
-    assert director.select([(1000, target), (1, nearby)], random.Random(1)) == nearby
+    assert category(target) == 'legendary' and new_entry(target)
+    returned = {**target, 'repeat': True, 'needed_capture': False}
+    assert not new_entry(returned) and new_entry({**returned, 'needed_capture': True})
+    assert candidate(target, 0, {}, False, set()).value == values.NEW_ENTRY
+    assert candidate(target, 0, {}, False, {150}).value == values.SMALL
+    director.finish(target, 0, False, 'No encounter')
+    assert director.waiting('mewtwo', 1)
 
 
 def test_mewtwo_project_has_a_longer_budget_and_new_retry_key(monkeypatch):
@@ -29,14 +33,16 @@ def test_mewtwo_project_has_a_longer_budget_and_new_retry_key(monkeypatch):
     c.director.monitor.stand_down('131:static:227:MEWTWO', c.elapsed)
     monkeypatch.setattr(c, 'sources', lambda: {sid(150): [{'map': MAPS['CERULEAN_CAVE_B1F'],
                     'method': 'static', 'fragment': 'MEWTWO', 'flag': 'EVENT_BEAT_MEWTWO'}]})
-    monkeypatch.setattr(c.director, 'select', lambda rows, *args, **kw: next(p for w,p in rows if p.get('legendary')))
+    monkeypatch.setattr(c.director, 'select', lambda options, projects: next(
+        p for p in projects.values() if p.get('legendary')))
     nav = Mock()
     nav.distance_lookup.return_value = lambda targets: 900
     nav.visits = []
     c.choose(state(), nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
     assert c.project['species'] == sid(150)
     assert c.project['key'] == 'legendary:131:227'
-    assert c.remaining == 180000
+    # Three times the walk and the special project's own frames.
+    assert c.remaining == 3 * (900 * FRAMES_PER_TILE + EXPECTED_FRAMES['special'])
 
 
 def test_expedition_shops_for_ultra_balls_instead_of_cheaper_balls():

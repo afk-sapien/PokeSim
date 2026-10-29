@@ -3,7 +3,7 @@ import random
 from dataclasses import replace
 from unittest.mock import Mock
 
-from pokesim.policies.collection import Collection, training_targets
+from pokesim.policies.collection import Collection, candidate, training_targets
 from pokesim.policies.director import AdventureDirector
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
@@ -12,16 +12,18 @@ from test_collection import sid, state
 from test_strategy import flags, mon
 
 
-def test_restarts_preserve_category_rotation_and_repeated_failure_backoff():
+def pick(director, *projects):
+    """The director's pick among ``projects``, each a (Candidate, project) pair."""
+    return director.select([option for option, _ in projects], {option.key: project for option, project in projects})
+
+
+def test_restarts_preserve_repeated_failure_backoff_and_ignore_the_old_recent_picks():
     director = AdventureDirector()
     catch = {'method': 'grass', 'species': sid(16), 'key': 'pidgey', 'repeat': True}
-    train = {'method': 'train', 'parent': sid(113), 'key': 'chansey'}
-    director.select([(1, catch)], random.Random(1))
-    director.select([(1, catch)], random.Random(1))
     first_retry = director.finish(catch, 0, False, 'No encounter')
     restored = AdventureDirector()
-    restored.load(json.loads(json.dumps(director.state_dict())))
-    assert restored.select([(1000, catch), (1, train)], random.Random(1)) == train
+    restored.load({**json.loads(json.dumps(director.state_dict())), 'recent': [{'category': 'collection', 'key': 'pidgey'}]})
+    assert 'recent' not in restored.state_dict()
     second_retry = restored.finish(catch, first_retry, False, 'No encounter')
     assert second_retry - first_retry == 120000
     assert restored.outcomes[-1]['reason'] == 'No encounter'
@@ -33,14 +35,16 @@ def test_restarts_preserve_category_rotation_and_repeated_failure_backoff():
 def test_a_rematch_waits_behind_every_other_project_unless_money_is_short():
     rematch = {'method': 'rematch', 'hof_count': 3, 'key': 'rematch'}
     explore = {'method': 'explore', 'map': 1, 'target': (1, 2, 3), 'key': 'explore'}
-    train = {'method': 'train', 'parent': sid(113), 'key': 'chansey'}
-    for seed in range(50):
-        director = AdventureDirector()
-        # Two rematch-free turns of training would hand the next turn to another category.
-        director.recent = [{'category': 'training', 'key': 'chansey'}] * 2
-        assert director.select([(1000, rematch), (0.1, explore), (1, train)], random.Random(seed)) != rematch
-    assert AdventureDirector().select([(1, rematch)], random.Random(1)) == rematch
-    assert AdventureDirector().select([(1, rematch), (1, train)], random.Random(1), urgent=True) == rematch
+    train = {'method': 'train', 'parent': sid(113), 'key': 'chansey', 'initial_level': 50, 'target_level': 60,
+             'mastery_needed': True}
+    rows = [(candidate(project, 0, {}, False, set()), project) for project in (rematch, explore, train)]
+    assert pick(AdventureDirector(), *rows) == train
+    # A filler explore goes before a rematch, which takes the longest.
+    assert pick(AdventureDirector(), *rows[:2]) == explore
+    assert pick(AdventureDirector(), rows[0]) == rematch
+    short = [(candidate(project, 0, {}, True, set()), project) for project in (rematch, train)]
+    assert pick(AdventureDirector(), *short) == rematch
+    assert AdventureDirector().select([], {}) is None
 
 
 def test_productive_training_hard_limit_is_advanced_and_does_not_escalate_failure():
@@ -127,8 +131,8 @@ def test_full_dex_still_selects_training_and_level_100_has_no_training_candidate
               owned=frozenset(range(1, 152)), party=(mon(species=sid(113), level=99),),
               items=tuple((ITEMS[item], 10) for item in ('POKE_BALL', 'OLD_ROD', 'GOOD_ROD', 'SUPER_ROD')))
     c.observe(s)
-    c.director.select = Mock(side_effect=lambda candidates, rng, urgent=False:
-                             next(project for weight, project in candidates if project['method'] == 'train'))
+    c.director.select = Mock(side_effect=lambda candidates, projects:
+                             next(project for project in projects.values() if project['method'] == 'train'))
     goal = c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
     assert goal.key == 'collect_train'
     assert c.project['target_level'] == 100
@@ -138,7 +142,7 @@ def test_full_dex_still_selects_training_and_level_100_has_no_training_candidate
     c.observe(s)
     c.director.select = Mock(wraps=c.director.select)
     assert c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan')).key in ('collect_rematch', 'collect_hunt')
-    assert all(project['method'] != 'train' for weight, project in c.director.select.call_args.args[0])
+    assert all(project['method'] != 'train' for project in c.director.select.call_args.args[1].values())
     assert c.project['method'] != 'train'
 
 

@@ -820,10 +820,6 @@ class StrategicPolicy(Policy):
             self.progress_frame = s.frame
             self.goal_distance = None
         if goal.key == 'collect_plan':
-            if 0 < self.collection.cooldown <= 1200:
-                self.mode = 'planning the next expedition'
-                self.watch.expected = None
-                return wait()
             self.mode = 'exploring between expeditions'
             self.watch.expected = None
             options = [(dr, target) for dr, target in self.nav.neighbors(pos, s.frame)
@@ -1440,8 +1436,7 @@ class StrategicPolicy(Policy):
             self.pickups.defer(self.collection.elapsed, 'Pickup approach was stationary too long')
         else:
             self.collection.abandon('The run was stationary too long')
-        self.collection.cooldown = 0
-        self.collection.last_choice = self.collection.elapsed - 600
+        self.collection.idle_token = None
         self._remember_failure(snapshot, 'Stationary objective abandoned without reloading')
         self.on_restore()
         self.recoveries += 1

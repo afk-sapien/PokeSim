@@ -151,7 +151,8 @@ def test_owned_legendary_return_is_planned_and_finished_by_receipt(monkeypatch):
     c.elapsed = 2000
     monkeypatch.setattr(c, 'sources', lambda: {sid(150): [{'map': MAPS['CERULEAN_CAVE_B1F'],
                     'method': 'static', 'fragment': 'MEWTWO', 'flag': 'EVENT_BEAT_MEWTWO'}]})
-    monkeypatch.setattr(c.director, 'select', lambda rows, *args, **kw: next(p for _, p in rows if p.get('legendary_return')))
+    monkeypatch.setattr(c.director, 'select', lambda options, projects: next(
+        p for p in projects.values() if p.get('legendary_return')))
     nav = Mock()
     nav.distance_lookup.return_value = lambda _: 20
     nav.visits = []

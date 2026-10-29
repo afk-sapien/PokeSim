@@ -77,7 +77,8 @@ def test_hunt_deadline_survives_restart_and_yields_to_story():
     restored.observe(state(frame=160))
     assert restored.project is None
     assert restored.director.waiting('hunt', restored.elapsed)
-    assert restored.cooldown > 0
+    # The stand-down is the only wait. The plan is drawn again at once, without the hunt.
+    assert restored.idle_token is None
 
 
 def test_capture_completes_project_and_records_progress():
@@ -333,18 +334,36 @@ def test_grass_targets_use_the_tilesets_own_grass_tile():
 
 
 def test_reload_rewind_does_not_silence_the_planner():
-    """A reload restores an older `elapsed`; the in-memory spacing guard must rewind with it.
+    """A reload forgets that the last plan found nothing to do, so the next one is drawn afresh.
 
-    Otherwise `elapsed - last_choice` stays negative for as long as the rewind, choose() declines
-    to plan, the collect_plan goal waits, and the run stands still until the next reload rewinds
-    it again — a loop the live Blue run spent half an hour in on 2026-09-14.
+    An in-memory guard that outlived a reload once kept choose() from planning, the collect_plan goal
+    waited, and the run stood still until the next reload. The live Blue run spent half an hour in that
+    loop on 2026-09-14.
     """
     c=Collection()
     c.elapsed=2_000_000
-    c.last_choice=c.elapsed            # as if it had just planned
-    older=dict(c.state_dict(),elapsed=1_400_000)
-    c.load(older)
-    assert c.elapsed - c.last_choice >= 600
+    c.idle_token=('as if the last plan', 'found nothing')
+    c.load(dict(c.state_dict(),elapsed=1_400_000))
+    assert c.idle_token is None
+
+
+def test_an_empty_plan_is_not_drawn_again_until_the_game_changes():
+    from unittest.mock import Mock
+    c = Collection()
+    c.completed_champion = True
+    nav = Navigator()
+    nav.distance_lookup = Mock(return_value=lambda targets: 0 if targets else None)
+    c.director.select = Mock(return_value=None)
+    s = state(map=MAPS['ROUTE_1'], money=100000)
+    c.observe(s)
+    main = Goal('collect_plan', 'Plan', 'Plan')
+    assert c.choose(s, nav, random.Random(1), main) is None
+    assert c.choose(s, nav, random.Random(1), main) is None
+    assert c.director.select.call_count == 1
+    # A new item in the bag can open a project, so the plan is drawn again.
+    more = replace(s, items=s.items + ((ITEMS['OLD_ROD'], 1),))
+    assert c.choose(more, nav, random.Random(1), main) is None
+    assert c.director.select.call_count == 2
 
 
 def test_moving_between_familiar_maps_cannot_extend_a_failed_expedition():
@@ -422,7 +441,7 @@ def test_stationary_recovery_abandons_project_without_losing_game_progress():
     p.recover_stall(state(frame=300))
     assert p.collection.project is None
     assert p.collection.director.waiting('ditto', p.collection.elapsed)
-    assert p.collection.elapsed - p.collection.last_choice >= 600
+    assert p.collection.idle_token is None
     assert p.recoveries == 1
 
 
