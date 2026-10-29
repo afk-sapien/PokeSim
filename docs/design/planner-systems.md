@@ -237,6 +237,7 @@ The lead approved the plan as picked and confirmed these on 2026-10-29.
 
 #### As built
 
+- Step 2 is #195. `planning/cost.py` owns `search_expected` with per-map, per-battle and slot chance costs. The generated Gen I table `policies/wild.py` is temporary. The lead ruled that core's rule is no committed game tables, and randomized adventures change the encounters, so step 5 switches `cost.py` to core's ROM wild tables (grass, water and rod slots, randomizer overrides applied) for both generations, fills the fishing gap that way and deletes `policies/wild.py` and `tools/gen1_wild.py`. A missing core accessor is asked of core and released before the repin.
 - Step 1 is #194. `planning/arbiter.py` ranks by tier, then value over expected plus interrupt frames, with ties on key. Passive candidates are never ranked, and an empty or all-passive list chooses nothing. `compare` names how the arbiter's pick differs from the chosen key. The seeded 18-run batch was byte-identical to the aac30ee baseline.
 
 ### S4. Progress monitor with backoff (cause C)
