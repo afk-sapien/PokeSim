@@ -1,12 +1,13 @@
-# Release status: 0.5.3 prepared for publication
+# Release status: 0.6.0 prepared for publication
 
-PokeSim 0.5.3 is a patch on 0.5.2 that finishes the worker memory fix ([#111](https://github.com/afk-sapien/PokeSim/issues/111)),
-steadies browser sound, fixes a Gen II reset stall and two trade failures, and adds floating `latest`
-and `0.5` image tags ([#115](https://github.com/afk-sapien/PokeSim/issues/115)). See the
-[release notes](docs/release-notes.md). The publication workflow must verify the exact tagged commit,
-build the packages and container, and verify the uploaded assets before making the release public.
-The publication receipt is recorded after that succeeds. PokeSim 0.5.2 was published on October 21,
-2026 ([notes](docs/release-0.5.2.md), [receipt](docs/validation/release-0.5.2.json)).
+PokeSim 0.6.0 replaces the planner's timers and special cases with one shared arbiter in all six
+games, adds randomized adventures ([#107](https://github.com/afk-sapien/PokeSim/issues/107)), caps
+journal attachments and compresses Gold, Silver and Crystal journal saves
+([#227](https://github.com/afk-sapien/PokeSim/issues/227)), and moves to pokecore 0.10.2 and
+PyBoy RS 0.1.4. See the [release notes](docs/release-notes.md). The publication workflow must verify
+the exact tagged commit, build the packages and container, and verify the uploaded assets before
+making the release public. The publication receipt is recorded after that succeeds. PokeSim 0.5.3
+was published on October 23, 2026 ([notes](docs/release-0.5.3.md)).
 
 0.5.0 moves every adventure to the Rust emulator (PyBoy RS 0.1.2 through Core 0.7.0) and adds
 Gold, Silver and Crystal. See the [0.5.0 release notes](docs/release-0.5.0.md). Core and PyBoy RS

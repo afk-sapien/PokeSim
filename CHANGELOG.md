@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - Count a Kanto Marathon checkpoint as progress in Red, Blue and Yellow stuck scenarios, as a Johto Marathon checkpoint already is in Gold, Silver and Crystal. A race earns nothing else and runs longer than a scenario's 20 minute quiet window, so a Red dojo return and a Yellow marathon save failed while the player was racing and then walking to Saffron. Play is unchanged. Local test runs now use up to 10 workers, and `tools/load_gate.sh` has five test slots.
 
