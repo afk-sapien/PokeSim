@@ -288,13 +288,20 @@ def _prune(rolling, progress_frame):
     """Keep the newest save at or before the last progress and everything after it."""
     keep = _before(rolling, progress_frame)
     while rolling and rolling[0] is not keep and rolling[0][0] < (keep or rolling[-1])[0]:
-        rolling.pop(0)[1].unlink(missing_ok=True)
+        path = rolling.pop(0)[1]
+        path.unlink(missing_ok=True)
+        path.with_suffix('.json').unlink(missing_ok=True)
 
 
 def _bundle(run, snap, folder, before, reason, missing, game_minute, marks):
     """Keep a stall the way the application does, in a folder tools/stuck_scenarios.py add accepts."""
+    # A stall noticed again in the same game minute after a reload gets its own folder.
     bundle = folder / 'stalls' / f'stall-{game_minute:05d}m'
-    bundle.mkdir(parents=True, exist_ok=True)
+    repeat = 1
+    while bundle.exists():
+        repeat += 1
+        bundle = folder / 'stalls' / f'stall-{game_minute:05d}m-{repeat}'
+    bundle.mkdir(parents=True)
     run.save(bundle / 'noticed.state', compress=True)
     if before is not None:
         for suffix in ('.state', '.json'):
@@ -306,7 +313,7 @@ def _bundle(run, snap, folder, before, reason, missing, game_minute, marks):
               'objective': (details.get('objective') or {}).get('title'), 'policy_reason': details.get('reason'),
               'marks': [title for _, _, title in marks][-5:], 'has_before': before is not None}
     (bundle / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    return {'bundle': str(bundle.relative_to(folder)), **report}
+    return {'bundle': bundle.relative_to(folder).as_posix(), **report}
 
 
 def adopt(args):
