@@ -2,6 +2,7 @@
 planner marks a scenario can wait for, on synthetic memory."""
 from types import SimpleNamespace
 
+from pokesim.events import RunMemory
 from pokesim.planning.monitor import STOOD_DOWN, Monitor
 from pokesim.ram import read_snapshot
 from pokesim.scenarios import Gen1Watch, Scenario, apply_edits, matches
@@ -53,6 +54,19 @@ def test_the_same_goal_standing_down_four_times_in_a_row_is_a_loop():
         table[key] = when
         watch.marks()
     assert watch.loop is None                                      # taking turns is not a retry loop
+
+
+def test_a_kanto_marathon_checkpoint_restarts_the_quiet_clock():
+    collection = SimpleNamespace(project={'method': 'marathon', 'checkpoint': 3})
+    watch = Gen1Watch(SimpleNamespace(memory=RunMemory(), policy=SimpleNamespace(collection=collection)))
+    snapshot = read_snapshot(cartridge(), 0)
+    assert watch.observe(snapshot)[1] is False                      # the first look only sets the mark
+    assert watch.observe(snapshot)[1] is False
+    collection.project['checkpoint'] = 4
+    assert watch.observe(snapshot)[1] is True
+    assert watch.observe(snapshot)[1] is False
+    collection.project = {'method': 'gift', 'checkpoint': 9}
+    assert watch.observe(snapshot)[1] is False                      # only a race has checkpoints
 
 
 def test_a_scenario_can_require_run_attempts(tmp_path):

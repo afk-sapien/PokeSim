@@ -58,6 +58,13 @@ checkouts that might not load this file automatically.
 
 - Never use em dashes or semicolons in authored output.
 
+## Local runs
+
+- Local pytest and replay pools use at most 10 processes. Run one heavy job at a time under `tools/load_gate.sh`, at `nice -n 10`.
+- Before a PR, run locally only the tests for the files you touched, plus lint. CI runs the full suite on 3 Pythons and the browsers, so do not repeat it locally.
+- Run the scenario suite and the 3-run batches only when a change can alter planner or bot behavior: planning, strategy, battle or overworld code. Storage, UI, tooling and docs changes skip them.
+- A scenario that also fails on main gets logged once, and the work goes on. Do not rerun it to prove it.
+
 ## Gen 1 vs Gen 2 parity
 
 - A new field in the live state, statistics or activity ledger payload must be filled for Red, Blue and Yellow and for Gold, Silver and Crystal.
