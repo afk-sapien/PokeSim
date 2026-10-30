@@ -6,6 +6,7 @@ in the other and in the application.
 from __future__ import annotations
 
 import hashlib
+import io
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 import json
 import secrets
@@ -14,7 +15,7 @@ from pokecore.emulator import Emulator as CoreEmulator
 
 from .yellow import YELLOW_SHA1, open_emulator
 
-from .checkpoints import CheckpointStore
+from .checkpoints import CheckpointStore, open_state
 from .events import RunMemory
 from .game_data import VARIANT_ENV
 from .policies.base import BUTTONS, PolicyContext, stack_pointer
@@ -35,7 +36,10 @@ class HeadlessRun:
         if (self.rom_sha1 == YELLOW_SHA1) != YELLOW:
             variant = 'yellow' if self.rom_sha1 == YELLOW_SHA1 else 'red'
             raise ValueError(f'This cartridge needs {VARIANT_ENV}={variant} before pokesim is imported')
-        self.pb = open_emulator(str(rom), default=CoreEmulator, window='null', sound_emulated=False)
+        # A randomized run (RANDOMIZER set) plays the patched cartridge, as the managed worker does.
+        from .randomized import rom_stream
+        self.pb = open_emulator(rom_stream(rom), default=CoreEmulator, yellow=self.rom_sha1 == YELLOW_SHA1,
+                                window='null', sound_emulated=False)
         self.pb.set_emulation_speed(0)
         self.policy = StrategicPolicy(seed)
         self.policy.collection.version = ('yellow' if self.rom_sha1 == YELLOW_SHA1
@@ -64,7 +68,7 @@ class HeadlessRun:
         self.memory = RunMemory.from_dict(metadata['run_memory'])
         if reseed:
             self.policy.rng.seed(self.seed)
-        with path.open('rb') as stream:
+        with open_state(path) as stream:
             self.pb.load_state(stream)
         for button in BUTTONS:
             self.pb.button_release(button)
@@ -76,8 +80,17 @@ class HeadlessRun:
         # The same save and the same choices would replay the same trouble.
         self.pb.tick(1 + (self.rng.randrange(180) if self.rng else secrets.randbelow(180)), render=False)
 
-    def save(self, path):
-        """Write a checkpoint the application and the replay tools both accept."""
+    def save(self, path, compress=False):
+        """Write a checkpoint the application and the replay tools both accept. ``compress`` writes
+        the state and its manifest gzipped, as the library keeps journal saves."""
+        if compress:
+            stream = io.BytesIO()
+            self.pb.save_state(stream)
+            manifest = {**checkpoint_metadata(), 'rom_sha1': self.rom_sha1, 'policy': 'strategic',
+                        'policy_state': self.policy.state_dict(), 'run_memory': self.memory.to_dict(),
+                        'frame': self.frame}
+            return CheckpointStore(path.parent).write_checkpoint(stream.getvalue(), manifest, name=path.name,
+                                                                 compress=True)
         with path.open('wb') as stream:
             self.pb.save_state(stream)
         manifest = {'format': 1, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
@@ -85,6 +98,7 @@ class HeadlessRun:
                     'policy_state': self.policy.state_dict(), 'run_memory': self.memory.to_dict(),
                     'frame': self.frame}
         path.with_suffix('.json').write_text(json.dumps(manifest), encoding='utf-8')
+        return path
 
     def step(self, snapshot):
         self.pb.memory[W_OPTIONS] = (self.pb.memory[W_OPTIONS] & ~7) | 1
