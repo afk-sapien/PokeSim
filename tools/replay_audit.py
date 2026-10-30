@@ -1,13 +1,16 @@
 """Replay copied checkpoints forward and audit where the frames go.
 
     replay_audit.py run ROM STATE FRAMES OUT_JSON [--data-root DIR] [--seed N] [--reseed-goals] [--lead-in N]
+                        [--randomizer CODE]
     replay_audit.py report BEFORE_DIR AFTER_DIR
 
 ``run`` plays one checkpoint headless with the checkout's own policy, from the working directory, and
 writes the frame share per goal from ``Monitor.shares()``, the stand-downs, and the frames spent in goal
 spans that ended without a progress event. Trainee experience counts as progress for a training goal.
 Red, Blue and Yellow need POKESIM_GEN1_VARIANT set to match the cartridge, and Gold, Silver and Crystal
-need ``--data-root``. AUDIT_PARTNERS lists the trainer ids of linked adventures, comma separated, as the
+need ``--data-root``. ``--randomizer`` takes a share code such as ``PSR1-RED-WS-12345`` and plays the
+save on that randomized cartridge, as a randomized adventure's worker does. The code must be for the
+cartridge's own game, and the run file records it. AUDIT_PARTNERS lists the trainer ids of linked adventures, comma separated, as the
 coordinator's broker would send them. Gold, Silver and Crystal runs list each Pokémon a release visit let go.
 
 Use ``--reseed-goals`` whenever two code versions are compared. Without it a few frames saved early on
@@ -44,8 +47,8 @@ import sys
 
 sys.path.insert(0, os.getcwd())
 
-from pokesim.planning.monitor import Monitor, ProgressEvent  # noqa: E402
-from pokesim.planning.progress import _held, events  # noqa: E402
+# The policy modules load inside ``run``, after ``--randomizer`` has set the worker's environment.
+# Gen I modules read their tables at import time.
 
 LIMIT_POINTS = 2.0
 LARGE_SHARE = 0.15
@@ -192,6 +195,8 @@ def _stand_downs(run, seen):
 def _goal_events(key, previous, current):
     """The progress events of ``current`` for goal ``key``. A training goal also progresses on experience,
     since a level can take many battles and a span that gained experience was not wasted."""
+    from pokesim.planning.monitor import ProgressEvent
+    from pokesim.planning.progress import _held, events
     found = events(previous, current)
     # A Pokémon let go frees a slot. The tree under test may predate that event, so the audit reads it
     # here too and every tree it compares is measured the same way.
@@ -226,7 +231,25 @@ def _released(previous, current, frame):
             for (species, _dvs, trainer), item in before.items() if (species, _dvs, trainer) not in now]
 
 
+def randomize(code, rom):
+    """Set the environment a randomized adventure's worker runs in and return the canonical share code,
+    or '' for a clean cartridge. Call it before any policy module loads."""
+    if not code:
+        return ''
+    from pokesim.cartridges import identify
+    from pokesim.randomized import ENV, validate
+    cartridge = identify(Path(rom).read_bytes())
+    if cartridge is None:
+        raise ValueError('Only a verified cartridge can be randomized')
+    code = validate(code, cartridge.version)
+    os.environ[ENV] = code
+    os.environ['ROM_PATH'] = str(Path(rom).resolve())
+    return code
+
+
 def run_one(args):
+    randomizer = randomize(args.randomizer, args.rom)
+    from pokesim.planning.monitor import Monitor
     run, read, game = _open(Path(args.rom), Path(args.state), args.data_root, args.seed)
     idle(run, args.lead_in)
     seeds = GoalSeeds(Path(args.state).name) if args.reseed_goals else None
@@ -303,7 +326,7 @@ def run_one(args):
         'stand_downs': stand_downs, 'reloads': 0, 'party_levels': party,
         'recoveries': getattr(run.policy, 'recoveries', 0) - recoveries,
         'released': released, 'reseed_goals': bool(seeds), 'lead_in': args.lead_in, 'rows': True,
-        'flees': {line: dict(counts) for line, counts in flees.items()},
+        'flees': {line: dict(counts) for line, counts in flees.items()}, 'randomizer': randomizer,
     }
     if shadow is not None:
         result['shadow'] = {**shadow.summary(), 'frames_by_pick': dict(would)}
@@ -322,6 +345,8 @@ def load(folder):
         game['frames'] += data['frames']
         game['errors'] += data['errors']
         game['recoveries'] += data['recoveries']
+        # Run files from before --randomizer played clean cartridges.
+        game.setdefault('randomizers', set()).add(data.get('randomizer') or 'off')
         game['goals'].update({name(key): value for key, value in data['frames_by_goal'].items()})
         game['wasted'].update({name(key): value for key, value in data['wasted'].items()})
         for key, title in data['titles'].items():
@@ -402,7 +427,8 @@ def report(args):
                 stalls = sum(game['stalls'].values())
                 wasted = 100 * sum(game['wasted'].values()) / max(game['frames'], 1)
                 print(f'{label}: {game["runs"]} runs, {game["frames"]} frames, {stalls} stalls, {wasted:.1f}% wasted, '
-                      f'{game["errors"]} errors, {game["recoveries"]} recoveries')
+                      f'{game["errors"]} errors, {game["recoveries"]} recoveries, '
+                      f'randomizer {", ".join(sorted(game["randomizers"]))}')
         print('| goal | share before | share after | stalls before | stalls after | wasted before | wasted after |')
         print('|---|---|---|---|---|---|---|')
         rank = new or old
@@ -441,6 +467,7 @@ def main(argv=None):
     one.add_argument('--reseed-goals', action='store_true',
                      help='seed the game random numbers at each goal start, for comparing code versions')
     one.add_argument('--lead-in', type=int, default=0, help='frames to idle before the policy starts')
+    one.add_argument('--randomizer', default='', help='share code of a randomized run, such as PSR1-RED-WS-12345')
     both = commands.add_parser('report')
     both.add_argument('before')
     both.add_argument('after')

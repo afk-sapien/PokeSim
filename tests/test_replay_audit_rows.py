@@ -1,8 +1,13 @@
 """Report rows in the replay audit: one goal key can cover many hunts, so each hunt kind and target gets its own row."""
 import json
+import os
+from pathlib import Path
 from types import SimpleNamespace
 
-from tools.replay_audit import ALL_TARGETS, describe, load, report, row
+import pytest
+
+from pokesim.randomized import ENV
+from tools.replay_audit import ALL_TARGETS, describe, load, randomize, report, row
 
 
 def test_gold_silver_and_crystal_hunts_split_by_kind_and_target():
@@ -79,3 +84,32 @@ def test_report_counts_the_battle_stance_runs_per_row(tmp_path, capsys):
            flees={'tower_travel': {'attempts': 7, 'failures': 2}})
     report(SimpleNamespace(before=before, after=after))
     assert '| tower_travel | 7 | 2 | 5.0 | 2.0 |' in capsys.readouterr().out
+
+
+def test_report_names_the_share_codes_each_side_played(tmp_path, capsys):
+    before, after = tmp_path / 'before', tmp_path / 'after'
+    before.mkdir()
+    after.mkdir()
+    _write(before, 'old.json', rows=True, frames_by_goal={'heal': 1000}, titles={})
+    _write(after, 'new.json', rows=True, frames_by_goal={'heal': 1000}, titles={}, randomizer='PSR1-SILVER-WS-7')
+    report(SimpleNamespace(before=before, after=after))
+    out = capsys.readouterr().out
+    assert '0 recoveries, randomizer off' in out and '0 recoveries, randomizer PSR1-SILVER-WS-7' in out
+
+
+RED_ROM = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
+
+
+def test_randomizer_sets_the_worker_environment_for_its_own_cartridge(monkeypatch):
+    if not RED_ROM.is_file():
+        pytest.skip('needs a clean Pokémon Red ROM in ROM_PATH')
+    # Set before deleting, so monkeypatch restores both variables after randomize() writes them.
+    monkeypatch.setenv(ENV, 'off')
+    monkeypatch.delenv(ENV)
+    monkeypatch.setenv('ROM_PATH', 'elsewhere.gb')
+    assert randomize('', RED_ROM) == '' and ENV not in os.environ
+    with pytest.raises(ValueError, match='not Red'):
+        randomize('PSR1-GOLD-WS-12345', RED_ROM)
+    assert ENV not in os.environ
+    assert randomize('psr1-red-ws-12345', RED_ROM) == 'PSR1-RED-WS-12345'
+    assert os.environ[ENV] == 'PSR1-RED-WS-12345' and os.environ['ROM_PATH'] == str(RED_ROM.resolve())
