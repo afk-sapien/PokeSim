@@ -214,14 +214,15 @@ def _goal_events(key, previous, current):
                      if before.species == after.species and after.experience > before.experience)
         if gained:
             found.append(ProgressEvent('experience', gained))
-    # A PC visit that swaps the trainee or the Exp. Share holder into the party keeps the held count,
-    # so no other event shows it, yet it is the whole of the preparation goal.
+    # A PC visit that swaps the trainee into the party keeps the held count, so no other event shows it,
+    # yet it is the whole of the preparation goal. A goal cut short between the deposit and the withdrawal
+    # leaves two spans, so each half of the swap counts.
     if key == 'collection_train_pc' and previous is not None and current is not None and not found \
-            and getattr(current, 'valid', True) and getattr(previous, 'valid', True) and previous.party:
-        party = {_identity(mon) for mon in previous.party}
-        joined = sum(1 for mon in current.party if _identity(mon) not in party)
-        if joined:
-            found.append(ProgressEvent('trainee', joined))
+            and getattr(current, 'valid', True) and getattr(previous, 'valid', True) and previous.party and current.party:
+        before, after = Counter(map(_identity, previous.party)), Counter(map(_identity, current.party))
+        moved = sum((after - before).values()) or sum((before - after).values())
+        if moved:
+            found.append(ProgressEvent('trainee', moved))
     return found
 
 

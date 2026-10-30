@@ -112,6 +112,10 @@ def test_a_pc_swap_that_brings_the_trainee_into_the_party_is_progress_for_its_pr
     # The same swap means nothing to other goals, and a party that only reorders gains nothing.
     assert _goal_events('collection_hunt', before, after) == []
     assert _goal_events('collection_train_pc', before, _snapshot([venusaur], [mankey])) == []
+    # A full box can cut the goal short after the deposit, and that half of the swap counts too.
+    golem = _mon('Golem')
+    full, deposited = _snapshot([golem, venusaur], [mankey]), _snapshot([golem], [mankey, venusaur])
+    assert [event.kind for event in _goal_events('collection_train_pc', full, deposited)] == ['trainee']
 
 
 RED_ROM = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
