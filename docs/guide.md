@@ -247,6 +247,7 @@ settings in the browser.
 | `HOST` / `PORT` | `127.0.0.1` / `8000` | native service bind address and port |
 | `VIEWER_ONLY` | `0` | disable browser game controls and preference writes |
 | `EVENT_RETENTION_DAYS` | `0` | journal retention, with `0` keeping all history |
+| `EVENT_ATTACHMENT_KEEP` | `500` | routine journal entries that keep their screenshot and save, newest first, with `0` keeping all. Milestones (notable entries of priority 4 or 5, such as badges, the League, new Pokédex entries and evolutions) keep theirs forever, and every entry keeps its text |
 | `TRADING_URL` / `TRADING_INSTANCE` | empty | broker URL and instance key for [trading](trading.md#connecting-an-installation) |
 | `TRADE_TOKEN` | empty | scoped peer authentication for [automatic exchanges](automatic-trading.md) |
 | `STREAM_FPS` | `15` | MJPEG frame rate |

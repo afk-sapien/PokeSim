@@ -6,6 +6,7 @@ from copy import deepcopy
 import json
 import os
 import logging
+import shutil
 import sqlite3
 import tempfile
 import threading
@@ -19,6 +20,12 @@ log = logging.getLogger(__name__)
 
 # Seconds between tries to move older trade settings while the collection cannot be read in full.
 TRADE_KEY_RETRY_SECONDS = 30
+# A notable entry at this priority or above is a milestone: badges, the League, new Pokédex entries,
+# evolutions, hatches, key items, the Elite Four and similar. It keeps its screenshot and save forever.
+MILESTONE_PRIORITY = 4
+ATTACHMENT_ROUND = 500
+# The custom reward that is staged or committed but not yet recovered, from runtime.reward_delivery.
+PENDING_REWARD = 'custom-reward-pending-v1'
 
 OBSERVATION_READ_KEYS = frozenset({
     'cartridge-steps-v1', 'mew-returns-v1', 'pokesim-mew-v1', 'legendary-returns-v1',
@@ -354,6 +361,73 @@ class Store:
                 if name and Path(name).name == name:
                     (directory / name).unlink(missing_ok=True)
         return len(rows)
+
+    def prune_attachments(self, keep: int) -> int:
+        """Keep the screenshot and save of only the newest ``keep`` routine entries, and return how many lost theirs.
+
+        Milestones keep theirs forever and every entry keeps its text. The oldest go first. Files go
+        before the row forgets them, so an interrupted pass leaves a row naming a missing file, which
+        the journal already treats as having none, and never a file that no row names.
+
+        This runs inside the adventure's own process, which holds its runtime lock. Backups, restores
+        and deletions take the app's maintenance guard and stop the adventure before touching its
+        files, so they never overlap. ``self.lock`` keeps a new entry from landing mid pass.
+        """
+        if keep <= 0:
+            return 0
+        removed = 0
+        while True:
+            with self.lock:
+                routine = "(shot IS NOT NULL OR state IS NOT NULL) AND NOT (notable=1 AND priority>=?)"
+                total = self.db.execute(f"SELECT COUNT(*) FROM events WHERE {routine}",
+                                        (MILESTONE_PRIORITY,)).fetchone()[0]
+                if total <= keep:
+                    return removed
+                # Rounds of a few hundred keep a first pass over a long adventure from blocking new entries.
+                rows = self.db.execute(f"SELECT id, shot, state FROM events WHERE {routine} ORDER BY id LIMIT ?",
+                                       (MILESTONE_PRIORITY, min(total - keep, ATTACHMENT_ROUND))).fetchall()
+                cleared = []
+                for row in rows:
+                    names = [(self.shots, row["shot"]), (self.states, row["state"])]
+                    if row["state"]:
+                        names.append((self.states, str(Path(row["state"]).with_suffix(".json"))))
+                    try:
+                        for directory, name in names:
+                            if name and Path(name).name == name:
+                                (directory / name).unlink(missing_ok=True)
+                    except OSError:
+                        log.exception("Cannot remove the attachments of event %d", row["id"])
+                        continue
+                    cleared.append((row["id"],))
+                with self.db:
+                    self.db.executemany("UPDATE events SET shot=NULL, state=NULL WHERE id=?", cleared)
+                removed += len(cleared)
+                if len(cleared) < len(rows):
+                    return removed
+
+    def prune_reward_results(self, min_age: float = 3600) -> int:
+        """Remove the saves of custom rewards and purchases that are finished, and return how many went.
+
+        Each one writes an uncompressed 167 KB ``result.state`` that only crash recovery of the pending
+        reward reads, and it used to be kept forever. The pending reward's folder and any folder newer
+        than ``min_age`` seconds, which may be one being staged, are left alone.
+        """
+        root = self.dir / "custom-rewards"
+        if not root.is_dir():
+            return 0
+        pending = self.get(PENDING_REWARD) or {}
+        keep = pending.get("id") if pending.get("phase") != "complete" else None
+        cutoff = time.time() - min_age
+        removed = 0
+        for folder in root.iterdir():
+            try:
+                if folder.name == keep or not folder.is_dir() or folder.stat().st_mtime > cutoff:
+                    continue
+                shutil.rmtree(folder)
+                removed += 1
+            except OSError:
+                log.exception("Cannot remove the finished custom reward %s", folder.name)
+        return removed
 
     def close(self):
         with self.lock:

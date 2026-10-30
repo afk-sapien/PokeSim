@@ -46,44 +46,70 @@ def open_state(path: Path):
         return io.BytesIO(gzip.decompress(handle.read()))
 
 
+def _unpack_manifest(stored: bytes):
+    return json.loads(gzip.decompress(stored) if stored[:2] == GZIP_MAGIC else stored)
+
+
+def read_manifest(path: Path):
+    """A checkpoint's parsed ``.json`` sidecar, whether it was written plain or compressed."""
+    return _unpack_manifest(Path(path).read_bytes())
+
+
+def pack_manifest(manifest: dict) -> bytes:
+    """A journal save's sidecar is about 28 KB of JSON, mostly the policy state, and gzip keeps a third.
+
+    Milestone entries keep theirs forever, so a long Gold, Silver or Crystal adventure holds thousands.
+    """
+    return compress_state(json.dumps(manifest).encode())
+
+
 def compress_event_state(path: Path) -> int:
-    """Compress one journal entry's save in place and return the bytes saved.
+    """Compress one journal entry's save and its sidecar in place and return the bytes saved.
 
     Gold, Silver and Crystal used to write these uncompressed, at about 200 KB each. The
     compressed copy replaces the original only after it decompresses to the same bytes, and its
     manifest checksum is moved to the new bytes. A compressed save whose manifest still names the
-    raw bytes, left by an interrupted run, has its manifest repaired.
+    raw bytes, left by an interrupted run, has its manifest repaired. A plain sidecar is compressed.
     """
     raw = path.read_bytes()
     manifest_path = path.with_suffix('.json')
     try:
-        manifest = json.loads(manifest_path.read_text(encoding='utf-8')) if manifest_path.exists() else None
-    except ValueError:
+        stored = manifest_path.read_bytes()
+    except FileNotFoundError:
+        stored = None
+    try:
+        manifest = _unpack_manifest(stored) if stored is not None else None
+    except (ValueError, EOFError, gzip.BadGzipFile):
         manifest = None
     if not isinstance(manifest, dict):
         manifest = None
+    rewrite = False
     if raw[:2] == GZIP_MAGIC:
+        packed = raw
         if manifest and manifest.get('sha256') == hashlib.sha256(gzip.decompress(raw)).hexdigest():
-            CheckpointStore.atomic_write(manifest_path, json.dumps(
-                dict(manifest, sha256=hashlib.sha256(raw).hexdigest())).encode())
-        return 0
-    packed = compress_state(raw)
-    if gzip.decompress(packed) != raw:
-        raise ValueError(f'{path.name} did not survive compression')
-    times = path.stat()
-    CheckpointStore.atomic_write(path, packed)
-    if path.read_bytes() != packed:
-        CheckpointStore.atomic_write(path, raw)
-        raise ValueError(f'{path.name} did not read back after compression')
-    os.utime(path, ns=(times.st_atime_ns, times.st_mtime_ns))
-    if manifest and manifest.get('sha256') == hashlib.sha256(raw).hexdigest():
-        CheckpointStore.atomic_write(manifest_path, json.dumps(
-            dict(manifest, sha256=hashlib.sha256(packed).hexdigest())).encode())
-    return len(raw) - len(packed)
+            manifest, rewrite = dict(manifest, sha256=hashlib.sha256(raw).hexdigest()), True
+    else:
+        packed = compress_state(raw)
+        if gzip.decompress(packed) != raw:
+            raise ValueError(f'{path.name} did not survive compression')
+        times = path.stat()
+        CheckpointStore.atomic_write(path, packed)
+        if path.read_bytes() != packed:
+            CheckpointStore.atomic_write(path, raw)
+            raise ValueError(f'{path.name} did not read back after compression')
+        os.utime(path, ns=(times.st_atime_ns, times.st_mtime_ns))
+        if manifest and manifest.get('sha256') == hashlib.sha256(raw).hexdigest():
+            manifest, rewrite = dict(manifest, sha256=hashlib.sha256(packed).hexdigest()), True
+    saved = len(raw) - len(packed)
+    if manifest and (rewrite or stored[:2] != GZIP_MAGIC):
+        sidecar = pack_manifest(manifest)
+        CheckpointStore.atomic_write(manifest_path, sidecar)
+        saved += len(stored) - len(sidecar)
+    return saved
 
 
 def compress_event_states(adventures: Path, guard, stop=lambda: False) -> int:
-    """Compress every adventure's uncompressed journal saves and return the bytes saved.
+    """Compress every adventure's uncompressed journal saves and sidecars and return the bytes saved.
 
     Each file is handled under ``guard`` so a backup, restore or deletion never sees it half done.
     Compressed files are skipped after reading two bytes, so later starts finish at once.
@@ -163,7 +189,7 @@ class CheckpointStore:
         if compress:
             state = compress_state(state)
         manifest = dict(metadata, format=1, sha256=hashlib.sha256(state).hexdigest())
-        manifest_bytes = json.dumps(manifest).encode()
+        manifest_bytes = pack_manifest(manifest) if compress else json.dumps(manifest).encode()
         try:
             self.atomic_write(path, state)
             self.atomic_write(path.with_suffix(".json"), manifest_bytes)
@@ -214,7 +240,7 @@ class CheckpointStore:
         manifest = path.with_suffix(".json")
         if not manifest.exists() and not path.name.startswith("auto-v1-"):
             return None
-        data = json.loads(manifest.read_text(encoding="utf-8"))
+        data = read_manifest(manifest)
         if not isinstance(data, dict) or data.get("format") != 1:
             raise ValueError("Unsupported checkpoint format")
         if data.get("sha256") != hashlib.sha256(path.read_bytes()).hexdigest():

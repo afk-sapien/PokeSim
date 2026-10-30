@@ -19,6 +19,7 @@ import subprocess
 import sys
 import warnings
 
+from .checkpoints import read_manifest
 from .events import diff
 from .game_data import VARIANT_ENV, current_variant
 from .headless import HeadlessRun
@@ -312,7 +313,7 @@ CARTRIDGE_DIRECTORY = 'GEN2_CARTRIDGE_DIR'
 
 def cartridge(checkpoint):
     """The generation and ROM hash a checkpoint's manifest names."""
-    metadata = json.loads(Path(checkpoint).with_suffix('.json').read_text(encoding='utf-8'))
+    metadata = read_manifest(Path(checkpoint).with_suffix('.json'))
     return (2 if metadata.get('generation') == 2 else 1), metadata.get('rom_sha1')
 
 

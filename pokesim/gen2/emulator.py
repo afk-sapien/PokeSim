@@ -512,6 +512,8 @@ class Emulator:
         self.store.set('play_clock', self.play_clock.state_dict())
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
+        self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
+        self.store.prune_reward_results()
         return path
 
     def _behind_barrier(self, metadata):
