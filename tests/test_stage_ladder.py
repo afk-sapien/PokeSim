@@ -233,3 +233,67 @@ def test_check_fails_on_a_rung_whose_save_reads_as_another_stage(tmp_path, monke
     assert 'red/badges_2: the save reads as 3 badges, not 2 badges' in capsys.readouterr().out
     (roms / 'any-name.gb').unlink()
     assert main(['check', str(roms), str(tmp_path / 'ladders')]) == 1
+
+
+def _result(rung, waste=10.0, errors=0, stall=None, ladder='gold'):
+    return {'ladder': ladder, 'rung': rung, 'waste': waste, 'errors': errors,
+            'stall': stall and {'reason': stall, 'bundle': 'stalls/stall-00010m'}}
+
+
+def test_the_gate_fails_on_a_new_stall_more_errors_or_waste_up_more_than_two_points():
+    baseline = {'gold/badges_2': {'stall': None, 'errors': 0, 'waste': 10.0},
+                'gold/red': {'stall': 'a retry loop', 'errors': 1, 'waste': 50.0}}
+    assert stage_ladder.compare([_result('badges_2', waste=11.9), _result('red', waste=48.0, errors=1, stall='quiet'),
+                                 _result('post_game', waste=90.0, stall='quiet')], baseline) == []
+    problems = stage_ladder.compare([_result('badges_2', waste=12.5, errors=2, stall='nothing achieved'),
+                                     {'ladder': 'gold', 'rung': 'red', 'failed': 'exit 1'}], baseline)
+    assert problems == ['gold/badges_2: a new stall, nothing achieved', 'gold/badges_2: 2 errors, 0 before',
+                        'gold/badges_2: 12.5% wasted, 10.0% before', 'gold/red: the run failed, exit 1']
+
+
+def _ladder(root, name, generation, randomizer, rungs):
+    folder = root / name
+    for rung in rungs:
+        (folder / rung).mkdir(parents=True)
+        (folder / rung / 'start.state').write_bytes(b'state')
+    (folder / 'ladder.json').write_text(json.dumps({'game': name, 'generation': generation, 'rom_sha1': 'aa',
+                                                    'randomizer': randomizer}), encoding='utf-8')
+
+
+def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_process(tmp_path, monkeypatch, capsys):
+    root = tmp_path / 'ladders'
+    _ladder(root, 'red', 1, '', ['new_game', 'badges_2'])
+    _ladder(root, 'red-randomized', 1, 'PSR1-RED-WS-1', ['badges_4'])
+    calls = []
+
+    def fake(command, env, **_):
+        calls.append((command, env))
+        if 'gate-rung' in command:
+            ladder, rung, out = Path(command[command.index('gate-rung') + 1]), *command[command.index('gate-rung') + 2:][:2]
+            waste = 30.0 if rung == 'badges_4' else 10.0
+            Path(out, 'summary.json').write_text(json.dumps(_result(rung, waste, ladder=ladder.name)), encoding='utf-8')
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(stage_ladder.subprocess, 'run', fake)
+    monkeypatch.delenv(stage_ladder.GATE_HELD, raising=False)
+    monkeypatch.setenv('POKESIM_GEN1_VARIANT', 'yellow')
+    args = ['gate', str(tmp_path / 'roms'), str(root), '--out', str(tmp_path / 'out')]
+    assert main(args) == 0
+    command, env = calls.pop()
+    assert command[:3] == ['sh', str(stage_ladder.ROOT / 'tools' / 'load_gate.sh'), 'heavy'] and command[-len(args):] == args
+    assert env[stage_ladder.GATE_HELD] == '1'
+    monkeypatch.setenv(stage_ladder.GATE_HELD, '1')
+    assert main(args + ['--write-baseline']) == 0
+    assert len(calls) == 3 and all(command[:3] == ['nice', '-n', '10'] for command, _ in calls)
+    assert all('POKESIM_GEN1_VARIANT' not in env for _, env in calls)
+    stored = json.loads((root / 'gate-baseline.json').read_text(encoding='utf-8'))
+    assert stored['frames'] == stage_ladder.GATE_FRAMES and set(stored['rungs']) == \
+        {'red/new_game', 'red/badges_2', 'red-randomized/badges_4'}
+    assert main(args) == 0
+    stored['rungs']['red-randomized/badges_4']['waste'] = 20.0
+    (root / 'gate-baseline.json').write_text(json.dumps(stored), encoding='utf-8')
+    capsys.readouterr()
+    assert main(args) == 1
+    assert 'red-randomized/badges_4: 30.0% wasted, 20.0% before' in capsys.readouterr().out
+    with pytest.raises(SystemExit, match='108000'):
+        main(args + ['--frames', '36000'])
