@@ -108,6 +108,24 @@ def test_a_stall_keeps_a_bundle_and_goes_back_to_the_save_before_it(tmp_path, mo
     assert not (ladder / '.work').exists()
 
 
+def test_a_repeat_stall_in_the_same_minute_keeps_both_bundles(tmp_path):
+    run = FakeRun()
+    snap = SimpleNamespace(map=0x26)
+    first = stage_ladder._bundle(run, snap, tmp_path, None, 'first', ['badges_2'], 90, [])
+    second = stage_ladder._bundle(run, snap, tmp_path, None, 'second', ['badges_2'], 90, [])
+    assert (first['bundle'], second['bundle']) == ('stalls/stall-00090m', 'stalls/stall-00090m-2')
+    assert json.loads((tmp_path / first['bundle'] / 'report.json').read_text(encoding='utf-8'))['reason'] == 'first'
+
+
+def test_pruning_a_rolling_save_removes_its_manifest_too(tmp_path):
+    run = FakeRun()
+    rolling = [(frame, run.save(tmp_path / f'rolling-{frame}.state')) for frame in (0, 600, 1200)]
+    stage_ladder._prune(rolling, 700)
+    assert [frame for frame, _ in rolling] == [600, 1200]
+    assert sorted(path.name for path in tmp_path.iterdir()) == ['rolling-1200.json', 'rolling-1200.state',
+                                                                'rolling-600.json', 'rolling-600.state']
+
+
 def test_adopt_keeps_an_existing_save_compressed(tmp_path):
     ladder = tmp_path / 'blue'
     ladder.mkdir()
