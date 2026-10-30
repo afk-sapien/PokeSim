@@ -2125,6 +2125,20 @@ def test_a_sale_skips_a_shop_whose_clerk_has_left(real_data, monkeypatch):
     assert policy.clerk_present(snapshot, entry, pharmacist)
 
 
+def test_the_pharmacist_stops_selling_once_the_player_helps_lance(real_data):
+    # During the hideout the pharmacist stays on the map but only talks about Lance. Asking him for
+    # balls looped between the restock and the hideout passwords forever (#240).
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data, starter='cyndaquil')
+    entry = real_data.maps[real_data.map_ids['MAHOGANY_MART_1F']]
+    flags = {'EVENT_GAVE_MYSTERY_EGG_TO_ELM'}
+    snapshot = SimpleNamespace(event=lambda name: name in flags)
+    pharmacist = next(shop for shop in entry['shops'] if shop['script'] == 'MahoganyMart1FPharmacistScript')
+    assert policy.clerk_present(snapshot, entry, pharmacist)
+    flags.update({'EVENT_DECIDED_TO_HELP_LANCE', 'EVENT_UNCOVERED_STAIRCASE_IN_MAHOGANY_MART'})
+    assert not policy.clerk_present(snapshot, entry, pharmacist)
+
+
 def test_static_legendary_is_slept_then_chipped_and_never_paralyzed(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
