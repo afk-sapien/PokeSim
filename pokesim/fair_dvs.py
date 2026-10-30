@@ -39,6 +39,20 @@ def secret(store):
     return bytes.fromhex(value['seed'])
 
 
+def attach(pb, rom_sha1, key):
+    """Reroll wild DVs with ``key`` in a run that has no adventure store, such as a headless batch.
+
+    A live adventure's key is the hex seed under ``KEY`` in its store, so passing it replays that
+    adventure's encounters exactly.
+    """
+    from .catches import TRACKED, YELLOW
+    from .shiny import BANK, SIGNATURE, YELLOW_SIGNATURE, store_dvs
+    if rom_sha1 not in TRACKED:
+        raise ValueError('Fair wild DVs is only for verified Red, Blue and Yellow cartridges')
+    address = store_dvs(pb, YELLOW_SIGNATURE if rom_sha1 == YELLOW else SIGNATURE)
+    pb.hook_register(BANK, address, lambda pb: reroll(pb.memory, key), pb)
+
+
 def wild(mem):
     """Whether storeDVs was reached on the random wild path.
 

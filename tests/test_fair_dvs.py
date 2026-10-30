@@ -185,12 +185,13 @@ def test_unverified_cartridges_never_reroll(tmp_path, monkeypatch):
         assert ShinyTracker(store, 'unknown').fair_key is None
 
 
-def wild_encounters(tmp_path, monkeypatch, count=3):
-    """Play from a private Viridian Forest checkpoint and return the DVs at each storeDVs and in battle."""
+def wild_encounters(tmp_path, monkeypatch, count=3, headless=None):
+    """Play from a private Viridian Forest checkpoint and return the DVs at each storeDVs and in battle.
+    ``headless`` is a key the headless run rerolls with instead of an adventure's tracker."""
     from pokesim.headless import HeadlessRun
     from pokesim.ram import read_snapshot
-    monkeypatch.setattr(config, 'FAIR_WILD_DVS', True, raising=False)
-    run = HeadlessRun(ROM, CHECKPOINT, seed=5)
+    monkeypatch.setattr(config, 'FAIR_WILD_DVS', headless is None, raising=False)
+    run = HeadlessRun(ROM, CHECKPOINT, seed=5, fair_wild_dvs=headless)
     hooked, battled = [], set()
 
     def spy(mem, key):
@@ -201,7 +202,8 @@ def wild_encounters(tmp_path, monkeypatch, count=3):
     with closing(Store(tmp_path)) as store:
         store.set(fair_dvs.KEY, {'seed': '11' * 32})
         tracker = ShinyTracker(store, hashlib.sha1(ROM.read_bytes()).hexdigest())
-        tracker.attach(run.pb)
+        if headless is None:
+            tracker.attach(run.pb)
         start = run.frame
         wild = lambda: [written for written, _ in hooked if written]
         while run.frame - start < 216000 and not (len(wild()) >= count and set(wild()) <= battled):
@@ -223,6 +225,33 @@ def test_rom_wild_battles_keep_the_dvs_the_hook_wrote(tmp_path, monkeypatch):
     assert set(wild) <= battled
     # Rerolls are fixed by the adventure key, so the same run repeats exactly.
     assert wild_encounters(tmp_path / 'again', monkeypatch)[0] == hooked
+
+
+@pytest.mark.skipif(not ROM.is_file() or not CHECKPOINT.is_file(), reason='private ROM and checkpoint unavailable')
+def test_a_headless_run_with_the_adventure_key_meets_the_adventure_encounters(tmp_path, monkeypatch):
+    live = wild_encounters(tmp_path / 'live', monkeypatch)[0]
+    assert wild_encounters(tmp_path / 'headless', monkeypatch, headless=bytes.fromhex('11' * 32))[0] == live
+    # Keyed by the seed instead, the rerolls still land and the run repeats exactly.
+    seeded = wild_encounters(tmp_path / 'seeded', monkeypatch, headless=True)[0]
+    assert sum(1 for written, _ in seeded if written) == 3
+    assert wild_encounters(tmp_path / 'seeded-again', monkeypatch, headless=True)[0] == seeded
+
+
+def test_a_headless_run_refuses_fair_dvs_on_an_unverified_cartridge():
+    with pytest.raises(ValueError, match='only for verified'):
+        fair_dvs.attach(SimpleNamespace(), 'unknown', bytes(32))
+
+
+def test_the_audit_takes_fair_dvs_as_a_flag_or_an_adventure_key(monkeypatch):
+    from tools import replay_audit
+    seen = []
+    monkeypatch.setattr(replay_audit, 'run_one', seen.append)
+    replay_audit.main(['run', 'red.gb', 'a.state', '60', 'out.json', '--fair-wild-dvs'])
+    replay_audit.main(['run', 'red.gb', 'a.state', '60', 'out.json', '--fair-wild-dvs', '11' * 32])
+    replay_audit.main(['run', 'red.gb', 'a.state', '60', 'out.json'])
+    assert [args.fair_wild_dvs for args in seen] == [True, bytes.fromhex('11' * 32), None]
+    with pytest.raises(ValueError, match='only for Red'):
+        replay_audit._open(Path('gold.gbc'), None, None, 7, True)
 
 
 def test_yellow_rerolls_its_own_shifted_addresses():

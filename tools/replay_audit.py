@@ -1,7 +1,7 @@
 """Replay copied checkpoints forward and audit where the frames go.
 
     replay_audit.py run ROM STATE FRAMES OUT_JSON [--data-root DIR] [--seed N] [--reseed-goals] [--lead-in N]
-                        [--randomizer CODE]
+                        [--randomizer CODE] [--fair-wild-dvs [KEY]]
     replay_audit.py report BEFORE_DIR AFTER_DIR
 
 ``run`` plays one checkpoint headless with the checkout's own policy, from the working directory, and
@@ -10,7 +10,10 @@ spans that ended without a progress event. Trainee experience counts as progress
 Red, Blue and Yellow need POKESIM_GEN1_VARIANT set to match the cartridge, and Gold, Silver and Crystal
 need ``--data-root``. ``--randomizer`` takes a share code such as ``PSR1-RED-WS-12345`` and plays the
 save on that randomized cartridge, as a randomized adventure's worker does. The code must be for the
-cartridge's own game, and the run file records it. AUDIT_PARTNERS lists the trainer ids of linked adventures, comma separated, as the
+cartridge's own game, and the run file records it. ``--fair-wild-dvs`` plays a Red, Blue or Yellow save
+with Fair wild DVs on, as an adventure with that setting does. Its rerolls are keyed by the seed, or by
+KEY, the hex seed under ``fair-wild-dvs-v1`` in an adventure's store, which replays that adventure's own
+encounters. AUDIT_PARTNERS lists the trainer ids of linked adventures, comma separated, as the
 coordinator's broker would send them. Gold, Silver and Crystal runs list each Pokémon a release visit let go.
 
 Use ``--reseed-goals`` whenever two code versions are compared. Without it a few frames saved early on
@@ -107,14 +110,16 @@ def _partners(run):
     return run
 
 
-def _open(rom, state, data_root, seed):
+def _open(rom, state, data_root, seed, fair_wild_dvs=None):
     if rom.suffix == '.gbc':
+        if fair_wild_dvs:
+            raise ValueError('Fair wild DVs is only for Red, Blue and Yellow')
         from pokesim.gen2.headless import HeadlessRun
         run = _partners(HeadlessRun(rom, state, seed=seed, data_root=Path(data_root) if data_root else None))
         return run, run.read, run.game
     from pokesim.headless import HeadlessRun
     from pokesim.ram import read_snapshot
-    run = _partners(HeadlessRun(rom, state, seed=seed, reseed=True))
+    run = _partners(HeadlessRun(rom, state, seed=seed, reseed=True, fair_wild_dvs=fair_wild_dvs))
     return run, lambda: read_snapshot(run.pb.memory, run.frame), run.policy.collection.version
 
 
@@ -250,7 +255,7 @@ def randomize(code, rom):
 def run_one(args):
     randomizer = randomize(args.randomizer, args.rom)
     from pokesim.planning.monitor import Monitor
-    run, read, game = _open(Path(args.rom), Path(args.state), args.data_root, args.seed)
+    run, read, game = _open(Path(args.rom), Path(args.state), args.data_root, args.seed, args.fair_wild_dvs)
     idle(run, args.lead_in)
     seeds = GoalSeeds(Path(args.state).name) if args.reseed_goals else None
     monitor = Monitor()
@@ -327,6 +332,7 @@ def run_one(args):
         'recoveries': getattr(run.policy, 'recoveries', 0) - recoveries,
         'released': released, 'reseed_goals': bool(seeds), 'lead_in': args.lead_in, 'rows': True,
         'flees': {line: dict(counts) for line, counts in flees.items()}, 'randomizer': randomizer,
+        'fair_wild_dvs': bool(args.fair_wild_dvs),
     }
     if shadow is not None:
         result['shadow'] = {**shadow.summary(), 'frames_by_pick': dict(would)}
@@ -468,6 +474,8 @@ def main(argv=None):
                      help='seed the game random numbers at each goal start, for comparing code versions')
     one.add_argument('--lead-in', type=int, default=0, help='frames to idle before the policy starts')
     one.add_argument('--randomizer', default='', help='share code of a randomized run, such as PSR1-RED-WS-12345')
+    one.add_argument('--fair-wild-dvs', nargs='?', const=True, type=bytes.fromhex, metavar='KEY',
+                     help='play Fair wild DVs, keyed by the seed or by an adventure\'s hex key')
     both = commands.add_parser('report')
     both.add_argument('before')
     both.add_argument('after')
