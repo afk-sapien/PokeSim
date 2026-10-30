@@ -528,8 +528,14 @@ class StrategicPolicy(Policy):
                                             f'Box {s.active_box + 1} is full. Visit a PC and switch to Box '
                                             f'{s.next_free_box + 1}', CENTERS, 'up', True),
                                        choice.errand_candidate('party_box', 'party'))
+        if kind == 'overworld' and not s.in_battle:
+            self._update_heal_latch(s)
+        if self.heal_latch and s.map not in league_rooms:
+            # The heal under way is the goal of every step, not only the overworld ones. Otherwise each
+            # dialogue box, battle and poison tick on the way to the nurse ran under the story goal.
+            self.goal = choice.replace(healing_goal(s), choice.errand_candidate('heal', 'heal'))
         self.choice = choice
-        token = (s.badges, tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
+        token =(s.badges, tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
         if s.party and token != self.assessment_token:
             self.readiness = readiness(s)
             self.assessment_token = token
@@ -755,16 +761,19 @@ class StrategicPolicy(Policy):
             return tap("a", 6, 24)
         return self._overworld(s, mem)
 
-    def _overworld(self, s, mem):
-        self.menu_context = None
-        self.intent = None
-        self.shop.leave_menu()
-        pos = (s.map, s.x, s.y)
+    def _update_heal_latch(self, s):
         if needs_healing(s.party):
             self.heal_latch = True
         if all(p.hp == p.max_hp and not p.status for p in s.party) and not needs_healing(s.party):
             self.heal_latch = False
             self.escape_attempted = False
+
+    def _overworld(self, s, mem):
+        self.menu_context = None
+        self.intent = None
+        self.shop.leave_menu()
+        pos = (s.map, s.x, s.y)
+        self._update_heal_latch(s)
         league_rooms = {MAPS[n] for n in ("LORELEIS_ROOM", "BRUNOS_ROOM", "AGATHAS_ROOM", "LANCES_ROOM", "CHAMPIONS_ROOM")}
         in_league = s.map in league_rooms
         choice = self.choice
