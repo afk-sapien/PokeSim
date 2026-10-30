@@ -6,7 +6,8 @@
 
 ``run`` plays one checkpoint headless with the checkout's own policy, from the working directory, and
 writes the frame share per goal from ``Monitor.shares()``, the stand-downs, and the frames spent in goal
-spans that ended without a progress event. Trainee experience counts as progress for a training goal.
+spans that ended without a progress event. Trainee experience counts as progress for a training goal, and a
+PC visit that brings the trainee into the party counts for its preparation.
 Red, Blue and Yellow need POKESIM_GEN1_VARIANT set to match the cartridge, and Gold, Silver and Crystal
 need ``--data-root``. ``--randomizer`` takes a share code such as ``PSR1-RED-WS-12345`` and plays the
 save on that randomized cartridge, as a randomized adventure's worker does. The code must be for the
@@ -213,7 +214,20 @@ def _goal_events(key, previous, current):
                      if before.species == after.species and after.experience > before.experience)
         if gained:
             found.append(ProgressEvent('experience', gained))
+    # A PC visit that swaps the trainee into the party keeps the held count, so no other event shows it,
+    # yet it is the whole of the preparation goal. A goal cut short between the deposit and the withdrawal
+    # leaves two spans, so each half of the swap counts.
+    if key == 'collection_train_pc' and previous is not None and current is not None and not found \
+            and getattr(current, 'valid', True) and getattr(previous, 'valid', True) and previous.party and current.party:
+        before, after = Counter(map(_identity, previous.party)), Counter(map(_identity, current.party))
+        moved = sum((after - before).values()) or sum((before - after).values())
+        if moved:
+            found.append(ProgressEvent('trainee', moved))
     return found
+
+
+def _identity(mon):
+    return mon.species, getattr(mon, 'trainer_id', None), tuple(getattr(mon, 'dvs', ()))
 
 
 def _levels(snapshot):
