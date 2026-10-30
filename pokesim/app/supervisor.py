@@ -65,7 +65,8 @@ class Child:
             try:
                 message = self.ready.get(timeout=timeout)
             except queue.Empty:
-                last = next((line for line in reversed(self.logs) if line.strip()), '')
+                # The worker-logs thread may still be appending, so walk a copy.
+                last = next((line for line in reversed(tuple(self.logs)) if line.strip()), '')
                 cause = last if len(last) <= 200 else last[:197] + '...'
                 alive = 'still running' if self.process.poll() is None else f'exited with {self.process.returncode}'
                 raise RuntimeError(f'Worker was not ready after {timeout} seconds ({alive}). '
