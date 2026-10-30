@@ -60,6 +60,9 @@ def legends(policy, snapshot, Goal):
         return None
     data = policy.data
     policy.collection['phase'] = 'legendary'
+    # Marks this decision as on the quest, so the sleeper static_lead picked keeps the lead
+    # through steps such as making box room that do not ask for it again.
+    policy.legend_decision = getattr(policy, 'decisions', None)
     if not snapshot.can_catch:
         if policy.no_room(snapshot):
             return None
@@ -314,6 +317,8 @@ def static_lead(policy, snapshot, species, Goal):
     if not options:
         return None
     mon = max(options, key=lambda row: row[:3])[3]
+    # The level reorder leaves this sleeper in front while the legendary quest goes on (Policy.level_lead).
+    policy.static_sleeper = (mon.trainer_id, tuple(mon.dvs))
     # False Swipe chips a sleeping legendary to 1 HP with no risk, so a Pokémon that knows it comes too.
     swipers = [row for row in snapshot.party + snapshot.stored if not row.egg and row is not mon
                and any(pp and data.moves.get(move, {}).get('effect') == 'EFFECT_FALSE_SWIPE' for move, pp in zip(row.moves, row.pp))]
