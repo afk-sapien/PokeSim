@@ -1,0 +1,177 @@
+"""The stage ladder: which rung a moment counts for, the stall loop, adopting a save, and fresh saves that replay."""
+import gzip
+import json
+import os
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from tools import stage_ladder
+from tools.stage_ladder import GEN1_LORELEI, main, reached
+
+ROOT = Path(__file__).resolve().parents[1]
+RED_ROM = Path(os.environ.get('ROM_PATH', ROOT / 'roms' / 'pokered.gb'))
+CARTRIDGES = Path(os.environ.get('GEN2_CARTRIDGE_DIR', ROOT / 'roms'))
+GEN2_DATA = os.environ.get('GEN2_DATA_DIR')
+
+
+def gen1(**fields):
+    return SimpleNamespace(**{'map': 0, 'badges': 0, 'hall_of_fame_count': 0, **fields})
+
+
+def gen2(constant='NEW_BARK_TOWN', **fields):
+    data = SimpleNamespace(maps={(1, 1): {'constant': constant}})
+    return SimpleNamespace(**{'map': (1, 1), 'badges': 0, 'hall_of_fame_count': 0, 'data': data, **fields})
+
+
+def test_gen1_rungs_follow_badges_the_first_league_room_and_the_hall_of_fame():
+    assert reached(1, gen1(), {}) == {'new_game'}
+    assert reached(1, gen1(badges=0b111), {}) == {'new_game', 'badges_2'}
+    assert reached(1, gen1(badges=0xFF, map=GEN1_LORELEI), {}) >= {'badges_8', 'league_first'}
+    # Back in Lorelei's room for a rematch is neither the first League nor post-game.
+    assert not reached(1, gen1(badges=0xFF, map=GEN1_LORELEI, hall_of_fame_count=1), {}) & {'league_first', 'post_game'}
+    assert 'post_game' in reached(1, gen1(badges=0xFF, map=0, hall_of_fame_count=1), {})
+
+
+def test_gen2_rungs_count_johto_badges_and_follow_the_story_after_the_league():
+    assert reached(2, gen2(badges=0xFF00), {}) == {'new_game'}
+    assert 'badges_4' in reached(2, gen2(badges=0x0F), {})
+    assert 'league_first' in reached(2, gen2('WILLS_ROOM', badges=0xFF), {})
+    assert 'champion_first' not in reached(2, gen2('HALL_OF_FAME', hall_of_fame_count=1), {})
+    after = reached(2, gen2('VERMILION_CITY', hall_of_fame_count=1), {'kanto': True})
+    assert after >= {'champion_first', 'kanto_entry'} and 'post_game' not in after
+    assert 'red' in reached(2, gen2('SILVER_CAVE_OUTSIDE', hall_of_fame_count=1), {'kanto': True})
+    done = reached(2, gen2('NEW_BARK_TOWN', hall_of_fame_count=2), {'kanto': True, 'red': True})
+    assert 'post_game' in done and not done & {'champion_first', 'kanto_entry', 'red'}
+
+
+class FakeRun:
+    """A Gen I run that never achieves anything, so every quiet window is a stall."""
+    generation = 1
+
+    def __init__(self):
+        self.frame, self.reloads = 0, []
+        self.policy = SimpleNamespace(details=lambda: {'reason': 'Walking in circles'}, goal=None)
+        self.pb = SimpleNamespace(tick=lambda frames, render: None)
+
+    def save(self, path, compress=False):
+        path.write_bytes(b'state')
+        path.with_suffix('.json').write_text(json.dumps({'frame': self.frame}), encoding='utf-8')
+        return path
+
+    def step(self, snapshot):
+        self.frame += 600
+
+    def reload(self, path):
+        self.reloads.append(json.loads(Path(path).with_suffix('.json').read_text(encoding='utf-8'))['frame'])
+
+    def stop(self):
+        pass
+
+
+class QuietWatch:
+    loop = None
+
+    def observe(self, snapshot):
+        return [], False
+
+    def marks(self, snapshot):
+        return []
+
+    def battle_clock(self, snapshot, since, frame):
+        return None
+
+    def reset(self):
+        pass
+
+
+def test_a_stall_keeps_a_bundle_and_goes_back_to_the_save_before_it(tmp_path, monkeypatch):
+    run = FakeRun()
+    cartridge = SimpleNamespace(version='red', generation=1, sha1='abc')
+    snapshot = SimpleNamespace(valid=True, in_battle=0, textbox=False, start_menu=False, map=0x26, badges=0,
+                               hall_of_fame_count=0)
+    monkeypatch.setattr(stage_ladder, 'prepare', lambda rom, code: (cartridge, ''))
+    monkeypatch.setattr(stage_ladder, 'open_fresh', lambda *args: (run, QuietWatch(), lambda: snapshot))
+    ladder = tmp_path / 'red'
+    assert main(['snapshot', 'red.gb', str(ladder), '--quiet', '30', '--max-stalls', '2', '--game-hours', '3']) == 1
+    report = json.loads((ladder / 'snapshot-report.json').read_text(encoding='utf-8'))
+    assert [kept['rung'] for kept in report['kept']] == ['new_game']
+    assert [stall['reason'] for stall in report['stalls']] == ['nothing achieved for 30 game minutes'] * 2
+    assert report['gave_up'] == 'too many stalls' and report['missing'][0] == 'badges_2'
+    # The first stall went back to the save taken at the start, the last progress there was.
+    assert run.reloads == [0]
+    bundle = ladder / report['stalls'][0]['bundle']
+    assert {path.name for path in bundle.iterdir()} >= {'before.state', 'before.json', 'noticed.state', 'report.json'}
+    assert json.loads((bundle / 'report.json').read_text(encoding='utf-8'))['policy_reason'] == 'Walking in circles'
+    assert json.loads((ladder / 'new_game' / 'scenario.json').read_text(encoding='utf-8'))['name'] == 'ladder-red-new_game'
+    assert not (ladder / '.work').exists()
+
+
+def test_adopt_keeps_an_existing_save_compressed(tmp_path):
+    ladder = tmp_path / 'blue'
+    ladder.mkdir()
+    (ladder / 'ladder.json').write_text(json.dumps({'game': 'blue', 'generation': 1, 'rom_sha1': 'abc',
+                                                    'randomizer': ''}), encoding='utf-8')
+    source = tmp_path / 'hall.state'
+    source.write_bytes(b'\0' * 1000)
+    source.with_suffix('.json').write_text(json.dumps({'rom_sha1': 'abc', 'frame': 9}), encoding='utf-8')
+    assert main(['adopt', str(ladder), 'post_game', str(source)]) == 0
+    rung = ladder / 'post_game'
+    assert gzip.decompress((rung / 'start.state').read_bytes()) == b'\0' * 1000
+    assert json.loads(gzip.decompress((rung / 'start.json').read_bytes()))['frame'] == 9
+    with pytest.raises(SystemExit, match='exists'):
+        main(['adopt', str(ladder), 'post_game', str(source)])
+    with pytest.raises(SystemExit, match='no rung'):
+        main(['adopt', str(ladder), 'red', str(source)])
+
+
+def test_ladders_stay_out_of_the_tracked_checkout():
+    with pytest.raises(SystemExit, match='private game data'):
+        main(['snapshot', str(RED_ROM), str(ROOT / 'tests' / 'ladder')])
+
+
+@pytest.mark.skipif(not RED_ROM.exists(), reason='no ROM')
+def test_a_fresh_red_run_saves_compressed_and_replays(tmp_path):
+    from pokesim.headless import HeadlessRun
+    from pokesim.ram import read_snapshot
+    run = HeadlessRun(RED_ROM)
+    try:
+        while run.frame < 20000:
+            run.step(read_snapshot(run.pb.memory, run.frame))
+        path = run.save(tmp_path / 'fresh.state', compress=True)
+        frame = run.frame
+    finally:
+        run.stop()
+    assert path.read_bytes()[:2] == b'\x1f\x8b' and (tmp_path / 'fresh.json').read_bytes()[:2] == b'\x1f\x8b'
+    again = HeadlessRun(RED_ROM, path)
+    try:
+        assert again.frame == frame
+    finally:
+        again.stop()
+
+
+def test_a_randomized_run_boots_the_patched_cartridge(monkeypatch):
+    if not RED_ROM.exists():
+        pytest.skip('no ROM')
+    import pokesim.randomized
+    booted = []
+    real = pokesim.randomized.rom_stream
+    monkeypatch.setattr(pokesim.randomized, 'rom_stream', lambda rom: booted.append(rom) or real(rom))
+    from pokesim.headless import HeadlessRun
+    HeadlessRun(RED_ROM).stop()
+    assert booted == [RED_ROM]
+
+
+@pytest.mark.skipif(not GEN2_DATA or not (CARTRIDGES / 'gold.gbc').exists(), reason='needs GEN2_DATA_DIR and Gold')
+def test_a_fresh_gold_ladder_keeps_a_new_game_rung_the_scenarios_replay(tmp_path):
+    from pokesim.scenarios import Scenario, open_run
+    ladder = tmp_path / 'gold'
+    main(['snapshot', str(CARTRIDGES / 'gold.gbc'), str(ladder), '--game-hours', '0.05'])
+    scenario = Scenario.load(ladder / 'new_game')
+    assert scenario.name == 'ladder-gold-new_game'
+    run, _ = open_run(scenario, CARTRIDGES / 'gold.gbc')
+    try:
+        assert run.frame > 0 and run.read().started
+    finally:
+        run.stop()

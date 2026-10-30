@@ -173,6 +173,25 @@ reloads an autosave. The second reload goes to the unedited `--fallback` save, a
 application restarts a League attempt from its entry save. `show` prints the party, bag and
 place a scenario starts from.
 
+## Stage ladder
+
+A stage ladder is a set of scenarios, one for each stage of a game, so a change can be replayed at
+every stage rather than only where a player once got stuck. `tools/stage_ladder.py snapshot` plays
+a fresh game headless and keeps a save the first time it reaches each rung. A stall on the way keeps
+a bundle under the ladder's `stalls/` folder, in the layout `add` accepts, and the run goes back to
+the save from before it. `adopt` keeps an existing save as a rung, and `show` lists what each ladder
+holds.
+
+```sh
+uv run --locked python tools/stage_ladder.py snapshot roms/pokered.gb data/ladder/red
+uv run --locked python tools/stage_ladder.py snapshot roms/pokered.gb data/ladder/red-randomized --randomizer PSR1-RED-WS-1
+uv run --locked python tools/stage_ladder.py adopt data/ladder/blue post_game hall-of-fame.state
+uv run --locked python tools/stuck_scenarios.py --root data/ladder/red run
+```
+
+A randomized ladder's rungs replay on the cartridge its `ladder.json` names only with `RANDOMIZER`
+and `ROM_PATH` set to that share code and cartridge.
+
 ## Build identity and packages
 
 `/api/state` and `/desktop/status` include `build.version`, `build.revision`, and

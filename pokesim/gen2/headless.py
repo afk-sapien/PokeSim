@@ -7,14 +7,16 @@ changing. Rewards, statistics, trades and notifications stay out, since they nee
 """
 from __future__ import annotations
 
+import io
 from pathlib import Path
 import secrets
 
-from pokecore.emulator_state import validate_runtime
-from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time
+from pokecore.emulator_state import checkpoint_metadata, validate_runtime
+from pokecore.gen2.clock import (boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed,
+                                 rebase_to_host)
 from pokecore.gen2.ram import read_snapshot
 
-from .. import config
+from .. import __version__, config
 from ..checkpoints import CheckpointStore, open_state
 from ..experimental.gen2 import identify
 from .data import GameData
@@ -27,14 +29,16 @@ from .store_stock import StoreStock
 class HeadlessRun:
     generation = 2
 
-    def __init__(self, rom, checkpoint, seed=7, rng=None, data_root=None):
+    def __init__(self, rom, checkpoint=None, seed=7, rng=None, data_root=None):
         rom = Path(rom)
         profile = identify(rom.read_bytes())
         self.rom_sha1, self.game = profile.sha1, profile.game
         self.data = GameData.load(data_root, self.game)
         from ..planning.cost import gen2_cartridge_rows
         self.data.encounters = gen2_cartridge_rows(rom, self.game, self.data.encounters)
-        self.pb = boot(str(rom), sound=False)
+        # A randomized run (RANDOMIZER set) plays the patched cartridge, as the managed worker does.
+        from ..randomized import rom_stream
+        self.pb = boot(rom_stream(rom), sound=False)
         self.pb.set_emulation_speed(0)
         follow_game_time(self.pb)
         StoreStock(self.data, champion=self._champion_catalogue).attach(self.pb)
@@ -44,7 +48,12 @@ class HeadlessRun:
         self.frame = self.screen_frame = 0
         self.screen_key = None
         self.clock = None
-        self._load(Path(checkpoint))
+        if checkpoint:
+            self._load(Path(checkpoint))
+        else:
+            # A new game, as the managed runtime starts one with no autosave: the clock follows game
+            # time from the host clock's reading now.
+            self.clock = follow_game_time(self.pb, host_elapsed(self.pb))
 
     def _champion_catalogue(self):
         """The planned Champion shop item for the clerk who opens the BUY list, as the managed runtime adds it.
@@ -94,6 +103,22 @@ class HeadlessRun:
         self._load(Path(path))
         self.policy.menu = None
         self.tick(1 + (self.rng.randrange(180) if self.rng else secrets.randbelow(180)))
+
+    def save(self, path, compress=False):
+        """Write a checkpoint the application and the replay tools both accept, with the manifest
+        fields the managed runtime writes that a replay reads back."""
+        # As the runtime does, so a copy opened with an unlocked clock never reads it running backward.
+        rebase_to_host(self.pb)
+        stream = io.BytesIO()
+        self.pb.save_state(stream)
+        lock = clock_lock_state(self.pb)
+        manifest = {'app_version': __version__, **checkpoint_metadata(rtc_clock=lock), 'rtc_clock': lock,
+                    'generation': 2, 'rom_sha1': self.rom_sha1, 'frame': self.frame, 'policy': config.POLICY,
+                    'policy_state': self.policy.state_dict(), 'run_memory': {}, 'gen2_history': self.history,
+                    'rtc_elapsed': clock_elapsed(self.pb),
+                    'settled': self.policy.menu is None and not getattr(self.policy, 'backing_out', False)}
+        return CheckpointStore(path.parent).write_checkpoint(stream.getvalue(), manifest, name=path.name,
+                                                             compress=compress)
 
     def read(self):
         return count_league(self.history, self.data, read_snapshot(self.pb.memory, self.data, self.frame), observe=True)
