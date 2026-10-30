@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.randomized import ENV
-from tools.replay_audit import ALL_TARGETS, describe, load, randomize, report, row
+from tools.replay_audit import ALL_TARGETS, _goal_events, describe, load, randomize, report, row
 
 
 def test_gold_silver_and_crystal_hunts_split_by_kind_and_target():
@@ -95,6 +95,23 @@ def test_report_names_the_share_codes_each_side_played(tmp_path, capsys):
     report(SimpleNamespace(before=before, after=after))
     out = capsys.readouterr().out
     assert '0 recoveries, randomizer off' in out and '0 recoveries, randomizer PSR1-SILVER-WS-7' in out
+
+
+def _mon(species, trainer_id=1, dvs=(1, 2, 3, 4)):
+    return SimpleNamespace(species=species, trainer_id=trainer_id, dvs=dvs, level=20, experience=8000)
+
+
+def _snapshot(party, stored):
+    return SimpleNamespace(owned=frozenset(), items=(), badges=0, party=party, stored=stored)
+
+
+def test_a_pc_swap_that_brings_the_trainee_into_the_party_is_progress_for_its_preparation():
+    venusaur, mankey = _mon('Venusaur'), _mon('Mankey', dvs=(9, 9, 9, 9))
+    before, after = _snapshot([venusaur], [mankey]), _snapshot([mankey], [venusaur])
+    assert [event.kind for event in _goal_events('collection_train_pc', before, after)] == ['trainee']
+    # The same swap means nothing to other goals, and a party that only reorders gains nothing.
+    assert _goal_events('collection_hunt', before, after) == []
+    assert _goal_events('collection_train_pc', before, _snapshot([venusaur], [mankey])) == []
 
 
 RED_ROM = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
