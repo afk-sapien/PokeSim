@@ -6,8 +6,9 @@
 
 ``run`` plays one checkpoint headless with the checkout's own policy, from the working directory, and
 writes the frame share per goal from ``Monitor.shares()``, the stand-downs, and the frames spent in goal
-spans that ended without a progress event. Trainee experience counts as progress for a training goal, and a
-PC visit that brings the trainee into the party counts for its preparation.
+spans that ended without a progress event. Battle experience counts as progress for any goal, a heal that
+restores HP, status or PP counts for the heal, and a PC visit that brings the trainee into the party counts
+for its preparation.
 Red, Blue and Yellow need POKESIM_GEN1_VARIANT set to match the cartridge, and Gold, Silver and Crystal
 need ``--data-root``. ``--randomizer`` takes a share code such as ``PSR1-RED-WS-12345`` and plays the
 save on that randomized cartridge, as a randomized adventure's worker does. The code must be for the
@@ -216,6 +217,15 @@ def _goal_events(key, previous, current):
                      if before.species == after.species and after.experience > before.experience)
         if gained:
             found.append(ProgressEvent('experience', gained))
+    # A heal that restores HP, status or PP was needed, so its trip is support for the goal behind it.
+    # A heal that loops or repeats with nothing to restore gains nothing and stays wasted.
+    if key == 'heal' and previous is not None and current is not None and not found \
+            and getattr(current, 'valid', True) and getattr(previous, 'valid', True):
+        restored = sum(1 for before, after in zip(previous.party, current.party) if before.species == after.species
+                       and (after.hp > before.hp or before.status and not after.status
+                            or sum(getattr(after, 'pp', ())) > sum(getattr(before, 'pp', ()))))
+        if restored:
+            found.append(ProgressEvent('healed', restored))
     # A PC visit that swaps the trainee into the party keeps the held count, so no other event shows it,
     # yet it is the whole of the preparation goal. A goal cut short between the deposit and the withdrawal
     # leaves two spans, so each half of the swap counts.
