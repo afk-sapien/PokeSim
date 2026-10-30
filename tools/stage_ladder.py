@@ -313,7 +313,7 @@ def _bundle(run, snap, folder, before, reason, missing, game_minute, marks):
               'objective': (details.get('objective') or {}).get('title'), 'policy_reason': details.get('reason'),
               'marks': [title for _, _, title in marks][-5:], 'has_before': before is not None}
     (bundle / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    return {'bundle': str(bundle.relative_to(folder)), **report}
+    return {'bundle': bundle.relative_to(folder).as_posix(), **report}
 
 
 def adopt(args):
