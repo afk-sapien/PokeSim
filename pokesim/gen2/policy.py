@@ -850,13 +850,22 @@ class Policy:
         _, x, y, face = min(choices)
         return Goal('fish_surf', 'Catch a partner for field moves', map_name, x, y, face)
 
+    # Shop scripts that check an event and skip the pokemart once it is set, in all three games.
+    CLOSED_SHOPS = {'MahoganyMart1FPharmacistScript': 'EVENT_DECIDED_TO_HELP_LANCE'}
+
     def clerk_present(self, snapshot, entry, shop):
         """Whether a clerk running this shop's script is on the map.
 
         A set event flag hides its object, so a shop whose every clerk is hidden cannot be used:
         Mahogany Mart's Team Rocket pharmacist leaves for good once the hideout is cleared, and
         the grandmother at the other counter takes over the shop.
+
+        A clerk can also stay on the map and stop selling. Once the player agrees to help Lance,
+        the pharmacist only talks about him until he leaves, so his counter is closed too.
         """
+        closed_by = self.CLOSED_SHOPS.get(shop['script'])
+        if closed_by and snapshot.event(closed_by):
+            return False
         return any(obj['script'] == shop['script']
                    and (obj['event'] not in self.data.events or not snapshot.event(obj['event']))
                    for obj in entry['objects'])

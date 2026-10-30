@@ -159,7 +159,7 @@ class Navigator:
                         or (snapshot.map, nx, ny) in self.blocked):
                     continue
                 inside = 0 <= nx < width and 0 <= ny < height
-                if avoid_warps and inside and CARPETS.get(grid[y * width + x]) == button:
+                if avoid_warps and inside and (x, y) in doors and CARPETS.get(grid[y * width + x]) == button:
                     continue
                 if not inside:
                     if point in targets and self.passable(border.get(point, 7), surf=surf):
