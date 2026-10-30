@@ -120,6 +120,8 @@ class Regions:
         # A carpet joins the ground on either side of it. In a gate the officer's corner behind the
         # counter opens only onto the carpet row, so leaving it out cut that corner off from the exits.
         terminals = {point for point in terminals if grid[point[1] * width + point[0]] not in CARPETS}
+        # A carpet tile with no warp on it, such as Olivine Port's gangway, is plain ground.
+        doors = {(warp['x'], warp['y']) for warp in entry['warps']}
         index = 0
         for y in range(height):
             for x in range(width):
@@ -135,7 +137,7 @@ class Regions:
                         if (nx, ny) in labels or (nx, ny) in terminals or not 0 <= nx < width or not 0 <= ny < height:
                             continue
                         if (side_wall(grid[py * width + px], button)
-                                or CARPETS.get(grid[py * width + px]) == button
+                                or (px, py) in doors and CARPETS.get(grid[py * width + px]) == button
                                 or side_wall(grid[ny * width + nx], OPPOSITE[button])
                                 or not self.walkable(grid[ny * width + nx], cut, surf)):
                             continue

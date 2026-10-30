@@ -6,6 +6,8 @@
 
 - Stop Gold, Silver and Crystal restocking at Mahogany Mart's pharmacist during the Rocket hideout. Once the player agrees to help Lance he only talks about Lance and sells nothing, so the restock and the hideout passwords took turns at his counter forever. His counter now counts as closed from then on, and the run restocks elsewhere. Red, Blue and Yellow play as before.
 
+- Let Gold, Silver and Crystal walk the Olivine Port pier to the S.S. Aqua. A carpet tile at the top of the gangway has no warp on it, but navigation treated stepping off it as a warp and avoided it, so the pier looked cut off and the run walked in and out of the port entrance until it gave up. Only a carpet with a warp on it is avoided now. Red, Blue and Yellow play as before.
+
 ## 0.6.0
 
 - Stop Gold, Silver and Crystal swapping their first two Pokémon back and forth at a PC during the Lugia or Ho-Oh quest. The quest puts its sleeping move user in front, then a visit to free box room took over the goal and the level reorder put the strongest Pokémon back, so each step only swapped the lead and the visit never went on. The sleeper now keeps the lead while a box release or box change runs and on any step the quest made. Red, Blue and Yellow play as before.
