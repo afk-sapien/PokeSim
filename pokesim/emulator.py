@@ -726,6 +726,8 @@ class Emulator:
                 log.exception("cannot keep the save from before a stall")
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
+        self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
+        self.store.prune_reward_results()
         # The checkpoint's copy, since building it again doubles the work of every save.
         self.store.set("policy_state", manifest["policy_state"])
 

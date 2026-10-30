@@ -5,7 +5,8 @@ import threading
 
 import pytest
 
-from pokesim.checkpoints import GZIP_MAGIC, CheckpointStore, compress_event_states, compress_state, open_state
+from pokesim.checkpoints import (GZIP_MAGIC, CheckpointStore, compress_event_states, compress_state, open_state,
+                                 read_manifest)
 
 # A save state is mostly zeroed RAM, so a short pattern in a long run of zeros stands in for one.
 RAW = b'\x01\x02\x03' + bytes(200_000)
@@ -115,3 +116,31 @@ def test_compression_stops_when_asked(tmp_path):
     path = checkpoints.write_checkpoint(RAW, MEMORY, name='event-4.state')
     assert compress_event_states(tmp_path, threading.Lock(), stop=lambda: True) == 0
     assert path.read_bytes() == RAW
+
+
+# A sidecar is mostly the policy state, which repeats itself enough for gzip to keep about a third.
+POLICY = {'policy_state': {'plan': [{'goal': 'collect', 'map': n % 7} for n in range(400)]}, 'run_memory': {}, 'generation': 2}
+
+
+def test_journal_sidecars_are_written_compressed_and_still_read(checkpoints):
+    path = checkpoints.write_checkpoint(RAW, POLICY, name='event-8.state', compress=True)
+    sidecar = path.with_suffix('.json')
+    assert sidecar.read_bytes()[:2] == GZIP_MAGIC
+    assert sidecar.stat().st_size < len(json.dumps(POLICY)) // 3
+    assert checkpoints.checkpoint_metadata(path)['policy_state'] == POLICY['policy_state']
+    assert read_manifest(sidecar)['generation'] == 2
+    autosave = checkpoints.write_checkpoint(RAW, POLICY)
+    assert json.loads(autosave.with_suffix('.json').read_text())['generation'] == 2, 'autosave sidecars stay plain'
+
+
+def test_plain_sidecars_of_compressed_saves_are_compressed_in_place(tmp_path):
+    checkpoints = CheckpointStore(tmp_path / 'a' / 'states')
+    path = checkpoints.write_checkpoint(RAW, POLICY, name='event-9.state', compress=True)
+    plain = json.dumps(read_manifest(path.with_suffix('.json'))).encode()
+    path.with_suffix('.json').write_bytes(plain)
+
+    assert compress_event_states(tmp_path, threading.Lock()) > len(plain) // 2
+
+    assert path.with_suffix('.json').read_bytes()[:2] == GZIP_MAGIC
+    assert checkpoints.checkpoint_metadata(path)['policy_state'] == POLICY['policy_state']
+    assert compress_event_states(tmp_path, threading.Lock()) == 0

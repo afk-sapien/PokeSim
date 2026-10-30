@@ -81,7 +81,7 @@ def game(tmp_path, **extra):
     snapshot = SimpleNamespace(valid=True, started=True, in_battle=0, map_name='Seafoam Islands B4F', x=4, y=9,
                                party=(SimpleNamespace(name='Lapras', level=40, hp=0, status=0),))
     store.get = lambda key: None
-    store.set = store.prune_events = lambda *a: None
+    store.set = store.prune_events = store.prune_attachments = store.prune_reward_results = lambda *a: None
     return SimpleNamespace(store=store, snapshot=snapshot, stall=StallWatch(game_minutes=120, real_minutes=0),
                            play_clock=SimpleNamespace(state_dict=dict), policy=SimpleNamespace(state_dict=dict, details=dict),
                            _state_bytes=lambda: b'state', _manifest=lambda: dict(MANIFEST), _shot_png=lambda: b'png',
