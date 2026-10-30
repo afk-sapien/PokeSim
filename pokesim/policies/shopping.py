@@ -17,6 +17,8 @@ BALL_RESERVE = 10
 HUNT_START_BALLS = 5
 SAFARI_GOALS = ('surf', 'teeth')
 SAFARI_INTERIOR = {m for m, w in WORLD.items() if w['name'].startswith('SafariZone') and w['name'] != 'SafariZoneGate'}
+# Bag entries the Safari Zone prizes need, HM03 and the Gold Teeth.
+SAFARI_PRIZE_SLOTS = 2
 
 
 def hunting(project):
@@ -93,7 +95,10 @@ class ShoppingController:
         ball_reserve = BALL_RESERVE
         balls = sum(qty for item, qty in snapshot.items if item in BALLS)
         medicine = sum(qty for item, qty in snapshot.items if item in HEALING)
-        bag_full = len(snapshot.items) >= 18 and self.sale_index(snapshot) is not None
+        # Inside the Safari Zone a crowded bag waits until the prizes have no room. A Yellow pickup there
+        # filled the bag, and each sale meant walking out to Fuchsia, paying the fee and walking back in.
+        crowded = 20 - SAFARI_PRIZE_SLOTS if snapshot.map in SAFARI_INTERIOR else 17
+        bag_full = len(snapshot.items) > crowded and self.sale_index(snapshot) is not None
         if balls < ball_reserve or (medicine == 0 and (snapshot.map in (2, 56)
                 or WORLD.get(snapshot.map, {}).get('name', '').endswith('Gym'))) or bag_full:
             self.restocking = True

@@ -13,7 +13,7 @@ from .battle import (BALLS, CURES, HEALING, HOPELESS, W_BATTLE_MON, W_ENEMY_MON,
                      healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
-from .pickups import Pickups
+from .pickups import Pickups, ground_item
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
 from .move_development import hm_upgrade, move_name
 from .progression import GAME_STARTERS, STARTERS, YELLOW, Goal, healing_goal, journey, league_partner, milestones, story_goal
@@ -1729,6 +1729,10 @@ class StrategicPolicy(Policy):
         candidates = []
         for i, o in enumerate(w.get('objects', [])):
             if o[2] in ('SPRITE_NURSE', 'SPRITE_CLERK', 'SPRITE_BOULDER', 'SPRITE_SNORLAX', 'SPRITE_BLUE', 'SPRITE_OAK') or (s.map, o[0], o[1]) in self.nav.cleared_objects:
+                continue
+            # An item the bag has no room for, including the Safari Zone's kept prize room, is left alone.
+            item = ground_item(o)
+            if item and not Pickups.has_space(s, item['item']):
                 continue
             x, y = positions[i] if i < len(positions) else o[:2]
             key = f'{s.map}:{o[4]}'
