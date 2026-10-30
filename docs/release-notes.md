@@ -1,4 +1,4 @@
-# PokeSim 0.6.0
+# PokeSim 0.6.0 release
 
 This release rebuilds how the bot picks what to do next, adds randomized adventures,
 and stops the library growing without bound. It also gives Gold, Silver and Crystal
