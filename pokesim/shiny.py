@@ -102,6 +102,14 @@ def clear(db, generation):
     db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
 
 
+def store_dvs(pb, signature):
+    """The bank 15 address right after storeDVs writes both wild DV bytes."""
+    bank = bytes(pb.memory[BANK, 0x4000:0x7fff])
+    if bank.count(signature) != 1:
+        raise ValueError('Shiny encounter tracking does not match the verified cartridge')
+    return 0x4000 + bank.index(signature) + 5
+
+
 class ShinyTracker:
     def __init__(self, store, rom_sha1):
         from .catches import TRACKED, YELLOW
@@ -120,11 +128,7 @@ class ShinyTracker:
     def attach(self, pb):
         if not self.supported:
             return
-        bank = bytes(pb.memory[BANK, 0x4000:0x7fff])
-        signature = getattr(self, 'signature', SIGNATURE)
-        if bank.count(signature) != 1:
-            raise ValueError('Shiny encounter tracking does not match the verified cartridge')
-        pb.hook_register(BANK, 0x4000 + bank.index(signature) + 5, self.encounter, pb)
+        pb.hook_register(BANK, store_dvs(pb, getattr(self, 'signature', SIGNATURE)), self.encounter, pb)
 
     def encounter(self, pb):
         from .strategy_data import SPECIES

@@ -42,6 +42,8 @@ def main():
                         help='stop after this many game minutes in one stall, 0 to keep playing')
     parser.add_argument('--until-champion', action='store_true', help='stop at the first Hall of Fame entry')
     parser.add_argument('--seed', type=int, default=7, help='vary the choices, including from a checkpoint')
+    parser.add_argument('--fair-wild-dvs', nargs='?', const=True, type=bytes.fromhex, metavar='KEY',
+                        help='play Fair wild DVs, keyed by the seed or by an adventure\'s hex key')
     args = parser.parse_args()
     if args.hours <= 0 or args.stall_minutes <= 0 or args.give_up_minutes < 0:
         parser.error('--hours and --stall-minutes must be positive')
@@ -53,7 +55,7 @@ def main():
     rolling.mkdir(exist_ok=True)
 
     # Hunting explores, so the seed must vary the choices a checkpoint would otherwise repeat.
-    run = HeadlessRun(args.rom, args.checkpoint, args.seed, reseed=True)
+    run = HeadlessRun(args.rom, args.checkpoint, args.seed, reseed=True, fair_wild_dvs=args.fair_wild_dvs)
     start = progress_frame = run.frame
     budget = int(args.hours * 60 * MINUTE)
     recent = deque(maxlen=8)                      # rolling checkpoints, oldest first

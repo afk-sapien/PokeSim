@@ -26,10 +26,15 @@ from .screen import W_OPTIONS
 BLUE_SHA1 = 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2'
 
 
+def fair_key(seed):
+    """A fair wild DV key for a run with no adventure, the same for every run with this seed."""
+    return hashlib.sha256(f'fair-wild-dvs {seed}'.encode()).digest()
+
+
 class HeadlessRun:
     generation = 1
 
-    def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False):
+    def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False, fair_wild_dvs=None):
         self.rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
         # The policy reads its game data once at import, from POKESIM_GEN1_VARIANT. Yellow under
         # Red data reads menus at Red's addresses, so every battle shortcut times out.
@@ -41,6 +46,12 @@ class HeadlessRun:
         self.pb = open_emulator(rom_stream(rom), default=CoreEmulator, yellow=self.rom_sha1 == YELLOW_SHA1,
                                 window='null', sound_emulated=False)
         self.pb.set_emulation_speed(0)
+        # Fair wild DVs, as an adventure with the setting on plays them. True keys the rerolls from
+        # the seed, and bytes are a live adventure's own key.
+        if fair_wild_dvs:
+            from . import fair_dvs
+            key = fair_wild_dvs if isinstance(fair_wild_dvs, bytes) else fair_key(seed)
+            fair_dvs.attach(self.pb, self.rom_sha1, key)
         self.policy = StrategicPolicy(seed)
         self.policy.collection.version = ('yellow' if self.rom_sha1 == YELLOW_SHA1
                                           else 'blue' if self.rom_sha1 == BLUE_SHA1 else 'red')
