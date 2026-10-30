@@ -172,6 +172,9 @@ class Manager:
         self.watchdog.install()
         from .deletion import recover_deletions
         recover_deletions(self)
+        from ..checkpoints import compress_event_states
+        threading.Thread(target=compress_event_states, args=(self.root / 'adventures', self.maintenance),
+                         kwargs={'stop': lambda: self.closing}, name='compress-event-states', daemon=True).start()
         self.coordinator.recover()
         for adventure in self.registry.adventures():
             if self.closing:

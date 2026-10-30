@@ -120,7 +120,8 @@ class Recorder:
         self.rows.append((event.type, state))
         return len(self.rows)
 
-    def write_checkpoint(self, state, manifest, name=None):
+    def write_checkpoint(self, state, manifest, name=None, compress=False):
+        assert compress
         self.checkpoints.append(name)
 
     def event(self, eid):

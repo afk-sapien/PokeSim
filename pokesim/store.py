@@ -328,10 +328,10 @@ class Store:
 
     atomic_write = staticmethod(CheckpointStore.atomic_write)
 
-    def write_checkpoint(self, state: bytes, metadata: dict, name: str | None = None) -> Path:
+    def write_checkpoint(self, state: bytes, metadata: dict, name: str | None = None, compress=False) -> Path:
         if self.read_only:
             raise PermissionError('A stopped adventure is read only')
-        return self.checkpoints.write_checkpoint(state, metadata, name)
+        return self.checkpoints.write_checkpoint(state, metadata, name, compress=compress)
 
     def checkpoint_metadata(self, path: Path) -> dict | None:
         return self.checkpoints.checkpoint_metadata(path)
