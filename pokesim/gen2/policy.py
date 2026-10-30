@@ -1895,8 +1895,17 @@ class Policy:
             self.collection.pop('roam_lead')
         # A roaming-beast or static-legendary sleeper leads on purpose even when it is far below the rest of the
         # party, and so does the Tower team's chosen lead, which the Tower preparation would otherwise swap back.
+        # The static-legendary sleeper also keeps the lead while the journey is still on the legendary quest
+        # under another goal, and through a PC visit to free box slots, which comes and goes between quest steps.
+        # Chaotic Escape swapped the sleeper and its level 100 lead back and forth for half an hour at a PC.
+        sleeper = getattr(self, 'static_sleeper', None)
+        storage = self.goal is not None and self.goal.key in {'collection_release', 'collection_box'}
+        quest = getattr(self, 'legend_decision', None)
+        questing = (quest is not None and quest == getattr(self, 'decisions', None) or storage) and not training
         if (self.collection.get('roam_lead') and not training or holds_lead(self)
-                or self.goal and self.goal.key in {'legend_lugia', 'legend_ho_oh', 'legend_suicune', 'collection_static_lead'}):
+                or self.goal and self.goal.key in {'legend_lugia', 'legend_ho_oh', 'legend_suicune', 'collection_static_lead'}
+                or questing and sleeper and snapshot.party
+                and (snapshot.party[0].trainer_id, tuple(snapshot.party[0].dvs)) == sleeper):
             return None
         if trainee is not None:
             mon = snapshot.party[trainee]

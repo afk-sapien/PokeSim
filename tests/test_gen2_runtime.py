@@ -2228,6 +2228,38 @@ def test_static_lead_is_the_sleeper_most_likely_to_land_sleep(real_data, monkeyp
     assert static_lead(policy, snapshot, 249, Goal) is None
 
 
+def test_the_static_sleeper_keeps_the_lead_through_a_box_release(real_data, monkeypatch):
+    from pokesim.gen2 import teams
+    from pokesim.gen2.menus import Lead
+    from pokesim.gen2.policy import Goal, Policy
+    from pokesim.gen2.quests import static_lead
+    monkeypatch.setattr(teams, 'key', lambda mon: mon.name)
+    policy = Policy(real_data)
+
+    def mon(species, level, moves, stats):
+        return SimpleNamespace(species=species, level=level, moves=moves, pp=tuple(10 if m else 0 for m in moves),
+                               egg=False, box=None, stats=stats, trainer_id=level, dvs=(level, 0, 0, 0),
+                               name=real_data.species[species]['name'], held_item=0, hp=stats[0])
+    # Chaotic Escape: a level 100 lead and a much lower sleeper, with a full box to clear first.
+    leader = mon(160, 100, (57, 250, 15, 70), (363, 284, 272, 234, 238, 246))
+    sleeper = mon(40, 54, (47, 50, 111, 3), (219, 95, 54, 62, 94, 67))
+    snapshot = SimpleNamespace(party=[leader, sleeper], stored=[], map=real_data.map_ids['CHERRYGROVE_CITY'],
+                               x=1, y=1, active_box=0)
+    assert static_lead(policy, snapshot, 249, Goal).key == 'collection_static_lead'
+    assert policy.menu == Lead(1, (54, (54, 0, 0, 0)))
+    snapshot.party = [sleeper, leader]
+    # The release visit takes over the goal, and the level reorder used to put the level 100 lead back each step.
+    for key in ('collection_release', 'collection_box'):
+        policy.goal = Goal(key, 'Make room in storage', 'CHERRYGROVE_POKECENTER_1F', 3, 1, 'up')
+        assert policy.level_lead(snapshot) is None
+    # A later quest step under its own goal keeps the sleeper too, but only on the decision the quest ran.
+    policy.goal = Goal('collection_static', 'Lugia', 'WHIRL_ISLAND_LUGIA_CHAMBER', 9, 13, 'up')
+    policy.legend_decision = policy.decisions
+    assert policy.level_lead(snapshot) is None
+    policy.decisions += 1
+    assert policy.level_lead(snapshot) == Lead(1, (100, (100, 0, 0, 0)))
+
+
 def test_wild_carriers_are_hunted_for_the_kings_rock_once_the_bag_has_none(real_data):
     from pokesim.gen2.collection import item_hunts, wanted
     rock, scale = real_data.items['KINGS_ROCK'], real_data.items['DRAGON_SCALE']
