@@ -937,10 +937,10 @@ class Policy:
         if not healthy or not walk_spent(self.data, snapshot):
             self.healing_map = None
             return None
+        cut = bool(snapshot.badges & 2) and any(15 in mon.moves for mon in snapshot.party)
+        surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
         choices = []
         for mid, entry in self.data.maps.items():
-            if self.healing_map is not None and mid != self.healing_map:
-                continue
             if not entry['constant'].endswith('POKECENTER_1F'):
                 continue
             if entry['region'] != self.travel_region(snapshot):
@@ -948,13 +948,23 @@ class Policy:
             if entry['constant'] == 'BLACKTHORN_POKECENTER_1F' and 'ice_path' not in self.completed:
                 continue
             route = self.nav.route(snapshot.map, mid)
-            if route is not None:
-                choices.append((len(route), mid))
+            if route is None:
+                continue
+            nurse = next(obj for obj in entry['objects'] if obj['sprite'] == 'SPRITE_NURSE')
+            # Map links can cross a cliff. Route 44 links to Blackthorn City that way, though the walk goes
+            # through Ice Path, where healing stands down. The trip would step into the cave, hand back to
+            # the main goal, step out and choose the same center again. So a known walk must stay out
+            # of Ice Path. With no walk known yet, the map links decide as before.
+            walk = self.nav.regions.route(snapshot, mid, [(nurse['x'], nurse['y'] + 2)], cut=cut, surf=surf)
+            if walk is None or not any(
+                    self.data.maps[step[1][0]]['constant'].startswith('ICE_PATH_') for step in walk):
+                choices.append((len(route), mid, nurse))
         if not choices:
+            self.healing_map = None
             return None
-        _, mid = min(choices)
+        # Keep to the center already chosen while it stays reachable, so the trip does not switch halfway.
+        _, mid, nurse = next((choice for choice in choices if choice[1] == self.healing_map), min(choices))
         self.healing_map = mid
-        nurse = next(obj for obj in self.data.maps[mid]['objects'] if obj['sprite'] == 'SPRITE_NURSE')
         return Goal('heal', 'Restore the team at a Pokémon Center', self.data.maps[mid]['constant'],
                     nurse['x'], nurse['y'] + 2, 'up')
 
