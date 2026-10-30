@@ -43,7 +43,7 @@ main() {
         printf '%s\n' 'Run this installer as your normal user, without sudo.' >&2
         exit 1
     fi
-    version=0.6.0
+    version=0.6.1
     package=${POKESIM_INSTALL_PACKAGE:-https://github.com/afk-sapien/PokeSim/releases/download/v${version}/pokesim-${version}-py3-none-any.whl}
     if command -v uv >/dev/null 2>&1
     then
