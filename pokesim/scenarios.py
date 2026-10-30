@@ -389,15 +389,24 @@ class PlannerMarks:
 
 
 class Gen1Watch(PlannerMarks):
-    """Achievements as the Red, Blue and Yellow application counts them for its stall watch."""
+    """Achievements as the Red, Blue and Yellow application counts them for its stall watch.
+
+    A Kanto Marathon checkpoint counts too, as a Johto one does for Gen II. The race runs longer than
+    a scenario's quiet window and earns nothing else, so a Red dojo return failed while it ran well.
+    """
 
     def __init__(self, run):
         self.run = run
         self.reset()
 
     def reset(self):
-        self.previous, self.pending = None, []
+        self.previous, self.pending, self.checkpoint = None, [], None
         self.reset_marks()
+
+    def race_checkpoint(self):
+        """The checkpoint the current Kanto Marathon has reached, or None outside a race."""
+        project = getattr(getattr(self.run.policy, 'collection', None), 'project', None) or {}
+        return project.get('checkpoint') if project.get('method') == 'marathon' else None
 
     def stand_downs(self):
         from .planning.monitor import STOOD_DOWN
@@ -415,6 +424,10 @@ class Gen1Watch(PlannerMarks):
         events += [event for event in new if event.still is None]
         earned = (self.previous is not None and self.previous.valid and snapshot.valid
                   and advanced(self.previous, snapshot))
+        reached = self.race_checkpoint()
+        if reached is not None and self.checkpoint is not None and reached > self.checkpoint:
+            earned = True
+        self.checkpoint = reached
         self.previous = snapshot
         return [(event.type, event.title) for event in events if event.type in PROGRESS_EVENTS], earned
 

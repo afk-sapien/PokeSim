@@ -44,7 +44,7 @@ if ! flock -w "$GATE_WAIT" 9; then
   failed+=(core pokesim)
 else
   slots=()
-  for i in 1 2 3; do
+  for i in 1 2 3 4 5; do
     exec {fd}>"$GATE/slot$i"
     flock "$fd"
     slots+=("$fd")
@@ -93,7 +93,7 @@ else
       } && DATA_DIR=$DATA GEN2_DATA_DIR=$POKESIM/.release-local/gen2-data GEN2_CARTRIDGE_DIR=$ROMS \
         ROM_PATH=$ROMS/red.gb BLUE_ROM_PATH=$ROMS/blue.gb YELLOW_ROM_PATH=$ROMS/yellow.gb \
         POKESIM_SCENARIO_TESTS=1 POKESIM_SCENARIOS=$DATA/scenarios \
-        nice -n 10 uv run -q --locked --extra dev pytest -q -rf -p no:cacheprovider --ignore=tests/browser -n 6 2>&1)
+        nice -n 10 uv run -q --locked --extra dev pytest -q -rf -p no:cacheprovider --ignore=tests/browser -n 10 2>&1)
       rc=$?
       # Only the failures and the summary line, since the suite prints a dot per test.
       grep -E '^(FAILED|ERROR)|^E  |[0-9]+ (passed|failed|errors?)\b' <<<"$out" | tail -40
