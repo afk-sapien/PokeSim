@@ -64,7 +64,7 @@ checkouts that might not load this file automatically.
 - Before a PR, run locally only the tests for the files you touched, plus lint. CI runs the full suite on 3 Pythons and the browsers, so do not repeat it locally.
 - Run the scenario suite and the 3-run batches only when a change can alter planner or bot behavior: planning, strategy, battle or overworld code. Storage, UI, tooling and docs changes skip them.
 - A scenario that also fails on main gets logged once, and the work goes on. Do not rerun it to prove it.
-- Every release runs `tools/stage_ladder.py gate` before the servarr soak, and a release with a gate failure does not ship. The gate takes the load gate's heavy lock on its own.
+- Every release runs `tools/stage_ladder.py gate` before the release soak, and a release with a gate failure does not ship. The gate takes the load gate's heavy lock on its own.
 - For a behavior change, the gate replaces long full-sim batches. Run full-sim batches only when the change targets late-game play the 30 game minutes from each rung cannot reach.
 - Store a new gate baseline with `--write-baseline` on main after a merge that changes play on purpose, so the next gate compares against it.
 

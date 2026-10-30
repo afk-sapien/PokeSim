@@ -8,7 +8,7 @@
 
 - Count a PC visit that brings a trainee into the party as progress in the replay audit. Preparing a Pokémon for training swaps it in from a box, which keeps the number of Pokémon held, so the audit counted every such visit as wasted. Randomized Gold has more trainees to evolve, such as Mankey, which is most of why its wasted share looked higher. Play is unchanged.
 
-- Add `tools/stage_ladder.py gate`, which plays 30 game minutes from every rung of every ladder, ten at once under the load gate, and compares each rung's stalls, errors and wasted share with a stored baseline. It exits 1 on a new stall, more errors, or a wasted share more than two points higher, and keeps a bundle for each stall. Every release now runs it before the servarr soak. Play is unchanged.
+- Add `tools/stage_ladder.py gate`, which plays 30 game minutes from every rung of every ladder, ten at once under the load gate, and compares each rung's stalls, errors and wasted share with a stored baseline. It exits 1 on a new stall, more errors, or a wasted share more than two points higher, and keeps a bundle for each stall. Every release now runs it before the release soak. Play is unchanged.
 
 ## 0.6.1
 
