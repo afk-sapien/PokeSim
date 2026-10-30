@@ -2,6 +2,7 @@
 from copy import deepcopy
 
 from .progression import object_goal
+from .shopping import SAFARI_INTERIOR, SAFARI_PRIZE_SLOTS
 from ..ground_items import ground_item
 from ..strategy_data import DATA, WORLD, object_hidden
 
@@ -30,7 +31,8 @@ class Pickups:
         bag = dict(s.items)
         if item in bag:
             return bag[item] < 99
-        return len(bag) < 20
+        # The Safari Zone keeps two entries free for its prizes, so a pickup never forces a trip out to sell.
+        return len(bag) < (20 - SAFARI_PRIZE_SLOTS if s.map in SAFARI_INTERIOR else 20)
 
     @staticmethod
     def hidden(s, target):

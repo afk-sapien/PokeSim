@@ -83,3 +83,22 @@ def test_the_silph_worker_is_not_revisited_once_his_lapras_is_gone():
     assert teaching_goal('teach_surf', 'Teach Surf', 'Cross water', state).key == 'lapras'
     gone = broke(party=state.party, event_flags=state.event_flags, owned=frozenset({lapras_dex}))
     assert teaching_goal('teach_surf', 'Teach Surf', 'Cross water', gone).key == 'catch_surf'
+
+
+def test_a_crowded_bag_inside_the_safari_zone_keeps_room_for_the_prizes_instead_of_leaving():
+    # Yellow, badges_6 rung: a pickup in the zone filled the bag, so the restock walked out to Fuchsia
+    # to sell one item, paid the fee and walked back in, three times before Surf.
+    from pokesim.policies.pickups import Pickups
+    names = ('POTION ANTIDOTE BURN_HEAL ICE_HEAL AWAKENING PARLYZ_HEAL FULL_HEAL REVIVE ESCAPE_ROPE '
+             'REPEL FIRE_STONE THUNDER_STONE WATER_STONE LEAF_STONE RARE_CANDY CALCIUM NUGGET').split()
+    bag = ((ITEMS['POKE_BALL'], 10),) + tuple((ITEMS[name], 1) for name in names)
+    assert len(bag) == 18
+    inside = broke(map=MAPS['SAFARI_ZONE_WEST'], money=30000, items=bag)
+    assert plan(ShoppingController(), inside).goal is SURF
+    assert not Pickups.has_space(inside, ITEMS['CARBOS'])
+    assert Pickups.has_space(inside, ITEMS['POTION'])
+    outside = broke(map=MAPS['FUCHSIA_CITY'], money=30000, items=bag)
+    assert plan(ShoppingController(), outside).goal.key == 'restock'
+    assert Pickups.has_space(outside, ITEMS['CARBOS'])
+    full = broke(map=MAPS['SAFARI_ZONE_WEST'], money=30000, items=bag + ((ITEMS['CARBOS'], 1),))
+    assert plan(ShoppingController(), full).goal.key == 'restock'
