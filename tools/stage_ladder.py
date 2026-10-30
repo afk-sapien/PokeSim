@@ -3,6 +3,7 @@
   snapshot  play one fresh game headless and keep a save the first time it reaches each rung
   adopt     keep an existing checkpoint as a rung, so a covered stage needs no fresh run
   show      list the rungs a ladder folder holds and the ones it still lacks
+  check     read each rung's save with pokecore and fail when its stage is not the rung's
 
 Rungs, in order. Every game has new_game, badges_2, badges_4, badges_6, badges_8, league_first (the
 Elite Four's first room before any Hall of Fame) and post_game. Gold, Silver and Crystal count Johto
@@ -20,6 +21,10 @@ keeps a bundle (before.state, noticed.state, report.json) under LADDER/stalls an
 the save from before it, as the application reloads. A run gives up after --max-stalls stalls. Its
 report, LADDER/snapshot-report.json, lists the game minute each rung was reached, every stall and the
 errors the policy raised.
+
+``check`` needs a folder of clean cartridges, found by the checksum each ladder.json names. A rung's
+state is mostly out of reach of the game's Save menu, so its cartridge save is built from the WRAM it
+holds, the way pokecore's own ladder test does, and pokecore.save_summary names the stage.
 
 Red, Blue and Yellow pick their game data from the cartridge, so no POKESIM_GEN1_VARIANT is needed.
 Gold, Silver and Crystal need --data-root or GEN2_DATA_DIR. Ladder folders hold private game data and
@@ -51,6 +56,13 @@ RANDOMIZED_RUNGS = ('new_game', 'badges_4', 'badges_8', 'league_first')
 GEN1_LORELEI = 0xF5
 GEN1_LEAGUE = frozenset({0x6C, 0xC2, 0xC6, 0xAE, 0xF5, 0xF6, 0xF7, 0x71, 0x78, 0x76})
 GEN2_LEAGUE = frozenset({'WILLS_ROOM', 'KOGAS_ROOM', 'BRUNOS_ROOM', 'KARENS_ROOM', 'LANCES_ROOM', 'HALL_OF_FAME'})
+# The pokecore.save_summary stage each rung stands for. Gen II's red rung stands before the fight, so
+# Red is not beaten yet, and only the credits after him set the Hall of Fame count that means beaten.
+GEN1_STAGES = {'new_game': 'new game', 'league_first': 'league entered', 'post_game': 'post-game'}
+GEN2_STAGES = {'new_game': 'new game', 'league_first': 'league entered', 'champion_first': 'champion',
+               'kanto_entry': 'kanto entered', 'red': 'kanto entered', 'post_game': 'red beaten'}
+# The end of Gen I wMainData, where the active box starts in WRAM.
+GEN1_MAIN_END = 0xDA80
 # Saves the run keeps while it plays, for a stall's before.state and the reload after it.
 ROLLING_GAME_MINUTES = 10
 REPLAY_GAME_MINUTES = 120
@@ -358,6 +370,102 @@ def show(args):
     return 0
 
 
+def expected_stage(generation, rung):
+    if rung.startswith('badges_'):
+        return f'{rung.removeprefix("badges_")} badges'
+    return (GEN2_STAGES if generation == 2 else GEN1_STAGES)[rung]
+
+
+def _gen1_image(memory, raw_memory):
+    """What the Save menu would write for this WRAM, with the boxes as SRAM holds them now."""
+    from pokecore import save_summary as ss
+    from pokecore.gen1 import W_DEX_OWNED, W_PARTY_COUNT, W_PLAYER_NAME
+    image = bytearray(ss.SAVE_SIZE)
+    for bank in (2, 3):
+        image[bank * 0x2000:(bank + 1) * 0x2000] = bytes(raw_memory[bank, 0xA000:0xC000])
+    image[ss.GEN1_PLAYER_NAME:ss.GEN1_PLAYER_NAME + 11] = bytes(memory[W_PLAYER_NAME:W_PLAYER_NAME + 11])
+    image[W_DEX_OWNED - ss.GEN1_MAIN:GEN1_MAIN_END - ss.GEN1_MAIN] = bytes(memory[W_DEX_OWNED:GEN1_MAIN_END])
+    image[ss.GEN1_PARTY:ss.GEN1_ACTIVE_BOX] = bytes(memory[W_PARTY_COUNT:W_PARTY_COUNT + 0x194])
+    box = slice(ss.GEN1_ACTIVE_BOX, ss.GEN1_ACTIVE_BOX + ss.GEN1_BOX_SIZE)
+    image[box] = bytes(memory[GEN1_MAIN_END:GEN1_MAIN_END + ss.GEN1_BOX_SIZE])
+    image[ss.GEN1_CHECKSUM] = ~sum(image[ss.GEN1_PLAYER_NAME:ss.GEN1_CHECKSUM]) & 0xFF
+    return bytes(image)
+
+
+def _gen2_image(version, memory):
+    from pokecore import save_summary as ss
+    from pokecore.gen2.memory_map import symbols
+    _, delta, end = ss.GEN2_LAYOUTS['crystal' if version == 'crystal' else None]
+    image = bytearray(ss.SAVE_SIZE)
+    for bank in (1, 2, 3):
+        image[bank * 0x2000:(bank + 1) * 0x2000] = bytes(memory[bank, 0xA000:0xC000])
+    image[ss.GEN2_CHECK_1] = ss.GEN2_CHECK_1_VALUE
+    image[ss.GEN2_DATA:end] = bytes(memory[1, ss.GEN2_DATA + delta:end + delta])
+    at = symbols(version)['sChecksum'][1] - 0xA000 + 0x2000
+    image[at:at + 2] = (sum(image[ss.GEN2_DATA:end]) & 0xFFFF).to_bytes(2, 'little')
+    image[at + 2] = ss.GEN2_CHECK_2_VALUE
+    return bytes(image)
+
+
+def rung_save(rom, info, state):
+    """The cartridge save a rung's state stands for, built from its WRAM. The emulator is stopped after."""
+    import io
+    if info['generation'] == 1:
+        from pokecore.yellow import open_emulator
+        emulator = open_emulator(io.BytesIO(rom), ram_file=io.BytesIO(bytes(0x8000)), window='null',
+                                 sound_emulated=False, log_level='ERROR')
+        try:
+            emulator.load_state(io.BytesIO(state))
+            return _gen1_image(emulator.memory, getattr(emulator, '_emulator', emulator).memory)
+        finally:
+            emulator.stop(save=False)
+    from pokecore.gen2 import clock
+    emulator = clock.boot(rom, sound=False)
+    try:
+        emulator.load_state(io.BytesIO(state))
+        return _gen2_image(info['game'], emulator.memory)
+    finally:
+        emulator.stop(save=False)
+
+
+def _cartridges(folder):
+    """Every file in a folder by its SHA-1, so a ladder finds its clean cartridge whatever it is named."""
+    return {hashlib.sha1(path.read_bytes()).hexdigest(): path for path in sorted(folder.iterdir())
+            if path.is_file() and path.stat().st_size <= 0x800000}
+
+
+def check(args):
+    from pokecore.save_summary import SaveError, summarize_save
+    from pokesim.checkpoints import open_state
+    roms = _cartridges(args.roms)
+    failures = checked = 0
+    for ladder in sorted(path.parent for path in args.root.glob('*/ladder.json')):
+        info = json.loads((ladder / 'ladder.json').read_text(encoding='utf-8'))
+        rom = roms.get(info['rom_sha1'])
+        if rom is None:
+            print(f'{ladder.name}: no cartridge in {args.roms} has SHA-1 {info["rom_sha1"]}')
+            failures += 1
+            continue
+        rom = rom.read_bytes()
+        for rung in rungs_for(info['generation'], bool(info['randomizer'])):
+            path = ladder / rung / 'start.state'
+            if not path.exists():
+                continue
+            with open_state(path) as handle:
+                state = handle.read()
+            wanted = expected_stage(info['generation'], rung)
+            try:
+                stage = summarize_save(rung_save(rom, info, state)).stage
+            except SaveError as error:
+                stage = f'unreadable ({error})'
+            checked += 1
+            if stage != wanted:
+                failures += 1
+                print(f'{ladder.name}/{rung}: the save reads as {stage}, not {wanted}')
+    print(f'checked {checked} rungs, {failures} problems')
+    return 1 if failures else 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -385,6 +493,10 @@ def main(argv=None):
     showing = commands.add_parser('show', help='list the ladders under a folder')
     showing.add_argument('root', type=Path, nargs='?', default=ROOT / 'data' / 'ladder')
     showing.set_defaults(action=show)
+    checking = commands.add_parser('check', help="fail when a rung's save is not at the rung's stage")
+    checking.add_argument('roms', type=Path, help='a folder holding the clean cartridges the ladders were taken on')
+    checking.add_argument('root', type=Path, nargs='?', default=ROOT / 'data' / 'ladder')
+    checking.set_defaults(action=check)
     args = parser.parse_args(argv)
     return args.action(args)
 

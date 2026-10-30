@@ -167,6 +167,12 @@ def test_a_fresh_red_run_saves_compressed_and_replays(tmp_path):
         assert again.frame == frame
     finally:
         again.stop()
+    from pokecore.save_summary import summarize_save
+    from pokesim.checkpoints import open_state
+    with open_state(path) as handle:
+        image = stage_ladder.rung_save(RED_ROM.read_bytes(), {'generation': 1, 'game': 'red'}, handle.read())
+    # By frame 20000 the run may already hold its starter.
+    assert summarize_save(image).stage in ('new game', '0 badges')
 
 
 def test_a_randomized_run_boots_the_patched_cartridge(monkeypatch):
@@ -193,3 +199,37 @@ def test_a_fresh_gold_ladder_keeps_a_new_game_rung_the_scenarios_replay(tmp_path
         assert run.frame > 0 and run.read().started
     finally:
         run.stop()
+    assert main(['check', str(CARTRIDGES), str(tmp_path)]) == 0
+
+
+def test_each_rung_names_the_stage_its_save_should_read_as():
+    assert stage_ladder.expected_stage(1, 'badges_6') == '6 badges'
+    assert stage_ladder.expected_stage(1, 'post_game') == 'post-game'
+    # Gen II's red rung stands outside Mt. Silver before the fight, and only the credits mean beaten.
+    assert stage_ladder.expected_stage(2, 'red') == 'kanto entered'
+    assert stage_ladder.expected_stage(2, 'post_game') == 'red beaten'
+    for generation in (1, 2):
+        assert all(stage_ladder.expected_stage(generation, rung) for rung in stage_ladder.rungs_for(generation, False))
+
+
+def test_check_fails_on_a_rung_whose_save_reads_as_another_stage(tmp_path, monkeypatch, capsys):
+    import hashlib
+    import pokecore.save_summary
+    roms = tmp_path / 'roms'
+    roms.mkdir()
+    (roms / 'any-name.gb').write_bytes(b'cartridge')
+    ladder = tmp_path / 'ladders' / 'red'
+    for rung in ('new_game', 'badges_2'):
+        (ladder / rung).mkdir(parents=True)
+        (ladder / rung / 'start.state').write_bytes(gzip.compress(rung.encode()))
+    (ladder / 'ladder.json').write_text(json.dumps({'game': 'red', 'generation': 1, 'randomizer': '',
+                                                    'rom_sha1': hashlib.sha1(b'cartridge').hexdigest()}))
+    stages = {'new_game': 'new game', 'badges_2': '2 badges'}
+    monkeypatch.setattr(stage_ladder, 'rung_save', lambda rom, info, state: state.decode())
+    monkeypatch.setattr(pokecore.save_summary, 'summarize_save', lambda save: SimpleNamespace(stage=stages[save]))
+    assert main(['check', str(roms), str(tmp_path / 'ladders')]) == 0
+    stages['badges_2'] = '3 badges'
+    assert main(['check', str(roms), str(tmp_path / 'ladders')]) == 1
+    assert 'red/badges_2: the save reads as 3 badges, not 2 badges' in capsys.readouterr().out
+    (roms / 'any-name.gb').unlink()
+    assert main(['check', str(roms), str(tmp_path / 'ladders')]) == 1
