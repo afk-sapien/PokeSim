@@ -54,6 +54,17 @@ def test_an_inner_carpet_is_never_walked_off_its_warp_way():
     assert nav.local(here(3, 3), [(2, 3)]) == ['up', 'left', 'down']
 
 
+def test_a_carpet_tile_with_no_warp_is_plain_ground():
+    # Olivine Port's gangway has a down carpet tile with no warp on it, and the pier past it looked
+    # cut off, so boarding the S.S. Aqua walked back and forth at the port entrance (#241).
+    data = gate()
+    data.maps[1]['warps'] = [warp for warp in data.maps[1]['warps'] if (warp['x'], warp['y']) != (3, 3)]
+    nav = Navigator(data)
+    assert nav.local(here(3, 3), [(2, 3)]) == ['left']
+    labels = Regions(data).regions(1, False, False)
+    assert labels[3, 3] == labels[2, 3]
+
+
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
 def real_data(request):
     directory = os.environ.get('GEN2_DATA_DIR')
@@ -72,3 +83,11 @@ def test_the_route_36_gate_officer_corner_has_a_way_out(real_data):
     assert regions.route(corner, real_data.map_ids['ROUTE_36'], [(19, 8)]) is not None
     assert regions.route(corner, real_data.map_ids['NATIONAL_PARK'], [(32, 18)]) is not None
     assert Navigator(real_data).local(corner, [(9, 4), (9, 5)]) is not None
+
+
+def test_the_olivine_port_pier_reaches_the_gangway(real_data):
+    port = real_data.map_ids['OLIVINE_PORT']
+    entrance = here(11, 8, port)
+    assert Navigator(real_data).local(entrance, [(7, 22)]) is not None
+    labels = Regions(real_data).regions(port, False, False)
+    assert labels[11, 8] == labels[7, 22]
