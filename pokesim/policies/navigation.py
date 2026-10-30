@@ -309,6 +309,10 @@ class Navigator:
             self.story_blocks.add((MAPS['SEAFOAM_ISLANDS_B3F'], 15, 8))
             self.story_blocks.update((MAPS['SEAFOAM_ISLANDS_B4F'], x, y)
                                      for x in (20, 21) for y in (16, 17))
+        if not event_set(snapshot.event_flags, 'EVENT_BEAT_ROCKET_HIDEOUT_1_TRAINER_4'):
+            # The map draws this door open. The map script shuts it until the Rocket behind it is beaten,
+            # so the elevator is reached through the B2F spin maze.
+            self.story_blocks.update((MAPS['ROCKET_HIDEOUT_B1F'], x, y) for x in (24, 25) for y in (16, 17))
         for condition, tiles in GUARD_GATES:
             if not condition.holds(world):
                 self.story_blocks.update(tiles)
