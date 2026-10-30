@@ -4,6 +4,7 @@
   adopt     keep an existing checkpoint as a rung, so a covered stage needs no fresh run
   show      list the rungs a ladder folder holds and the ones it still lacks
   check     read each rung's save with pokecore and fail when its stage is not the rung's
+  gate      play a short batch from every rung and fail on a new stall, an error or more waste
 
 Rungs, in order. Every game has new_game, badges_2, badges_4, badges_6, badges_8, league_first (the
 Elite Four's first room before any Hall of Fame) and post_game. Gold, Silver and Crystal count Johto
@@ -26,6 +27,15 @@ errors the policy raised.
 state is mostly out of reach of the game's Save menu, so its cartridge save is built from the WRAM it
 holds, the way pokecore's own ladder test does, and pokecore.save_summary names the stage.
 
+``gate`` plays 108000 frames (30 game minutes) from every rung under ROOT with the replay audit, ten
+rungs at once at niceness 10, and takes the load gate's heavy lock first. A randomized ladder plays on
+its own share code. Goals are reseeded as in ``replay_audit.py run --reseed-goals``, so two code versions
+meet the same rolls. A run ends at its first stall, nothing achieved for 20 game minutes, one battle
+running 20 game minutes or a retry loop, and keeps a bundle. The gate compares each rung's stall, errors
+and wasted share with ROOT/gate-baseline.json and exits 1 on a stall the baseline lacks, more errors, or
+a wasted share more than two points higher. ``--write-baseline`` stores the run as the baseline. The runs,
+bundles and gate-report.json go under ROOT/gate/<time>.
+
 Red, Blue and Yellow pick their game data from the cartridge, so no POKESIM_GEN1_VARIANT is needed.
 Gold, Silver and Crystal need --data-root or GEN2_DATA_DIR. Ladder folders hold private game data and
 must stay outside the checkout or under data/.
@@ -33,12 +43,14 @@ must stay outside the checkout or under data/.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
 from pathlib import Path
 import random
 import shutil
+import subprocess
 import sys
 import time
 
@@ -67,6 +79,15 @@ GEN1_MAIN_END = 0xDA80
 ROLLING_GAME_MINUTES = 10
 REPLAY_GAME_MINUTES = 120
 REPLAY_QUIET_MINUTES = 90
+# The gate plays 30 game minutes from every rung, ten rungs at once, and fails on a new stall, more
+# errors, or a wasted share up by more than two points. Its stall watch is shorter than the snapshot's
+# to fit the batch. The environment variable marks a gate that already holds the load gate's heavy lock.
+GATE_FRAMES = 108000
+GATE_JOBS = 10
+GATE_QUIET = 20
+GATE_WASTE_POINTS = 2.0
+GATE_TIMEOUT = 1800
+GATE_HELD = 'POKESIM_LADDER_GATE_HELD'
 
 
 def private(path):
@@ -466,6 +487,167 @@ def check(args):
     return 1 if failures else 0
 
 
+class GateWatch:
+    """Ends a gate run at its first stall: nothing achieved for ``quiet`` game minutes, one battle running
+    ``battle`` game minutes, or a retry loop. The stall keeps a bundle under ``folder`` whose save from
+    before is the rung itself, so the bundle replays the whole run."""
+
+    def __init__(self, folder, rung_state, quiet, battle):
+        from pokesim.scenarios import Gen1Watch, Gen2Watch
+        from pokesim.stalls import FRAMES_PER_GAME_MINUTE
+        self.kinds, self.minute = (Gen1Watch, Gen2Watch), FRAMES_PER_GAME_MINUTE
+        self.folder, self.before, self.quiet, self.battle = folder, (0, rung_state), quiet, battle
+        self.watch = self.progress = self.since = self.stall = None
+
+    def __call__(self, run, snap):
+        if self.watch is None:
+            self.watch, self.progress = self.kinds[run.generation - 1](run), run.frame
+        gained, earned = self.watch.observe(snap)
+        if gained or earned or run.generation == 2 and snap.started and run.waiting(snap):
+            self.progress = run.frame
+        marks = self.watch.marks(snap)
+        self.since = self.watch.battle_clock(snap, self.since, run.frame)
+        quiet = run.frame - self.progress >= self.quiet * self.minute
+        hung = self.since is not None and run.frame - self.since >= self.battle * self.minute
+        if not (quiet or hung or self.watch.loop):
+            return False
+        reason = (f'a retry loop: {self.watch.loop}' if self.watch.loop else
+                  f'nothing achieved for {self.quiet} game minutes' if quiet else
+                  f'a battle ran for {self.battle} game minutes')
+        self.stall = _bundle(run, snap, self.folder, self.before, reason, [], run.frame // self.minute, marks)
+        return True
+
+
+def gate_rung(args):
+    """Play one rung for the gate. Each rung runs in its own process, since the cartridge and the share
+    code pick the policy modules' tables at import."""
+    info = json.loads((args.ladder / 'ladder.json').read_text(encoding='utf-8'))
+    rom = _cartridges(args.roms).get(info['rom_sha1'])
+    if rom is None:
+        raise SystemExit(f'no cartridge in {args.roms} has SHA-1 {info["rom_sha1"]}')
+    _, code = prepare(rom, info['randomizer'])
+    from pokesim.scenarios import gen2_data_root
+    from tools import replay_audit
+    args.out.mkdir(parents=True, exist_ok=True)
+    state = args.ladder / args.rung / 'start.state'
+    data_root = args.data_root or (gen2_data_root() if info['generation'] == 2 else None)
+    watch = GateWatch(args.out, state, args.quiet, args.battle_minutes)
+    audit = argparse.Namespace(rom=rom, state=state, frames=args.frames, out=args.out / 'run.json', data_root=data_root,
+                               seed=7, reseed_goals=True, lead_in=0, randomizer=code, fair_wild_dvs=None)
+    result = replay_audit.run_one(audit, watch)
+    summary = {'ladder': args.ladder.name, 'rung': args.rung, 'randomizer': code, 'frames': result['frames'],
+               'errors': result['errors'], 'stall': watch.stall,
+               'waste': round(100 * sum(result['wasted'].values()) / max(result['frames'], 1), 2)}
+    (args.out / 'summary.json').write_text(json.dumps(summary, indent=1) + '\n', encoding='utf-8')
+    return 0
+
+
+def compare(results, baseline, points=GATE_WASTE_POINTS):
+    """What a gate run did worse than the baseline: a run that failed, a stall on a rung that had none, more
+    errors, or a wasted share up by more than ``points``. A rung the baseline lacks is only reported."""
+    problems = []
+    for result in results:
+        name = f'{result["ladder"]}/{result["rung"]}'
+        base = baseline.get(name)
+        if result.get('failed'):
+            problems.append(f'{name}: the run failed, {result["failed"]}')
+        elif base is not None:
+            if result['stall'] and not base['stall']:
+                problems.append(f'{name}: a new stall, {result["stall"]["reason"]}')
+            if result['errors'] > base['errors']:
+                problems.append(f'{name}: {result["errors"]} errors, {base["errors"]} before')
+            if result['waste'] - base['waste'] > points:
+                problems.append(f'{name}: {result["waste"]:.1f}% wasted, {base["waste"]:.1f}% before')
+    return problems
+
+
+def _gate_line(result, base):
+    name = f'{result["ladder"]}/{result["rung"]}'
+    if result.get('failed'):
+        return f'{name:<30} failed: {result["failed"]}'
+    change = f'{result["waste"] - base["waste"]:+5.1f}' if base else '  new'
+    stall = f', stall: {result["stall"]["reason"]}' if result['stall'] else ''
+    return f'{name:<30} {result["waste"]:5.1f}% wasted ({change}), {result["errors"]} errors{stall}'
+
+
+def gate(args):
+    if os.environ.get(GATE_HELD) != '1':
+        # Take the heavy lock of the shared load gate, so no test or other batch runs beside the gate.
+        command = ['sh', str(ROOT / 'tools' / 'load_gate.sh'), 'heavy', sys.executable, str(Path(__file__).resolve()),
+                   *args.argv]
+        return subprocess.run(command, env=dict(os.environ, **{GATE_HELD: '1'}), check=False).returncode
+    baseline_path = args.baseline or args.root / 'gate-baseline.json'
+    stored = json.loads(baseline_path.read_text(encoding='utf-8')) if baseline_path.exists() else None
+    if stored is not None and stored['frames'] != args.frames and not args.write_baseline:
+        raise SystemExit(f'{baseline_path} was taken at {stored["frames"]} frames a rung, not {args.frames}')
+    baseline = (stored or {}).get('rungs', {})
+    jobs = [(ladder, rung) for ladder in sorted(path.parent for path in args.root.glob('*/ladder.json'))
+            for rung in rungs_for(*_ladder_kind(ladder)) if (ladder / rung / 'start.state').exists()
+            and (not args.ladder or ladder.name in args.ladder)]
+    if not jobs:
+        raise SystemExit(f'no rungs under {args.root}')
+    out = args.out or args.root / 'gate' / time.strftime('%Y%m%d-%H%M%S')
+    # Each rung sets its own Gen I variant and share code.
+    env = {key: value for key, value in os.environ.items() if key not in ('POKESIM_GEN1_VARIANT', 'RANDOMIZER', 'ROM_PATH')}
+    began = time.monotonic()
+
+    def play(job):
+        ladder, rung = job
+        folder = out / ladder.name / rung
+        folder.mkdir(parents=True, exist_ok=True)
+        command = ['nice', '-n', str(args.nice), sys.executable, str(Path(__file__).resolve()), 'gate-rung',
+                   str(ladder), rung, str(folder), str(args.roms), '--frames', str(args.frames), '--quiet',
+                   str(args.quiet), '--battle-minutes', str(args.battle_minutes)]
+        if args.data_root:
+            command += ['--data-root', str(args.data_root)]
+        with open(folder / 'log.txt', 'w', encoding='utf-8') as log:
+            try:
+                code = subprocess.run(command, env=env, stdout=log, stderr=subprocess.STDOUT, check=False,
+                                      timeout=GATE_TIMEOUT).returncode
+            except subprocess.TimeoutExpired:
+                code = f'no result in {GATE_TIMEOUT} seconds'
+        summary = folder / 'summary.json'
+        if code == 0 and summary.exists():
+            result = json.loads(summary.read_text(encoding='utf-8'))
+        else:
+            result = {'ladder': ladder.name, 'rung': rung, 'failed': f'exit {code}, see {folder / "log.txt"}'}
+        print(_gate_line(result, baseline.get(f'{ladder.name}/{rung}')), flush=True)
+        return result
+
+    with ThreadPoolExecutor(args.jobs) as pool:
+        results = list(pool.map(play, jobs))
+    problems = compare(results, baseline, args.waste_points)
+    report = {'commit': _commit(), 'frames': args.frames, 'wall_seconds': round(time.monotonic() - began, 1),
+              'baseline': str(baseline_path) if stored else None, 'problems': problems, 'results': results}
+    out.mkdir(parents=True, exist_ok=True)
+    (out / 'gate-report.json').write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
+    stalls = [result for result in results if result.get('stall')]
+    print(f'{len(results)} rungs in {report["wall_seconds"]}s, {len(stalls)} stalls, report in {out}')
+    if args.write_baseline:
+        failed = [result for result in results if result.get('failed')]
+        if failed:
+            print(f'not writing a baseline: {len(failed)} rungs failed')
+            return 1
+        rungs = {f'{result["ladder"]}/{result["rung"]}': {
+            'stall': result['stall'] and result['stall']['reason'], 'errors': result['errors'],
+            'waste': result['waste']} for result in results}
+        baseline_path.write_text(json.dumps({'commit': report['commit'], 'frames': args.frames, 'rungs': rungs},
+                                            indent=1) + '\n', encoding='utf-8')
+        print(f'wrote {baseline_path}')
+        return 0
+    if stored is None:
+        print(f'no baseline at {baseline_path}. Take one on main with --write-baseline.')
+        return 1
+    for problem in problems:
+        print(problem)
+    return 1 if problems else 0
+
+
+def _ladder_kind(ladder):
+    info = json.loads((ladder / 'ladder.json').read_text(encoding='utf-8'))
+    return info['generation'], bool(info['randomizer'])
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -497,7 +679,34 @@ def main(argv=None):
     checking.add_argument('roms', type=Path, help='a folder holding the clean cartridges the ladders were taken on')
     checking.add_argument('root', type=Path, nargs='?', default=ROOT / 'data' / 'ladder')
     checking.set_defaults(action=check)
+    gating = commands.add_parser('gate', help='play a short batch from every rung and compare it with the baseline')
+    gating.add_argument('roms', type=Path, help='a folder holding the clean cartridges the ladders were taken on')
+    gating.add_argument('root', type=Path, nargs='?', default=ROOT / 'data' / 'ladder')
+    gating.add_argument('--ladder', action='append', help='play only this ladder, such as gold, repeatable')
+    gating.add_argument('--frames', type=int, default=GATE_FRAMES, help='frames to play from each rung')
+    gating.add_argument('--jobs', '-n', type=int, default=GATE_JOBS, help='rungs played at once')
+    gating.add_argument('--nice', type=int, default=10, help='the niceness each rung plays at')
+    gating.add_argument('--quiet', type=int, default=GATE_QUIET, help='game minutes without an achievement that count as a stall')
+    gating.add_argument('--battle-minutes', type=int, default=GATE_QUIET, help='game minutes one battle may run')
+    gating.add_argument('--waste-points', type=float, default=GATE_WASTE_POINTS,
+                        help='how many points a rung\'s wasted share may grow before the gate fails')
+    gating.add_argument('--baseline', type=Path, help='the baseline file, by default ROOT/gate-baseline.json')
+    gating.add_argument('--write-baseline', action='store_true', help='store this run as the baseline')
+    gating.add_argument('--out', type=Path, help='where the runs and stall bundles go, by default ROOT/gate/<time>')
+    gating.add_argument('--data-root', type=Path, help='Gen II game data, by default GEN2_DATA_DIR')
+    gating.set_defaults(action=gate)
+    one = commands.add_parser('gate-rung', help='play one rung for gate, in its own process')
+    one.add_argument('ladder', type=Path)
+    one.add_argument('rung')
+    one.add_argument('out', type=Path)
+    one.add_argument('roms', type=Path)
+    one.add_argument('--frames', type=int, default=GATE_FRAMES)
+    one.add_argument('--quiet', type=int, default=GATE_QUIET)
+    one.add_argument('--battle-minutes', type=int, default=GATE_QUIET)
+    one.add_argument('--data-root', type=Path)
+    one.set_defaults(action=gate_rung)
     args = parser.parse_args(argv)
+    args.argv = list(sys.argv[1:] if argv is None else argv)
     return args.action(args)
 
 

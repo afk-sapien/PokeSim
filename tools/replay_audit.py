@@ -266,7 +266,9 @@ def randomize(code, rom):
     return code
 
 
-def run_one(args):
+def run_one(args, watch=None):
+    """Play one checkpoint and write its run file. ``watch``, called with the run and each snapshot, ends
+    the run early when it returns true, as tools/stage_ladder.py gate does on a stall."""
     randomizer = randomize(args.randomizer, args.rom)
     from pokesim.planning.monitor import Monitor
     run, read, game = _open(Path(args.rom), Path(args.state), args.data_root, args.seed, args.fair_wild_dvs)
@@ -335,6 +337,8 @@ def run_one(args):
             released += _released(snapshot, current, run.frame)
         if current is not None:
             snapshot = current
+        if watch is not None and watch(run, snapshot):
+            break
     run.stop()
     party.append(_levels(snapshot))
     frames = dict(monitor.frames)
@@ -351,6 +355,7 @@ def run_one(args):
     if shadow is not None:
         result['shadow'] = {**shadow.summary(), 'frames_by_pick': dict(would)}
     Path(args.out).write_text(json.dumps(result, indent=1), encoding='utf-8')
+    return result
 
 
 def load(folder):
