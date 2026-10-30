@@ -118,6 +118,13 @@ def test_a_pc_swap_that_brings_the_trainee_into_the_party_is_progress_for_its_pr
     assert [event.kind for event in _goal_events('collection_train_pc', full, deposited)] == ['trainee']
 
 
+def test_a_battle_fought_under_any_goal_counts_its_experience():
+    before, after = _snapshot([_mon('Pidgey')], []), _snapshot([_mon('Pidgey')], [])
+    after.party[0].experience = 8200
+    # A training detour battles while the policy still names the goal it left, here the Surf errand.
+    assert [event.kind for event in _goal_events('surf', before, after)] == ['experience']
+    assert _goal_events('surf', before, _snapshot([_mon('Pidgey')], [])) == []
+
 RED_ROM = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
 
 

@@ -199,8 +199,9 @@ def _stand_downs(run, seen):
 
 
 def _goal_events(key, previous, current):
-    """The progress events of ``current`` for goal ``key``. A training goal also progresses on experience,
-    since a level can take many battles and a span that gained experience was not wasted."""
+    """The progress events of ``current`` for goal ``key``. Any goal also progresses on experience. A level
+    can take many battles, and a training detour fights its battles while the policy reports the goal it
+    detoured from, so a span that gained experience was not wasted."""
     from pokesim.planning.monitor import ProgressEvent
     from pokesim.planning.progress import _held, events
     found = events(previous, current)
@@ -209,7 +210,8 @@ def _goal_events(key, previous, current):
     if found == [] and previous is not None and current is not None and getattr(current, 'valid', True) \
             and getattr(previous, 'valid', True) and _held(current) < _held(previous):
         found.append(ProgressEvent('room', _held(previous) - _held(current)))
-    if 'train' in key and previous is not None and current is not None and not found:
+    if previous is not None and current is not None and not found and getattr(current, 'valid', True) \
+            and getattr(previous, 'valid', True):
         gained = sum(after.experience - before.experience for before, after in zip(previous.party, current.party)
                      if before.species == after.species and after.experience > before.experience)
         if gained:
