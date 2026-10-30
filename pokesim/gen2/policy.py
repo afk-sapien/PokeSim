@@ -922,6 +922,13 @@ class Policy:
                 and snapshot.event('EVENT_BEAT_ROCKET_EXECUTIVEF_2')
                 and not snapshot.event('EVENT_CLEARED_ROCKET_HIDEOUT'))
 
+    def errand_allowed(self, snapshot, mem):
+        """Whether a heal or supply errand may break off the current goal."""
+        well_item = (self.goal.key == 'collection_trade_item'
+                     and self.constant(snapshot) in {'SLOWPOKE_WELL_B1F', 'SLOWPOKE_WELL_B2F'})
+        return (not self.goal.key.startswith('push_') and not well_item
+                and (not self.collection.get('contest') or not mem.byte('wStatusFlags2') & 4))
+
     def healing(self, snapshot):
         if (self.in_transmitter_room(snapshot) or self.in_league(snapshot)
                 or self.constant(snapshot).startswith('ICE_PATH_')
@@ -1150,7 +1157,8 @@ class Policy:
         if self.resetting_puzzle is not None and self.resetting_puzzle != snapshot.map:
             self.resetting_puzzle = None
         releasing = self.goal is not None and self.goal.key == 'collection_release'
-        if self.goal is not None and self.battle_starting(mem):
+        starting = self.goal is not None and self.battle_starting(mem)
+        if starting:
             journey_goal = self.goal
         else:
             self.goal = journey_goal = self.journey(snapshot, mem)
@@ -1200,6 +1208,10 @@ class Policy:
         # Textboxes cover the bottom six rows. Scripted walking is allowed to finish.
         if '┌' in snapshot.tiles[12] or mem.byte('wScriptRunning'):
             self.mode = 'conversation'
+            # The nurse and every other talk on the way run under the heal, not the journey goal, so one
+            # trip stays one goal and the restore lands inside it.
+            if not starting and self.errand_allowed(snapshot, mem):
+                self.goal = self.healing(snapshot) or self.goal
             if self.talk_progress(snapshot):
                 return Action('b', 8, 36)
             answer = self.unknown_yes_no(snapshot)
@@ -1255,9 +1267,7 @@ class Policy:
                 return Action(None, 0, 24)
         if self.in_league(snapshot) and self.remedy(snapshot):
             return Action(None, 0, 24)
-        well_item = (self.goal.key == 'collection_trade_item'
-                     and self.constant(snapshot) in {'SLOWPOKE_WELL_B1F', 'SLOWPOKE_WELL_B2F'})
-        if not self.goal.key.startswith('push_') and not well_item and (not self.collection.get('contest') or not mem.byte('wStatusFlags2') & 4):
+        if self.errand_allowed(snapshot, mem):
             prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
             self.goal = self.healing(snapshot) or (None if prize_errand else self.shop(snapshot)) or self.goal
         target = self.data.map_ids[self.goal.map_name]
