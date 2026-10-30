@@ -581,7 +581,9 @@ class Emulator:
         state = self._state_bytes() if event.notable else None
         eid = self.store.add_event(event, snapshot, shot, state)
         if state:
-            self.store.write_checkpoint(state, self._manifest(), name=f'event-{eid}.state')
+            # Rewinding needs the cartridge identity and clock lock in the manifest. The save is
+            # compressed like the one add_event wrote, about 13 KB instead of 200 KB.
+            self.store.write_checkpoint(state, self._manifest(), name=f'event-{eid}.state', compress=True)
         if event.type not in journal.NOT_PROGRESS:
             self.last_achievement = self.store.event(eid)
         if event.notable and self.ntfy and self.ntfy.wants(event):

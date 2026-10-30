@@ -46,6 +46,66 @@ def open_state(path: Path):
         return io.BytesIO(gzip.decompress(handle.read()))
 
 
+def compress_event_state(path: Path) -> int:
+    """Compress one journal entry's save in place and return the bytes saved.
+
+    Gold, Silver and Crystal used to write these uncompressed, at about 200 KB each. The
+    compressed copy replaces the original only after it decompresses to the same bytes, and its
+    manifest checksum is moved to the new bytes. A compressed save whose manifest still names the
+    raw bytes, left by an interrupted run, has its manifest repaired.
+    """
+    raw = path.read_bytes()
+    manifest_path = path.with_suffix('.json')
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8')) if manifest_path.exists() else None
+    except ValueError:
+        manifest = None
+    if not isinstance(manifest, dict):
+        manifest = None
+    if raw[:2] == GZIP_MAGIC:
+        if manifest and manifest.get('sha256') == hashlib.sha256(gzip.decompress(raw)).hexdigest():
+            CheckpointStore.atomic_write(manifest_path, json.dumps(
+                dict(manifest, sha256=hashlib.sha256(raw).hexdigest())).encode())
+        return 0
+    packed = compress_state(raw)
+    if gzip.decompress(packed) != raw:
+        raise ValueError(f'{path.name} did not survive compression')
+    times = path.stat()
+    CheckpointStore.atomic_write(path, packed)
+    if path.read_bytes() != packed:
+        CheckpointStore.atomic_write(path, raw)
+        raise ValueError(f'{path.name} did not read back after compression')
+    os.utime(path, ns=(times.st_atime_ns, times.st_mtime_ns))
+    if manifest and manifest.get('sha256') == hashlib.sha256(raw).hexdigest():
+        CheckpointStore.atomic_write(manifest_path, json.dumps(
+            dict(manifest, sha256=hashlib.sha256(packed).hexdigest())).encode())
+    return len(raw) - len(packed)
+
+
+def compress_event_states(adventures: Path, guard, stop=lambda: False) -> int:
+    """Compress every adventure's uncompressed journal saves and return the bytes saved.
+
+    Each file is handled under ``guard`` so a backup, restore or deletion never sees it half done.
+    Compressed files are skipped after reading two bytes, so later starts finish at once.
+    """
+    saved = 0
+    for states in sorted(Path(adventures).glob('*/states')):
+        before = saved
+        for path in sorted(states.glob('event-*.state')):
+            if stop():
+                return saved
+            with guard:
+                try:
+                    saved += compress_event_state(path)
+                except FileNotFoundError:
+                    continue
+                except (OSError, ValueError, EOFError, gzip.BadGzipFile):
+                    log.exception('Cannot compress %s', path)
+        if saved > before:
+            log.info('compressed journal saves in %s, %d MB saved', states.parent.name, (saved - before) // 2**20)
+    return saved
+
+
 class CheckpointStore:
     def __init__(self, states: Path):
         self.states = Path(states)
@@ -96,9 +156,12 @@ class CheckpointStore:
         finally:
             temporary.unlink(missing_ok=True)
 
-    def write_checkpoint(self, state: bytes, metadata: dict, name: str | None = None) -> Path:
+    def write_checkpoint(self, state: bytes, metadata: dict, name: str | None = None, compress=False) -> Path:
         # A named checkpoint sits outside the rotating autosaves, so it is never pruned or resumed by accident.
         path = self.states / name if name else self.autosave_path()
+        # The checksum covers the bytes on disk, so releases that predate compression still verify it.
+        if compress:
+            state = compress_state(state)
         manifest = dict(metadata, format=1, sha256=hashlib.sha256(state).hexdigest())
         manifest_bytes = json.dumps(manifest).encode()
         try:

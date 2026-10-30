@@ -48,6 +48,24 @@ def test_restart_clears_the_old_runs_watch_and_bests(gen2_emu):
     assert emu.stall.frame is None and emu.stall.alerted is None
 
 
+def test_journal_saves_are_compressed_and_keep_their_manifest(gen2_emu):
+    """Uncompressed, these were about 200 KB each and filled 8.6 GB of a live library."""
+    from pokesim.checkpoints import GZIP_MAGIC, open_state
+    from pokesim.events import Event
+    emu = gen2_emu
+    raw = b'\x01' + bytes(200_000)
+    emu._shot_png, emu._state_bytes = Mock(return_value=None), Mock(return_value=raw)
+    emu._manifest = Mock(return_value={'generation': 2, 'policy_state': {}, 'run_memory': {}})
+    emu.store.add_event, emu.store.event = Mock(return_value=5), Mock()
+    emu.ntfy = None
+    emu._event(Event('catch', 'Caught Sentret', ''), SimpleNamespace())
+    path = emu.store.states / 'event-5.state'
+    assert path.read_bytes()[:2] == GZIP_MAGIC and path.stat().st_size < 2_000
+    assert emu.store.checkpoint_metadata(path)['generation'] == 2
+    with open_state(path) as source:
+        assert source.read() == raw
+
+
 @pytest.mark.parametrize('error', [ValueError('refused'), OSError('unreadable'), EOFError('truncated')])
 def test_a_broken_rewind_never_ends_the_run(gen2_emu, error):
     emu = gen2_emu
