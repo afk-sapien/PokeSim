@@ -125,6 +125,24 @@ def test_a_battle_fought_under_any_goal_counts_its_experience():
     assert [event.kind for event in _goal_events('surf', before, after)] == ['experience']
     assert _goal_events('surf', before, _snapshot([_mon('Pidgey')], [])) == []
 
+
+def _hurt(hp=10, status=0, pp=(5, 0, 0, 0)):
+    mon = _mon('Pidgey')
+    mon.hp, mon.max_hp, mon.status, mon.pp = hp, 40, status, pp
+    return mon
+
+
+def test_a_heal_that_restores_the_party_is_support_and_one_with_nothing_to_restore_is_waste():
+    hurt = _snapshot([_hurt()], [])
+    assert [event.kind for event in _goal_events('heal', hurt, _snapshot([_hurt(hp=40)], []))] == ['healed']
+    assert [event.kind for event in _goal_events('heal', _snapshot([_hurt(status=8)], []), hurt)] == ['healed']
+    assert [event.kind for event in _goal_events('heal', hurt, _snapshot([_hurt(pp=(35, 0, 0, 0))], []))] == ['healed']
+    # A heal trip that loops or repeats leaves the party as it was, as in the Ice Path loop of #254.
+    assert _goal_events('heal', hurt, _snapshot([_hurt()], [])) == []
+    assert _goal_events('heal', hurt, _snapshot([_hurt(hp=9)], [])) == []
+    # Only the heal is credited, not another goal the party happened to recover under.
+    assert _goal_events('surf', hurt, _snapshot([_hurt(hp=40)], [])) == []
+
 RED_ROM = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
 
 
