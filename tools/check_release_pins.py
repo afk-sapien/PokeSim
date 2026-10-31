@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import release_pins  # noqa: E402
+import release_version  # noqa: E402
 
 
 def main():
@@ -13,7 +14,8 @@ def main():
     parser.add_argument('--remote', action='store_true',
                         help='download every locked emulator asset and compare it with uv.lock and the Dockerfile')
     arguments = parser.parse_args()
-    problems = release_pins.local_problems(arguments.tree)
+    # A release must not ship a Compose file or installer that still names the previous version.
+    problems = release_pins.local_problems(arguments.tree) + release_version.version_problems(arguments.tree)
     if arguments.remote and not problems:
         problems = release_pins.remote_problems(arguments.tree)
     if problems:

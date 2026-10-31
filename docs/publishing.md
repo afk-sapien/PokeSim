@@ -8,9 +8,12 @@ remains available as a checksummed release download for offline loading.
 ## Trigger and checks
 
 Ordinary branch pushes and pull requests do not publish anything. When ready to
-release, update `pyproject.toml`, the lockfile, both installer version defaults,
-Docker defaults, and release notes for the chosen version. Commit and merge the
-reviewed changes to `main`. Push a new `v<version>` tag for that exact commit, then
+release, run `python tools/release_version.py <version>`. It moves every pinned
+version together: `pyproject.toml`, the lockfile, both installers, the Dockerfile, the
+Compose files including `compose.quickstart.yaml`, `.env.example`, and the install
+commands in the docs. Then run `uv lock --check` and write the release notes. CI and the
+release workflow both fail while any pin differs from the package version, so a missed
+file cannot ship. Commit and merge the reviewed changes to `main`. Push a new `v<version>` tag for that exact commit, then
 create a draft release and start the publishing workflow:
 
 ```sh
