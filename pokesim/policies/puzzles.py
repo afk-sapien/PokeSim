@@ -8,6 +8,8 @@ from .navigation import DIRS, FORCED, MANSION_FALLS, PAIR_COLLISIONS, SEAFOAM_HO
 from ..strategy_data import MAPS, WORLD, event_set
 
 BOULDER_NAME = re.compile(r'BOULDER\d*$')
+# CheckForCollisionWhenPushingBoulder never moves a boulder onto this tile, in any tileset.
+STAIRS_TILE = 0x15
 
 MANSION_MAPS = {MAPS[n] for n in ('POKEMON_MANSION_1F', 'POKEMON_MANSION_2F',
                                   'POKEMON_MANSION_3F', 'POKEMON_MANSION_B1F')}
@@ -266,6 +268,13 @@ class BoulderPlanner:
                                       and (world['tileset'], here, there) not in PAIR_COLLISIONS
                                       and (world['tileset'], there, here) not in PAIR_COLLISIONS)
             return steps_between[key]
+        def lands(point, dest):
+            # The cartridge refuses a push onto the stairs tile, or onto a square at another
+            # elevation than the player's own, even though the player could walk onto either.
+            here, there = tile(point), tile(dest)
+            return (floor(dest) and there != STAIRS_TILE
+                    and (world['tileset'], here, there) not in PAIR_COLLISIONS
+                    and (world['tileset'], there, here) not in PAIR_COLLISIONS)
         def walk(origin, stone):
             if (origin, stone) in walks:
                 return walks[origin, stone]
@@ -315,7 +324,7 @@ class BoulderPlanner:
             for direction, (dx, dy) in DIRS.items():
                 behind = (stone[0] - dx, stone[1] - dy)
                 ahead = (stone[0] + dx, stone[1] + dy)
-                if behind not in reachable or not floor(ahead):
+                if behind not in reachable or not lands(behind, ahead):
                     continue
                 steps = []
                 point = behind
