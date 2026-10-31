@@ -22,24 +22,26 @@ ADVENTURE_ACTIONS = {
     'adventure.own': 'owner',
 }
 
-# The body actions of the game's api/control. Release 1 keeps every one with the owner, and
-# release 2 opens them to players and managers through the control lease.
+# The body actions of the game's api/control. Under accounts the proxy also checks the control
+# lease: press and take_control need it, and resume needs it unless the person can manage.
 CONTROL_ACTIONS = {
-    'press': 'adventure.own',
-    'take_control': 'adventure.own',
-    'resume': 'adventure.own',
-    'pause': 'adventure.own',
-    'save': 'adventure.own',
-    'speed': 'adventure.own',
-    'load_state': 'adventure.own',
+    'press': 'adventure.play',
+    'take_control': 'adventure.play',
+    'resume': 'adventure.play',
+    'pause': 'adventure.manage',
+    'save': 'adventure.manage',
+    'speed': 'adventure.manage',
+    'load_state': 'adventure.manage',
     'restart': 'adventure.own',
 }
+LEASE_ACTIONS = {'press', 'take_control'}
 
-# Game reads that hand out saves. Only an owner lists them.
-OWNER_READS = {'api/states': 'adventure.own'}
+# Game reads that hand out saves. A manager lists them to load one.
+OWNER_READS = {'api/states': 'adventure.manage'}
 GAME_POSTS = {
     'api/control': None,  # decided by the body action, see CONTROL_ACTIONS
-    'api/trading/preferences': 'adventure.own',
+    'api/lease': 'adventure.play',  # the manager serves it and checks each lease action itself
+    'api/trading/preferences': 'adventure.manage',
     'api/export-save': 'adventure.own',
 }
 # Query flags that change what a game read returns, with the action each one needs. A flag

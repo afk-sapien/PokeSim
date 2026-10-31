@@ -4,6 +4,8 @@
   const $ = selector => document.querySelector(selector)
   let csrf = ''
   let session = {}
+  const ROLE_CHOICES = {viewer: 'Can watch', player: 'Can play', manager: 'Can manage'}
+  const ROLE_LABELS = {viewer: 'can watch', player: 'can play', manager: 'can manage'}
 
   async function call(path, options = {}) {
     const response = await fetch(path, {cache: 'no-store', credentials: 'same-origin', ...options,
@@ -104,7 +106,21 @@
     const sharing = await call(`/api/v1/adventures/${aid}/sharing`)
     const watching = new Set(sharing.grants.map(grant => grant.user_id))
     $('#share-watchers').replaceChildren(...sharing.grants.map(grant => {
-      const row = element('li', `${grant.display_name || grant.username} can watch.`, 'people-row')
+      const name = grant.display_name || grant.username
+      const row = element('li', `${name} ${ROLE_LABELS[grant.role] || 'can watch'}.`, 'people-row')
+      const choice = element('select')
+      choice.setAttribute('aria-label', `What ${name} can do`)
+      for (const [value, text] of Object.entries(ROLE_CHOICES)) {
+        const option = element('option', text)
+        option.value = value
+        choice.append(option)
+      }
+      choice.value = grant.role
+      choice.addEventListener('change', () => attempt('#share-result', async () => {
+        await send('POST', `/api/v1/adventures/${aid}/grants`, {user_id: grant.user_id, role: choice.value})
+        await showSharing()
+      }))
+      row.append(choice)
       row.append(button('Stop sharing', () => attempt('#share-result', async () => {
         await call(`/api/v1/adventures/${aid}/grants/${grant.user_id}`, {method: 'DELETE'})
         await showSharing()
@@ -126,13 +142,26 @@
       }), true))
       return row
     }))
+    // The /view/ link of an adventure from before accounts stopped working when they turned on.
+    $('#share-legacy').hidden = !sharing.legacy
+    if (sharing.legacy) {
+      $('#share-legacy-note').textContent = `The old view link ${sharing.legacy.path} stopped working when accounts turned on. Make a watch link to share in its place.`
+    }
   }
   async function addWatcher() {
     const uid = $('#share-person').value
     if (!uid) return report('#share-result', 'Choose a person first.')
     await attempt('#share-result', async () => {
-      await send('POST', `/api/v1/adventures/${$('#share-adventure').value}/grants`, {user_id: uid, role: 'viewer'})
+      await send('POST', `/api/v1/adventures/${$('#share-adventure').value}/grants`, {user_id: uid, role: $('#share-role').value})
       await showSharing()
+    })
+  }
+  async function makeLegacyLink() {
+    await attempt('#share-result', async () => {
+      const made = await send('POST', `/api/v1/adventures/${$('#share-adventure').value}/shares`, {legacy: true})
+      await showSharing()
+      $('#share-url').value = made.url
+      $('#share-made').hidden = false
     })
   }
   async function makeLink() {
@@ -181,6 +210,7 @@
     $('#password-form').addEventListener('submit', changePassword)
     $('#share-adventure').addEventListener('change', () => attempt('#share-result', showSharing))
     $('#share-add').addEventListener('click', addWatcher)
+    $('#share-legacy-make').addEventListener('click', makeLegacyLink)
     $('#share-create').addEventListener('click', makeLink)
     $('#share-copy').addEventListener('click', copier('#share-url'))
     await attempt('#share-result', showAdventures)

@@ -38,6 +38,9 @@ LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM'
 LEAGUE_ENTRY = MAPS['LORELEIS_ROOM']
 LEAGUE_CHECKPOINT = 'league-entry.state'
 BEFORE_STALL_CHECKPOINT = 'before-stall.state'
+# Kept by name, so a wrong rewind or restart can be undone from the saves list.
+BEFORE_LOAD_CHECKPOINT = 'before-load.state'
+BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
 
 log = logging.getLogger("pokesim.emu")
 
@@ -731,6 +734,16 @@ class Emulator:
         # The checkpoint's copy, since building it again doubles the work of every save.
         self.store.set("policy_state", manifest["policy_state"])
 
+    def _checkpoint_before(self, name: str):
+        """Keep the game as it is now under `name` before a rewind or restart replaces it."""
+        if self.store.get("trade_hold"):
+            return
+        try:
+            # A named checkpoint, not an autosave: as the newest autosave it would undo the rewind on the next start.
+            self.store.write_checkpoint(self._state_bytes(), self._manifest(), name)
+        except Exception:
+            log.exception("cannot keep the save from before %s", name)
+
     def _unstick(self, since: float, why: str):
         """Go back to an autosave from before the trouble started (or power-cycle if there is none)."""
         saves = self.store.autosaves()
@@ -953,6 +966,11 @@ class Emulator:
             self.paused = True
             self.manual_mode = False
         elif name in ("take_control", "press"):
+            if name == "take_control":
+                # A new holder of the control lease never inherits presses someone else queued.
+                self.input_epoch += 1
+                while not self.manual.empty():
+                    self.manual.get_nowait()
             if not self.manual_mode:
                 self.policy.on_restore()
                 if hasattr(self, 'statistics'):
@@ -975,6 +993,7 @@ class Emulator:
         elif name == "load_state":
             p = self.store.state_path(arg)
             if p:
+                self._checkpoint_before(BEFORE_LOAD_CHECKPOINT)
                 try:
                     self._load_state_file(p)
                 except ValueError as error:
@@ -983,6 +1002,7 @@ class Emulator:
                     log.info("loaded %s", p.name)
         elif name == "restart":
             log.warning("restarting run from power-on")
+            self._checkpoint_before(BEFORE_RESTART_CHECKPOINT)
             if hasattr(self, 'statistics'):
                 self.statistics.flush()
                 self.statistics.reset_baseline()

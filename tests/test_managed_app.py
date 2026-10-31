@@ -462,7 +462,7 @@ def test_a_slow_game_trade_history_does_not_stall_the_library(client, monkeypatc
     manager.registry.add_rom('fixture-rom', 'sha1', 'red')
     row = manager.registry.create('Red', 'fixture-rom', {}, identifier())
     release = threading.Event()
-    def slow_status(aid):
+    def slow_status(aid, watcher=False):
         release.wait(10)
         return {'adventure': {'id': aid}, 'active': [], 'history': [], 'recent_failures': [], 'attention': None}
     monkeypatch.setattr(manager.coordinator, 'adventure_status', slow_status)

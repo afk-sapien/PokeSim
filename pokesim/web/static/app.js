@@ -62,6 +62,11 @@ function steadyObjective(objective) {
 let viewerOnly = false
 let paused = false
 let manualMode = false
+let stoppedNow = false
+// This person's role on the adventure. Without accounts everyone is the owner.
+let role = 'owner'
+let lease = null
+let leaseEnforced = false
 let stateBusy = false
 let partySignature = ''
 let currentParty = []
@@ -80,11 +85,98 @@ function toast(message, error = false) {
   toastTimer = setTimeout(() => { $('#toast').hidden = true }, 4500)
 }
 
+async function problem(response, fallback) {
+  try {
+    const data = await response.json()
+    return typeof data.detail === 'string' ? data.detail : fallback
+  } catch (_) { return fallback }
+}
+
 async function post(action, value) {
   if (viewerOnly) throw new Error("This instance is view-only.")
   const response = await PokeSim.fetch('/api/control', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({action, value})})
-  if (!response.ok) throw new Error('That action could not be sent. Please try again.')
+  if (!response.ok) throw new Error(await problem(response, 'That action could not be sent. Please try again.'))
   return response.json()
+}
+
+// With accounts, one person at a time plays by hand. The library keeps that control lease.
+const holding = () => !leaseEnforced || Boolean(lease?.you_hold)
+const canPress = () => !viewerOnly && role !== 'viewer' && holding()
+
+async function refreshLease() {
+  // A standalone game, or a library without accounts, has no lease. The library stamps the page when it has one.
+  if (!PokeSim.base || !document.querySelector('meta[name="pokesim-lease"]')) return
+  try {
+    const response = await PokeSim.fetch('/api/lease', {cache: 'no-store'})
+    if (!response.ok) throw new Error('Unavailable')
+    const status = await response.json()
+    if (status.you_hold && !lease?.you_hold) set('#manual-controls', 'open', true)
+    lease = status
+    leaseEnforced = Boolean(status.enforced)
+  } catch (_) {
+    // Keep the last answer through a brief outage rather than flashing the controls.
+  }
+}
+
+async function leaseAction(button, action, userId) {
+  releaseControls()
+  if (button) button.disabled = true
+  try {
+    const response = await PokeSim.fetch('/api/lease', {method: 'POST', headers: {'content-type': 'application/json'},
+      body: JSON.stringify(userId ? {action, user_id: userId} : {action})})
+    if (!response.ok) throw new Error(await problem(response, 'Control could not change. Please try again.'))
+    const status = await response.json()
+    if (status.you_hold && !lease?.you_hold) set('#manual-controls', 'open', true)
+    lease = status
+    if (action === 'request' && !status.you_hold) toast('You are in line. The person playing can hand control to you.')
+    renderLease()
+    await refreshState()
+  } catch (error) {
+    toast(error.message, true)
+  } finally {
+    if (button) button.disabled = false
+  }
+}
+
+function renderLease() {
+  window.pokesimHoldsControl = holding()
+  const box = $('#lease')
+  const status = leaseEnforced ? lease : null
+  const manages = role === 'manager' || role === 'owner'
+  if (box) box.hidden = !status || stoppedNow || (!status.holder && role !== 'owner')
+  $('.controller')?.querySelectorAll('[data-b]').forEach((button) => { button.disabled = !holding() })
+  const take = $('#take-control')
+  if (take) {
+    let action = ''
+    let text = manualMode ? 'Let AI play' : 'Take control'
+    if (status?.you_hold) [action, text] = ['release', status.end === 'pause' ? 'Stop playing' : 'Let AI play']
+    else if (status?.holder) [action, text] = manages ? ['take', 'Take control back'] : status.queued ? ['release', 'Leave the line'] : ['request', 'Ask for control']
+    else if (status) [action, text] = ['request', 'Take control']
+    take.dataset.lease = action
+    take.textContent = text
+  }
+  if (!status) return
+  const holder = status.holder
+  set('#lease-holder', 'textContent', status.you_hold
+    ? `You have control. ${status.end === 'pause' ? 'The game stays paused when you stop.' : 'The AI plays again when you stop.'}`
+    : holder ? `${holder.name} has control.${status.queued ? ' You are in line.' : ''}` : 'Nobody is playing by hand.')
+  if (holder && !status.you_hold && !stoppedNow) set('#control-mode', 'textContent', `${holder.name} is playing. AI paused`)
+  set('#lease-idle', 'hidden', !status.idle_warning)
+  if (status.idle_warning) set('#lease-idle', 'textContent', `No buttons pressed for a while. Control ends in ${status.idle_ends_in} s unless you press one.`)
+  const queue = $('#lease-queue')
+  const decides = status.you_hold || manages
+  const rows = decides ? (status.queue || []).filter((entry) => entry.id) : []
+  if (queue) {
+    queue.hidden = !rows.length
+    const signature = JSON.stringify([rows, status.you_hold])
+    if (queue.dataset.signature !== signature && !queue.contains(document.activeElement)) {
+      queue.dataset.signature = signature
+      queue.innerHTML = rows.map((entry) => `<li><span>${esc(entry.name)} asks for control</span>${status.you_hold ? `<button class="key" data-lease-action="handover" data-user="${esc(entry.id)}">Hand over</button>` : ''}<button class="key" data-lease-action="refuse" data-user="${esc(entry.id)}">Refuse</button></li>`).join('')
+    }
+  }
+  set('#lease-end-field', 'hidden', role !== 'owner')
+  const end = $('#lease-end')
+  if (end && document.activeElement !== end) end.value = status.end || 'resume'
 }
 
 async function control(button, action, value, message) {
@@ -168,11 +260,19 @@ async function refreshState() {
     if ($('#connection').classList.contains('is-offline')) window.pokesimScreen?.reconnect()
     // A stopped adventure shows its last save read only, so it takes no controls either.
     const stopped = Boolean(state.stopped)
-    viewerOnly = Boolean(state.viewer_only) || stopped
+    stoppedNow = stopped
+    role = ['viewer', 'player', 'manager', 'owner'].includes(state.role) ? state.role : 'owner'
+    // A player's page is view-only for everything except playing by hand.
+    viewerOnly = (Boolean(state.viewer_only) && role !== 'player') || stopped
+    const manages = role === 'manager' || role === 'owner'
     $('.game-card')?.classList.toggle('is-stopped', stopped)
     document.querySelectorAll('.controls > :not(#sound):not(#sound-status), .manual-controls, .controller, #restart').forEach((element) => {
       element.hidden = viewerOnly
     })
+    for (const selector of ['#take-control', '.manual-controls', '.controller']) set(selector, 'hidden', viewerOnly || role === 'viewer')
+    for (const selector of ['#pause', '#save', '.controls > .live-speed']) set(selector, 'hidden', viewerOnly || !manages)
+    set('#restart', 'hidden', viewerOnly || role !== 'owner')
+    await refreshLease()
     set('#app-version', 'textContent', `v${state.version || 'unknown'}${state.build?.revision ? ` (${String(state.build.revision).slice(0, 7)})` : ''}`)
     const edition = state.strategy?.collection?.version
     if (edition) {
@@ -189,8 +289,8 @@ async function refreshState() {
     // The bezel's power LED is lit while the game runs and dark while it is paused.
     $('.game-card')?.classList.toggle('is-paused', Boolean(paused) && !manualMode)
     set('#on-air-label', 'textContent', stopped ? 'Stopped' : manualMode ? 'Manual' : paused ? 'Paused' : 'Live')
-    set('#take-control', 'textContent', manualMode ? 'Let AI play' : 'Take control')
     set('#control-mode', 'textContent', stopped ? 'Showing the last save' : manualMode ? 'You’re playing. AI paused' : paused ? 'Game paused' : 'AI is playing')
+    renderLease()
     $('#connection').classList.toggle('is-paused', paused)
     $('#connection').classList.remove('is-offline')
     set('#status', 'textContent', stopped ? 'Stopped' : manualMode ? 'In control' : paused ? 'Paused' : 'Running')
@@ -333,7 +433,37 @@ async function refreshEvents(append = false) {
 }
 
 if ($('#pause')) $('#pause').onclick = (event) => control(event.currentTarget, paused && !manualMode ? 'resume' : 'pause')
-if ($('#take-control')) $('#take-control').onclick = (event) => control(event.currentTarget, manualMode ? 'resume' : 'take_control')
+if ($('#take-control')) $('#take-control').onclick = (event) => {
+  const action = event.currentTarget.dataset.lease
+  if (action) return leaseAction(event.currentTarget, action)
+  control(event.currentTarget, manualMode ? 'resume' : 'take_control')
+}
+$('#lease-queue')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-lease-action]')
+  if (button) leaseAction(button, button.dataset.leaseAction, button.dataset.user)
+})
+if ($('#lease-end')) $('#lease-end').onchange = async (event) => {
+  const select = event.currentTarget
+  select.disabled = true
+  try {
+    const response = await PokeSim.fetch('/api/lease', {method: 'POST', headers: {'content-type': 'application/json'},
+      body: JSON.stringify({action: 'setting', end: select.value})})
+    if (!response.ok) throw new Error(await problem(response, 'That choice could not be saved. Please try again.'))
+    lease = await response.json()
+    toast(lease.end === 'pause' ? 'The game will stay paused when someone stops playing.' : 'The AI will play again when someone stops playing.')
+  } catch (error) {
+    toast(error.message, true)
+  } finally {
+    select.disabled = false
+    renderLease()
+  }
+}
+// The library ends a lease whose page goes quiet, so a holding page checks in.
+setInterval(() => {
+  if (!leaseEnforced || !lease?.you_hold) return
+  PokeSim.fetch('/api/lease', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({action: 'heartbeat'})})
+    .catch(() => {})
+}, 15000)
 if ($('#save')) $('#save').onclick = (event) => control(event.currentTarget, 'save', undefined, 'Checkpoint save requested. Progress also saves automatically.')
 if ($('#simulation-speed')) $('#simulation-speed').onchange = async (event) => {
   const select = event.currentTarget
@@ -432,7 +562,7 @@ const controller = $('.controller')
 if (controller) {
   controller.addEventListener('pointerdown', event => {
     const button = event.target.closest('[data-b]')
-    if (!button || button.disabled || viewerOnly || event.button !== 0) return
+    if (!button || button.disabled || !canPress() || event.button !== 0) return
     event.preventDefault()
     releaseControls(event.pointerId)
     button.setPointerCapture(event.pointerId)
@@ -440,7 +570,7 @@ if (controller) {
     heldControls.set(event.pointerId, held)
     button.classList.add('is-held')
     const repeat = async () => {
-      if (heldControls.get(event.pointerId) !== held || viewerOnly || document.hidden) return
+      if (heldControls.get(event.pointerId) !== held || !canPress() || document.hidden) return
       const ok = await manualPress(button.dataset.b)
       if (!ok) return releaseControls(event.pointerId)
       if (heldControls.get(event.pointerId) === held && !['start', 'select'].includes(button.dataset.b)) {
@@ -456,7 +586,7 @@ if (controller) {
   // Keyboard and assistive activation produce a click without a pointing device.
   controller.addEventListener('click', event => {
     const button = event.target.closest('[data-b]')
-    if (button && event.detail === 0 && !viewerOnly) manualPress(button.dataset.b)
+    if (button && event.detail === 0 && canPress()) manualPress(button.dataset.b)
   })
 }
 window.addEventListener('blur', () => releaseControls())
@@ -494,7 +624,7 @@ async function manualPress(button) {
     await post('press', button)
     manualMode = true
     paused = true
-    set('#take-control', 'textContent', 'Let AI play')
+    if (!leaseEnforced) set('#take-control', 'textContent', 'Let AI play')
     set('#control-mode', 'textContent', 'You’re playing. AI paused')
     $('.game-card')?.classList.add('is-manual')
     return true
@@ -503,7 +633,7 @@ async function manualPress(button) {
 }
 let lastKeyPress = 0
 window.addEventListener('keydown', (event) => {
-  if (viewerOnly || !$('#screen') || globalThis.PartyPopup?.isOpen()) return
+  if (!canPress() || !$('#screen') || globalThis.PartyPopup?.isOpen()) return
   const map = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', z: 'a', x: 'b', Z: 'a', X: 'b', Enter: 'start', Shift: 'select'}
   if (map[event.key] && !event.target.closest('input, select, textarea, [contenteditable]') && !(event.key === 'Enter' && event.target.closest('button, summary, a'))) {
     event.preventDefault()

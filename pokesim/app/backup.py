@@ -69,9 +69,13 @@ def create_backup(manager):
         running = list(manager.supervisor.children)
         playback = {}
         try:
+            # A backup ends every control lease, and nobody plays by hand across one.
+            leases = getattr(manager, 'leases', None)
+            if leases is not None:
+                leases.end_all('backup')
             for aid in running:
                 status = manager.supervisor.child(aid).request('GET', '/api/summary', timeout=5)
-                playback[aid] = 'take_control' if status.get('manual_mode') else 'pause' if status.get('paused') else None
+                playback[aid] = 'pause' if status.get('paused') and not status.get('manual_mode') else None
             for aid in running:
                 manager.supervisor.stop(aid, preserve_desired=True)
             bid = identifier()

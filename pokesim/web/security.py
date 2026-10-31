@@ -18,9 +18,27 @@ VIEWER_HEADER = 'X-PokeSim-Viewer'
 VIEWER_PRIVATE = frozenset({'api/states', 'api/export-save'})
 
 
+# Under accounts the library names the adventure role of a person below the owner. Like the
+# viewer header it only takes permissions away: the library has already checked the request.
+ROLE_HEADER = 'X-PokeSim-Role'
+ROLES_BELOW_OWNER = ('viewer', 'player', 'manager')
+
+
 def viewer_allows(method, path):
     """Whether a view-only request may reach this game route, given relative to the game root."""
     return method in {'GET', 'HEAD'} and path.strip('/') not in VIEWER_PRIVATE
+
+
+def role_allows(role, method, path):
+    """Whether a person with this adventure role may reach this game route at all."""
+    path = path.strip('/')
+    if role == 'viewer':
+        return viewer_allows(method, path)
+    if role == 'player':
+        return viewer_allows(method, path) or (method == 'POST' and path == 'api/control')
+    if role == 'manager':
+        return path != 'api/export-save'
+    return True
 
 
 def public_origin(value):
