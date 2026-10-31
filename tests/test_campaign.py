@@ -229,6 +229,30 @@ def test_victory_road_boulder_plan_preserves_a_walkable_push_route():
     assert (state[2] + dx, state[3] + dy) == task[1]
 
 
+def test_victory_road_boulder_plan_never_pushes_onto_stairs_or_another_elevation():
+    # Blue stalled on Victory Road 3F for hours pushing a boulder at (17, 6) up onto the stairs
+    # tile at (17, 5), which the cartridge refuses, so the boulder never moved (#242).
+    from pokesim.policies.navigation import DIRS, PAIR_COLLISIONS
+    from pokesim.policies.puzzles import STAIRS_TILE, BoulderPlanner
+    from pokesim.strategy_data import WORLD
+    s = ready(badges=255, map=MAPS['VICTORY_ROAD_3F'], x=17, y=7)
+    world = WORLD[s.map]
+    nav = Navigator()
+    nav.update_story(s)
+    nav.live_map = s.map
+    nav.live_positions = [(28, 5), (7, 13), (6, 14), (13, 3), (26, 5), (7, 7), (22, 3), (17, 6), (22, 10), (23, 15)]
+    planner = BoulderPlanner()
+    planner.route(s, nav, ('BOULDER2', (3, 5)))
+    for (px, py, bx, by), direction in planner.path:
+        dx, dy = DIRS[direction]
+        if (px + dx, py + dy) != (bx, by):
+            continue
+        here, there = nav.active_tile(world, px, py), nav.active_tile(world, bx + dx, by + dy)
+        assert there != STAIRS_TILE, (px, py, direction)
+        assert (world['tileset'], here, there) not in PAIR_COLLISIONS, (px, py, direction)
+        assert (world['tileset'], there, here) not in PAIR_COLLISIONS, (px, py, direction)
+
+
 def test_mt_moon_stays_the_goal_wherever_a_side_project_leads():
     # Training for Misty happens on Route 24, beyond the mountain. A run that went back to Viridian
     # Forest to evolve a Metapod was given that goal and wandered for hours of game time.
