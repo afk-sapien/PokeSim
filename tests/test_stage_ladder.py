@@ -2,6 +2,8 @@
 import gzip
 import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -297,3 +299,14 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
     assert 'red-randomized/badges_4: 30.0% wasted, 20.0% before' in capsys.readouterr().out
     with pytest.raises(SystemExit, match='108000'):
         main(args + ['--frames', '36000'])
+
+
+@pytest.mark.skipif(shutil.which('flock') is None, reason='needs flock')
+def test_a_load_gate_inside_a_heavy_run_runs_at_once(tmp_path, monkeypatch):
+    # A gate run under the heavy lock once waited 14 hours on the lock its own parent held.
+    monkeypatch.setenv('POKESIM_LOAD_GATE', str(tmp_path))
+    monkeypatch.delenv('POKESIM_LOAD_GATE_HEAVY', raising=False)
+    gate = str(stage_ladder.ROOT / 'tools' / 'load_gate.sh')
+    nested = ['sh', gate, 'heavy', 'sh', gate, 'heavy', 'sh', gate, 'pytest', 'echo', 'ran']
+    done = subprocess.run(nested, capture_output=True, text=True, timeout=30, check=True)
+    assert done.stdout == 'ran\n'
