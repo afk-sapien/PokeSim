@@ -84,7 +84,7 @@ def main(argv=None):
             admin_index += 1
         else:
             break
-    if admin_index < len(args) and args[admin_index] in {'adventures', 'import', 'import-pair', 'backup', 'restore'}:
+    if admin_index < len(args) and args[admin_index] in {'adventures', 'import', 'import-pair', 'backup', 'restore', 'admin'}:
         from .app.cli import main as cli_main
         return cli_main(args)
     if args and args[0] == 'legacy':

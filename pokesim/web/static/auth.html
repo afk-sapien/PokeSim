@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#DDDAD0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#20241F" media="(prefers-color-scheme: dark)">
+<title>Log in · PokeSim</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<script src="/static/panel.js?v=panel-4"></script>
+<link rel="preload" href="/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/tokens.css?v=panel-1">
+<link rel="stylesheet" href="/static/panel.css?v=pass2-1">
+<link rel="stylesheet" href="/static/panel-library.css?v=pass2-1">
+<script src="/static/auth.js?v=accounts-1" defer></script>
+</head>
+<body class="library auth" data-page="${page}" data-token="${token}">
+<header class="rail">
+<div class="shell rail-inner">
+<a class="brandplate" href="/" aria-label="PokeSim library"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model">${app_version}</span></span></a>
+</div>
+</header>
+
+<main id="main" class="shell library-main">
+<section class="panel settings-panel" aria-labelledby="auth-heading">
+<h1 class="panel-head legend legend--ink" id="auth-heading">Log in</h1>
+<div class="panel-body stack">
+<p class="lede" id="auth-intro"></p>
+<a class="key key--primary" id="oidc-login" href="/auth/oidc/login" hidden>Log in with single sign-on</a>
+<form id="auth-form" class="stack">
+<label class="field" id="code-field" hidden><span class="micro">Setup code</span><input id="code" autocomplete="one-time-code" maxlength="64"><span class="note">PokeSim printed this code in its log when it started. Run <code>docker logs pokesim</code> to see it.</span></label>
+<label class="field"><span class="micro">Username</span><input id="username" autocomplete="username" maxlength="64" required autocapitalize="none" spellcheck="false"></label>
+<label class="field"><span class="micro">Password</span><input id="password" type="password" maxlength="256" required></label>
+<label class="field" id="confirm-field" hidden><span class="micro">Password again</span><input id="confirm" type="password" maxlength="256" autocomplete="new-password"><span class="note">At least 10 characters.</span></label>
+<div class="form-actions"><button class="key key--primary" id="auth-submit">Log in</button></div>
+<p class="form-result" id="auth-result" role="status" aria-live="polite"></p>
+</form>
+</div>
+</section>
+</main>
+</body>
+</html>

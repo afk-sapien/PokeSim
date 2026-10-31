@@ -166,16 +166,18 @@ class TradeBuilder:
             return reasons[0]
         return f'Nothing in {game["name"]} can be traded for {_name(give)}'
 
-    def targets(self, from_id, from_key=None):
+    def targets(self, from_id, from_key=None, *, visible=None):
         """Every other adventure, with the reason it cannot trade right now.
 
         A view-only adventure is listed but cannot be chosen. With from_key, each adventure
         is also checked against that Pokémon, so one that cannot take it is greyed out
-        before the owner opens its PC.
+        before the owner opens its PC. `visible`, when given, is the set of adventure ids
+        this person may trade with, and every other adventure is left out.
         """
         validate_id(from_id)
         sender = self.registry.adventure(from_id)
-        games = [game for game in self.registry.adventures() if game['id'] != from_id and not game['archived']]
+        games = [game for game in self.registry.adventures() if game['id'] != from_id and not game['archived']
+                 and (visible is None or game['id'] in visible)]
         reasons = {game['id']: (VIEW_ONLY if self.viewer_only(game['id']) else '')
                    or self.coordinator.manual_game_reason(game) for game in games}
         busy = self.coordinator.busy_adventures()

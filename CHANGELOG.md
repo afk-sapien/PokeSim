@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased (multi-user branch)
+
+- Add accounts. With `AUTH=accounts`, or on a new library, everyone logs in with a password, an OpenID Connect provider or a trusted proxy header. Admins manage the Library and members see only their own adventures and the ones shared with them. The first admin comes from a one-time setup code in the log or from `POKESIM_ADMIN_USER` and `POKESIM_ADMIN_PASSWORD`, and owns every earlier adventure. Admins invite people with one-time links, owners let other people watch or make expiring watch links, trades run only between adventures one person owns, and `pokesim admin reset-password` recovers a locked-out account. A library from before accounts stays open until an admin is set up. See [Users and sharing](docs/users-and-sharing.md) and [Authentication](docs/authentication.md).
+
 ## 0.6.2
 
 - Publish the container image for linux/arm64 as well as linux/amd64, so it runs on a Raspberry Pi 4 or 5, an ARM NAS or an Apple silicon Mac without emulation. The release workflow builds and tests each architecture on its own native runner, pushes each as `<version>-linux-<arch>` and joins them into one multi-platform tag, then checks anonymously that the tag serves both and that each pulls the tested image ([#269](https://github.com/afk-sapien/PokeSim/issues/269)).

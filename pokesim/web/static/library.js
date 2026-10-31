@@ -19,6 +19,7 @@
   }, true)
   let csrf = ''
   let owner = false
+  let canCreate = false
   let adventures = []
   let busy = false
   let refreshing = false
@@ -72,17 +73,39 @@
     $('#notice').hidden = !message
     $('#notice').classList.toggle('error', error)
   }
+  // An admin runs the whole Library. A member runs the adventures they own and, when allowed,
+  // creates new ones. The server checks every request either way.
+  function allowed(element) {
+    if (owner) return true
+    const id = element.dataset.id
+    if (id) return adventures.find(game => game.id === id)?.access === 'owner'
+    return element.hasAttribute('data-create') && canCreate
+  }
   function permissions() {
-    document.querySelectorAll('[data-owner]').forEach(element => { element.disabled = !owner || busy || element.hasAttribute('data-blocked') })
+    document.querySelectorAll('[data-owner]').forEach(element => { element.disabled = !allowed(element) || busy || element.hasAttribute('data-blocked') })
     if (notifyIntegration) renderNotifyProvider()
+  }
+  function showAccount(session) {
+    $('#accounts-banner').hidden = !session.setup_recommended
+    $('#account').hidden = session.auth !== 'accounts' || !session.user
+    if (session.user) $('#account-name').textContent = session.user.display_name || session.user.username
   }
   async function initializeSession() {
     if (!sessionPending) sessionPending = api('/api/v1/session').then(session => {
+      if (session.auth === 'accounts' && !session.authenticated) {
+        location.replace(session.setup ? '/setup' : `/login?next=${encodeURIComponent(location.pathname)}`)
+        return new Promise(() => {})
+      }
       csrf = session.csrf_token || ''
-      owner = session.role === 'owner'
+      owner = session.role === 'owner' || session.role === 'admin'
+      canCreate = owner || Boolean(session.user?.can_create)
+      showAccount(session)
       permissions()
     }).finally(() => { sessionPending = null })
     return sessionPending
+  }
+  $('#logout').onclick = async () => {
+    try { await api('/api/v1/auth/logout', {method: 'POST'}) } finally { location.replace('/login') }
   }
   async function api(path, options = {}, retried = false) {
     const {download, ...fetchOptions} = options

@@ -14,7 +14,7 @@ from .registry import identifier
 from .backup import extract_archive
 
 
-def import_directory(manager, source, *, rom=None, name=None, stopped=False):
+def import_directory(manager, source, *, rom=None, name=None, stopped=False, owner=None):
     source = Path(source).resolve()
     if not stopped:
         raise ValueError('Confirm the old service is stopped before importing its directory')
@@ -52,7 +52,8 @@ def import_directory(manager, source, *, rom=None, name=None, stopped=False):
                 checkpoints = CheckpointStore(stage / 'states')
                 for path in checkpoints.autosaves():
                     checkpoints.checkpoint_metadata(path)
-                adventure = manager.registry.create(name or source.name, asset['id'], settings, aid_request)
+                adventure = manager.registry.create(name or source.name, asset['id'], settings, aid_request,
+                                                    owner=owner or manager.default_owner())
                 target = manager.root / 'adventures' / adventure['id']
                 try:
                     shutil.copytree(stage, target, dirs_exist_ok=True)
@@ -67,7 +68,7 @@ def import_directory(manager, source, *, rom=None, name=None, stopped=False):
             manager.suspended = False
 
 
-def import_archive(manager, archive):
+def import_archive(manager, archive, owner=None):
     # Up to 2 GB is extracted here, which will not fit the container's 256 MB /tmp.
     with tempfile.TemporaryDirectory(prefix='.pokesim-import-', dir=manager.root) as temporary:
         root = extract_archive(archive, temporary, max_expanded=2 * 1024**3)
@@ -75,4 +76,4 @@ def import_archive(manager, archive):
             raise ValueError('This is a whole-application backup. Restore it to a new directory with pokesim restore.')
         if not (root / 'rom.gb').is_file():
             raise ValueError('A legacy import archive must include rom.gb and its adventure data')
-        return import_directory(manager, root, name='Imported adventure', stopped=True)
+        return import_directory(manager, root, name='Imported adventure', stopped=True, owner=owner)
