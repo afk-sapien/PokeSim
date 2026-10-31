@@ -1,0 +1,362 @@
+# Planner systems: replacing special cases
+
+Status: historical record. S1 to S5 shipped between 0.5.x and 0.6.0, and S3 step 9 (mastery credit) is parked after options B and 3 missed their bars. The proposal below was first read from main at `efc9491`. Its As built notes record what shipped.
+
+Most stuck loops of the last month were fixed with a special case: sell a repel, skip a wait when the boxes are full, close two gate tiles, cap one hunt. Each fix works, but the next loop needs another one. This document lists those fixes, groups them by the mechanism that is missing, and proposes five systems that replace them.
+
+## 1. Band-aid inventory
+
+### Recent pull requests
+
+| PR | Where (main) | Symptom patched | Missing mechanism | Cause |
+|---|---|---|---|---|
+| #133 | `gen2/collection.py:537-539`, `:641-642` | Gold paced Goldenrod for Day Care steps, 29% of frames | Background waits treated as passive progress, never chosen as a foreground goal | B |
+| #135 | `gen2/training.py:20-31` `POCKET_SLOTS`, `bag_takes`, `:69` `share_blocked` | Exp. Share swap refused on a full pocket and replanned every 3600 frames, 56.6% | Item moves check bag room before they are planned | A, D |
+| #135 | `gen2/training.py:22` `ITEM_REFUSALS`, `:417` `held_back` | The same refused task came back each time its block ended | One refusal count and backoff for every goal | C |
+| #137 | `gen2/training.py:35-66` `KEPT_ITEMS`, `VALUABLES`, `spare_item`, `room_goal`, `:345` | A full pocket blocked held-item swaps | A bag arbiter that ranks items by their value to active goals | A |
+| #146 | `gen2/policy.py:1467` `tower_travel` | The Battle Tower walk fought every wild battle, then turned back to heal, 35% | Engage or flee decided from the current goal and its HP and PP budget | E |
+| #147 | `gen2/collection.py:21` `policy.no_room` in `clock_wait` | A Lapras wait with 14 full boxes blocked the League, 98 to 100% idle | A wait whose payoff is a catch checks box room first, and a wait never blocks other goals | D, B |
+| #148 | `policies/shopping.py:29` `spare_repels`, `:100` | Red skipped all three legendary birds with no bag slot for Ultra Balls | The same bag arbiter as #137, built again for Gen I | A |
+| #150 | `policies/director.py:55`, `gen2/postgame.py:35` `WEIGHTS`, `:234` | Rematch and League runs took 46% (Blue) and 28% (Gold) of frames | Utility per expected frame instead of per turn in a rotation | B |
+| #151 | `gen2/collection.py` `carrier_budget`, `observe_carriers`, `carriers_exhausted`, and one call in `Policy.step` | A 2% held-item hunt took 33 to 98% of frames | One expected-cost budget for every goal, kept across restarts | C, B |
+| #153 | `policies/navigation.py:30` `CYCLING_ROAD_CHECKS`, `:279` | A run with no Bicycle paced the Route 18 gate until a two-minute timeout | Navigation reads gate conditions from game data | F, D |
+
+#145 (shared loop error recovery), #149 (a harness check that the cartridge matches the game data) and #152 (a feature) are not band-aids. #149 does point at one real cause: Gen I game data is chosen from an environment variable at import time. That is a separate cleanup and is out of scope here.
+
+### Their predecessors
+
+- Stand-down and backoff: `gen2/standdown.py` (9160209), then the Remedy refusal (103f8c6), Time Capsule backoff (98e6be1), Tower stand-down (938a314), `SHINY_ENCOUNTERS = 100` (beb0919, `gen2/postgame.py:27`) and the Gen I two-minute idle timeout (`policies/collection.py:469`). #135 and #151 are the sixth and seventh budgets, each with its own constants.
+- Bag: the `len(items) >= 18` sale rule (ad5b1e7) and selling spent evolution stones (09ae6c7), then #135, #137 and #148. Gen I and Gen II each keep their own lists of what to keep or sell.
+- Waits: `while_waiting` (d7be7b9) and releasing spares instead of reloading on a clock wait (3fb9eaf), then #133 and #147.
+- Director: new entries first (5869435, 81cbe2a, `director.py:52`), the level 100 weight fix, the League in the Gen II rotation (beb0919, 3894554), then #150. These are three tweaks in a row to one `select`.
+- League deadlocks: b110a07, c6b4415, ddc4ad6, 4d0ddd8, fa9e915 and 143fbcd, each guarding one case.
+- Gates: `ROUTE_23_CHECKS`, the Saffron drinks and the Cinnabar doors (`navigation.py:27`, `:281`), the gate officer warp carpets (4ce54a2), then #153.
+- Fleeing: the shiny session flee (beb0919) and the uncatchable shiny (1275e1e), then #146.
+
+### Older special cases found in a sweep
+
+| # | Where | Symptom | Cause |
+|---|---|---|---|
+| 1 | `gen2/policy.py:921-923` | A hard-coded sell list (Nugget, Pearl and seven TMs), used only when money is under 200 | A |
+| 2 | `policies/shopping.py:23-25`, `:79` | `SPARE` and `LUXURIES` sets plus item ids 201 to 250 decide what is sold | A |
+| 3 | `gen2/training.py:353-357` | An item is tossed when the PC refuses it | A |
+| 4 | `gen2/policy.py:945-949` | Money reserve is 400 at 1200 or more, or fees plus 1000 | A |
+| 5 | `policies/shopping.py:40-46` | Safari fee reserve keyed on badges and HMs | A, D |
+| 6 | `gen2/collection.py:478-483`, `gen2/kanto.py:90` | League funding fires under fixed money, ball and potion counts | A |
+| 7 | `policies/collection.py:814`, `:852` | Rematch weight and director urgency both switch at money 10000 | A, B |
+| 8 | `gen2/policy.py:1419-1422` | No balls thrown under 1200 money with three or fewer balls, except for a species list | A |
+| 9 | `gen2/policy.py:953`, `:971-981` | Fixed restock targets for balls, potions and revives | A |
+| 10 | `policies/director.py:53-57`, `:73-76` | Tier filters and fixed category priorities, each tuned after an incident | B |
+| 11 | `gen2/collection.py:446-577` | About 25 sub-planners in a fixed order, first non-empty goal wins | B |
+| 12 | `policies/strategic.py:595-720` | Goal overrides chosen by key-prefix exclusion lists | B |
+| 13 | `policies/collection.py:866` | Per-method time budgets of 300000, 180000, 108000 and 36000 frames | C |
+| 14 | `policies/collection.py:467`, `:602`, `:850` | `PROJECT_COOLDOWN` 12000, 1200 after Champion, 3600 with no candidates, 600 between choices | C |
+| 15 | `gen2/postgame.py:26-30` | `QUALITY_BUDGET`, `SHINY_ENCOUNTERS`, `SHINY_MAX_FRAMES` | C |
+| 16 | `gen2/collection.py:779-781` | An outing is dropped after 20 "map still loading" steps | C |
+| 17 | `gen2/tower.py:70`, `gen2/teams.py:14-16` | Separate retry and backoff copies (`RETRY_AFTER`, `BLOCKED_LIMIT`) | C |
+| 18 | `policies/strategic.py:1115-1143`, `:1427` | TM check, teach, deadline and development timers | C |
+| 19 | `gen2/policy.py:907-912`, `:987-1012` | Shopping turned off on named maps to stop a walk out and back. Moved to S3: the cost of interrupting a puzzle map | B, C |
+| 20 | `policies/strategic.py:695-706`, `:842-917` | Victory Road coordinate boxes for one route and the boulders. Deferred from S2: boulder choreography, not a precondition | D |
+| 21 | `gen2/policy.py:1131-1162`, `gen2/champion_shop.py:41`, `gen2/menus.py:154` | Three copies of the protected move set, plus a Move Deleter special case for Waterfall | A |
+
+## 2. Root causes
+
+The four suspected causes hold, with three corrections.
+
+- **A. No resource model.** Confirmed, and it is the largest group. Bag slots, item PC slots, box slots, money and move slots are checked ad hoc at the point of failure. Gen I and Gen II fixed the same full-bag bug twice (#137, #148). It also explains the open Silver and Gold end state: every spare boxed duplicate holds an item (51 of 57 in Silver, 33 of 33 in Gold), so nothing can be released, so nothing can be caught.
+- **B. No unified goal utility.** Confirmed. Gen I picks by "last writer wins" in `StrategicPolicy.step` plus a weighted lottery for side projects. Gen II has a fixed ladder of about 25 sub-planners. Neither weighs value against expected time, so cheap-looking turns of a long goal (a rematch, a wait) crowd out progress.
+- **C. No progress detector.** Corrected: it exists in pieces. Gen I has backoff in `AdventureDirector.finish` (`director.py:113`). Gen II has stand-down in `gen2/standdown.py` but it only knows hunt, train, postgame and team keys. About ten hand-set budgets sit on top. The missing part is a shared definition of progress, not the backoff itself.
+- **D. No precondition check.** Confirmed, and it overlaps with A. #135, #137, #147 and #148 are all "a goal started without the slot or box it needs". When goals declare their needs, one check covers both.
+- **E. New: battle choices ignore the goal.** #146 and the shiny flee rules exist because engage, flee or catch is decided without knowing what the current goal needs or what HP and PP it can spend.
+- **F. New: navigation has no model of world conditions.** Gates that need a Bicycle, a drink, a badge or an event are added as tile lists after each stall (#153, `ROUTE_23_CHECKS`, Saffron, Cinnabar).
+
+## 3. Proposed systems
+
+All five live in a shared `pokesim/planning/` package below the generation split. Each generation supplies a small adapter that reads its own memory map.
+
+### S1. Resource ledger (cause A)
+
+Interface:
+
+```python
+@dataclass(frozen=True)
+class Need:
+    pocket_slots: dict[str, int] = field(default_factory=dict)  # "balls": 1
+    box_slots: int = 0
+    party_slots: int = 0
+    money: int = 0
+    move_slot: str | None = None   # protect a move such as "SURF"
+
+class Ledger:
+    def snapshot(self) -> Resources            # read from the save or memory
+    def reserve(self, goal: str, need: Need) -> Reservation | Shortfall
+    def release(self, goal: str) -> None
+    def make_room(self, shortfall: Shortfall) -> list[Goal]   # sell, deposit, toss, unequip, release
+```
+
+- Each item, box mon and move gets a value from the goals that want it (a ball is worth more while a legendary goal is active). `make_room` evicts the lowest value first and never touches a reserved unit.
+- Money reserves (Safari fees, League funding, restocks) become reservations instead of thresholds.
+- Plugs into `ShopPlanner.plan` and `cash_reserve` (`shopping.py:40`, `:112`), `_release_target` (`strategic.py:353`), Gen II `Policy.shop` (`policy.py:906`) and `training.spare_item` (`training.py:43`).
+- Deletes: `POCKET_SLOTS`, `bag_takes`, `share_blocked`, `KEPT_ITEMS`, `VALUABLES`, `spare_item`, `room_goal`, `spare_repels`, sweep rows 1 to 9 and 21.
+- Also fixes the Silver and Gold deadlock: a box slot shortfall can ask to unequip a spare duplicate's item, then release it.
+
+Migration:
+1. Read-only `Ledger.snapshot` for both generations, logged next to the existing checks. No behaviour change.
+2. Gen II bag: replace #135 and #137 with `reserve` and `make_room`.
+3. Gen I bag and money: replace #148, `SPARE`, `LUXURIES` and the Safari reserve.
+4. Boxes and party, including unequip then release.
+5. Move slots: one protected move set used by HM teaching, the Champion shop and the Move Deleter.
+
+Sweep rows closed: 1, 4, 6, 7, 8 and 9 in #172, 2 and 5 in #169, 21 in #168, and the box rule in #167. Row 3 stays by choice. The tossed item is the ledger's least-worth spare (`gen2/ledger.py` picks it), and the toss is only the action taken when the item PC refuses the deposit, so no threshold is left there.
+
+As built (#165 to #169 and #172), the interface differs in a few places:
+- `make_room` returns the `Unit`s to give up, worth least first. The caller turns them into goals.
+- `read` takes `kinds` and `boxes`, so a caller reads only the room it needs and passes the policy's box ranking.
+- `Ledger.compare` logs where the ledger would choose differently from an existing check, used while a rule moves over.
+- Box space is `box_wanted` with `BOX_RESERVE` 5 and `BOX_REFILL` 10. A release visit that starts below 5 free slots frees up to 10. Its frames do not count against the Gen I project it interrupts.
+- `FIELD_MOVES` and `LEARN_KEPT` live in `planning/ledger.py`, shared by both generations' move checks.
+- Gen I money comes from `money_needs` (the cash reserve and the Safari fee). The Gen I rematch uses `funds_short`, the cash reserve plus ten Ultra Balls.
+- Gen II money comes from `money_needs`, `supplies` and `held_money`.
+- A Gen II spare whose item is taken off goes back to its box when a PC step is refused, and `Take` closes the PC text the withdrawal leaves up.
+- A Gen II release visit (`gen2/ledger.release_step`) finishes a spare whose item is coming off, then ends at `BOX_REFILL`. Before that fix one Crystal visit released to 34 free slots.
+- A drop in Pokémon held is a `room` progress event in `planning/progress.py`, so the monitor and the replay audit count a release visit as progress.
+- The Gen II headless runner adds the planned Champion shop item to the clerk's list, as the managed runtime does. Without it every replayed Champion shop visit stood down.
+
+### S2. Precondition check (causes D and F)
+
+Interface:
+
+```python
+class Condition(Protocol):
+    def holds(self, world: World) -> bool
+    def enabler(self, world: World) -> Goal | None   # a goal that would make it hold
+
+def feasible(goal: Goal, world: World, ledger: Ledger) -> Feasibility
+    # ok, or the missing conditions and the goals that would enable them
+```
+
+- A goal declares `requires()`: items, badges, events, a ledger `Need`, and reachability of its target map.
+- Navigation edges carry conditions taken from game data (gate scripts, item checks, event flags) instead of tile lists. An edge whose condition fails is closed and its enabler is offered as a goal.
+- Plugs into Gen I `Collection.goal` (`collection.py:871`) before a candidate is accepted, Gen II `prerequisites` and `usable` (`gen2/collection.py:307`, `:664`), and the route planner in `policies/navigation.py`.
+- Deletes: the `no_room` check in `clock_wait` (#147), `CYCLING_ROAD_CHECKS`, `ROUTE_23_CHECKS`, the Saffron and Cinnabar lists, sweep rows 19 and 20.
+
+Migration:
+1. `Condition` types and `feasible`, with tests built from the stuck scenarios.
+2. Gate conditions extracted from game data for Gen I, checked against today's hand lists.
+3. Navigation uses them and the hand lists go.
+4. Collection goals declare `requires()`, starting with catches (box room) and legendaries (balls).
+5. The same for Gen II, with its own gate data.
+
+Sweep rows closed: none. Row 19 moved to S3, since it weighs a shop walk against leaving a puzzle map, which is utility, not a precondition. Row 20 stays open, deferred from S2: it is boulder choreography and needs its own batch. The #147 and #153 band-aids, `ROUTE_23_CHECKS` and the Saffron and Cinnabar lists are gone.
+
+As built (#176 to #180), the interface differs in a few places:
+- The Gen I gate table, `policies/gates.py`, is generated, not hand-written. `tools/gen1_gates.py` builds it from the pinned pokered scripts and writes the source commit in its header, and `tests/test_gen1_gates.py` regenerates it and fails on drift whenever a pokered or pokeyellow checkout is present (CI fills `.reference`). Red and Yellow agree on every gate.
+- Conditions are `Item`, `Count`, `Can`, `Badge`, `Event`, `Reach` and `AnyOf`, in `planning/conditions.py`. `Can` asks the adapter a whole-snapshot question, such as room to catch or a party that surfs. `Requirements` pairs conditions with a ledger `Need`, and `feasible` reserves that need under a key.
+- Navigation keeps one condition per gate (`GUARD_GATES`), read through `StoryWorld`. The Route 23 Earth Badge guard now blocks only x below 14, as the game does.
+- Gen I collection sources declare `source_requires` instead of goals declaring `requires()`. The Safari fee is a `Need(money=800)` on the ledger.
+- Gen II has no hand-written gate lists, since its navigation reads map events from pokecore, so it has no generated table. Its clock wait asks `gen2/ledger.catch_room`, which needs a box slot once the party is full, or a spare the ledger can release.
+
+### S3. Utility arbiter (cause B)
+
+Interface:
+
+```python
+@dataclass
+class Candidate:
+    key: str
+    tier: Tier             # STORY, PROGRESS, UPKEEP, FILLER
+    value: float           # progress it buys: dex entries, badges, legendaries, levels
+    expected_frames: float # travel plus expected encounters times frames per encounter
+    passive: bool = False  # waits that accrue on any walk (Day Care steps, clock)
+
+class Arbiter:
+    def choose(self, candidates: list[Candidate], state: State) -> Candidate
+```
+
+- Score is `value / expected_frames`, with a higher tier always first. Story stays a hard tier, rematches and League runs are `FILLER`, and passive waits are never chosen. They only accrue while something else runs.
+- `expected_frames` uses the real encounter odds. That fixes the held-item hunt that prefers a near Route 28 spot (10%) over Silver Cave Outside (90%), and it charges the grass walk between water points.
+- Plugs in where the Gen I override chain sits (`strategic.py:319-362`, `:595-720`) with `director.select` as its scorer, and where the Gen II `collection.journey` ladder sits (`gen2/collection.py:441-577`). Each sub-planner returns a candidate instead of returning first.
+- Deletes: the tier filters and fixed priorities in `director.py`, `gen2/postgame.py` `WEIGHTS`, the money-based rematch weight, the #133 and #147 wait rules, sweep rows 10 to 12, and row 19 (moved from S2), where a shop walk is weighed against the cost of leaving a puzzle map half done.
+
+Cadences that S4 left in place and S3 should replace with its own scoring: `PROJECT_COOLDOWN` (sweep row 14), the tower `RETRY_AFTER` rest, the shiny session slice (`SHINY_ENCOUNTERS` and `SHINY_MAX_FRAMES`), the strategic development and TM check timers (row 18) and the Gen II `attempts` recency of 18000 decisions.
+
+#### Scoring
+
+Line numbers in this subsection are from main at 45374eb.
+
+- **Tier.** `STORY` before `UPKEEP` before `PROGRESS` before `FILLER`. An enabler that S2 offers for a failed condition (a box room visit, a restock) takes the tier and value of the goal it unblocks, not its own.
+- **Value.** One unit for both generations: a new dex entry is 1.0, a legendary is a dex entry, a species' first level 100 credit is 0.5, a perfect species is 0.5, and a quality catch is 0.5 times the expected drop in the species' best DV tail. Money has no value of its own. It is worth what it funds, so the rematch is worth its prize only while `funds_short` (`policies/ledger.py:131`) holds and a small constant otherwise. The lead approved these weights (see Decided).
+- **Expected frames.** `planning/cost.py` gives `travel + needed / chance × frames_per_encounter`, the shape Gen II already uses in `search_expected` (`gen2/standdown.py:31`). `needed` for a quality hunt is the expected catches until a better copy, one over P(better). Travel uses the route planner's length.
+- **Interrupt cost.** A candidate that cuts into a running goal adds the frames to walk back to it, plus the frames sunk into the current map when its puzzle resets on exit (boulders, switches, an unfinished League run). That is how row 19 goes: a shop walk out of Ice Path or the League costs the sunk frames, so it loses unless the need is urgent, with no named map list.
+- **Ties** break on key so the choice is deterministic. The recent-kind decay (`director.py:114`, `:122`) goes, since S4 backoff already moves the arbiter off a stalled goal.
+
+#### Boundary with S4
+
+- S3 supplies `expected_frames`. S4 starts each goal with a budget of three times that and stands it down with backoff when no progress event comes. A stood-down key is left out of the arbiter's list until its `until`.
+- S3 decides when a hunt is no longer worth doing (its value falls as P(better) falls, or the target is met). S4 decides when a hunt is not progressing. Neither keeps a fixed catch count.
+- After a stand-down the arbiter picks the next candidate, which covers Gold event-9335.
+- A shiny search becomes `FILLER` at a constant rate, and S4 counts each target species encounter as its progress event. That needs a small S4 change, flagged below.
+
+#### Gen I and Gen II share it
+
+- `planning/arbiter.py` and `planning/cost.py` are shared. Each generation has one adapter that turns its sources into candidates: Gen I in `policies/collection.py` and `policies/strategic.py`, Gen II in `gen2/collection.py` and `gen2/postgame.py`.
+- Parity: arbiter detail shown on the Live page goes under `state.strategy`, which `tests/test_generation_parity.py` already allows as a per-generation planner shape. Any new statistics or activity field, such as an arbiter share in the audit, is filled by both generations in the same PR. The shadow comparison in step 3 goes only to the log and the replay audit.
+
+#### Steps
+
+1. **Arbiter core.** `planning/arbiter.py` (`Candidate`, `Tier`, `choose`, `compare`) and `tests/test_arbiter.py`. Nothing calls it, so behaviour is preserved. Unit tests on fixed candidates: tier order, value over frames, interrupt cost, passive never chosen, and the Yellow Dojo gift (`43:gift:177:HITMONLEE`) outranking a long hunt. Closes no rows.
+2. **Shared cost and Gen I odds.** `planning/cost.py` takes over `search_expected` from `gen2/standdown.py:31`. `tools/gen1_wild.py` generates a Gen I wild table (`policies/wild.py`) from the pinned pokered and pokeyellow data, with a drift test `tests/test_gen1_wild.py` built like the gate test. Preserves behaviour, with an equivalence test that Gen II `search_expected` returns what it did. Closes the S4 known gap once step 5 uses it.
+3. **Shadow mode in both generations.** Gen I `Collection.choose` and the `_overworld` chain, and the Gen II `journey` ladder and `postgame.choose`, build candidates and call `Arbiter.compare` while the old order still decides. Preserves behaviour, with equivalence tests on the stuck scenarios that the chosen goal is unchanged. One read-only batch reads the would-have-chosen shares, with no 2-point bar. Closes no rows.
+4. **Red box room enabler (Gen I).** See the Red answer below. `policies/team.py` (`spare_entries` reachability at `:85`), `policies/storage.py` (`release_target` at `:23` offers the unlist plan), `policies/strategic.py` (the release visit at `:358` and `_release_target` at `:1101`), `duplicates.py` (offer a party duplicate, if allowed), and an enabler on `Can('catch')` for the catch sources (`policies/collection.py:831`). Changes behaviour. Red batch, bar: `collect_rematch` down at least 2 points and a `room` progress event in each save. Closes no sweep rows. It does not need steps 1 to 3 and could go first.
+5. **Gen I side projects on the arbiter.** `policies/director.py` loses the new entry and rematch-last filters (`:96-100`), the priorities and decay (`:114-122`), and `new_entry` counts a legendary only when unowned (`:27` returns True for a returned repeat, such as Red's Articuno). `policies/collection.py` loses the rematch weight `10 if short else 2` (`:972`), `urgent=short` (`:1010`), `PROJECT_COOLDOWN` (`:31`), the 1200 and 3600 cooldowns (`:630`, `:1008`) and the 600 frame gap (`:765`). Catch kinds take `expected_frames` from step 2 instead of `EXPECTED_FRAMES` (`:38`). Changes behaviour. Batch, bar: 2 points on Red `collect_rematch` and Yellow `collect_hunt` (14.7%), and the Dojo gift no longer stands down. Closes rows 10 and 14.
+6. **Gen II postgame on the arbiter.** `gen2/postgame.py` loses `WEIGHTS` (`:35`), the rotation in `choose` (`:215`), `SHINY_ENCOUNTERS`, `SHINY_BREAK_ACTIVITIES` and `SHINY_MAX_FRAMES` (`:27-30`). A quality hunt ends at the first better copy instead of `QUALITY_CATCHES` 3 (`:26`), and `reachable` (`:256`) and `quality` (`:275`) rank by value over cost. `planning/progress.py` counts a target encounter for a shiny search. Changes behaviour. Batch, bar: Gold Golduck (63.7%, 29.0 wasted, 3 stalls), Silver Girafarig (55.9%, 27.7 wasted) and Crystal's Silver Cave shiny search (17.6%, 7.4 wasted) each down at least 2 points. Closes row 15.
+7. **Gen I overworld overrides.** `policies/strategic.py` `_overworld` (`:590-760`) and the story, collection and release choices (`:324-372`) become candidates. `_tm_development` (`:1114`) loses its 18000 and 3600 timers and becomes a candidate worth the move it gives. Changes behaviour. Batch on all three Gen I games. Closes rows 12 and 18.
+8. **Gen II ladder.** Each rung of `gen2/collection.py` `journey` (`:480`) returns a candidate. `while_waiting` (`:54`) is passive. The #133 and #147 wait rules, the `attempts` recency of 18000 (`:662`) and the tower `RETRY_AFTER` 50000 (`gen2/tower.py:53`) go. The shop-off map list (`gen2/policy.py:938-947`, `:984-1004`) is replaced by interrupt cost. Changes behaviour. Batch on all three Gen II games. Closes rows 11, 17 and 19.
+
+9. **Mastery weighted by full remaining credit (option B, later).** A mastery training step is worth the full level 100 credit it still has to earn, not a fixed rank above quality hunts. The lead sets the values when this step starts. Replaces the step 5 constant that ranks training above every quality hunt. Rejected as written (see As built). The lead chose option 3 instead: training keeps its tier above quality hunts, and inside that tier trainees rank by remaining credit per expected frame, with expected frames = remaining experience × (`FRAMES_PER_EXPERIENCE` + `HEAL_FRAMES_PER_EXPERIENCE` 0.29), plus `BOX_SWITCH_FRAMES` 4800 for a boxed trainee. `TRAINEE_SHARE_CAP` 0.5 (window 450k frames) turns on only if a trainee's share rises more than 5 points above its baseline, with Crystal Nidoking's 74 to 79% grandfathered.
+
+#### Red answer
+
+Red is not out of work the way Blue is. It has open goals it cannot reach, and nothing offers the goal that would reach them. From the three S2 saves, read without stepping:
+
+- Frame shares (S2 after, the same as the base): `collect_rematch` 42.3% with 7.6 wasted, the League 35.0%, marathon 5.9% (all wasted), `collect_plan` 5.9%, ceremony 5.4%, heal 3.8%, `collect_train` 0.9%.
+- Long goals still open: 26 quality hunts (136 species with a readable best tail, 66 above `GOOD_TAIL`, 81 with their searches spent), and the perfect and high quality goals. No perfect species is held. Level 100 credit covers 150 of 151 and only Snorlax is missing, finished in the third save.
+- Every catch source fails `Can('catch')` (`policies/collection.py:831`, `ram.py:196`). The boxes hold 240 of 240 with the party full, so `can_catch` is False.
+- `spare_entries` finds 16 spares (Muk, Kabutops, Rapidash and others), but all 16 are unlisted. The first slot of box 11 holds a trade nickname with a list break byte (`ram.py:336` `LIST_BREAKS`), so the 19 slots after it never show. `policies/team.py:85` reserves them, `_release_target` (`strategic.py:1101`) returns None and the release visit (`:358`) never fires.
+- What is left is training (it ends when Snorlax reaches 100), marathon and the rematch fallback. The rematch's prize money is worth nothing to Red: money is 151763 against `funds_needed` 12300, so `funds_short` is False and the weight is the floor of 2 (`:972`).
+- Blue, for contrast: 151 of 151, level 100 credit 151, 240 stored, 0 spares, 0 unlisted. Its 27 open quality hunts are also blocked by full boxes, and there is nothing to release under today's keep rules. That is a real end state.
+
+The missing goal is a box room enabler that reopens box 11's list. Free a party slot by releasing the weaker Pidgeot (level 38, while the level 40 one keeps Fly), withdraw the nickname breaker, release spares up to `BOX_REFILL`, and deposit the breaker last so it hides nothing behind it. The arbiter values the enabler at the catches it unblocks (step 4).
+
+#### Decided
+
+The lead approved the plan as picked and confirmed these on 2026-10-29.
+
+- Party releases stay off. The step 4 enabler never releases a party duplicate.
+- Shiny progress belongs to S4. A target species encounter counts as progress for the monitor, so a live shiny search is not stood down as idle. The planner's own shiny search stays `FILLER`, and the value weights give it no extra worth.
+- The value weights are approved as written under Scoring: a new dex entry 1.0 (a legendary counts as one), a species' first level 100 credit 0.5, a perfect species 0.5, and a quality catch 0.5 times the expected drop in the best DV tail. The rematch is worth its prize while `funds_short` holds and a small constant otherwise.
+- Step 4 went first (#186, with the #188 fix).
+- Step 6 (2026-10-29). Gold Golduck, Silver Girafarig and the Crystal shiny search are held to the standard bar, no rise over 2 points. The step 6 numbers above came from older saves, and on the step 6 baseline those rows waste almost nothing.
+- Step 6 keeps the shadow tiers in Gen II, with quality hunts and training both in `PROGRESS`, because Gen II `trainee` already makes ordinary copies under level 80 wait for their hunts. If Gen II training share falls by more than half or wasted goes over the bar, the one retry is option C as in Gen I.
+- The marathon runs whenever it is eligible, with its own cooldown as the cadence, under the same rule in both generations. After step 5, Gen I had it as one `FILLER` candidate that ran only when no `PROGRESS` work was left, so on 2026-10-29 the lead ruled that both generations change to match `docs/marathon.md`. Once it is due (eligible, and the 6 hour cooldown has passed), the marathon outranks quality hunts and training. Missing Pokédex entries and urgent supply projects still go first, the same as before step 5. The rule is an explicit marathon tier or rule in the arbiter, not a tuned value. Gen I may change only in marathon rows and what follows from them. It is judged by the all-frames rule, with the marathon rows explained for each save and Red compared against its race share of about 5.9% from before step 5. The PR reports race share for each save in both generations, and any save over 20% goes to the lead before merging.
+- A shiny search stays ahead of the League, the League is the last fallback, and the arbiter asks again after each shiny search battle.
+- Step 6 waiver (lead, 2026-10-29): Silver `collection_train_pc` wasted rose from 1.6 to 5.1%. Under option C, training rotates through several trainees, so each save makes 4 to 6 PC trainee withdrawals instead of 1 to 3, at about 10k frames each. The lead waived the row because Silver's total wasted share fell from 15.2 to 9.5% and the row is the parked box switch cost. That work now comes right after the step 6 deploy, as its own PR before step 7. It keeps training the party trainee before withdrawing a boxed one, prices the heal trips a trainee causes, and caps one trainee's share. Its bar: wasted % no worse anywhere, with PC withdrawals and heal waste both down.
+- Quality hunts fell to 0.0% in all three Gen II games under option C in the 864k frame window. That is expected while trainees remain, but it must not last. The overnight watch checks that any Gen II adventure whose trainees are all at level 100, or that has none left, starts a quality hunt within its next 6 game hours.
+- Step 8 waiver (lead, 2026-10-29): on the live Crystal copy, "Train Pikachu" rose from 64.3 to 75.7%, over the 2 point row bar. Main lost a Tower run at cap 10 with no wins and stood down on `tower:10`, and the ladder trains instead. The lead waived the row because wasted frames (28.5 to 24.2%), stalls (1 to 0) and the Tower row all improve. A day-only Sunkern hunt from an edited Crystal save covers the timed catch for the merge. Gen II scenarios that take edits, with a committed timed hunt and a Tower with no room, follow in their own PR before S5.
+
+#### As built
+
+- Step 8 is #212. Each rung of the Gen II collection `journey` offers a candidate through a new `Ladder` in `gen2/collection.py`, which restores the collection state for every losing rung. The Day-Care walk and the clock wait are passive. A rung that cuts into the one under way pays the walk back. The #133 and #147 wait rules, the 18000 frame `attempts` recency and the Tower `RETRY_AFTER` 50000 and `tower_after` are gone. A timed catch is a passive candidate worth its new entry, and a hunt with no tile or a Tower with no room stands down on the planner's backoff. `shop()` loses its fixed map list: `gen2/errands.py` prices a trip by its walk against the bag's need and never breaks off a puzzle, a story dungeon or the League. `healing()` keeps its map list. The seeded batch matches main byte for byte, so the live Gold, Silver and Crystal copies were replayed too: Gold and Silver are identical, and Crystal improves with the waiver above. Closes rows 11, 17 and 19.
+
+- The main fix after step 7 is #211, with pokecore 0.10.2. A scenario that raises now fails alone instead of erroring the shared fixture. Red's Route 23 search took a route through Victory Road that assumed its boulder switches were solved, and inside only open gates count, so it walked in and out. Route 23 now takes the open route first. A full bag planned a restock at the Indigo Plateau Lobby, and inside the lobby the flag was recomputed from League supplies only, so it left at the door. The lobby now keeps a full bag restocking. The scenario Gen II watch counts a marathon checkpoint as progress. Gen II has neither lobby bug, since its supplies do not depend on the map and a full bag never starts a shop trip, and its Victory Road and Route 23 have no boulders.
+- Step 7 is #210. In Gen I, the story, the collection plan, the project under way, ground pickups, party swaps, HM and TM teaching and Champion counter trips are candidates on one `Choice` table, which replaces the key prefix exclusion lists. An errand under way is cut into only by a step of the same errand, and a failed precondition, such as a hurt party or a full box, still replaces the pick. The collection's own pick is taken as it is, since it already weighed the goal it was handed. `_tm_development` loses its 18000 and 3600 frame timers. A purchase is worth the move it gives (`values.move_gain`), and it pays the trip again as an interrupt while a project is under way. The HM teach timer and `development_until` stay, since this step named only the TM timers. The seeded batch matches #209 in 17 of 18 saves. One Red save adds a 1250 frame HM teach during training, and Gen II is unchanged. Headless runs never buy TMs, so unit tests cover the purchase value. Closes rows 12 and 18.
+- The full box fix is #209. Silver's Wandering Training Camp filled all 280 box slots and could catch nothing, and the #207 watch flagged it. Its 23 spare Snorlax, from the player or linked trainers, all held Leftovers. Gen II offered them only with the item taken off first, which needs a free party slot. Now, when the party and every box are full, such a spare may go holding its item, as long as the bag or another Pokémon keeps a copy. Gen I has no held items, so this is Gen II's form of the release Gen I already makes. A parity test checks that both generations pick the same spare. The new scenario `silver-full-box-20261029` releases at 16 game minutes and then goes back to training, and the seeded batch matches #208 exactly.
+
+- The box switch cost is #208, after step 6. It uses only the first of the lead's three ideas: keep training the party trainee before a boxed one. Gen I `party_first` drops a boxed trainee unless its tier is above every party trainee's, and Gen II `trainee()` trains a party copy within `MIN_UPGRADE` of its species' best. No tuned constant was added. The seeded 18-run batch against 3add32a, as non-race wasted share of all frames: Red 4.9 to 2.9%, Yellow 4.5 to 3.9%, Gold 8.5 to 7.5%, Silver 9.4 to 5.7%, Crystal 13.3 to 11.7%, and Blue unchanged. PC trips fell from 32 to 12 in Red, 45 to 9 in Yellow and 15 to 6 in Silver. Gen I heal waste rose a little (Red 0.5 to 0.6%, Yellow 0.2 to 0.6%), because a boxed trainee used to come out fresh and its swap doubled as a heal. Heal plus PC wasted frames together fell by 41% in Red and by 25% in Yellow, so the lead ruled it a pass. Pricing a trainee's heal trips and capping one trainee's share stay parked, unless a later batch shows heal waste climbing.
+
+- Step 6 is #206, deployed with #205 on pokecore 0.10.1. The arbiter runs the Gen II postgame. The lead's one retry, option C, applies because training share fell by more than half (Gold 22.1 to 3.2%, Silver 32.0 to 3.8%) with both tiers in `PROGRESS`. Gen II training is now `UPGRADE`, ahead of better-copy hunts at Gen I's `HUNT_TIER`, so training is 60.6, 62.9 and 56.2% of Gold, Silver and Crystal frames and quality hunts are 0.0% in the 864k frame window. The marathon is `Tier.RACE` in `planning/arbiter.py`, between `PROGRESS` and `UPGRADE`, in all six games. Once it is due (eligible, and the six hour cooldown has passed), it outranks better-copy hunts and training, while missing Pokédex entries and urgent supply projects still go first. The seeded 18-run batch against batch-0.10.1, as non-race wasted share of all frames: Red 5.4 to 4.9%, Blue 3.2 to 2.9%, Yellow 5.2 to 4.6%, Gold 14.0 to 8.5%, Silver 15.2 to 9.5%, Crystal 15.2 to 13.3%, with no stalls or stand-downs. Race share per save stays at or below 18.8% (Crystal), and Red races 6.8% against about 5.9% before step 5. Golduck, Girafarig and the Crystal shiny search meet the standard bar. The Silver `collection_train_pc` row is waived, as recorded under Decided.
+
+- Step 5 is #203, on pokecore 0.10.0. The arbiter decides Red, Blue and Yellow side projects by value per expected frame. `planning/cost.py` reads each cartridge's own grass, water and rod tables from core, randomizer overrides included, and `policies/wild.py`, `tools/gen1_wild.py` and `tests/test_gen1_wild.py` are gone. The lead chose option C for the weights: training toward a level 100 credit ranks above every quality hunt, behind one named constant. A quality catch earned about 10 times more per frame than a mastery step, and Red's training share fell from 57% to 2% without it. A training step is priced by the experience it needs (`FRAMES_PER_EXPERIENCE` 5 frames per point by growth rate), because a flat cost per level made frail high level trainees look cheapest and sent them to heal about 7 times per 450k frames. A hunt stocks 30 balls only while money stays above `funds_needed`, and never starts a Mart trip it cannot fund. `cost.py` falls back to unpriced odds only for a cartridge core does not recognise as a Pokémon game, and a recognised game whose tables fail to read still raises. The seeded 18-run batch against aac30ee: Red 8.0 to 6.6% wasted, Blue 11.3 to 3.2%, Yellow 6.6 to 5.2% with its one stall gone, and Gen II identical. Recoveries rose (Red 195 to 228, Yellow 229 to 377) from party withdrawals to train low level partners, and a box switch cost is the follow-up. The randomized adventure's share code rebuilds the same ROM, encounters and trainers on 0.10.0. Only `canonical()` moved, because it now hashes fishing.
+- Parked after step 5: the box switch cost. Pokecore 0.10.1 shipped on its own as #205, with a batch identical in all 6 games. Two attempts to cut Yellow's party withdrawals missed the bar (Yellow recoveries below 300, wasted % no worse anywhere). The first, branch `box-switch-cost`, kept the experience price and added `BOX_SWITCH_FRAMES` 4800, measured from 19 withdrawals. A boxed low level partner still won, because the experience price makes L4 to 10 look about 2300 frames when it takes 8000 to 150000, and Yellow recoveries rose from 377 to 441. The second, branch `level-frame-price`, priced each level at 9800 plus 450 times the level, fitted on 77 training projects from 6 saves outside the bar set. Yellow recoveries fell from 377 to 103 and Red from 228 to 164, but Yellow wasted rose from 5.2 to 6.3%. The slope makes high level steps near a level 100 credit the best value per frame, Yellow put 89% of its training into two frail trainees, and heal waste rose from 0.3 to 3.6%. That is the same failure the experience price fixed in step 5. A next try should price the heal trips a trainee causes, or cap the share of training one trainee takes. Option B (step 9) may settle it. Total waste is flat or better without it, so it waits.
+- `HEAL_FRAMES_PER_EXPERIENCE` is 0.29, measured on 2026-10-29 from a rerun of batch-s5-gen1 at c5ff9ce with experience logged (frames by goal matched the batch exactly). Heals that broke off a training goal took 303840 frames while training rows gained 1035021 experience, pooled over all 6 games. `collection_train_pc` is left out, since its PC swap reads as about 1M of false gains per Silver save. Per game: Red 0.25, Yellow 0.19, Gold 0.20, Silver 0.24, Crystal 0.63. The pooled value is the one used.
+- Rejected: step 9 option B (2026-10-29, local commit b88113f, never merged). Do not retry it. Training and quality hunts shared one tier on value per expected frame, with a whole mastery project worth `NEW_ENTRY` and priced over all its remaining experience. A project to level 100 costs millions of frames for one entry's worth, so every quality hunt beat training (Red Psyduck took 25% of frames, Yellow Growlithe 22%). Batch against batch-s5-gen1, training share and wasted %: Red 85.3 to 1.7 and 10.0 to 21.5, Blue 0.0 to 0.0 and 8.2 to 8.2, Yellow 83.8 to 0.0 and 11.9 to 20.2, Gold 68.3 to 2.6 and 7.2 to 21.8, Silver 70.1 to 24.4 and 21.2 to 26.9, Crystal 62.5 to 51.0 and 26.7 to 32.0. Yellow recoveries rose from 374 to 422. Heal waste and stand-down keys were fine.
+- Missed, parked: step 9 option 3 (2026-10-29, local commits b9e83ec and 770be92 on `s3/mastery-credit`, never merged). Training kept its tier, and Gen I trainees ranked by remaining credit per expected frame with the 0.29 heal price. Training share held (Red 85.3 to 85.2, Yellow 83.8 to 82.5) and Yellow recoveries fell from 374 to 190, but Yellow wasted rose from 11.9 to 13.0%, over the +1 bar, with Yellow heal waste 0.8 to 2.3% and Red 0.8 to 1.4%. Red recoveries rose from 229 to 303. Gen II was identical, because `trainee()` already picks a single trainee. The new top trainees took 56 to 59% of training (Red JAMGURU, Yellow WETDAD), so `TRAINEE_SHARE_CAP` 0.5 was added. The batch stayed byte-identical. Yellow makes about 5 collection choices in 864k frames and one 10-level step can fill the 450k window, so a cap checked only at the next choice never drops a trainee. Making it bite means ending a running training project, which is past the spec. The lead moved on to the legendary retry timers.
+- Step 3 is #196. Shadow mode builds candidates in both generations and logs where the arbiter would disagree, while the old order still decides. The seeded 18-run batch matched aac30ee exactly.
+- Step 2 is #195. `planning/cost.py` owns `search_expected` with per-map, per-battle and slot chance costs. The generated Gen I table `policies/wild.py` is temporary. The lead ruled that core's rule is no committed game tables, and randomized adventures change the encounters, so step 5 switches `cost.py` to core's ROM wild tables (grass, water and rod slots, randomizer overrides applied) for both generations, fills the fishing gap that way and deletes `policies/wild.py` and `tools/gen1_wild.py`. A missing core accessor is asked of core and released before the repin.
+- Step 1 is #194. `planning/arbiter.py` ranks by tier, then value over expected plus interrupt frames, with ties on key. Passive candidates are never ranked, and an empty or all-passive list chooses nothing. `compare` names how the arbiter's pick differs from the chosen key. The seeded 18-run batch was byte-identical to the aac30ee baseline.
+
+### S4. Progress monitor with backoff (cause C)
+
+Interface:
+
+```python
+class Monitor:
+    def start(self, key: str, expected_frames: float) -> None
+    def observe(self, key: str, frames: int, events: list[ProgressEvent]) -> Verdict
+        # CONTINUE, or STAND_DOWN until a frame or decision count
+    def shares(self) -> dict[str, float]   # frame share per goal for audits
+```
+
+- A progress event is defined per goal kind: a dex entry, an item obtained, a level, a badge, a target encounter, a map reached.
+- The budget is a multiple of the goal's own `expected_frames` (three by default), counted across restarts. After that comes exponential backoff, kept in the save like today's stand-down.
+- Merges the two halves that exist: Gen I backoff from `director.finish` and Gen II `stood_down` from `standdown.py`.
+- Deletes: sweep rows 13 to 18, `ITEM_REFUSALS`, `SHINY_ENCOUNTERS`, `QUALITY_BUDGET`, the #151 carrier budget and the tower and team retry copies.
+
+Migration:
+1. `Monitor` with `shares()` only, used by the replay audit. No behaviour change.
+2. Gen II stand-down moves onto it with today's constants.
+3. Gen I director backoff and idle timeout move onto it.
+4. Budgets switch from constants to `3 × expected_frames`.
+5. The remaining per-feature counters go.
+
+As built (#155, #156, #157, #162), the interface differs in a few places:
+- A progress event clears the frames spent on a key but keeps its stand-down count, so a goal that progresses and then stalls again still backs off from where it was.
+- `observe` takes `now`, the frame or decision count the backoff is measured in.
+- `Monitor` adds `stand_down(progressed)`, `standing_down`, `until` and `clear`. `start` takes a `budget` override.
+- Backoff is `Backoff(base, doublings)`.
+- Gen II state stays in `collection['stood_down']` so older saves keep their waits. Gen I state is in `director.progress`.
+- Known gap: Gen I uses `expected_frames` declared per kind of project until S3 adds encounter odds, because the Gen I `collection.json` has no odds.
+
+Counters fall into three kinds. Real budgets (Gen I per-method budgets, the #151 carrier budget, the Gen II quality hunt, training and the TM plan deadline) use three times expected, counted across restarts and cleared by progress. Attempt counts (`ITEM_REFUSALS`, the teams `BLOCKED_LIMIT`, the outing "map still loading" 20 steps) move to the monitor in their own unit. Cadences are not budgets and go to S3.
+
+### S5. Goal-aware battle stance (cause E)
+
+Interface: `goal.stance(encounter, ledger) -> FIGHT | FLEE | CATCH`. The default comes from the goal kind (travel flees plain battles, training fights, a hunt catches its target). HP and PP are ledger resources, so a goal that needs them for its destination flees early.
+
+- Deletes the `tower_travel` key list (#146) and the shiny session flee rules.
+- Migration: one step per generation, after S1.
+
+#### Decided
+
+- Step 1 values (lead, 2026-10-29): no new constant. The HP and PP budget is the room above the `Policy.healing` heal line. Every `collection.hunt` goal flees every plain off-target wild battle, on the walk and on the spot, and still catches anything the run wants. After 2 failed runs in one battle, the battle is fought out.
+- Gen I parity lands in step 2. Gen I hunts still fight off-target battles, and Gen I has no travel flee, no HP or PP budget flee and no 2-try cap.
+- Step 1 waiver (lead, 2026-10-29): the Crystal marathon row rose from 17.6 to 20.1% wasted (+2.5), and two Crystal saves passed 20% race share (20.4 and 20.9). A probe on the 20.9% save found no experience gap. Levels at the race start match, the stance made no runs during the race, and the extra 24.7k frames come from a race that starts about 6k frames later in a different game state. Crystal's total wasted falls from 29.3 to 26.7%, and races stay capped at 180000 frames. The row carries into step 2.
+- Step 2 goal kinds (lead, 2026-10-29): the Gen I carrier catches (`catch_cut`, `catch_surf`, `catch_strength`) and every `collect_hunt` goal are HUNT, matching Gen II carrier hunts. Only `cable_travel` is TRAVEL, matching `tower_travel`. Rematches, the marathon, the League entrance walk and errands during a legendary expedition are STORY. The legendary retreat (no balls, or the capture limit on a missing legendary) and the `_fight` guard for a missing legendary stay as Gen I rules. The retreat is a resource rule and a candidate for the ledger.
+- Step 2 waiver (lead, 2026-10-29): Yellow's PANTSNINJA training row rose from 11.0 to 13.4% (+2.4), because 2 runs on `party_collection_space` moved the trainee pick and JELLYFAX fell from 2.2 to 0%. It is training swapped between two trainees, and Yellow's wasted share fell from 12.0 to 11.9%.
+- Before any further S5 step (lead): no batch save hunts, so the hunt flee gets its own scenarios with edits. They are a Gen I Pokédex hunt among common off-target grass, a Gen I carrier catch from a weak party, and a Gen II hunt with off-target grass such as the Poliwhirl case.
+
+#### As built
+
+- Step 2 (#215, c5ff9ce): Gen I goals carry a kind and `choose_battle` calls the shared `stance()`. HUNT is every `collect_hunt`, the carrier catches, legendary expedition goals and `collect_seafoam_current`. TRAVEL is `cable_travel`, and TRAIN is the training goals. The budget is the old Gen I heal line, moved into `policies/ledger.py` (`battle_room`, `battle_ledger`, `walk_spent`) with no new values, and `needs_healing` goes through `budget_spent`. `FLEE_TRIES` also covers the shiny guard in `_fight`. A carrier hunt's target stays wanted while the catcher is hurt, so the hunt never runs from its own target. The expedition rule "Save time and supplies for the legendary expedition" and the shiny half of the legendary retreat are gone. Batch runs were Blue 17 and Yellow 2, all heal walks with 0 failures. Gen II is identical to step 1.
+- #216 (3ccef44, tools only) adds hunt flee scenarios in all six games through new Gen I scenario edits (`unowned`, `badges`, `events`, an `owned:N` until mark and `min_flees`).
+- The legendary retry timers are #217 (756b150). The missed legendary wait in both `legendary.py` files comes from `LEGENDARY_RETRY = Backoff(36000, linear=True, limit=180000)` in `planning/monitor.py`, with the same numbers and the same saved `pending` and `attempts`. It stays a countdown that pauses in battle, because the `Monitor` clock times waits from a stand-down on a running clock. The Gen I legendary retreat (no balls, no room, or `LEGENDARY_THROWS` 50) is `catch_spent` and `legendary_retreat` in `policies/ledger.py`. The seeded batch is identical in all 6 games.
+- The Gen I strategic timers are #218 (9ff70b7), the follow-up to step 7. `move_teaching_after` is gone: an HM teach from the bag is a `Choice` candidate worth `values.move_gain`, costs `TEACH_FRAMES` 1250 and pays them again as interrupt cost during a project, and is tried once per partner and move set. It takes the pick's tier, not `Tier.UPGRADE`, because at UPGRADE it would never teach during the story. `development_until` is gone: an excursion ends when its partner gains a level or leaves the party, or after `DEVELOPMENT_STALL` 2400 frames with no experience. It ends on the partner's own progress, not the arbiter, because an upgrade tier excursion would never beat a story goal. The 18000 frame `development_cooldown` stays. The lead accepted both changes. Batch against batch-s5-gen1: Red wasted 10.0 to 9.3%, every other game identical. Waiver (lead, 2026-10-29): Red `collect_train TUBATAX` share 27.7 to 30.2, a shift between trainees with 0.0 waste, while Red's total waste fell.
+- Sweep row 20 is #219 (b6c60c5), closed. `tools/gen1_gates.py` reads the five Victory Road boulder switches and their flags from the pinned pokered scripts into `BOULDER_SWITCHES` in `policies/gates.py`, with a drift test. `BoulderPlanner.switch_push` in `policies/puzzles.py` plans every loose boulder against every open switch and keeps the shortest plan, with a clearing push first when no boulder can reach a switch. `exit_push` pushes a boulder aside when every way on toward the goal is walled off. The five hand tasks, their clearing squares and the coordinate boxes in `strategic.py` and `collection.py` are gone. The ladder fallback (`ready_to_climb`, `ready_to_drop`) stays as a route question for a later step. The first push failed `test_step_budget` (Gen I median 7.58 ms, 16.30 ms on macos-intel), because a clearing push for squares already in reach was not cached, and the fix caches it with no change in decisions. Batch: Red, Yellow and Gen II identical, Blue 8.2 to 8.3% wasted, because its rematches cross Victory Road and the third floor's upper switch push lands 8 frames sooner. No row moved more than a point.
+- Step 1 (#214, cc01b5b): `pokesim/planning/stance.py` gives `stance()` from the goal kind. `tower.py` marks travel, `collection.hunt` marks every hunt and `training.walk_goal` marks training. HP and PP are ledger kinds, and `budget_spent` is the one budget rule, which `healing()` shares. The `tower_travel` key check and the shiny session flee are gone from `Policy.battle`, and the uncatchable shiny is the shiny case of `stance()`. A shiny whose runs fail twice is now fought. `tools/replay_audit.py` counts run attempts and failures per row. Batch runs and failures were Gold 47/0, Silver 34/7 and Crystal 55/3, all on heal walks. Heal share fell in every game (Crystal 12.4 to 4.8%). No batch save reached the Tower walk or a hunt, so those are covered by unit tests and the scenarios.
+
+## 4. How we prove it works
+
+- **Replay audit.** Each system ships with a before and after replay on all six games under the load limits (one batch, at most six processes, `nice -n 10`). It reports frame share per goal from `Monitor.shares()`, stall count (stand-downs plus reloads), and wasted frames (frames in goals that ended with no progress event).
+- **Pass bar.** No goal above 15% of frames unless it is intended (the Bug-Catching Contest), no new reloads, and wasted frames below the baseline.
+- **Regression set.** The private stuck scenarios already replayed by the full suite, plus one scenario per fix in section 1. Each must still pass with the special case deleted.
+- **Unit tests.** Ledger arithmetic and eviction order, condition and enabler pairs, arbiter ordering on fixed candidates, and monitor budgets and backoff.
+
+## 5. Estimates (agent time)
+
+| System | Agent work | Replay time |
+|---|---|---|
+| S4 progress monitor | about 3 to 4 hours | two batches, about 40 minutes each |
+| S1 resource ledger | about 5 to 6 hours | three batches |
+| S2 preconditions | about 4 to 5 hours | two batches |
+| S3 utility arbiter | about 8 to 10 hours | five batches plus one read-only shadow batch, the largest change in behaviour |
+| S5 battle stance | about 2 hours | one batch |
+
+Suggested order: S4 first, because it merges code that already exists and gives every later step its metric. Then S1, S2, S3 and S5. The lead picks the final order.
+
+## 6. Open findings to fold in
+
+- Silver and Gold are stuck in League runs (94% and 95.7%) because spare duplicates hold items. Silver has 251 of 251, 14 full boxes and a full party, and 51 of 57 boxed duplicates hold an item. In Gold all 33 boxed duplicates hold one, and 30 of them are also trained. Fixed by S1 step 4.
+- Gold save event-9335 idles 98% after a lost League run. S4 should stand that goal down and S3 should pick the next. Does not reproduce on 4e42e00 (2026-10-29). Over 864000 frames the save wastes 7.9% unseeded and 15.3% reseeded, with no stand-downs and no League or funds share. Its trainees level up through the `league_lost` and `LEAGUE_REGROWTH` path in `gen2/collection.py` before the next League try.
+- The held-item hunt ranks spots by distance plus a fixed term, and spends half its time on a 10% spot. The Poliwhirl surf hunt prefers Route 28 (10% Poliwhirl) over Silver Cave Outside (90%). About 80% of its battles are grass species met walking between water spots, so it gets about 7 Poliwhirl battles per game hour and one item takes about 7 game hours. Fixed by S3 expected frames, with S5 fleeing off-target battles.
+- Red's "Train CHEESEKING to level 30" takes 79.8% of frames at about 0.3 level gains per 10000 frames, and Yellow's training takes 58.8%. S4 progress rate and S3 cost should cover both. These need checking in the next audit.
+- Blue at 151 of 151 with full boxes is a real end state. Rematches as filler are the intended result there. Checked again for S3: 0 spares and 0 unlisted. Red is not in the same state. Its 16 spares sit behind a list break in box 11 (see the S3 Red answer).
+- Crystal's 47% wasted in the S4 baseline was an audit artefact. The audit counted only level ups as training progress, but Furret climbs from level 82 to 97 per run. The audit now counts trainee experience, and that training is productive.
+- Red's CHEESEKING and Ditto gain 14 to 16 levels per run, so Red's training share is slow progress, not a stall.
+- Yellow's `party_release` loops releasing from a full box (3 stalls in the baseline). S1 should own box space.
+- Screen recoveries are high in the baseline: Yellow 490, Blue 588, Red 115 per batch. Worth a look of its own. Fixed in #220 (4e42e00). 96 to 98% were the 900-frame battle decision clock in `strategic.py`, which kept running after the Core shortcut had handed the move to the game, so long turns (a knockout and forced switch, League animations, level ups) counted as recoveries and dropped the decision mid-turn. The clock now stops once the game takes the decision. Per run, Red 71 to 87 fell to 5 to 6, Blue 191 to 217 to 7 to 11, Yellow 110 to 134 to 8 to 9, Gen II stays 0. Batch: Red 9.3 to 9.6, Blue 8.3 to 8.1, Yellow 11.9 to 12.1, Gen II identical, no stand-downs, no row up more than 0.3 points.
+- Yellow's Fighting Dojo gift (`43:gift:177:HITMONLEE`, 4 stalls in the S1 baseline) is put off by the generic 36000-frame "other" expedition budget, on efc9491 and later. No special case. S3 test case: a cheap one-time gift must outrank the generic budget, because its utility is high and its expected cost is a short walk.
+- Fixed in #170 and deployed at 26390ca: Crystal kept a level 20 roam lead after every beast was caught, Crystal's storage goal flipped between two Pokémon Centers at the same distance, and Blue's guided detours jumped Route 22 ledges, which #150 exposed. None of these were band-aids, so they need no rows.
+- Hunts the Gold and Silver League deadlock was hiding, and that show up once S1 #167 clears it, for S3 and S4. Gold's Golduck quality hunt on Route 6 takes 62.5% of frames with 12.1 wasted, and `hunt:114` stands down in all 3 saves. Silver's shiny hunt on Route 14 takes 55.9% with 28.1 wasted, because a shiny search logs no progress until a shiny appears. S4 needs a progress signal for shiny searches, or S3 needs to weigh their odds. Yellow's hunt projects (`78:fish:161`, `130:grass`, `166:grass`) time out inside collect_hunt. The Yellow timeouts do not reproduce on 4e42e00 (2026-10-29). Across the three S1 Yellow saves, unseeded and reseeded, there are 0 stand-downs and 0 wasted frames in collect_hunt. The Golbat and Raticate hunts are no longer chosen, and the one hunt left (high DV Krabby) takes 4.6 to 19.0% with no waste.
+- Fixed in #174: Gen 2 replanned during the wild-battle start transition and counted hunt battles as `collection_wait`. The bug came in with 3a94920.
+- Parked by the lead (2026-10-29): giving the stack pointer (`core_ui(mem)`) to every Gen 2 Core task, not only the PC tasks, as Gen 1 does. The Oct 28 ablation on pokecore 0.9.5 showed a `tower:100` stand-down, which does not reproduce on 7b69bdf. A probe of the one-line change on the 9 Gen 2 seeded saves moved Gold 7.2 to 9.1% wasted, Silver 21.2 to 17.1% and Crystal 26.7 to 26.8%, with no stand-downs. No failure without it was found, so the change is unexplained and is not shipped for parity alone.
+- Not reproducing, or not a policy fault, on 2026-10-29: the Karate Master intent timeouts (fixed by #220), "Invalid scheduler state" (a pyboy-rs sound-off DIV bug, fixed in 0.1.4 and pinned in #226) and Tangela's low catch rate (the cartridge's odds plus its 26/256 flee per turn, measured 46% per battle against 46% predicted).
