@@ -71,6 +71,49 @@ an offer. See [Trade offers](trading.md#trade-offers).
 Automatic trading pairs two people's adventures only when both owners switch on **Auto
 trading with other people**. Otherwise it pairs only adventures with the same owner.
 
+## Give an adventure away
+
+On Settings, under Sharing, choose the adventure, then the person under **Give this
+adventure to**. Press **Give away**, then **Confirm give away**. They own it from then on
+and you lose access unless they share it back. Your open offers from it are withdrawn,
+offers to it are declined, its queued trades are cancelled and your control lease ends.
+
+## Delete a user
+
+An admin opens Settings, then People, and presses **Delete user**. Each adventure the
+person owns gets a choice: give it to someone, or archive it. An archived adventure is
+stopped and kept on disk under the admin who deleted the user, who can restore it or give
+it away later. No adventure is ever deleted this way.
+
+Their sessions, grants, invites, share links, sent offers and lease requests end with the
+account. You cannot delete your own account or the last admin.
+
+## Running limits
+
+An admin can limit how many adventures run at once in Settings, under Running adventures.
+The server limit counts every adventure. The per member limit counts each member's own
+adventures, and admins are not held to it. A start over a limit is refused with the
+numbers, and adventures already running keep going. Settings suggests 2 per member on a
+Raspberry Pi or another ARM machine with 4 GB of memory or less, and 4 otherwise. The
+server limit also works with accounts off.
+
+## Inbox
+
+**Inbox** in the Library header shows how many items you have not read. Open it to see
+them, newest first. You get an item when:
+
+1. Someone sends an offer to your adventure, or answers, or lets expire, an offer you sent.
+2. A trade between your adventure and someone else's finishes.
+3. Someone asks for control while you hold it, or asks for control of your adventure.
+4. An owner or manager takes control back from you.
+5. Someone shares an adventure with you.
+
+Nothing arrives for your own actions or for trades between your own adventures. Select
+an item to open its page and mark it read, or select **Mark all read**. PokeSim keeps
+your newest 200 items.
+
+Alerts sent to ntfy, Discord or Telegram stay with admins, under Notifications.
+
 ## Your account
 
 In Settings, under Your account, change your password. Changing it logs you out on every

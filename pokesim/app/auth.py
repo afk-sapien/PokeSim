@@ -31,6 +31,9 @@ LAST_SEEN_SECONDS = 60
 USERNAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}')
 MIN_PASSWORD = 10
 MAX_PASSWORD = 256
+# Inbox items kept per user. Older ones go when a new one arrives.
+INBOX_KEEP = 200
+KIND = re.compile(r'[a-z]+(?:\.[a-z]+)*')
 
 
 def token_hash(token):
@@ -131,6 +134,11 @@ class AuthStore:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL NOT NULL, user_id TEXT, action TEXT NOT NULL,
                 adventure_id TEXT, target TEXT, result TEXT NOT NULL, ip TEXT)''')
             self.db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+            self.db.execute('''CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                kind TEXT NOT NULL, adventure_id TEXT, text TEXT NOT NULL, link TEXT,
+                created_at REAL NOT NULL, read_at REAL)''')
+            self.db.execute('CREATE INDEX IF NOT EXISTS notifications_user ON notifications (user_id, id)')
             self.db.execute('CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id)')
             self.db.execute('CREATE INDEX IF NOT EXISTS grants_user ON grants (user_id)')
             self.db.execute('CREATE INDEX IF NOT EXISTS shares_adventure ON shares (adventure_id)')
@@ -248,6 +256,19 @@ class AuthStore:
         if result['role'] != current['role'] or result['disabled']:
             self.end_sessions(uid)
         return result
+
+    def delete_user(self, uid):
+        """Remove a user with their sessions, sign-ins and grants, and end the links and invites they made."""
+        current = self.user(uid)
+        if current is None or current['placeholder']:
+            raise KeyError('User not found')
+        with self.lock, self.db:
+            self.db.execute('UPDATE shares SET revoked_at=? WHERE created_by=? AND revoked_at IS NULL', (time.time(), uid))
+            self.db.execute('UPDATE invites SET revoked=1 WHERE created_by=? AND used_by IS NULL', (uid,))
+            self.db.execute('DELETE FROM users WHERE id=?', (uid,))
+            if current['role'] == 'admin' and not current['disabled'] and self._admins() == 0:
+                raise ValueError('Keep at least one admin')
+        self.cache.clear()
 
     def set_password(self, uid, password, *, keep=None):
         """Change a password and end every other session of that user."""
@@ -518,6 +539,59 @@ class AuthStore:
     def revoke_share(self, sid):
         with self.lock, self.db:
             self.db.execute('UPDATE shares SET revoked_at=? WHERE id=? AND revoked_at IS NULL', (time.time(), sid))
+
+    # Inbox ------------------------------------------------------------------------------
+    @staticmethod
+    def _public_notification(row):
+        return {'id': row['id'], 'kind': row['kind'], 'adventure_id': row['adventure_id'], 'text': row['text'],
+                'link': row['link'], 'created_at': row['created_at'], 'read': row['read_at'] is not None}
+
+    def notify(self, user_id, kind, text, adventure_id=None, link=None):
+        """Put one item in a user's inbox and keep only their newest INBOX_KEEP. Returns its id."""
+        if not isinstance(kind, str) or not KIND.fullmatch(kind):
+            raise ValueError('Unknown notification kind')
+        text = str(text or '').strip()[:500]
+        if not text:
+            raise ValueError('A notification needs text')
+        # Links stay inside PokeSim, so an inbox item can never send anyone elsewhere.
+        if link is not None and (not isinstance(link, str) or not link.startswith('/') or link.startswith('//')
+                                 or '\\' in link or len(link) > 300):
+            raise ValueError('A notification link must be a PokeSim path')
+        with self.lock, self.db:
+            if self.db.execute('SELECT 1 FROM users WHERE id=?', (user_id,)).fetchone() is None:
+                raise KeyError('User not found')
+            nid = self.db.execute('''INSERT INTO notifications (user_id, kind, adventure_id, text, link, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)''', (user_id, kind, adventure_id, text, link, time.time())).lastrowid
+            self.db.execute('''DELETE FROM notifications WHERE user_id=? AND id <= (
+                SELECT id FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 1 OFFSET ?)''',
+                            (user_id, user_id, INBOX_KEEP))
+        return nid
+
+    def inbox(self, user_id, limit=50):
+        """A user's newest inbox items, newest first."""
+        limit = max(1, min(INBOX_KEEP, int(limit)))
+        with self.lock:
+            rows = self.db.execute('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT ?', (user_id, limit))
+            return [self._public_notification(row) for row in rows]
+
+    def unread_count(self, user_id):
+        with self.lock:
+            return self.db.execute('SELECT COUNT(*) FROM notifications WHERE user_id=? AND read_at IS NULL',
+                                   (user_id,)).fetchone()[0]
+
+    def mark_read(self, user_id, ids=None):
+        """Mark some of a user's items read, or all of them when `ids` is None. Returns how many changed."""
+        now = time.time()
+        with self.lock, self.db:
+            if ids is None:
+                return self.db.execute('UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL',
+                                       (now, user_id)).rowcount
+            ids = [int(nid) for nid in ids]
+            if not ids:
+                return 0
+            marks = ','.join('?' * len(ids))
+            return self.db.execute(f'UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL AND id IN ({marks})',
+                                   (now, user_id, *ids)).rowcount
 
     # Audit ------------------------------------------------------------------------------
     def audit(self, action, *, user_id=None, adventure_id=None, target=None, result='ok', ip=None):

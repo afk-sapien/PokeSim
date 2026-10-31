@@ -21,7 +21,7 @@ import httpx
 
 from ..checkpoints import CheckpointStore
 from ..game_data import VARIANT_ENV
-from . import trade_settings
+from . import inbox, trade_settings
 from .assets import portrait_url
 from .registry import digest, identifier, validate_id
 from pokecore.identity import find, legacy
@@ -888,6 +888,7 @@ class Coordinator:
                 self.manager.notifications.trade_completed(row, manifest.get('display') or {})
             except Exception:
                 log.exception('Could not announce trade %s', tid)
+            inbox.trade_completed(self.manager, row, manifest.get('display') or {})
         self._prune_interactions()
         with self.view_guard:
             self.manual_progress.pop(tid, None)

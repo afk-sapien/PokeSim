@@ -214,6 +214,14 @@ def install(app, manager):
                    ip=manager.client_address(request))
         return result
 
+    @app.delete('/api/v1/users/{uid}')
+    async def delete_user(uid: str, request: Request):
+        from . import ownership
+        data = await body(request)
+        if set(data) != {'adventures'}:
+            raise ValueError('Choose a new owner or Archive for each of their adventures')
+        return await run_in_threadpool(ownership.delete_user, manager, uid, data['adventures'], actor(request))
+
     @app.delete('/api/v1/users/{uid}/sessions')
     def end_user_sessions(uid: str, request: Request):
         if auth.user(uid) is None:
@@ -276,7 +284,11 @@ def install(app, manager):
             raise ValueError('Choose Can watch, Can play or Can manage')
         if data['user_id'] == manager.registry.adventure(aid)['owner_id']:
             raise ValueError('The owner already has this adventure')
+        new = aid not in auth.grants_for(data['user_id'])
         auth.grant(aid, data['user_id'], data['role'], actor(request).id)
+        if new:
+            from . import inbox
+            inbox.shared(manager, aid, data['user_id'], data['role'], actor(request))
         if data['role'] == 'viewer':
             manager.leases.forget(aid, data['user_id'])
         auth.audit('grant.add', user_id=actor(request).id, adventure_id=aid, target=f"{data['user_id']} {data['role']}",
@@ -289,6 +301,14 @@ def install(app, manager):
         manager.leases.forget(aid, uid)
         auth.audit('grant.remove', user_id=actor(request).id, adventure_id=aid, target=uid, ip=manager.client_address(request))
         return sharing_of(aid)
+
+    @app.post('/api/v1/adventures/{aid}/transfer')
+    async def transfer_adventure(aid: str, request: Request):
+        from . import ownership
+        data = await body(request)
+        if set(data) != {'user_id'} or not isinstance(data['user_id'], str):
+            raise ValueError('Choose who gets this adventure')
+        return await run_in_threadpool(ownership.transfer, manager, aid, data['user_id'], actor(request))
 
     @app.post('/api/v1/adventures/{aid}/shares')
     async def add_share(aid: str, request: Request):

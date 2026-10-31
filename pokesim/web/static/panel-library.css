@@ -364,6 +364,66 @@
    status lamp's fixed width. */
 #account { width: auto; }
 @media (max-width: 860px) { .library #account:not([hidden]) + .connection { margin-left: 0; } }
+/* ---- inbox: a key in the rail and a panel that drops below it ---------- */
+.inbox-key { padding: 0 var(--s3); }
+.inbox-key[hidden] { display: none; }
+.inbox-key[aria-expanded="true"] { background: var(--well); box-shadow: var(--well-inset); }
+.inbox-count {
+  min-width: 20px;
+  padding: 3px var(--s1);
+  background: var(--signal);
+  color: var(--focus-halo);
+  font: var(--f-micro) / 1 var(--font-mono);
+  letter-spacing: 0;
+  text-align: center;
+}
+.inbox-count[hidden] { display: none; }
+.inbox-anchor { position: relative; height: 0; }
+.inbox-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 21;
+  display: grid;
+  gap: var(--s2);
+  width: min(400px, 100%);
+  max-height: min(70vh, 560px);
+  padding: var(--s3) 0 var(--s1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--panel);
+  border: var(--hair) solid var(--rule);
+  box-shadow: var(--key-inset), 4px 4px 0 var(--bevel-lo);
+}
+.inbox-panel[hidden] { display: none; }
+.inbox-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: 0 var(--s4); }
+.inbox-head h2 { margin: 0; color: var(--ink-2); }
+.inbox-result { margin: 0; padding: 0 var(--s4); }
+.inbox-result:empty { display: none; }
+.inbox-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.inbox-item + .inbox-item, .inbox-empty { border-top: var(--hair) solid var(--rule-faint); }
+.inbox-empty { padding: var(--s3) var(--s4); color: var(--ink-2); }
+.inbox-body {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  color: var(--ink-2);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+a.inbox-body:hover, a.inbox-body:focus-visible { background: var(--panel-2); text-decoration: none; }
+a.inbox-body:focus-visible { outline-offset: -3px; }
+.inbox-item.is-unread .inbox-body { color: var(--ink); box-shadow: inset 3px 0 0 var(--signal); }
+.inbox-body time { color: var(--ink-3); }
+.inbox-flag {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .people-list { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
 .people-list:empty { display: none; }
 .people-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); color: var(--ink-2); }

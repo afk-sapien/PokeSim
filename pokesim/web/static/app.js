@@ -128,6 +128,7 @@ async function leaseAction(button, action, userId) {
     const status = await response.json()
     if (status.you_hold && !lease?.you_hold) set('#manual-controls', 'open', true)
     lease = status
+    leaseEnforced = Boolean(status.enforced)
     if (action === 'request' && !status.you_hold) toast('You are in line. The person playing can hand control to you.')
     renderLease()
     await refreshState()
@@ -434,7 +435,9 @@ async function refreshEvents(append = false) {
 
 if ($('#pause')) $('#pause').onclick = (event) => control(event.currentTarget, paused && !manualMode ? 'resume' : 'pause')
 if ($('#take-control')) $('#take-control').onclick = (event) => {
-  const action = event.currentTarget.dataset.lease
+  // A press before the first lease answer still asks the library, so it never skips the lease.
+  const early = !lease && PokeSim.base && document.querySelector('meta[name="pokesim-lease"]')
+  const action = event.currentTarget.dataset.lease || (early ? 'request' : '')
   if (action) return leaseAction(event.currentTarget, action)
   control(event.currentTarget, manualMode ? 'resume' : 'take_control')
 }
