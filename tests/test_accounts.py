@@ -286,18 +286,18 @@ def request_from(host, headers):
 
 
 def test_proxy_headers_count_only_from_the_trusted_proxy_with_its_secret():
-    proxy = ProxyAuth('Remote-User', 's' * 20, '172.20.0.5/32', groups_header='Remote-Groups', gateways=set())
+    proxy = ProxyAuth('Remote-User', 's' * 20, '198.51.100.5/32', groups_header='Remote-Groups', gateways=set())
     sent = {'Remote-User': 'carol', 'Remote-Groups': 'pokesim-admins', ProxyAuth.SECRET_HEADER: 's' * 20}
-    assert proxy.identify(request_from('172.20.0.5', sent)) == ('carol', 'admin')
-    assert proxy.identify(request_from('172.20.0.6', sent)) is None
-    assert proxy.identify(request_from('172.20.0.5', {**sent, ProxyAuth.SECRET_HEADER: 'wrong'})) is None
-    assert proxy.identify(request_from('172.20.0.5', {**sent, 'Remote-Groups': 'friends'})) == ('carol', 'member')
+    assert proxy.identify(request_from('198.51.100.5', sent)) == ('carol', 'admin')
+    assert proxy.identify(request_from('198.51.100.6', sent)) is None
+    assert proxy.identify(request_from('198.51.100.5', {**sent, ProxyAuth.SECRET_HEADER: 'wrong'})) is None
+    assert proxy.identify(request_from('198.51.100.5', {**sent, 'Remote-Groups': 'friends'})) == ('carol', 'member')
     with pytest.raises(ValueError, match='every address'):
         ProxyAuth('Remote-User', 's' * 20, '0.0.0.0/0', gateways=set())
     with pytest.raises(ValueError, match='default gateway'):
-        ProxyAuth('Remote-User', 's' * 20, '172.20.0.0/16', gateways={ipaddress.ip_address('172.20.0.1')})
+        ProxyAuth('Remote-User', 's' * 20, '198.51.100.0/24', gateways={ipaddress.ip_address('198.51.100.1')})
     with pytest.raises(ValueError, match='16 characters'):
-        ProxyAuth('Remote-User', 'short', '172.20.0.5/32', gateways=set())
+        ProxyAuth('Remote-User', 'short', '198.51.100.5/32', gateways=set())
 
 
 class Provider:
