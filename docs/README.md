@@ -38,6 +38,7 @@ This index separates current instructions, future plans, and historical evidence
 
 ## Plans and historical records
 
+- [Multi-user PokeSim](design/multi-user.md): proposal for accounts, roles, sharing, a control lease and trade offers between people.
 - [Planner systems](design/planner-systems.md): the shared planner systems S1 to S5 that replaced special-case fixes, as proposed and as built, with the parked mastery credit step.
 - [Distribution readiness](distribution-readiness.md): historical release-process review.
 
