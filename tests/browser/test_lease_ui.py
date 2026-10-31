@@ -68,11 +68,13 @@ def checked(page):
     assert not problems, problems
 
 
-def open_game(browser, game, name):
+def open_game(browser, game, name, lease_route=None):
     """A separate browser for each person, logged in on the game page."""
     from playwright.sync_api import expect
     page = browser.new_context().new_page()
     game.pages.enter_context(checked(page))
+    if lease_route:
+        page.route('**/api/lease', lease_route)
     page.goto(f'{game.url}/login?next=/games/{game.aid}/')
     page.get_by_label('Username').fill(name)
     page.get_by_label('Password', exact=True).fill(PASSWORD)
@@ -126,11 +128,22 @@ def test_idle_hands_are_warned_then_lose_control(browser, tmp_path, monkeypatch)
     from playwright.sync_api import expect
     # The shortest idle limit is 30 s, the same as the warning lead, so the warning shows at once.
     monkeypatch.setenv('CONTROL_IDLE_SECONDS', '30')
+    # Hold back the page's lease reads, so Bob presses before the page knows there is a lease.
+    held = []
+
+    def hold_reads(route):
+        if route.request.method == 'GET':
+            held.append(route)
+        else:
+            route.continue_()
     with adventure(tmp_path, monkeypatch) as game:
-        bob = open_game(browser, game, 'bob')
+        bob = open_game(browser, game, 'bob', lease_route=hold_reads)
         bob.locator('#take-control').click()
         idle = bob.locator('#lease-idle')
         expect(idle).to_contain_text('No buttons pressed for a while. Control ends in')
+        # Unrouting sends the held reads on.
+        bob.unroute('**/api/lease', hold_reads)
+        assert held
         # Move the lease clock past the limit instead of waiting, then sweep as the library does.
         game.manager.leases.clock = lambda: time.monotonic() + 31
         game.manager.leases.sweep()
