@@ -7,11 +7,13 @@ import zipfile
 
 import pytest
 
-from tools.assemble_release import DESKTOP_ARCHIVES, assemble, digest
+from tools.assemble_release import DESKTOP_ARCHIVES, IMAGE_ARCHITECTURES, assemble, digest
 
 
 VERSION = '0.2.0rc99'
 REVISION = 'a' * 40
+IMAGE = f'ghcr.io/afk-sapien/pokesim:{VERSION}'
+INDEX = 'sha256:' + 'c' * 64
 
 
 @pytest.fixture
@@ -31,12 +33,13 @@ def assets(tmp_path):
         (tmp_path / (name + '.json')).write_text(json.dumps({
             **identity, 'archive': name, 'sha256': checksum,
         }))
-    (tmp_path / 'image-linux-amd64.tar.gz').write_bytes(b'image contents')
-    (tmp_path / 'image-metadata.json').write_text(json.dumps({
-        'Id': 'sha256:example', 'Os': 'linux', 'Architecture': 'amd64',
-        'Config': {'Labels': {'org.opencontainers.image.version': VERSION,
-                              'org.opencontainers.image.revision': REVISION}},
-    }))
+    for architecture in IMAGE_ARCHITECTURES:
+        (tmp_path / f'image-linux-{architecture}.tar.gz').write_bytes(b'image contents')
+        (tmp_path / f'image-metadata-linux-{architecture}.json').write_text(json.dumps({
+            'Id': 'sha256:' + architecture, 'Os': 'linux', 'Architecture': architecture,
+            'Config': {'Labels': {'org.opencontainers.image.version': VERSION,
+                                  'org.opencontainers.image.revision': REVISION}},
+        }))
     (tmp_path / 'python-dependencies.json').write_text('[]')
     (tmp_path / 'compose.yaml').write_text('services:\n'
                                          '  pokesim:\n'
@@ -101,13 +104,35 @@ def test_changed_archive_blocks_release(assets):
         assemble(assets, VERSION, REVISION)
 
 
-def test_wrong_container_revision_blocks_release(assets):
-    path = assets / 'image-metadata.json'
+@pytest.mark.parametrize('architecture', IMAGE_ARCHITECTURES)
+def test_wrong_container_revision_blocks_release(assets, architecture):
+    path = assets / f'image-metadata-linux-{architecture}.json'
     metadata = json.loads(path.read_text())
     metadata['Config']['Labels']['org.opencontainers.image.revision'] = 'b' * 40
     path.write_text(json.dumps(metadata))
     with pytest.raises(ValueError, match='Container identity'):
         assemble(assets, VERSION, REVISION)
+
+
+def test_image_built_for_the_wrong_architecture_blocks_release(assets):
+    path = assets / 'image-metadata-linux-arm64.json'
+    path.write_text(json.dumps({**json.loads(path.read_text()), 'Architecture': 'amd64'}))
+    with pytest.raises(ValueError, match='platform does not match'):
+        assemble(assets, VERSION, REVISION)
+
+
+@pytest.mark.parametrize('name', ['image-linux-arm64.tar.gz', 'image-metadata-linux-arm64.json'])
+def test_missing_arm64_image_blocks_release(assets, name):
+    (assets / name).unlink()
+    with pytest.raises(ValueError, match='Missing release assets'):
+        assemble(assets, VERSION, REVISION)
+
+
+def test_manifest_records_every_platform(assets):
+    assemble(assets, VERSION, REVISION)
+    manifest = json.loads((assets / 'manifest.json').read_text())
+    assert manifest['platforms'] == {'linux/amd64': {'image_id': 'sha256:amd64'},
+                                     'linux/arm64': {'image_id': 'sha256:arm64'}}
 
 
 def test_wrong_wheel_revision_blocks_release(assets):
@@ -142,11 +167,12 @@ def registry_assets(assets):
     for name in DESKTOP_ARCHIVES:
         for suffix in ('', '.sha256', '.json'):
             (assets / (name + suffix)).unlink()
-    path = assets / 'image-metadata.json'
-    metadata = json.loads(path.read_text())
-    metadata['RepoTags'] = [f'ghcr.io/afk-sapien/pokesim:{VERSION}']
-    metadata['RepoDigests'] = ['ghcr.io/afk-sapien/pokesim@sha256:' + 'b' * 64]
-    path.write_text(json.dumps(metadata))
+    for architecture, fill in zip(IMAGE_ARCHITECTURES, 'ab'):
+        path = assets / f'image-metadata-linux-{architecture}.json'
+        metadata = json.loads(path.read_text())
+        metadata['RepoTags'] = [f'{IMAGE}-linux-{architecture}']
+        metadata['RepoDigests'] = ['ghcr.io/afk-sapien/pokesim@sha256:' + fill * 64]
+        path.write_text(json.dumps(metadata))
     # Use the actual shipped configuration, including its future release default.
     root = Path(__file__).resolve().parents[1]
     (assets / 'compose.yaml').write_text((root / 'compose.yaml').read_text())
@@ -155,11 +181,15 @@ def registry_assets(assets):
 
 
 def test_registry_release_pins_configuration_and_records_digest(registry_assets):
-    image = f'ghcr.io/afk-sapien/pokesim:{VERSION}'
-    assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=image)
+    image = IMAGE
+    assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=image, index_digest=INDEX)
     manifest = json.loads((registry_assets / 'manifest.json').read_text())
     assert manifest['image'] == image
-    assert manifest['image_digest'] == 'ghcr.io/afk-sapien/pokesim@sha256:' + 'b' * 64
+    assert manifest['image_digest'] == 'ghcr.io/afk-sapien/pokesim@' + INDEX
+    assert manifest['platforms'] == {
+        'linux/amd64': {'image_id': 'sha256:amd64', 'image_digest': 'ghcr.io/afk-sapien/pokesim@sha256:' + 'a' * 64},
+        'linux/arm64': {'image_id': 'sha256:arm64', 'image_digest': 'ghcr.io/afk-sapien/pokesim@sha256:' + 'b' * 64},
+    }
     assert '${POKESIM_IMAGE:-' + image + '}' in (registry_assets / 'compose.yaml').read_text()
     assert f'POKESIM_IMAGE={image}\n' in (registry_assets / 'env.example').read_text()
     assert '${POKESIM_IMAGE:-' + image + '}' in (registry_assets / 'compose.quickstart.yaml').read_text()
@@ -170,7 +200,7 @@ def test_registry_release_pins_configuration_and_records_digest(registry_assets)
     assert set(sums) == {path.name for path in registry_assets.iterdir()} - {'SHA256SUMS'}
     assert all(digest(registry_assets / name) == checksum for name, checksum in sums.items())
     before = (registry_assets / 'SHA256SUMS').read_bytes()
-    assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=image)
+    assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=image, index_digest=INDEX)
     assert (registry_assets / 'SHA256SUMS').read_bytes() == before
 
 
@@ -181,7 +211,15 @@ def test_registry_release_pins_configuration_and_records_digest(registry_assets)
 ])
 def test_registry_release_rejects_wrong_destination_or_version(registry_assets, image):
     with pytest.raises(ValueError, match='exact release version'):
-        assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=image)
+        assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=image, index_digest=INDEX)
+    assert not (registry_assets / 'manifest.json').exists()
+
+
+@pytest.mark.parametrize('index_digest', [None, 'sha256:invalid', 'c' * 64])
+def test_registry_release_requires_the_index_digest(registry_assets, index_digest):
+    with pytest.raises(ValueError, match='multi-platform index'):
+        assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=IMAGE,
+                 index_digest=index_digest)
     assert not (registry_assets / 'manifest.json').exists()
 
 
@@ -191,12 +229,12 @@ def test_registry_release_rejects_wrong_destination_or_version(registry_assets, 
     ('RepoDigests', ['ghcr.io/someone/else@sha256:' + 'b' * 64]),
     ('RepoDigests', ['ghcr.io/afk-sapien/pokesim@sha256:invalid']),
 ])
-def test_registry_release_requires_published_image_evidence(registry_assets, field, value):
-    path = registry_assets / 'image-metadata.json'
+@pytest.mark.parametrize('architecture', IMAGE_ARCHITECTURES)
+def test_registry_release_requires_published_image_evidence(registry_assets, field, value, architecture):
+    path = registry_assets / f'image-metadata-linux-{architecture}.json'
     metadata = json.loads(path.read_text())
     metadata[field] = value
     path.write_text(json.dumps(metadata))
     with pytest.raises(ValueError, match='Registry image'):
-        assemble(registry_assets, VERSION, REVISION, include_desktop=False,
-                 image=f'ghcr.io/afk-sapien/pokesim:{VERSION}')
+        assemble(registry_assets, VERSION, REVISION, include_desktop=False, image=IMAGE, index_digest=INDEX)
     assert not (registry_assets / 'manifest.json').exists()

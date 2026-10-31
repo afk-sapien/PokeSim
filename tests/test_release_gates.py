@@ -81,8 +81,8 @@ def test_a_job_whose_name_only_shares_a_prefix_does_not_satisfy_the_gate():
     renamed = [job_ for job_ in jobs if job_['name'] != 'install (macos-15)']
     assert gates.judge('python-install.yml', renamed)[0] == 'fail'
     ci = complete('ci.yml')
-    assert gates.judge('ci.yml', [job_ for job_ in ci if job_['name'] != 'container']
-                       + [job('container-extra')])[0] == 'fail'
+    assert gates.judge('ci.yml', [job_ for job_ in ci if job_['name'] != 'container (arm64)']
+                       + [job('container (arm64)-extra')])[0] == 'fail'
 
 
 def test_every_native_test_shard_is_required():

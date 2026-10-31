@@ -81,7 +81,7 @@ jobs:
           if not dry_run:
               assert len(releases) == 1, 'Create exactly one draft GitHub release for this tag first'
               assert release['draft'], 'Only draft releases can be built and published'
-              assert not any(asset['name'] == 'image-linux-amd64.tar.gz' for asset in release['assets']), \
+              assert not any(asset['name'].startswith('image-linux-') for asset in release['assets']), \
                   'This version already has published downloads. Publish a new version.'
           revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
@@ -118,8 +118,16 @@ jobs:
         run: python tools/check_release_gates.py --sha "$REVISION" --tree release-source --timeout 2100
   build:
     # Runs in parallel with the gate. It holds no credentials that can publish and uploads nothing public.
+    # Each image is built and tested on a runner of its own architecture, so nothing runs under emulation.
     needs: validate
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -131,63 +139,94 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: '3.12'
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+      # The Python packages do not depend on the architecture, so only the amd64 leg builds them.
+      - if: matrix.arch == 'amd64'
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
         with:
           version: '0.12.18'
-      - run: uv sync --locked --extra dev
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - if: matrix.arch == 'amd64'
+        run: uv sync --locked --extra dev
+      - if: matrix.arch == 'amd64'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: pret/pokered
           ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
           path: .reference/pokered
           persist-credentials: false
-      - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
-      - run: uv build
-      - run: python tools/check_package.py
-      - run: python tools/check_python_install.py
+      - if: matrix.arch == 'amd64'
+        run: uv run --locked python -m pokesim.prepare_data .reference/pokered
+      - if: matrix.arch == 'amd64'
+        run: uv build
+      - if: matrix.arch == 'amd64'
+        run: python tools/check_package.py
+      - if: matrix.arch == 'amd64'
+        run: python tools/check_python_install.py
       - name: Build and test the versioned image
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
+          ARCH: ${{ matrix.arch }}
           VERSION: ${{ needs.validate.outputs.version }}
           REVISION: ${{ needs.validate.outputs.revision }}
         run: |
-          docker build --platform linux/amd64 --build-arg VERSION="$VERSION" --build-arg REVISION="$REVISION" -t "$IMAGE" .
+          docker build --platform "linux/$ARCH" --build-arg VERSION="$VERSION" --build-arg REVISION="$REVISION" \
+            -t "$IMAGE" -t "$IMAGE-linux-$ARCH" .
           python tools/check_container.py "$IMAGE"
           python tools/check_quickstart.py "$IMAGE"
       - name: Keep the tested image and packages for the publish job
+        # The archive carries the plain version tag too, so an offline load works with the release Compose file.
         run: |
           mkdir -p release
-          docker save "$IMAGE" | gzip > release/image-linux-amd64.tar.gz
-          cp dist/* release/
+          docker save "$IMAGE" "$IMAGE-linux-$ARCH" | gzip > "release/image-linux-$ARCH.tar.gz"
+          if [ "$ARCH" = amd64 ]; then cp dist/* release/; fi
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
-      - name: Rehearse release assembly before anything is published
-        # The publish job repeats these steps against the registry image. Running them here without a registry
-        # finds identity, checksum, and Compose problems before an image is pushed, and in a dry run.
-        env:
-          IMAGE: ${{ needs.validate.outputs.image }}
-          VERSION: ${{ needs.validate.outputs.version }}
-          REVISION: ${{ needs.validate.outputs.revision }}
-        run: |
-          mkdir rehearsal
-          cp dist/* rehearsal/
-          ln -s "$PWD/release/image-linux-amd64.tar.gz" rehearsal/image-linux-amd64.tar.gz
-          cp compose.yaml compose.quickstart.yaml install.sh install.ps1 rehearsal/
-          cp .env.example rehearsal/env.example
-          docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > rehearsal/python-dependencies.json
-          docker image inspect "$IMAGE" --format '{{json .}}' > rehearsal/image-metadata.json
-          python tools/assemble_release.py rehearsal --version "$VERSION" --revision "$REVISION" --without-desktop
+          ARCH: ${{ matrix.arch }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: release-inputs
+          name: release-inputs-${{ matrix.arch }}
           path: release/
           compression-level: 0
           retention-days: 3
           if-no-files-found: error
+  rehearse:
+    # The publish job repeats these steps against the registry image. Running them here without a registry
+    # finds identity, checksum, and Compose problems before an image is pushed, and in a dry run.
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.validate.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: release-inputs-*
+          merge-multiple: true
+          path: rehearsal
+      - name: Rehearse release assembly before anything is published
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          REVISION: ${{ needs.validate.outputs.revision }}
+        run: |
+          for arch in amd64 arm64; do
+            docker load --input "rehearsal/image-linux-$arch.tar.gz"
+            docker image inspect "$IMAGE-linux-$arch" --format '{{json .}}' > "rehearsal/image-metadata-linux-$arch.json"
+          done
+          cp compose.yaml compose.quickstart.yaml install.sh install.ps1 rehearsal/
+          cp .env.example rehearsal/env.example
+          docker run --rm --network none "$IMAGE-linux-amd64" cat /usr/share/pokesim/python-dependencies.json > rehearsal/python-dependencies.json
+          python tools/assemble_release.py rehearsal --version "$VERSION" --revision "$REVISION" --without-desktop
   publish:
     # The only job that can push an image or change a release. A dry run never reaches it.
     if: ${{ inputs.dry_run != true }}
-    needs: [validate, gate, build]
+    needs: [validate, gate, build, rehearse]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -203,19 +242,30 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: release-inputs
+          pattern: release-inputs-*
+          merge-multiple: true
           path: release
       - name: Publish image and verify anonymous access
+        id: image
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
         run: |
-          docker load --input release/image-linux-amd64.tar.gz
           mkdir -p "$DOCKER_CONFIG"
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker push "$IMAGE"
-          python tools/check_registry_image.py "$IMAGE"
+          for arch in amd64 arm64; do
+            docker load --input "release/image-linux-$arch.tar.gz"
+            docker push "$IMAGE-linux-$arch"
+            # Record the pushed digest now. The anonymous pulls below add more digests to the local image.
+            docker image inspect "$IMAGE-linux-$arch" --format '{{json .}}' > "release/image-metadata-linux-$arch.json"
+          done
+          docker buildx imagetools create --tag "$IMAGE" "$IMAGE-linux-amd64" "$IMAGE-linux-arm64"
+          digest=$(python tools/check_registry_image.py "$IMAGE" --index linux/amd64,linux/arm64)
+          echo "index_digest=$digest" >> "$GITHUB_OUTPUT"
+          for arch in amd64 arm64; do
+            python tools/check_registry_image.py "$IMAGE" --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
+          done
       - name: Remove registry credentials
         if: always()
         env:
@@ -224,14 +274,15 @@ jobs:
       - name: Assemble versioned release downloads
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
+          INDEX_DIGEST: ${{ steps.image.outputs.index_digest }}
           VERSION: ${{ needs.validate.outputs.version }}
           REVISION: ${{ needs.validate.outputs.revision }}
         run: |
           cp compose.yaml compose.quickstart.yaml install.sh install.ps1 release/
           cp .env.example release/env.example
-          docker run --rm --network none "$IMAGE" cat /usr/share/pokesim/python-dependencies.json > release/python-dependencies.json
-          docker image inspect "$IMAGE" --format '{{json .}}' > release/image-metadata.json
-          python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION" --image "$IMAGE" --without-desktop
+          docker run --rm --network none "$IMAGE-linux-amd64" cat /usr/share/pokesim/python-dependencies.json > release/python-dependencies.json
+          python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION" --image "$IMAGE" \
+            --index-digest "$INDEX_DIGEST" --without-desktop
       - name: Upload and verify the release downloads
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -273,12 +324,14 @@ jobs:
           [ -n "$tags" ] || { echo 'No floating tags move for this release'; exit 0; }
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           for tag in $tags; do
-            docker tag "$IMAGE" "${IMAGE%:*}:$tag"
-            docker push "${IMAGE%:*}:$tag"
+            docker buildx imagetools create --tag "${IMAGE%:*}:$tag" "$IMAGE"
           done
           docker logout ghcr.io
           for tag in $tags; do
-            python tools/check_registry_image.py "${IMAGE%:*}:$tag"
+            python tools/check_registry_image.py "${IMAGE%:*}:$tag" --index linux/amd64,linux/arm64
+            for arch in amd64 arm64; do
+              python tools/check_registry_image.py "${IMAGE%:*}:$tag" --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
+            done
           done
       - name: Remove registry credentials after the floating tags
         if: always()
