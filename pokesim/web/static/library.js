@@ -531,6 +531,8 @@
     try {
       const data = await api('/api/v1/adventures')
       adventures = data.adventures || []
+      // The inbox badge reads its unread count from this poll instead of polling on its own.
+      if (data.inbox && typeof CustomEvent === 'function') document.dispatchEvent?.(new CustomEvent('pokesim:inbox', {detail: data.inbox}))
       renderAttention(data.attention)
       if (page === 'library' || page === 'settings') await refreshCartridges()
       renderAdventures()

@@ -163,6 +163,9 @@ ROUTE_ACTIONS = {
     ('POST', '/api/v1/invites'): 'library.users',
     ('DELETE', '/api/v1/invites/{iid}'): 'library.users',
     ('GET', '/api/v1/auth/settings'): 'library.users',
+    # Each person reads only their own inbox, so these only need a user.
+    ('GET', '/api/v1/inbox'): 'library.read',
+    ('POST', '/api/v1/inbox/read'): 'library.read',
     ('GET', '/api/v1/adventures/{aid}/sharing'): 'adventure.own',
     ('POST', '/api/v1/adventures/{aid}/grants'): 'adventure.own',
     ('DELETE', '/api/v1/adventures/{aid}/grants/{uid}'): 'adventure.own',

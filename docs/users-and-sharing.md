@@ -71,6 +71,23 @@ an offer. See [Trade offers](trading.md#trade-offers).
 Automatic trading pairs two people's adventures only when both owners switch on **Auto
 trading with other people**. Otherwise it pairs only adventures with the same owner.
 
+## Inbox
+
+**Inbox** in the Library header shows how many items you have not read. Open it to see
+them, newest first. You get an item when:
+
+1. Someone sends an offer to your adventure, or answers, or lets expire, an offer you sent.
+2. A trade between your adventure and someone else's finishes.
+3. Someone asks for control while you hold it, or asks for control of your adventure.
+4. An owner or manager takes control back from you.
+5. Someone shares an adventure with you.
+
+Nothing arrives for your own actions or for trades between your own adventures. Select
+an item to open its page and mark it read, or select **Mark all read**. PokeSim keeps
+your newest 200 items.
+
+Alerts sent to ntfy, Discord or Telegram stay with admins, under Notifications.
+
 ## Your account
 
 In Settings, under Your account, change your password. Changing it logs you out on every

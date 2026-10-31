@@ -14,6 +14,7 @@ import os
 import threading
 import time
 
+from . import inbox
 from .policy import can
 
 log = logging.getLogger(__name__)
@@ -128,8 +129,13 @@ class Leases:
                 if lease.user_id != actor.id and all(entry['user_id'] != actor.id for entry in lease.queue):
                     lease.queue.append({'user_id': actor.id, 'name': label(actor.user), 'at': time.time()})
                     self.audit('lease.request', actor.id, aid)
+                    holder = lease.user_id
+                else:
+                    return
+            else:
+                self._grant(aid, actor.user, 'lease.grant')
                 return
-            self._grant(aid, actor.user, 'lease.grant')
+        inbox.lease_requested(self.manager, aid, holder, actor)
 
     def release(self, aid, actor, adventure):
         """The holder lets go, which passes control to the next in line. A queued person leaves the queue."""
@@ -184,6 +190,8 @@ class Leases:
                 return
             queue = [entry for entry in lease.queue if entry['user_id'] != actor.id] if lease else []
             self._grant(aid, actor.user, 'lease.take', queue=queue)
+        if lease is not None:
+            inbox.lease_taken(self.manager, aid, lease.user_id, actor)
 
     def touch(self, aid, actor):
         """A button press from the holder. Returns False when this person does not hold control."""

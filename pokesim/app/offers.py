@@ -20,6 +20,7 @@ import time
 
 from pokecore.identity import find
 
+from . import inbox
 from .policy import adventure_role
 from .registry import LIBRARY_OWNER, identifier, validate_id
 from .trade_builder import Gone, HardLimit, TradeBuilder, ViewOnlyError
@@ -153,6 +154,7 @@ class TradeOffers(TradeBuilder):
                 return self.accept(oid, actor)
             except (ValueError, ViewOnlyError, PermissionError):
                 row = self.registry.trade_offer(oid)
+        inbox.offer_received(self.manager, row, actor)
         return self.public(row)
 
     def _sides(self, offer, *, accepting=False):
@@ -189,11 +191,11 @@ class TradeOffers(TradeBuilder):
             try:
                 give, take = self._check(trade, accepting=True)
             except Gone as error:
-                return self.public(self.registry.update_trade_offer(oid, status='expired', reason=str(error)))
+                return self.public(self._announce(self.registry.update_trade_offer(oid, status='expired', reason=str(error)), actor))
             except HardLimit as error:
                 if to_key and to_key != offer['to_key']:
                     raise
-                return self.public(self.registry.update_trade_offer(oid, status='failed', reason=str(error)))
+                return self.public(self._announce(self.registry.update_trade_offer(oid, status='failed', reason=str(error)), actor))
             display = offer.get('display') or {}
             changes = [text for text in (self._changes(display.get('from'), give),
                                          self._changes(display.get('to') if chosen == offer['to_key'] else None, take))
@@ -206,19 +208,25 @@ class TradeOffers(TradeBuilder):
             row = self.registry.update_trade_offer(oid, expect=(PENDING,), status=ACCEPTED, reason=None,
                                                    manual_id=entry['id'], to_key=chosen,
                                                    display={'from': self._snapshot(give), 'to': self._snapshot(take)})
-        return self.public(row or self.registry.trade_offer(oid))
+        return self.public(self._announce(row, actor) or self.registry.trade_offer(oid))
 
-    def _answer(self, oid, side, status):
+    def _announce(self, row, actor=None):
+        """Tell the sender in their inbox that their offer moved on. Returns the row."""
+        if row is not None:
+            inbox.offer_answered(self.manager, row, actor)
+        return row
+
+    def _answer(self, oid, side, status, actor=None):
         offer = self.registry.trade_offer(validate_id(oid))
         self._writer(offer[side])
         with self.guard:
             row = self.registry.update_trade_offer(oid, expect=(PENDING,), status=status, reason=None)
         if row is None:
             raise ValueError(f'This offer is already {self.registry.trade_offer(oid)["status"]}')
-        return self.public(row)
+        return self.public(self._announce(row, actor) if status == 'declined' else row)
 
-    def decline(self, oid):
-        return self._answer(oid, 'to_id', 'declined')
+    def decline(self, oid, actor=None):
+        return self._answer(oid, 'to_id', 'declined', actor)
 
     def withdraw(self, oid):
         return self._answer(oid, 'from_id', 'withdrawn')
@@ -282,8 +290,12 @@ class TradeOffers(TradeBuilder):
                 status, reason = 'expired', 'The trade did not start within 6 hours'
         if status is None:
             return offer
-        return self.registry.update_trade_offer(offer['id'], expect=(offer['status'],), status=status,
-                                                reason=reason) or self.registry.trade_offer(offer['id'])
+        row = self.registry.update_trade_offer(offer['id'], expect=(offer['status'],), status=status, reason=reason)
+        # Only the sweep that moved the offer tells the sender. A finished trade reaches both
+        # inboxes from the coordinator instead.
+        if row is not None and status != 'completed':
+            self._announce(row)
+        return row or self.registry.trade_offer(offer['id'])
 
     def refresh(self):
         for offer in self.registry.trade_offers(statuses=OPEN):

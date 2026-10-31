@@ -11,9 +11,10 @@
 <link rel="preload" href="/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="/static/panel.css?v=pass2-1">
-<link rel="stylesheet" href="/static/panel-library.css?v=accounts-1">
-<script src="/static/library.js?v=accounts-4" defer></script>
+<link rel="stylesheet" href="/static/panel-library.css?v=inbox-1">
+<script src="/static/library.js?v=inbox-1" defer></script>
 <script src="/static/accounts.js?v=accounts-4" defer></script>
+<script src="/static/inbox.js?v=inbox-1" defer></script>
 </head>
 <body class="library" data-trainer-names="${trainer_names}" data-page="${page}" data-adventure="${adventure_id}">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -22,9 +23,10 @@
 <div class="shell rail-inner">
 <a class="brandplate" href="/" aria-label="PokeSim library"><span class="mark" aria-hidden="true"></span><span><span class="wordmark">PokeSim</span><span class="model">${app_version}</span></span></a>
 <nav aria-label="Application"><a href="/" data-nav="library">Library</a><a href="/notifications" data-nav="notifications">Notifications</a><a href="/settings" data-nav="settings">Settings</a></nav>
-<span class="connection" id="account" hidden><span id="account-name"></span><button class="key" id="logout" type="button">Log out</button></span>
+<span class="connection" id="account" hidden><button class="key inbox-key" id="inbox-open" type="button" aria-label="Inbox" aria-expanded="false" aria-controls="inbox-panel" hidden>Inbox<span class="inbox-count" id="inbox-count" aria-hidden="true" hidden>0</span></button><span id="account-name"></span><button class="key" id="logout" type="button">Log out</button></span>
 <span class="connection" id="connection" role="status"><i class="lamp" aria-hidden="true"></i><span id="status">Connecting</span></span>
 </div>
+<div class="shell inbox-anchor"><section class="inbox-panel" id="inbox-panel" aria-labelledby="inbox-heading" hidden><div class="inbox-head"><h2 class="micro" id="inbox-heading">Inbox</h2><button class="key" id="inbox-read-all" type="button" disabled>Mark all read</button></div><p class="note inbox-result" id="inbox-result" role="status"></p><ol class="inbox-list" id="inbox-list"></ol></section></div>
 </header>
 
 <main id="main" class="shell library-main">
