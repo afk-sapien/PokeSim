@@ -1,0 +1,9 @@
+images:
+  image:
+    repository: ghcr.io/afk-sapien/pokesim
+    tag: 0.6.1
+
+consts:
+  pokesim_container_name: pokesim
+  perms_container_name: permissions
+  container_port: 8000
