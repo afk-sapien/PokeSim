@@ -3,7 +3,7 @@ name: pokesim
 services:
   pokesim:
     container_name: pokesim
-    image: ghcr.io/afk-sapien/pokesim:0.6.1
+    image: ghcr.io/afk-sapien/pokesim:0.6.2
     init: true
     restart: unless-stopped
     # CasaOS creates the data folder as root. All capabilities are dropped, so root

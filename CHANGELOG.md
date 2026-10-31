@@ -1,6 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.6.2
+
+- Publish the container image for linux/arm64 as well as linux/amd64, so it runs on a Raspberry Pi 4 or 5, an ARM NAS or an Apple silicon Mac without emulation. The release workflow builds and tests each architecture on its own native runner, pushes each as `<version>-linux-<arch>` and joins them into one multi-platform tag, then checks anonymously that the tag serves both and that each pulls the tested image ([#269](https://github.com/afk-sapien/PokeSim/issues/269)).
+
+- Add app store templates for Unraid Community Applications, CasaOS, Umbrel and TrueNAS community apps in `deploy/stores/`. Each runs the release image with one data folder, drops every capability and takes the same `PUBLIC_URL` and ntfy settings as the quickstart. None has been submitted to its store yet ([#273](https://github.com/afk-sapien/PokeSim/issues/273)).
+
+- Add `tools/release_version.py`, which moves every pinned version in the Compose files, installers, docs and store templates with one command, and whose `--check` lists any pin that differs from the package version. CI and the release workflow fail on such a pin, so a release can no longer ship a quickstart that installs the previous version ([#271](https://github.com/afk-sapien/PokeSim/issues/271)).
+
+- Start the README with a three command quickstart, the note that ROMs are not included, and what the app needs: at 4x speed, 5 to 20% of a core and about 300 MB of memory for a Red, Blue or Yellow adventure, about 150 MB for Gold, Silver or Crystal, and about 170 MB for the Library ([#275](https://github.com/afk-sapien/PokeSim/issues/275)).
+
+- Keep Red, Blue and Yellow runs out of the Rocket Hideout B1F door before its Rocket is beaten. The map data draws the door to the elevator open, but the map script keeps it shut until that Rocket is beaten, so a run walked back and forth between B1F and B2F. Routes to the elevator now take the B2F spin maze while the door is shut, and the lift leaves for B2F on the way out ([#263](https://github.com/afk-sapien/PokeSim/issues/263), [#267](https://github.com/afk-sapien/PokeSim/issues/267)).
+
+- Keep the heal goal in front on every step while a heal is under way, in all six games. Before, a battle or nurse dialogue on the way to a Pokémon Center ran under the story goal, so the run could turn back mid trip. An errand under way, a heal or a shop trip, now also stays the goal through warps and menus until the next errand decision ends it ([#258](https://github.com/afk-sapien/PokeSim/issues/258), [#261](https://github.com/afk-sapien/PokeSim/issues/261), [#265](https://github.com/afk-sapien/PokeSim/issues/265)).
+
+- Stop Red, Blue and Yellow leaving the Safari Zone or a dungeon to sell. Inside the Safari Zone, a pickup or detour keeps bag room for HM03 and the Gold Teeth, and a crowded bag starts a selling trip only once those no longer fit. Caves and Team Rocket buildings keep two bag entries free for story items, and a restock starts there only for a full bag or no balls ([#256](https://github.com/afk-sapien/PokeSim/issues/256)).
+
+- Stop Gold, Silver and Crystal choosing Blackthorn City's Pokémon Center through Ice Path. Healing stands down inside the cave, so the trip stepped in, handed back to the main goal, stepped out and chose Blackthorn again. A center whose known walk passes through Ice Path is no longer a healing choice ([#254](https://github.com/afk-sapien/PokeSim/issues/254)).
+
+- Count battle experience as progress for every goal in the replay audit, and a heal that restores HP, status or PP as support. Wild battles on a training detour ran under the goal the detour came from, and every heal counted as waste. Play is unchanged.
 
 - Require PokeSim Core 0.11.0. Add `tools/stage_ladder.py check`, which reads each rung's save with Core's save summary and fails when the stage it reads as is not the stage its folder names. For Gold, Silver and Crystal the rung before Red reads as Kanto entered, and the post-game rung reads as Red beaten. Play is unchanged.
 

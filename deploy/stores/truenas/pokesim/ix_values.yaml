@@ -1,7 +1,7 @@
 images:
   image:
     repository: ghcr.io/afk-sapien/pokesim
-    tag: 0.6.1
+    tag: 0.6.2
 
 consts:
   pokesim_container_name: pokesim

@@ -17,10 +17,10 @@ file cannot ship. Commit and merge the reviewed changes to `main`. Push a new `v
 create a draft release and start the publishing workflow:
 
 ```sh
-git tag v0.6.1
-git push origin v0.6.1
-gh release create v0.6.1 --verify-tag --draft --title "PokeSim 0.6.1" --notes-file docs/release-notes.md
-gh workflow run release.yml --ref main -f tag=v0.6.1
+git tag v0.6.2
+git push origin v0.6.2
+gh release create v0.6.2 --verify-tag --draft --title "PokeSim 0.6.2" --notes-file docs/release-notes.md
+gh workflow run release.yml --ref main -f tag=v0.6.2
 ```
 
 Use the actual next version when following these examples. A tag push alone does
@@ -66,7 +66,7 @@ exposes draft releases to identities with push access. All other jobs retain rea
 To rehearse the whole workflow without publishing, start it with the dry run input:
 
 ```sh
-gh workflow run release.yml --ref main -f tag=v0.6.1 -f dry_run=true
+gh workflow run release.yml --ref main -f tag=v0.6.2 -f dry_run=true
 ```
 
 A dry run validates the tag, runs the gate, and runs the full build and image checks. The
