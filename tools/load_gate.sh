@@ -5,10 +5,15 @@
 # Five slots at -n 2 fill the local cap of 10 processes. A heavy run, itself at most 10 processes,
 # takes the heavy lock and then all five slots, so no test runs beside it.
 # The lock files live in POKESIM_LOAD_GATE, by default ~/.local/state/pokesim-load.
+# A heavy run exports POKESIM_LOAD_GATE_HEAVY=1, and a load gate inside it runs its command at once,
+# since waiting on a lock its own parent holds would never end.
 D=${POKESIM_LOAD_GATE:-$HOME/.local/state/pokesim-load}
 mkdir -p "$D"
 mode=$1
 shift
+if [ "$POKESIM_LOAD_GATE_HEAVY" = 1 ] && { [ "$mode" = pytest ] || [ "$mode" = heavy ]; }; then
+  exec "$@"
+fi
 case $mode in
   pytest)
     while :; do
@@ -21,6 +26,9 @@ case $mode in
     done
     ;;
   heavy)
+    flock -n "$D/heavy" true || echo "load gate: waiting for the heavy lock in $D" >&2
+    POKESIM_LOAD_GATE_HEAVY=1
+    export POKESIM_LOAD_GATE_HEAVY
     exec flock "$D/heavy" flock "$D/slot1" flock "$D/slot2" flock "$D/slot3" flock "$D/slot4" flock "$D/slot5" "$@"
     ;;
   *)
