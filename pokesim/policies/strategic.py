@@ -745,7 +745,7 @@ class StrategicPolicy(Policy):
             self.intent = None
             return self._menu_decision(self.shop.step(s, self.goal.key, self.collection.project), s)
         if kind == "elevator":
-            target = 2 if self.elevator_floor == "B4F" else 0
+            target = {"B4F": 2, "B2F": 1}.get(self.elevator_floor, 0)
             if scr.menu_index + scr.scroll == target:
                 self.elevator_exit = True
             return self._select(scr, target, scroll=True)
@@ -935,7 +935,8 @@ class StrategicPolicy(Policy):
             if self.elevator_exit:
                 self.mode = "leaving the elevator"
                 return tap("left" if s.x > 2 else "right" if s.x < 2 else "up", 8, 12)
-            self.elevator_floor = "B4F" if goal.key == "hideout_elevator" else "B1F"
+            self.elevator_floor = ("B4F" if goal.key == "hideout_elevator"
+                                   else self.nav.hideout_lift_floor() if rocket_lift else "B1F")
             # Inside a lift, the only way on is to ride it.
             goal = choice.replace(Goal("hideout_elevator", "Use the Rocket Hideout elevator",
                                        f"Select {self.elevator_floor} and leave the lift",
