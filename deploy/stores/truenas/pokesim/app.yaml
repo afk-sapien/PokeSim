@@ -1,0 +1,36 @@
+annotations:
+  min_scale_version: 24.10.2.2
+app_version: 0.6.1
+capabilities: []
+categories:
+- games
+changelog_url: https://github.com/afk-sapien/PokeSim/blob/main/CHANGELOG.md
+date_added: '2026-10-30'
+description: Pokémon Red, Blue, Yellow, Gold, Silver and Crystal that play themselves
+  while you're away. Bring your own legally dumped ROMs, none are included.
+home: https://github.com/afk-sapien/PokeSim
+host_mounts: []
+icon: https://raw.githubusercontent.com/afk-sapien/PokeSim/main/pokesim/web/static/favicon.svg
+keywords:
+- pokemon
+- emulator
+- gameboy
+lib_version: 2.1.0
+maintainers:
+- email: 327645577+afk-sapien@users.noreply.github.com
+  name: afk-sapien
+  url: https://github.com/afk-sapien
+name: pokesim
+run_as_context:
+- description: PokeSim runs as any user and group that owns its data folder.
+  gid: 568
+  group_name: apps
+  uid: 568
+  user_name: apps
+screenshots:
+- https://raw.githubusercontent.com/afk-sapien/PokeSim/main/docs/images/library.jpg
+sources:
+- https://github.com/afk-sapien/PokeSim
+title: PokeSim
+train: community
+version: 1.0.0

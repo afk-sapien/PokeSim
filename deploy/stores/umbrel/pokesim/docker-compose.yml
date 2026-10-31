@@ -1,0 +1,28 @@
+services:
+  app_proxy:
+    environment:
+      APP_HOST: pokesim_web_1
+      APP_PORT: 8000
+
+  web:
+    image: ghcr.io/afk-sapien/pokesim:0.6.1
+    init: true
+    restart: on-failure
+    user: "1000:1000"
+    command: [python, -m, pokesim, serve, --data-dir, /data, --host, 0.0.0.0]
+    environment:
+      PUBLIC_URL: http://${DEVICE_DOMAIN_NAME}:8930
+      PORT: "8000"
+      NTFY_URL: ""
+      NTFY_TOKEN: ""
+      NTFY_MIN_PRIORITY: "2"
+      NTFY_MUTE: ""
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    stop_grace_period: 90s

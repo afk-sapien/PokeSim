@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>PokeSim</Name>
+  <Repository>ghcr.io/afk-sapien/pokesim:0.6.1</Repository>
+  <Registry>https://github.com/afk-sapien/PokeSim/pkgs/container/pokesim</Registry>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/afk-sapien/PokeSim/issues</Support>
+  <Project>https://github.com/afk-sapien/PokeSim</Project>
+  <Overview>Pokémon Red, Blue, Yellow, Gold, Silver and Crystal that play themselves while you're away. Watch in your browser and take control whenever you like. Bring your own legally dumped ROMs, none are included. Add one in the browser under Settings, then Game cartridges. Set PUBLIC_URL to the exact address you open in the browser, for example http://192.168.1.10:8930.</Overview>
+  <Category>GameServers: Other:</Category>
+  <WebUI>http://[IP]:[PORT:8000]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/afk-sapien/PokeSim/main/pokesim/web/static/favicon.svg</Icon>
+  <ExtraParams>--init --user 0:0 --read-only --tmpfs /tmp:size=256m,mode=1777 --cap-drop ALL --security-opt no-new-privileges:true --stop-timeout 90</ExtraParams>
+  <PostArgs/>
+  <Config Name="Web UI port" Target="8000" Default="8930" Mode="tcp" Description="Host port for the browser UI." Type="Port" Display="always" Required="true" Mask="false">8930</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/pokesim" Mode="rw" Description="Saves, cartridges, journals and settings." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/pokesim</Config>
+  <Config Name="PUBLIC_URL" Target="PUBLIC_URL" Default="http://SERVER_IP:8930" Mode="" Description="The exact address you open in the browser. Requests for any other host are refused." Type="Variable" Display="always" Required="true" Mask="false">http://SERVER_IP:8930</Config>
+  <Config Name="PORT" Target="PORT" Default="8000" Mode="" Description="Port inside the container. Leave at 8000." Type="Variable" Display="advanced" Required="true" Mask="false">8000</Config>
+  <Config Name="NTFY_URL" Target="NTFY_URL" Default="" Mode="" Description="Optional ntfy topic URL for notifications. Notifications are normally set up in the Library." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="NTFY_TOKEN" Target="NTFY_TOKEN" Default="" Mode="" Description="Optional ntfy access token." Type="Variable" Display="advanced" Required="false" Mask="true"/>
+  <Config Name="NTFY_MIN_PRIORITY" Target="NTFY_MIN_PRIORITY" Default="2" Mode="" Description="Lowest ntfy priority to send, 1 to 5." Type="Variable" Display="advanced" Required="false" Mask="false">2</Config>
+  <Config Name="NTFY_MUTE" Target="NTFY_MUTE" Default="" Mode="" Description="Optional comma separated event kinds to mute." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+</Container>

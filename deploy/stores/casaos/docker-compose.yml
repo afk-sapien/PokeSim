@@ -1,0 +1,92 @@
+# CasaOS app in the Big Bear store layout. Not submitted anywhere.
+name: pokesim
+services:
+  pokesim:
+    container_name: pokesim
+    image: ghcr.io/afk-sapien/pokesim:0.6.1
+    init: true
+    restart: unless-stopped
+    # CasaOS creates the data folder as root. All capabilities are dropped, so root
+    # can only write to folders it owns.
+    user: "0:0"
+    command: [python, -m, pokesim, serve, --data-dir, /data, --host, 0.0.0.0]
+    ports:
+      - target: 8000
+        published: "8930"
+        protocol: tcp
+    environment:
+      PUBLIC_URL: http://localhost:8930
+      PORT: "8000"
+      NTFY_URL: ""
+      NTFY_TOKEN: ""
+      NTFY_MIN_PRIORITY: "2"
+      NTFY_MUTE: ""
+    volumes:
+      - type: bind
+        source: /DATA/AppData/$AppID/data
+        target: /data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    stop_grace_period: 90s
+    x-casaos:
+      envs:
+        - container: PUBLIC_URL
+          description:
+            en_us: The exact address you open in the browser, such as http://192.168.1.10:8930. Requests for any other host are refused.
+        - container: NTFY_URL
+          description:
+            en_us: Optional ntfy topic URL. Notifications are normally set up in the Library.
+        - container: NTFY_TOKEN
+          description:
+            en_us: Optional ntfy access token.
+        - container: NTFY_MIN_PRIORITY
+          description:
+            en_us: Lowest ntfy priority to send, 1 to 5.
+        - container: NTFY_MUTE
+          description:
+            en_us: Optional comma separated event kinds to mute.
+      ports:
+        - container: "8000"
+          description:
+            en_us: Browser UI
+      volumes:
+        - container: /data
+          description:
+            en_us: Saves, cartridges, journals and settings.
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  main: pokesim
+  author: afk-sapien
+  developer: afk-sapien
+  category: Gaming
+  port_map: "8930"
+  scheme: http
+  index: /
+  title:
+    en_us: PokeSim
+  tagline:
+    en_us: Pokémon games that play themselves while you're away
+  description:
+    en_us: |
+      Pokémon Red, Blue, Yellow, Gold, Silver and Crystal that play themselves while
+      you're away. Watch in your browser and take control whenever you like.
+
+      Bring your own legally dumped ROMs, none are included. Add one in the browser under
+      Settings, then Game cartridges.
+
+      Set PUBLIC_URL to the address you open in the browser, for example
+      http://192.168.1.10:8930. Requests for any other host are refused.
+  tips:
+    before_install:
+      en_us: Set PUBLIC_URL to http://YOUR_SERVER_IP:8930 before the first start.
+  icon: https://raw.githubusercontent.com/afk-sapien/PokeSim/main/pokesim/web/static/favicon.svg
+  screenshot_link:
+    - https://raw.githubusercontent.com/afk-sapien/PokeSim/main/docs/images/library.jpg
+  thumbnail: https://raw.githubusercontent.com/afk-sapien/PokeSim/main/docs/images/library.jpg
