@@ -61,7 +61,8 @@ def library(tmp_path, monkeypatch):
     monkeypatch.setattr('pokesim.app.manager.httpx.AsyncClient',
                         lambda **kwargs: original_client(transport=httpx.MockTransport(worker), **kwargs))
     monkeypatch.setattr(manager.supervisor, 'child',
-                        lambda aid: SimpleNamespace(url='http://127.0.0.1:12345', token='private-worker-token'))
+                        lambda aid: SimpleNamespace(url='http://127.0.0.1:12345', token='private-worker-token',
+                                                    request=lambda *args, **kwargs: {'ok': True}))
     app = create_app(manager)
     with TestClient(app) as client:
         client.headers['X-PokeSim-CSRF'] = client.get('/api/v1/session').json()['csrf_token']
@@ -88,8 +89,8 @@ def test_every_library_route_declares_an_action(library):
 
 def test_game_actions_deny_what_they_do_not_know():
     assert policy.game_action('GET', 'api/state') == 'adventure.watch'
-    assert policy.game_action('GET', 'api/states') == 'adventure.own'
-    assert policy.game_action('POST', 'api/control', 'press') == 'adventure.own'
+    assert policy.game_action('GET', 'api/states') == 'adventure.manage'
+    assert policy.game_action('POST', 'api/control', 'press') == 'adventure.play'
     assert policy.game_action('POST', 'api/control', 'format_disk') is None
     assert policy.game_action('POST', 'api/control', None) is None
     assert policy.game_action('POST', 'internal/shutdown') is None
@@ -148,12 +149,14 @@ def test_members_see_only_their_own_and_granted_adventures(library, people):
     assert {row['id'] for row in admin.get('/api/v1/adventures').json()['adventures']} == {people.red, people.blue}
 
 
-def test_watchers_read_the_game_but_only_the_owner_presses_buttons(library, people):
+def test_watchers_read_the_game_but_only_whoever_holds_control_presses_buttons(library, people):
     library.manager.auth.grant(people.blue, people.alice['id'], 'viewer', people.bob['id'])
     alice, bob = library.login('alice'), library.login('bob')
     assert alice.get(f'/games/{people.blue}/api/state').status_code == 200
     assert alice.post(f'/games/{people.blue}/api/control', json={'action': 'press', 'button': 'a'}).status_code == 403
     assert alice.get(f'/games/{people.blue}/api/states').status_code == 403
+    assert bob.post(f'/games/{people.blue}/api/control', json={'action': 'press', 'button': 'a'}).status_code == 409
+    assert bob.post(f'/games/{people.blue}/api/lease', json={'action': 'request'}).json()['you_hold']
     assert bob.post(f'/games/{people.blue}/api/control', json={'action': 'press', 'button': 'a'}).status_code == 200
     assert bob.post(f'/games/{people.blue}/api/control', json={'action': 'unknown'}).status_code == 404
     assert alice.get(f'/games/{people.red}/api/state').status_code == 200
@@ -221,7 +224,10 @@ def test_only_the_owner_manages_sharing(library, people):
     assert granted.status_code == 200
     assert bob.get(f'/api/v1/adventures/{people.red}/sharing').status_code == 403
     playing = alice.post(f'/api/v1/adventures/{people.red}/grants', json={'user_id': people.bob['id'], 'role': 'player'})
-    assert playing.status_code == 409
+    assert playing.status_code == 200
+    assert bob.get(f'/api/v1/adventures/{people.red}/sharing').status_code == 403
+    owning = alice.post(f'/api/v1/adventures/{people.red}/grants', json={'user_id': people.bob['id'], 'role': 'owner'})
+    assert owning.status_code in {409, 422}
 
 
 def test_trades_stay_between_one_owners_adventures(library, people):

@@ -77,6 +77,24 @@ def test_restart_resets_the_adventure_and_input_but_keeps_event_history(emu):
     emu.policy.reset.assert_called_once()
 
 
+@pytest.mark.parametrize('command,kept', [('load_state', 'before-load.state'), ('restart', 'before-restart.state')])
+def test_a_rewind_or_restart_first_keeps_the_game_it_replaces(emu, monkeypatch, command, kept):
+    (emu.store.states / 'chosen.state').write_bytes(b'chosen')
+    monkeypatch.setattr(emu, '_state_bytes', lambda: b'before', raising=False)
+    monkeypatch.setattr(emu, '_manifest', lambda: {'frame': 900}, raising=False)
+    monkeypatch.setattr(emu, '_load_state_file', Mock(), raising=False)
+    emu._handle_command(command, 'chosen.state')
+    assert (emu.store.states / kept).read_bytes() == b'before'
+    # It is a named checkpoint, so the next start does not resume it as the newest autosave.
+    assert not list(emu.store.states.glob('auto-*.state'))
+
+
+def test_taking_control_drops_queued_presses(emu):
+    emu.manual_mode = emu.paused = False
+    emu._handle_command('take_control', None)
+    assert emu.manual_mode and emu.manual.empty() and emu.input_epoch == 8
+
+
 @pytest.mark.parametrize('command', ['restart', 'resume', 'load_state', 'take_control'])
 def test_trade_hold_blocks_game_transitions_at_execution_time(emu, command):
     emu.store.set('trade_hold', {'id': '123'})

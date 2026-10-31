@@ -33,8 +33,8 @@ from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
 from ..platform_io import lock_file
-from ..web.pages import SPRITE_META, SPRITE_VERSION
-from ..web.security import VIEWER_HEADER, protect_response, public_origin, viewer_allows
+from ..web.pages import LEASE_META, SPRITE_META, SPRITE_VERSION
+from ..web.security import ROLE_HEADER, VIEWER_HEADER, protect_response, public_origin, viewer_allows
 from .assets import Assets
 from .auth import AuthStore, SetupCode
 from . import policy, trade_settings
@@ -47,9 +47,11 @@ STATIC = Path(__file__).parents[1] / 'web' / 'static'
 CLI_HEADER = 'x-pokesim-cli-token'
 SESSION_COOKIE = 'pokesim_session'
 SHARE_COOKIE = 'pokesim_share'
+# An open screen stream checks this often that its viewer may still watch.
+STREAM_RECHECK_SECONDS = 5
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
-                   'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
+                   'api/audio', 'api/lease', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
 
 # Pages a person opens. A stopped adventure answers these with its status page, not raw JSON.
 GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon',
@@ -59,7 +61,7 @@ GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats'
 def public_game_path(method, path):
     """Allow public routes before HTTP client URL normalization can change them."""
     if method == 'POST':
-        return path in {'api/control', 'api/trading/preferences', 'api/export-save'}
+        return path in {'api/control', 'api/lease', 'api/trading/preferences', 'api/export-save'}
     if method not in {'GET', 'HEAD'}:
         return False
     if path in GAME_READ_PATHS:
@@ -120,6 +122,8 @@ class Manager:
         self.builder = TradeBuilder(self)
         from .watchdog import Watchdog
         self.watchdog = Watchdog(self)
+        from .lease import Leases
+        self.leases = Leases(self)
 
     @staticmethod
     def validate_adventure_settings(values):
@@ -214,12 +218,28 @@ class Manager:
         self.supervisor.run_monitor()
         self.coordinator.start_scheduler()
         self.watchdog.run()
+        if self.auth_mode == 'accounts':
+            self.leases.run()
+            threading.Thread(target=self.resume_orphans, name='resume-manual', daemon=True).start()
+
+    def resume_orphans(self):
+        """Leases do not survive a restart, so a worker still in manual mode goes back to the autopilot."""
+        for aid in list(self.supervisor.children):
+            if self.closing:
+                return
+            try:
+                child = self.supervisor.child(aid)
+                if child.request('GET', '/api/summary', timeout=5).get('manual_mode') and not self.leases.holder(aid):
+                    child.request('POST', '/api/control', {'action': 'resume'}, timeout=5)
+            except Exception:
+                log.info('Could not check adventure %s for manual mode', aid, exc_info=True)
 
     def close(self):
         if self._closed:
             return
         self.closing = True
         self.watchdog.close()
+        self.leases.close()
         self.coordinator.close()
         errors = self.supervisor.close()
         if errors:
@@ -1177,10 +1197,11 @@ def create_app(manager, shutdown=lambda: None):
         return await game(aid, path, request)
 
     def game_access(aid, path, request, viewer, body):
-        """Whether this person may make this game request, and whether they see it as a viewer.
+        """Whether this person may make this game request, and the adventure role the worker sees.
 
-        Anyone below the owner gets the view-only game, so the worker hides its controls.
-        A share link counts only under /view/, which is also the only path its cookie is sent to.
+        A watcher gets the view-only game. A player or manager gets the game with only the
+        controls their role allows. A share link counts only under /view/, which is also the
+        only path its cookie is sent to. Control presses also need the control lease.
         """
         actor = request.state.actor
         if not viewer:
@@ -1206,8 +1227,58 @@ def create_app(manager, shutdown=lambda: None):
         if action is None:
             raise HTTPException(404)
         if not can(actor, action, adventure):
-            raise HTTPException(403, 'Only the owner of this adventure can do this')
-        return viewer or not can(actor, 'adventure.own', adventure)
+            raise HTTPException(403, 'Your role on this adventure does not allow this')
+        if control in policy.LEASE_ACTIONS and not manager.leases.holds(aid, actor):
+            raise HTTPException(409, 'Ask for control first. Someone else may hold it.')
+        if control == 'press':
+            manager.leases.touch(aid, actor)
+        if control == 'resume' and not (manager.leases.holds(aid, actor) or can(actor, 'adventure.manage', adventure)):
+            raise HTTPException(403, 'Only the person in control or a manager can resume the autopilot')
+        if control in {'resume', 'pause'}:
+            # The autopilot takes over again, or the manager stopped it, so nobody holds control.
+            manager.leases.end(aid, control, apply=False)
+        return 'viewer' if viewer else policy.adventure_role(actor, adventure)
+
+    def lease_route(aid, request, body):
+        """The control lease of one adventure: GET reads it, POST acts on it."""
+        from .lease import END_CHOICES, LeaseRefused
+        actor = request.state.actor
+        if request.url.path.startswith('/games/'):
+            actor = policy.Actor(actor.user, actor.grants)
+        adventure = manager.registry.adventure(aid)
+        if request.method != 'POST':
+            return manager.leases.status(aid, actor, adventure)
+        try:
+            data = json.loads(body or b'{}')
+        except ValueError:
+            raise HTTPException(400, 'Invalid JSON') from None
+        if not isinstance(data, dict) or set(data) - {'action', 'user_id', 'end'}:
+            raise HTTPException(400, 'Unsupported lease request')
+        if data.get('action') == 'setting':
+            if not can(actor, 'adventure.own', adventure):
+                raise HTTPException(403, 'Only the owner chooses what happens when control ends')
+            if data.get('end') not in END_CHOICES:
+                raise HTTPException(400, 'Choose resume or pause')
+            manager.registry.set_setting('lease_end:' + aid, data['end'])
+            return manager.leases.status(aid, actor, adventure)
+        try:
+            return manager.leases.act(aid, actor, adventure, data.get('action'), data.get('user_id'))
+        except PermissionError as error:
+            raise HTTPException(403, str(error)) from None
+        except LeaseRefused as error:
+            raise HTTPException(409, str(error)) from None
+
+    def still_allowed(request, aid):
+        """Re-run the watch check for an open stream: a revoked grant, link or session closes it."""
+        if manager.auth_mode != 'accounts':
+            return True
+        actor = manager.actor(request)
+        if not request.url.path.startswith('/view/'):
+            actor = policy.Actor(actor.user, actor.grants)
+        try:
+            return can(actor, 'adventure.watch', manager.registry.adventure(aid))
+        except KeyError:
+            return False
 
     async def game(aid, path, request, viewer=False):
         if not public_game_path(request.method, path):
@@ -1218,11 +1289,15 @@ def create_app(manager, shutdown=lambda: None):
             if len(body) > 65536:
                 raise HTTPException(413, 'Game request is too large')
         body = bytes(body)
+        role = 'viewer' if viewer else 'owner'
         if manager.auth_mode == 'accounts':
             access = await run_in_threadpool(game_access, aid, path, request, viewer, body)
             if isinstance(access, Response):
                 return access
-            viewer = access
+            role = access
+            viewer = role == 'viewer'
+        if path == 'api/lease':
+            return await run_in_threadpool(lease_route, aid, request, body)
         # Everything below that reads the registry, the coordinator or the disk runs in a worker
         # thread. This handler shares one event loop with every page of every adventure, so a
         # blocking call here (a registry lock held across a commit, a slow trade history) would
@@ -1232,10 +1307,11 @@ def create_app(manager, shutdown=lambda: None):
         if path == 'trading' and request.method in {'GET', 'HEAD'}:
             from ..web.pages import render_game_page
             return HTMLResponse(render_game_page('adventure-trading.html', base_path=f"/{'view' if viewer else 'games'}/{aid}",
-                adventure_id=aid, adventure_name=adventure['name'], viewer=viewer,
+                adventure_id=aid, adventure_name=adventure['name'], viewer=role in {'viewer', 'player'},
                 sprite_version=await run_in_threadpool(manager.assets.sprite_version, aid)))
         if path == 'api/interactions' and request.method in {'GET', 'HEAD'}:
-            return JSONResponse(await run_in_threadpool(manager.coordinator.adventure_status, aid))
+            return JSONResponse(await run_in_threadpool(manager.coordinator.adventure_status, aid,
+                                                        role not in {'manager', 'owner'}))
         # Item artwork is a library setting, served here too so a view link never needs /api/v1/.
         if path == 'item-artwork':
             status = await run_in_threadpool(manager.assets.item_artwork.status)
@@ -1304,8 +1380,13 @@ def create_app(manager, shutdown=lambda: None):
                         return Response(raw, media_type='image/jpeg')
                 elif await run_in_threadpool(preview_path.is_file):
                     async def provisional_frames():
+                        checked = time.monotonic()
                         try:
                             while not manager.closing:
+                                if time.monotonic() - checked >= STREAM_RECHECK_SECONDS:
+                                    if not await run_in_threadpool(still_allowed, request, aid):
+                                        break
+                                    checked = time.monotonic()
                                 current = await run_in_threadpool(manager.registry.transaction, active['id'])
                                 if current['decision'] is not None:
                                     break
@@ -1325,7 +1406,8 @@ def create_app(manager, shutdown=lambda: None):
                 limits=httpx.Limits(max_connections=None, max_keepalive_connections=32))
         client = app.state.children
         target = httpx.URL(child.url).copy_with(path='/' + path, query=request.scope['query_string'])
-        headers = {'Authorization': 'Bearer ' + child.token, **({VIEWER_HEADER: '1'} if viewer else {})}
+        headers = {'Authorization': 'Bearer ' + child.token, **({VIEWER_HEADER: '1'} if viewer else {}),
+                   **({ROLE_HEADER: role} if role in {'player', 'manager'} else {})}
         if request.headers.get('content-type'):
             headers['Content-Type'] = request.headers['content-type']
         if path == 'api/pokedex' and request.headers.get('if-none-match'):
@@ -1344,14 +1426,23 @@ def create_app(manager, shutdown=lambda: None):
             finally:
                 await response.aclose()
             stamp = await run_in_threadpool(manager.assets.sprite_version, aid)
-            page = page.replace((SPRITE_META % SPRITE_VERSION).encode(), (SPRITE_META % stamp).encode(), 1)
+            meta = SPRITE_META % stamp
+            if manager.leases.enforced:
+                # The page asks the library who holds control only when there is a lease to ask about.
+                meta += LEASE_META
+            page = page.replace((SPRITE_META % SPRITE_VERSION).encode(), meta.encode(), 1)
             return Response(page, status_code=200, media_type=response.headers['content-type'])
         async def stream():
             # Decode here rather than forwarding raw bytes: `content-encoding` is not one of
             # the headers that survive below, so a compressed child response would otherwise
             # reach the browser as undeclared gzip.
+            checked = time.monotonic()
             try:
                 async for chunk in response.aiter_bytes():
+                    if path == 'stream' and time.monotonic() - checked >= STREAM_RECHECK_SECONDS:
+                        if not await run_in_threadpool(still_allowed, request, aid):
+                            return
+                        checked = time.monotonic()
                     yield chunk
             finally:
                 await response.aclose()

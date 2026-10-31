@@ -1450,6 +1450,13 @@ html:has(.screen-well:fullscreen) { scrollbar-gutter: auto }
   overflow-wrap: anywhere;
 }
 .deck.controls .live-speed { display: block; width: 100%; }
+/* Who holds control, who waits for it, and the owner's choice for when control ends. */
+.deck.lease { flex-direction: column; align-items: stretch; }
+.deck.lease p { margin: 0; }
+.lease-queue { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.lease-queue li { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); }
+.lease-queue li span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+#lease-idle { color: var(--warn-lamp); }
 .deck.controls .live-speed select {
   -webkit-appearance: none;
   appearance: none;

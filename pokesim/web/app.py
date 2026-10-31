@@ -24,18 +24,31 @@ from .event_page import render_event
 from .feed import render_feed
 from .journal_art import annotate as species_art, species_index
 from .pages import GEN2_CONTEXT, render_game_page
-from .security import VIEWER_HEADER, viewer_allows
+from .security import ROLE_HEADER, ROLES_BELOW_OWNER, VIEWER_HEADER, role_allows, viewer_allows
 from ..trade import preferences
 
 STATIC = Path(__file__).parent / "static"
 BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
 # Set for each request that arrived through a /view/ link.
 VIEWING = contextvars.ContextVar('pokesim_viewing', default=False)
+# The adventure role the library named for this request. Without accounts everyone is the owner.
+ROLE = contextvars.ContextVar('pokesim_role', default='owner')
+# What a player may send to api/control. Everything else there needs Can manage, and restart the owner.
+PLAYER_CONTROLS = frozenset({'press', 'take_control', 'resume'})
 
 
 def view_only():
-    """True when this request may only watch: a view link, or the instance-wide VIEWER_ONLY."""
-    return config.VIEWER_ONLY or VIEWING.get()
+    """True when this request may not change the adventure itself: a view link, a player, or VIEWER_ONLY."""
+    return config.VIEWER_ONLY or VIEWING.get() or ROLE.get() in {'viewer', 'player'}
+
+
+def control_allowed(action):
+    role = ROLE.get()
+    if config.VIEWER_ONLY or VIEWING.get() or role == 'viewer':
+        return False
+    if role == 'player':
+        return action in PLAYER_CONTROLS
+    return role == 'owner' or action != 'restart'
 
 
 # Ownership barriers: a save from before one of these would undo a completed trade or custom reward.
@@ -172,12 +185,18 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         viewing = request.headers.get(VIEWER_HEADER) == '1'
         if viewing and not viewer_allows(request.method, request.url.path):
             return JSONResponse({'detail': 'This is a view-only link'}, status_code=403)
+        role = request.headers.get(ROLE_HEADER)
+        role = 'viewer' if viewing else role if role in ROLES_BELOW_OWNER else 'owner'
+        if not role_allows(role, request.method, request.url.path):
+            return JSONResponse({'detail': 'Your role on this adventure does not allow this'}, status_code=403)
         if getattr(emu, 'frozen', False) is True and request.method not in {'GET', 'HEAD'}:
             return JSONResponse({'detail': 'This adventure is stopped. Start it to make changes.'}, status_code=409)
         token = VIEWING.set(viewing)
+        role_token = ROLE.set(role)
         try:
             return await call_next(request)
         finally:
+            ROLE.reset(role_token)
             VIEWING.reset(token)
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -454,7 +473,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         if isinstance(game, dict) and isinstance(game.get('party'), list):
             # A partner's popup draws from this record until the PC's own arrives, so it carries the same stats.
             status = {**status, 'game': {**game, 'party': live_party(game['party'])}}
-        return {**status, 'viewer_only': view_only()}
+        return {**status, 'viewer_only': view_only(), 'role': ROLE.get()}
 
     @app.get("/api/summary")
     def summary():
@@ -508,8 +527,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def control(c: Control):
         if store.get("trade_hold") and c.action != "speed":
             raise HTTPException(409, "An exchange is holding this adventure")
-        if view_only():
-            raise HTTPException(403, "This instance is view-only")
+        if not control_allowed(c.action):
+            raise HTTPException(403, "This instance is view-only" if view_only() and ROLE.get() != 'player'
+                                else "Your role on this adventure does not allow this")
         if c.action == "press":
             if c.value not in BUTTONS:
                 raise HTTPException(400, "Unknown game button")

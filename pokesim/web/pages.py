@@ -46,6 +46,7 @@ def template(name):
 # adventure actually shows (see Assets.sprite_version); this one is always revalidated.
 SPRITE_VERSION = 'rom-portraits-1'
 SPRITE_META = '<meta name="pokesim-sprites" content="%s">'
+LEASE_META = '<meta name="pokesim-lease" content="1">'
 
 GAME_CONTEXT = {'dex_total': '151', 'region': 'Kanto', 'badge_total': '8', 'marathon_name': 'Kanto Marathon'}
 GEN2_CONTEXT = {'dex_total': '251', 'region': 'Johto and Kanto', 'badge_total': '16', 'marathon_name': 'Johto Marathon'}

@@ -16,6 +16,8 @@ from .providers import default_gateways, env_flag
 log = logging.getLogger(__name__)
 FORWARDING_HEADERS = ('x-forwarded-for', 'forwarded', 'x-real-ip')
 OIDC_COOKIE = 'pokesim_oidc'
+# The roles an owner can give: Can watch, Can play and Can manage.
+GRANT_ROLES = ('viewer', 'player', 'manager')
 
 
 def password_login(manager):
@@ -247,10 +249,19 @@ def install(app, manager):
                 'redirect_uri': f'{manager.public_url}/auth/oidc/callback'}
 
     # Sharing one adventure, for its owner ----------------------------------------------------
+    def legacy_link(adventure):
+        """The old /view/ link of an adventure from before accounts, until a share link replaces it."""
+        users = [user['created_at'] for user in auth.users()]
+        if not users or adventure.get('created_at', 0) >= min(users) or auth.setting('legacy_link:' + adventure['id']):
+            return None
+        return {'path': f"/view/{adventure['id']}/"}
+
     def sharing_of(aid):
-        owner = manager.registry.adventure(aid)['owner_id']
+        adventure = manager.registry.adventure(aid)
+        owner = adventure['owner_id']
         people = [public_user(user) for user in auth.users() if not user['disabled'] and user['id'] != owner]
-        return {'grants': auth.grants(aid), 'shares': auth.shares(aid), 'users': people}
+        return {'grants': auth.grants(aid), 'shares': auth.shares(aid), 'users': people,
+                'legacy': legacy_link(adventure)}
 
     @app.get('/api/v1/adventures/{aid}/sharing')
     def sharing(aid: str):
@@ -261,11 +272,13 @@ def install(app, manager):
         data = await body(request)
         if set(data) != {'user_id', 'role'}:
             raise ValueError('Choose a person and a role')
-        if data['role'] != 'viewer':
-            raise ValueError('People can watch an adventure for now. Playing and managing come later.')
+        if data['role'] not in GRANT_ROLES:
+            raise ValueError('Choose Can watch, Can play or Can manage')
         if data['user_id'] == manager.registry.adventure(aid)['owner_id']:
             raise ValueError('The owner already has this adventure')
         auth.grant(aid, data['user_id'], data['role'], actor(request).id)
+        if data['role'] == 'viewer':
+            manager.leases.forget(aid, data['user_id'])
         auth.audit('grant.add', user_id=actor(request).id, adventure_id=aid, target=f"{data['user_id']} {data['role']}",
                    ip=manager.client_address(request))
         return sharing_of(aid)
@@ -273,15 +286,19 @@ def install(app, manager):
     @app.delete('/api/v1/adventures/{aid}/grants/{uid}')
     def remove_grant(aid: str, uid: str, request: Request):
         auth.revoke_grant(aid, uid)
+        manager.leases.forget(aid, uid)
         auth.audit('grant.remove', user_id=actor(request).id, adventure_id=aid, target=uid, ip=manager.client_address(request))
         return sharing_of(aid)
 
     @app.post('/api/v1/adventures/{aid}/shares')
     async def add_share(aid: str, request: Request):
         data = await body(request)
-        if set(data) - {'seconds'}:
+        if set(data) - {'seconds', 'legacy'}:
             raise ValueError('Unsupported share link options')
         raw, share = auth.create_share(aid, actor(request).id, seconds=data.get('seconds'))
+        if data.get('legacy') is True:
+            # The old /view/ link this one replaces leaves the share list.
+            auth.set_setting('legacy_link:' + aid, share['id'])
         auth.audit('share.create', user_id=actor(request).id, adventure_id=aid, target=share['id'],
                    ip=manager.client_address(request))
         return {'share': share, 'url': f'{manager.public_url}/s/{raw}'}

@@ -77,7 +77,8 @@ def test_queued_start_waits_until_backup_finishes_copying(tmp_path, monkeypatch)
 
 @pytest.mark.parametrize('state,expected', [
     ({'paused': True, 'manual_mode': False}, 'pause'),
-    ({'paused': True, 'manual_mode': True}, 'take_control'),
+    # A backup ends playing by hand, so the autopilot plays again afterwards.
+    ({'paused': True, 'manual_mode': True}, None),
     ({'paused': False, 'manual_mode': False}, None),
 ])
 def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, state, expected):

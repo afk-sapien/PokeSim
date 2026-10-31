@@ -30,13 +30,34 @@ Pending invites are listed there too and can be cancelled.
 
 Open Settings, then Sharing, and choose one of your adventures.
 
-- **Let them watch** gives another person with an account the adventure in their Library.
-  They see it live but cannot press buttons, change settings or trade with it.
+- **Share** gives another person with an account the adventure in their Library. Choose
+  what they can do:
+  - **Can watch**: they see it live but cannot press buttons, change settings or trade.
+  - **Can play**: they can also take control and play by hand.
+  - **Can manage**: they can also pause, save, change speed, load a save state and set
+    trading preferences. Only the owner restarts, exports, deletes or shares it.
 - **Make watch link** creates a link anyone can open without an account, such as a friend in
   a chat. Choose how many days it stays open, or 0 for no end. Turn it off at any time.
 
 Only the owner shares an adventure. A watch link opens that one adventure and nothing else
-in the Library.
+in the Library. Change what someone can do from the list of people, or stop sharing.
+
+An adventure from before accounts had a `/view/` link. That link stops working when accounts
+turn on. Sharing shows it with a **Make a link** button that makes a watch link in its place.
+
+## Take control
+
+One person plays by hand at a time. Press **Take control** on the game page. If someone else
+already has control, you join a line and they choose **Hand over** or **Refuse**. An owner or
+manager can always press **Take control back**.
+
+Control ends when you press **Let AI play**, when you press no buttons for 2 minutes, when
+your page closes, or when a trade or backup starts. You get a warning 30 seconds before an
+idle end. The next person in line gets control then. The owner chooses whether the AI plays
+again or the game stays paused when control ends. To change the idle time, set
+`CONTROL_IDLE_SECONDS` (30 or more).
+
+Loading a save state or restarting first saves a checkpoint, so a mistake can be undone.
 
 ## Trades
 

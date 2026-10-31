@@ -445,7 +445,20 @@ class Coordinator:
                 'attention': attention,
                 'message': attention['message'] if attention else self.last_message}
 
-    def adventure_status(self, aid):
+    def adventure_status(self, aid, watcher=False):
+        """One adventure's trades. A watcher never learns which other adventures it traded with."""
+        status = self._adventure_status(aid)
+        if not watcher:
+            return status
+        def hidden(row):
+            return {**row, 'peer_id': None, 'peer_name': 'Another adventure',
+                    **({'failure_reason': None} if 'failure_reason' in row else {})}
+        attention = status['attention'] and {**status['attention'], 'reason': None,
+                                             'message': 'A recent trade attempt did not complete.'}
+        return {**status, 'attention': attention,
+                **{key: [hidden(row) for row in status[key]] for key in ('active', 'queued', 'recent_failures', 'history')}}
+
+    def _adventure_status(self, aid):
         game = self.registry.adventure(aid)
         names = {row['id']: row['name'] for row in self.registry.adventures()}
         rows = self.registry.transactions(adventure_id=aid)
@@ -599,6 +612,14 @@ class Coordinator:
                     'attempt_id': identifier(), 'kind': 'cable_trade', 'display_offers': display_offers}
             if manual:
                 plan['manual'] = True
+            leases = getattr(self.manager, 'leases', None)
+            if leases is not None:
+                held = [aid for aid in participants if leases.holder(aid)]
+                if held and not manual:
+                    # Someone is playing by hand. Automatic trades wait for them.
+                    raise Waiting('Someone is playing this adventure by hand')
+                for aid in held:
+                    leases.end(aid, 'trade')
             plan['plan_digest'] = digest(plan)
             return self.registry.create_transaction(tid, plan)
 
