@@ -38,6 +38,7 @@ This index separates current instructions, future plans, and historical evidence
 
 ## Plans and historical records
 
+- [Planner systems](design/planner-systems.md): the shared planner systems S1 to S5 that replaced special-case fixes, as proposed and as built, with the parked mastery credit step.
 - [Distribution readiness](distribution-readiness.md): historical release-process review.
 
 - [Multi-adventure application plan](multi-adventure-app-plan.md) and
