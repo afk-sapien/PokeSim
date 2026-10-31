@@ -78,6 +78,11 @@ class Policy:
         # would bring the run back into that screen, so the emulator skips it.
         self.backing_out = False
         self.goal = None
+        # The heal or supply errand the last errand decision picked, the step's journey pick, and
+        # whether this step reached the errand decision.
+        self.errand = None
+        self.pick = None
+        self.decided = False
         self.menu = None
         self.shopping = None
         self.shop_location = None
@@ -1087,6 +1092,16 @@ class Policy:
 
     def step(self, snapshot, memory, sp=None):
         """``sp`` is the CPU stack pointer, which Core's PC lists read to press through a <CONT> name."""
+        self.pick, self.decided = None, False
+        action = self._step(snapshot, memory, sp)
+        if self.errand is not None and not self.decided and self.goal is self.pick and not snapshot.in_battle:
+            # An errand under way is the goal until the next errand decision ends it. Otherwise each
+            # menu, conversation and team step on the way ran under the journey goal behind it. The step
+            # has already decided under that goal, so menus read the same goal as before.
+            self.goal = self.errand
+        return action
+
+    def _step(self, snapshot, memory, sp=None):
         self.memory, self.sp = memory, sp
         self.decisions += 1
         from .postgame import observe
@@ -1168,6 +1183,7 @@ class Policy:
         if release:
             self.goal = journey_goal = release
             inner = None
+        self.pick = self.goal
         if shadow is not None and journey_goal is not None and shadow.changed('ladder', journey_goal.key):
             offers, pick = getattr(self, 'ladder_offers', None), getattr(self, 'ladder_pick', None)
             if release is None and offers and pick and getattr(self, 'ladder_decision', None) == self.decisions:
@@ -1269,8 +1285,12 @@ class Policy:
             return Action(None, 0, 24)
         if self.errand_allowed(snapshot, mem):
             prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
-            self.goal = self.healing(snapshot) or (None if prize_errand else self.shop(snapshot)) or self.goal
-        target = self.data.map_ids[self.goal.map_name]
+            self.errand = self.healing(snapshot) or (None if prize_errand else self.shop(snapshot))
+            self.goal = self.errand or self.goal
+        else:
+            self.errand = None
+        self.decided = True
+        target =self.data.map_ids[self.goal.map_name]
         # A marathon runner covers the course on foot, so neither Fly nor Surf shortens a leg. The way
         # to the starting line is not timed, and from Kanto it needs both.
         from .marathon import racing

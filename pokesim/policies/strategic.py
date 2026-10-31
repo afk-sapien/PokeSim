@@ -323,6 +323,11 @@ class StrategicPolicy(Policy):
         self.tm_options = None
         # The step's choice, which the overworld chain goes on weighing.
         self.choice = None
+        # The errand the last overworld decision picked, the step's pick before any errand, and whether
+        # this step reached the overworld decision.
+        self.errand = None
+        self.pick = None
+        self.decided = False
 
     def describe(self):
         return f"strategic ({self.mode})"
@@ -385,6 +390,16 @@ class StrategicPolicy(Policy):
         return select(scr, target, one_based, scroll)
 
     def step(self, ctx):
+        self.pick, self.decided = None, False
+        actions = self._step(ctx)
+        if self.errand is not None and not self.decided and self.goal is self.pick and not ctx.snapshot.in_battle:
+            # An errand under way is the goal until the next overworld decision ends it. Otherwise each
+            # walking, warp, dialogue and menu step on the way ran under the pick behind it. The step has
+            # already decided under that pick, so menus read the same goal as before.
+            self.goal = self.errand
+        return actions
+
+    def _step(self, ctx):
         s, mem = ctx.snapshot, ctx.mem
         scr = Screen(mem)
         kind = scr.kind(s)
@@ -493,7 +508,7 @@ class StrategicPolicy(Policy):
                                     'Swap an underused reserve for a useful Pokémon already in storage',
                                     ((self.pc.destination, 13, 4),), 'up', True),
                                choice.errand_candidate('party_upgrade', 'party'))
-        self.goal = choice.goal
+        self.goal = self.pick = choice.goal
         self.next_goal = self.goal.to_dict()
         league_rooms = {MAPS[n] for n in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM')}
         withdrawing_partner = (
@@ -932,6 +947,8 @@ class StrategicPolicy(Policy):
         if shadow is not None and shadow.changed('overworld', (goal.key, (self.collection.project or {}).get('key'))):
             shadow.compare('overworld', lambda: list(choice.candidates), goal.key, outer=True)
         self.goal = goal
+        self.errand = goal if choice.errand else None
+        self.decided = True
         if self.next_goal and self.next_goal['id'] == goal.key:
             next_badge = next((row['title'] for row in self.journey if not row['done']), 'Celebrate the Champion victory')
             self.next_goal = {'id': 'milestone', 'title': next_badge}
