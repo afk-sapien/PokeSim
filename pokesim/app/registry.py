@@ -11,7 +11,10 @@ import uuid
 
 from ..checkpoints import CheckpointStore
 
-SCHEMA = 1
+SCHEMA = 2
+# Adventures from before accounts belong to this placeholder user until setup names the first
+# admin, and so do adventures whose owner no longer exists.
+LIBRARY_OWNER = '0' * 32
 
 
 def identifier():
@@ -70,6 +73,8 @@ class Registry:
             columns = {row[1] for row in self.db.execute('PRAGMA table_info(adventures)')}
             if 'provenance' not in columns:
                 self.db.execute("ALTER TABLE adventures ADD COLUMN provenance TEXT NOT NULL DEFAULT '{}'")
+            if 'owner_id' not in columns:
+                self.db.execute(f"ALTER TABLE adventures ADD COLUMN owner_id TEXT NOT NULL DEFAULT '{LIBRARY_OWNER}'")
             self.db.execute(f'PRAGMA user_version={SCHEMA}')
         if self.setting('application_id') is None:
             self.set_setting('application_id', identifier())
@@ -136,11 +141,19 @@ class Registry:
         with self.lock, self.db:
             self.db.executemany('DELETE FROM roms WHERE id=?', [(rom_id,) for rom_id in rom_ids])
 
-    def create(self, name, rom_id, settings, request_id):
+    @staticmethod
+    def scoped_request(request_id, owner):
+        """Request ids come from browsers, so each user gets their own space of them."""
+        validate_id(request_id)
+        if owner == LIBRARY_OWNER:
+            return request_id
+        return hashlib.sha256(f'{validate_id(owner)}:{request_id}'.encode()).hexdigest()[:32]
+
+    def create(self, name, rom_id, settings, request_id, *, owner=LIBRARY_OWNER):
         name = str(name).strip()
         if not name or len(name) > 120:
             raise ValueError('Choose an adventure name of 1 to 120 characters')
-        validate_id(request_id)
+        request_id = self.scoped_request(request_id, owner)
         payload = dict(name=name, rom_id=rom_id, settings=settings)
         fingerprint = digest(payload)
         with self.lock, self.db:
@@ -158,17 +171,27 @@ class Registry:
             aid = identifier()
             campaign = identifier()
             self.db.execute('''INSERT INTO adventures
-                (id,campaign_id,name,rom_id,version,settings,desired_state,state,created_at)
-                VALUES (?,?,?,?,?,?,?,?,?)''',
-                (aid, campaign, name, rom_id, rom['version'], json.dumps({'speed': 1, **settings}), 'stopped', 'stopped', time.time()))
+                (id,campaign_id,name,rom_id,version,settings,desired_state,state,created_at,owner_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?)''',
+                (aid, campaign, name, rom_id, rom['version'], json.dumps({'speed': 1, **settings}), 'stopped', 'stopped', time.time(),
+                 validate_id(owner)))
             self.db.execute('INSERT INTO operations VALUES (?, ?, ?, ?)',
                             (request_id, 'create', fingerprint, json.dumps({'id': aid})))
         result = self.adventure(aid)
         self.write_manifest(result)
         return result
 
-    def request_lifecycle(self, aid, action, request_id):
-        validate_id(request_id)
+    def rebind_owners(self, owner, known):
+        """Give the placeholder's adventures, and those of users that no longer exist, to `owner`."""
+        validate_id(owner)
+        with self.lock, self.db:
+            rows = [row['id'] for row in self.db.execute('SELECT id, owner_id FROM adventures')
+                    if row['owner_id'] == LIBRARY_OWNER or row['owner_id'] not in known]
+            self.db.executemany('UPDATE adventures SET owner_id=? WHERE id=?', [(owner, aid) for aid in rows])
+        return rows
+
+    def request_lifecycle(self, aid, action, request_id, *, owner=LIBRARY_OWNER):
+        request_id = self.scoped_request(request_id, owner)
         self.adventure(aid)  # an unknown adventure raises KeyError here
         if action not in {'start', 'stop'}:
             raise ValueError('Unknown lifecycle action')

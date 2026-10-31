@@ -183,7 +183,7 @@ def inspect_backup(manager, archive):
             for item in _backup_adventures(root)]}
 
 
-def load_backup_adventure(manager, archive, adventure_id, name, request_id):
+def load_backup_adventure(manager, archive, adventure_id, name, request_id, owner=None):
     """Load a verified save as a stopped, isolated copy without replacing live data."""
     from .migration import import_directory
     from .registry import digest, validate_id
@@ -209,7 +209,7 @@ def load_backup_adventure(manager, archive, adventure_id, name, request_id):
                 raise ValueError('The backup ROM does not match this adventure')
             restored = import_directory(manager, root / 'adventures' / adventure_id,
                                         rom=rom,
-                                        name=name.strip(), stopped=True)
+                                        name=name.strip(), stopped=True, owner=owner)
             restored = manager.registry.update(restored['id'], settings=settings, summary=row['summary'], provenance={
                 'backup_id': Path(archive).stem, 'source_adventure': adventure_id,
                 'trading_blocked': True, 'reason': 'Restored backup copies do not automatically trade'})

@@ -16,7 +16,7 @@ import socket
 import sys
 import threading
 import time
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 import webbrowser
 
 import httpx
@@ -27,6 +27,7 @@ from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddle
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
+from starlette.routing import Match, Mount
 
 from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
@@ -35,12 +36,17 @@ from ..platform_io import lock_file
 from ..web.pages import SPRITE_META, SPRITE_VERSION
 from ..web.security import VIEWER_HEADER, protect_response, public_origin, viewer_allows
 from .assets import Assets
-from . import trade_settings
-from .registry import Registry, identifier, validate_id
+from .auth import AuthStore, SetupCode
+from . import policy, trade_settings
+from .policy import Actor, can
+from .registry import LIBRARY_OWNER, Registry, identifier, validate_id
 from .supervisor import AdventureRunning, Supervisor
 
 log = logging.getLogger(__name__)
 STATIC = Path(__file__).parents[1] / 'web' / 'static'
+CLI_HEADER = 'x-pokesim-cli-token'
+SESSION_COOKIE = 'pokesim_session'
+SHARE_COOKIE = 'pokesim_share'
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
                    'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
@@ -66,17 +72,35 @@ def public_game_path(method, path):
 
 class Manager:
     def __init__(self, root, public_url='http://127.0.0.1:8000', *, game_data_dir=None,
-                 reference_archive=None, child_factory=None):
+                 reference_archive=None, child_factory=None, auth='none'):
         self.public_url = public_origin(public_url)
         self.root = Path(root).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.lock = (self.root / 'application.lock').open('a+b')
         try:
             lock_file(self.lock)
+            fresh = not (self.root / 'app.sqlite').exists()
             self.registry = Registry(self.root)
+            self.auth = AuthStore(self.root)
+            self.auth_mode = self.resolve_auth(auth, fresh)
+            self.oidc = self.proxy = None
+            if self.auth_mode == 'accounts':
+                from .providers import OIDC, ProxyAuth
+                self.oidc = OIDC.from_env(self.public_url)
+                self.proxy = ProxyAuth.from_env()
+                # Kept in app.sqlite, which backups carry, so a restored copy asks for setup
+                # again instead of opening without a login.
+                self.registry.set_setting('accounts', True)
         except BaseException:
+            for name in ('auth', 'registry'):
+                if hasattr(self, name):
+                    getattr(self, name).close()
             self.lock.close()
             raise
+        self.setup_code = SetupCode()
+        self.cli_token = None
+        if self.auth_mode == 'accounts' and self.auth.setup_done():
+            self.bind_library_owner()
         self.assets = Assets(self.registry, game_data_dir, reference_archive)
         self.supervisor = Supervisor(self.registry, self.assets, self.public_url,
                                      **({'child_factory': child_factory} if child_factory else {}))
@@ -169,6 +193,7 @@ class Manager:
             raise ValueError('PokeSim is saving, backing up, or shutting down')
 
     def start(self):
+        self.announce_setup()
         self.watchdog.install()
         from .deletion import recover_deletions
         recover_deletions(self)
@@ -200,6 +225,7 @@ class Manager:
         if errors:
             log.error('Shutdown requires attention: %s', ', '.join(errors))
         self.registry.close()
+        self.auth.close()
         self.lock.close()
         self._closed = True
 
@@ -214,13 +240,151 @@ class Manager:
         task.add_done_callback(self.tasks.discard)
         return task
 
-    def browser_session(self, request):
-        session_id = request.cookies.get('pokesim_session', '')
+    # Accounts ---------------------------------------------------------------------------
+    def resolve_auth(self, requested, fresh):
+        """none or accounts. Upgrades with nothing configured stay open, and new libraries log in."""
+        if requested == 'auto':
+            requested = os.environ.get('AUTH', '').strip().lower() or 'auto'
+        if requested in {'none', 'accounts'}:
+            return requested
+        if requested != 'auto':
+            raise ValueError('AUTH must be none or accounts')
+        configured = os.environ.get('OIDC_ISSUER') or os.environ.get('AUTH_PROXY_HEADER')
+        if fresh or configured or self.auth.setup_done() or self.registry.setting('accounts'):
+            return 'accounts'
+        return 'none'
+
+    @property
+    def needs_setup(self):
+        return self.auth_mode == 'accounts' and not self.auth.setup_done()
+
+    def announce_setup(self):
+        """Log a fresh one-time setup code while the Library has no admin."""
+        if self.needs_setup:
+            log.warning('PokeSim needs its first admin. Open %s/setup and enter this one-time code: %s',
+                        self.public_url, self.setup_code.issue())
+
+    def bootstrap_admin(self, username, password):
+        """Create the first admin from POKESIM_ADMIN_USER and POKESIM_ADMIN_PASSWORD, so a
+        server that nobody opens in a browser first does not wait on the setup page."""
+        if not self.needs_setup or not username or not password:
+            return None
+        with self.auth.lock:
+            user = self.auth.create_user(username, password, role='admin')
+        self.bind_library_owner(user['id'])
+        self.auth.audit('setup', user_id=user['id'], target='environment')
+        log.info('Created the first admin %s from the environment', user['username'])
+        return user
+
+    def default_owner(self):
+        return self.auth.library_owner()
+
+    def bind_library_owner(self, uid=None):
+        """Give adventures from before setup, and adventures of missing users, to the first admin."""
+        if uid is not None and self.auth.setting('library_owner') is None:
+            self.auth.set_setting('library_owner', uid)
+        owner = self.auth.library_owner()
+        if owner == LIBRARY_OWNER:
+            return []
+        moved = self.registry.rebind_owners(owner, {user['id'] for user in self.auth.users()})
+        if moved:
+            log.info('Gave %d adventures from before setup to the first admin', len(moved))
+        return moved
+
+    def issue_cli_token(self):
+        """A token for `pokesim` commands on this machine. The file is readable only by its owner."""
+        token = secrets.token_urlsafe(32)
+        path = self.root / 'cli.token'
+        path.unlink(missing_ok=True)
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, 'w', encoding='ascii') as output:
+            output.write(token)
+        self.cli_token = token
+        return token
+
+    def cli_request(self, request):
+        sent = request.headers.get(CLI_HEADER, '')
+        return bool(self.cli_token and sent.isascii() and hmac.compare_digest(sent, self.cli_token))
+
+    def open_user(self):
+        """The user every request acts as when accounts are off."""
+        return {'id': self.auth.library_owner(), 'username': 'owner', 'display_name': 'Library owner',
+                'role': 'admin', 'can_create': True, 'disabled': False, 'placeholder': True}
+
+    def proxy_user(self, name, role):
+        """The user a trusted proxy names. It gets its own identity, never a local account's."""
+        with self.auth.lock:
+            user = self.auth.identity_user('proxy', 'header', name)
+            if user is None:
+                user = self.auth.create_user(self.auth.free_username(name), role=role, display_name=name)
+                self.auth.link_identity(user['id'], 'proxy', 'header', name)
+                self.auth.audit('user.create', user_id=user['id'], target='proxy')
+            if user['role'] != role:
+                try:
+                    user = self.auth.update_user(user['id'], role=role)
+                except ValueError:
+                    log.warning('The proxy names %s as a member, but they are the last admin', name)
+        return user
+
+    def actor(self, request):
+        """Who is behind this request. Under AUTH=none everyone is the admin, as before accounts."""
+        if self.auth_mode == 'none':
+            return Actor(self.open_user())
+        user = None
+        if self.proxy:
+            named = self.proxy.identify(request)
+            if named:
+                user = self.proxy_user(*named)
+        if user is None:
+            session = self.auth.session(request.cookies.get(SESSION_COOKIE))
+            user = session['user'] if session else None
+        if user is None and self.cli_request(request):
+            user = self.auth.user(self.auth.library_owner())
+        if user is not None and user['disabled']:
+            user = None
+        share = self.auth.share(request.cookies.get(SHARE_COOKIE))
+        return self.actor_for(user, share['adventure_id'] if share else None)
+
+    def actor_for(self, user, share=None):
+        grants = self.auth.grants_for(user['id']) if user and user['role'] != 'admin' else {}
+        return Actor(user, grants, share)
+
+    def browser_session(self, request, actor=None):
+        """The session that holds this browser's CSRF token: a stored login or an anonymous one."""
+        session_id = request.cookies.get(SESSION_COOKIE, '')
+        if self.auth_mode == 'accounts':
+            stored = self.auth.session(session_id)
+            if stored is not None:
+                # A proxy login wins over a stale session cookie of someone else.
+                if actor is None or actor.id == stored['user_id']:
+                    return stored
+                return None
         with self.session_lock:
             session = self.sessions.get(session_id)
             if session and session['expires'] > time.time():
                 return session
         return None
+
+    def anonymous_session(self, role):
+        session_id = secrets.token_urlsafe(32)
+        current = {'csrf_token': secrets.token_urlsafe(32), 'role': role, 'expires': time.time() + 86400}
+        with self.session_lock:
+            self.sessions = {key: value for key, value in self.sessions.items() if value['expires'] > time.time()}
+            if len(self.sessions) >= 1024:
+                raise HTTPException(429, 'Too many active browser sessions')
+            self.sessions[session_id] = current
+        return session_id, current
+
+    def end_anonymous_session(self, request):
+        with self.session_lock:
+            self.sessions.pop(request.cookies.get(SESSION_COOKIE, ''), None)
+
+    def set_session_cookie(self, response, raw, max_age):
+        response.set_cookie(SESSION_COOKIE, raw, httponly=True, samesite='strict',
+                            secure=self.public_url.startswith('https:'), max_age=max_age)
+
+    def client_address(self, request):
+        return request.client.host if request.client else None
 
 
 async def json_body(request, limit=65536):
@@ -337,6 +501,59 @@ def create_app(manager, shutdown=lambda: None):
     async def departed(request, error):
         return Response(status_code=499)
 
+    def route_action(request):
+        """The declared action of the route this request reaches, and its path parameters.
+
+        An unmatched path returns (None, {}) and gets FastAPI's own 404 or 405. A matched
+        route with no declared action returns ('deny', {}).
+        """
+        for route in app.router.routes:
+            matched, child = route.matches(request.scope)
+            if matched != Match.FULL:
+                continue
+            if isinstance(route, Mount):
+                return 'public', {}
+            method = request.method
+            action = policy.ROUTE_ACTIONS.get((method, route.path))
+            if action is None and method == 'HEAD':
+                action = policy.ROUTE_ACTIONS.get(('GET', route.path))
+            return action or 'deny', child.get('path_params', {})
+        return None, {}
+
+    def owner_of(request):
+        """Who a new adventure, import or request ID belongs to."""
+        return request.state.actor.id or manager.default_owner()
+
+    def check_route(request, actor):
+        """A refusal for this request under accounts, or None to let it through."""
+        action, params = route_action(request)
+        if action in {None, 'public', 'game'}:
+            return None
+        if action == 'deny':
+            return JSONResponse({'detail': 'Not found'}, status_code=404)
+        if action == 'page':
+            if actor.user is not None:
+                return None
+            if manager.needs_setup:
+                return RedirectResponse('/setup', status_code=303)
+            return RedirectResponse('/login?' + urlencode({'next': request.url.path}), status_code=303)
+        if actor.user is None:
+            code = 'setup_required' if manager.needs_setup else 'login_required'
+            return JSONResponse({'detail': 'Log in to PokeSim first', 'code': code}, status_code=401)
+        if action.startswith('library.'):
+            if can(actor, action):
+                return None
+            return JSONResponse({'detail': 'Only an admin can do this'}, status_code=403)
+        try:
+            adventure = manager.registry.adventure(params.get('aid', ''))
+        except (KeyError, ValueError):
+            return JSONResponse({'detail': 'Adventure not found'}, status_code=404)
+        if not can(actor, 'adventure.watch', adventure):
+            return JSONResponse({'detail': 'Adventure not found'}, status_code=404)
+        if not can(actor, action, adventure):
+            return JSONResponse({'detail': 'Only the owner of this adventure can do this'}, status_code=403)
+        return None
+
     @app.middleware('http')
     async def access(request, call_next):
         expected = urlsplit(manager.public_url)
@@ -350,11 +567,19 @@ def create_app(manager, shutdown=lambda: None):
         changing = request.method not in {'GET', 'HEAD', 'OPTIONS'}
         if request.headers.get('sec-fetch-site') == 'cross-site' and (changing or request.url.path == '/api/v1/session'):
             return JSONResponse({'detail': 'Requests must come from this PokeSim application'}, status_code=403)
+        actor = await run_in_threadpool(manager.actor, request)
+        request.state.actor = actor
         if changing:
-            session = manager.browser_session(request)
+            session = await run_in_threadpool(manager.browser_session, request, actor)
             csrf = request.headers.get('x-pokesim-csrf', '')
             if session is None or not csrf.isascii() or not hmac.compare_digest(csrf, session['csrf_token']):
                 return JSONResponse({'detail': 'Reload this page before making changes'}, status_code=403)
+        if manager.auth_mode == 'accounts':
+            refused = await run_in_threadpool(check_route, request, actor)
+            if refused is not None:
+                protect_response(refused)
+                refused.headers['Cache-Control'] = 'no-store'
+                return refused
         response = await call_next(request)
         protect_response(response)
         response.headers['Cache-Control'] = cache_policy(
@@ -391,30 +616,54 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/api/v1/session')
     def session(request: Request):
-        current = manager.browser_session(request)
+        actor = request.state.actor
+        if manager.auth_mode == 'none':
+            current = manager.browser_session(request)
+            extra = {'auth': 'none', 'authenticated': True, 'user': None,
+                     'setup_recommended': True}
+            if current is not None:
+                return {'csrf_token': current['csrf_token'], 'role': current['role'], **extra}
+            session_id, current = manager.anonymous_session('admin')
+            response = JSONResponse({'csrf_token': current['csrf_token'], 'role': current['role'], **extra})
+            manager.set_session_cookie(response, session_id, 86400)
+            return response
+        from .accounts import session_payload
+        current = manager.browser_session(request, actor)
+        if actor.user is not None and (current is None or 'user_id' not in current):
+            # A proxy or command line login gets a stored session to hold its CSRF token.
+            raw, current = manager.auth.create_session(actor.id, manager.client_address(request),
+                                                       request.headers.get('user-agent'))
+            response = JSONResponse(session_payload(manager, actor, current))
+            manager.set_session_cookie(response, raw, 14 * 86400)
+            return response
         if current is not None:
-            return {'csrf_token': current['csrf_token'], 'role': current['role']}
-        session_id = secrets.token_urlsafe(32)
-        current = {'csrf_token': secrets.token_urlsafe(32), 'role': 'owner', 'expires': time.time() + 86400}
-        with manager.session_lock:
-            manager.sessions = {key: value for key, value in manager.sessions.items() if value['expires'] > time.time()}
-            if len(manager.sessions) >= 1024:
-                raise HTTPException(429, 'Too many active browser sessions')
-            manager.sessions[session_id] = current
-        response = JSONResponse({'csrf_token': current['csrf_token'], 'role': current['role']})
-        response.set_cookie('pokesim_session', session_id, httponly=True, samesite='strict',
-                            secure=manager.public_url.startswith('https:'), max_age=86400)
+            return session_payload(manager, actor, current)
+        session_id, current = manager.anonymous_session(None)
+        response = JSONResponse(session_payload(manager, actor, current))
+        manager.set_session_cookie(response, session_id, 86400)
         return response
 
+    from .accounts import install as install_accounts
+    install_accounts(app, manager)
+
+    def listed(row, actor):
+        return {**row, 'resources': manager.supervisor.resources(row['id']), 'access': policy.adventure_role(actor, row)}
+
     @app.get('/api/v1/adventures')
-    def adventures():
-        return {'adventures': [{**row, 'resources': manager.supervisor.resources(row['id'])}
-                               for row in manager.registry.adventures()],
-                'attention': manager.watchdog.public()}
+    def adventures(request: Request):
+        actor = request.state.actor
+        rows = policy.visible_adventures(actor, manager.registry.adventures())
+        attention = manager.watchdog.public()
+        if not actor.admin:
+            # Library problems are for admins. A member sees those of adventures they can watch.
+            shown = {row['id'] for row in rows}
+            attention = {**attention, 'problems': [problem for problem in attention['problems']
+                                                   if problem['adventure_id'] in shown]}
+        return {'adventures': [listed(row, actor) for row in rows], 'attention': attention}
 
     @app.get('/api/v1/adventures/{aid}')
-    def adventure(aid: str):
-        return {**manager.registry.adventure(aid), 'resources': manager.supervisor.resources(aid)}
+    def adventure(aid: str, request: Request):
+        return listed(manager.registry.adventure(aid), request.state.actor)
 
     @app.get('/api/v1/assets')
     def assets():
@@ -479,7 +728,7 @@ def create_app(manager, shutdown=lambda: None):
             'dojo_preference': data.get('dojo_preference', 'auto'),
         })
         return manager.registry.create(data.get('name', ''), data.get('rom_id', ''), settings,
-                                       data.get('request_id', identifier()))
+                                       data.get('request_id', identifier()), owner=owner_of(request))
 
     @app.post('/api/v1/adventures/{aid}/start')
     async def start(aid: str, request: Request):
@@ -488,7 +737,7 @@ def create_app(manager, shutdown=lambda: None):
         if adventure['archived']:
             raise ValueError('Restore this adventure before starting')
         data = await json_body(request)
-        if manager.registry.request_lifecycle(aid, 'start', data.get('request_id', identifier())):
+        if manager.registry.request_lifecycle(aid, 'start', data.get('request_id', identifier()), owner=owner_of(request)):
             manager.registry.update(aid, state='starting', error=None)
             manager.background(manager.start_adventure, aid)
         return manager.registry.adventure(aid)
@@ -498,7 +747,7 @@ def create_app(manager, shutdown=lambda: None):
         manager.check_available()
         manager.registry.adventure(aid)
         data = await json_body(request)
-        if not manager.registry.request_lifecycle(aid, 'stop', data.get('request_id', identifier())):
+        if not manager.registry.request_lifecycle(aid, 'stop', data.get('request_id', identifier()), owner=owner_of(request)):
             return manager.registry.adventure(aid)
         if manager.coordinator.reserved(aid):
             return manager.registry.update(aid, summary={'message': 'Will stop after the pending trade is resolved'})
@@ -509,7 +758,9 @@ def create_app(manager, shutdown=lambda: None):
     async def delete(aid: str, request: Request):
         from .deletion import delete_adventure
         data = await json_body(request)
-        return await asyncio.to_thread(delete_adventure, manager, aid, data.get('confirmation'))
+        result = await asyncio.to_thread(delete_adventure, manager, aid, data.get('confirmation'))
+        manager.auth.forget_adventure(aid)
+        return result
 
     @app.post('/api/v1/adventures/{aid}/archive')
     async def archive(aid: str):
@@ -566,10 +817,12 @@ def create_app(manager, shutdown=lambda: None):
         return result
 
     @app.get('/api/v1/settings')
-    def settings():
+    def settings(request: Request):
         from ..nicknames import nickname_defaults, nickname_catalog
         parts = {**nickname_defaults(), **manager.registry.setting('nickname_parts', {})}
-        return {'data_dir': str(manager.root), **parts, 'nickname_catalog': nickname_catalog(parts)}
+        # Where the library lives on disk is for the person who runs the server.
+        place = {'data_dir': str(manager.root)} if request.state.actor.admin else {}
+        return {**place, **parts, 'nickname_catalog': nickname_catalog(parts)}
 
     @app.patch('/api/v1/settings')
     async def set_settings(request: Request):
@@ -579,7 +832,7 @@ def create_app(manager, shutdown=lambda: None):
         parts = validate_parts({**nickname_defaults(), **manager.registry.setting('nickname_parts', {}), **changes})
         manager.registry.set_setting('nickname_parts', parts)
         pending = await asyncio.to_thread(manager.supervisor.update_nicknames)
-        return {**settings(), 'pending': pending}
+        return {**settings(request), 'pending': pending}
 
     @app.get('/api/v1/portraits')
     def portraits():
@@ -685,51 +938,100 @@ def create_app(manager, shutdown=lambda: None):
         data = await json_body(request)
         return await asyncio.to_thread(manager.notifications.test, data, integration_id)
 
+    def require(request, action, *aids):
+        """Refuse unless this person may do `action` on every adventure named. Trades in
+        release 1 run only between adventures of one owner."""
+        actor = request.state.actor
+        if actor.admin:
+            return
+        for aid in aids:
+            try:
+                row = manager.registry.adventure(validate_id(aid))
+            except (KeyError, ValueError, TypeError):
+                raise HTTPException(404, 'Adventure not found') from None
+            if not can(actor, 'adventure.watch', row):
+                raise HTTPException(404, 'Adventure not found')
+            if not can(actor, action, row):
+                raise HTTPException(403, 'You can trade only between adventures you own')
+
+    def owned_ids(request):
+        """The adventures this person owns, or None for an admin, who sees every one."""
+        actor = request.state.actor
+        if actor.admin:
+            return None
+        return {row['id'] for row in manager.registry.adventures() if can(actor, 'adventure.own', row)}
+
+    def trade_participants(tid):
+        try:
+            return manager.registry.transaction(validate_id(tid))['plan']['participants']
+        except (KeyError, ValueError):
+            raise HTTPException(404, 'Trade not found') from None
+
     @app.get('/api/v1/interactions')
-    def interactions():
-        return manager.coordinator.status()
+    def interactions(request: Request):
+        status = manager.coordinator.status()
+        owned = owned_ids(request)
+        if owned is None:
+            return status
+        mine = lambda row: bool({row['left_id'], row['right_id']} & owned)  # noqa: E731
+        return {**status, 'participants': [aid for aid in status['participants'] if aid in owned],
+                **{key: [row for row in status[key] if mine(row)] for key in ('active', 'history', 'recent_failures', 'queued')},
+                'attention': None, 'message': None}
 
     @app.post('/api/v1/interactions/trades')
     async def trade(request: Request):
         manager.check_available()
         data = await json_body(request)
+        require(request, 'adventure.own', data.get('left_id'), data.get('right_id'))
         row = await asyncio.to_thread(manager.coordinator.propose, data)
         manager.background(manager.coordinator.execute, row['id'])
         return row
 
     # Trade builder: the owner picks a Pokémon in two of their adventures and trades them.
     @app.get('/api/v1/interactions/trade-builder/targets')
-    async def trade_builder_targets(from_id: str, from_key: str | None = None):
-        return await asyncio.to_thread(manager.builder.targets, validate_id(from_id), from_key)
+    async def trade_builder_targets(request: Request, from_id: str, from_key: str | None = None):
+        await run_in_threadpool(require, request, 'adventure.own', from_id)
+        owned = await run_in_threadpool(owned_ids, request)
+        limit = {} if owned is None else {'visible': owned}
+        return await asyncio.to_thread(manager.builder.targets, validate_id(from_id), from_key, **limit)
 
     @app.get('/api/v1/interactions/trade-builder/limits')
-    async def trade_builder_limits(from_id: str, from_key: str, to_id: str):
+    async def trade_builder_limits(request: Request, from_id: str, from_key: str, to_id: str):
+        await run_in_threadpool(require, request, 'adventure.own', from_id, to_id)
         return await asyncio.to_thread(manager.builder.limits, validate_id(from_id), from_key, validate_id(to_id))
 
     @app.get('/api/v1/interactions/trade-builder/pokemon')
-    async def trade_builder_pokemon(adventure_id: str):
+    async def trade_builder_pokemon(request: Request, adventure_id: str):
+        await run_in_threadpool(require, request, 'adventure.own', adventure_id)
         return await asyncio.to_thread(manager.builder.pokemon, validate_id(adventure_id))
 
     @app.post('/api/v1/interactions/trade-builder')
     async def create_built_trade(request: Request):
         manager.check_available()
         data = await json_body(request)
+        await run_in_threadpool(require, request, 'adventure.own', data.get('from_id'), data.get('to_id'))
         trade = await asyncio.to_thread(manager.builder.create, data)
         manager.background(manager.coordinator.drain_manual)
         return trade
 
     @app.post('/api/v1/interactions/trade-builder/{mid}/cancel')
-    async def cancel_built_trade(mid: str):
-        return await asyncio.to_thread(manager.builder.cancel, validate_id(mid))
+    async def cancel_built_trade(mid: str, request: Request):
+        def cancel():
+            queued = manager.coordinator.manual_status(validate_id(mid))
+            require(request, 'adventure.own', queued['left_id'], queued['right_id'])
+            return manager.builder.cancel(mid)
+        return await asyncio.to_thread(cancel)
 
     # Automatic trading settings: on or off, per adventure.
     @app.get('/api/v1/interactions/auto-settings')
-    async def auto_settings(adventure_id: str):
+    async def auto_settings(request: Request, adventure_id: str):
+        await run_in_threadpool(require, request, 'adventure.watch', adventure_id)
         return await asyncio.to_thread(auto_settings_public, validate_id(adventure_id))
 
     @app.put('/api/v1/interactions/auto-settings')
     async def set_auto_settings(adventure_id: str, request: Request):
         manager.check_available()
+        await run_in_threadpool(require, request, 'adventure.own', adventure_id)
         aid = validate_id(adventure_id)
         data = await json_body(request)
         if not isinstance(data, dict) or set(data) - {'enabled'}:
@@ -752,11 +1054,15 @@ def create_app(manager, shutdown=lambda: None):
                 'viewer_only': manager.builder.viewer_only(aid)}
 
     @app.post('/api/v1/interactions/{tid}/cancel')
-    async def cancel(tid: str):
+    async def cancel(tid: str, request: Request):
+        if not request.state.actor.admin:
+            await run_in_threadpool(lambda: require(request, 'adventure.own', *trade_participants(tid)))
         return await asyncio.to_thread(manager.coordinator.cancel, tid)
 
     @app.post('/api/v1/interactions/{tid}/recover')
-    async def recover(tid: str):
+    async def recover(tid: str, request: Request):
+        if not request.state.actor.admin:
+            await run_in_threadpool(lambda: require(request, 'adventure.own', *trade_participants(tid)))
         manager.registry.transaction(tid)
         manager.background(manager.coordinator.recover_one, tid)
         return manager.registry.transaction(tid)
@@ -833,7 +1139,8 @@ def create_app(manager, shutdown=lambda: None):
         from .backup import load_backup_adventure
         values = await json_body(request)
         return await asyncio.to_thread(load_backup_adventure, manager, backup_path(bid),
-                                       values.get('adventure_id'), values.get('name'), values.get('request_id'))
+                                       values.get('adventure_id'), values.get('name'), values.get('request_id'),
+                                       owner=owner_of(request))
 
     @app.post('/api/v1/imports')
     async def import_data(request: Request):
@@ -850,7 +1157,7 @@ def create_app(manager, shutdown=lambda: None):
                     if total > 512 * 1024**2:
                         raise HTTPException(413, 'Import archive exceeds 512 MB')
                     output.write(chunk)
-            return await asyncio.to_thread(import_archive, manager, path)
+            return await asyncio.to_thread(import_archive, manager, path, owner=owner_of(request))
         finally:
             path.unlink(missing_ok=True)
 
@@ -869,9 +1176,53 @@ def create_app(manager, shutdown=lambda: None):
     async def games(aid: str, path: str, request: Request):
         return await game(aid, path, request)
 
+    def game_access(aid, path, request, viewer, body):
+        """Whether this person may make this game request, and whether they see it as a viewer.
+
+        Anyone below the owner gets the view-only game, so the worker hides its controls.
+        A share link counts only under /view/, which is also the only path its cookie is sent to.
+        """
+        actor = request.state.actor
+        if not viewer:
+            actor = policy.Actor(actor.user, actor.grants)
+        if actor.user is None and actor.share is None:
+            if path in GAME_PAGES and request.method == 'GET':
+                target = '/setup' if manager.needs_setup else '/login?' + urlencode({'next': request.url.path})
+                return RedirectResponse(target, status_code=303)
+            raise HTTPException(401, 'Log in to PokeSim first')
+        try:
+            adventure = manager.registry.adventure(aid)
+        except (KeyError, ValueError):
+            raise HTTPException(404, 'Adventure not found') from None
+        if not can(actor, 'adventure.watch', adventure):
+            raise HTTPException(404, 'Adventure not found')
+        control = None
+        if request.method == 'POST' and path == 'api/control':
+            try:
+                control = json.loads(body or b'{}').get('action')
+            except (ValueError, AttributeError):
+                raise HTTPException(400, 'Invalid JSON') from None
+        action = policy.game_action(request.method, path, control)
+        if action is None:
+            raise HTTPException(404)
+        if not can(actor, action, adventure):
+            raise HTTPException(403, 'Only the owner of this adventure can do this')
+        return viewer or not can(actor, 'adventure.own', adventure)
+
     async def game(aid, path, request, viewer=False):
         if not public_game_path(request.method, path):
             raise HTTPException(404)
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 65536:
+                raise HTTPException(413, 'Game request is too large')
+        body = bytes(body)
+        if manager.auth_mode == 'accounts':
+            access = await run_in_threadpool(game_access, aid, path, request, viewer, body)
+            if isinstance(access, Response):
+                return access
+            viewer = access
         # Everything below that reads the registry, the coordinator or the disk runs in a worker
         # thread. This handler shares one event loop with every page of every adventure, so a
         # blocking call here (a registry lock held across a commit, a slow trade history) would
@@ -966,12 +1317,6 @@ def create_app(manager, shutdown=lambda: None):
                     return StreamingResponse(provisional_frames(), media_type='multipart/x-mixed-replace',
                                              headers={'Content-Type': 'multipart/x-mixed-replace' + chr(59) + ' boundary=frame'})
         child = stopped_view or manager.supervisor.child(aid)
-        body = bytearray()
-        async for chunk in request.stream():
-            body.extend(chunk)
-            if len(body) > 65536:
-                raise HTTPException(413, 'Game request is too large')
-        body = bytes(body)
         if request.method == 'POST' and await run_in_threadpool(manager.coordinator.reserved, aid):
             raise HTTPException(409, 'A trade holds this adventure')
         if app.state.children is None:
@@ -1041,7 +1386,7 @@ def main(argv=None):
         prog='pokesim',
         description='Run one PokeSim application with multiple adventures',
         epilog='Commands: adventures (list, create, start, stop), import, import-pair, backup, '
-               'restore, desktop, legacy. Each takes its own --help, for example '
+               'restore, admin, desktop, legacy. Each takes its own --help, for example '
                '"pokesim adventures create --help". Running pokesim with no command serves the library.')
     parser.add_argument('--desktop', action='store_true')
     parser.add_argument('--data-dir', type=Path)
@@ -1071,9 +1416,12 @@ def main(argv=None):
         actual_port = listener.getsockname()[1]
         browser_host = '127.0.0.1' if host in {'0.0.0.0', '::'} else host
         public_url = args.public_url or os.environ.get('PUBLIC_URL') or f'http://{browser_host}:{actual_port}'
+        # The desktop app serves one person on their own machine, so it opens without a login
+        # unless AUTH asks for one. A server decides from its library (see resolve_auth).
+        auth = 'none' if args.desktop and not os.environ.get('AUTH') else 'auto'
         try:
             manager = Manager(root, public_url, game_data_dir=args.game_data_dir,
-                              reference_archive=args.reference_archive)
+                              reference_archive=args.reference_archive, auth=auth)
         except BlockingIOError:
             identity = json.loads((root / 'manager.json').read_text(encoding='utf-8'))
             if args.desktop and not args.no_browser:
@@ -1081,9 +1429,13 @@ def main(argv=None):
             return
         identity = {'url': public_url, 'application_id': manager.registry.setting('application_id')}
         CheckpointStore.atomic_write(manager.root / 'manager.json', json.dumps(identity).encode())
+        manager.bootstrap_admin(os.environ.get('POKESIM_ADMIN_USER', '').strip(), os.environ.get('POKESIM_ADMIN_PASSWORD', ''))
+        manager.issue_cli_token()
         server = None
         app = create_app(manager, shutdown=lambda: setattr(server, 'should_exit', True))
-        server = uvicorn.Server(uvicorn.Config(app, host=host, port=actual_port,
+        # Forwarded addresses are read only from proxies that AUTH_TRUSTED_PROXIES names
+        # (see client_address), never from whoever connects.
+        server = uvicorn.Server(uvicorn.Config(app, host=host, port=actual_port, proxy_headers=False,
                                              loop='asyncio', log_level='warning', timeout_graceful_shutdown=60))
         if args.desktop and not args.no_browser:
             def open_browser():

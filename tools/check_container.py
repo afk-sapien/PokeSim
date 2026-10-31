@@ -102,8 +102,9 @@ def main():
                     request = Request(f'http://{address}{path}', headers={'Host': 'localhost:8930'})
                     with urlopen(request, timeout=5) as response:
                         assert response.status == 200
+                        # A fresh library has no admin yet, so the Library page sends visitors to setup.
                         if path == '/':
-                            assert b'Your adventure library' in response.read()
+                            assert response.geturl().endswith('/setup'), response.geturl()
                 compose('stop', 'pokesim')
                 container = compose('ps', '-a', '-q', 'pokesim', capture=True).strip()
                 exit_code = subprocess.check_output(['docker', 'inspect', '--format',

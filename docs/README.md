@@ -20,6 +20,8 @@ This index separates current instructions, future plans, and historical evidence
 | Standalone Red and Blue pair coordinator | [Automatic trading](automatic-trading.md) |
 | Backups, upgrades, recovery, and storage | [Operations](operations.md) |
 | Remote access | [Self-hosting](self-hosting.md#configure-ports-and-remote-access) |
+| Logins, identity providers, proxies, and view links | [Authentication](authentication.md) |
+| Admins, members, invites, and sharing adventures | [Users and sharing](users-and-sharing.md) |
 
 ## Develop and maintain
 

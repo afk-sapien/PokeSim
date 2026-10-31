@@ -52,7 +52,32 @@ def parser():
     _options(commands.add_parser('backup', help='Request a consistent backup from the running application'))
     restoring = _options(commands.add_parser('restore', help='Restore a backup into an empty data directory'))
     restoring.add_argument('archive', type=Path)
+    admin = _options(commands.add_parser('admin', help='Recover accounts on this machine'))
+    admin_actions = admin.add_subparsers(dest='action', required=True)
+    reset = _options(admin_actions.add_parser('reset-password', help='Give a user a new random password and log them out'))
+    reset.add_argument('username')
     return result
+
+
+def reset_password(root, username):
+    """Works on auth.sqlite directly, so a locked-out admin can recover with `docker exec`
+    while the server runs. The new password is printed once."""
+    import secrets
+    from .auth import AuthStore
+    if not (root / 'auth.sqlite').exists():
+        raise ValueError('This library has no accounts')
+    store = AuthStore(root)
+    try:
+        user = store.user_by_name(username)
+        if user is None:
+            raise ValueError(f'No user is called {username}')
+        password = secrets.token_urlsafe(12)
+        store.set_password(user['id'], password)
+        store.audit('password.reset', user_id=user['id'], target='command line')
+        return {'username': user['username'], 'password': password,
+                'note': 'Every session of this user has ended. Change this password after logging in.'}
+    finally:
+        store.close()
 
 
 class RunningApplication:
@@ -67,6 +92,12 @@ class RunningApplication:
             raise ValueError('The application address in manager.json is invalid')
         self.expected_application = identity['application_id']
         self.client = httpx.Client(base_url=identity['url'].rstrip('/'), trust_env=False, timeout=300)
+        # The running app writes this token for commands on its own machine, so they act
+        # as the first admin when the library has accounts.
+        try:
+            self.client.headers['X-PokeSim-CLI-Token'] = (root / 'cli.token').read_text(encoding='ascii').strip()
+        except OSError:
+            pass
         try:
             health = self.request('GET', '/health/live')
             if health.get('application_id') != self.expected_application:
@@ -97,6 +128,8 @@ def run(args):
     if args.command == 'restore':
         from .backup import restore_backup
         return {'restored_to': str(restore_backup(args.archive, root))}
+    if args.command == 'admin':
+        return reset_password(root, args.username)
     if args.command in {'import', 'import-pair'}:
         from .manager import Manager
         from .migration import import_directory
