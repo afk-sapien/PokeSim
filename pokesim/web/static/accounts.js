@@ -50,6 +50,7 @@
 
   async function showPeople() {
     const [{users}, {invites}] = await Promise.all([call('/api/v1/users'), call('/api/v1/invites')])
+    $('#invite-made').hidden = true
     const list = $('#people-list')
     list.replaceChildren(...users.filter(user => !user.placeholder).map(user => {
       const row = element('li', undefined, 'people-row')
@@ -84,9 +85,9 @@
   async function invite() {
     await attempt('#people-result', async () => {
       const made = await send('POST', '/api/v1/invites', {can_create: $('#invite-can-create').checked})
+      await showPeople()
       $('#invite-url').value = made.url
       $('#invite-made').hidden = false
-      await showPeople()
     })
   }
 
@@ -97,6 +98,8 @@
   async function showSharing() {
     const aid = $('#share-adventure').value
     $('#share-details').hidden = !aid
+    // A link shows only right after it is made, so a turned-off one never stays on screen.
+    $('#share-made').hidden = true
     if (!aid) return
     const sharing = await call(`/api/v1/adventures/${aid}/sharing`)
     const watching = new Set(sharing.grants.map(grant => grant.user_id))
@@ -136,9 +139,9 @@
     await attempt('#share-result', async () => {
       const days = Number($('#share-days').value)
       const made = await send('POST', `/api/v1/adventures/${$('#share-adventure').value}/shares`, days ? {seconds: days * 86400} : {})
+      await showSharing()
       $('#share-url').value = made.url
       $('#share-made').hidden = false
-      await showSharing()
     })
   }
   async function showAdventures() {
@@ -151,6 +154,8 @@
       return option
     }))
     choice.firstChild.value = ''
+    choice.disabled = !owned.length
+    if (!owned.length) report('#share-result', 'You have no adventures to share yet.')
     if (owned.some(row => row.id === kept)) choice.value = kept
     await showSharing()
   }
@@ -164,6 +169,13 @@
     if (session.auth !== 'accounts' || !session.user) return
     $('#account-panel').hidden = false
     $('#sharing-panel').hidden = false
+    if (session.role !== 'admin') {
+      // Library-wide settings belong to admins, so members do not see them at all.
+      for (const heading of ['nickname', 'backup', 'import', 'quit']) {
+        const panel = document.getElementById(`${heading}-settings-heading`)?.closest('section')
+        if (panel) panel.hidden = true
+      }
+    }
     $('#password-form').hidden = session.methods?.password === false
     $('#oidc-link').hidden = !session.methods?.oidc
     $('#password-form').addEventListener('submit', changePassword)

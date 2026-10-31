@@ -1186,7 +1186,7 @@ def create_app(manager, shutdown=lambda: None):
         if not viewer:
             actor = policy.Actor(actor.user, actor.grants)
         if actor.user is None and actor.share is None:
-            if not viewer and path in GAME_PAGES and request.method == 'GET':
+            if path in GAME_PAGES and request.method == 'GET':
                 target = '/setup' if manager.needs_setup else '/login?' + urlencode({'next': request.url.path})
                 return RedirectResponse(target, status_code=303)
             raise HTTPException(401, 'Log in to PokeSim first')

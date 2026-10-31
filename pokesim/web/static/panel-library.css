@@ -360,6 +360,10 @@
 .settings-controls input[type="file"] { width: 100%; min-width: 0; }
 .settings-wide { grid-column: 1 / -1; display: grid; gap: var(--s3); width: 100%; min-width: 0; }
 .settings-wide:not(:has(> :not(:empty):not([hidden]))) { display: none; }
+/* The account slot holds a name and a button, so it grows instead of taking the
+   status lamp's fixed width. */
+#account { width: auto; }
+@media (max-width: 860px) { .library #account:not([hidden]) + .connection { margin-left: 0; } }
 .people-list { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
 .people-list:empty { display: none; }
 .people-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); color: var(--ink-2); }

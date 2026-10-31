@@ -208,6 +208,9 @@ def test_a_share_link_opens_one_adventure_view_only(library, people):
     share_id = alice.get(f'/api/v1/adventures/{people.red}/sharing').json()['shares'][0]['id']
     alice.delete(f'/api/v1/adventures/{people.red}/shares/{share_id}')
     assert visitor.get(f'/view/{people.red}/api/state').status_code == 401
+    # A turned-off link sends a browser opening the page to the login, not to a JSON error.
+    page = visitor.get(f'/view/{people.red}/', follow_redirects=False)
+    assert page.status_code == 303 and page.headers['location'].startswith('/login?')
 
 
 def test_only_the_owner_manages_sharing(library, people):
