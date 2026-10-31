@@ -1,9 +1,9 @@
 # Publishing a release
 
-The release workflow publishes Python packages, a Linux amd64 image at
+The release workflow publishes Python packages, a Linux amd64 and arm64 image at
 `ghcr.io/afk-sapien/pokesim:<version>`, and versioned Compose downloads.
-Standalone executables and app bundles are excluded. The image archive remains
-available as a checksummed release download for offline loading.
+Standalone executables and app bundles are excluded. Each architecture's image archive
+remains available as a checksummed release download for offline loading.
 
 ## Trigger and checks
 
@@ -46,13 +46,16 @@ that are still in progress and fails for a missing or failed run, so wait for gr
 on the release commit before starting the workflow. The script comes from the commit that
 dispatched the workflow, not from the release revision.
 
-The `build` job runs in parallel with the gate. It builds the wheel and source package,
-checks them, builds and tests the Linux amd64 image, assembles the downloads, and keeps
-them as a workflow artifact. It has read-only permissions and publishes nothing. The
-`publish` job runs only after both the gate and the build succeed. It is the only job that
-can push an image or change a release. It loads the tested image from the build artifact,
-logs in to GHCR with the repository's temporary
-`GITHUB_TOKEN`, and pushes the exact version tag. No personal access token or added
+The `build` job runs in parallel with the gate, once per architecture on a native runner
+(`ubuntu-latest` for amd64, `ubuntu-24.04-arm` for arm64). The amd64 leg also builds and
+checks the wheel and source package. Each leg builds and tests its image and keeps it as a
+workflow artifact. The `rehearse` job assembles the downloads from both. These jobs have
+read-only permissions and publish nothing. The `publish` job runs only after the gate, the
+builds and the rehearsal succeed. It is the only job that can push an image or change a
+release. It loads the tested images, logs in to GHCR with the repository's temporary
+`GITHUB_TOKEN`, pushes each one as `<version>-linux-<arch>`, and joins them into the
+multi-platform `<version>` tag. It then checks anonymously that the tag serves exactly
+amd64 and arm64 and that each platform pulls the tested image. No personal access token or added
 repository secret is needed. The publishing job has `packages: write` and
 `contents: write`. Draft validation also needs `contents: write` because GitHub only
 exposes draft releases to identities with push access. All other jobs retain read-only access.

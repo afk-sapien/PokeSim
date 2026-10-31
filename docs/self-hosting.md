@@ -19,9 +19,9 @@ docker version
 docker compose version
 ```
 
-The published image targets **Linux amd64**. Docker Desktop must use Linux containers.
-For Apple Silicon and Linux ARM64, the [native installer](desktop.md) is the recommended
-path. ARM64 container images are not currently published. There is no established minimum
+The published image targets **Linux amd64 and arm64**, so it runs on x86-64 servers,
+Raspberry Pi 4 and 5 with a 64-bit OS, and Apple Silicon. Docker pulls the right one for
+the machine. Docker Desktop must use Linux containers. 32-bit ARM is not supported. There is no established minimum
 hardware specification. Start with one adventure at 1× and add more as resources allow.
 
 Create a new installation folder, then download the quick-start configuration:
@@ -138,11 +138,11 @@ commands. Use the same file arguments for subsequent stop, logs, and update comm
 
 ### Offline image loading
 
-The release retains `image-linux-amd64.tar.gz` for offline loading. Download it and
-`SHA256SUMS` from the same release, verify the image checksum with
-`sha256sum --ignore-missing -c SHA256SUMS`, then run
-`docker load -i image-linux-amd64.tar.gz` and `docker compose up -d --pull never --wait`.
-The loaded archive has the same versioned GHCR tag. Initial reference preparation
+The release retains `image-linux-amd64.tar.gz` and `image-linux-arm64.tar.gz` for offline
+loading. Download the one for your machine and `SHA256SUMS` from the same release, verify the
+image checksum with `sha256sum --ignore-missing -c SHA256SUMS`, then run
+`docker load -i image-linux-amd64.tar.gz` (or the arm64 file) and
+`docker compose up -d --pull never --wait`. The loaded archive has the same versioned GHCR tag. Initial reference preparation
 still needs internet access unless the reference archive is supplied locally.
 
 ### Troubleshooting startup
@@ -153,7 +153,7 @@ in a [support request](../SUPPORT.md). Remove private paths or tokens before sha
 
 - **Cannot connect to the Docker daemon:** Start Docker Desktop or the Docker service. On Linux, check your user's access to Docker according to its installation guide.
 - **Unknown `compose` or `--wait`:** Install or update the Docker Compose v2 plugin. The old `docker-compose` v1 command is not the supported path.
-- **No matching manifest for ARM64:** Use the native installer. The published container is amd64 only.
+- **No matching manifest for your platform:** The image is published for amd64 and arm64. On 32-bit ARM, install a 64-bit OS. On releases before multi-platform images, use the native installer.
 - **Permission denied under `/data`:** For a new installation, use the named-volume quick start. For an existing bind mount, check ownership for container UID 10001 and any SELinux or rootless mapping rules.
 - **Port is already allocated:** Change `HTTP_PORT` as shown above and recreate the container.
 - **Library works on the server but not another computer:** Use the SSH tunnel or configure both the bind address and public URL.

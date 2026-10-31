@@ -248,7 +248,7 @@ It does not touch an existing adventure or establish autonomous campaign progres
 
 Follow the [publishing guide](publishing.md) for the current draft-release workflow,
 required installation matrix, artifact verification, and recovery after a failed
-run. Python packages, the Linux amd64 image, and versioned configuration downloads
+run. Python packages, the Linux amd64 and arm64 image, and versioned configuration downloads
 are the supported release artifacts. Standalone desktop bundles are excluded.
 
 Publication does not upgrade any deployment. Verify downloads anonymously and
