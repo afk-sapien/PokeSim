@@ -74,7 +74,9 @@ A dry run validates the tag, runs the gate, and runs the full build and image ch
 does not require a draft release, so it can also run against a tag that is already published.
 
 It next pulls the image using an empty Docker credentials directory and verifies
-that it has the same image ID as the tested build. Release assembly records the
+that each platform has the same creation time, layers and labels as the tested build.
+The image ID is not compared, because the containerd image store reports the digest
+of the pulled tag there. Release assembly records the
 registry digest, image ID, source revision, platform, and file checksums.
 `compose.yaml`, `compose.quickstart.yaml`, and `env.example` select the exact image version.
 The `install.sh` and `install.ps1` downloads select the matching wheel version and are
@@ -159,8 +161,19 @@ failure and rerun the workflow manually against the same unchanged tag. It repla
 partial assets and checks the complete asset set. Never move a published tag. Fix
 released software in a new version.
 
-Rerunning an unpublished candidate can rebuild and replace its registry tag.
-The final manifest records the verified digest for that run. Published releases
+Before each push, the publish job refuses to replace a version tag that already
+serves a different image, so a rerun can never change what a version tag serves.
+A fresh build is not byte-identical, so a rerun after the image was pushed must
+publish the earlier run's tested images:
+
+```sh
+gh workflow run release.yml --ref main -f tag=v0.6.2 -f images_from_run=<run id>
+```
+
+The publish job checks that those images were built from the tag's revision. Its
+registry checks come from the dispatching commit, so a fix to a check reaches a
+rerun of an unchanged tag. Workflow artifacts expire after three days. Past that,
+publish a new version. Published releases
 are rejected before the build, so this workflow does not overwrite their images.
 Existing installations keep their selected version until their owners upgrade.
 

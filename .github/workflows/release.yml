@@ -11,6 +11,11 @@ on:
         required: false
         default: false
         type: boolean
+      images_from_run:
+        description: Publish the tested images and packages of this earlier run of the same tag instead of this run's builds
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -230,12 +235,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      actions: read
       contents: write
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.validate.outputs.revision }}
+          persist-credentials: false
+      # The registry checks come from the commit that dispatched this workflow, so a fixed check can publish
+      # an unchanged tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: dispatch
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
@@ -245,10 +257,13 @@ jobs:
           pattern: release-inputs-*
           merge-multiple: true
           path: release
+          run-id: ${{ inputs.images_from_run || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish image and verify anonymous access
         id: image
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
+          REVISION: ${{ needs.validate.outputs.revision }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
         run: |
@@ -256,15 +271,20 @@ jobs:
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           for arch in amd64 arm64; do
             docker load --input "release/image-linux-$arch.tar.gz"
+            built=$(docker image inspect "$IMAGE-linux-$arch" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')
+            [ "$built" = "$REVISION" ] || { echo "The $arch image was built from $built, not $REVISION"; exit 1; }
+            # A rerun may push the same image again, never a different one under a version already in GHCR.
+            python dispatch/tools/check_registry_image.py "$IMAGE-linux-$arch" --unchanged
+            python dispatch/tools/check_registry_image.py "$IMAGE" --unchanged --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
             docker push "$IMAGE-linux-$arch"
             # Record the pushed digest now. The anonymous pulls below add more digests to the local image.
             docker image inspect "$IMAGE-linux-$arch" --format '{{json .}}' > "release/image-metadata-linux-$arch.json"
           done
           docker buildx imagetools create --tag "$IMAGE" "$IMAGE-linux-amd64" "$IMAGE-linux-arm64"
-          digest=$(python tools/check_registry_image.py "$IMAGE" --index linux/amd64,linux/arm64)
+          digest=$(python dispatch/tools/check_registry_image.py "$IMAGE" --index linux/amd64,linux/arm64)
           echo "index_digest=$digest" >> "$GITHUB_OUTPUT"
           for arch in amd64 arm64; do
-            python tools/check_registry_image.py "$IMAGE" --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
+            python dispatch/tools/check_registry_image.py "$IMAGE" --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
           done
       - name: Remove registry credentials
         if: always()
@@ -328,9 +348,9 @@ jobs:
           done
           docker logout ghcr.io
           for tag in $tags; do
-            python tools/check_registry_image.py "${IMAGE%:*}:$tag" --index linux/amd64,linux/arm64
+            python dispatch/tools/check_registry_image.py "${IMAGE%:*}:$tag" --index linux/amd64,linux/arm64
             for arch in amd64 arm64; do
-              python tools/check_registry_image.py "${IMAGE%:*}:$tag" --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
+              python dispatch/tools/check_registry_image.py "${IMAGE%:*}:$tag" --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
             done
           done
       - name: Remove registry credentials after the floating tags

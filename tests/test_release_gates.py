@@ -106,6 +106,15 @@ def test_publish_job_is_the_only_writer_and_never_runs_in_a_dry_run():
     assert 'gate' in publish.split('needs:')[1].split('\n')[0]
 
 
+def test_publish_checks_come_from_the_dispatching_commit_and_guard_every_push():
+    text = (ROOT / '.github/workflows/release.yml').read_text()
+    publish = text.split('\n  publish:')[1]
+    assert 'path: dispatch' in publish and 'run-id: ${{ inputs.images_from_run || github.run_id }}' in publish
+    assert ' tools/check_registry_image.py' not in publish
+    before_push = publish.split('docker push')[0]
+    assert '--unchanged' in before_push and '"$REVISION"' in before_push
+
+
 def test_shards_cover_the_suite_exactly_once(monkeypatch):
     import importlib.util
     spec = importlib.util.spec_from_file_location('pokesim_root_conftest', ROOT / 'conftest.py')
