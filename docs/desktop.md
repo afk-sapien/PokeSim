@@ -254,7 +254,7 @@ The [Python install workflow](https://github.com/afk-sapien/PokeSim/actions/work
 
 ### Unsupported platforms
 
-The emulator ships as one prebuilt wheel per platform: Linux x86-64 and ARM64 (glibc), macOS Intel and Apple Silicon, and Windows x64. Windows on ARM64, 32-bit ARM, FreeBSD and musl Linux (Alpine) have no wheel. PokeSim installs nothing for the emulator on them: `install.sh` and `install.ps1` stop with a clear message before downloading anything, and a manual install leaves the application unable to start with the same message. Do not work around this with `pip install pokesim`, which installs an unrelated PyPI project, or by installing `pyboy-rs` or `pokesim-core` from PyPI. Use the Docker image (linux/amd64) on such a machine if Docker is available.
+The emulator ships as one prebuilt wheel per platform: Linux x86-64 and ARM64 (glibc), macOS Intel and Apple Silicon, and Windows x64. Windows on ARM64, 32-bit ARM, FreeBSD and musl Linux (Alpine) have no wheel. PokeSim installs nothing for the emulator on them: `install.sh` and `install.ps1` stop with a clear message before downloading anything, and a manual install leaves the application unable to start with the same message. Do not work around this with `pip install pokesim`, which installs an unrelated PyPI project, or by installing `pyboy-rs` or `pokesim-core` from PyPI. Use the Docker image (linux/amd64 and linux/arm64) on such a machine if Docker is available.
 
 ## Troubleshooting
 

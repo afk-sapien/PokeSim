@@ -5,7 +5,7 @@ set -eu
 unsupported() {
     printf '%s\n' "PokeSim 0.5 has no emulator build for this platform: $1." \
         'Supported: Linux x86-64 and ARM64 (glibc), macOS Intel and Apple Silicon, and Windows x64 (use install.ps1).' \
-        'The Docker image (linux/amd64) is the alternative: see the Docker guide in the PokeSim documentation.' \
+        'The Docker image (linux/amd64 and linux/arm64) is the alternative: see the Docker guide in the PokeSim documentation.' \
         'Nothing was installed. Do not run "pip install pokesim": that installs an unrelated project from PyPI.' \
         'Do not install pyboy-rs or pokecore from PyPI either: they are published only as GitHub release files.' >&2
     exit 1

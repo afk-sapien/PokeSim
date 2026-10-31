@@ -23,7 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 REQUIRED = {
     'ci.yml': [
         'dependency-audit', 'lint', 'tests (3.11)', 'tests (3.12)', 'tests (3.14)',
-        'browser (1/4)', 'browser (2/4)', 'browser (3/4)', 'browser (4/4)', 'container',
+        'browser (1/4)', 'browser (2/4)', 'browser (3/4)', 'browser (4/4)',
+        'container (amd64)', 'container (arm64)',
     ],
     'python-install.yml': [
         'native tests (ubuntu-22.04, 1/1)', 'native tests (ubuntu-24.04-arm, 1/1)',

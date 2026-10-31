@@ -15,6 +15,8 @@ DESKTOP_ARCHIVES = (
     'PokeSim-linux-x86_64.tar.gz',
     'PokeSim-linux-aarch64.tar.gz',
 )
+# Each architecture is built and tested natively, then published under one multi-platform tag.
+IMAGE_ARCHITECTURES = ('amd64', 'arm64')
 
 
 def digest(path):
@@ -28,7 +30,7 @@ def check_identity(identity, version, revision):
         raise ValueError('Every package must come from the same clean tagged revision')
 
 
-def assemble(root, version, revision, *, include_desktop=True, image=None):
+def assemble(root, version, revision, *, include_desktop=True, image=None, index_digest=None):
     archives = DESKTOP_ARCHIVES if include_desktop else ()
     if not re.fullmatch(r'\d+\.\d+\.\d+(?:rc\d+)?', version):
         raise ValueError('Invalid release version')
@@ -36,9 +38,10 @@ def assemble(root, version, revision, *, include_desktop=True, image=None):
         raise ValueError('Invalid source revision')
     wheel = f'pokesim-{version}-py3-none-any.whl'
     source = f'pokesim-{version}.tar.gz'
-    required = {wheel, source, 'image-linux-amd64.tar.gz', 'image-metadata.json',
-                'python-dependencies.json', 'compose.yaml', 'compose.quickstart.yaml',
+    required = {wheel, source, 'python-dependencies.json', 'compose.yaml', 'compose.quickstart.yaml',
                 'install.sh', 'install.ps1', 'env.example'}
+    for architecture in IMAGE_ARCHITECTURES:
+        required.update({f'image-linux-{architecture}.tar.gz', f'image-metadata-linux-{architecture}.json'})
     for name in archives:
         required.update({name, name + '.sha256', name + '.json'})
     missing = sorted(name for name in required if not (root / name).is_file())
@@ -57,25 +60,32 @@ def assemble(root, version, revision, *, include_desktop=True, image=None):
         check_identity(json.load(archive.extractfile(f'pokesim-{version}/pokesim/_build.json')),
                        version, revision)
 
-    metadata = json.loads((root / 'image-metadata.json').read_text(encoding='utf-8'))
-    labels = metadata['Config']['Labels']
-    if (metadata['Os'] != 'linux' or metadata['Architecture'] != 'amd64'
-            or labels['org.opencontainers.image.version'] != version
-            or labels['org.opencontainers.image.revision'] != revision):
-        raise ValueError('Container identity or platform does not match the release')
-
-    registry_digest = None
     if image is not None:
         if not re.fullmatch(r'ghcr\.io/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*:' + re.escape(version), image):
             raise ValueError('Registry image must use GHCR and the exact release version')
-        if image not in metadata.get('RepoTags', []):
-            raise ValueError('Registry image tag is absent from the tested image')
-        repository = image.rsplit(':', 1)[0]
-        matches = [value for value in metadata.get('RepoDigests', [])
-                   if re.fullmatch(re.escape(repository) + r'@sha256:[0-9a-f]{64}', value)]
-        if len(matches) != 1:
-            raise ValueError('Registry image must have exactly one verified repository digest')
-        registry_digest = matches[0]
+        if not re.fullmatch(r'sha256:[0-9a-f]{64}', index_digest or ''):
+            raise ValueError('Registry image must record the digest of its multi-platform index')
+    platforms = {}
+    for architecture in IMAGE_ARCHITECTURES:
+        metadata = json.loads((root / f'image-metadata-linux-{architecture}.json').read_text(encoding='utf-8'))
+        labels = metadata['Config']['Labels']
+        if (metadata['Os'] != 'linux' or metadata['Architecture'] != architecture
+                or labels['org.opencontainers.image.version'] != version
+                or labels['org.opencontainers.image.revision'] != revision):
+            raise ValueError('Container identity or platform does not match the release')
+        platform = {'image_id': metadata['Id']}
+        if image is not None:
+            # The publish job pushes each tested image under its own architecture tag before the
+            # multi-platform tag is made from them.
+            if f'{image}-linux-{architecture}' not in metadata.get('RepoTags', []):
+                raise ValueError('Registry image tag is absent from the tested image')
+            repository = image.rsplit(':', 1)[0]
+            matches = [value for value in metadata.get('RepoDigests', [])
+                       if re.fullmatch(re.escape(repository) + r'@sha256:[0-9a-f]{64}', value)]
+            if len(matches) != 1:
+                raise ValueError('Registry image must have exactly one verified repository digest')
+            platform['image_digest'] = matches[0]
+        platforms[f'linux/{architecture}'] = platform
 
     desktop = {}
     for name in archives:
@@ -88,6 +98,7 @@ def assemble(root, version, revision, *, include_desktop=True, image=None):
             raise ValueError(f'Desktop checksum mismatch: {name}')
         desktop[name] = identity
 
+    registry_digest = image.rsplit(':', 1)[0] + '@' + index_digest if image else None
     image = image or f'pokesim:{version}'
     settings = root / 'env.example'
     contents = settings.read_text(encoding='utf-8')
@@ -121,7 +132,7 @@ def assemble(root, version, revision, *, include_desktop=True, image=None):
     (root / 'manifest.json').write_text(json.dumps({
         'version': version, 'revision': revision, 'image': image,
         **({'image_digest': registry_digest} if registry_digest else {}),
-        'image_id': metadata['Id'], 'platform': 'linux/amd64', 'files': files,
+        'platforms': platforms, 'files': files,
     }, indent=2) + '\n', encoding='utf-8')
     files['manifest.json'] = digest(root / 'manifest.json')
     (root / 'SHA256SUMS').write_text(''.join(f'{checksum}  {name}\n'
@@ -135,9 +146,10 @@ def main():
     parser.add_argument('--revision', required=True)
     parser.add_argument('--without-desktop', action='store_true', help='Assemble the Python and Docker release')
     parser.add_argument('--image', help='Verified GHCR image tagged with the release version')
+    parser.add_argument('--index-digest', help='Digest of the multi-platform index behind --image')
     args = parser.parse_args()
     assemble(args.directory, args.version, args.revision,
-             include_desktop=not args.without_desktop, image=args.image)
+             include_desktop=not args.without_desktop, image=args.image, index_digest=args.index_digest)
     print('Release assets verified and manifests written')
 
 
