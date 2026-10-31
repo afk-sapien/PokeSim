@@ -15,7 +15,7 @@ optional ntfy settings.
 ## Set PUBLIC_URL
 
 PokeSim refuses any request whose host differs from `PUBLIC_URL`. Set it to the
-exact address you type in the browser, such as `http://192.168.1.10:8930`.
+exact address you type in the browser, such as `http://nas.local:8930`.
 A wrong value shows "Use the configured PokeSim address". Umbrel sets it to
 `http://<device name>:8930`, so open it through that name rather than the IP address.
 
@@ -33,7 +33,8 @@ by store:
 
 ## Before submitting
 
-1. Bump the image tag, which appears in each file, to the release being submitted.
+1. Submit from a release tag. `tools/release_version.py` moves the version in every
+   template with the rest of the release, so the tag's templates name its image.
 2. Check that the release image covers linux/arm64 if the store lists arm64.
 3. Umbrel needs a 256x256 icon and gallery images uploaded to its gallery repository,
    and pins images by digest (`image@sha256:...`).

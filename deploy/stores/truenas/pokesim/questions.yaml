@@ -17,7 +17,7 @@ questions:
       attrs:
         - variable: public_url
           label: Public URL
-          description: The exact address you open in the browser, such as http://192.168.1.10:8930. Requests for any other host are refused.
+          description: The exact address you open in the browser, such as http://truenas.local:8930. Requests for any other host are refused.
           schema:
             type: string
             required: true

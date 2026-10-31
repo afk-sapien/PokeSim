@@ -36,7 +36,7 @@ services:
       envs:
         - container: PUBLIC_URL
           description:
-            en_us: The exact address you open in the browser, such as http://192.168.1.10:8930. Requests for any other host are refused.
+            en_us: The exact address you open in the browser, such as http://nas.local:8930. Requests for any other host are refused.
         - container: NTFY_URL
           description:
             en_us: Optional ntfy topic URL. Notifications are normally set up in the Library.
@@ -82,7 +82,7 @@ x-casaos:
       Settings, then Game cartridges.
 
       Set PUBLIC_URL to the address you open in the browser, for example
-      http://192.168.1.10:8930. Requests for any other host are refused.
+      http://nas.local:8930. Requests for any other host are refused.
   tips:
     before_install:
       en_us: Set PUBLIC_URL to http://YOUR_SERVER_IP:8930 before the first start.

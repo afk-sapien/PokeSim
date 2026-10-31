@@ -7,7 +7,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/afk-sapien/PokeSim/issues</Support>
   <Project>https://github.com/afk-sapien/PokeSim</Project>
-  <Overview>Pokémon Red, Blue, Yellow, Gold, Silver and Crystal that play themselves while you're away. Watch in your browser and take control whenever you like. Bring your own legally dumped ROMs, none are included. Add one in the browser under Settings, then Game cartridges. Set PUBLIC_URL to the exact address you open in the browser, for example http://192.168.1.10:8930.</Overview>
+  <Overview>Pokémon Red, Blue, Yellow, Gold, Silver and Crystal that play themselves while you're away. Watch in your browser and take control whenever you like. Bring your own legally dumped ROMs, none are included. Add one in the browser under Settings, then Game cartridges. Set PUBLIC_URL to the exact address you open in the browser, for example http://tower.local:8930.</Overview>
   <Category>GameServers: Other:</Category>
   <WebUI>http://[IP]:[PORT:8000]/</WebUI>
   <Icon>https://raw.githubusercontent.com/afk-sapien/PokeSim/main/pokesim/web/static/favicon.svg</Icon>

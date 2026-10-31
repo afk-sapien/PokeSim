@@ -34,6 +34,12 @@ PINS = [
     ('docs/self-hosting.md', r'`download/v' + VERSION + '`'),
     ('README.md', WHEEL),
     ('docs/desktop.md', WHEEL),
+    ('deploy/stores/unraid/pokesim.xml', IMAGE),
+    ('deploy/stores/casaos/docker-compose.yml', IMAGE),
+    ('deploy/stores/umbrel/pokesim/docker-compose.yml', IMAGE),
+    ('deploy/stores/umbrel/pokesim/umbrel-app.yml', r'^version: "' + VERSION + '"$'),
+    ('deploy/stores/truenas/pokesim/app.yaml', r'^app_version: ' + VERSION + '$'),
+    ('deploy/stores/truenas/pokesim/ix_values.yaml', r'^    tag: ' + VERSION + '$'),
 ]
 
 
