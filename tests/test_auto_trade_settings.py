@@ -68,19 +68,23 @@ def test_changes_to_different_adventures_at_once_all_stick():
 
 def test_settings_default_on_and_switch_per_adventure(setup):  # noqa: F811
     aid = setup.data['left_id']
-    assert trade_settings.get(setup.registry, aid) == {'enabled': True}
-    assert trade_settings.update(setup.registry, aid, enabled=False) == {'enabled': False}
+    closed = {'open_to_offers': False, 'across_owners': False}
+    assert trade_settings.get(setup.registry, aid) == {'enabled': True, **closed}
+    assert trade_settings.update(setup.registry, aid, enabled=False) == {'enabled': False, **closed}
+    assert trade_settings.update(setup.registry, aid, open_to_offers=True)['open_to_offers'] is True
     assert trade_settings.get(setup.registry, aid)['enabled'] is False
     assert trade_settings.get(setup.registry, setup.data['right_id'])['enabled'] is True
     with pytest.raises(ValueError):
         trade_settings.update(setup.registry, aid, enabled='yes')
+    with pytest.raises(ValueError):
+        trade_settings.update(setup.registry, aid, wishlist=[25])
 
 
 def test_an_old_stored_wish_list_is_ignored_and_kept(setup, monkeypatch):  # noqa: F811
     """The wish list is gone. One saved by an earlier build neither crashes nor changes trades, and stays stored."""
     c, left = setup.coordinator, setup.data['left_id']
     setup.registry.set_setting(trade_settings.KEY, {left: {'enabled': True, 'wishlist': [2, 'bad', 999]}, 'junk': 5})
-    assert trade_settings.get(setup.registry, left) == {'enabled': True}
+    assert trade_settings.get(setup.registry, left)['enabled'] is True
     monkeypatch.setattr(c, '_benefit', lambda inventory, mon: 0)
     # Both peers offer an Ivysaur (No. 2). An old wish for it no longer makes a useless trade worth it.
     assert c.schedule_once() is None
@@ -120,11 +124,17 @@ def test_trade_first_pokemon_are_used_before_anything_else(setup, monkeypatch): 
     assert third in setup.peers
 
 
-def test_stored_trade_offers_are_ignored(setup):  # noqa: F811
-    """Offers left from before 0.5.0 stay in the registry but no longer hold any Pokémon back."""
+def test_stored_trade_offers_expire_at_the_first_sweep(setup):  # noqa: F811
+    """Offers left from before 0.5.0 hold their Pokémon until the first sweep expires them."""
+    from pokesim.app.offers import EXPIRE_SECONDS, TradeOffers
     c, left, right = setup.coordinator, setup.data['left_id'], setup.data['right_id']
     setup.registry.create_trade_offer({'id': identifier(), 'from_id': left, 'from_key': '0',
                                        'to_id': right, 'to_key': 'party-1', 'display': {'from': {}, 'to': {}}})
+    assert (left, '0') in c.hand_picked_keys()
+    setup.manager.coordinator = c
+    service = TradeOffers(setup.manager)
+    service.clock = lambda: time.time() + EXPIRE_SECONDS + 1
+    service.refresh()
     assert (left, '0') not in c.hand_picked_keys()
     assert c.schedule_once()['phase'] == 'completed'
 
@@ -210,9 +220,12 @@ def test_auto_settings_route_reads_writes_and_respects_view_only(managed, monkey
     client, aid = managed.client, managed.aid
     path = f'/api/v1/interactions/auto-settings?adventure_id={aid}'
     data = client.get(path).json()
-    assert data == {'adventure_id': aid, 'enabled': True, 'viewer_only': False}
+    closed = {'open_to_offers': False, 'across_owners': False}
+    assert data == {'adventure_id': aid, 'enabled': True, **closed, 'viewer_only': False, 'can_change': True}
     saved = client.put(path, json={'enabled': False}).json()
-    assert saved == {'adventure_id': aid, 'enabled': False, 'viewer_only': False}
+    assert saved == {'adventure_id': aid, 'enabled': False, **closed, 'viewer_only': False}
+    assert client.put(path, json={'open_to_offers': True}).json()['open_to_offers'] is True
+    assert client.put(path, json={}).status_code == 400
     assert client.put(path, json={'wishlist': [25]}).status_code == 400
     assert client.put(path, json={'other': 1}).status_code == 400
     monkeypatch.setattr(config, 'VIEWER_ONLY', True)

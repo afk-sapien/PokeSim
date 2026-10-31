@@ -70,6 +70,9 @@ class Registry:
                 created_at REAL NOT NULL, updated_at REAL NOT NULL)''')
             self.db.execute('CREATE INDEX IF NOT EXISTS trade_offers_from ON trade_offers (from_id)')
             self.db.execute('CREATE INDEX IF NOT EXISTS trade_offers_to ON trade_offers (to_id)')
+            # The account that sent an offer, for its limits and its own history. Older offers have none.
+            if 'sender_id' not in {row[1] for row in self.db.execute('PRAGMA table_info(trade_offers)')}:
+                self.db.execute('ALTER TABLE trade_offers ADD COLUMN sender_id TEXT')
             columns = {row[1] for row in self.db.execute('PRAGMA table_info(adventures)')}
             if 'provenance' not in columns:
                 self.db.execute("ALTER TABLE adventures ADD COLUMN provenance TEXT NOT NULL DEFAULT '{}'")
@@ -335,15 +338,19 @@ class Registry:
     def create_trade_offer(self, offer):
         now = time.time()
         with self.lock, self.db:
-            self.db.execute('INSERT INTO trade_offers VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-                            (offer['id'], offer['from_id'], offer['from_key'], offer['to_id'], offer['to_key'],
-                             'pending', None, None, json.dumps(offer.get('display') or {}), now, now))
+            self.db.execute('''INSERT INTO trade_offers (id, from_id, from_key, to_id, to_key, status, reason,
+                manual_id, display, created_at, updated_at, sender_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+                            (offer['id'], offer['from_id'], offer['from_key'], offer['to_id'], offer['to_key'] or '',
+                             'pending', None, None, json.dumps(offer.get('display') or {}), now, now,
+                             offer.get('sender_id')))
         return self.trade_offer(offer['id'])
 
     def update_trade_offer(self, oid, expect=None, **values):
         """Change an offer, only while its status is still one of `expect` when given."""
-        if not values or not set(values) <= {'status', 'reason', 'manual_id'}:
+        if not values or not set(values) <= {'status', 'reason', 'manual_id', 'to_key', 'display'}:
             raise ValueError('Unsupported trade offer update')
+        if 'display' in values:
+            values['display'] = json.dumps(values['display'] or {})
         with self.lock, self.db:
             current = self.trade_offer(oid)
             if expect is not None and current['status'] not in expect:
@@ -353,11 +360,32 @@ class Registry:
         return self.trade_offer(oid)
 
     def prune_trade_offers(self, keep):
-        """Forget the oldest finished offers beyond the newest `keep`."""
+        """Forget each sender's oldest finished offers beyond their newest `keep`."""
         with self.lock, self.db:
-            self.db.execute('''DELETE FROM trade_offers WHERE status NOT IN ('pending','accepted') AND id NOT IN
-                (SELECT id FROM trade_offers WHERE status NOT IN ('pending','accepted')
-                 ORDER BY updated_at DESC LIMIT ?)''', (keep,))
+            self.db.execute('''DELETE FROM trade_offers WHERE id IN (SELECT id FROM (
+                SELECT id, ROW_NUMBER() OVER (PARTITION BY COALESCE(sender_id, '') ORDER BY updated_at DESC) AS place
+                FROM trade_offers WHERE status NOT IN ('pending','accepted')) WHERE place > ?)''', (keep,))
+
+    def count_trade_offers(self, *, sender_id=None, to_ids=None, statuses=None, since=None):
+        """How many offers one account sent, or a set of adventures received."""
+        conditions, parameters = [], []
+        if sender_id is not None:
+            conditions.append('sender_id=?')
+            parameters.append(sender_id)
+        if to_ids is not None:
+            to_ids = list(to_ids) or ['']
+            conditions.append('to_id IN (' + ','.join('?' * len(to_ids)) + ')')
+            parameters += to_ids
+        if statuses is not None:
+            statuses = list(statuses)
+            conditions.append('status IN (' + ','.join('?' * len(statuses)) + ')')
+            parameters += statuses
+        if since is not None:
+            conditions.append('created_at >= ?')
+            parameters.append(since)
+        query = 'SELECT COUNT(*) FROM trade_offers' + (' WHERE ' + ' AND '.join(conditions) if conditions else '')
+        with self.lock:
+            return self.db.execute(query, parameters).fetchone()[0]
 
     def close(self):
         with self.lock:

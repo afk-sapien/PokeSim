@@ -267,19 +267,13 @@ def test_builder_routes_pass_through_and_refuse_view_only(managed, monkeypatch):
     assert client.post(f'/view/{aid}/api/v1/interactions/trade-builder', json=body).status_code in {403, 404}
 
 
-def test_offer_and_cable_session_routes_are_gone(managed):  # noqa: F811
+def test_cable_session_routes_are_gone(managed):  # noqa: F811
+    """Trade offers came back for trading with other people. The live Cable Club session did not."""
     client, aid, oid = managed.client, managed.aid, identifier()
     routes = {path for _, path in writes(managed.app, aid)}
-    assert not any('trade-offers' in path or 'cable-sessions' in path for path in routes)
+    assert not any('cable-sessions' in path for path in routes)
     for method, path in [
-            ('GET', f'/api/v1/interactions/trade-offers?adventure_id={aid}'),
-            ('GET', f'/api/v1/interactions/trade-offers/targets?from_id={aid}'),
-            ('GET', f'/api/v1/interactions/trade-offers/limits?from_id={aid}&from_key=a&to_id={aid}'),
-            ('GET', f'/api/v1/interactions/trade-offers/pokemon?adventure_id={aid}'),
-            ('GET', f'/api/v1/interactions/trade-offers/{oid}'),
-            ('POST', '/api/v1/interactions/trade-offers'),
-            ('POST', f'/api/v1/interactions/trade-offers/{oid}/accept'),
-            ('POST', f'/api/v1/interactions/trade-offers/{oid}/decline'),
+            # The old name for cancelling an offer.
             ('POST', f'/api/v1/interactions/trade-offers/{oid}/withdraw'),
             ('GET', f'/api/v1/interactions/cable-sessions/partners?adventure_id={aid}'),
             ('GET', f'/api/v1/interactions/cable-sessions/{oid}'),
@@ -296,14 +290,14 @@ def test_offer_and_cable_session_routes_are_gone(managed):  # noqa: F811
 
 
 @pytest.mark.parametrize('viewer', [False, True])
-def test_trading_page_has_make_and_history_tabs_without_offers_or_cable_club(viewer):
+def test_trading_page_has_make_history_and_offers_tabs_without_cable_club(viewer):
     html = render_game_page('adventure-trading.html', base_path=f'/{"view" if viewer else "games"}/{"a" * 32}',
                             adventure_id='a' * 32, adventure_name='Gold', viewer=viewer)
-    assert re.findall(r'role="tab" id="([a-z-]+)"', html) == ['tab-make', 'tab-history']
+    assert re.findall(r'role="tab" id="([a-z-]+)"', html) == ['tab-make', 'tab-history', 'tab-offers']
     sections = re.findall(r'<section (?:id="([a-z-]+)" )?class="([a-z- ]+)"', html)
     assert [name or cls for name, cls in sections if cls != 'builder-slot'] == ['trade-overview', 'current-exchange-section', 'make-trade',
-                                                       'trade-history-section']
-    for gone in ('tab-offers', 'tab-auto', 'panel-auto', 'auto-list', 'panel-offers', 'offers-count', 'tab-cable', 'panel-cable', 'cable-games', 'Send offer',
+                                                       'trade-history-section', 'trade-offers-section']
+    for gone in ('tab-auto', 'panel-auto', 'auto-list', 'tab-cable', 'panel-cable', 'cable-games',
                  'ask-switch', 'trade-requests', 'Ask me first', 'Suggested trades', 'wish', 'Wish'):
         assert gone not in html
 

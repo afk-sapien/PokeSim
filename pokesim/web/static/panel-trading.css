@@ -289,6 +289,15 @@ main.shell { padding-bottom: var(--s7); }
 .trade-overview > .trade-notice { margin: 0 }
 #make-trade, #trade-history-section, #current-exchange-section { scroll-margin-top: var(--s7) }
 
+/* ---- trade offers ---- */
+.offers-subhead { margin: var(--s4) 0 var(--s2) }
+#offers-note:empty { display: none }
+.offer-answer { display: flex }
+.offer-answer { flex-wrap: wrap }
+.offer-answer { gap: var(--s2) }
+.offer-answer { padding: 0 var(--s4) var(--s4) }
+.offer-owner { color: var(--ink-2) }
+
 /* ---- two tabs under the switch: Make a trade and History ---------------- */
 .trade-tabs { display: flex }
 .trade-tabs { flex-wrap: wrap }
@@ -330,8 +339,15 @@ main.shell { padding-bottom: var(--s7); }
 @media (max-width: 640px) {
   .trade-tabs [role="tab"] { flex: 1 1 0 }
   .trade-tabs [role="tab"] { justify-content: center }
-  /* Untracked and tighter, so both uppercase legends stay on one row at 360px. */
-  .trade-tabs [role="tab"] { padding: 0 var(--s2) }
+  /* Untracked and tighter, so all three uppercase legends stay on one row at 360px. */
+  .trade-tabs { flex-wrap: nowrap }
+  .trade-tabs [role="tab"] { min-width: min-content }
+  /* Below about 380px a label breaks onto a second line inside its tab. */
+  .trade-tabs [role="tab"] { flex-wrap: wrap }
+  .trade-tabs [role="tab"] { white-space: normal }
+  .trade-tabs [role="tab"] { text-align: center }
+  .trade-tabs [role="tab"] { line-height: 1.2 }
+  .trade-tabs [role="tab"] { padding: var(--s1) }
   .trade-tabs [role="tab"] { gap: var(--s1) }
   .trade-tabs [role="tab"] { letter-spacing: 0 }
 }
@@ -405,6 +421,8 @@ a.pick-item { text-decoration: none }
 .auto-switch:focus-visible { outline-offset: 2px }
 #auto-switch-state { font-family: var(--font-panel) }
 #auto-switch-state { font-size: 12px }
+.auto-switch[hidden] { display: none }
+.auto-switch [data-switch-state] { font: 12px / 1 var(--font-panel) }
 .auto-switch-track { position: relative }
 .auto-switch-track { width: 36px }
 .auto-switch-track { height: 20px }

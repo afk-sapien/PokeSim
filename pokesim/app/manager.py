@@ -120,6 +120,8 @@ class Manager:
         self.coordinator = Coordinator(self)
         from .trade_builder import TradeBuilder
         self.builder = TradeBuilder(self)
+        from .offers import TradeOffers
+        self.offers = TradeOffers(self)
         from .watchdog import Watchdog
         self.watchdog = Watchdog(self)
         from .lease import Leases
@@ -218,6 +220,7 @@ class Manager:
         self.supervisor.run_monitor()
         self.coordinator.start_scheduler()
         self.watchdog.run()
+        self.offers.run()
         if self.auth_mode == 'accounts':
             self.leases.run()
             threading.Thread(target=self.resume_orphans, name='resume-manual', daemon=True).start()
@@ -240,6 +243,7 @@ class Manager:
         self.closing = True
         self.watchdog.close()
         self.leases.close()
+        self.offers.close()
         self.coordinator.close()
         errors = self.supervisor.close()
         if errors:
@@ -511,6 +515,20 @@ def create_app(manager, shutdown=lambda: None):
     @app.exception_handler(ViewOnlyError)
     async def view_only(request, error):
         return JSONResponse({'detail': str(error)}, status_code=403)
+
+    from .offers import Changed, LimitReached, OwnerOnly
+
+    @app.exception_handler(OwnerOnly)
+    async def owner_only(request, error):
+        return JSONResponse({'detail': str(error)}, status_code=403)
+
+    @app.exception_handler(LimitReached)
+    async def too_many_offers(request, error):
+        return JSONResponse({'detail': str(error)}, status_code=429)
+
+    @app.exception_handler(Changed)
+    async def offer_changed(request, error):
+        return JSONResponse({'detail': str(error), 'changed': True, 'offer': error.offer}, status_code=409)
 
     @app.exception_handler(RuntimeError)
     async def unavailable(request, error):
@@ -959,8 +977,8 @@ def create_app(manager, shutdown=lambda: None):
         return await asyncio.to_thread(manager.notifications.test, data, integration_id)
 
     def require(request, action, *aids):
-        """Refuse unless this person may do `action` on every adventure named. Trades in
-        release 1 run only between adventures of one owner."""
+        """Refuse unless this person may do `action` on every adventure named. Trades with
+        someone else's adventure go through trade offers."""
         actor = request.state.actor
         if actor.admin:
             return
@@ -972,7 +990,8 @@ def create_app(manager, shutdown=lambda: None):
             if not can(actor, 'adventure.watch', row):
                 raise HTTPException(404, 'Adventure not found')
             if not can(actor, action, row):
-                raise HTTPException(403, 'You can trade only between adventures you own')
+                raise HTTPException(403, 'You cannot trade for this adventure. Send its owner an offer instead'
+                                    if action == 'adventure.own' else 'You cannot trade for this adventure')
 
     def owned_ids(request):
         """The adventures this person owns, or None for an admin, who sees every one."""
@@ -1042,11 +1061,120 @@ def create_app(manager, shutdown=lambda: None):
             return manager.builder.cancel(mid)
         return await asyncio.to_thread(cancel)
 
+    # Trade offers: one adventure asks another, often someone else's, for a trade. Accepting queues a manual trade.
+    def open_to_offers(request, aid):
+        """Refuse unless this person manages the adventure or its owner takes offers for it."""
+        actor = request.state.actor
+        try:
+            row = manager.registry.adventure(validate_id(aid))
+        except (KeyError, ValueError, TypeError):
+            raise HTTPException(404, 'Adventure not found') from None
+        if actor.admin or can(actor, 'adventure.manage', row):
+            return row
+        if not row['archived'] and trade_settings.get(manager.registry, row['id'])['open_to_offers']:
+            return row
+        if can(actor, 'adventure.watch', row):
+            raise HTTPException(403, 'This adventure does not take trade offers')
+        raise HTTPException(404, 'Adventure not found')
+
+    def offer_targets(request, from_id, from_key):
+        actor = request.state.actor
+        sender = manager.registry.adventure(from_id)
+        games = [row for row in manager.registry.adventures() if not row['archived']]
+        visible = None if actor.admin else {
+            row['id'] for row in games if can(actor, 'adventure.manage', row)
+            or trade_settings.get(manager.registry, row['id'])['open_to_offers']}
+        result = manager.offers.targets(from_id, from_key, **({} if visible is None else {'visible': visible}))
+        rows = {row['id']: row for row in games}
+        names = {}
+        for target in result['adventures']:
+            game = rows.get(target['id']) or {}
+            # Trading between two of your own adventures goes through the trade builder, without an offer.
+            target['offer'] = not (can(actor, 'adventure.own', sender) and can(actor, 'adventure.own', game))
+            target['owner_name'] = manager.offers._owner_name(game, names)
+        return result
+
+    def offer_side(request, oid, side):
+        offer = manager.registry.trade_offer(validate_id(oid))
+        require(request, 'adventure.manage', offer[side])
+        return offer
+
+    @app.get('/api/v1/interactions/trade-offers')
+    async def trade_offers(request: Request, adventure_id: str):
+        await run_in_threadpool(require, request, 'adventure.manage', adventure_id)
+        return await asyncio.to_thread(manager.offers.for_adventure, validate_id(adventure_id))
+
+    @app.get('/api/v1/interactions/trade-offers/targets')
+    async def trade_offer_targets(request: Request, from_id: str, from_key: str | None = None):
+        await run_in_threadpool(require, request, 'adventure.manage', from_id)
+        return await asyncio.to_thread(offer_targets, request, validate_id(from_id), from_key)
+
+    @app.get('/api/v1/interactions/trade-offers/limits')
+    async def trade_offer_limits(request: Request, from_id: str, from_key: str, to_id: str):
+        await run_in_threadpool(require, request, 'adventure.manage', from_id)
+        await run_in_threadpool(open_to_offers, request, to_id)
+        return await asyncio.to_thread(manager.offers.limits, validate_id(from_id), from_key, validate_id(to_id))
+
+    @app.get('/api/v1/interactions/trade-offers/pokemon')
+    async def trade_offer_pokemon(request: Request, adventure_id: str):
+        await run_in_threadpool(open_to_offers, request, adventure_id)
+        return await asyncio.to_thread(manager.offers.pokemon, validate_id(adventure_id))
+
+    @app.post('/api/v1/interactions/trade-offers')
+    async def create_trade_offer(request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        await run_in_threadpool(require, request, 'adventure.manage', data.get('from_id'))
+        await run_in_threadpool(open_to_offers, request, data.get('to_id'))
+        offer = await asyncio.to_thread(manager.offers.create, data, request.state.actor)
+        if offer['status'] == 'accepted':
+            manager.background(manager.coordinator.drain_manual)
+        return offer
+
+    @app.get('/api/v1/interactions/trade-offers/{oid}')
+    async def trade_offer(oid: str, request: Request):
+        def read():
+            offer = manager.registry.trade_offer(validate_id(oid))
+            try:
+                require(request, 'adventure.manage', offer['from_id'])
+            except HTTPException:
+                require(request, 'adventure.manage', offer['to_id'])
+            return manager.offers.status(oid)
+        return await asyncio.to_thread(read)
+
+    @app.post('/api/v1/interactions/trade-offers/{oid}/accept')
+    async def accept_trade_offer(oid: str, request: Request):
+        manager.check_available()
+        data = await json_body(request)
+        if set(data) - {'to_key', 'confirm'} or not isinstance(data.get('confirm', False), bool):
+            raise HTTPException(400, 'Send to_key and confirm only')
+        await run_in_threadpool(offer_side, request, oid, 'to_id')
+        offer = await asyncio.to_thread(manager.offers.accept, oid, request.state.actor, data.get('to_key'),
+                                        data.get('confirm', False))
+        if offer['status'] == 'accepted':
+            manager.background(manager.coordinator.drain_manual)
+        return offer
+
+    @app.post('/api/v1/interactions/trade-offers/{oid}/decline')
+    async def decline_trade_offer(oid: str, request: Request):
+        await run_in_threadpool(offer_side, request, oid, 'to_id')
+        return await asyncio.to_thread(manager.offers.decline, oid)
+
+    @app.post('/api/v1/interactions/trade-offers/{oid}/cancel')
+    async def cancel_trade_offer(oid: str, request: Request):
+        await run_in_threadpool(offer_side, request, oid, 'from_id')
+        return await asyncio.to_thread(manager.offers.withdraw, oid)
+
     # Automatic trading settings: on or off, per adventure.
     @app.get('/api/v1/interactions/auto-settings')
     async def auto_settings(request: Request, adventure_id: str):
         await run_in_threadpool(require, request, 'adventure.watch', adventure_id)
-        return await asyncio.to_thread(auto_settings_public, validate_id(adventure_id))
+
+        def read():
+            aid = validate_id(adventure_id)
+            # Only the owner changes these switches. The page hides them from everyone else.
+            return {**auto_settings_public(aid), 'can_change': can(request.state.actor, 'adventure.own', manager.registry.adventure(aid))}
+        return await asyncio.to_thread(read)
 
     @app.put('/api/v1/interactions/auto-settings')
     async def set_auto_settings(adventure_id: str, request: Request):
@@ -1054,15 +1182,15 @@ def create_app(manager, shutdown=lambda: None):
         await run_in_threadpool(require, request, 'adventure.own', adventure_id)
         aid = validate_id(adventure_id)
         data = await json_body(request)
-        if not isinstance(data, dict) or set(data) - {'enabled'}:
-            raise HTTPException(400, 'Send enabled only')
+        if not data or set(data) - set(trade_settings.SWITCHES):
+            raise HTTPException(400, 'Send enabled, open_to_offers or across_owners')
 
         def write():
             if manager.builder.viewer_only(aid):
                 raise HTTPException(403, 'This adventure is view-only')
             manager.registry.adventure(aid)
             try:
-                trade_settings.update(manager.registry, aid, enabled=data.get('enabled'))
+                trade_settings.update(manager.registry, aid, **data)
             except ValueError as error:
                 raise HTTPException(400, str(error)) from error
             return auto_settings_public(aid)
