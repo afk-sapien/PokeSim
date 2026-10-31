@@ -20,6 +20,7 @@ WHEEL = r'releases/download/v' + VERSION + r'/pokesim-(?P=version)-py3'
 # (path, pattern). Each pattern must match at least once, and its version group is the pin.
 PINS = [
     ('pyproject.toml', r'^version = "' + VERSION + '"$'),
+    ('pokesim/__init__.py', r'^__version__ = "' + VERSION + '"$'),
     ('uv.lock', r'^name = "pokesim"\nversion = "' + VERSION + '"$'),
     ('Dockerfile', r'^ARG VERSION=' + VERSION + '$'),
     ('install.sh', r'^    version=' + VERSION + '$'),
@@ -34,6 +35,7 @@ PINS = [
     ('docs/self-hosting.md', r'`download/v' + VERSION + '`'),
     ('README.md', WHEEL),
     ('docs/desktop.md', WHEEL),
+    ('docs/publishing.md', r'(?:\bv|PokeSim )' + VERSION + r'\b'),
     ('deploy/stores/unraid/pokesim.xml', IMAGE),
     ('deploy/stores/casaos/docker-compose.yml', IMAGE),
     ('deploy/stores/umbrel/pokesim/docker-compose.yml', IMAGE),

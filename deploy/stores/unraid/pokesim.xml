@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>PokeSim</Name>
-  <Repository>ghcr.io/afk-sapien/pokesim:0.6.1</Repository>
+  <Repository>ghcr.io/afk-sapien/pokesim:0.6.2</Repository>
   <Registry>https://github.com/afk-sapien/PokeSim/pkgs/container/pokesim</Registry>
   <Network>bridge</Network>
   <Privileged>false</Privileged>

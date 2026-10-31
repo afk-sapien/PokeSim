@@ -2,7 +2,7 @@ manifestVersion: 1
 id: pokesim
 category: gaming
 name: PokeSim
-version: "0.6.1"
+version: "0.6.2"
 tagline: Pokémon games that play themselves while you're away
 icon: https://raw.githubusercontent.com/afk-sapien/PokeSim/main/pokesim/web/static/favicon.svg
 description: >-

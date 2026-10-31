@@ -12,7 +12,7 @@ Everything runs locally, with no model API or subscription.
 
 ## Quickstart
 
-On an x86-64 machine with Docker Compose:
+On an x86-64 or 64-bit ARM machine with Docker Compose:
 
 ```sh
 curl -fL --retry 3 --create-dirs -o pokesim/compose.yaml https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.quickstart.yaml
@@ -145,7 +145,7 @@ package manager:
 Open a new terminal, then install the current public release:
 
 ```sh
-uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.6.1/pokesim-0.6.1-py3-none-any.whl
+uv tool install --python 3.12 --managed-python https://github.com/afk-sapien/PokeSim/releases/download/v0.6.2/pokesim-0.6.2-py3-none-any.whl
 uv tool update-shell
 ```
 
