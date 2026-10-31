@@ -28,3 +28,25 @@ def test_the_elevator_route_avoids_the_shut_door():
 
 def test_the_door_opens_once_its_rocket_is_beaten():
     assert DOOR & set(route(flags('EVENT_BEAT_ROCKET_HIDEOUT_1_TRAINER_4')))
+
+
+def way_out(event_flags):
+    b4f = MAPS['ROCKET_HIDEOUT_B4F']
+    nav = Navigator()
+    nav.update_story(snap(map=b4f, x=24, y=12, event_flags=event_flags))
+    corner = {(MAPS['GAME_CORNER'], x, y) for x in range(20) for y in range(18)}
+    assert nav.route((b4f, 24, 12), corner, 0) is not None
+    return nav, {m for _, _, (m, _, _) in nav.path}
+
+
+def test_the_lift_leaves_for_b2f_while_the_door_is_shut():
+    # A heal from Giovanni's floor rode down to the B1F stop and walked back into the lift until a fight opened the door.
+    nav, maps = way_out(flags())
+    assert nav.hideout_lift_floor() == 'B2F'
+    assert MAPS['ROCKET_HIDEOUT_B2F'] in maps
+
+
+def test_the_lift_leaves_for_b1f_once_the_door_is_open():
+    nav, maps = way_out(flags('EVENT_BEAT_ROCKET_HIDEOUT_1_TRAINER_4'))
+    assert nav.hideout_lift_floor() == 'B1F'
+    assert MAPS['ROCKET_HIDEOUT_B2F'] not in maps

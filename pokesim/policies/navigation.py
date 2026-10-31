@@ -499,7 +499,15 @@ class Navigator:
                                                ("up", y == 0), ("down", y == world["height"] - 1)) if edge}
             if outward and direction not in outward:
                 return None
-        return self._warp(source, warp)
+        target = self._warp(source, warp)
+        if target and source == MAPS['ROCKET_HIDEOUT_ELEVATOR'] and self.hideout_lift_floor() == 'B2F':
+            # The lift stops at the same tiles on B1F and B2F, and the B1F stop is shut in until the door opens.
+            return (MAPS['ROCKET_HIDEOUT_B2F'],) + target[1:]
+        return target
+
+    def hideout_lift_floor(self):
+        """The floor the Rocket Hideout lift leaves for on the way out, B1F once its door is open."""
+        return 'B2F' if (MAPS['ROCKET_HIDEOUT_B1F'], 24, 16) in self.story_blocks else 'B1F'
 
     @staticmethod
     def _world_signature(world):
