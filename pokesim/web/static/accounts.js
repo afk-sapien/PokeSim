@@ -163,8 +163,8 @@
     return () => navigator.clipboard?.writeText($(selector).value).catch(() => $(selector).select())
   }
 
-  async function start() {
-    session = await (await fetch('/api/v1/session', {cache: 'no-store', credentials: 'same-origin'})).json()
+  async function start(event) {
+    session = event.detail
     csrf = session.csrf_token || ''
     if (session.auth !== 'accounts' || !session.user) return
     $('#account-panel').hidden = false
@@ -191,5 +191,6 @@
       await attempt('#people-result', showPeople)
     }
   }
-  start().catch(() => {})
+  // The Library page loads the session and hands it over.
+  document.addEventListener('pokesim:session', event => start(event).catch(() => {}), {once: true})
 })()
