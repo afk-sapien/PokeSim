@@ -45,11 +45,11 @@ Session and invite tokens are stored only as hashes. Cookies stay HttpOnly and S
 2. **OIDC**, optional, through Authlib. It is set with an issuer URL, client id and secret, and an optional groups claim mapped to server roles, such as `pokesim-admins` to admin and `pokesim` to member. A user who fits no mapped group is refused. Authentik, Authelia, Keycloak and Google all fit here.
 3. **Trusted proxy headers**, opt-in. `AUTH_PROXY_HEADER` names the user header and `AUTH_PROXY_GROUPS_HEADER` the groups header, and both are read only from addresses in `AUTH_TRUSTED_PROXIES`. A request from any other address with those headers is refused and logged.
 
-`AUTH=none` keeps today's behavior for a single person on a LAN: every browser gets an admin session. It is the default only while no admin exists, so an upgraded install acts as before until someone runs setup.
+`AUTH=none` keeps today's behavior for a single person on a LAN: every browser gets an admin session. Second factors come from OIDC. Local accounts get no TOTP in release 1, and passkeys are a later item.
 
 ### First run and migration
 
-When `users` is empty and `AUTH` is not `none`, every page sends people to `/setup`, which creates the first admin. Setup needs a one-time code printed to the log, so a stranger who reaches a fresh install first cannot claim it. The same migration adds `owner_id` to `adventures` and gives every existing adventure, ROM and backup to that admin.
+An upgraded install with no auth configured stays on `AUTH=none` and acts as before, with a banner in the Library that recommends running setup. A new install has no `AUTH=none` default: every page sends people to `/setup`, which creates the first admin. Setup needs a one-time code printed to the log, so a stranger who reaches a fresh install first cannot claim it. The same migration adds `owner_id` to `adventures` and gives every existing adventure, ROM and backup to that admin.
 
 ## 3. Roles
 
@@ -76,7 +76,7 @@ A member can hold any role on another person's adventure except owner, which onl
 
 ### Share links
 
-Share links replace `/view/<aid>/`. A link is `/s/<token>`, with a random 32-byte token stored only as a hash, a role (viewer by default, player at most), an optional expiry and a revoke button. Opening a player link asks the person to log in, so control is always tied to an account. A viewer link works without a login. The old `/view/<aid>/` keeps working for one release behind `LEGACY_VIEW_LINKS=1`, with a warning on the Library page, and then goes away.
+Share links replace `/view/<aid>/`. A link is `/s/<token>`, with a random 32-byte token stored only as a hash, a role (viewer by default, player at most), an optional expiry and a revoke button. A viewer link works without a login, as view links do now. Opening a player link asks the person to log in, so control is always tied to an account. Anonymous link visitors only watch. The old `/view/<aid>/` keeps working for one release behind `LEGACY_VIEW_LINKS=1`, with a warning on the Library page, and then goes away.
 
 ## 4. Enforcement
 
@@ -90,7 +90,7 @@ The manager's game proxy is already the only door to a worker, because every wor
 
 ## 5. Control lease
 
-The lease builds on Take Control. One person holds control at a time.
+The lease builds on Take Control. One person holds control at a time, and only a logged-in account can hold it.
 
 - Everyone watching sees who holds it. Another player can request it, and the holder sees the request and can hand over or refuse.
 - The owner or a manager can always take it back.
@@ -111,11 +111,12 @@ The flow is offer, then accept, reject, counter, cancel, or expiry after 24 hour
 - Auto-trading between adventures of different owners is off by default and opt-in on each adventure by its owner. Auto-trading between one owner's own adventures works as today.
 - Offers are rate-limited per user (default 20 open, 50 a day). A user can block another user, which hides and refuses that user's offers.
 - Both adventures show the trade in their history, with the other side's owner and adventure name.
+- Both owners accepting, plus rate limits and blocking, is the whole consent step. An admin toggle, `TRADE_ADMIN_APPROVAL`, off by default, adds an admin approval before a trade between different owners runs.
 
 ## 7. Other parts
 
 - **Inbox.** One inbox per user for trade offers, control requests and new shares, with a badge in the Library. It is a `notifications` table read by the page's existing polling. `notify.py` also sends a push to the user's own ntfy, Discord or Telegram target, set per user. Library-wide alerts stay admin-only.
-- **Quotas.** Per member: running adventures (default 2) and storage for saves, backups and ROMs (default 5 GB). Admins can change them per user. A start or upload over quota is refused with the numbers. Admins have no quota.
+- **Quotas.** Per member: running adventures and storage for saves, backups and ROMs. On a Raspberry Pi or other arm64 machine with 4 GB of RAM or less, the defaults are 2 running adventures and 10 GB. Anything else gets 4 running and 50 GB. Admins can change both, per user. Going over quota, including after an admin lowers it, only refuses new starts and uploads and shows a warning with the numbers. Running adventures are never stopped. Admins have no quota.
 - **ROMs.** Each member uploads their own, and a ROM row gets `owner_id`. A shared ROM library is an admin toggle, off by default. When it is on, members can start adventures from any ROM in it. ROM files stay deduplicated by hash on disk, so two uploads of one cartridge use the space once.
 - **API tokens.** Personal tokens for `/api/v1`, with scopes (`read`, `control`, `manage`, `trade`) and an optional expiry and adventure list. They are stored as hashes, shown once, and checked by the same `can()`. A token never carries more than its user's rights.
 - **Deleting a user.** The admin picks, for each of their adventures, a new owner or archive. Archived adventures stay on disk and can be given to someone later. Nothing is deleted silently. Grants and share links the user made are revoked.
@@ -130,12 +131,14 @@ The flow is offer, then accept, reject, counter, cancel, or expiry after 24 hour
 | 4. Trade offers | Offers between people, counters, expiry, per-Pokémon lock, opt-in auto-trading across owners, rate limits, blocks, history on both sides, the inbox. | A trade between two users' adventures completes through the unchanged coordinator. |
 | 5. Quotas and tokens | Run and storage quotas, per-member ROMs and the shared ROM toggle, personal API tokens, user deletion with transfer or archive. | Over-quota starts are refused. A token cannot exceed its scopes. |
 
-## 9. Open questions
+## 9. Decisions on the review questions
 
-1. Should release 1 ship with `AUTH=none` still the default for upgrades, or should an upgrade force setup?
-2. Should a viewer share link work without a login, as view links do now, or must every share need an account?
-3. Do we want TOTP for local accounts in release 1, or leave second factors to OIDC?
-4. What are the right default quotas for a Raspberry Pi install compared with a server?
-5. Should a guest be able to hold the control lease on an adventure shared by link, or only on one shared to their account?
-6. When a member is over quota after an admin lowers it, do their running adventures stop or only new starts get refused?
-7. Should trade offers between people go through an admin approval step on public installs?
+The lead settled these on 2026-10-31. The sections above already follow them.
+
+1. **Upgrades.** An upgrade with no auth configured stays on `AUTH=none` and shows a banner that recommends setup. A new install forces first-run setup.
+2. **Viewer links.** They work without a login, as now, but become revocable tokens with an optional expiry.
+3. **Second factors.** No TOTP in release 1. Second factors come from OIDC. Passkeys are a later item.
+4. **Default quotas.** A Pi or arm64 machine with 4 GB of RAM or less gets 2 running adventures and 10 GB per member. Anything else gets 4 running and 50 GB. Admins can change both.
+5. **Control lease.** Only an account can hold it. Link visitors are anonymous and only watch.
+6. **Over quota.** New starts are refused with a warning. Running adventures are never stopped.
+7. **Trade approval.** No admin approval by default. Both owners accepting, rate limits and blocking are enough. An optional admin toggle, off by default, adds approval.
