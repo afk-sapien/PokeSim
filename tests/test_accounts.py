@@ -1,5 +1,6 @@
 """Accounts: setup, login, invites, who sees and controls which adventure, share links and sign-in providers."""
 import ipaddress
+import os
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
@@ -272,7 +273,8 @@ def test_reset_password_from_the_command_line(library, people):
 
 def test_the_cli_token_acts_as_the_first_admin(library, people):
     token = library.manager.issue_cli_token()
-    assert (library.manager.root / 'cli.token').stat().st_mode & 0o077 == 0
+    if os.name != 'nt':  # Windows has no POSIX permission bits.
+        assert (library.manager.root / 'cli.token').stat().st_mode & 0o077 == 0
     command = TestClient(library.app)
     assert command.get('/api/v1/users').status_code == 401
     command.headers['X-PokeSim-CLI-Token'] = token
