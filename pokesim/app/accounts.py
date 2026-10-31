@@ -284,7 +284,11 @@ def install(app, manager):
             raise ValueError('Choose Can watch, Can play or Can manage')
         if data['user_id'] == manager.registry.adventure(aid)['owner_id']:
             raise ValueError('The owner already has this adventure')
+        new = aid not in auth.grants_for(data['user_id'])
         auth.grant(aid, data['user_id'], data['role'], actor(request).id)
+        if new:
+            from . import inbox
+            inbox.shared(manager, aid, data['user_id'], data['role'], actor(request))
         if data['role'] == 'viewer':
             manager.leases.forget(aid, data['user_id'])
         auth.audit('grant.add', user_id=actor(request).id, adventure_id=aid, target=f"{data['user_id']} {data['role']}",

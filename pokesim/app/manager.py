@@ -726,6 +726,8 @@ def create_app(manager, shutdown=lambda: None):
 
     from .accounts import install as install_accounts
     install_accounts(app, manager)
+    from . import inbox as inbox_module
+    inbox_module.install(app, manager)
 
     def listed(row, actor):
         return {**row, 'resources': manager.supervisor.resources(row['id']), 'access': policy.adventure_role(actor, row)}
@@ -740,7 +742,8 @@ def create_app(manager, shutdown=lambda: None):
             shown = {row['id'] for row in rows}
             attention = {**attention, 'problems': [problem for problem in attention['problems']
                                                    if problem['adventure_id'] in shown]}
-        return {'adventures': [listed(row, actor) for row in rows], 'attention': attention}
+        return {'adventures': [listed(row, actor) for row in rows], 'attention': attention,
+                **inbox_module.summary(manager, actor)}
 
     @app.get('/api/v1/adventures/{aid}')
     def adventure(aid: str, request: Request):
@@ -1229,7 +1232,7 @@ def create_app(manager, shutdown=lambda: None):
     @app.post('/api/v1/interactions/trade-offers/{oid}/decline')
     async def decline_trade_offer(oid: str, request: Request):
         await run_in_threadpool(offer_side, request, oid, 'to_id')
-        return await asyncio.to_thread(manager.offers.decline, oid)
+        return await asyncio.to_thread(manager.offers.decline, oid, request.state.actor)
 
     @app.post('/api/v1/interactions/trade-offers/{oid}/cancel')
     async def cancel_trade_offer(oid: str, request: Request):
