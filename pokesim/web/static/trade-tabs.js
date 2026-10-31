@@ -1,15 +1,18 @@
 (() => {
   const $ = selector => document.querySelector(selector)
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
+  // Trades between your own adventures start at once through the builder. Anyone else's get an offer.
+  // The picker reads through the offers routes, which also list adventures open to offers.
   const BUILDER = '/api/v1/interactions/trade-builder'
+  const OFFERS = '/api/v1/interactions/trade-offers'
   const SETTINGS = '/api/v1/interactions/auto-settings'
   const aid = PokeSim.adventureId
   const owner = String(PokeSim.base || '').startsWith('/games/') && typeof PokeSim.api === 'function'
   const query = new URLSearchParams(location.search)
 
-  // Two tabs under the switch: Make a trade and History. The hash (#make, #history) keeps the choice.
+  // Three tabs under the switches: Make a trade, History and Offers. The hash (#make, #history, #offers) keeps the choice.
   const tabs = [...document.querySelectorAll('.trade-tabs [role="tab"]')]
-  const TABS = {make: 'make', trade: 'make', current: 'make', auto: 'make', history: 'history'}
+  const TABS = {make: 'make', trade: 'make', current: 'make', auto: 'make', history: 'history', offers: 'offers'}
   // A section inside a tab. Picking it shows its tab, then scrolls to it.
   const SECTIONS = {current: '#current-exchange-section'}
   function show(name, {focus = false, hash = true} = {}) {
@@ -147,11 +150,14 @@
     fit(el)
   }
   // The Trade key works only with both slots filled and a pair that is allowed. Otherwise it says why.
+  // A game someone else owns gets an offer instead, and the Pokémon to get may be left for them to pick.
   function summary() {
     slot('mine')
     slot('theirs')
     const button = $('#pick-confirm')
     const game = pick.games.find(row => row.id === pick.game)
+    const offering = Boolean(game?.offer)
+    button.textContent = offering ? 'Send offer' : 'Trade'
     const blocked = (pick.mon && mineBlocked(pick.mon)) || (pick.their && theirsBlocked(pick.their)) || ''
     // The next step is the Trade key's tooltip. Only a real blocker or a wait shows as text.
     let next = ''
@@ -159,16 +165,17 @@
     if (!owner) reason = 'Trades are picked from the owner’s page.'
     else if (!pick.game) next = 'Choose a game to trade with.'
     else if (game && !game.available) reason = game.reason
-    else if (!pick.mon && !pick.their) next = 'Choose a Pokémon to send and one to get.'
+    else if (!pick.mon && !pick.their) next = offering ? 'Choose a Pokémon to send.' : 'Choose a Pokémon to send and one to get.'
     else if (!pick.mon) next = 'Choose a Pokémon to send.'
-    else if (!pick.their) next = 'Choose a Pokémon to get.'
+    else if (!pick.their && !offering) next = 'Choose a Pokémon to get.'
     else if (blocked) reason = blocked
     else if (!pick.limits || pick.limits.from?.key !== pick.mon.key || pick.limits.to?.adventure_id !== pick.game) next = 'Checking this trade…'
     else if (!pick.limits.starts_now) reason = VIEW_ONLY
     const ready = !reason && !next && !pick.busy
     // A game busy with another trade can still be picked. The trade waits in line for it.
     const waits = (game?.busy || pick.limits?.busy || pick.mineBusy) && 'Busy with a trade. Your trade will wait in line.'
-    note('#pick-summary', reason || waits || '')
+    const asks = offering && !reason && `${game.owner_name || 'Its owner'} answers this offer${pick.their ? '' : ' and picks the Pokémon you get'}.`
+    note('#pick-summary', reason || asks || waits || '')
     button.disabled = !ready
     button.title = next || reason || ''
     if ($('#slot-get-game')) $('#slot-get-game').textContent = pick.game ? `In ${gameName(pick.game)}` : ''
@@ -200,7 +207,7 @@
     loadGames()
     try {
       const [data, found] = await Promise.all([
-        json(await PokeSim.api(`${BUILDER}/pokemon?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read this adventure’s Pokémon.'),
+        json(await PokeSim.api(`${OFFERS}/pokemon?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read this adventure’s Pokémon.'),
         readOwn()])
       if (found?.generation && Grid) Grid.generation('pick-mine', found.generation)
       pick.mine = data.pokemon || []
@@ -225,13 +232,13 @@
     const key = pick.mon?.key
     const ask = pick.gamesAsked = {}
     try {
-      const data = await json(await PokeSim.api(`${BUILDER}/targets?from_id=${encodeURIComponent(aid)}${key ? `&from_key=${encodeURIComponent(key)}` : ''}`, {cache: 'no-store'}), 'Could not check the other games.')
+      const data = await json(await PokeSim.api(`${OFFERS}/targets?from_id=${encodeURIComponent(aid)}${key ? `&from_key=${encodeURIComponent(key)}` : ''}`, {cache: 'no-store'}), 'Could not check the other games.')
       // A slower answer for a Pokémon picked earlier must not show its reasons for this one.
       if (pick.gamesAsked !== ask || pick.mon?.key !== key) return
       pick.games = data.adventures || []
       const select = $('#pick-game')
       select.innerHTML = `<option value="">${pick.games.length ? 'Choose a game' : 'No other adventure yet'}</option>` + pick.games.map(game =>
-        `<option value="${esc(game.id)}"${game.available ? '' : ' disabled'}${game.id === pick.game ? ' selected' : ''}>${esc(game.name)}, ${esc(game.version)}${game.available ? game.busy ? ', busy with a trade' : '' : `: ${esc(game.reason)}`}</option>`).join('')
+        `<option value="${esc(game.id)}"${game.available ? '' : ' disabled'}${game.id === pick.game ? ' selected' : ''}>${esc(game.name)}${game.offer && game.owner_name ? ` (${esc(game.owner_name)})` : ''}, ${esc(game.version)}${game.available ? game.busy ? ', busy with a trade' : '' : `: ${esc(game.reason)}`}</option>`).join('')
       const current = pick.games.find(game => game.id === pick.game)
       note('#pick-game-reason', gameNote(current))
       summary()
@@ -282,8 +289,8 @@
     })
     try {
       const path = key
-        ? `${BUILDER}/limits?from_id=${encodeURIComponent(aid)}&from_key=${encodeURIComponent(key)}&to_id=${encodeURIComponent(id)}`
-        : `${BUILDER}/pokemon?adventure_id=${encodeURIComponent(id)}`
+        ? `${OFFERS}/limits?from_id=${encodeURIComponent(aid)}&from_key=${encodeURIComponent(key)}&to_id=${encodeURIComponent(id)}`
+        : `${OFFERS}/pokemon?adventure_id=${encodeURIComponent(id)}`
       const data = await json(await PokeSim.api(path, {cache: 'no-store'}), 'Could not read their Pokémon.')
       if (stale()) return
       pick.limits = key ? data : null
@@ -316,11 +323,24 @@
     summary()
   }
   async function confirm() {
-    if (pick.busy || !pick.mon || !pick.their || $('#pick-confirm').disabled) return
+    const offering = Boolean(pick.games.find(row => row.id === pick.game)?.offer)
+    if (pick.busy || !pick.mon || (!pick.their && !offering) || $('#pick-confirm').disabled) return
     pick.busy = true
     $('#pick-confirm').disabled = true
     const request = globalThis.crypto?.randomUUID ? crypto.randomUUID().replace(/-/g, '') : undefined
     try {
+      if (offering) {
+        const offer = await json(await PokeSim.api(OFFERS, {method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({from_id: aid, from_key: pick.mon.key, to_id: pick.game, ...(pick.their ? {to_key: pick.their.key} : {})})}),
+        'That offer could not be sent.')
+        pick.busy = false
+        reset()
+        await globalThis.AdventureTrading?.refreshOffers?.()
+        note('#offers-note', offer.status === 'accepted' ? 'Offer accepted. The trade waits in line under Current exchange.'
+          : 'Offer sent. It waits for an answer below.')
+        show('offers')
+        return
+      }
       await json(await PokeSim.api(BUILDER, {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({from_id: aid, from_key: pick.mon.key, to_id: pick.game, to_key: pick.their.key, ...(request ? {request_id: request} : {})})}),
       'That trade could not be set up.')
@@ -367,7 +387,9 @@
       note('#pick-dialog-note', `${card.nick || card.name} cannot be picked: ${blocked}`)
       return
     }
+    const giving = pick.giving
     picker.close()
+    if (giving) return giving(card.row)
     if (side === 'mine') chooseMine(key)
     else chooseTheirs(key)
     $(side === 'mine' ? '#slot-send' : '#slot-get')?.querySelector('[data-key]')?.focus()
@@ -381,7 +403,17 @@
       const rect = picker.getBoundingClientRect()
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) picker.close()
     })
-    picker.addEventListener('close', () => { pick.side = null })
+    picker.addEventListener('close', () => {
+      pick.side = null
+      pick.giving = null
+    })
+  }
+  // Accepting an offer that asks for nothing: the same picker, over this adventure's Pokémon.
+  function pickToGive(done) {
+    if (!picker || !owner) return
+    openPicker('mine')
+    pick.giving = done
+    $('#pick-dialog-title').textContent = 'Choose a Pokémon to give'
   }
 
   // The detail popup: the PC page's detail. A lock shows as a stamp; it changes on the PC page.
@@ -452,16 +484,24 @@
     if (!auto) return
     const switcher = $('#auto-switch')
     switcher.setAttribute('aria-checked', String(auto.enabled))
-    switcher.disabled = auto.viewer_only || autoBusy
+    switcher.disabled = auto.viewer_only || autoBusy || auto.can_change === false
     $('#auto-switch-state').textContent = auto.enabled ? 'On' : 'Off'
+    // Taking offers and trading with other people are the owner's choice, so only the owner sees them.
+    for (const other of document.querySelectorAll('.auto-switch[data-setting]')) {
+      const on = Boolean(auto[other.dataset.setting])
+      other.hidden = !auto.can_change
+      other.disabled = auto.viewer_only || autoBusy
+      other.setAttribute('aria-checked', String(on))
+      other.querySelector('[data-switch-state]').textContent = on ? 'On' : 'Off'
+    }
   }
   async function saveAuto(change) {
     if (autoBusy || !auto) return
     autoBusy = true
     renderAuto()
     try {
-      auto = await json(await PokeSim.api(`${SETTINGS}?adventure_id=${encodeURIComponent(aid)}`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(change)}),
-        'Could not save this setting.')
+      auto = {...auto, ...await json(await PokeSim.api(`${SETTINGS}?adventure_id=${encodeURIComponent(aid)}`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(change)}),
+        'Could not save this setting.')}
       note('#auto-note', '')
       globalThis.AdventureTrading?.refresh?.()
     } catch (error) {
@@ -495,6 +535,11 @@
   $('#auto-switch')?.addEventListener('click', () => {
     if (auto) saveAuto({enabled: !auto.enabled})
   })
+  for (const other of document.querySelectorAll('.auto-switch[data-setting]')) {
+    other.addEventListener('click', () => {
+      if (auto) saveAuto({[other.dataset.setting]: !auto[other.dataset.setting]})
+    })
+  }
   // Fresh trade settings update the picker's lock icons.
   globalThis.TradeUI?.subscribe?.(() => {
     if (pick.cards.length) renderMine()
@@ -511,5 +556,5 @@
   show(asked, {hash: Boolean(TABS[asked])})
   const settled = globalThis.document?.fonts?.ready || Promise.resolve()
   if (SECTIONS[asked]) settled.then(() => (globalThis.requestAnimationFrame || setTimeout)(() => select(asked)))
-  globalThis.TradeTabs = {select, show}
+  globalThis.TradeTabs = {select, show, pickToGive}
 })()

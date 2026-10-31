@@ -9,7 +9,8 @@ exchange rules, and recovery.
 Everything about trading lives on each adventure's Trading page at
 `/games/{id}/trading`. Trading is one of two things: automatic trades,
 which start on their own, and trades you build by hand between your own
-adventures. The page has the switch on top and two tabs under it:
+adventures. The page has the switch on top and tabs under it, with an
+**Offers** tab for [trade offers](#trade-offers):
 
 1. The **Auto trading** switch. Its lamp shows the state, and hovering the lamp
    gives the reason when trades are not completing.
@@ -20,7 +21,7 @@ adventures. The page has the switch on top and two tabs under it:
 3. **History** shows hand-picked and automatic trades together, newest first.
    Its tab label counts them, for example "History (2)".
 
-The tab is kept in the address as `#make` or `#history`, so links and reloads
+The tab is kept in the address as `#make`, `#history` or `#offers`, so links and reloads
 keep it. `&mon=` with a trade key always opens Make a trade with that Pokémon
 chosen to send, as the PC's **Trade…** link does. Older `?tab=history` links
 open History, and other older `?tab=` links open Make a trade. A trade completed
@@ -136,6 +137,29 @@ release candidates, are gone too, and automatic trades start on their own as
 before. The `/api/v1/interactions/trade-requests` routes return 404. A stored
 Ask me first setting and any waiting suggestions are ignored.
 
+## Trade offers
+
+With accounts, you can offer a trade to an adventure someone else owns. Their adventure
+must be shared with you, and its owner must switch on **Open to offers** on its Trading
+page. Make a trade then lists it with the owner's name, and the button reads **Send
+offer**. You can leave the Pokémon you get empty, so the owner picks one.
+
+The **Offers** tab lists offers for this adventure and offers it sent. Only the owner
+answers an offer, and the sender can cancel it until then. Accepting checks both
+Pokémon again. If one evolved, changed level or left the collection since the offer, the
+owner sees what changed and confirms a second time. An accepted offer queues as a normal
+trade. Unanswered offers expire after 24 hours.
+
+Limits keep offers from piling up:
+
+1. You can have 20 offers open and send 50 a day.
+2. An owner can have 20 unanswered offers across their adventures.
+3. A Pokémon an adventure cannot trade away, or one in a game that cannot report its
+   collection, is in the League or is sealed, can be offered only by its owner.
+
+The owner's two switches, **Open to offers** and **Auto trading with other people**,
+sit under the Auto trading switch. Other people see neither.
+
 ## Trading API
 
 The trade builder is under `/api/v1/interactions/trade-builder`:
@@ -153,8 +177,15 @@ The trade builder is under `/api/v1/interactions/trade-builder`:
 `active` and `history`. The older `/api/v1/interactions/manual-trades` admin API
 is gone.
 
-`GET /api/v1/interactions/auto-settings?adventure_id=` reads the switch, and
-`PUT` with `enabled` saves it. A game's own `POST /api/trading/preferences` sets one Pokémon with
+Offers are under `/api/v1/interactions/trade-offers`. `GET` lists an adventure's
+incoming and outgoing offers, `targets`, `limits` and `pokemon` work as in the
+trade builder, and `POST` sends one. `POST /{oid}/accept`, `/decline` and `/cancel`
+answer it, and an accept sends `to_key` when the owner picks the Pokémon. An accept answers 409 with `changed` when a Pokémon changed, and the
+owner sends it again with `confirm`.
+
+`GET /api/v1/interactions/auto-settings?adventure_id=` reads the switches and
+`can_change`, and the owner's `PUT` with `enabled`, `open_to_offers` or
+`across_owners` saves them. A game's own `POST /api/trading/preferences` sets one Pokémon with
 `key` and `state`: `keep` locks it and `auto` unlocks it. `first` (Prefer to
 trade) is still accepted.
 

@@ -1051,6 +1051,7 @@ class Coordinator:
         blocked = {}
         games = sorted(self.registry.adventures(), key=lambda game: (last.get(game['id'], 0), game['id']))
         campaigns = {game['id']: game['campaign_id'] for game in games}
+        owners = {game['id']: game.get('owner_id') for game in games}
         visits = self.registry.completed_trade_visits()
         recent_species = Counter()
         recent_games = Counter()
@@ -1103,6 +1104,10 @@ class Coordinator:
         candidates = []
         for index, (left_id, left) in enumerate(inventories):
             for right_id, right in inventories[index + 1:]:
+                # Adventures of two different people trade automatically only when both owners opted in.
+                if owners[left_id] != owners[right_id] and not (
+                        settings[left_id]['across_owners'] and settings[right_id]['across_owners']):
+                    continue
                 # Each benefit scans a whole library, so score every offer once per pair
                 # rather than once per combination.
                 gives = [self._offer_for(offer, right) for offer in left.get('offers', [])]
@@ -1154,13 +1159,17 @@ class Coordinator:
         """Pokémon in a hand-picked trade that has not finished, as (adventure, trade key) pairs.
 
         Automatic trading never selects them, so a queued trade the owner chose does not lose
-        its Pokémon to an automatic exchange first. Trade offers stored before 0.5.0 are
-        ignored: nothing can answer them any more.
+        its Pokémon to an automatic exchange first. An open trade offer holds its Pokémon the
+        same way, and so does the Pokémon it asks for.
         """
         keys = set()
         for entry in self._manual_entries():
             if entry['state'] in MANUAL_WAITING:
                 keys |= {(entry['left_id'], entry['left_key']), (entry['right_id'], entry['right_key'])}
+        for offer in self.registry.trade_offers(statuses=('pending', 'accepted')):
+            keys.add((offer['from_id'], offer['from_key']))
+            if offer['to_key']:
+                keys.add((offer['to_id'], offer['to_key']))
         return keys
 
     @staticmethod

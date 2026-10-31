@@ -1,4 +1,4 @@
-"""Library-wide automatic trading settings: one on/off switch per adventure.
+"""Library-wide trading settings: auto trading, open to offers and auto trading with other people, per adventure.
 
 Earlier 0.5.0 builds also stored a wish list per adventure. It is no longer read or offered,
 but a stored one is left in place, so an older release still finds it after a downgrade.
@@ -29,7 +29,11 @@ def _all(registry):
 
 def _clean(entry):
     entry = entry if isinstance(entry, dict) else {}
-    return {'enabled': entry.get('enabled', True) is not False}
+    # With accounts, an adventure takes offers from other people, and trades automatically with
+    # their adventures, only when its owner turns that on.
+    return {'enabled': entry.get('enabled', True) is not False,
+            'open_to_offers': entry.get('open_to_offers') is True,
+            'across_owners': entry.get('across_owners') is True}
 
 
 def get(registry, aid):
@@ -38,17 +42,22 @@ def get(registry, aid):
     return _clean(_all(registry).get(aid))
 
 
-def update(registry, aid, *, enabled=None):
+SWITCHES = {'enabled': 'Auto trading', 'open_to_offers': 'Open to offers', 'across_owners': 'Auto trading with other people'}
+
+
+def update(registry, aid, **values):
     validate_id(aid)
-    if enabled is not None and not isinstance(enabled, bool):
-        raise ValueError('Auto trading is either on or off')
+    for name, value in values.items():
+        if name not in SWITCHES:
+            raise ValueError(f'Unknown trade setting {name}')
+        if value is not None and not isinstance(value, bool):
+            raise ValueError(f'{SWITCHES[name]} is either on or off')
     with _write:
         settings = _all(registry)
         stored = settings.get(aid)
         # Other stored keys, such as an old wish list, stay as they were.
         stored = dict(stored) if isinstance(stored, dict) else {}
-        if enabled is not None:
-            stored['enabled'] = enabled
+        stored.update({name: value for name, value in values.items() if value is not None})
         settings[aid] = stored
         registry.set_setting(KEY, settings)
         return _clean(stored)

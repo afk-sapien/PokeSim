@@ -180,6 +180,8 @@ test('a trade waiting for a busy game says so and its Cancel key takes it out of
   let queued = [{id: tid, state: 'queued', position: 1, peer_id: 'b'.repeat(32), peer_name: 'Blue', busy: true, cancellable: true}]
   const posted = []
   const api = async (path, options) => {
+    // The page also reads its trade offers through the same API.
+    if (path.startsWith('/api/v1/interactions/trade-offers')) return {ok: true, json: async () => ({adventure_id: 'red', incoming: [], outgoing: []})}
     posted.push([path, options.method])
     queued = []
     return {ok: true, json: async () => ({state: 'cancelled'})}

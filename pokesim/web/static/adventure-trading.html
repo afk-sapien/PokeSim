@@ -19,7 +19,7 @@
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=pass2-1">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
 <link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=locks-1">
-<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=tabs-1">
+<link rel="stylesheet" href="${game_base}/static/panel-trading.css?v=offers-2">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 </head>
 <body data-page="trading">
@@ -40,6 +40,8 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <section class="trade-overview" aria-label="Automatic trading" id="trade-overview">
 <button type="button" role="switch" id="auto-switch" class="auto-switch" aria-checked="true" title="Locked, shiny and perfect DV Pokémon, last copies and the active party are never traded automatically." disabled><i class="lamp" id="trade-lamp" aria-hidden="true"></i><span>Auto trading</span> <b id="auto-switch-state">On</b><span class="auto-switch-track" aria-hidden="true"></span></button>
+<button type="button" role="switch" id="offers-switch" class="auto-switch" data-setting="open_to_offers" aria-checked="false" title="People you share this adventure with can see its Pokémon and send it trade offers." hidden><span>Open to offers</span> <b data-switch-state>Off</b><span class="auto-switch-track" aria-hidden="true"></span></button>
+<button type="button" role="switch" id="across-switch" class="auto-switch" data-setting="across_owners" aria-checked="false" title="Automatic trading may pair this adventure with other people’s adventures that also allow it." hidden><span>Auto trading with other people</span> <b data-switch-state>Off</b><span class="auto-switch-track" aria-hidden="true"></span></button>
 <p id="auto-note" class="trade-notice" role="status" aria-live="polite" hidden></p>
 </section>
 <p id="trade-connection-note" class="trade-notice" role="status" hidden></p>
@@ -47,6 +49,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div class="trade-tabs" role="tablist" aria-label="Trading">
 <button type="button" role="tab" id="tab-make" aria-controls="panel-make" aria-selected="true" tabindex="0">Make a trade</button>
 <button type="button" role="tab" id="tab-history" aria-controls="panel-history" aria-selected="false" tabindex="-1">History <span class="tab-count" id="trade-history-count"></span></button>
+<button type="button" role="tab" id="tab-offers" aria-controls="panel-offers" aria-selected="false" tabindex="-1">Offers <span class="tab-count" id="offers-count"></span></button>
 </div>
 
 <div id="panel-make" class="trade-panel" role="tabpanel" aria-labelledby="tab-make" tabindex="0">
@@ -71,6 +74,10 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div id="panel-history" class="trade-panel" role="tabpanel" aria-labelledby="tab-history" tabindex="0" hidden>
 <section id="trade-history-section" class="trade-section" aria-labelledby="tab-history"><div id="trade-history" class="deal-list" aria-live="polite">Loading…</div></section>
 </div>
+
+<div id="panel-offers" class="trade-panel" role="tabpanel" aria-labelledby="tab-offers" tabindex="0" hidden>
+<section id="trade-offers-section" class="trade-section" aria-labelledby="offers-heading"><p id="offers-note" class="trade-notice" role="status" aria-live="polite"></p><div class="section-head"><h2 class="legend legend--ink" id="offers-heading">Offers for this adventure</h2><span class="micro">Unanswered offers expire after 24 hours</span></div><div id="offers-incoming" class="deal-list" aria-live="polite">Loading…</div><div class="section-head offers-subhead"><h2 class="legend legend--ink">Offers this adventure sent</h2></div><div id="offers-outgoing" class="deal-list" aria-live="polite"></div></section>
+</div>
 </main>
 
 <dialog id="pick-dialog" class="pick-dialog" aria-labelledby="pick-dialog-title"><div class="pick-dialog-head"><h2 class="legend legend--ink" id="pick-dialog-title">Choose a Pokémon</h2><button type="button" id="pick-dialog-close" class="key close-detail" aria-label="Close the picker">Close</button></div>
@@ -90,7 +97,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 
 <script src="${game_base}/static/mon-grid.js?v=locks-1"></script>
 <script src="${game_base}/static/trade-ui.js?v=one-page-1"></script>
-<script src="${game_base}/static/adventure-trading.js?v=tabs-1"></script>
-<script src="${game_base}/static/trade-tabs.js?v=tabs-1"></script>
+<script src="${game_base}/static/adventure-trading.js?v=offers-2"></script>
+<script src="${game_base}/static/trade-tabs.js?v=offers-2"></script>
 </body>
 </html>

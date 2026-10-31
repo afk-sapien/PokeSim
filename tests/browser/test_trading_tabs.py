@@ -19,6 +19,8 @@ REASON = 'Busy Blue is busy finishing another trade'
 MEGANIUM = 'Meganium cannot go to a Red, Blue or Yellow game. Meganium did not exist in Gen I'
 JSON = 'application/json'
 PORTRAIT = frame_png()
+# The automatic trading switch, apart from the owner's switch for trading with other people.
+AUTO = re.compile(r'^Auto trading (On|Off)$')
 
 
 def shoot(page, name, full_page=True):
@@ -52,7 +54,11 @@ class Library:
         self.queued = []
         self.held = {}
         self.request_reads = []
-        self.auto = {'adventure_id': FROM, 'enabled': True, 'viewer_only': False}
+        self.auto = {'adventure_id': FROM, 'enabled': True, 'open_to_offers': False, 'across_owners': False,
+                     'viewer_only': False, 'can_change': True}
+        # Offers this adventure received and sent, and every answer the page posted.
+        self.incoming, self.outgoing, self.answers = [], [], []
+        self.changed = None
         trading = render_game_page('adventure-trading.html', base_path=f'/games/{FROM}', adventure_id=FROM,
                                    adventure_name='Crystal')
         pc = render_game_page('pc.html', base_path=f'/games/{FROM}', adventure_id=FROM, adventure_name='Crystal')
@@ -68,9 +74,12 @@ class Library:
         page.route(re.compile(r'/api/v1/adventures(\?|$)'), lambda route: self.json(route, {'adventures': [
             {'id': FROM, 'name': 'Crystal', 'version': 'crystal', 'archived': False}]}))
         page.route(re.compile(r'/api/v1/interactions/trade-builder(\?|$)'), self.build)
-        page.route(re.compile(r'/api/v1/interactions/trade-builder/pokemon(\?|$)'), self.pokemon)
-        page.route(re.compile(r'/api/v1/interactions/trade-builder/targets(\?|$)'), self.targets)
-        page.route(re.compile(r'/api/v1/interactions/trade-builder/limits(\?|$)'), self.limits)
+        # The picker reads through the offers routes, which also list adventures open to offers.
+        page.route(re.compile(r'/api/v1/interactions/trade-offers/pokemon(\?|$)'), self.pokemon)
+        page.route(re.compile(r'/api/v1/interactions/trade-offers/targets(\?|$)'), self.targets)
+        page.route(re.compile(r'/api/v1/interactions/trade-offers/limits(\?|$)'), self.limits)
+        page.route(re.compile(r'/api/v1/interactions/trade-offers(\?|$)'), self.offers)
+        page.route(re.compile(r'/api/v1/interactions/trade-offers/[0-9a-f]{32}/(accept|decline|cancel)$'), self.answer)
         page.route(re.compile(r'/api/v1/interactions/auto-settings(\?|$)'), self.auto_settings)
         page.route(re.compile(r'/api/v1/interactions/trade-builder/[0-9a-f]{32}/cancel$'), self.cancel)
         # Ask me first is gone. Any call to its old API is recorded and answered as the library does.
@@ -147,8 +156,31 @@ class Library:
                                       self.side(RED, 'Second Red', {'key': '2', 'name': 'Mew', 'dex': 151, 'level': 5,
                                                                     'blocked': 'Mew stays in this game'})],
                           'from': {'key': parse_qs(urlparse(route.request.url).query)['from_key'][0], 'blocked': ''},
-                          'to': {'adventure_id': RED, 'adventure_name': 'Second Red', 'viewer_only': not self.starts_now},
+                          'to': {'adventure_id': parse_qs(urlparse(route.request.url).query)['to_id'][0],
+                                 'adventure_name': 'Second Red', 'viewer_only': not self.starts_now},
                           'starts_now': self.starts_now, 'viewer_only': False, 'blocked': {}, 'busy': self.busy})
+
+    def offers(self, route):
+        if route.request.method == 'POST':
+            body = json.loads(route.request.post_data)
+            self.posted.append(body)
+            offer = {'id': 'e' * 32, 'status': 'pending', 'reason': '', 'created_at': 3000, 'updated_at': 3000,
+                     'expires_at': 3000 + 86400, 'manual_id': None, 'trade': None,
+                     'from': self.side(FROM, 'Crystal', {'key': body['from_key'], 'name': 'Bulbasaur', 'dex': 1, 'level': 5}),
+                     'to': self.side(BLUE, 'Busy Blue', {'key': None, 'owner_name': 'bob'})}
+            self.outgoing.append(offer)
+            return self.json(route, offer)
+        self.json(route, {'adventure_id': FROM, 'incoming': self.incoming, 'outgoing': self.outgoing, 'viewer_only': False})
+
+    def answer(self, route):
+        oid, action = route.request.url.rsplit('/', 2)[-2:]
+        body = json.loads(route.request.post_data) if route.request.post_data else {}
+        self.answers.append((action, body))
+        offer = next(row for row in self.incoming + self.outgoing if row['id'] == oid)
+        if action == 'accept' and self.changed and not body.get('confirm'):
+            return self.json(route, {'detail': self.changed, 'changed': True, 'offer': offer}, 409)
+        offer['status'] = {'accept': 'accepted', 'decline': 'declined', 'cancel': 'withdrawn'}[action]
+        self.json(route, offer)
 
     def auto_settings(self, route):
         if route.request.method == 'GET':
@@ -184,16 +216,17 @@ def test_trading_has_the_switch_up_top_then_make_a_trade_and_history_tabs(page, 
     page.set_viewport_size({'width': width, 'height': 844})
     library.open()
     overview = page.locator('.trade-overview')
-    expect(overview.get_by_role('switch', name=re.compile('Auto trading'))).to_be_enabled()
-    # The status box is the switch and nothing else: no headline, no explanation, no wish list.
-    assert overview.inner_text().upper().split() == ['AUTO', 'TRADING', 'ON'], overview.inner_text()
+    expect(overview.get_by_role('switch', name=AUTO)).to_be_enabled()
+    # The status box is the switches and nothing else: no headline, no explanation, no wish list.
+    # The owner also sees whether this adventure takes offers and trades with other people.
+    expect(overview.get_by_role('switch')).to_have_text(['Auto trading On', 'Open to offers Off', 'Auto trading with other people Off'])
     expect(page.locator('main .trade-help, .page-lede, #trade-status, #trade-activity, [id^="wish"]')).to_have_count(0)
     expect(page.locator('#auto-list, #auto-setting, .trade-setting')).to_have_count(0)
-    # Under the switch, two tabs. Make a trade is the default and the URL keeps no hash for it.
-    expect(tabs(page)).to_have_text(['Make a trade', re.compile(r'^History \(2\)$')])
+    # Under the switches, three tabs. Make a trade is the default and the URL keeps no hash for it.
+    expect(tabs(page)).to_have_text(['Make a trade', re.compile(r'^History \(2\)$'), 'Offers'])
     expect(page.locator('#tab-history')).to_have_attribute('title', '1 completed, 1 did not complete')
     order = page.evaluate("""[...document.querySelectorAll('main > *')].map(el => el.id || el.className)""")
-    assert order[1:] == ['trade-overview', 'trade-connection-note', 'trade-tabs', 'panel-make', 'panel-history'], order
+    assert order[1:] == ['trade-overview', 'trade-connection-note', 'trade-tabs', 'panel-make', 'panel-history', 'panel-offers'], order
     on_tab(page, 'make')
     expect(page.locator('#make-trade')).to_be_visible()
     expect(page.locator('#trade-history')).to_be_hidden()
@@ -224,15 +257,21 @@ def test_trading_has_the_switch_up_top_then_make_a_trade_and_history_tabs(page, 
     # Arrow keys move between the tabs, wrapping around, and Home and End jump.
     page.locator('#tab-history').focus()
     page.keyboard.press('ArrowRight')
+    on_tab(page, 'offers')
+    page.keyboard.press('ArrowRight')
     on_tab(page, 'make')
     expect(page.locator('#tab-make')).to_be_focused()
     assert urlparse(page.url).fragment == 'make'
     page.keyboard.press('ArrowLeft')
+    on_tab(page, 'offers')
+    page.keyboard.press('ArrowLeft')
     on_tab(page, 'history')
     expect(page.locator('#tab-history')).to_be_focused()
+    page.keyboard.press('End')
+    on_tab(page, 'offers')
     page.keyboard.press('Home')
     on_tab(page, 'make')
-    page.keyboard.press('End')
+    page.keyboard.press('ArrowRight')
     on_tab(page, 'history')
     # Only the selected tab is in the Tab order.
     expect(page.locator('#tab-make')).to_have_attribute('tabindex', '-1')
@@ -424,8 +463,8 @@ def test_a_view_only_adventure_is_a_disabled_choice_with_its_reason(page, game):
             {'id': RED, 'name': 'Second Red', 'version': 'red', 'generation': 1, 'available': True, 'reason': ''},
             {'id': BLUE, 'name': 'Watched Blue', 'version': 'blue', 'generation': 1, 'available': False, 'reason': view_only}],
             'from_key': None, 'viewer_only': False})
-    page.unroute(re.compile(r'/api/v1/interactions/trade-builder/targets(\?|$)'))
-    page.route(re.compile(r'/api/v1/interactions/trade-builder/targets(\?|$)'), targets)
+    page.unroute(re.compile(r'/api/v1/interactions/trade-offers/targets(\?|$)'))
+    page.route(re.compile(r'/api/v1/interactions/trade-offers/targets(\?|$)'), targets)
     library.open()
     expect(option(page, BLUE)).to_have_attribute('disabled', '')
     expect(option(page, BLUE)).to_contain_text(view_only)
@@ -486,7 +525,7 @@ def test_a_view_only_adventure_cannot_fill_the_send_slot(page, game):
 def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late, expected_errors):
     if late == 'error':
         # The late answer for the earlier pick is a failure on purpose.
-        expected_errors(*refused('/api/v1/interactions/trade-builder/limits', 500))
+        expected_errors(*refused('/api/v1/interactions/trade-offers/limits', 500))
     library = Library(page, game[0])
     library.limits_held = []
     library.open()
@@ -517,7 +556,8 @@ def test_automatic_trades_run_without_asking(page, game, width):
     expect(page.locator('#trade-lamp')).to_have_attribute('title', 'On')
     expect(page.locator('#auto-switch')).to_be_enabled()
     # There is no Ask me first switch and no suggested trades to accept or dismiss.
-    expect(page.get_by_role('switch')).to_have_count(1)
+    # The owner's other two switches are Open to offers and Auto trading with other people.
+    expect(page.get_by_role('switch')).to_have_count(3)
     expect(page.get_by_text('Ask me first')).to_have_count(0)
     expect(page.locator('#trade-requests-section, .request-card, [data-request-action]')).to_have_count(0)
     shoot(page, f'auto-on-{width}')
@@ -532,7 +572,7 @@ def test_status_box_switch_turns_auto_trading_off(page, game, width):
     library = Library(page, game[0])
     page.set_viewport_size({'width': width, 'height': 844})
     library.open()
-    switch = page.locator('.trade-overview').get_by_role('switch', name=re.compile('Auto trading'))
+    switch = page.locator('.trade-overview').get_by_role('switch', name=AUTO)
     expect(switch).to_have_attribute('aria-checked', 'true')
     switch.click()
     expect(switch).to_have_attribute('aria-checked', 'false')
@@ -568,7 +608,7 @@ def test_pc_popup_lock_shows_on_the_grid_and_party(page, game, width):
     shoot(page, f'pc-lock-grid-{width}')
 
 
-@pytest.mark.parametrize('tab', ['offers', 'cable', 'auto'])
+@pytest.mark.parametrize('tab', ['cable', 'auto'])
 def test_an_old_tab_link_or_remembered_tab_still_opens_the_page(page, game, tab):
     library = Library(page, game[0])
     page.goto(f'{game[0]}/games/{FROM}/trading')
@@ -595,3 +635,100 @@ def test_a_deep_link_that_chooses_a_pokemon_lands_on_make_a_trade(page, game, wi
     library.open()
     on_tab(page, 'make')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+def someone_elses(library):
+    """Busy Blue belongs to bob and takes offers, so trading with it sends him an offer."""
+    def targets(route):
+        library.json(route, {'adventures': [
+            {'id': RED, 'name': 'Second Red', 'version': 'red', 'generation': 1, 'available': True, 'reason': '', 'offer': False},
+            {'id': BLUE, 'name': 'Busy Blue', 'version': 'blue', 'generation': 1, 'available': True, 'reason': '',
+             'offer': True, 'owner_name': 'bob'}], 'from_key': None, 'viewer_only': False})
+    library.page.unroute(re.compile(r'/api/v1/interactions/trade-offers/targets(\?|$)'))
+    library.page.route(re.compile(r'/api/v1/interactions/trade-offers/targets(\?|$)'), targets)
+
+
+@pytest.mark.parametrize('width', [1280, 390])
+def test_an_offer_to_someone_elses_adventure_is_sent_then_cancelled(page, game, width):
+    library = Library(page, game[0])
+    someone_elses(library)
+    page.set_viewport_size({'width': width, 'height': 844})
+    library.open()
+    expect(option(page, BLUE)).to_have_text('Busy Blue (bob), blue')
+    choose(page, 'mine', 'box-1')
+    page.locator('#pick-game').select_option(BLUE)
+    # The Pokémon to get may be left for bob to pick.
+    confirm = page.locator('#pick-confirm')
+    expect(confirm).to_have_text('Send offer')
+    expect(confirm).to_be_enabled()
+    expect(page.locator('#pick-summary')).to_have_text('bob answers this offer and picks the Pokémon you get.')
+    confirm.click()
+    on_tab(page, 'offers')
+    assert library.posted == [{'from_id': FROM, 'from_key': 'box-1', 'to_id': BLUE}]
+    expect(page.locator('#offers-note')).to_have_text('Offer sent. It waits for an answer below.')
+    card = page.locator('#offers-outgoing .offer-card')
+    expect(card.locator('h3')).to_have_text('To Busy Blue (bob)')
+    expect(card).to_contain_text('Your pick')
+    expect(card.locator('.offer-status')).to_have_text('Waiting for an answer')
+    expect(page.locator('#offers-count')).to_have_text('(1)')
+    shoot(page, f'offers-sent-{width}')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    card.get_by_role('button', name='Cancel').click()
+    expect(card.locator('.offer-status')).to_have_text('Cancelled')
+    assert library.answers == [('cancel', {})]
+    expect(page.locator('#offers-count')).to_have_text('')
+    # A game of your own still trades at once, with both Pokémon picked.
+    library.open()
+    choose(page, 'mine', 'box-1')
+    page.locator('#pick-game').select_option(RED)
+    expect(confirm).to_have_text('Trade')
+    expect(confirm).to_be_disabled()
+
+
+# The first accept answers 409 with changed, which asks for the second confirm.
+@pytest.mark.expected_errors(*refused('/accept', 409))
+def test_an_offer_that_asks_for_nothing_is_accepted_with_a_pick_and_a_second_confirm(page, game):
+    library = Library(page, game[0])
+    library.incoming.append({
+        'id': 'f' * 32, 'status': 'pending', 'reason': '', 'created_at': 3000, 'updated_at': 3000, 'expires_at': 3000 + 86400,
+        'manual_id': None, 'trade': None,
+        'from': library.side(BLUE, 'Busy Blue', {'key': '5', 'name': 'Pidgey', 'dex': 16, 'level': 9, 'owner_name': 'bob'}),
+        'to': library.side(FROM, 'Crystal', {'key': None, 'owner_name': 'alice'})})
+    library.changed = 'Pidgey is now Pidgeotto. Accept again to trade it as it is now.'
+    library.open('#offers')
+    on_tab(page, 'offers')
+    card = page.locator('#offers-incoming .offer-card')
+    expect(card.locator('h3')).to_have_text('From Busy Blue (bob)')
+    expect(page.locator('#offers-count')).to_have_text('(1)')
+    card.get_by_role('button', name='Accept').click()
+    # Nothing was asked for, so this adventure's Pokémon open to pick from.
+    picker = page.locator('#pick-dialog')
+    expect(picker).to_be_visible()
+    expect(page.locator('#pick-dialog-title')).to_have_text('Choose a Pokémon to give')
+    picker.locator('#pick-mine [data-key="box-1"]').click()
+    expect(picker).to_be_hidden()
+    expect(card).to_contain_text('Bulbasaur')
+    expect(card.locator('.offer-confirm')).to_have_text('Trades cannot be undone. Trade now?')
+    card.get_by_role('button', name='Trade now').click()
+    # Their Pokémon changed since the offer was sent, so the page asks once more.
+    expect(card.locator('.offer-confirm')).to_contain_text('Pidgey is now Pidgeotto')
+    card.get_by_role('button', name='Trade now').click()
+    expect(card.locator('.offer-status')).to_have_text('Accepted, waiting for the Cable Club')
+    assert library.answers == [('accept', {'to_key': 'box-1', 'confirm': False}), ('accept', {'to_key': 'box-1', 'confirm': True})]
+
+
+def test_only_the_owner_sees_the_offer_and_across_owner_switches(page, game):
+    library = Library(page, game[0])
+    library.open()
+    offers = page.locator('#offers-switch')
+    offers.click()
+    expect(offers).to_have_attribute('aria-checked', 'true')
+    page.locator('#across-switch').click()
+    expect(page.locator('#across-switch')).to_have_attribute('aria-checked', 'true')
+    assert library.saved == [{'open_to_offers': True}, {'across_owners': True}]
+    # Someone the owner shared the adventure with sees automatic trading, unchangeable, and nothing more.
+    library.auto['can_change'] = False
+    library.open()
+    expect(page.locator('#auto-switch')).to_be_disabled()
+    expect(page.locator('#offers-switch')).to_be_hidden()
+    expect(page.locator('#across-switch')).to_be_hidden()

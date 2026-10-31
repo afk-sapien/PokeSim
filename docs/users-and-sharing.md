@@ -61,8 +61,15 @@ Loading a save state or restarting first saves a checkpoint, so a mistake can be
 
 ## Trades
 
-Each player trades only between adventures they own. An admin can set up a trade between
-any two adventures.
+You build trades by hand only between adventures you own. An admin can set up a trade
+between any two adventures.
+
+To trade with someone else, send an offer. Their adventure must be shared with you and
+its owner must switch on **Open to offers** on its Trading page. Only the owner answers
+an offer. See [Trade offers](trading.md#trade-offers).
+
+Automatic trading pairs two people's adventures only when both owners switch on **Auto
+trading with other people**. Otherwise it pairs only adventures with the same owner.
 
 ## Your account
 
