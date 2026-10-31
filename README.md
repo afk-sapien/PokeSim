@@ -8,6 +8,25 @@ Watch an automatic player catch Pokémon, earn badges and challenge the League i
 your browser. Take control whenever you like, then hand the adventure back.
 Everything runs locally, with no model API or subscription.
 
+**Bring your own legally dumped ROMs. None are included, and PokeSim never downloads them.**
+
+## Quickstart
+
+On an x86-64 machine with Docker Compose:
+
+```sh
+curl -fL --retry 3 --create-dirs -o pokesim/compose.yaml https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.quickstart.yaml
+cd pokesim
+docker compose up -d --wait
+```
+
+Open [localhost:8930](http://localhost:8930), add your ROM in Settings → Game cartridges
+and create an adventure. Other platforms and the desktop install are under [Install](#install).
+
+**Hardware:** each running adventure is one process. At 4x speed it uses 5 to 20% of one
+CPU core, about 300 MB of RAM for Red, Blue or Yellow and about 150 MB for Gold, Silver or
+Crystal. Max speed can use a full core. The Library itself needs about 170 MB.
+
 ## Keep the adventure going
 
 - **Many games side by side:** Run any mix of Generation I and II adventures, each with
@@ -103,16 +122,7 @@ include or download ROMs. Your ROM stays on the machine running PokeSim.
 
 ### Server: Docker Compose
 
-On an x86-64 machine with Docker Compose, create a new installation folder:
-
-```sh
-mkdir pokesim
-cd pokesim
-curl -fL --retry 3 -o compose.yaml https://github.com/afk-sapien/PokeSim/releases/latest/download/compose.quickstart.yaml
-docker compose up -d --wait
-```
-
-Open [localhost:8930](http://localhost:8930), add your ROM in Settings → Game cartridges and create an adventure.
+The [quickstart](#quickstart) creates a `pokesim` folder holding `compose.yaml`.
 On Windows PowerShell, use `curl.exe`. Docker keeps your library in a persistent
 volume. Keep this folder for future Compose commands.
 
