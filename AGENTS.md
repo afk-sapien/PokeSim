@@ -65,7 +65,7 @@ checkouts that might not load this file automatically.
 - Run the scenario suite and the 3-run batches only when a change can alter planner or bot behavior: planning, strategy, battle or overworld code. Storage, UI, tooling and docs changes skip them.
 - A scenario that also fails on main gets logged once, and the work goes on. Do not rerun it to prove it.
 - Every release runs `tools/stage_ladder.py gate` before the release soak, and a release with a gate failure does not ship. The gate takes the load gate's heavy lock on its own, so never wrap it in a `flock` of those lock files or a script that takes them. A gate inside its own lock waits forever.
-- Run every long local job in the background under `timeout`, and look at it when it runs past twice its usual time. A job at 0% CPU for that long is stuck, so report it.
+- Run every long local job in the background under `timeout`, and look at it when it runs past twice its usual time. A full gate takes about 3 minutes, so run it under `timeout 30m`. A job at 0% CPU for that long is stuck, so report it.
 - For a behavior change, the gate replaces long full-sim batches. Run full-sim batches only when the change targets late-game play the 30 game minutes from each rung cannot reach.
 - Store a new gate baseline with `--write-baseline` on main after a merge that changes play on purpose, so the next gate compares against it.
 
