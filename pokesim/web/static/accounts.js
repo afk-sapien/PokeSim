@@ -72,6 +72,7 @@
           await call(`/api/v1/users/${user.id}/sessions`, {method: 'DELETE'})
           report('#people-result', `${user.username} is logged out everywhere.`)
         })))
+        row.append(button('Delete user', () => attempt('#people-result', () => planDeletion(row, user, users)), true))
       }
       return row
     }))
@@ -83,6 +84,40 @@
       }), true))
       return row
     }))
+  }
+  // Deleting someone never deletes an adventure: each one they own goes to another person or
+  // is archived under the admin who deleted them.
+  async function planDeletion(row, user, users) {
+    row.querySelector('.delete-plan')?.remove()
+    const {adventures} = await call('/api/v1/adventures')
+    const owned = adventures.filter(game => game.owner_id === user.id)
+    const others = users.filter(other => !other.placeholder && !other.disabled && other.id !== user.id)
+    const plan = element('div', undefined, 'delete-plan settings-controls')
+    const name = user.display_name || user.username
+    plan.append(element('p', owned.length ? `Choose what happens to each adventure ${name} owns.` : `${name} owns no adventures.`, 'note'))
+    const choices = owned.map(game => {
+      const choice = element('select')
+      choice.dataset.adventure = game.id
+      choice.setAttribute('aria-label', `New owner of ${game.name}`)
+      const archive = element('option', 'Archive it')
+      archive.value = 'archive'
+      choice.append(archive, ...others.map(other => {
+        const option = element('option', `Give to ${other.display_name || other.username}`)
+        option.value = other.id
+        return option
+      }))
+      const field = element('label', undefined, 'field')
+      field.append(element('span', game.name, 'micro'), choice)
+      plan.append(field)
+      return choice
+    })
+    plan.append(button(`Delete ${name}`, () => attempt('#people-result', async () => {
+      const chosen = Object.fromEntries(choices.map(choice => [choice.dataset.adventure, choice.value]))
+      await call(`/api/v1/users/${user.id}`, {method: 'DELETE', body: JSON.stringify({adventures: chosen})})
+      await showPeople()
+      report('#people-result', `${name} was deleted.`)
+    }), true), button('Keep them', () => plan.remove()))
+    row.append(plan)
   }
   async function invite() {
     await attempt('#people-result', async () => {
@@ -134,6 +169,13 @@
         return option
       }))
     $('#share-person').firstChild.value = ''
+    $('#transfer-person').replaceChildren(element('option', 'Choose a person'), ...sharing.users.map(user => {
+      const option = element('option', `${user.display_name || user.username} (${user.username})`)
+      option.value = user.id
+      return option
+    }))
+    $('#transfer-person').firstChild.value = ''
+    resetTransfer()
     $('#share-links').replaceChildren(...sharing.shares.map(share => {
       const row = element('li', `Link made ${when(share.created_at)}` + (share.expires ? `, open until ${when(share.expires)}.` : ', no end date.'), 'people-row')
       row.append(button('Turn off link', () => attempt('#share-result', async () => {
@@ -173,6 +215,31 @@
       $('#share-made').hidden = false
     })
   }
+  // Giving an adventure away takes two clicks: the first asks, the second gives it.
+  function resetTransfer() {
+    const key = $('#transfer-start')
+    delete key.dataset.confirm
+    key.textContent = 'Give away'
+  }
+  async function transfer() {
+    const key = $('#transfer-start')
+    const choice = $('#transfer-person')
+    if (!choice.value) return report('#share-result', 'Choose who gets this adventure first.')
+    const name = choice.selectedOptions[0].textContent
+    if (!key.dataset.confirm) {
+      key.dataset.confirm = 'yes'
+      key.textContent = 'Confirm give away'
+      return report('#share-result', `${name} will own this adventure. You will lose access unless they share it back. Press Confirm give away to go ahead.`)
+    }
+    await attempt('#share-result', async () => {
+      await send('POST', `/api/v1/adventures/${$('#share-adventure').value}/transfer`, {user_id: choice.value})
+      $('#share-adventure').value = ''
+      await showAdventures()
+      report('#share-result', `${name} owns it now.`)
+    })
+    resetTransfer()
+  }
+
   async function showAdventures() {
     const owned = await ownedAdventures()
     const choice = $('#share-adventure')
@@ -213,6 +280,8 @@
     $('#share-legacy-make').addEventListener('click', makeLegacyLink)
     $('#share-create').addEventListener('click', makeLink)
     $('#share-copy').addEventListener('click', copier('#share-url'))
+    $('#transfer-start').addEventListener('click', transfer)
+    $('#transfer-person').addEventListener('change', resetTransfer)
     await attempt('#share-result', showAdventures)
     if (session.role === 'admin') {
       $('#people-panel').hidden = false

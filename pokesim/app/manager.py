@@ -58,6 +58,10 @@ GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats'
               'stats/items', 'trading'}
 
 
+class CapReached(Exception):
+    """A start would put more adventures running than a cap allows."""
+
+
 def public_game_path(method, path):
     """Allow public routes before HTTP client URL normalization can change them."""
     if method == 'POST':
@@ -109,6 +113,7 @@ class Manager:
         from .notifications import NotificationCenter
         self.notifications = NotificationCenter(self.registry, self.supervisor, self.public_url)
         self.maintenance = threading.RLock()
+        self.cap_lock = threading.Lock()
         self.supervisor.admission = self.maintenance
         self.suspended = False
         self.closing = False
@@ -197,6 +202,40 @@ class Manager:
     def check_available(self):
         if self.suspended or self.closing:
             raise ValueError('PokeSim is saving, backing up, or shutting down')
+
+    def running_caps(self):
+        """The server-wide cap and the per-member cap on running adventures. None means no cap."""
+        caps = self.registry.setting('running_caps', {})
+        return {'server': caps.get('server'), 'member': caps.get('member')}
+
+    @staticmethod
+    def suggested_member_cap():
+        """2 on a Pi or another arm64 machine with 4 GB of RAM or less, otherwise 4."""
+        import platform
+        import psutil
+        small = platform.machine().lower() in {'aarch64', 'arm64', 'armv7l'} and psutil.virtual_memory().total <= 4 * 1024 ** 3
+        return 2 if small else 4
+
+    def check_running_cap(self, aid):
+        """Refuse a start over a cap. Adventures already running are never stopped."""
+        caps = self.running_caps()
+        if self.registry.adventure(aid)['desired_state'] == 'running':
+            return
+        running = [row for row in self.registry.adventures()
+                   if row['id'] != aid and not row['archived'] and row['desired_state'] == 'running']
+        if caps['server'] is not None and len(running) >= caps['server']:
+            raise CapReached(f'{len(running)} of {caps["server"]} adventures are running on this server. '
+                             'Stop one before starting another')
+        if caps['member'] is None or self.auth_mode != 'accounts':
+            return
+        owner = self.registry.adventure(aid).get('owner_id')
+        user = self.auth.user(owner) if owner else None
+        if user is None or user['role'] == 'admin':
+            return
+        mine = sum(row.get('owner_id') == owner for row in running)
+        if mine >= caps['member']:
+            raise CapReached(f'{user["display_name"]} has {mine} of {caps["member"]} adventures running. '
+                             'Stop one before starting another')
 
     def start(self):
         self.announce_setup()
@@ -530,6 +569,10 @@ def create_app(manager, shutdown=lambda: None):
     async def offer_changed(request, error):
         return JSONResponse({'detail': str(error), 'changed': True, 'offer': error.offer}, status_code=409)
 
+    @app.exception_handler(CapReached)
+    async def cap_reached(request, error):
+        return JSONResponse({'detail': str(error), 'cap': True}, status_code=409)
+
     @app.exception_handler(RuntimeError)
     async def unavailable(request, error):
         return JSONResponse({'detail': str(error)}, status_code=409)
@@ -775,7 +818,14 @@ def create_app(manager, shutdown=lambda: None):
         if adventure['archived']:
             raise ValueError('Restore this adventure before starting')
         data = await json_body(request)
-        if manager.registry.request_lifecycle(aid, 'start', data.get('request_id', identifier()), owner=owner_of(request)):
+
+        def admit():
+            # One start at a time passes the cap check, so two starts cannot both take the last place.
+            with manager.cap_lock:
+                manager.check_running_cap(aid)
+                return manager.registry.request_lifecycle(aid, 'start', data.get('request_id', identifier()),
+                                                          owner=owner_of(request))
+        if await run_in_threadpool(admit):
             manager.registry.update(aid, state='starting', error=None)
             manager.background(manager.start_adventure, aid)
         return manager.registry.adventure(aid)
@@ -934,6 +984,27 @@ def create_app(manager, shutdown=lambda: None):
             return await asyncio.to_thread(manager.watchdog.set_enabled, data['enabled'])
         except ValueError as error:
             raise HTTPException(422, str(error)) from None
+
+    @app.get('/api/v1/running-caps')
+    def running_caps(request: Request):
+        running = [row for row in manager.registry.adventures()
+                   if not row['archived'] and row['desired_state'] == 'running']
+        mine = sum(row.get('owner_id') == request.state.actor.id for row in running)
+        return {**manager.running_caps(), 'running': len(running), 'mine': mine,
+                'suggested_member': manager.suggested_member_cap(),
+                'can_change': can(request.state.actor, 'library.settings')}
+
+    @app.put('/api/v1/running-caps')
+    async def set_running_caps(request: Request):
+        data = await json_body(request)
+        if not isinstance(data, dict) or not data or set(data) - {'server', 'member'}:
+            raise HTTPException(422, 'Send server, member or both')
+        for value in data.values():
+            if value is not None and (type(value) is not int or not 1 <= value <= 1000):
+                raise HTTPException(422, 'A cap is a whole number from 1 to 1000, or null for no cap')
+        manager.registry.set_setting('running_caps', {**manager.running_caps(), **data})
+        manager.auth.audit('caps.update', user_id=request.state.actor.id, target=json.dumps(data, sort_keys=True))
+        return running_caps(request)
 
     @app.get('/api/v1/notifications')
     def notifications():

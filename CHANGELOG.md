@@ -6,6 +6,10 @@
 
 - Add trade offers between people. An owner switches on Open to offers, and people the adventure is shared with send offers from Make a trade, with or without a Pokémon they ask for. Only the owner accepts or declines, a changed Pokémon asks for a second confirm, and unanswered offers expire after 24 hours. Auto trading with other people lets automatic trading pair two owners' adventures when both switch it on. See [Trade offers](docs/trading.md#trade-offers).
 
+- Add running limits. An admin sets a server-wide limit on running adventures and an optional per-member limit in Settings. A start over a limit is refused with the numbers, and running adventures are never stopped. Settings suggests 2 per member on an ARM machine with 4 GB of memory or less, otherwise 4. See [Running limits](docs/users-and-sharing.md#running-limits).
+
+- Add giving an adventure away and deleting a user. An owner gives an adventure to another person from Sharing. An admin deletes a user after choosing, for each adventure they own, a new owner or Archive, so no adventure is deleted with the account. Either way the old owner's open offers, queued trades and control lease end. See [Delete a user](docs/users-and-sharing.md#delete-a-user).
+
 ## 0.6.2
 
 - Publish the container image for linux/arm64 as well as linux/amd64, so it runs on a Raspberry Pi 4 or 5, an ARM NAS or an Apple silicon Mac without emulation. The release workflow builds and tests each architecture on its own native runner, pushes each as `<version>-linux-<arch>` and joins them into one multi-platform tag, then checks anonymously that the tag serves both and that each pulls the tested image ([#269](https://github.com/afk-sapien/PokeSim/issues/269)).

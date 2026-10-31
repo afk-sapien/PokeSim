@@ -193,6 +193,16 @@ class Registry:
             self.db.executemany('UPDATE adventures SET owner_id=? WHERE id=?', [(owner, aid) for aid in rows])
         return rows
 
+    def set_owner(self, aid, owner):
+        """Ownership moves only here, by a transfer or when a user is deleted."""
+        validate_id(owner)
+        self.adventure(aid)
+        with self.lock, self.db:
+            self.db.execute('UPDATE adventures SET owner_id=? WHERE id=?', (owner, aid))
+        result = self.adventure(aid)
+        self.write_manifest(result)
+        return result
+
     def request_lifecycle(self, aid, action, request_id, *, owner=LIBRARY_OWNER):
         request_id = self.scoped_request(request_id, owner)
         self.adventure(aid)  # an unknown adventure raises KeyError here

@@ -249,6 +249,19 @@ class AuthStore:
             self.end_sessions(uid)
         return result
 
+    def delete_user(self, uid):
+        """Remove a user with their sessions, sign-ins and grants, and end the links and invites they made."""
+        current = self.user(uid)
+        if current is None or current['placeholder']:
+            raise KeyError('User not found')
+        with self.lock, self.db:
+            self.db.execute('UPDATE shares SET revoked_at=? WHERE created_by=? AND revoked_at IS NULL', (time.time(), uid))
+            self.db.execute('UPDATE invites SET revoked=1 WHERE created_by=? AND used_by IS NULL', (uid,))
+            self.db.execute('DELETE FROM users WHERE id=?', (uid,))
+            if current['role'] == 'admin' and not current['disabled'] and self._admins() == 0:
+                raise ValueError('Keep at least one admin')
+        self.cache.clear()
+
     def set_password(self, uid, password, *, keep=None):
         """Change a password and end every other session of that user."""
         hashed = self.hasher.hash(validate_password(password))

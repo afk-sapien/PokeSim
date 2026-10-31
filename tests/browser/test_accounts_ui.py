@@ -79,3 +79,58 @@ def test_share_an_adventure_with_a_role(page, tmp_path, monkeypatch):
         expect(page.locator('#share-watchers')).to_contain_text('bob can manage.')
         aid = manager.registry.adventures()[0]['id']
         assert manager.auth.grants_for(bob['id']) == {aid: 'manager'}
+
+
+def test_set_running_limits_from_settings(page, tmp_path, monkeypatch):
+    from playwright.sync_api import expect
+    factory, holder = library(tmp_path, monkeypatch)
+    with serve(factory) as url:
+        log_in(page, url, 'admin', OLD)
+        expect(page.locator('#caps-panel')).to_be_visible()
+        expect(page.locator('#caps-summary')).to_contain_text('per member suits this machine')
+        page.get_by_label('Server limit, blank for none').fill('3')
+        page.get_by_label('Per member, blank for none').fill('1')
+        page.get_by_role('button', name='Save limits').click()
+        expect(page.locator('#caps-result')).to_have_text('Limits saved.')
+        assert holder['manager'].running_caps() == {'server': 3, 'member': 1}
+
+
+def test_give_an_adventure_away_in_two_clicks(page, tmp_path, monkeypatch):
+    from playwright.sync_api import expect
+    factory, holder = library(tmp_path, monkeypatch)
+    with serve(factory) as url:
+        manager = holder['manager']
+        manager.registry.add_rom('fixture', 'sha1', 'red')
+        admin = manager.auth.user_by_name('admin')
+        red = manager.registry.create('Red', 'fixture', {}, identifier(), owner=admin['id'])
+        bob = manager.auth.create_user('bob', OLD)
+        log_in(page, url, 'admin', OLD)
+        page.locator('#share-adventure').select_option(label='Red')
+        page.locator('#transfer-person').select_option(label='bob (bob)')
+        page.get_by_role('button', name='Give away').click()
+        expect(page.locator('#share-result')).to_contain_text('will own this adventure')
+        assert manager.registry.adventure(red['id'])['owner_id'] == admin['id']
+        page.get_by_role('button', name='Confirm give away').click()
+        expect(page.locator('#share-result')).to_have_text('bob (bob) owns it now.')
+        assert manager.registry.adventure(red['id'])['owner_id'] == bob['id']
+
+
+def test_delete_a_user_and_archive_their_adventure(page, tmp_path, monkeypatch):
+    from playwright.sync_api import expect
+    factory, holder = library(tmp_path, monkeypatch)
+    with serve(factory) as url:
+        manager = holder['manager']
+        monkeypatch.setattr(manager, 'background', lambda function, *args: None)
+        manager.registry.add_rom('fixture', 'sha1', 'red')
+        bob = manager.auth.create_user('bob', OLD)
+        blue = manager.registry.create('Blue', 'fixture', {}, identifier(), owner=bob['id'])
+        log_in(page, url, 'admin', OLD)
+        row = page.locator('#people-list li', has_text='(bob)')
+        row.get_by_role('button', name='Delete user').click()
+        expect(row.get_by_label('New owner of Blue')).to_have_value('archive')
+        row.get_by_role('button', name='Delete bob').click()
+        expect(page.locator('#people-result')).to_have_text('bob was deleted.')
+        expect(page.locator('#people-list')).not_to_contain_text('(bob)')
+        kept = manager.registry.adventure(blue['id'])
+        assert kept['archived'] and kept['owner_id'] == manager.auth.user_by_name('admin')['id']
+        assert manager.auth.user(bob['id']) is None

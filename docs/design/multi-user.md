@@ -93,7 +93,7 @@ Each adventure has one owner and a `grants` table: adventure id, user id, role, 
 |---|---|---|
 | viewer | Can watch | Watch the screen, team, journal, progress and statistics. |
 | player | Can play | Request and hold the control lease. |
-| manager | Can manage | Pause, save, change speed, goals and settings, load saves, rewind, make and answer trade offers, turn auto-trading on or off. |
+| manager | Can manage | Pause, save, change speed, goals and settings, load saves, rewind, make trade offers, turn auto-trading on or off. Only the owner answers an offer. |
 | owner | Owner | Restart, share and unshare, transfer, archive and delete. |
 
 Ownership only moves by transfer. Transferring an adventure, revoking a grant or deleting a user withdraws the affected user's outgoing offers, declines their incoming ones, cancels queued trades and ends their lease.
@@ -211,7 +211,7 @@ The lease lives in the manager, in memory with a copy in the audit log. A manage
 - **Running caps.** A server-wide cap on running adventures, and an optional per-member cap. A start over a cap is refused with a warning and the numbers. Running adventures are never stopped.
 - **ROMs.** A `rom_owners` join table links users to ROMs, and each user sees their own shelf. Removing a cartridge removes only your ownership, and the file goes when no owner is left. The upload answer is the same whether or not the ROM already exists. No route exposes ROM hashes or other people's rows, and no route serves a ROM file back. A shared ROM shelf is an admin toggle, off by default.
 - **API tokens.** Later. When they come, they are sent only in the `Authorization` header, a request may not carry a cookie and a token together, and tokens reach `/games/` only with a `control` scope.
-- **Deleting a user.** The admin picks, for each of the user's adventures, a new owner or archive. Archived adventures stay on disk and can be given to someone later. Nothing is deleted silently. The user's grants, share links, offers, queued trades, leases and sessions end.
+- **Deleting a user.** The admin picks, for each of the user's adventures, a new owner or archive. Archived adventures stay on disk under the admin who deleted the user, and can be given to someone later. Nothing is deleted silently. The user's grants, share links, offers, queued trades, leases and sessions end.
 
 ## 8. Rollout
 
@@ -222,7 +222,13 @@ Agent time per release is the estimate for writing, testing and review fixes, pl
 | 1, answers #45 | Local login with invites, OIDC, trusted headers, `AUTH=none`, admin and member, owner-only adventures with watch grants, share tokens, login for reads, admin-only backups, first-run setup and migration, `auth.sqlite`, the audit table, the coverage test, and the user guide. Invites can create members, and members can only watch adventures shared with them, so nobody becomes admin by accident. | 5 h |
 | 2 | Can play and Can manage grants, the full control lease, body-action enforcement on `api/control`. | 6 h |
 | 3 | Trade offers: offer, accept, decline, cancel, expiry, the per-Pokémon lock, open to offers and the opt-in for auto-trading across owners. | 6 h |
-| 4 | The server-wide running cap, the optional per-member cap, user deletion and transfer, and `pokesim admin reset-password` if it has not shipped earlier. | 3 h |
+| 4 | The server-wide running cap, the optional per-member cap, user deletion and transfer, the inbox, and `pokesim admin reset-password` if it has not shipped earlier. | 3 h |
+
+All four releases shipped on the `feature/multi-user` branch. Where they differ from this design:
+
+- Only an adventure's owner answers an offer. A manager can send offers but not accept or decline them.
+- `pokesim admin reset-password` shipped in release 1.
+- An archived adventure of a deleted user belongs to the admin who deleted them, so it always has an owner who can restore it or give it away.
 
 Deferred until someone asks: counter-offers, per-user blocking, `TRADE_ADMIN_APPROVAL`, storage quotas, scoped API tokens, per-user notification targets, an audit log viewer (the table keeps being written) and a hash-chained audit log.
 

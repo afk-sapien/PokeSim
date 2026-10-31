@@ -1230,6 +1230,19 @@
   $('#item-artwork-default').onclick = () => act(async () => {
     renderItemArtwork(await write('/api/v1/item-artwork/default'))
   })
+  function renderCaps(data) {
+    $('#caps-panel').hidden = !data.can_change
+    const limit = value => value === null ? 'no limit' : `a limit of ${value}`
+    $('#caps-summary').textContent = `${data.running} running now. The server has ${limit(data.server)}, each member ${limit(data.member)}. ${data.suggested_member} per member suits this machine.`
+    if (document.activeElement !== $('#caps-server')) $('#caps-server').value = data.server ?? ''
+    if (document.activeElement !== $('#caps-member')) $('#caps-member').value = data.member ?? ''
+  }
+  $('#caps-save').onclick = () => act(async () => {
+    const read = id => $(id).value.trim() === '' ? null : Number($(id).value)
+    renderCaps(await api('/api/v1/running-caps', {method: 'PUT', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({server: read('#caps-server'), member: read('#caps-member')})}))
+    $('#caps-result').textContent = 'Limits saved.'
+  })
   async function enter() {
     await initializeSession()
     $('#workspace').hidden = false
@@ -1237,6 +1250,7 @@
     document.querySelector(`[data-nav="${page === 'stopped' ? 'library' : page}"]`)?.setAttribute('aria-current', 'page')
     if (page === 'settings' && owner) {
       renderNicknameSettings(await api('/api/v1/settings'))
+      renderCaps(await api('/api/v1/running-caps'))
       await refreshBackups()
       await refreshPortraits()
       await refreshItemArtwork()
