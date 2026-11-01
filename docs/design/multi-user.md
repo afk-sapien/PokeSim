@@ -223,12 +223,17 @@ Agent time per release is the estimate for writing, testing and review fixes, pl
 | 2 | Can play and Can manage grants, the full control lease, body-action enforcement on `api/control`. | 6 h |
 | 3 | Trade offers: offer, accept, decline, cancel, expiry, the per-Pokémon lock, open to offers and the opt-in for auto-trading across owners. | 6 h |
 | 4 | The server-wide running cap, the optional per-member cap, user deletion and transfer, the inbox, and `pokesim admin reset-password` if it has not shipped earlier. | 3 h |
+| 5 | Per-user cartridge shelves with `rom_owners`, inbox items for offers that a transfer, a revoked share, a deleted user or a deleted adventure ends, and unlinking the inbox items of a deleted adventure. | 2 h |
 
-All four releases shipped on the `feature/multi-user` branch. Where they differ from this design:
+All five releases shipped on the `feature/multi-user` branch. Where they differ from this design:
 
 - Only an adventure's owner answers an offer. A manager can send offers but not accept or decline them.
 - `pokesim admin reset-password` shipped in release 1.
 - An archived adventure of a deleted user belongs to the admin who deleted them, so it always has an owner who can restore it or give it away.
+- The shared ROM shelf toggle is not built. Every shelf is private. ROMs from before shelves belong to the Library owner, and each adventure's owner has its ROM.
+- A member who can create adventures can add cartridges. Each person sees only their own ROM ids, which are hashes, and an adventure shared with someone who lacks its ROM hides its `rom_id`.
+- The admin backup download still contains ROM files.
+- The game page has no inbox yet, and inbox text is English only.
 
 Deferred until someone asks: counter-offers, per-user blocking, `TRADE_ADMIN_APPROVAL`, storage quotas, scoped API tokens, per-user notification targets, an audit log viewer (the table keeps being written) and a hash-chained audit log.
 

@@ -493,6 +493,8 @@ class AuthStore:
             self.db.execute('DELETE FROM grants WHERE adventure_id=?', (adventure_id,))
             self.db.execute('UPDATE shares SET revoked_at=? WHERE adventure_id=? AND revoked_at IS NULL',
                             (time.time(), adventure_id))
+            # Inbox items about it keep their words but no longer point at a game that is gone.
+            self.db.execute('UPDATE notifications SET adventure_id=NULL, link=NULL WHERE adventure_id=?', (adventure_id,))
 
     # Share links ------------------------------------------------------------------------
     def create_share(self, adventure_id, created_by, *, seconds=None):

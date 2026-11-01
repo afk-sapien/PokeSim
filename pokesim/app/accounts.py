@@ -290,15 +290,19 @@ def install(app, manager):
             from . import inbox
             inbox.shared(manager, aid, data['user_id'], data['role'], actor(request))
         if data['role'] == 'viewer':
+            from . import ownership
             manager.leases.forget(aid, data['user_id'])
+            ownership.unshare(manager, aid, data['user_id'], actor(request))
         auth.audit('grant.add', user_id=actor(request).id, adventure_id=aid, target=f"{data['user_id']} {data['role']}",
                    ip=manager.client_address(request))
         return sharing_of(aid)
 
     @app.delete('/api/v1/adventures/{aid}/grants/{uid}')
     def remove_grant(aid: str, uid: str, request: Request):
+        from . import ownership
         auth.revoke_grant(aid, uid)
         manager.leases.forget(aid, uid)
+        ownership.unshare(manager, aid, uid, actor(request))
         auth.audit('grant.remove', user_id=actor(request).id, adventure_id=aid, target=uid, ip=manager.client_address(request))
         return sharing_of(aid)
 

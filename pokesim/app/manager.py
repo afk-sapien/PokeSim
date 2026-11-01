@@ -730,7 +730,11 @@ def create_app(manager, shutdown=lambda: None):
     inbox_module.install(app, manager)
 
     def listed(row, actor):
-        return {**row, 'resources': manager.supervisor.resources(row['id']), 'access': policy.adventure_role(actor, row)}
+        row = {**row, 'resources': manager.supervisor.resources(row['id']), 'access': policy.adventure_role(actor, row)}
+        if manager.auth_mode == 'accounts' and not manager.registry.owns_rom(row['rom_id'], actor.id):
+            # The ROM id is its hash, which is only for people who have that cartridge.
+            row.pop('rom_id')
+        return row
 
     @app.get('/api/v1/adventures')
     def adventures(request: Request):
@@ -749,9 +753,13 @@ def create_app(manager, shutdown=lambda: None):
     def adventure(aid: str, request: Request):
         return listed(manager.registry.adventure(aid), request.state.actor)
 
+    def shelf(request):
+        """Whose cartridges a request sees: its own under accounts, the whole Library without them."""
+        return owner_of(request) if manager.auth_mode == 'accounts' else None
+
     @app.get('/api/v1/assets')
-    def assets():
-        return {'roms': manager.registry.roms(), 'cartridges': manager.assets.cartridge_slots()}
+    def assets(request: Request):
+        return {'roms': manager.registry.roms(shelf(request)), 'cartridges': manager.assets.cartridge_slots(shelf(request))}
 
     async def read_cartridge(request):
         raw = bytearray()
@@ -764,7 +772,7 @@ def create_app(manager, shutdown=lambda: None):
     async def add_cartridge(request, slot=None):
         manager.check_available()
         raw = await read_cartridge(request)
-        result = await asyncio.to_thread(manager.assets.add_cartridge, raw, slot)
+        result = await asyncio.to_thread(manager.assets.add_cartridge, raw, slot, owner_of(request))
         manager.background(manager.assets.install_portraits_quietly, result.pop('raw'))
         return result
 
@@ -775,20 +783,20 @@ def create_app(manager, shutdown=lambda: None):
         return {**result['rom'], 'title': result['title'], 'message': result['message']}
 
     @app.get('/api/v1/cartridges')
-    def cartridges():
+    def cartridges(request: Request):
         from ..cartridges import supported_names
-        return {'slots': manager.assets.cartridge_slots(), 'supported': supported_names()}
+        return {'slots': manager.assets.cartridge_slots(shelf(request)), 'supported': supported_names()}
 
     @app.post('/api/v1/cartridges')
     async def upload_cartridge(request: Request, slot: str | None = None):
         result = await add_cartridge(request, slot or None)
-        return {**result, 'slots': manager.assets.cartridge_slots()}
+        return {**result, 'slots': manager.assets.cartridge_slots(shelf(request))}
 
     @app.delete('/api/v1/cartridges/{version}')
-    def remove_cartridge(version: str):
+    def remove_cartridge(version: str, request: Request):
         manager.check_available()
-        result = manager.assets.remove_cartridge(version)
-        return {**result, 'slots': manager.assets.cartridge_slots()}
+        result = manager.assets.remove_cartridge(version, shelf(request))
+        return {**result, 'slots': manager.assets.cartridge_slots(shelf(request))}
 
     @app.post('/api/v1/adventures')
     async def create(request: Request):
@@ -811,7 +819,11 @@ def create_app(manager, shutdown=lambda: None):
             'fossil_preference': data.get('fossil_preference', 'auto'),
             'dojo_preference': data.get('dojo_preference', 'auto'),
         })
-        return manager.registry.create(data.get('name', ''), data.get('rom_id', ''), settings,
+        rom_id = data.get('rom_id', '')
+        if shelf(request) is not None and not manager.registry.owns_rom(rom_id, shelf(request)):
+            # The same answer as for a ROM nobody has, so ids from elsewhere tell nothing.
+            raise ValueError('Add a game cartridge in Settings before creating an adventure')
+        return manager.registry.create(data.get('name', ''), rom_id, settings,
                                        data.get('request_id', identifier()), owner=owner_of(request))
 
     @app.post('/api/v1/adventures/{aid}/start')
@@ -849,7 +861,8 @@ def create_app(manager, shutdown=lambda: None):
     async def delete(aid: str, request: Request):
         from .deletion import delete_adventure
         data = await json_body(request)
-        result = await asyncio.to_thread(delete_adventure, manager, aid, data.get('confirmation'))
+        result = await asyncio.to_thread(delete_adventure, manager, aid, data.get('confirmation'),
+                                         getattr(request.state, 'actor', None))
         manager.auth.forget_adventure(aid)
         return result
 

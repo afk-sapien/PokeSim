@@ -88,6 +88,19 @@ it away later. No adventure is ever deleted this way.
 Their sessions, grants, invites, share links, sent offers and lease requests end with the
 account. You cannot delete your own account or the last admin.
 
+## Cartridges
+
+Each person has their own cartridge shelf in Settings. Admins and members who can create
+adventures add cartridges there, and nobody sees anyone else's shelf. PokeSim stores each
+cartridge file once, however many people add it.
+
+Removing a cartridge takes it off your shelf only. It is refused while one of your own
+adventures plays it. The file is deleted once nobody has it on their shelf and no
+adventure plays it. Deleting a user empties their shelf the same way.
+
+Cartridges added before accounts belong to the admin who set up the Library, and the
+owner of each adventure has its cartridge. Admin backups contain the cartridge files.
+
 ## Running limits
 
 An admin can limit how many adventures run at once in Settings, under Running adventures.
@@ -107,6 +120,10 @@ them, newest first. You get an item when:
 3. Someone asks for control while you hold it, or asks for control of your adventure.
 4. An owner or manager takes control back from you.
 5. Someone shares an adventure with you.
+
+An offer also ends with an item for both sides when an adventure in it changes hands or
+is deleted, when its sender loses their share or can only watch, or when its sender is
+deleted. Items about a deleted adventure keep their text but no longer open a page.
 
 Nothing arrives for your own actions or for trades between your own adventures. Select
 an item to open its page and mark it read, or select **Mark all read**. PokeSim keeps
