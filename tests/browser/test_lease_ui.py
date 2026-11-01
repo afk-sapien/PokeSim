@@ -138,6 +138,8 @@ def test_idle_hands_are_warned_then_lose_control(browser, tmp_path, monkeypatch)
             route.continue_()
     with adventure(tmp_path, monkeypatch) as game:
         bob = open_game(browser, game, 'bob', lease_route=hold_reads)
+        # The URL settles before app.js runs, and a press before then reaches no handler.
+        bob.wait_for_load_state('domcontentloaded')
         bob.locator('#take-control').click()
         idle = bob.locator('#lease-idle')
         expect(idle).to_contain_text('No buttons pressed for a while. Control ends in')
