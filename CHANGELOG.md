@@ -10,6 +10,10 @@
 
 - Add giving an adventure away and deleting a user. An owner gives an adventure to another person from Sharing. An admin deletes a user after choosing, for each adventure they own, a new owner or Archive, so no adventure is deleted with the account. Either way the old owner's open offers, queued trades and control lease end. See [Delete a user](docs/users-and-sharing.md#delete-a-user).
 
+- Give each person their own cartridge shelf. A member who can create adventures adds cartridges, sees only their own, and removing one takes it off their shelf only. The file is deleted when nobody has it and no adventure plays it. An upload answers the same whether or not someone else has the file, and an adventure needs a cartridge from your own shelf. Earlier cartridges belong to the Library owner. See [Cartridges](docs/users-and-sharing.md#cartridges).
+
+- Tell both sides in their inboxes when an offer ends because an adventure changed hands or was deleted, or its sender lost their share or was deleted. Inbox items about a deleted adventure no longer link to it.
+
 ## 0.6.2
 
 - Publish the container image for linux/arm64 as well as linux/amd64, so it runs on a Raspberry Pi 4 or 5, an ARM NAS or an Apple silicon Mac without emulation. The release workflow builds and tests each architecture on its own native runner, pushes each as `<version>-linux-<arch>` and joins them into one multi-platform tag, then checks anonymously that the tag serves both and that each pulls the tested image ([#269](https://github.com/afk-sapien/PokeSim/issues/269)).

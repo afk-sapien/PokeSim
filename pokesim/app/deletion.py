@@ -20,6 +20,17 @@ def _paths(manager, aid):
     return source, target
 
 
+def _end_offers(manager, aid, actor=None):
+    """Pending offers from or to a game being deleted end, and both sides hear why."""
+    from .inbox import adventure_name
+    from .offers import PENDING
+    from .ownership import end_offer
+    why = f'{adventure_name(manager, aid)} was deleted'
+    for offer in manager.registry.trade_offers(aid, statuses=[PENDING]):
+        status = 'withdrawn' if offer['from_id'] == aid else 'declined'
+        end_offer(manager, offer, status, 'The adventure was deleted', why, actor)
+
+
 def _finish(manager, aid):
     source, target = _paths(manager, aid)
     if source.exists():
@@ -41,7 +52,7 @@ def _finish(manager, aid):
     return {'deleted': aid}
 
 
-def delete_adventure(manager, aid, confirmation):
+def delete_adventure(manager, aid, confirmation, actor=None):
     validate_id(aid)
     with manager.maintenance, manager.coordinator.guard, manager.supervisor._lock(aid):
         manager.check_available()
@@ -61,6 +72,7 @@ def delete_adventure(manager, aid, confirmation):
                 raise ValueError('The adventure worker is still running')
         manager.supervisor.close_viewer(aid)
         _paths(manager, aid)
+        _end_offers(manager, aid, actor)
         with manager.registry.lock, manager.registry.db:
             manager.registry.db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
                                         (PREFIX + aid, json.dumps({'complete': False})))

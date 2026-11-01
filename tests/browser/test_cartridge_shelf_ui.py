@@ -75,6 +75,36 @@ def assert_even_keys(page):
     assert not any(item['clipped'] for item in keys), keys
 
 
+def test_a_member_fills_their_own_shelf(page, library, tmp_path, monkeypatch):
+    """Under accounts a member who can create adds cartridges to a shelf nobody else sees."""
+    from playwright.sync_api import expect
+    from test_accounts_ui import OLD, library as accounts
+    from test_inbox_ui import log_in
+    factory, holder = accounts(tmp_path / 'accounts', monkeypatch)
+    with serve(factory) as url:
+        manager = holder['manager']
+        monkeypatch.setattr(manager.assets, 'install_portraits_quietly', lambda raw: 0)
+        admin = manager.auth.user_by_name('admin')
+        manager.assets.add_cartridge(synthetic('red'), owner=admin['id'])
+        bob = manager.auth.create_user('bob', OLD)
+        manager.auth.create_user('carol', OLD, can_create=False)
+        page.set_viewport_size({'width': 390, 'height': 900})
+        log_in(page, url, 'bob')
+        page.goto(f'{url}/settings#cartridges')
+        expect(page.locator('#cartridge-red')).to_have_attribute('data-state', 'empty')
+        upload(page, 'blue', rom_file('blue'))
+        expect(page.locator('#cartridge-blue')).to_have_attribute('data-state', 'installed')
+        expect(page.locator('#cartridge-blue')).to_contain_text('Pokémon Blue added')
+        assert [row['version'] for row in manager.registry.roms(bob['id'])] == ['blue']
+        assert [row['version'] for row in manager.registry.roms(admin['id'])] == ['red']
+        no_sideways_scroll(page)
+        page.context.clear_cookies()
+        log_in(page, url, 'carol')
+        page.goto(f'{url}/settings#cartridges')
+        expect(page.locator('#cartridge-blue')).to_have_attribute('data-state', 'empty')
+        expect(page.locator('#cartridge-blue [data-cartridge-upload]')).to_be_disabled()
+
+
 def rom_file(version, name=None):
     return {'name': name or f'{version}.gb', 'mimeType': 'application/octet-stream', 'buffer': synthetic(version)}
 

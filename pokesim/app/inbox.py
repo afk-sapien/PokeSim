@@ -103,6 +103,19 @@ def offer_answered(manager, offer, actor=None):
            link=game_link(from_id, 'trading#offers'), actor=actor)
 
 
+def offer_ended(manager, offer, why, actor=None):
+    """An offer ended by a transfer, a revoked share or a deleted user: tell its sender and the
+    owner it was made to, whoever is still here."""
+    if not enabled(manager):
+        return
+    text = (f"The offer of {_pokemon(offer, 'from')} from {adventure_name(manager, offer['from_id'])} to "
+            f"{adventure_name(manager, offer['to_id'])} ended because {why}.")
+    sides = {offer.get('sender_id'): offer['from_id']}
+    sides.setdefault(owner(manager, offer['to_id']), offer['to_id'])
+    for uid, aid in sides.items():
+        notify(manager, uid, 'offer.ended', text, adventure_id=aid, link=game_link(aid, 'trading#offers'), actor=actor)
+
+
 def trade_completed(manager, row, display):
     """A finished trade between two people's adventures, for both owners. Trades inside one
     person's Library are their own doing, so they stay out of the inbox."""
