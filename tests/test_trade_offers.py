@@ -166,6 +166,16 @@ def test_an_offer_between_one_owners_adventures_starts_at_once(offers):
     assert service.create(offer_request(offers, to_key='party-1'))['status'] == 'pending'
 
 
+def test_an_offer_starts_at_once_only_for_someone_who_manages_the_receiver(offers):
+    service, left, right = offers.manager.offers, offers.data['left_id'], offers.data['right_id']
+    service.auto_accept = True
+    # Carol manages the sender only. Her offer into the same owner's other game waits for an answer.
+    waiting = service.create(offer_request(offers), member(CAROL, **{left: 'manager', right: 'viewer'}))
+    assert waiting['status'] == 'pending'
+    offers.registry.update_trade_offer(waiting['id'], status='withdrawn')
+    assert service.create(offer_request(offers), member(CAROL, **{left: 'manager', right: 'manager'}))['status'] == 'accepted'
+
+
 def test_automatic_trading_across_owners_needs_both_to_opt_in(offers):
     c, registry = offers.coordinator, offers.registry
     left, right = offers.data['left_id'], offers.data['right_id']

@@ -62,7 +62,10 @@ def validate_password(value):
 
 
 class Limiter:
-    """Failed attempts per key, with a lockout that doubles after the first five."""
+    """Failed attempts per key, with a lockout that doubles after the first five.
+
+    A key that stays quiet for LONGEST after its last failure starts again from nothing.
+    """
 
     FREE = 5
     LONGEST = 900
@@ -78,14 +81,16 @@ class Limiter:
             return max([0] + [round(until - now) + 1 for count, until in (self.failures.get(key, (0, 0)) for key in keys)
                               if until > now])
 
-    def fail(self, *keys):
+    def fail(self, *keys, longest=None):
+        """Count one failure. `longest` caps the lockout of these keys below LONGEST."""
         now = time.time()
         with self.lock:
             if len(self.failures) > 10000:
                 self.failures = {key: value for key, value in self.failures.items() if value[1] > now}
             for key in keys:
-                count = self.failures.get(key, (0, 0))[0] + 1
-                delay = 0 if count < self.FREE else min(self.LONGEST, 2 ** (count - self.FREE))
+                count, until = self.failures.get(key, (0, 0))
+                count = 1 if now - until > self.LONGEST else count + 1
+                delay = 0 if count < self.FREE else min(longest or self.LONGEST, 2 ** (count - self.FREE))
                 self.failures[key] = (count, now + delay)
 
     def clear(self, *keys):

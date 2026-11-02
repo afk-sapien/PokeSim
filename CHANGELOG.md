@@ -12,6 +12,8 @@
 
 - Give each person their own cartridge shelf. A member who can create adventures adds cartridges, sees only their own, and removing one takes it off their shelf only. The file is deleted when nobody has it and no adventure plays it. An upload answers the same whether or not someone else has the file, and an adventure needs a cartridge from your own shelf. Earlier cartridges belong to the Library owner. See [Cartridges](docs/users-and-sharing.md#cartridges).
 
+- Fix account and sharing problems from review. Behind a proxy listed in `AUTH_TRUSTED_PROXIES`, logins see the client's own address from `X-Forwarded-For`, so one person's wrong passwords no longer slow everyone. Wrong passwords from strangers slow an account by a minute at most, so nobody can lock someone else out. Sharing refuses an unknown or disabled person, an offer starts at once only for someone who manages both adventures, and losing a share keeps offers sent to it from your own adventure. Archiving a deleted user's adventure stops its game, Resume and Pause keep the control lease when the game never got them, a slow game holds up only its own control lease, and a queued page that closed leaves the line. Stylesheets and health checks skip the account lookups. See [Client addresses behind a proxy](docs/authentication.md#client-addresses-behind-a-proxy).
+
 - Tell both sides in their inboxes when an offer ends because an adventure changed hands or was deleted, or its sender lost their share or was deleted. Inbox items about a deleted adventure no longer link to it.
 
 ## 0.6.2

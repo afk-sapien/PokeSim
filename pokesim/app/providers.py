@@ -51,6 +51,46 @@ def default_gateways():
     return gateways
 
 
+def proxy_networks(text):
+    """The networks in AUTH_TRUSTED_PROXIES, comma separated."""
+    networks = []
+    for part in (text or '').split(','):
+        if part.strip():
+            try:
+                networks.append(ipaddress.ip_network(part.strip(), strict=False))
+            except ValueError as error:
+                raise ValueError(f'AUTH_TRUSTED_PROXIES has an invalid network: {part.strip()}') from error
+    if any(network.prefixlen == 0 for network in networks):
+        raise ValueError('AUTH_TRUSTED_PROXIES may not trust every address')
+    return networks
+
+
+def in_networks(host, networks):
+    try:
+        address = ipaddress.ip_address(host)
+    except (TypeError, ValueError):
+        return False
+    return any(address.version == network.version and address in network for network in networks)
+
+
+def forwarded_client(peer, header, networks):
+    """The client a trusted proxy names in X-Forwarded-For, or `peer` itself.
+
+    Hops are read from the right, so a client cannot hide behind an address it wrote at the
+    left. The first hop that is not a trusted proxy is the client.
+    """
+    if not header or not in_networks(peer, networks):
+        return peer
+    for hop in reversed([part.strip() for part in header.split(',')]):
+        try:
+            hop = str(ipaddress.ip_address(hop))
+        except ValueError:
+            return peer
+        if not in_networks(hop, networks):
+            return hop
+    return peer
+
+
 class ProxyAuth:
     """A login proxy that names the user in a header. Headers count only from a trusted address
     that also sends the shared secret, so a client that reaches PokeSim directly cannot claim one."""
@@ -63,18 +103,10 @@ class ProxyAuth:
             raise ValueError('AUTH_PROXY_HEADER needs AUTH_PROXY_SECRET as well')
         if len(secret) < 16:
             raise ValueError('AUTH_PROXY_SECRET must be at least 16 characters')
-        networks = []
-        for part in (trusted or '').split(','):
-            if part.strip():
-                try:
-                    networks.append(ipaddress.ip_network(part.strip(), strict=False))
-                except ValueError as error:
-                    raise ValueError(f'AUTH_TRUSTED_PROXIES has an invalid network: {part.strip()}') from error
+        networks = proxy_networks(trusted)
         if not networks:
             raise ValueError('AUTH_PROXY_HEADER needs AUTH_TRUSTED_PROXIES')
         for network in networks:
-            if network.prefixlen == 0:
-                raise ValueError('AUTH_TRUSTED_PROXIES may not trust every address')
             for gateway in default_gateways() if gateways is None else gateways:
                 if gateway.version == network.version and gateway in network:
                     raise ValueError(f'AUTH_TRUSTED_PROXIES contains the default gateway {gateway}, '
@@ -99,11 +131,7 @@ class ProxyAuth:
                    member_group=os.environ.get('AUTH_MEMBER_GROUP', ''))
 
     def trusted(self, host):
-        try:
-            address = ipaddress.ip_address(host)
-        except (TypeError, ValueError):
-            return False
-        return any(address.version == network.version and address in network for network in self.networks)
+        return in_networks(host, self.networks)
 
     def identify(self, request):
         """(username, role) the proxy vouches for, or None."""

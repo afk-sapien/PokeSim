@@ -10,9 +10,11 @@ import httpx
 import pytest
 
 from pokesim.app import policy
+from pokesim.app.accounts import USER_LOCKOUT
+from pokesim.app.auth import Limiter
 from pokesim.app.cli import reset_password
 from pokesim.app.manager import Manager, create_app
-from pokesim.app.providers import OIDC, ProxyAuth
+from pokesim.app.providers import OIDC, ProxyAuth, forwarded_client, proxy_networks
 from pokesim.app.registry import identifier
 
 PASSWORD = 'correct horse battery'
@@ -128,6 +130,81 @@ def test_login_refuses_wrong_passwords_and_then_slows_down(library, people):
     assert limited.status_code == 429 and 'Retry-After' in limited.headers
 
 
+def browser_at(library, host, **headers):
+    """A browser that connects from `host`, sending `headers` on every request."""
+    client = TestClient(library.app, client=(host, 50000), headers=headers)
+    client.headers['X-PokeSim-CSRF'] = client.get('/api/v1/session').json()['csrf_token']
+    return client
+
+
+def test_a_trusted_proxy_names_the_client_and_nobody_else_can():
+    networks = proxy_networks('198.51.100.5, 198.51.100.64/26')
+    assert forwarded_client('198.51.100.5', '203.0.113.9', networks) == '203.0.113.9'
+    assert forwarded_client('198.51.100.6', '203.0.113.9', networks) == '198.51.100.6'
+    # A client writes what it likes at the left. Only the hop the proxy added counts.
+    assert forwarded_client('198.51.100.5', '203.0.113.66, 203.0.113.9', networks) == '203.0.113.9'
+    assert forwarded_client('198.51.100.5', '203.0.113.9, 198.51.100.70', networks) == '203.0.113.9'
+    assert forwarded_client('198.51.100.5', 'not an address', networks) == '198.51.100.5'
+    assert forwarded_client('198.51.100.5', '', networks) == '198.51.100.5'
+    with pytest.raises(ValueError, match='every address'):
+        proxy_networks('0.0.0.0/0')
+
+
+def test_failed_logins_behind_the_proxy_lock_out_only_the_client_that_made_them(library, people):
+    library.manager.trusted_proxies = proxy_networks('198.51.100.5')
+    guesser = browser_at(library, '198.51.100.5', **{'X-Forwarded-For': '203.0.113.9'})
+    for _ in range(5):
+        assert guesser.post('/api/v1/auth/login', json={'username': 'bob', 'password': 'wrong password'}).status_code == 401
+    assert guesser.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 429
+    neighbour = browser_at(library, '198.51.100.5', **{'X-Forwarded-For': '203.0.113.10'})
+    assert neighbour.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 200
+    assert library.manager.auth.sessions(people.alice['id'])[0]['ip'] == '203.0.113.10'
+    # A peer that is not the proxy cannot pick its own address.
+    spoofer = browser_at(library, '198.51.100.6', **{'X-Forwarded-For': '203.0.113.11'})
+    assert spoofer.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 200
+    assert library.manager.auth.sessions(people.alice['id'])[0]['ip'] == '198.51.100.6'
+
+
+def test_guesses_from_everywhere_slow_an_account_by_a_minute_at_most(library, people, monkeypatch):
+    for number in range(12):
+        stranger = browser_at(library, f'203.0.113.{number + 1}')
+        assert stranger.post('/api/v1/auth/login', json={'username': 'alice', 'password': 'wrong'}).status_code in {401, 429}
+    waiting = browser_at(library, '203.0.113.100').post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD})
+    assert waiting.status_code == 429 and int(waiting.headers['Retry-After']) <= USER_LOCKOUT + 1
+    # Alice already has a session from her own address, so she is not made to wait.
+    library.manager.auth.create_session(people.alice['id'], '198.51.100.20', 'test')
+    assert browser_at(library, '198.51.100.20').post(
+        '/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 200
+
+
+def test_stylesheets_and_health_checks_skip_the_account_lookups(library, people, monkeypatch):
+    looked_up = []
+    original = library.manager.actor
+    monkeypatch.setattr(library.manager, 'actor', lambda request: looked_up.append(request.url.path) or original(request))
+    client = library.login('alice')
+    looked_up.clear()
+    assert client.get('/health/live').status_code == 200
+    assert client.get('/static/app.js').status_code == 200
+    assert looked_up == []
+    assert client.get('/api/v1/adventures').status_code == 200
+    assert looked_up == ['/api/v1/adventures']
+
+
+def test_a_quiet_key_forgets_its_failures(monkeypatch):
+    clock = SimpleNamespace(time=lambda: 1000.0)
+    monkeypatch.setattr('pokesim.app.auth.time', clock)
+    limiter = Limiter()
+    for _ in range(20):
+        limiter.fail('user:alice', longest=60)
+    assert 0 < limiter.wait('user:alice') <= 61
+    for _ in range(20):
+        limiter.fail('ip:203.0.113.1')
+    assert limiter.wait('ip:203.0.113.1') > 61
+    clock.time = lambda: 1000.0 + Limiter.LONGEST * 3
+    limiter.fail('ip:203.0.113.1')
+    assert limiter.failures['ip:203.0.113.1'][0] == 1 and limiter.wait('ip:203.0.113.1') == 0
+
+
 def test_logout_ends_the_session(library, people):
     alice = library.login('alice')
     assert alice.get('/api/v1/adventures').status_code == 200
@@ -228,6 +305,17 @@ def test_only_the_owner_manages_sharing(library, people):
     assert bob.get(f'/api/v1/adventures/{people.red}/sharing').status_code == 403
     owning = alice.post(f'/api/v1/adventures/{people.red}/grants', json={'user_id': people.bob['id'], 'role': 'owner'})
     assert owning.status_code in {409, 422}
+
+
+def test_sharing_needs_a_real_person(library, people):
+    alice = library.login('alice')
+    for user_id in ({}, ['x'], 42, 'f' * 32):
+        refused = alice.post(f'/api/v1/adventures/{people.red}/grants', json={'user_id': user_id, 'role': 'viewer'})
+        assert refused.status_code == 409 and refused.json()['detail'] == 'Choose a person to share with', user_id
+    library.manager.auth.update_user(people.bob['id'], disabled=True)
+    refused = alice.post(f'/api/v1/adventures/{people.red}/grants', json={'user_id': people.bob['id'], 'role': 'viewer'})
+    assert refused.status_code == 409
+    assert library.manager.auth.grants_for(people.bob['id']) == {}
 
 
 def test_trades_stay_between_one_owners_adventures(library, people):

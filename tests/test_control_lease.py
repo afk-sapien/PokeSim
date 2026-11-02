@@ -1,6 +1,8 @@
 """The control lease: one account plays an adventure by hand at a time, with roles below the owner."""
+import threading
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from pokesim.app import lease as lease_module
@@ -169,6 +171,82 @@ def test_resume_and_pause_end_the_lease(game):
     lease(game.bob, game.red, 'request')
     assert game.bob.post(f'/games/{game.red}/api/control', json={'action': 'pause'}).status_code == 403
     assert game.carol.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 200
+    assert leases.holder(game.red) is None
+
+
+def test_a_resume_the_worker_never_got_keeps_the_lease(game):
+    leases, app = game.library.manager.leases, game.library.app
+    lease(game.bob, game.red, 'request')
+
+    def unreachable(request):
+        raise httpx.ConnectError('the worker is restarting')
+    # The library fixture already replaced httpx.AsyncClient, so start from the real class.
+    original = httpx._client.AsyncClient
+    app.state.children = original(transport=httpx.MockTransport(unreachable))
+    assert game.carol.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 503
+    assert leases.holder(game.red) == game.ids.bob
+    app.state.children = original(transport=httpx.MockTransport(lambda request: httpx.Response(500)))
+    assert game.carol.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 500
+    assert leases.holder(game.red) == game.ids.bob
+
+
+def test_a_slow_worker_holds_up_only_its_own_adventure(game, monkeypatch):
+    manager = game.library.manager
+    leases, entered, answer = manager.leases, threading.Event(), threading.Event()
+
+    def child(aid):
+        def send(method, path, body=None, timeout=None):
+            entered.set()
+            answer.wait(5)
+            return {'ok': True}
+        return SimpleNamespace(url='http://127.0.0.1:12345', token='private-worker-token', request=send)
+    monkeypatch.setattr(manager.supervisor, 'child', child)
+    bob = manager.actor_for(manager.auth.user(game.ids.bob))
+    asking = threading.Thread(target=leases.act, args=(game.red, bob, manager.registry.adventure(game.red), 'request'))
+    asking.start()
+    try:
+        assert entered.wait(5)
+        # Another page reads and sweeps while Red's worker has not answered.
+        assert leases.lock.acquire(timeout=1)
+        leases.lock.release()
+        assert lease(game.dave, game.red).json()['holder'] is None
+    finally:
+        answer.set()
+        asking.join(5)
+    assert leases.holder(game.red) == game.ids.bob
+
+
+def test_a_refused_hand_on_ends_the_lease_once(game, monkeypatch):
+    manager = game.library.manager
+    lease(game.bob, game.red, 'request')
+    lease(game.carol, game.red, 'request')
+    manager.suspended = True
+    try:
+        lease(game.bob, game.red, 'release')
+    finally:
+        manager.suspended = False
+    assert manager.leases.holder(game.red) is None
+    ends = [row for row in manager.auth.audit_rows() if row['action'] == 'lease.end']
+    assert len(ends) == 1 and ends[0]['user_id'] == game.ids.bob
+
+
+def test_a_quiet_queued_page_leaves_the_line(game):
+    leases = game.library.manager.leases
+    lease(game.bob, game.red, 'request')
+    lease(game.carol, game.red, 'request')
+    game.clock.now += lease_module.HEARTBEAT_GRACE_SECONDS - 1
+    lease(game.bob, game.red, 'heartbeat')
+    lease(game.carol, game.red, 'heartbeat')
+    game.clock.now += lease_module.HEARTBEAT_GRACE_SECONDS - 1
+    lease(game.bob, game.red, 'heartbeat')
+    leases.sweep()
+    assert lease(game.carol, game.red).json()['queued']
+    # Carol closed her tab. When Bob lets go nobody is waiting, so control is not passed to her.
+    game.clock.now += 2
+    lease(game.bob, game.red, 'heartbeat')
+    leases.sweep()
+    assert not lease(game.carol, game.red).json()['queued']
+    lease(game.bob, game.red, 'release')
     assert leases.holder(game.red) is None
 
 

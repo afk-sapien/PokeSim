@@ -1,4 +1,6 @@
 """Running caps, giving an adventure to someone else, and deleting a user without losing their adventures."""
+import threading
+
 import pytest
 
 from pokesim.app.registry import identifier
@@ -118,6 +120,17 @@ def test_deleting_a_user_needs_a_choice_for_every_adventure(quiet, people):  # n
     assert registry.adventure(people.red)['owner_id'] == people.bob['id']
     kept = registry.adventure(second)
     assert kept['archived'] and kept['desired_state'] == 'stopped' and kept['owner_id'] == people.admin['id']
+
+
+def test_archiving_stops_the_game_through_the_real_background_path(library, people, monkeypatch):  # noqa: F811
+    # The deletion runs in a worker thread, so its stop has to reach the app's event loop from there.
+    stopped = threading.Event()
+    monkeypatch.setattr(library.manager, 'start_adventure', lambda aid: stopped.set() if aid == people.red else None)
+    admin = library.login('admin')
+    done = admin.request('DELETE', f'/api/v1/users/{people.alice["id"]}', json={'adventures': {people.red: 'archive'}})
+    assert done.status_code == 200, done.text
+    assert stopped.wait(5)
+    assert library.manager.registry.adventure(people.red)['archived']
 
 
 def test_deleting_a_user_ends_their_sessions_grants_and_sent_offers(quiet, people):  # noqa: F811
