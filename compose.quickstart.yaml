@@ -10,6 +10,12 @@ services:
     environment:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:${HTTP_PORT:-8930}}
       PORT: "8000"
+      # Accounts (docs/authentication.md). Empty AUTH lets the Library decide. Remove the
+      # admin pair once the first admin exists.
+      AUTH: ${AUTH:-}
+      AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES:-}
+      POKESIM_ADMIN_USER: ${POKESIM_ADMIN_USER:-}
+      POKESIM_ADMIN_PASSWORD: ${POKESIM_ADMIN_PASSWORD:-}
       # Optional defaults. Notifications are normally set up in the Library.
       NTFY_URL: ${NTFY_URL:-}
       NTFY_TOKEN: ${NTFY_TOKEN:-}

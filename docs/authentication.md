@@ -8,6 +8,10 @@ PokeSim can run open or with accounts. `AUTH` picks the mode:
 | `accounts` | Everyone logs in. Admins manage the Library, members see their own adventures and the ones shared with them. |
 | unset (`auto`) | A new library uses accounts. A library from before accounts stays open until an admin is set up, and shows a banner that says so. Setting up OpenID Connect or a trusted proxy also turns accounts on. |
 
+With Docker Compose, set `AUTH` in `.env`. `compose.yaml` and `compose.quickstart.yaml` pass
+`AUTH`, `AUTH_TRUSTED_PROXIES`, `POKESIM_ADMIN_USER` and `POKESIM_ADMIN_PASSWORD` to the
+app. Add the identity provider and proxy settings below under `environment:` yourself.
+
 The desktop app runs with `AUTH=none` unless you set `AUTH` yourself. For how admins,
 members, invites and sharing work day to day, see [Users and sharing](users-and-sharing.md).
 

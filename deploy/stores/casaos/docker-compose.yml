@@ -17,6 +17,7 @@ services:
     environment:
       PUBLIC_URL: http://localhost:8930
       PORT: "8000"
+      AUTH: ""
       NTFY_URL: ""
       NTFY_TOKEN: ""
       NTFY_MIN_PRIORITY: "2"

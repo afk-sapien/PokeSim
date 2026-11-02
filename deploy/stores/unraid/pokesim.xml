@@ -17,6 +17,7 @@
   <Config Name="Data" Target="/data" Default="/mnt/user/appdata/pokesim" Mode="rw" Description="Saves, cartridges, journals and settings." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/pokesim</Config>
   <Config Name="PUBLIC_URL" Target="PUBLIC_URL" Default="http://SERVER_IP:8930" Mode="" Description="The exact address you open in the browser. Requests for any other host are refused." Type="Variable" Display="always" Required="true" Mask="false">http://SERVER_IP:8930</Config>
   <Config Name="PORT" Target="PORT" Default="8000" Mode="" Description="Port inside the container. Leave at 8000." Type="Variable" Display="advanced" Required="true" Mask="false">8000</Config>
+  <Config Name="AUTH" Target="AUTH" Default="" Mode="" Description="accounts for logins, none for an open Library. Empty lets the Library decide. See docs/authentication.md." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="NTFY_URL" Target="NTFY_URL" Default="" Mode="" Description="Optional ntfy topic URL for notifications. Notifications are normally set up in the Library." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="NTFY_TOKEN" Target="NTFY_TOKEN" Default="" Mode="" Description="Optional ntfy access token." Type="Variable" Display="advanced" Required="false" Mask="true"/>
   <Config Name="NTFY_MIN_PRIORITY" Target="NTFY_MIN_PRIORITY" Default="2" Mode="" Description="Lowest ntfy priority to send, 1 to 5." Type="Variable" Display="advanced" Required="false" Mask="false">2</Config>
