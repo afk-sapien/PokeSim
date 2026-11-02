@@ -84,6 +84,23 @@ address and only with a shared secret:
 `AUTH_TRUSTED_PROXIES` trusts every address or contains the network's default gateway, since
 direct clients often arrive from the gateway's address. Trust the proxy container alone.
 
+## Client addresses behind a proxy
+
+PokeSim records each login's address and slows down repeated wrong passwords per address. Behind
+a reverse proxy every request seems to come from the proxy, so one person's typos would slow
+everyone. Set `AUTH_TRUSTED_PROXIES` to the proxy's address, and PokeSim takes the client from the
+`X-Forwarded-For` header that proxy sends. It reads the header from the right and stops at the
+first address that is not a trusted proxy, so a client cannot claim another address. Requests
+from anywhere else keep their own address.
+
+This works without header logins too. Then the default gateway is allowed, which matters when
+the proxy reaches PokeSim through Docker's port mapping and arrives from the gateway address.
+Trust the gateway only when every other client still arrives with its own address.
+
+Wrong passwords from one address lock that address out for up to 15 minutes. Wrong passwords
+for one account from many addresses slow that account by a minute at most, and never slow a
+login from an address the account already has a session from.
+
 ## View links
 
 A view link is `/view/<adventure id>/`. It shows the screen, team, journal, progress and

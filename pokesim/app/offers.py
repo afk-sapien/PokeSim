@@ -21,7 +21,7 @@ import time
 from pokecore.identity import find
 
 from . import inbox
-from .policy import adventure_role
+from .policy import adventure_role, can
 from .registry import LIBRARY_OWNER, identifier, validate_id
 from .trade_builder import Gone, HardLimit, TradeBuilder, ViewOnlyError
 
@@ -147,7 +147,9 @@ class TradeOffers(TradeBuilder):
             self._limits(sender_id, selection['to_id'])
             display = {'from': self._snapshot(give), 'to': self._snapshot(take) if take else {}}
             row = self.registry.create_trade_offer({'id': oid, **selection, 'sender_id': sender_id, 'display': display})
+        # Only someone who could accept the offer themselves may have it accepted at once.
         if (self.auto_accept and selection['to_key'] and owner_of(sender) == owner_of(receiver)
+                and (actor is None or can(actor, 'adventure.manage', receiver))
                 and not self.viewer_only(selection['to_id'])):
             # When the trade cannot start yet, the offer simply waits like any other.
             try:

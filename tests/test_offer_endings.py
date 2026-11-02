@@ -31,10 +31,13 @@ def test_a_revoked_share_ends_offers_the_person_sent_from_it(quiet, people):  # 
     manager.auth.grant(people.red, people.bob['id'], 'manager', people.alice['id'])
     sent = offer(quiet, people.red, green, sender=people.bob['id'])
     others = offer(quiet, people.red, green, sender=people.alice['id'])
+    # Bob also asked Red for a trade from his own Blue. Losing his share of Red does not take that back.
+    own = offer(quiet, people.blue, people.red, sender=people.bob['id'])
     alice = quiet.login('alice')
     assert alice.request('DELETE', f'/api/v1/adventures/{people.red}/grants/{people.bob["id"]}').status_code == 200
     assert manager.registry.trade_offer(sent['id'])['status'] == 'withdrawn'
     assert manager.registry.trade_offer(others['id'])['status'] == 'pending'
+    assert manager.registry.trade_offer(own['id'])['status'] == 'pending'
     [bob] = ended(manager, people.bob['id'])
     [admin] = ended(manager, people.admin['id'])
     assert bob['text'] == admin['text'] == 'The offer of a Pokémon from Red to Green ended because sharing of an adventure ended.'

@@ -461,9 +461,10 @@ if ($('#lease-end')) $('#lease-end').onchange = async (event) => {
     renderLease()
   }
 }
-// The library ends a lease whose page goes quiet, so a holding page checks in.
+// The library ends a lease whose page goes quiet, and drops a quiet page from the queue, so a
+// holding or waiting page checks in.
 setInterval(() => {
-  if (!leaseEnforced || !lease?.you_hold) return
+  if (!leaseEnforced || !(lease?.you_hold || lease?.queued)) return
   PokeSim.fetch('/api/lease', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({action: 'heartbeat'})})
     .catch(() => {})
 }, 15000)

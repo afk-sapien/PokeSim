@@ -1,10 +1,12 @@
 """Moving adventures between people: a transfer, a revoked share and deleting a user."""
 import logging
+import threading
 
 from . import inbox
 from .offers import OPEN, PENDING
 
 log = logging.getLogger(__name__)
+deleting = threading.Lock()
 
 
 def end_offer(manager, offer, status, reason, why, actor=None):
@@ -16,11 +18,11 @@ def end_offer(manager, offer, status, reason, why, actor=None):
 
 
 def unshare(manager, aid, uid, actor=None):
-    """`uid` lost their share of `aid`, or can only watch it now. Pending offers they sent from it end."""
+    """`uid` lost their share of `aid`, or can only watch it now. Pending offers they sent from it end.
+    Offers they sent to it from an adventure of their own stay."""
     for offer in manager.registry.trade_offers(aid, statuses=[PENDING]):
-        if offer.get('sender_id') == uid:
-            status = 'withdrawn' if offer['from_id'] == aid else 'declined'
-            end_offer(manager, offer, status, 'Sharing of the adventure ended', 'sharing of an adventure ended', actor)
+        if offer.get('sender_id') == uid and offer['from_id'] == aid:
+            end_offer(manager, offer, 'withdrawn', 'Sharing of the adventure ended', 'sharing of an adventure ended', actor)
 
 
 def release(manager, aid, uid, actor=None):
@@ -61,8 +63,14 @@ def delete_user(manager, uid, plan, actor):
     """Delete a user. `plan` maps each adventure they own to a new owner's id or 'archive'.
 
     Nothing is deleted silently. An archived adventure stays on disk, stopped, owned by the admin
-    who deleted the user, so it can be given to someone later.
+    who deleted the user, so it can be given to someone later. One deletion runs at a time, so
+    two admins deleting each other cannot both pass the last-admin check.
     """
+    with deleting:
+        return _delete_user(manager, uid, plan, actor)
+
+
+def _delete_user(manager, uid, plan, actor):
     user = manager.auth.user(uid)
     if user is None or user['placeholder']:
         raise KeyError('User not found')

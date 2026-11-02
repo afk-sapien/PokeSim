@@ -90,10 +90,12 @@ class Manager:
             self.auth = AuthStore(self.root)
             self.auth_mode = self.resolve_auth(auth, fresh)
             self.oidc = self.proxy = None
+            self.trusted_proxies = []
             if self.auth_mode == 'accounts':
-                from .providers import OIDC, ProxyAuth
+                from .providers import OIDC, ProxyAuth, proxy_networks
                 self.oidc = OIDC.from_env(self.public_url)
                 self.proxy = ProxyAuth.from_env()
+                self.trusted_proxies = proxy_networks(os.environ.get('AUTH_TRUSTED_PROXIES', ''))
                 # Kept in app.sqlite, which backups carry, so a restored copy asks for setup
                 # again instead of opening without a login.
                 self.registry.set_setting('accounts', True)
@@ -119,6 +121,8 @@ class Manager:
         self.closing = False
         self._closed = False
         self.tasks = set()
+        # The app's event loop, once it runs, so worker threads can start background tasks.
+        self.loop = None
         self.sessions = {}
         self.session_lock = threading.Lock()
         from .coordinator import Coordinator
@@ -293,6 +297,15 @@ class Manager:
         self._closed = True
 
     def background(self, function, *args):
+        """Run `function` in a thread. From a worker thread the task goes to the app's event loop."""
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            if self.loop is None or self.loop.is_closed():
+                raise RuntimeError('PokeSim is not running yet') from None
+            self.loop.call_soon_threadsafe(self.background, function, *args)
+            return None
+
         async def run():
             try:
                 await asyncio.to_thread(function, *args)
@@ -447,7 +460,10 @@ class Manager:
                             secure=self.public_url.startswith('https:'), max_age=max_age)
 
     def client_address(self, request):
-        return request.client.host if request.client else None
+        """The browser's address. Behind a proxy that AUTH_TRUSTED_PROXIES names, the one it forwards."""
+        from .providers import forwarded_client
+        peer = request.client.host if request.client else None
+        return forwarded_client(peer, ','.join(request.headers.getlist('x-forwarded-for')), self.trusted_proxies)
 
 
 async def json_body(request, limit=65536):
@@ -465,6 +481,8 @@ async def json_body(request, limit=65536):
     return value
 
 
+# Requests that need nobody's identity. Everything under /static/ counts too.
+ANONYMOUS_PATHS = frozenset({'/health/live', '/health/ready'})
 GAME_ASSET = re.compile(r'/(?:games|view)/[A-Za-z0-9_-]+/(static|sprites|shots)/')
 
 
@@ -517,6 +535,7 @@ def cache_policy(path, query, content_type):
 def create_app(manager, shutdown=lambda: None):
     @asynccontextmanager
     async def lifespan(app):
+        manager.loop = asyncio.get_running_loop()
         manager.background(manager.start)
         try:
             yield
@@ -648,19 +667,24 @@ def create_app(manager, shutdown=lambda: None):
         changing = request.method not in {'GET', 'HEAD', 'OPTIONS'}
         if request.headers.get('sec-fetch-site') == 'cross-site' and (changing or request.url.path == '/api/v1/session'):
             return JSONResponse({'detail': 'Requests must come from this PokeSim application'}, status_code=403)
-        actor = await run_in_threadpool(manager.actor, request)
-        request.state.actor = actor
-        if changing:
-            session = await run_in_threadpool(manager.browser_session, request, actor)
-            csrf = request.headers.get('x-pokesim-csrf', '')
-            if session is None or not csrf.isascii() or not hmac.compare_digest(csrf, session['csrf_token']):
-                return JSONResponse({'detail': 'Reload this page before making changes'}, status_code=403)
-        if manager.auth_mode == 'accounts':
-            refused = await run_in_threadpool(check_route, request, actor)
-            if refused is not None:
-                protect_response(refused)
-                refused.headers['Cache-Control'] = 'no-store'
-                return refused
+        if not changing and (request.url.path.startswith('/static/') or request.url.path in ANONYMOUS_PATHS):
+            # Stylesheets, scripts and health checks are the same for everyone, so they skip the
+            # session, share and grant lookups.
+            request.state.actor = Actor()
+        else:
+            actor = await run_in_threadpool(manager.actor, request)
+            request.state.actor = actor
+            if changing:
+                session = await run_in_threadpool(manager.browser_session, request, actor)
+                csrf = request.headers.get('x-pokesim-csrf', '')
+                if session is None or not csrf.isascii() or not hmac.compare_digest(csrf, session['csrf_token']):
+                    return JSONResponse({'detail': 'Reload this page before making changes'}, status_code=403)
+            if manager.auth_mode == 'accounts':
+                refused = await run_in_threadpool(check_route, request, actor)
+                if refused is not None:
+                    protect_response(refused)
+                    refused.headers['Cache-Control'] = 'no-store'
+                    return refused
         response = await call_next(request)
         protect_response(response)
         response.headers['Cache-Control'] = cache_policy(
@@ -1451,7 +1475,8 @@ def create_app(manager, shutdown=lambda: None):
             raise HTTPException(403, 'Only the person in control or a manager can resume the autopilot')
         if control in {'resume', 'pause'}:
             # The autopilot takes over again, or the manager stopped it, so nobody holds control.
-            manager.leases.end(aid, control, apply=False)
+            # The lease ends once the worker has done it (see game).
+            request.state.ends_lease = control
         return 'viewer' if viewer else policy.adventure_role(actor, adventure)
 
     def lease_route(aid, request, body):
@@ -1632,6 +1657,9 @@ def create_app(manager, shutdown=lambda: None):
             response = await client.send(client.build_request(request.method, target, content=body, headers=headers), stream=True)
         except httpx.HTTPError as error:
             raise HTTPException(503, 'The adventure is reconnecting') from error
+        ends_lease = getattr(request.state, 'ends_lease', None)
+        if ends_lease and response.status_code < 400:
+            await run_in_threadpool(manager.leases.end, aid, ends_lease, apply=False)
         if (path in GAME_PAGES and request.method == 'GET' and response.status_code == 200
                 and response.headers.get('content-type', '').startswith('text/html')):
             # The adventure renders its pages without knowing which portraits the library

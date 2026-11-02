@@ -3,8 +3,13 @@
 The first request wins and later requests queue in order. The holder hands over, refuses or
 lets go, and an owner or manager can always take control back. A lease ends when its page
 stops sending heartbeats, when its holder stops pressing buttons, when a trade or backup
-starts, or when the holder loses Can play. Leases live in memory, and every change goes to
-the audit log, so a manager restart drops them and startup puts the autopilot back.
+starts, or when the holder loses Can play. A queued page sends heartbeats too, and leaves the
+queue when it stops. Leases live in memory, and every change goes to the audit log, so a
+manager restart drops them and startup puts the autopilot back.
+
+Two locks keep a slow worker from stalling every page. `lock` guards the leases and is never
+held across a worker request. Each adventure's turn lock lines up the changes that ask its
+worker, so a hung worker holds up only its own adventure. A turn is always taken before `lock`.
 """
 from __future__ import annotations
 
@@ -56,12 +61,18 @@ class Leases:
         self.clock = clock
         self.lock = threading.RLock()
         self.leases = {}
+        self.turns = {}
         self.stop = threading.Event()
 
     @property
     def enforced(self):
         """Leases apply under accounts. Under AUTH=none Take Control works as it always has."""
         return self.manager.auth_mode == 'accounts'
+
+    def turn(self, aid):
+        """The lock that lines up the lease changes of one adventure."""
+        with self.lock:
+            return self.turns.setdefault(aid, threading.RLock())
 
     # Reading ----------------------------------------------------------------------------
     def holder(self, aid):
@@ -123,55 +134,67 @@ class Leases:
     def request(self, aid, actor, adventure):
         if not can(actor, 'adventure.play', adventure):
             raise PermissionError('You can watch this adventure but not play it')
-        with self.lock:
-            lease = self.leases.get(aid)
-            if lease is not None:
-                if lease.user_id != actor.id and all(entry['user_id'] != actor.id for entry in lease.queue):
-                    lease.queue.append({'user_id': actor.id, 'name': label(actor.user), 'at': time.time()})
-                    self.audit('lease.request', actor.id, aid)
+        with self.turn(aid):
+            with self.lock:
+                lease = self.leases.get(aid)
+                if lease is not None:
+                    if lease.user_id == actor.id or any(entry['user_id'] == actor.id for entry in lease.queue):
+                        return
+                    lease.queue.append({'user_id': actor.id, 'name': label(actor.user), 'at': time.time(),
+                                        'beat': self.clock()})
                     holder = lease.user_id
-                else:
-                    return
-            else:
+            if lease is None:
                 self._grant(aid, actor.user, 'lease.grant')
                 return
+            self.audit('lease.request', actor.id, aid)
         inbox.lease_requested(self.manager, aid, holder, actor)
 
     def release(self, aid, actor, adventure):
         """The holder lets go, which passes control to the next in line. A queued person leaves the queue."""
-        with self.lock:
-            lease = self.leases.get(aid)
-            if lease is None:
-                return
-            if lease.user_id != actor.id:
-                lease.queue = [entry for entry in lease.queue if entry['user_id'] != actor.id]
-                return
+        with self.turn(aid):
+            with self.lock:
+                lease = self.leases.get(aid)
+                if lease is None:
+                    return
+                if lease.user_id != actor.id:
+                    lease.queue = [entry for entry in lease.queue if entry['user_id'] != actor.id]
+                    return
             self._pass_on(aid, lease, 'release')
 
     def heartbeat(self, aid, actor, adventure):
+        """The holder's page, or a queued page, is still open."""
         with self.lock:
             lease = self.leases.get(aid)
-            if lease is None or lease.user_id != actor.id:
-                raise LeaseRefused('You do not hold control of this adventure')
-            lease.last_beat = self.clock()
+            if lease is not None:
+                if lease.user_id == actor.id:
+                    lease.last_beat = self.clock()
+                    return
+                entry = next((entry for entry in lease.queue if entry['user_id'] == actor.id), None)
+                if entry is not None:
+                    entry['beat'] = self.clock()
+                    return
+            raise LeaseRefused('You do not hold control of this adventure')
 
     def handover(self, aid, actor, adventure, target):
-        with self.lock:
-            lease = self.leases.get(aid)
-            if lease is None or lease.user_id != actor.id:
-                raise LeaseRefused('You do not hold control of this adventure')
-            entry = next((entry for entry in lease.queue if entry['user_id'] == target), None)
-            if entry is None:
-                raise LeaseRefused('That person is not waiting for control')
+        with self.turn(aid):
+            with self.lock:
+                lease = self.leases.get(aid)
+                if lease is None or lease.user_id != actor.id:
+                    raise LeaseRefused('You do not hold control of this adventure')
+                entry = next((entry for entry in lease.queue if entry['user_id'] == target), None)
+                if entry is None:
+                    raise LeaseRefused('That person is not waiting for control')
             user = self.playable(target, adventure)
             if user is None:
-                lease.queue.remove(entry)
+                with self.lock:
+                    lease.queue = [row for row in lease.queue if row is not entry]
                 raise LeaseRefused('That person can no longer play this adventure')
-            queue = [row for row in lease.queue if row is not entry]
+            with self.lock:
+                queue = [row for row in lease.queue if row is not entry]
             self._grant(aid, user, 'lease.handover', queue=queue)
 
     def refuse(self, aid, actor, adventure, target):
-        with self.lock:
+        with self.turn(aid), self.lock:
             lease = self.leases.get(aid)
             if lease is None or not (lease.user_id == actor.id or can(actor, 'adventure.manage', adventure)):
                 raise LeaseRefused('You do not hold control of this adventure')
@@ -184,11 +207,12 @@ class Leases:
         """An owner or manager takes control at once, whoever holds it."""
         if not can(actor, 'adventure.manage', adventure):
             raise PermissionError('Only an owner or manager can take control back')
-        with self.lock:
-            lease = self.leases.get(aid)
-            if lease is not None and lease.user_id == actor.id:
-                return
-            queue = [entry for entry in lease.queue if entry['user_id'] != actor.id] if lease else []
+        with self.turn(aid):
+            with self.lock:
+                lease = self.leases.get(aid)
+                if lease is not None and lease.user_id == actor.id:
+                    return
+                queue = [entry for entry in lease.queue if entry['user_id'] != actor.id] if lease else []
             self._grant(aid, actor.user, 'lease.take', queue=queue)
         if lease is not None:
             inbox.lease_taken(self.manager, aid, lease.user_id, actor)
@@ -202,41 +226,53 @@ class Leases:
             lease.last_input = lease.last_beat = self.clock()
             return True
 
-    def end(self, aid, reason, *, apply=True):
+    def end(self, aid, reason, *, apply=True, audited=False):
         """End the lease on this adventure, if any, and put the autopilot back or keep it paused."""
-        with self.lock:
-            lease = self.leases.pop(aid, None)
+        with self.turn(aid):
+            with self.lock:
+                lease = self.leases.pop(aid, None)
             if lease is None:
                 return False
-            self.audit('lease.end', lease.user_id, aid, reason)
+            if not audited:
+                self.audit('lease.end', lease.user_id, aid, reason)
             if apply:
                 self.worker(aid, 'pause' if self.end_choice(aid) == 'pause' else 'resume')
             return True
 
     def end_all(self, reason):
         with self.lock:
-            return [aid for aid in list(self.leases) if self.end(aid, reason)]
+            held = list(self.leases)
+        return [aid for aid in held if self.end(aid, reason)]
 
     def forget(self, aid, uid):
         """A grant, user or session went away: end their lease and drop their requests."""
-        with self.lock:
-            lease = self.leases.get(aid)
-            if lease is None:
-                return
-            if lease.user_id == uid:
-                self._pass_on(aid, lease, 'revoked')
-            else:
-                lease.queue = [entry for entry in lease.queue if entry['user_id'] != uid]
+        with self.turn(aid):
+            with self.lock:
+                lease = self.leases.get(aid)
+                if lease is None:
+                    return
+                if lease.user_id != uid:
+                    lease.queue = [entry for entry in lease.queue if entry['user_id'] != uid]
+                    return
+            self._pass_on(aid, lease, 'revoked')
 
     def sweep(self):
-        """End leases that went quiet or whose holder can no longer play."""
-        now = self.clock()
+        """End leases that went quiet or whose holder can no longer play, and drop quiet queued pages."""
         with self.lock:
-            for aid, lease in list(self.leases.items()):
+            held = list(self.leases)
+        for aid in held:
+            with self.turn(aid):
+                now = self.clock()
+                with self.lock:
+                    lease = self.leases.get(aid)
+                    if lease is None:
+                        continue
+                    lease.queue = [entry for entry in lease.queue if now - entry['beat'] <= HEARTBEAT_GRACE_SECONDS]
                 try:
                     adventure = self.manager.registry.adventure(aid)
                 except KeyError:
-                    self.leases.pop(aid, None)
+                    with self.lock:
+                        self.leases.pop(aid, None)
                     continue
                 if adventure['state'] != 'running':
                     self.end(aid, 'stopped', apply=False)
@@ -259,7 +295,7 @@ class Leases:
     def close(self):
         self.stop.set()
 
-    # Inside the lock ---------------------------------------------------------------------
+    # Inside the adventure's turn ---------------------------------------------------------
     def playable(self, uid, adventure):
         """This user, when they may still hold control of this adventure."""
         user = self.manager.auth.user(uid)
@@ -270,7 +306,9 @@ class Leases:
     def _pass_on(self, aid, lease, reason):
         """Give control to the next person in line who can still play, or end the lease."""
         adventure = self.manager.registry.adventure(aid)
-        queue = list(lease.queue)
+        now = self.clock()
+        with self.lock:
+            queue = [entry for entry in lease.queue if now - entry['beat'] <= HEARTBEAT_GRACE_SECONDS]
         while queue:
             entry = queue.pop(0)
             user = self.playable(entry['user_id'], adventure)
@@ -280,8 +318,8 @@ class Leases:
                     self._grant(aid, user, 'lease.next', queue=queue)
                     return
                 except LeaseRefused:
-                    break
-        self.leases[aid] = lease
+                    self.end(aid, reason, audited=True)
+                    return
         self.end(aid, reason)
 
     def _grant(self, aid, user, event, queue=()):
@@ -292,7 +330,8 @@ class Leases:
         if not self.worker(aid, 'take_control'):
             raise LeaseRefused('The adventure is busy with a trade or did not answer. Try again in a moment.')
         now = self.clock()
-        self.leases[aid] = Lease(user['id'], label(user), now, now, now, list(queue))
+        with self.lock:
+            self.leases[aid] = Lease(user['id'], label(user), now, now, now, list(queue))
         self.audit(event, user['id'], aid)
 
     def blocked(self, aid):
