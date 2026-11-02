@@ -49,6 +49,19 @@ questions:
           schema:
             type: string
             default: ""
+        - variable: auth
+          label: Accounts
+          description: Empty lets the Library decide. Accounts means everyone logs in. None leaves the Library open.
+          schema:
+            type: string
+            default: ""
+            enum:
+              - value: ""
+                description: Let the Library decide
+              - value: accounts
+                description: Accounts
+              - value: none
+                description: None
         - variable: additional_envs
           label: Additional Environment Variables
           schema:

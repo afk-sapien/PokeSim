@@ -10,12 +10,15 @@ ROOT = Path(__file__).resolve().parents[1]
 STORES = ROOT / 'deploy' / 'stores'
 VERSION = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version']
 QUICKSTART = (ROOT / 'compose.quickstart.yaml').read_text()
-ENVIRONMENT = sorted(set(re.findall(r'^      ([A-Z_]+):', QUICKSTART, re.MULTILINE)))
+# Store apps keep their settings for good, so they leave out the one-time admin pair and the
+# proxy list that only a Compose setup behind a proxy needs.
+COMPOSE_ONLY = {'AUTH_TRUSTED_PROXIES', 'POKESIM_ADMIN_USER', 'POKESIM_ADMIN_PASSWORD'}
+ENVIRONMENT = sorted(set(re.findall(r'^      ([A-Z_]+):', QUICKSTART, re.MULTILINE)) - COMPOSE_ONLY)
 COMPOSE_TEMPLATES = ('casaos/docker-compose.yml', 'umbrel/pokesim/docker-compose.yml')
 
 
 def test_quickstart_facts_the_templates_copy():
-    assert ENVIRONMENT == ['NTFY_MIN_PRIORITY', 'NTFY_MUTE', 'NTFY_TOKEN', 'NTFY_URL', 'PORT', 'PUBLIC_URL']
+    assert ENVIRONMENT == ['AUTH', 'NTFY_MIN_PRIORITY', 'NTFY_MUTE', 'NTFY_TOKEN', 'NTFY_URL', 'PORT', 'PUBLIC_URL']
     assert '8930}:8000"' in QUICKSTART
     assert ':/data\n' in QUICKSTART
 
@@ -68,5 +71,5 @@ def test_truenas_app_matches_the_quickstart():
     assert 'add_storage("/data", values.storage.data)' in template
     questions = (app / 'questions.yaml').read_text()
     assert '                  default: 8930\n' in questions
-    for variable in ('public_url', 'ntfy_url', 'ntfy_token', 'ntfy_min_priority', 'ntfy_mute'):
+    for variable in ('public_url', 'auth', 'ntfy_url', 'ntfy_token', 'ntfy_min_priority', 'ntfy_mute'):
         assert f'        - variable: {variable}\n' in questions
