@@ -320,6 +320,16 @@ def test_a_refused_page_hears_why(game):
     assert 'left_line' not in lease(game.carol, game.red).json()
 
 
+def test_a_page_in_line_that_can_no_longer_play_hears_why(game, people):  # noqa: F811
+    lease(game.bob, game.red, 'request')
+    lease(game.carol, game.red, 'request')
+    # Carol can only watch now, and nothing took her out of the line before Bob let go.
+    game.library.manager.auth.grant(game.red, game.ids.carol, 'viewer', people.alice['id'])
+    lease(game.bob, game.red, 'release')
+    status = lease(game.carol, game.red).json()
+    assert status['holder'] is None and not status['queued'] and status['left_line'] == 'refused'
+
+
 def test_a_backup_during_a_lease_change_does_not_hang(game, monkeypatch):
     """A take asks the registry whether a trade holds the adventure while a backup ends every lease."""
     from pokesim.app import backup
@@ -391,6 +401,28 @@ def test_resume_refuses_once_control_changed_hands(game, monkeypatch):
         lambda request: sent.append(request) or httpx.Response(200, json={'ok': True})))
     assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 409
     assert not sent
+
+
+def test_a_press_from_the_old_holder_never_reaches_the_new_one(game, monkeypatch):
+    manager, app = game.library.manager, game.library.app
+    leases, sent = manager.leases, []
+    lease(game.bob, game.red, 'request')
+    carol = manager.actor_for(manager.auth.user(game.ids.carol))
+    adventure = manager.registry.adventure(game.red)
+    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(
+        lambda request: sent.append(request) or httpx.Response(200, json={'ok': True})))
+    reserved = manager.coordinator.reserved
+
+    def handed_over(aid):
+        # Control changes hands after the access check and before the press reaches the worker.
+        if leases.holder(game.red) == game.ids.bob:
+            leases.end(game.red, 'release', apply=False)
+            leases.act(game.red, carol, adventure, 'request')
+        return reserved(aid)
+    monkeypatch.setattr(manager.coordinator, 'reserved', handed_over)
+    assert press(game.bob, game.red).status_code == 409
+    assert leases.holder(game.red) == game.ids.carol and not sent
+    assert press(game.carol, game.red).status_code == 200 and len(sent) == 1
 
 
 def test_a_page_in_line_hears_that_control_ended(game):

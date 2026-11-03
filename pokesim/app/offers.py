@@ -67,7 +67,8 @@ class TradeOffers(TradeBuilder):
 
     def __init__(self, manager):
         super().__init__(manager)
-        self.guard = threading.Lock()
+        # Accepting, settling and a hand-on of an adventure take turns. Accept settles inside it.
+        self.guard = threading.RLock()
         self.stop = threading.Event()
         self.clock = time.time
 
@@ -204,13 +205,22 @@ class TradeOffers(TradeBuilder):
                        if text]
             if changes and not confirm:
                 raise Changed('. '.join(changes) + '. Accept again to trade anyway', self.public(offer))
-            entry = self.coordinator.enqueue_manual({'left_id': trade['from_id'], 'left_key': trade['from_key'],
-                                                     'right_id': trade['to_id'], 'right_key': chosen,
-                                                     'request_id': identifier()})
+            # Claim the offer before the trade is queued, so an offer that expired or was withdrawn
+            # meanwhile never moves a Pokémon. A sweep and a hand-on wait for `guard` too.
+            mid = identifier()
             row = self.registry.update_trade_offer(oid, expect=(PENDING,), status=ACCEPTED, reason=None,
-                                                   manual_id=entry['id'], to_key=chosen,
+                                                   manual_id=mid, to_key=chosen,
                                                    display={'from': self._snapshot(give), 'to': self._snapshot(take)})
-        return self.public(self._announce(row, actor) or self.registry.trade_offer(oid))
+            if row is None:
+                raise ValueError(f'This offer is already {self.registry.trade_offer(oid)["status"]}')
+            try:
+                self.coordinator.enqueue_manual({'left_id': trade['from_id'], 'left_key': trade['from_key'],
+                                                 'right_id': trade['to_id'], 'right_key': chosen, 'request_id': mid})
+            except BaseException:
+                self.registry.update_trade_offer(oid, expect=(ACCEPTED,), status=PENDING, manual_id=None,
+                                                 to_key=offer['to_key'], display=offer.get('display') or {})
+                raise
+        return self.public(self._announce(row, actor))
 
     def _announce(self, row, actor=None):
         """Tell the sender in their inbox that their offer moved on. Returns the row."""
@@ -270,6 +280,14 @@ class TradeOffers(TradeBuilder):
 
     def _settle(self, offer, now=None):
         """Move an open offer on when its time ran out, an adventure left, or its trade finished."""
+        with self.guard:
+            try:
+                offer = self.registry.trade_offer(offer['id'])
+            except KeyError:
+                return offer
+            return self._settle_now(offer, now)
+
+    def _settle_now(self, offer, now=None):
         now = self.clock() if now is None else now
         status, reason = None, None
         if offer['status'] == PENDING:

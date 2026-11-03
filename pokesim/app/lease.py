@@ -374,6 +374,10 @@ class Leases:
                 except LeaseRefused:
                     self.end(aid, reason, audited=True)
                     return
+            # They can no longer play, so they leave the line and their page hears why.
+            with self.lock:
+                lease.queue = [left for left in lease.queue if left['user_id'] != entry['user_id']]
+                self.dropped[aid, entry['user_id']] = 'refused'
         self.end(aid, reason)
 
     def _grant(self, aid, user, event, queue=()):
