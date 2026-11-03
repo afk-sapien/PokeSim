@@ -71,6 +71,8 @@ def delete_adventure(manager, aid, confirmation, actor=None):
             if child and child.process is not None and child.process.poll() is None:
                 raise ValueError('The adventure worker is still running')
         manager.supervisor.close_viewer(aid)
+        # A lease left from before the stop ends here, recorded, and each page in its line hears so.
+        manager.leases.end(aid, 'deleted', apply=False)
         _paths(manager, aid)
         _end_offers(manager, aid, actor)
         with manager.registry.lock, manager.registry.db:

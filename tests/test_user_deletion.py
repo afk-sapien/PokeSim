@@ -272,3 +272,25 @@ def test_background_work_runs_with_no_loop_to_take_it(library):  # noqa: F811
     assert late.wait(2)
     manager.join_background(5)
     assert not manager.threads
+
+
+def test_a_failed_cleanup_step_never_skips_the_rest_of_a_deletion(quiet, people, monkeypatch):  # noqa: F811
+    manager = quiet.manager
+    admin = quiet.login('admin')
+    # Alice sent it between two adventures of Bob's, so only the sent-offer step ends it.
+    sent = offer(quiet, people.blue, quiet.adventure('Green', people.bob), sender=people.alice['id'])
+    shelves, started = [], []
+
+    def broken(aid, uid):
+        raise RuntimeError('the lease table is gone')
+    monkeypatch.setattr(manager.leases, 'forget', broken)
+    monkeypatch.setattr(manager.assets, 'forget_owner', shelves.append)
+    monkeypatch.setattr(manager, 'background', lambda function, *args: started.append(args))
+    done = admin.request('DELETE', f'/api/v1/users/{people.alice["id"]}', json={'adventures': {people.red: 'archive'}})
+    assert done.status_code == 200, done.text
+    row = manager.registry.adventure(people.red)
+    assert row['archived'] and row['owner_id'] == people.admin['id']
+    assert manager.registry.trade_offer(sent['id'])['status'] == 'withdrawn'
+    assert shelves == [people.alice['id']] and started == [(people.red,)]
+    assert any(entry['action'] == 'user.delete' and entry['target'] == people.alice['id']
+               for entry in manager.auth.audit_rows())

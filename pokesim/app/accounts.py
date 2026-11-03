@@ -241,10 +241,8 @@ def install(app, manager):
 
     def changed(uid, data, by):
         from . import ownership
-        result = auth.update_user(uid, **data)
         # A demotion or a disabled account can take manage or play away, and what they allowed goes too.
-        ownership.recheck(manager, uid, by)
-        return result
+        return ownership.change_user(manager, uid, by, **data)
 
     @app.delete('/api/v1/users/{uid}')
     async def delete_user(uid: str, request: Request):
@@ -461,11 +459,13 @@ def install(app, manager):
                 auth.audit('user.create', user_id=user['id'], target='oidc', ip=ip)
                 if role == 'admin':
                     manager.bind_library_owner(user['id'])
-            elif user['role'] != role:
-                try:
-                    user = auth.update_user(user['id'], role=role)
-                except ValueError:
-                    log.warning('The provider no longer names %s an admin, but they are the last one', user['username'])
+        # Outside `auth.lock`, since the recheck after a role change takes adventure turns.
+        if user['role'] != role:
+            from . import ownership
+            try:
+                user = ownership.change_user(manager, user['id'], role=role)
+            except ValueError:
+                log.warning('The provider no longer names %s an admin, but they are the last one', user['username'])
         if user['disabled']:
             return message_page('Log in', 'This account is turned off.', 403)
         auth.audit('login', user_id=user['id'], target='oidc', ip=ip)
