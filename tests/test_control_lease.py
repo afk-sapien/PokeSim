@@ -1,13 +1,20 @@
 """The control lease: one account plays an adventure by hand at a time, with roles below the owner."""
+import asyncio
+import json
 import threading
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 
+from pokesim import config
 from pokesim.app import lease as lease_module
 from pokesim.app import policy
-from pokesim.web.security import role_allows
+from pokesim.store import Store
+from pokesim.web.app import create_app
+from pokesim.web.security import LEASE_HEADER, role_allows
 
 from test_accounts import library, people  # noqa: F401
 
@@ -26,7 +33,7 @@ def game(library, people, monkeypatch):  # noqa: F811
     calls = []
 
     def request(aid):
-        def send(method, path, body=None, timeout=None):
+        def send(method, path, body=None, timeout=None, headers=None):
             calls.append((aid, path, (body or {}).get('action')))
             return {'ok': True}
         return send
@@ -249,7 +256,7 @@ def test_a_slow_worker_holds_up_only_its_own_adventure(game, monkeypatch):
     leases, entered, answer = manager.leases, threading.Event(), threading.Event()
 
     def child(aid):
-        def send(method, path, body=None, timeout=None):
+        def send(method, path, body=None, timeout=None, headers=None):
             entered.set()
             answer.wait(5)
             return {'ok': True}
@@ -327,7 +334,7 @@ def test_a_page_in_line_that_can_no_longer_play_hears_why(game, people):  # noqa
     game.library.manager.auth.grant(game.red, game.ids.carol, 'viewer', people.alice['id'])
     lease(game.bob, game.red, 'release')
     status = lease(game.carol, game.red).json()
-    assert status['holder'] is None and not status['queued'] and status['left_line'] == 'refused'
+    assert status['holder'] is None and not status['queued'] and status['left_line'] == 'no_longer_allowed'
 
 
 def test_a_backup_during_a_lease_change_does_not_hang(game, monkeypatch):
@@ -423,6 +430,81 @@ def test_a_press_from_the_old_holder_never_reaches_the_new_one(game, monkeypatch
     assert press(game.bob, game.red).status_code == 409
     assert leases.holder(game.red) == game.ids.carol and not sent
     assert press(game.carol, game.red).status_code == 200 and len(sent) == 1
+
+
+def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(game):
+    """A held arrow key sends a press every 140 ms. A slow worker must not use up the request
+    threads that every page and sign in share, and the presses must reach it in order."""
+    import anyio.to_thread
+    app, arrived = game.library.app, []
+    lease(game.bob, game.red, 'request')
+    buttons = ['down', 'a', 'up', 'b', 'left', 'right', 'start', 'select'] * 2
+
+    async def held():
+        anyio.to_thread.current_default_thread_limiter().total_tokens = 4
+        answer = asyncio.Event()
+
+        async def slow(request):
+            arrived.append(json.loads(request.content)['value'])
+            await answer.wait()
+            return httpx.Response(200, json={'ok': True})
+        app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(slow))
+        async with httpx._client.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://testserver',
+                                             cookies=game.bob.cookies, headers=dict(game.bob.headers)) as page:
+            presses = []
+            for button in buttons:
+                presses.append(asyncio.create_task(page.post(
+                    f'/games/{game.red}/api/control', json={'action': 'press', 'value': button})))
+                await asyncio.sleep(0.01)
+            try:
+                # Sixteen presses wait on the worker, and a page still reads who holds control.
+                status = await asyncio.wait_for(page.get(f'/games/{game.red}/api/lease'), 3)
+                assert status.status_code == 200 and status.json()['holder'] is not None
+            finally:
+                answer.set()
+            return [response.status_code for response in await asyncio.gather(*presses)]
+    assert asyncio.run(held()) == [200] * len(buttons)
+    assert arrived == buttons
+
+
+def test_a_slow_press_keeps_the_usual_time_limit(game):
+    lease(game.bob, game.red, 'request')
+    assert press(game.bob, game.red).status_code == 200
+    # A press that takes longer than five seconds still works, so the page never shows a 503
+    # for a press the game made.
+    sent = game.library.forwarded[-1]
+    assert sent.url.path == '/api/control' and sent.extensions['timeout']['read'] == 30
+
+
+def test_a_press_carries_its_lease_generation(game):
+    app, sent = game.library.app, []
+    lease(game.bob, game.red, 'request')
+    first = game.library.manager.leases.generation(game.red)
+    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(
+        lambda request: sent.append(request) or httpx.Response(200, json={'ok': True})))
+    assert press(game.bob, game.red).status_code == 200
+    assert sent[-1].headers[LEASE_HEADER] == str(first)
+    lease(game.bob, game.red, 'release')
+    lease(game.carol, game.red, 'request')
+    assert game.library.manager.leases.generation(game.red) > first
+    assert press(game.carol, game.red).status_code == 200
+    assert int(sent[-1].headers[LEASE_HEADER]) > first
+
+
+def test_the_worker_drops_a_press_from_before_control_changed_hands(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, 'VIEWER_ONLY', False)
+    emu = Mock()
+    with TestClient(create_app(emu, Store(tmp_path))) as worker:
+        def control(action, generation, value=None):
+            return worker.post('/api/control', json={'action': action, 'value': value},
+                               headers={LEASE_HEADER: str(generation)})
+        assert control('take_control', 3).status_code == 200
+        assert control('press', 3, 'a').status_code == 200
+        assert control('take_control', 5).status_code == 200
+        # Bob's press left the library just before Carol took over, and reaches the game after.
+        assert control('press', 3, 'down').status_code == 409
+        assert control('press', 5, 'down').status_code == 200
+    assert [call.args for call in emu.press.call_args_list] == [('a',), ('down',)]
 
 
 def test_a_page_in_line_hears_that_control_ended(game):

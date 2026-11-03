@@ -11,16 +11,22 @@ Two locks keep a slow worker from stalling every page. `lock` guards the leases 
 held across a worker request. Each adventure's turn lock lines up the changes that ask its
 worker, so a hung worker holds up only its own adventure. A turn is always taken before `lock`,
 and before the registry's lock, so nobody may end a lease while holding the registry's lock.
+
+Each grant and end gives the adventure a new generation before its worker hears of it. A press
+carries the generation of the lease it was checked against, so the library and the worker
+refuse a press from a lease that has since changed hands.
 """
 from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+import itertools
 import logging
 import os
 import threading
 import time
 
+from ..web.security import LEASE_HEADER
 from . import inbox
 from .policy import can
 
@@ -53,6 +59,7 @@ class Lease:
     last_input: float
     last_beat: float
     queue: list = field(default_factory=list)
+    generation: int = 0
 
 
 def label(user):
@@ -69,6 +76,10 @@ class Leases:
         self.turns = {}
         # People who left a line without asking, with the reason, until their page hears it.
         self.dropped = {}
+        # Each adventure's newest generation. The count never repeats, so a worker that kept an
+        # old one never mistakes it for a new one.
+        self.generations = {}
+        self.counter = itertools.count(1)
         self.stop = threading.Event()
 
     @property
@@ -112,6 +123,30 @@ class Leases:
 
     def holds(self, aid, actor):
         return actor.id is not None and self.holder(aid) == actor.id
+
+    def generation(self, aid):
+        """The adventure's newest generation. Safe to read on the event loop: it takes no lock."""
+        return self.generations.get(aid, 0)
+
+    def stamp(self, aid, actor):
+        """The generation a press from `actor` carries, or None when they do not hold control."""
+        with self.lock:
+            lease = self.leases.get(aid)
+            if lease is None or actor.id is None or lease.user_id != actor.id:
+                return None
+            return lease.generation
+
+    def advance(self, aid):
+        """Start a new generation, before the worker hears of a change."""
+        with self.lock:
+            generation = self.generations[aid] = next(self.counter)
+            return generation
+
+    def restamp(self, aid, lease, generation):
+        """A change the worker never made: the lease still in control carries the new generation."""
+        with self.lock:
+            if lease is not None and self.leases.get(aid) is lease:
+                lease.generation = generation
 
     def end_choice(self, aid):
         choice = self.manager.registry.setting('lease_end:' + aid)
@@ -223,6 +258,7 @@ class Leases:
             if user is None:
                 with self.lock:
                     lease.queue = [row for row in lease.queue if row is not entry]
+                    self.dropped[aid, target] = 'no_longer_allowed'
                 raise LeaseRefused('That person can no longer play this adventure')
             with self.lock:
                 queue = [row for row in lease.queue if row is not entry]
@@ -277,10 +313,12 @@ class Leases:
                     self.dropped[aid, entry['user_id']] = 'ended'
             if lease is None:
                 return False
+            # Presses checked against the ended lease are refused from here on.
+            generation = self.advance(aid)
             if not audited:
                 self.audit('lease.end', lease.user_id, aid, reason)
             if apply:
-                self.worker(aid, 'pause' if self.end_choice(aid) == 'pause' else 'resume')
+                self.worker(aid, 'pause' if self.end_choice(aid) == 'pause' else 'resume', generation)
             return True
 
     def end_all(self, reason):
@@ -377,7 +415,7 @@ class Leases:
             # They can no longer play, so they leave the line and their page hears why.
             with self.lock:
                 lease.queue = [left for left in lease.queue if left['user_id'] != entry['user_id']]
-                self.dropped[aid, entry['user_id']] = 'refused'
+                self.dropped[aid, entry['user_id']] = 'no_longer_allowed'
         self.end(aid, reason)
 
     def _grant(self, aid, user, event, queue=()):
@@ -385,11 +423,15 @@ class Leases:
         blocked = self.blocked(aid)
         if blocked:
             raise LeaseRefused(blocked)
-        if not self.worker(aid, 'take_control'):
+        # The old holder's presses are refused from the new generation on, and the worker drops
+        # any it queued when take_control arrives.
+        generation = self.advance(aid)
+        if not self.worker(aid, 'take_control', generation):
+            self.restamp(aid, self.current(aid), generation)
             raise LeaseRefused('The adventure is busy with a trade or did not answer. Try again in a moment.')
         now = self.clock()
         with self.lock:
-            self.leases[aid] = Lease(user['id'], label(user), now, now, now, list(queue))
+            self.leases[aid] = Lease(user['id'], label(user), now, now, now, list(queue), generation)
         self.audit(event, user['id'], aid)
 
     def blocked(self, aid):
@@ -400,9 +442,10 @@ class Leases:
             return 'A trade holds this adventure. Control opens again when it finishes.'
         return None
 
-    def worker(self, aid, action):
+    def worker(self, aid, action, generation):
         try:
-            self.manager.supervisor.child(aid).request('POST', '/api/control', {'action': action}, timeout=5)
+            self.manager.supervisor.child(aid).request('POST', '/api/control', {'action': action}, timeout=5,
+                                                       headers={LEASE_HEADER: str(generation)})
             return True
         except Exception as error:
             log.warning('Adventure %s refused %s for the control lease: %s', aid, action, error)

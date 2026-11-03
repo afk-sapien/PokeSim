@@ -67,7 +67,8 @@ class TradeOffers(TradeBuilder):
 
     def __init__(self, manager):
         super().__init__(manager)
-        # Accepting, settling and a hand-on of an adventure take turns. Accept settles inside it.
+        # Accepting, settling and a hand-on of an adventure take turns. Nothing holds it while a
+        # game answers: accept reads both Pokémon first and takes it only to claim the offer.
         self.guard = threading.RLock()
         self.stop = threading.Event()
         self.clock = time.time
@@ -177,34 +178,35 @@ class TradeOffers(TradeBuilder):
         self._writer(offer['to_id'])
         if to_key is not None and (not isinstance(to_key, str) or not 1 <= len(to_key) <= 256):
             raise ValueError('Choose a Pokémon to give')
+        offer = self._settle(self.registry.trade_offer(oid))
+        if offer['status'] != PENDING:
+            raise ValueError(f'This offer is already {offer["status"]}')
+        chosen = to_key or offer['to_key']
+        if not chosen:
+            raise ValueError('Choose a Pokémon to give in return')
+        # Both games are asked about their Pokémon before `guard`, which never waits on a game.
+        self._owner_check(actor, offer['to_id'], chosen)
+        trade = {**offer, 'to_key': chosen}
+        try:
+            give, take = self._check(trade, accepting=True)
+        except Gone as error:
+            return self.public(self._announce(self._end(oid, 'expired', str(error)), actor))
+        except HardLimit as error:
+            if to_key and to_key != offer['to_key']:
+                raise
+            return self.public(self._announce(self._end(oid, 'failed', str(error)), actor))
+        display = offer.get('display') or {}
+        changes = [text for text in (self._changes(display.get('from'), give),
+                                     self._changes(display.get('to') if chosen == offer['to_key'] else None, take))
+                   if text]
+        if changes and not confirm:
+            raise Changed('. '.join(changes) + '. Accept again to trade anyway', self.public(offer))
         with self.guard:
-            offer = self._settle(self.registry.trade_offer(oid))
-            if offer['status'] != PENDING:
-                raise ValueError(f'This offer is already {offer["status"]}')
-            chosen = to_key or offer['to_key']
-            if not chosen:
-                raise ValueError('Choose a Pokémon to give in return')
-            self._owner_check(actor, offer['to_id'], chosen)
-            trade = {**offer, 'to_key': chosen}
             busy = [row for row in self.registry.trade_offers(statuses=[ACCEPTED])
                     if {(row['from_id'], row['from_key']), (row['to_id'], row['to_key'])}
                     & {(trade['from_id'], trade['from_key']), (trade['to_id'], trade['to_key'])}]
             if busy:
                 raise ValueError('One of these Pokémon is already in another accepted trade. Try again when it finishes')
-            try:
-                give, take = self._check(trade, accepting=True)
-            except Gone as error:
-                return self.public(self._announce(self.registry.update_trade_offer(oid, status='expired', reason=str(error)), actor))
-            except HardLimit as error:
-                if to_key and to_key != offer['to_key']:
-                    raise
-                return self.public(self._announce(self.registry.update_trade_offer(oid, status='failed', reason=str(error)), actor))
-            display = offer.get('display') or {}
-            changes = [text for text in (self._changes(display.get('from'), give),
-                                         self._changes(display.get('to') if chosen == offer['to_key'] else None, take))
-                       if text]
-            if changes and not confirm:
-                raise Changed('. '.join(changes) + '. Accept again to trade anyway', self.public(offer))
             # Claim the offer before the trade is queued, so an offer that expired or was withdrawn
             # meanwhile never moves a Pokémon. A sweep and a hand-on wait for `guard` too.
             mid = identifier()
@@ -221,6 +223,13 @@ class TradeOffers(TradeBuilder):
                                                  to_key=offer['to_key'], display=offer.get('display') or {})
                 raise
         return self.public(self._announce(row, actor))
+
+    def _end(self, oid, status, reason):
+        """End a pending offer that can no longer trade, unless it moved on first."""
+        row = self.registry.update_trade_offer(oid, expect=(PENDING,), status=status, reason=reason)
+        if row is None:
+            raise ValueError(f'This offer is already {self.registry.trade_offer(oid)["status"]}')
+        return row
 
     def _announce(self, row, actor=None):
         """Tell the sender in their inbox that their offer moved on. Returns the row."""
