@@ -121,6 +121,24 @@ def test_an_accepted_offer_whose_trade_never_starts_expires_and_leaves_the_line(
     assert c.drain_manual() is None
 
 
+def test_an_offer_that_ends_during_accept_queues_no_trade(offers, monkeypatch):
+    service = offers.manager.offers
+    offer = service.create(offer_request(offers))
+    check = service._check
+
+    def ended_meanwhile(*args, **kwargs):
+        found = check(*args, **kwargs)
+        # A transfer ends the offer while the accept reads both Pokémon, without the offers guard.
+        offers.registry.update_trade_offer(offer['id'], expect=('pending',), status='withdrawn',
+                                           reason='The adventure changed hands')
+        return found
+    monkeypatch.setattr(service, '_check', ended_meanwhile)
+    with pytest.raises(ValueError, match='already withdrawn'):
+        service.accept(offer['id'])
+    assert [entry for entry in offers.coordinator._manual_entries() if entry['state'] == 'queued'] == []
+    assert service.status(offer['id'])['status'] == 'withdrawn'
+
+
 def test_a_changed_pokemon_needs_the_receiver_to_confirm(offers):
     service = offers.manager.offers
     offer = service.create(offer_request(offers))

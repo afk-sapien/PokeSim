@@ -67,18 +67,20 @@ def recheck(manager, uid, actor=None):
 
 def release(manager, aid, uid, actor=None):
     """`uid` no longer owns `aid`. Its open offers end, its queued trades leave the line and their lease ends."""
-    for offer in manager.registry.trade_offers(aid, statuses=list(OPEN)):
-        if offer['status'] != PENDING:
-            continue
-        status = 'withdrawn' if offer['from_id'] == aid else 'declined'
-        end_offer(manager, offer, status, 'The adventure changed hands', f"{inbox.adventure_name(manager, aid)} changed hands", actor)
-    coordinator = manager.coordinator
-    for entry in coordinator._manual_entries():
-        if entry['state'] == 'queued' and aid in (entry.get('left_id'), entry.get('right_id')):
-            try:
-                coordinator.cancel_queued(entry['id'])
-            except (KeyError, ValueError):
-                log.info('Queued trade %s started before the transfer could cancel it', entry['id'])
+    # An accept under way finishes first, so its trade is in the line below, or it finds the offer ended.
+    with manager.offers.guard:
+        for offer in manager.registry.trade_offers(aid, statuses=list(OPEN)):
+            if offer['status'] != PENDING:
+                continue
+            status = 'withdrawn' if offer['from_id'] == aid else 'declined'
+            end_offer(manager, offer, status, 'The adventure changed hands', f"{inbox.adventure_name(manager, aid)} changed hands", actor)
+        coordinator = manager.coordinator
+        for entry in coordinator._manual_entries():
+            if entry['state'] == 'queued' and aid in (entry.get('left_id'), entry.get('right_id')):
+                try:
+                    coordinator.cancel_queued(entry['id'])
+                except (KeyError, ValueError):
+                    log.info('Queued trade %s started before the transfer could cancel it', entry['id'])
     manager.leases.forget(aid, uid)
 
 

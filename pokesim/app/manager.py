@@ -1494,10 +1494,12 @@ def create_app(manager, shutdown=lambda: None):
             raise HTTPException(404)
         if not can(actor, action, adventure):
             raise HTTPException(403, 'Your role on this adventure does not allow this')
-        if control in policy.LEASE_ACTIONS and not manager.leases.holds(aid, actor):
-            raise HTTPException(409, 'Ask for control first. Someone else may hold it.')
-        if control == 'press':
-            manager.leases.touch(aid, actor)
+        if control in policy.LEASE_ACTIONS:
+            current = manager.leases.current(aid)
+            if current is None or actor.id is None or current.user_id != actor.id:
+                raise HTTPException(409, 'Ask for control first. Someone else may hold it.')
+            # The press is sent only while this same lease still holds control (see game).
+            request.state.lease_input = (control, current, actor)
         if control == 'resume' and not (manager.leases.holds(aid, actor) or can(actor, 'adventure.manage', adventure)):
             raise HTTPException(403, 'Only the person in control or a manager can resume the autopilot')
         if control in {'resume', 'pause'}:
@@ -1683,11 +1685,22 @@ def create_app(manager, shutdown=lambda: None):
             # The species reference only changes with the cartridge, so browsers revalidate it.
             headers['If-None-Match'] = request.headers['if-none-match']
         ends_lease = getattr(request.state, 'ends_lease', None)
+        lease_input = getattr(request.state, 'lease_input', None)
 
         async def send():
             return await client.send(client.build_request(
                 request.method, target, content=body, headers=headers,
-                **({'timeout': 5} if ends_lease else {})), stream=True)
+                **({'timeout': 5} if ends_lease or lease_input else {})), stream=True)
+
+        def input_in_turn(control, current, actor):
+            # A press and a handover happen one at a time, so the old holder's press never
+            # reaches the worker after the new holder has control.
+            with manager.leases.turn(aid):
+                if manager.leases.current(aid) is not current:
+                    return None
+                if control == 'press':
+                    manager.leases.touch(aid, actor)
+                return anyio.from_thread.run(send)
 
         def resume_in_turn(reason, current):
             # Resume or Pause and the lease's end happen in one turn, so no handover lands between.
@@ -1699,7 +1712,12 @@ def create_app(manager, shutdown=lambda: None):
                     manager.leases.end(aid, reason, apply=False, only=current)
                 return sent
         try:
-            response = await (run_in_threadpool(resume_in_turn, *ends_lease) if ends_lease else send())
+            if ends_lease:
+                response = await run_in_threadpool(resume_in_turn, *ends_lease)
+            elif lease_input:
+                response = await run_in_threadpool(input_in_turn, *lease_input)
+            else:
+                response = await send()
         except httpx.HTTPError as error:
             raise HTTPException(503, 'The adventure is reconnecting') from error
         if response is None:
