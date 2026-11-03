@@ -1569,7 +1569,8 @@ def create_app(manager, shutdown=lambda: None):
                 return await forward(aid, path, request, viewer, body)
         return await forward(aid, path, request, viewer, body)
 
-    press_lines = {}
+    # Each adventure's line of presses: its lock and how many presses are in it.
+    press_lines = app.state.press_lines = {}
 
     @asynccontextmanager
     async def press_line(aid):

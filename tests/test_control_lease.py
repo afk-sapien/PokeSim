@@ -452,10 +452,14 @@ def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(g
         async with httpx._client.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://testserver',
                                              cookies=game.bob.cookies, headers=dict(game.bob.headers)) as page:
             presses = []
-            for button in buttons:
+            for count, button in enumerate(buttons, 1):
                 presses.append(asyncio.create_task(page.post(
                     f'/games/{game.red}/api/control', json={'action': 'press', 'value': button})))
-                await asyncio.sleep(0.01)
+                # Like a key repeat, each press is sent once the one before it is in line.
+                for _ in range(100):
+                    if presses[-1].done() or getattr(app.state, 'press_lines', {}).get(game.red, [None, 0])[1] >= count:
+                        break
+                    await asyncio.sleep(0.01)
             try:
                 # Sixteen presses wait on the worker, and a page still reads who holds control.
                 status = await asyncio.wait_for(page.get(f'/games/{game.red}/api/lease'), 3)
