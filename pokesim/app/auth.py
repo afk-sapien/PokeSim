@@ -23,6 +23,8 @@ from .registry import LIBRARY_OWNER, identifier, validate_id
 
 SERVER_ROLES = ('admin', 'member')
 SESSION_SECONDS = 14 * 86400
+# How long a browser counts as one that logged in before, unless the user's sessions end first.
+KNOWN_SECONDS = 30 * 86400
 INVITE_SECONDS = 7 * 86400
 MAX_INVITE_SECONDS = 30 * 86400
 # How long a cached session is trusted before it is read again, so a password reset from the
@@ -260,9 +262,11 @@ class AuthStore:
         if not values:
             return current
         with self.lock, self.db:
+            # Counted inside the transaction, since `current` may be older than a change just made.
+            admins = self._admins()
             self.db.execute('UPDATE users SET ' + ','.join(f'{key}=?' for key in values) + ' WHERE id=?',
                             (*values.values(), uid))
-            if current['role'] == 'admin' and not current['disabled'] and self._admins() == 0:
+            if admins and self._admins() == 0:
                 raise ValueError('Keep at least one admin')
         result = self.user(uid)
         # A new role or a disabled account starts from a fresh login.
@@ -288,8 +292,10 @@ class AuthStore:
                     raise KeyError('User not found')
             self.db.execute('UPDATE shares SET revoked_at=? WHERE created_by=? AND revoked_at IS NULL', (time.time(), uid))
             self.db.execute('UPDATE invites SET revoked=1 WHERE created_by=? AND used_by IS NULL', (uid,))
+            # Counted inside the transaction, since `current` may be older than a promotion just made.
+            admins = self._admins()
             self.db.execute('DELETE FROM users WHERE id=?', (uid,))
-            if current['role'] == 'admin' and not current['disabled'] and self._admins() == 0:
+            if admins and self._admins() == 0:
                 raise ValueError('Keep at least one admin')
         self.cache.clear()
 
@@ -411,6 +417,9 @@ class AuthStore:
         kept = token_hash(keep) if keep else ''
         with self.lock, self.db:
             self.db.execute('DELETE FROM sessions WHERE user_id=? AND id_hash != ?', (uid, kept))
+            # Browsers this user logged in from before stop counting as known, like their sessions.
+            self.db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
+                            ('known_generation:' + uid, str(self._generation(uid) + 1)))
             self.cache.clear()
 
     # Known browsers ---------------------------------------------------------------------
@@ -422,23 +431,34 @@ class AuthStore:
                 self.set_setting('known_browser_key', key)
         return bytes.fromhex(key)
 
+    def _generation(self, uid):
+        """Goes up each time every session of `uid` ends, by a new password or by an admin."""
+        return int(self.setting('known_generation:' + uid, 0))
+
+    def _browser_mac(self, uid, issued):
+        message = f'{uid}.{issued}.{self._generation(uid)}'.encode()
+        return hmac.new(self._browser_key(), message, hashlib.sha256).hexdigest()
+
     def known_browser(self, uid):
         """A cookie value that marks this browser as one `uid` logged in from before."""
         issued = str(int(time.time()))
-        mac = hmac.new(self._browser_key(), f'{uid}.{issued}'.encode(), hashlib.sha256).hexdigest()
-        return f'{uid}.{issued}.{mac}'
+        return f'{uid}.{issued}.{self._browser_mac(uid, issued)}'
 
     def browser_knows(self, value, uid):
-        """Whether `value` is a known-browser cookie this store made for `uid`."""
+        """Whether `value` is a known-browser cookie this store made for `uid`, not too old and
+        made since their sessions last ended."""
         if not isinstance(value, str) or len(value) > 256 or value.count('.') != 2:
             return False
         owner, issued, mac = value.split('.')
-        expected = hmac.new(self._browser_key(), f'{owner}.{issued}'.encode(), hashlib.sha256).hexdigest()
-        return hmac.compare_digest(mac, expected) and owner == uid
+        if owner != uid or not issued.isdigit() or not 0 <= time.time() - int(issued) <= KNOWN_SECONDS:
+            return False
+        return hmac.compare_digest(mac, self._browser_mac(uid, issued))
 
     def end_all_sessions(self):
         with self.lock, self.db:
             self.db.execute('DELETE FROM sessions')
+            # A new key, so no browser counts as known any more.
+            self.db.execute("DELETE FROM settings WHERE key='known_browser_key'")
             self.cache.clear()
 
     def sessions(self, uid):

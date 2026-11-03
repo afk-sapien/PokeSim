@@ -157,6 +157,23 @@ def test_a_trusted_proxy_names_the_client_and_nobody_else_can():
         proxy_networks('0.0.0.0/0')
 
 
+def test_a_client_from_the_default_gateway_cannot_pick_its_address(library, people):
+    """Docker NATs direct clients to the gateway, which a wide trusted network may contain."""
+    import ipaddress
+    library.manager.trusted_proxies = proxy_networks('198.51.100.0/24')
+    library.manager.gateways = {ipaddress.ip_address('198.51.100.1')}
+    for number in range(5):
+        # Each guess claims a new address, but all of them count against the gateway.
+        guesser = browser_at(library, '198.51.100.1', **{'X-Forwarded-For': f'203.0.113.{number + 1}'})
+        guesser.post('/api/v1/auth/login', json={'username': 'bob', 'password': 'wrong password'})
+    fresh = browser_at(library, '198.51.100.1', **{'X-Forwarded-For': '203.0.113.99'})
+    assert fresh.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 429
+    # The proxy itself, elsewhere in the network, still names its clients.
+    proxied = browser_at(library, '198.51.100.5', **{'X-Forwarded-For': '203.0.113.50'})
+    assert proxied.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 200
+    assert library.manager.auth.sessions(people.alice['id'])[0]['ip'] == '203.0.113.50'
+
+
 def test_failed_logins_behind_the_proxy_lock_out_only_the_client_that_made_them(library, people):
     library.manager.trusted_proxies = proxy_networks('198.51.100.5')
     guesser = browser_at(library, '198.51.100.5', **{'X-Forwarded-For': '203.0.113.9'})
@@ -198,6 +215,25 @@ def test_guesses_from_everywhere_slow_an_account_by_a_minute_at_most(library, pe
     copied = browser_at(library, '198.51.100.20')
     copied.cookies.set('pokesim_known', own.cookies.get('pokesim_known'), path='/api/v1/auth/login')
     assert copied.post('/api/v1/auth/login', json={'username': 'bob', 'password': PASSWORD}).status_code == 429
+
+
+def test_a_known_browser_stops_counting_when_sessions_end_or_time_runs_out(library, people, monkeypatch):
+    from types import SimpleNamespace
+    from pokesim.app import auth as auth_module
+    auth, uid = library.manager.auth, people.alice['id']
+    now = [1_000_000_000.0]
+    monkeypatch.setattr(auth_module, 'time', SimpleNamespace(time=lambda: now[0]))
+    cookie = auth.known_browser(uid)
+    assert auth.browser_knows(cookie, uid)
+    now[0] += auth_module.KNOWN_SECONDS + 1
+    assert not auth.browser_knows(cookie, uid)
+    # A new password, an admin ending her sessions, or every session ending at once forgets it too.
+    for forget in (lambda: auth.set_password(uid, 'another password 1'), lambda: auth.end_sessions(uid),
+                   auth.end_all_sessions):
+        cookie = auth.known_browser(uid)
+        assert auth.browser_knows(cookie, uid)
+        forget()
+        assert not auth.browser_knows(cookie, uid)
 
 
 def test_stylesheets_and_health_checks_skip_the_account_lookups(library, people, monkeypatch):

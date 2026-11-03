@@ -25,6 +25,31 @@ def unshare(manager, aid, uid, actor=None):
             end_offer(manager, offer, 'withdrawn', 'Sharing of the adventure ended', 'sharing of an adventure ended', actor)
 
 
+def recheck(manager, uid, actor=None):
+    """`uid` changed role or was disabled. Offers they sent from an adventure they no longer manage
+    end, and they leave control of, and the line for, each adventure they can no longer play."""
+    from .policy import can
+    user = manager.auth.user(uid)
+    if user is None:
+        return
+    who = manager.actor_for(user)
+
+    def allowed(aid, action):
+        try:
+            return can(who, action, manager.registry.adventure(aid))
+        except KeyError:
+            return False
+    for offer in manager.registry.trade_offers(statuses=[PENDING]):
+        if offer.get('sender_id') == uid and not allowed(offer['from_id'], 'adventure.manage'):
+            end_offer(manager, offer, 'withdrawn', 'The person who sent it can no longer manage the adventure',
+                      'the person who sent it can no longer manage the adventure', actor)
+    with manager.leases.lock:
+        held = list(manager.leases.leases)
+    for aid in held:
+        if not allowed(aid, 'adventure.play'):
+            manager.leases.forget(aid, uid)
+
+
 def release(manager, aid, uid, actor=None):
     """`uid` no longer owns `aid`. Its open offers end, its queued trades leave the line and their lease ends."""
     for offer in manager.registry.trade_offers(aid, statuses=list(OPEN)):
@@ -81,6 +106,21 @@ def _delete_user(manager, uid, plan, actor):
         raise KeyError('User not found')
     if uid == actor.id:
         raise ValueError('You cannot delete your own account')
+    # From here no adventure is created for, imported by or given to them, so `owned` stays whole.
+    registry = manager.registry
+    with registry.lock:
+        known = uid in registry.leaving
+        registry.leaving.add(uid)
+    try:
+        return _delete_owner(manager, uid, user, plan, actor)
+    except BaseException:
+        if not known and manager.auth.user(uid) is not None:
+            with registry.lock:
+                registry.leaving.discard(uid)
+        raise
+
+
+def _delete_owner(manager, uid, user, plan, actor):
     owned = [row['id'] for row in manager.registry.adventures() if row.get('owner_id') == uid]
     if not isinstance(plan, dict) or set(plan) != set(owned):
         raise ValueError('Choose a new owner or Archive for each of their adventures')

@@ -272,6 +272,9 @@ class Leases:
                 if only is not None and self.leases.get(aid) is not only:
                     return False
                 lease = self.leases.pop(aid, None)
+                # The line goes with the lease, and each page still in it hears so once.
+                for entry in lease.queue if lease else ():
+                    self.dropped[aid, entry['user_id']] = 'ended'
             if lease is None:
                 return False
             if not audited:

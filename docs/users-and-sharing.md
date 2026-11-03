@@ -54,7 +54,8 @@ leaves the line, and says so when you come back to it.
 
 Control ends when you press **Let AI play**, when you press no buttons for 2 minutes, when
 your page closes, or when a trade or backup starts. You get a warning 30 seconds before an
-idle end. The next person in line gets control then. The owner chooses whether the AI plays
+idle end. The next person in line gets control then. A trade, a backup, or a manager's
+**Resume** or **Pause** closes the line instead, and each page in it says so. The owner chooses whether the AI plays
 again or the game stays paused when control ends. To change the idle time, set
 `CONTROL_IDLE_SECONDS` (30 or more).
 

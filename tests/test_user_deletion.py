@@ -172,7 +172,8 @@ def test_a_demotion_during_a_deletion_leaves_nothing_half_done(quiet, people, mo
         # Someone demotes the deleting admin just after the deletion counts admins.
         result = count()
         if not demoted:
-            demoted.append(auth.update_user(other['id'], role='member'))
+            demoted.append(True)
+            auth.update_user(other['id'], role='member')
         return result
     monkeypatch.setattr(auth, '_admins', admins)
     refused = second.request('DELETE', f'/api/v1/users/{people.admin["id"]}', json={'adventures': {kept: 'archive'}})
@@ -180,6 +181,48 @@ def test_a_demotion_during_a_deletion_leaves_nothing_half_done(quiet, people, mo
     assert auth.user(people.admin['id'])['role'] == 'admin'
     row = quiet.manager.registry.adventure(kept)
     assert not row['archived'] and row['owner_id'] == people.admin['id']
+
+
+def test_nothing_new_can_belong_to_a_user_being_deleted(quiet, people, monkeypatch):  # noqa: F811
+    """An adventure created for or given to them while the deletion runs would be left with no owner."""
+    manager = quiet.manager
+    auth, registry = manager.auth, manager.registry
+    delete, attempts = auth.delete_user, []
+
+    def racing(uid, heirs=()):
+        # Bob starts a new adventure and Carol gives him one, after the plan was checked.
+        for attempt in (lambda: registry.create('Late', 'fixture', {'starter': 'random'}, identifier(), owner=uid),
+                        lambda: registry.set_owner(people.red, uid)):
+            try:
+                attempts.append(attempt()['id'])
+            except ValueError as error:
+                attempts.append(str(error))
+        return delete(uid, heirs=heirs)
+    monkeypatch.setattr(auth, 'delete_user', racing)
+    done = quiet.login('admin').request('DELETE', f"/api/v1/users/{people.bob['id']}",
+                                        json={'adventures': {people.blue: 'archive'}})
+    assert done.status_code == 200
+    assert attempts == ['This account is being deleted'] * 2
+    assert [row['id'] for row in registry.adventures() if row['owner_id'] == people.bob['id']] == []
+
+
+def test_a_promotion_and_a_demotion_cannot_delete_the_last_admin(quiet, people, monkeypatch):  # noqa: F811
+    """The deletion read Alice as a member. She became the only admin before it ran."""
+    auth = quiet.manager.auth
+    read, raced = auth.user, []
+
+    def stale(uid):
+        found = read(uid)
+        if uid == people.alice['id'] and not raced:
+            raced.append(True)
+            auth.update_user(uid, role='admin')
+            auth.update_user(people.admin['id'], role='member')
+        return found
+    monkeypatch.setattr(auth, 'user', stale)
+    with pytest.raises(ValueError, match='Keep at least one admin'):
+        auth.delete_user(people.alice['id'])
+    monkeypatch.setattr(auth, 'user', read)
+    assert auth.user(people.alice['id'])['role'] == 'admin'
 
 
 def test_a_new_owner_disabled_during_a_deletion_leaves_nothing_half_done(quiet, people, monkeypatch):  # noqa: F811
@@ -205,12 +248,27 @@ def test_a_new_owner_disabled_during_a_deletion_leaves_nothing_half_done(quiet, 
 def test_background_work_runs_with_no_loop_to_take_it(library):  # noqa: F811
     import asyncio
     manager = library.manager
-    for loop in (None, asyncio.new_event_loop()):
-        ran = threading.Event()
-        manager.loop = loop
-        try:
-            manager.background(ran.set)
-            assert ran.wait(5)
-        finally:
-            if loop is not None:
-                loop.close()
+    ran = threading.Event()
+    manager.background(ran.set)
+    assert ran.wait(5)
+    # Work handed over while the app's loop is stopping still runs.
+    loop, inside, gate, late = asyncio.new_event_loop(), threading.Event(), threading.Event(), threading.Event()
+
+    def stopping():
+        loop.stop()
+        inside.set()
+        gate.wait(5)
+    manager.loop = loop
+    loop.call_soon(stopping)
+    running = threading.Thread(target=loop.run_forever, daemon=True)
+    running.start()
+    try:
+        assert inside.wait(5)
+        manager.background(late.set)
+        gate.set()
+        running.join(5)
+    finally:
+        loop.close()
+    assert late.wait(2)
+    manager.join_background(5)
+    assert not manager.threads

@@ -113,6 +113,35 @@ def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, state, ex
         manager.close()
 
 
+def test_a_backup_stays_suspended_until_its_workers_are_back(tmp_path, monkeypatch):
+    """No lease or trade may land on a worker that is still starting after a backup."""
+    seen = []
+
+    class QuietChild(FakeChild):
+        def request(self, method, path, body=None, **kwargs):
+            return {}
+    manager = Manager(tmp_path, child_factory=QuietChild)
+    manager.registry.add_rom('rom', 'sha1', 'red')
+    row = manager.registry.create('Red', 'rom', {'starter': 'random'}, identifier())
+    manager.registry.request_lifecycle(row['id'], 'start', identifier())
+    monkeypatch.setattr(manager.assets, 'rom_path', lambda rid: tmp_path / 'fixture.gb')
+    monkeypatch.setattr(manager.assets, 'prepare', lambda report: tmp_path)
+    monkeypatch.setattr(manager.assets, 'install_portraits', lambda raw: 0)
+    (tmp_path / 'fixture.gb').write_bytes(b'fake')
+    try:
+        manager.supervisor.start(row['id'])
+        start = manager.supervisor.start
+
+        def watched(aid, *args, **kwargs):
+            seen.append(manager.suspended)
+            return start(aid, *args, **kwargs)
+        monkeypatch.setattr(manager.supervisor, 'start', watched)
+        create_backup(manager)
+        assert seen == [True] and manager.suspended is False
+    finally:
+        manager.close()
+
+
 def test_backup_and_import_stage_inside_the_library_not_tmp(tmp_path, monkeypatch):
     """The container mounts /tmp as a 256 MB tmpfs, so staging a library there fails in RAM.
 
