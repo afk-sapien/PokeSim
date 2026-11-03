@@ -36,6 +36,8 @@ class Registry:
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        # Users being deleted, or deleted. Nothing new may belong to them.
+        self.leaving = set()
         self.db = sqlite3.connect(self.root / 'app.sqlite', check_same_thread=False)
         try:
             # Library settings can hold an ntfy access token.
@@ -206,6 +208,8 @@ class Registry:
         payload = dict(name=name, rom_id=rom_id, settings=settings)
         fingerprint = digest(payload)
         with self.lock, self.db:
+            if owner in self.leaving:
+                raise ValueError('This account is being deleted')
             previous = self.db.execute('SELECT * FROM operations WHERE id=?', (request_id,)).fetchone()
             if previous:
                 if previous['kind'] != 'create' or previous['digest'] != fingerprint:
@@ -252,6 +256,8 @@ class Registry:
         validate_id(owner)
         self.adventure(aid)
         with self.lock, self.db:
+            if owner in self.leaving:
+                raise ValueError('This account is being deleted')
             self.db.execute('UPDATE adventures SET owner_id=? WHERE id=?', (owner, aid))
             self.db.execute('INSERT OR IGNORE INTO rom_owners SELECT rom_id, ?, ? FROM adventures WHERE id=?',
                             (owner, time.time(), aid))

@@ -165,6 +165,28 @@ def test_same_request_is_idempotent_and_different_selection_is_rejected(setup):
     assert c.reserved(setup.data['left_id'])
 
 
+def test_a_trade_waits_for_a_grant_under_way(setup):
+    """A grant holds the adventure's turn while the worker takes control. The trade sees its lease."""
+    from pokesim.app.coordinator import Waiting
+    from pokesim.app.lease import Leases
+    leases = setup.manager.leases = Leases(setup.manager)
+    aid, entered = setup.data['left_id'], threading.Event()
+
+    def grant():
+        with leases.turn(aid):
+            entered.set()
+            threading.Event().wait(0.3)
+            with leases.lock:
+                leases.leases[aid] = SimpleNamespace(user_id='someone', queue=[])
+    granting = threading.Thread(target=grant, daemon=True)
+    granting.start()
+    assert entered.wait(5)
+    with pytest.raises(Waiting, match='by hand'):
+        setup.coordinator.propose(setup.data)
+    granting.join(5)
+    assert not setup.coordinator.reserved(aid)
+
+
 def test_both_stages_precede_commit_and_both_apply_precede_release(setup):
     c = setup.coordinator
     row = c.propose(setup.data)

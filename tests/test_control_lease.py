@@ -167,6 +167,46 @@ def test_losing_can_manage_ends_what_it_allowed(game, monkeypatch):
     assert leases.holder(game.red) != game.ids.carol and unshared == [game.ids.carol]
 
 
+def test_a_grant_change_ends_the_lease_off_the_event_loop(game, monkeypatch):
+    """Ending a lease can wait on a slow worker, which must never stall every other page."""
+    import asyncio
+    leases, on_loop = game.library.manager.leases, []
+    forget = leases.forget
+
+    def watched(aid, uid):
+        try:
+            asyncio.get_running_loop()
+            on_loop.append(True)
+        except RuntimeError:
+            on_loop.append(False)
+        return forget(aid, uid)
+    monkeypatch.setattr(leases, 'forget', watched)
+    lease(game.carol, game.red, 'take')
+    game.alice.post(f'/api/v1/adventures/{game.red}/grants', json={'user_id': game.ids.carol, 'role': 'viewer'})
+    assert on_loop == [False]
+
+
+def test_a_demotion_or_a_disable_ends_what_the_old_role_allowed(game, people):  # noqa: F811
+    from pokesim.app.registry import identifier
+    manager = game.library.manager
+    leases, registry = manager.leases, manager.registry
+    game.library.user('second', 'admin')
+    second = game.library.login('second')
+    admin = game.library.login('admin')
+    lease(game.bob, game.red, 'request')
+    assert lease(admin, game.red, 'request').json()['queued']
+    # The admin sent an offer from Red, which only admins and its managers may do.
+    sent = registry.create_trade_offer({'id': identifier(), 'from_id': game.red, 'from_key': '0', 'to_id': people.blue,
+                                        'to_key': '1', 'sender_id': people.admin['id']})
+    assert second.patch(f"/api/v1/users/{people.admin['id']}", json={'role': 'member'}).status_code == 200
+    assert registry.trade_offer(sent['id'])['status'] == 'withdrawn'
+    assert [entry['user_id'] for entry in leases.current(game.red).queue] == []
+    # Disabling the person in control hands control on.
+    lease(game.carol, game.red, 'request')
+    assert second.patch(f'/api/v1/users/{game.ids.bob}', json={'disabled': True}).status_code == 200
+    assert leases.holder(game.red) == game.ids.carol
+
+
 def test_a_trade_or_backup_ends_control(game):
     manager = game.library.manager
     lease(game.bob, game.red, 'request')
@@ -314,21 +354,52 @@ def test_a_backup_during_a_lease_change_does_not_hang(game, monkeypatch):
     assert made and manager.leases.holder(game.red) is None
 
 
-def test_resume_ends_only_the_lease_it_was_sent_for(game):
-    """Control changes hands while the worker resumes: the new holder keeps it."""
+def test_no_handover_lands_while_the_worker_resumes(game):
+    """A handover asked for during Resume waits for it, so nobody holds control while the autopilot plays."""
     manager, app = game.library.manager, game.library.app
     leases = manager.leases
     lease(game.bob, game.red, 'request')
     carol = manager.actor_for(manager.auth.user(game.ids.carol))
     adventure = manager.registry.adventure(game.red)
 
-    def resumed(request):
+    def hand_over():
         leases.end(game.red, 'release', apply=False)
         leases.act(game.red, carol, adventure, 'request')
+    handover = threading.Thread(target=hand_over, daemon=True)
+
+    def resumed(request):
+        handover.start()
+        handover.join(0.3)
+        assert handover.is_alive(), 'the handover landed between Resume and the end of the lease'
         return httpx.Response(200, json={'ok': True})
     app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(resumed))
     assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 200
-    assert leases.holder(game.red) == game.ids.carol
+    handover.join(5)
+    # Carol asked after the autopilot took over, so she holds a fresh lease.
+    assert not handover.is_alive() and leases.holder(game.red) == game.ids.carol
+
+
+def test_resume_refuses_once_control_changed_hands(game, monkeypatch):
+    manager, app = game.library.manager, game.library.app
+    leases, sent = manager.leases, []
+    lease(game.bob, game.red, 'request')
+    access = manager.leases.current
+    # Control changes hands after the access check read the lease and before the worker hears of it.
+    reads = iter([access(game.red), object()])
+    monkeypatch.setattr(leases, 'current', lambda aid: next(reads, None) or access(aid))
+    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(
+        lambda request: sent.append(request) or httpx.Response(200, json={'ok': True})))
+    assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 409
+    assert not sent
+
+
+def test_a_page_in_line_hears_that_control_ended(game):
+    lease(game.bob, game.red, 'request')
+    lease(game.carol, game.red, 'request')
+    assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 200
+    status = lease(game.carol, game.red).json()
+    assert not status['queued'] and status['left_line'] == 'ended'
+    assert 'left_line' not in lease(game.carol, game.red).json()
 
 
 def test_an_adventure_without_a_lease_keeps_no_turn_lock(game):

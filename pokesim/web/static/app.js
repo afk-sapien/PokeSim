@@ -106,6 +106,7 @@ const canPress = () => !viewerOnly && role !== 'viewer' && holding()
 const LEFT_LINE = {
   quiet: 'You left the line for control because this page was hidden too long. Ask again to wait.',
   refused: 'The person playing turned down your request for control.',
+  ended: 'Control ended, so the line for it closed. Ask again to play.',
 }
 
 async function refreshLease() {

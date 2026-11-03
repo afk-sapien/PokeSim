@@ -93,14 +93,16 @@ everyone. Set `AUTH_TRUSTED_PROXIES` to the proxy's address, and PokeSim takes t
 first address that is not a trusted proxy, so a client cannot claim another address. Requests
 from anywhere else keep their own address.
 
-This works without header logins too. Then the default gateway is allowed, which matters when
-the proxy reaches PokeSim through Docker's port mapping and arrives from the gateway address.
-Trust the gateway only when every other client still arrives with its own address.
+This works without header logins too. A forwarded address from the default gateway never
+counts, even inside a trusted network, because Docker's port mapping can make direct clients
+arrive from it. Run the proxy on another machine or in the same Docker network, and trust its
+own address.
 
 Wrong passwords from one address lock that address out for up to 15 minutes. Wrong passwords
 for one account from many addresses slow that account by a minute at most, and never slow a
-browser that logged in to that account before. A signed cookie marks that browser, so a
-shared or made-up address does not count.
+browser that logged in to that account in the last 30 days. A signed cookie marks that browser,
+so a shared or made-up address does not count. A new password, or ending that person's sessions,
+makes every browser wait like a new one.
 
 ## View links
 

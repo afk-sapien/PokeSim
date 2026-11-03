@@ -19,6 +19,7 @@ import time
 from urllib.parse import parse_qs, urlencode, urlsplit
 import webbrowser
 
+import anyio.from_thread
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
@@ -91,11 +92,13 @@ class Manager:
             self.auth_mode = self.resolve_auth(auth, fresh)
             self.oidc = self.proxy = None
             self.trusted_proxies = []
+            self.gateways = set()
             if self.auth_mode == 'accounts':
-                from .providers import OIDC, ProxyAuth, proxy_networks
+                from .providers import OIDC, ProxyAuth, default_gateways, proxy_networks
                 self.oidc = OIDC.from_env(self.public_url)
                 self.proxy = ProxyAuth.from_env()
                 self.trusted_proxies = proxy_networks(os.environ.get('AUTH_TRUSTED_PROXIES', ''))
+                self.gateways = default_gateways()
                 # Kept in app.sqlite, which backups carry, so a restored copy asks for setup
                 # again instead of opening without a login.
                 self.registry.set_setting('accounts', True)
@@ -121,8 +124,8 @@ class Manager:
         self.closing = False
         self._closed = False
         self.tasks = set()
-        # The app's event loop, once it runs, so worker threads can start background tasks.
-        self.loop = None
+        # Background threads started off the event loop, which shutdown waits for.
+        self.threads = set()
         self.sessions = {}
         self.session_lock = threading.Lock()
         from .coordinator import Coordinator
@@ -297,27 +300,24 @@ class Manager:
         self._closed = True
 
     def background(self, function, *args):
-        """Run `function` in a thread. From a worker thread the task goes to the app's event loop.
+        """Run `function` in a thread, which shutdown waits for.
 
-        Callers run this after their changes are saved, so it never refuses. With no loop to
-        take the task, before startup or after shutdown, a thread of its own runs it.
+        Callers run this after their changes are saved, so it never refuses. Off the event loop
+        a thread of its own runs it, since a callback handed to a loop that is stopping is lost.
         """
         def call():
             try:
                 function(*args)
             except Exception:
                 log.exception('Background application operation failed')
+            finally:
+                self.threads.discard(threading.current_thread())
         try:
             asyncio.get_running_loop()
         except RuntimeError:
-            loop = self.loop
-            if loop is not None and loop.is_running():
-                try:
-                    loop.call_soon_threadsafe(self.background, function, *args)
-                    return None
-                except RuntimeError:
-                    pass
-            threading.Thread(target=call, name='pokesim-background', daemon=True).start()
+            thread = threading.Thread(target=call, name='pokesim-background', daemon=True)
+            self.threads.add(thread)
+            thread.start()
             return None
 
         async def run():
@@ -326,6 +326,13 @@ class Manager:
         self.tasks.add(task)
         task.add_done_callback(self.tasks.discard)
         return task
+
+    def join_background(self, seconds=60):
+        """Wait for the background threads, and any they start, for up to `seconds`."""
+        deadline = time.monotonic() + seconds
+        while self.threads and time.monotonic() < deadline:
+            for thread in list(self.threads):
+                thread.join(max(0, deadline - time.monotonic()))
 
     # Accounts ---------------------------------------------------------------------------
     def resolve_auth(self, requested, fresh):
@@ -471,10 +478,17 @@ class Manager:
                             secure=self.public_url.startswith('https:'), max_age=max_age)
 
     def client_address(self, request):
-        """The browser's address. Behind a proxy that AUTH_TRUSTED_PROXIES names, the one it forwards."""
-        from .providers import forwarded_client
+        """The browser's address. Behind a proxy that AUTH_TRUSTED_PROXIES names, the one it forwards.
+
+        Direct clients that Docker's port mapping NATs arrive from the default gateway, so a
+        forwarded address from the gateway never counts, even inside a trusted network.
+        """
+        from .providers import forwarded_client, host_address
         peer = request.client.host if request.client else None
-        return forwarded_client(peer, ','.join(request.headers.getlist('x-forwarded-for')), self.trusted_proxies)
+        networks = self.trusted_proxies
+        if networks and host_address(peer) in self.gateways:
+            networks = []
+        return forwarded_client(peer, ','.join(request.headers.getlist('x-forwarded-for')), networks)
 
 
 async def json_body(request, limit=65536):
@@ -546,7 +560,6 @@ def cache_policy(path, query, content_type):
 def create_app(manager, shutdown=lambda: None):
     @asynccontextmanager
     async def lifespan(app):
-        manager.loop = asyncio.get_running_loop()
         manager.background(manager.start)
         try:
             yield
@@ -557,6 +570,7 @@ def create_app(manager, shutdown=lambda: None):
             await asyncio.to_thread(manager.coordinator.close)
             if manager.tasks:
                 await asyncio.gather(*list(manager.tasks), return_exceptions=True)
+            await asyncio.to_thread(manager.join_background)
             await asyncio.to_thread(manager.close)
             if app.state.children is not None:
                 await app.state.children.aclose()
@@ -1666,14 +1680,28 @@ def create_app(manager, shutdown=lambda: None):
         if path == 'api/pokedex' and request.headers.get('if-none-match'):
             # The species reference only changes with the cartridge, so browsers revalidate it.
             headers['If-None-Match'] = request.headers['if-none-match']
+        ends_lease = getattr(request.state, 'ends_lease', None)
+
+        async def send():
+            return await client.send(client.build_request(
+                request.method, target, content=body, headers=headers,
+                **({'timeout': 5} if ends_lease else {})), stream=True)
+
+        def resume_in_turn(reason, current):
+            # Resume or Pause and the lease's end happen in one turn, so no handover lands between.
+            with manager.leases.turn(aid):
+                if manager.leases.current(aid) is not current:
+                    return None
+                sent = anyio.from_thread.run(send)
+                if sent.status_code < 400:
+                    manager.leases.end(aid, reason, apply=False, only=current)
+                return sent
         try:
-            response = await client.send(client.build_request(request.method, target, content=body, headers=headers), stream=True)
+            response = await (run_in_threadpool(resume_in_turn, *ends_lease) if ends_lease else send())
         except httpx.HTTPError as error:
             raise HTTPException(503, 'The adventure is reconnecting') from error
-        ends_lease = getattr(request.state, 'ends_lease', None)
-        if ends_lease and response.status_code < 400:
-            reason, current = ends_lease
-            await run_in_threadpool(manager.leases.end, aid, reason, apply=False, only=current)
+        if response is None:
+            raise HTTPException(409, 'Control changed hands. Look again and retry.')
         if (path in GAME_PAGES and request.method == 'GET' and response.status_code == 200
                 and response.headers.get('content-type', '').startswith('text/html')):
             # The adventure renders its pages without knowing which portraits the library

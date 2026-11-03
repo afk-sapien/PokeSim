@@ -120,7 +120,7 @@ def _create_backup(manager):
             pending.replace(destination)
         return {'id': bid, 'path': str(destination), 'created_at': manifest['created_at']}
     finally:
-        manager.suspended = False
+        # create_backup lifts `suspended` once these are back, so no lease lands on a starting worker.
         for aid in running:
             try:
                 manager.supervisor.start(aid)

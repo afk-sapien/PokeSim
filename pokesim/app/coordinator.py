@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter, deque
-from contextlib import closing
+from contextlib import ExitStack, closing
 from dataclasses import asdict
 import hashlib
 import json
@@ -613,15 +613,20 @@ class Coordinator:
             if manual:
                 plan['manual'] = True
             leases = getattr(self.manager, 'leases', None)
-            if leases is not None:
-                held = [aid for aid in participants if leases.holder(aid)]
-                if held and not manual:
-                    # Someone is playing by hand. Automatic trades wait for them.
-                    raise Waiting('Someone is playing this adventure by hand')
-                for aid in held:
-                    leases.end(aid, 'trade')
-            plan['plan_digest'] = digest(plan)
-            return self.registry.create_transaction(tid, plan)
+            with ExitStack() as turns:
+                if leases is not None:
+                    # Each adventure's turn waits out a grant under way, and keeps a new one off
+                    # until the trade is recorded and holds the adventure.
+                    for aid in sorted(participants):
+                        turns.enter_context(leases.turn(aid))
+                    held = [aid for aid in participants if leases.holder(aid)]
+                    if held and not manual:
+                        # Someone is playing by hand. Automatic trades wait for them.
+                        raise Waiting('Someone is playing this adventure by hand')
+                    for aid in held:
+                        leases.end(aid, 'trade')
+                plan['plan_digest'] = digest(plan)
+                return self.registry.create_transaction(tid, plan)
 
     def _admit(self, tid, selection):
         """The exchange already recorded under this request ID, or None if a new one may start."""

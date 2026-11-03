@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
 
 from ..web.pages import template
-from .auth import SESSION_SECONDS, private_address
+from .auth import KNOWN_SECONDS, SESSION_SECONDS, private_address
 from .providers import default_gateways, env_flag
 
 log = logging.getLogger(__name__)
@@ -20,7 +20,6 @@ OIDC_COOKIE = 'pokesim_oidc'
 USER_LOCKOUT = 60
 # A browser that logged in to an account before keeps logging in to it while others guess.
 KNOWN_COOKIE = 'pokesim_known'
-KNOWN_SECONDS = 365 * 86400
 # The roles an owner can give: Can watch, Can play and Can manage.
 GRANT_ROLES = ('viewer', 'player', 'manager')
 
@@ -235,9 +234,16 @@ def install(app, manager):
         data = await body(request)
         if set(data) - {'role', 'disabled', 'can_create', 'display_name'}:
             raise ValueError('Unsupported user changes')
-        result = await run_in_threadpool(lambda: auth.update_user(uid, **data))
+        result = await run_in_threadpool(changed, uid, data, actor(request))
         auth.audit('user.update', user_id=actor(request).id, target=f'{uid} {sorted(data)}',
                    ip=manager.client_address(request))
+        return result
+
+    def changed(uid, data, by):
+        from . import ownership
+        result = auth.update_user(uid, **data)
+        # A demotion or a disabled account can take manage or play away, and what they allowed goes too.
+        ownership.recheck(manager, uid, by)
         return result
 
     @app.delete('/api/v1/users/{uid}')
@@ -304,6 +310,10 @@ def install(app, manager):
     @app.post('/api/v1/adventures/{aid}/grants')
     async def add_grant(aid: str, request: Request):
         data = await body(request)
+        # Ending a lease can wait on a worker, so the rest runs off the event loop.
+        return await run_in_threadpool(grant, aid, data, request)
+
+    def grant(aid, data, request):
         if set(data) != {'user_id', 'role'}:
             raise ValueError('Choose a person and a role')
         if data['role'] not in GRANT_ROLES:
