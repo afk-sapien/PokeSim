@@ -487,3 +487,105 @@ def test_without_accounts_take_control_needs_no_lease(tmp_path):
             manager.leases.act('x', policy.Actor(None, {}), {}, 'request')
     finally:
         manager.close()
+
+
+def oidc_login(library, provider, groups):  # noqa: F811
+    import time
+    from urllib.parse import parse_qs, urlsplit
+    browser = library.browser()
+    query = parse_qs(urlsplit(browser.get('/auth/oidc/login', follow_redirects=False).headers['location']).query)
+    now = int(time.time())
+    provider.claims = {'iss': provider.issuer, 'sub': 'u-erin', 'aud': 'pokesim', 'exp': now + 300, 'iat': now,
+                       'nonce': query['nonce'][0], 'preferred_username': 'erin', 'groups': groups}
+    done = browser.get(f'/auth/oidc/callback?state={query["state"][0]}&code=abc', follow_redirects=False)
+    assert done.status_code == 200, done.text
+    browser.headers['X-PokeSim-CSRF'] = browser.get('/api/v1/session').json()['csrf_token']
+    return browser
+
+
+def sent_from(manager, aid, to_id, uid):
+    from pokesim.app.registry import identifier
+    return manager.registry.create_trade_offer({'id': identifier(), 'from_id': aid, 'from_key': '0', 'to_id': to_id,
+                                                'to_key': '1', 'sender_id': uid})
+
+
+def test_a_provider_that_lowers_a_role_ends_what_the_old_role_allowed(game, people):  # noqa: F811
+    from pokesim.app.providers import OIDC
+    from test_accounts import Provider
+    manager = game.library.manager
+    provider = Provider()
+    manager.oidc = OIDC(provider.issuer, 'pokesim', 'secret', 'http://testserver/auth/oidc/callback',
+                        transport=httpx.MockTransport(provider.handle))
+    erin = oidc_login(game.library, provider, ['pokesim-admins'])
+    uid = manager.auth.identity_user('oidc', provider.issuer, 'u-erin')['id']
+    lease(game.bob, game.red, 'request')
+    assert lease(erin, game.red, 'request').json()['queued']
+    sent = sent_from(manager, game.red, people.blue, uid)
+    oidc_login(game.library, provider, ['pokesim'])
+    assert manager.auth.user(uid)['role'] == 'member'
+    assert manager.registry.trade_offer(sent['id'])['status'] == 'withdrawn'
+    assert manager.leases.current(game.red).queue == []
+
+
+def test_a_proxy_that_lowers_a_role_ends_what_the_old_role_allowed(game, people, monkeypatch):  # noqa: F811
+    import time
+    from pokesim.app import ownership
+    manager = game.library.manager
+    named = ['admin']
+    monkeypatch.setattr(manager, 'proxy', SimpleNamespace(
+        identify=lambda request: ('frank', named[0]) if request.headers.get('X-Test-Proxy') else None))
+    checks = []
+    recheck = ownership.recheck
+    monkeypatch.setattr(ownership, 'recheck', lambda manager, uid, actor=None: checks.append(uid) or recheck(manager, uid, actor))
+    frank = game.library.browser()
+    frank.headers['X-Test-Proxy'] = '1'
+    lease(game.bob, game.red, 'request')
+    assert lease(frank, game.red, 'request').json()['queued']
+    uid = manager.auth.identity_user('proxy', 'header', 'frank')['id']
+    sent = sent_from(manager, game.red, people.blue, uid)
+    # The same role on every request rechecks nothing.
+    lease(frank, game.red)
+    assert checks == []
+    named[0] = 'member'
+    frank.get('/api/v1/session')
+    # The recheck runs in the background, so wait for its last step.
+    deadline = time.monotonic() + 5
+    while manager.leases.current(game.red).queue and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert manager.registry.trade_offer(sent['id'])['status'] == 'withdrawn'
+    assert manager.leases.current(game.red).queue == []
+    frank.get('/api/v1/session')
+    assert checks == [uid]
+
+
+def lease_ends(manager, aid):
+    return [row['target'] for row in manager.auth.audit_rows() if row['action'] == 'lease.end' and row['adventure_id'] == aid]
+
+
+def test_a_role_change_after_an_adventure_went_ends_its_lease_cleanly(game):
+    manager = game.library.manager
+    leases, registry = manager.leases, manager.registry
+    lease(game.bob, game.red, 'request')
+    lease(game.carol, game.red, 'request')
+    # Gone between two sweeps, so its lease is still in memory.
+    with registry.lock, registry.db:
+        registry.db.execute('DELETE FROM adventures WHERE id=?', (game.red,))
+    admin = game.library.login('admin')
+    assert admin.patch(f'/api/v1/users/{game.ids.bob}', json={'disabled': True}).status_code == 200
+    assert leases.holder(game.red) is None
+    assert leases.dropped[game.red, game.ids.carol] == 'ended'
+    assert lease_ends(manager, game.red) == ['deleted']
+
+
+def test_deleting_an_adventure_ends_its_lease_and_tells_its_line(game, people):  # noqa: F811
+    from pokesim.app.deletion import delete_adventure
+    manager = game.library.manager
+    leases = manager.leases
+    lease(game.bob, game.red, 'request')
+    lease(game.carol, game.red, 'request')
+    # Stopped, inside the sweep's window, so the lease is still there.
+    manager.registry.update(game.red, state='stopped', desired_state='stopped')
+    delete_adventure(manager, game.red, 'Red', manager.actor_for(manager.auth.user(people.alice['id'])))
+    assert leases.holder(game.red) is None
+    assert leases.dropped[game.red, game.ids.carol] == 'ended'
+    assert lease_ends(manager, game.red) == ['deleted']

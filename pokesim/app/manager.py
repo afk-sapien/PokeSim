@@ -413,11 +413,13 @@ class Manager:
                 user = self.auth.create_user(self.auth.free_username(name), role=role, display_name=name)
                 self.auth.link_identity(user['id'], 'proxy', 'header', name)
                 self.auth.audit('user.create', user_id=user['id'], target='proxy')
-            if user['role'] != role:
-                try:
-                    user = self.auth.update_user(user['id'], role=role)
-                except ValueError:
-                    log.warning('The proxy names %s as a member, but they are the last admin', name)
+        # Only a real change rechecks, in the background, since this runs on every request.
+        if user['role'] != role:
+            from . import ownership
+            try:
+                user = ownership.change_user(self, user['id'], role=role, wait=False)
+            except ValueError:
+                log.warning('The proxy names %s as a member, but they are the last admin', name)
         return user
 
     def actor(self, request):

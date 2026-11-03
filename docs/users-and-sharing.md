@@ -23,7 +23,9 @@ ones loaded from a backup or import, belong to the admin who loaded them.
 3. Send them the link. It works once and lasts 7 days.
 
 They choose a username and password on the invite page and arrive as a member. In People,
-an admin can make someone an admin, turn an account off, or log them out everywhere.
+an admin can make someone an admin, turn an account off, or log them out everywhere. A lower
+role or a turned-off account, whether set here, by the identity provider or by the proxy, ends
+the offers and places in line that the old role allowed.
 Pending invites are listed there too and can be cancelled.
 
 ## Share an adventure
@@ -54,8 +56,8 @@ leaves the line, and says so when you come back to it.
 
 Control ends when you press **Let AI play**, when you press no buttons for 2 minutes, when
 your page closes, or when a trade or backup starts. You get a warning 30 seconds before an
-idle end. The next person in line gets control then. A trade, a backup, or a manager's
-**Resume** or **Pause** closes the line instead, and each page in it says so. The owner chooses whether the AI plays
+idle end. The next person in line gets control then. A trade, a backup, deleting the adventure, or a
+manager's **Resume** or **Pause** closes the line instead, and each page in it says so. The owner chooses whether the AI plays
 again or the game stays paused when control ends. To change the idle time, set
 `CONTROL_IDLE_SECONDS` (30 or more).
 

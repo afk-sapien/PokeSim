@@ -321,8 +321,7 @@ class Leases:
                 try:
                     adventure = self.manager.registry.adventure(aid)
                 except KeyError:
-                    with self.lock:
-                        self.leases.pop(aid, None)
+                    self.end(aid, 'deleted', apply=False)
                     continue
                 if adventure['state'] != 'running':
                     self.end(aid, 'stopped', apply=False)
@@ -355,7 +354,12 @@ class Leases:
 
     def _pass_on(self, aid, lease, reason):
         """Give control to the next person in line who can still play, or end the lease."""
-        adventure = self.manager.registry.adventure(aid)
+        try:
+            adventure = self.manager.registry.adventure(aid)
+        except KeyError:
+            # The adventure was deleted. Its line hears so, and there is no worker to resume.
+            self.end(aid, 'deleted', apply=False)
+            return
         now = self.clock()
         with self.lock:
             queue = self.waiting(aid, lease, now)
