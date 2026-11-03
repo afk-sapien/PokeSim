@@ -65,10 +65,30 @@ def proxy_networks(text):
     return networks
 
 
-def in_networks(host, networks):
+def host_address(text):
+    """The address in a peer or X-Forwarded-For hop, or None.
+
+    Proxies may add a port (`203.0.113.5:4711`, `[2001:db8::1]:4711`) or brackets, and a dual
+    stack socket reports IPv4 clients as `::ffff:203.0.113.5`, so all of these become the plain
+    address.
+    """
+    if not isinstance(text, str):
+        return None
+    text = text.strip()
+    if text.startswith('['):
+        text = text[1:].partition(']')[0]
+    elif text.count(':') == 1:
+        text = text.partition(':')[0]
     try:
-        address = ipaddress.ip_address(host)
-    except (TypeError, ValueError):
+        address = ipaddress.ip_address(text)
+    except ValueError:
+        return None
+    return getattr(address, 'ipv4_mapped', None) or address
+
+
+def in_networks(host, networks):
+    address = host if isinstance(host, (ipaddress.IPv4Address, ipaddress.IPv6Address)) else host_address(host)
+    if address is None:
         return False
     return any(address.version == network.version and address in network for network in networks)
 
@@ -79,15 +99,17 @@ def forwarded_client(peer, header, networks):
     Hops are read from the right, so a client cannot hide behind an address it wrote at the
     left. The first hop that is not a trusted proxy is the client.
     """
-    if not header or not in_networks(peer, networks):
+    address = host_address(peer)
+    if address is not None:
+        peer = str(address)
+    if not header or not in_networks(address, networks):
         return peer
-    for hop in reversed([part.strip() for part in header.split(',')]):
-        try:
-            hop = str(ipaddress.ip_address(hop))
-        except ValueError:
+    for part in reversed(header.split(',')):
+        hop = host_address(part)
+        if hop is None:
             return peer
         if not in_networks(hop, networks):
-            return hop
+            return str(hop)
     return peer
 
 

@@ -49,7 +49,8 @@ turn on. Sharing shows it with a **Make a link** button that makes a watch link 
 
 One person plays by hand at a time. Press **Take control** on the game page. If someone else
 already has control, you join a line and they choose **Hand over** or **Refuse**. An owner or
-manager can always press **Take control back**.
+manager can always press **Take control back**. A page hidden for more than about 2 minutes
+leaves the line, and says so when you come back to it.
 
 Control ends when you press **Let AI play**, when you press no buttons for 2 minutes, when
 your page closes, or when a trade or backup starts. You get a warning 30 seconds before an

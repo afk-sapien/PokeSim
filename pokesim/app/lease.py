@@ -9,10 +9,12 @@ manager restart drops them and startup puts the autopilot back.
 
 Two locks keep a slow worker from stalling every page. `lock` guards the leases and is never
 held across a worker request. Each adventure's turn lock lines up the changes that ask its
-worker, so a hung worker holds up only its own adventure. A turn is always taken before `lock`.
+worker, so a hung worker holds up only its own adventure. A turn is always taken before `lock`,
+and before the registry's lock, so nobody may end a lease while holding the registry's lock.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 import logging
 import os
@@ -25,6 +27,8 @@ from .policy import can
 log = logging.getLogger(__name__)
 # A page sends a heartbeat every 15 s. A hidden tab may skip a few before its lease ends.
 HEARTBEAT_GRACE_SECONDS = 45
+# Browsers run a hidden tab's timers about once a minute, so a waiting page may miss two.
+QUEUE_GRACE_SECONDS = 150
 # The holder is warned this long before an idle lease ends.
 IDLE_WARNING_LEAD = 30
 END_CHOICES = ('resume', 'pause')
@@ -61,7 +65,10 @@ class Leases:
         self.clock = clock
         self.lock = threading.RLock()
         self.leases = {}
+        # Each adventure's turn lock and how many threads hold or wait for it.
         self.turns = {}
+        # People who left a line without asking, with the reason, until their page hears it.
+        self.dropped = {}
         self.stop = threading.Event()
 
     @property
@@ -69,16 +76,39 @@ class Leases:
         """Leases apply under accounts. Under AUTH=none Take Control works as it always has."""
         return self.manager.auth_mode == 'accounts'
 
+    @contextmanager
     def turn(self, aid):
-        """The lock that lines up the lease changes of one adventure."""
+        """Line up the lease changes of one adventure. The lock goes once nobody uses it and no lease is left."""
         with self.lock:
-            return self.turns.setdefault(aid, threading.RLock())
+            entry = self.turns.setdefault(aid, [threading.RLock(), 0])
+            entry[1] += 1
+        try:
+            with entry[0]:
+                yield
+        finally:
+            with self.lock:
+                entry[1] -= 1
+                if not entry[1] and aid not in self.leases:
+                    self.turns.pop(aid, None)
+
+    def waiting(self, aid, lease, now):
+        """Drop the queued pages that went quiet and return who is left. Called with `lock` held."""
+        for entry in lease.queue:
+            if now - entry['beat'] > QUEUE_GRACE_SECONDS:
+                self.dropped[aid, entry['user_id']] = 'quiet'
+        lease.queue = [entry for entry in lease.queue if now - entry['beat'] <= QUEUE_GRACE_SECONDS]
+        return list(lease.queue)
 
     # Reading ----------------------------------------------------------------------------
     def holder(self, aid):
         with self.lock:
             lease = self.leases.get(aid)
             return lease.user_id if lease else None
+
+    def current(self, aid):
+        """The lease itself, to end later only if it is still the same one."""
+        with self.lock:
+            return self.leases.get(aid)
 
     def holds(self, aid, actor):
         return actor.id is not None and self.holder(aid) == actor.id
@@ -95,6 +125,10 @@ class Leases:
             return {**base, 'holder': None, 'you_hold': False, 'queue': [], 'queued': False}
         now = self.clock()
         with self.lock:
+            # A page that fell out of the line hears why once, so it can say so.
+            left = self.dropped.pop((aid, actor.id), None)
+            if left:
+                base['left_line'] = left
             lease = self.leases.get(aid)
             if lease is None:
                 return {**base, 'holder': None, 'you_hold': False, 'queue': [], 'queued': False}
@@ -136,6 +170,7 @@ class Leases:
             raise PermissionError('You can watch this adventure but not play it')
         with self.turn(aid):
             with self.lock:
+                self.dropped.pop((aid, actor.id), None)
                 lease = self.leases.get(aid)
                 if lease is not None:
                     if lease.user_id == actor.id or any(entry['user_id'] == actor.id for entry in lease.queue):
@@ -201,6 +236,7 @@ class Leases:
             before = len(lease.queue)
             lease.queue = [entry for entry in lease.queue if entry['user_id'] != target]
             if len(lease.queue) != before:
+                self.dropped[aid, target] = 'refused'
                 self.audit('lease.refuse', actor.id, aid, target)
 
     def take(self, aid, actor, adventure):
@@ -226,10 +262,15 @@ class Leases:
             lease.last_input = lease.last_beat = self.clock()
             return True
 
-    def end(self, aid, reason, *, apply=True, audited=False):
-        """End the lease on this adventure, if any, and put the autopilot back or keep it paused."""
+    def end(self, aid, reason, *, apply=True, audited=False, only=None):
+        """End the lease on this adventure, if any, and put the autopilot back or keep it paused.
+
+        With `only`, end it only while that same lease still holds control, not one granted since.
+        """
         with self.turn(aid):
             with self.lock:
+                if only is not None and self.leases.get(aid) is not only:
+                    return False
                 lease = self.leases.pop(aid, None)
             if lease is None:
                 return False
@@ -240,14 +281,20 @@ class Leases:
             return True
 
     def end_all(self, reason):
+        """End every lease, including one a change already under way is about to grant.
+
+        Call it after setting `manager.suspended`, so later grants are refused, and never while
+        holding the registry's lock.
+        """
         with self.lock:
-            held = list(self.leases)
+            held = list(dict.fromkeys([*self.leases, *self.turns]))
         return [aid for aid in held if self.end(aid, reason)]
 
     def forget(self, aid, uid):
         """A grant, user or session went away: end their lease and drop their requests."""
         with self.turn(aid):
             with self.lock:
+                self.dropped.pop((aid, uid), None)
                 lease = self.leases.get(aid)
                 if lease is None:
                     return
@@ -267,7 +314,7 @@ class Leases:
                     lease = self.leases.get(aid)
                     if lease is None:
                         continue
-                    lease.queue = [entry for entry in lease.queue if now - entry['beat'] <= HEARTBEAT_GRACE_SECONDS]
+                    self.waiting(aid, lease, now)
                 try:
                     adventure = self.manager.registry.adventure(aid)
                 except KeyError:
@@ -308,7 +355,7 @@ class Leases:
         adventure = self.manager.registry.adventure(aid)
         now = self.clock()
         with self.lock:
-            queue = [entry for entry in lease.queue if now - entry['beat'] <= HEARTBEAT_GRACE_SECONDS]
+            queue = self.waiting(aid, lease, now)
         while queue:
             entry = queue.pop(0)
             user = self.playable(entry['user_id'], adventure)

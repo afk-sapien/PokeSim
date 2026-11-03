@@ -102,6 +102,11 @@ async function post(action, value) {
 // With accounts, one person at a time plays by hand. The library keeps that control lease.
 const holding = () => !leaseEnforced || Boolean(lease?.you_hold)
 const canPress = () => !viewerOnly && role !== 'viewer' && holding()
+// Why the library took this page out of the line for control, which it says once.
+const LEFT_LINE = {
+  quiet: 'You left the line for control because this page was hidden too long. Ask again to wait.',
+  refused: 'The person playing turned down your request for control.',
+}
 
 async function refreshLease() {
   // A standalone game, or a library without accounts, has no lease. The library stamps the page when it has one.
@@ -111,6 +116,7 @@ async function refreshLease() {
     if (!response.ok) throw new Error('Unavailable')
     const status = await response.json()
     if (status.you_hold && !lease?.you_hold) set('#manual-controls', 'open', true)
+    if (status.left_line) toast(LEFT_LINE[status.left_line] || LEFT_LINE.quiet, true)
     lease = status
     leaseEnforced = Boolean(status.enforced)
   } catch (_) {
@@ -462,12 +468,20 @@ if ($('#lease-end')) $('#lease-end').onchange = async (event) => {
   }
 }
 // The library ends a lease whose page goes quiet, and drops a quiet page from the queue, so a
-// holding or waiting page checks in.
-setInterval(() => {
+// holding or waiting page checks in. Browsers slow a hidden tab's timers, so a page that comes
+// back into view checks in at once and hears whether it is still in line.
+function heartbeat() {
   if (!leaseEnforced || !(lease?.you_hold || lease?.queued)) return
   PokeSim.fetch('/api/lease', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({action: 'heartbeat'})})
     .catch(() => {})
-}, 15000)
+}
+setInterval(heartbeat, 15000)
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden) return
+  heartbeat()
+  await refreshLease()
+  renderLease()
+})
 if ($('#save')) $('#save').onclick = (event) => control(event.currentTarget, 'save', undefined, 'Checkpoint save requested. Progress also saves automatically.')
 if ($('#simulation-speed')) $('#simulation-speed').onchange = async (event) => {
   const select = event.currentTarget

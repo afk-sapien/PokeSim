@@ -158,3 +158,59 @@ def test_deleting_is_for_admins_and_never_yourself_or_the_last_admin(quiet, peop
     assert second.request('DELETE', f'/api/v1/users/{people.admin["id"]}', json={'adventures': {}}).status_code == 200
     # The admin who is left cannot be removed by anyone.
     assert quiet.manager.auth._admins() == 1 and quiet.manager.auth.user(other['id'])
+
+
+def test_a_demotion_during_a_deletion_leaves_nothing_half_done(quiet, people, monkeypatch):  # noqa: F811
+    auth = quiet.manager.auth
+    other = quiet.user('second', 'admin')
+    second = quiet.login('second')
+    kept = quiet.adventure('Admin game', people.admin)
+    count = auth._admins
+    demoted = []
+
+    def admins():
+        # Someone demotes the deleting admin just after the deletion counts admins.
+        result = count()
+        if not demoted:
+            demoted.append(auth.update_user(other['id'], role='member'))
+        return result
+    monkeypatch.setattr(auth, '_admins', admins)
+    refused = second.request('DELETE', f'/api/v1/users/{people.admin["id"]}', json={'adventures': {kept: 'archive'}})
+    assert refused.status_code == 409 and 'Keep at least one admin' in refused.text
+    assert auth.user(people.admin['id'])['role'] == 'admin'
+    row = quiet.manager.registry.adventure(kept)
+    assert not row['archived'] and row['owner_id'] == people.admin['id']
+
+
+def test_a_new_owner_disabled_during_a_deletion_leaves_nothing_half_done(quiet, people, monkeypatch):  # noqa: F811
+    auth = quiet.manager.auth
+    admin = quiet.login('admin')
+    second = quiet.adventure('Red 2', people.alice)
+    from pokesim.app import ownership
+    release = ownership.release
+
+    def disabling(*args):
+        # Bob is disabled once the adventures start moving, after every check passed.
+        auth.update_user(people.bob['id'], disabled=True)
+        return release(*args)
+    monkeypatch.setattr(ownership, 'release', disabling)
+    done = admin.request('DELETE', f'/api/v1/users/{people.alice["id"]}',
+                         json={'adventures': {second: 'archive', people.red: people.bob['id']}})
+    assert done.status_code == 200, done.text
+    registry = quiet.manager.registry
+    assert auth.user(people.alice['id']) is None
+    assert registry.adventure(second)['archived'] and registry.adventure(people.red)['owner_id'] == people.bob['id']
+
+
+def test_background_work_runs_with_no_loop_to_take_it(library):  # noqa: F811
+    import asyncio
+    manager = library.manager
+    for loop in (None, asyncio.new_event_loop()):
+        ran = threading.Event()
+        manager.loop = loop
+        try:
+            manager.background(ran.set)
+            assert ran.wait(5)
+        finally:
+            if loop is not None:
+                loop.close()

@@ -6,6 +6,7 @@ invite, share and setup tokens are stored only as SHA-256 hashes.
 """
 from __future__ import annotations
 
+import collections
 import hashlib
 import hmac
 import ipaddress
@@ -69,34 +70,41 @@ class Limiter:
 
     FREE = 5
     LONGEST = 900
+    # Keys kept per kind, the part before the colon. Past it the key that failed longest ago goes,
+    # so a flood of one kind of key never pushes out another kind, or a key still failing.
+    KEEP = 10000
 
     def __init__(self):
         self.lock = threading.Lock()
-        self.failures = {}
+        self.kinds = {}
 
     def wait(self, *keys):
         """Seconds until any of these keys may try again, or 0."""
         now = time.time()
         with self.lock:
-            return max([0] + [round(until - now) + 1 for count, until in (self.failures.get(key, (0, 0)) for key in keys)
+            return max([0] + [round(until - now) + 1 for count, until in (self.kind(key).get(key, (0, 0)) for key in keys)
                               if until > now])
+
+    def kind(self, key):
+        return self.kinds.setdefault(key.partition(':')[0], collections.OrderedDict())
 
     def fail(self, *keys, longest=None):
         """Count one failure. `longest` caps the lockout of these keys below LONGEST."""
         now = time.time()
         with self.lock:
-            if len(self.failures) > 10000:
-                self.failures = {key: value for key, value in self.failures.items() if value[1] > now}
             for key in keys:
-                count, until = self.failures.get(key, (0, 0))
+                failures = self.kind(key)
+                count, until = failures.pop(key, (0, 0))
                 count = 1 if now - until > self.LONGEST else count + 1
                 delay = 0 if count < self.FREE else min(longest or self.LONGEST, 2 ** (count - self.FREE))
-                self.failures[key] = (count, now + delay)
+                failures[key] = (count, now + delay)
+                while len(failures) > self.KEEP:
+                    failures.popitem(last=False)
 
     def clear(self, *keys):
         with self.lock:
             for key in keys:
-                self.failures.pop(key, None)
+                self.kind(key).pop(key, None)
 
 
 class AuthStore:
@@ -262,12 +270,22 @@ class AuthStore:
             self.end_sessions(uid)
         return result
 
-    def delete_user(self, uid):
-        """Remove a user with their sessions, sign-ins and grants, and end the links and invites they made."""
+    def delete_user(self, uid, heirs=()):
+        """Remove a user with their sessions, sign-ins and grants, and end the links and invites they made.
+
+        Every one of `heirs`, the people their adventures go to, must still be able to log in. That
+        and the last-admin check run in the same transaction as the deletion, so a demotion or a
+        disable at the same moment cannot slip between them.
+        """
         current = self.user(uid)
         if current is None or current['placeholder']:
             raise KeyError('User not found')
         with self.lock, self.db:
+            for heir in set(heirs):
+                row = self.db.execute('SELECT disabled FROM users WHERE id=? AND id != ?',
+                                      (heir, LIBRARY_OWNER)).fetchone()
+                if row is None or row['disabled'] or heir == uid:
+                    raise KeyError('User not found')
             self.db.execute('UPDATE shares SET revoked_at=? WHERE created_by=? AND revoked_at IS NULL', (time.time(), uid))
             self.db.execute('UPDATE invites SET revoked=1 WHERE created_by=? AND used_by IS NULL', (uid,))
             self.db.execute('DELETE FROM users WHERE id=?', (uid,))
@@ -394,6 +412,29 @@ class AuthStore:
         with self.lock, self.db:
             self.db.execute('DELETE FROM sessions WHERE user_id=? AND id_hash != ?', (uid, kept))
             self.cache.clear()
+
+    # Known browsers ---------------------------------------------------------------------
+    def _browser_key(self):
+        with self.lock:
+            key = self.setting('known_browser_key')
+            if key is None:
+                key = secrets.token_hex(32)
+                self.set_setting('known_browser_key', key)
+        return bytes.fromhex(key)
+
+    def known_browser(self, uid):
+        """A cookie value that marks this browser as one `uid` logged in from before."""
+        issued = str(int(time.time()))
+        mac = hmac.new(self._browser_key(), f'{uid}.{issued}'.encode(), hashlib.sha256).hexdigest()
+        return f'{uid}.{issued}.{mac}'
+
+    def browser_knows(self, value, uid):
+        """Whether `value` is a known-browser cookie this store made for `uid`."""
+        if not isinstance(value, str) or len(value) > 256 or value.count('.') != 2:
+            return False
+        owner, issued, mac = value.split('.')
+        expected = hmac.new(self._browser_key(), f'{owner}.{issued}'.encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(mac, expected) and owner == uid
 
     def end_all_sessions(self):
         with self.lock, self.db:

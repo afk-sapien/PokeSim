@@ -146,6 +146,13 @@ def test_a_trusted_proxy_names_the_client_and_nobody_else_can():
     assert forwarded_client('198.51.100.5', '203.0.113.9, 198.51.100.70', networks) == '203.0.113.9'
     assert forwarded_client('198.51.100.5', 'not an address', networks) == '198.51.100.5'
     assert forwarded_client('198.51.100.5', '', networks) == '198.51.100.5'
+    # Hops with a port or brackets, and a proxy seen through a dual stack socket, still count.
+    assert forwarded_client('198.51.100.5', '203.0.113.9:4711', networks) == '203.0.113.9'
+    assert forwarded_client('198.51.100.5', '[2001:db8::9]:443', networks) == '2001:db8::9'
+    assert forwarded_client('198.51.100.5', '[2001:db8::9]', networks) == '2001:db8::9'
+    assert forwarded_client('::ffff:198.51.100.5', '203.0.113.9', networks) == '203.0.113.9'
+    assert forwarded_client('198.51.100.5', '203.0.113.9, ::ffff:198.51.100.70', networks) == '203.0.113.9'
+    assert forwarded_client('::ffff:198.51.100.6', '203.0.113.9', networks) == '198.51.100.6'
     with pytest.raises(ValueError, match='every address'):
         proxy_networks('0.0.0.0/0')
 
@@ -166,15 +173,31 @@ def test_failed_logins_behind_the_proxy_lock_out_only_the_client_that_made_them(
 
 
 def test_guesses_from_everywhere_slow_an_account_by_a_minute_at_most(library, people, monkeypatch):
+    own = browser_at(library, '198.51.100.20')
+    first = own.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD})
+    assert first.status_code == 200
+    own.headers['X-PokeSim-CSRF'] = first.json()['csrf_token']
     for number in range(12):
         stranger = browser_at(library, f'203.0.113.{number + 1}')
         assert stranger.post('/api/v1/auth/login', json={'username': 'alice', 'password': 'wrong'}).status_code in {401, 429}
     waiting = browser_at(library, '203.0.113.100').post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD})
     assert waiting.status_code == 429 and int(waiting.headers['Retry-After']) <= USER_LOCKOUT + 1
-    # Alice already has a session from her own address, so she is not made to wait.
-    library.manager.auth.create_session(people.alice['id'], '198.51.100.20', 'test')
-    assert browser_at(library, '198.51.100.20').post(
-        '/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 200
+    # Another browser at the address Alice has a session from still waits, as does one with a
+    # forged cookie.
+    for cookie in (None, own.cookies.get('pokesim_known') + 'x'):
+        other = browser_at(library, '198.51.100.20')
+        if cookie:
+            other.cookies.set('pokesim_known', cookie, path='/api/v1/auth/login')
+        assert other.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 429
+    # The browser Alice logged in from before is not made to wait.
+    assert own.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 200
+    # Her cookie does not let a browser past the wait on another account.
+    for number in range(12):
+        browser_at(library, f'203.0.113.{number + 1}').post(
+            '/api/v1/auth/login', json={'username': 'bob', 'password': 'wrong'})
+    copied = browser_at(library, '198.51.100.20')
+    copied.cookies.set('pokesim_known', own.cookies.get('pokesim_known'), path='/api/v1/auth/login')
+    assert copied.post('/api/v1/auth/login', json={'username': 'bob', 'password': PASSWORD}).status_code == 429
 
 
 def test_stylesheets_and_health_checks_skip_the_account_lookups(library, people, monkeypatch):
@@ -202,7 +225,28 @@ def test_a_quiet_key_forgets_its_failures(monkeypatch):
     assert limiter.wait('ip:203.0.113.1') > 61
     clock.time = lambda: 1000.0 + Limiter.LONGEST * 3
     limiter.fail('ip:203.0.113.1')
-    assert limiter.failures['ip:203.0.113.1'][0] == 1 and limiter.wait('ip:203.0.113.1') == 0
+    assert limiter.kinds['ip']['ip:203.0.113.1'][0] == 1 and limiter.wait('ip:203.0.113.1') == 0
+
+
+def test_a_flood_of_new_keys_keeps_the_counts_that_matter():
+    limiter = Limiter()
+    for _ in range(Limiter.FREE - 1):
+        limiter.fail('user:alice')
+    # One guess each from thousands of made-up addresses, three keys per guess, fills the table.
+    for number in range(Limiter.KEEP // 2):
+        limiter.fail(f'ip:198.51.{number}', f'pair:198.51.{number} bob', f'user:nobody{number}')
+    # Alice's count still stands, so the next guess locks her account.
+    limiter.fail('user:alice', longest=60)
+    assert limiter.wait('user:alice') > 0
+    assert len(limiter.kinds['ip']) <= Limiter.KEEP
+
+
+def test_the_oldest_key_of_a_kind_goes_first(monkeypatch):
+    monkeypatch.setattr(Limiter, 'KEEP', 3)
+    limiter = Limiter()
+    for key in ('ip:a', 'ip:b', 'ip:c', 'ip:a', 'ip:d'):
+        limiter.fail(key)
+    assert list(limiter.kinds['ip']) == ['ip:c', 'ip:a', 'ip:d']
 
 
 def test_logout_ends_the_session(library, people):

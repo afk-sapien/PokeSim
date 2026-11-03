@@ -153,6 +153,20 @@ def test_losing_can_play_ends_the_lease(game):
     assert leases.holder(game.red) is None
 
 
+def test_losing_can_manage_ends_what_it_allowed(game, monkeypatch):
+    from pokesim.app import ownership
+    leases = game.library.manager.leases
+    unshared = []
+    monkeypatch.setattr(ownership, 'unshare', lambda manager, aid, uid, actor=None: unshared.append(uid))
+    lease(game.bob, game.red, 'request')
+    assert lease(game.carol, game.red, 'take').json()['you_hold']
+    # Sharing Red with Bob again as a player changes nothing, so Carol keeps control.
+    game.alice.post(f'/api/v1/adventures/{game.red}/grants', json={'user_id': game.ids.bob, 'role': 'player'})
+    assert leases.holder(game.red) == game.ids.carol and unshared == []
+    game.alice.post(f'/api/v1/adventures/{game.red}/grants', json={'user_id': game.ids.carol, 'role': 'player'})
+    assert leases.holder(game.red) != game.ids.carol and unshared == [game.ids.carol]
+
+
 def test_a_trade_or_backup_ends_control(game):
     manager = game.library.manager
     lease(game.bob, game.red, 'request')
@@ -232,22 +246,97 @@ def test_a_refused_hand_on_ends_the_lease_once(game, monkeypatch):
 
 def test_a_quiet_queued_page_leaves_the_line(game):
     leases = game.library.manager.leases
+
+    def wait(seconds):
+        # Bob keeps his page open and presses buttons, so only Carol's page is quiet.
+        game.clock.now += seconds
+        lease(game.bob, game.red, 'heartbeat')
+        press(game.bob, game.red)
     lease(game.bob, game.red, 'request')
     lease(game.carol, game.red, 'request')
-    game.clock.now += lease_module.HEARTBEAT_GRACE_SECONDS - 1
-    lease(game.bob, game.red, 'heartbeat')
-    lease(game.carol, game.red, 'heartbeat')
-    game.clock.now += lease_module.HEARTBEAT_GRACE_SECONDS - 1
-    lease(game.bob, game.red, 'heartbeat')
+    # A hidden tab runs its timers about once a minute, so two minutes of silence keeps her place.
+    for _ in range(4):
+        wait(30)
     leases.sweep()
-    assert lease(game.carol, game.red).json()['queued']
+    status = lease(game.carol, game.red).json()
+    assert status['queued'] and 'left_line' not in status
     # Carol closed her tab. When Bob lets go nobody is waiting, so control is not passed to her.
-    game.clock.now += 2
-    lease(game.bob, game.red, 'heartbeat')
+    wait(lease_module.QUEUE_GRACE_SECONDS - 120 + 1)
     leases.sweep()
-    assert not lease(game.carol, game.red).json()['queued']
+    status = lease(game.carol, game.red).json()
+    assert not status['queued'] and status['left_line'] == 'quiet'
+    # Her page hears it once.
+    assert 'left_line' not in lease(game.carol, game.red).json()
     lease(game.bob, game.red, 'release')
     assert leases.holder(game.red) is None
+
+
+def test_a_refused_page_hears_why(game):
+    lease(game.bob, game.red, 'request')
+    lease(game.carol, game.red, 'request')
+    lease(game.bob, game.red, 'refuse', user_id=game.ids.carol)
+    assert lease(game.carol, game.red).json()['left_line'] == 'refused'
+    lease(game.carol, game.red, 'request')
+    assert 'left_line' not in lease(game.carol, game.red).json()
+
+
+def test_a_backup_during_a_lease_change_does_not_hang(game, monkeypatch):
+    """A take asks the registry whether a trade holds the adventure while a backup ends every lease."""
+    from pokesim.app import backup
+    manager = game.library.manager
+    coordinator, inside, go = manager.coordinator, threading.Event(), threading.Event()
+    reserved = coordinator.reserved
+
+    def slow_reserved(aid):
+        inside.set()
+        go.wait(5)
+        return reserved(aid)
+    lease(game.bob, game.red, 'request')
+    monkeypatch.setattr(coordinator, 'reserved', slow_reserved)
+    carol = manager.actor_for(manager.auth.user(game.ids.carol))
+    asking = threading.Thread(target=manager.leases.act, args=(game.red, carol, manager.registry.adventure(game.red), 'take'),
+                              daemon=True)
+    asking.start()
+    assert inside.wait(5)
+    made = []
+    backing_up = threading.Thread(target=lambda: made.append(backup.create_backup(manager)), daemon=True)
+    backing_up.start()
+    for _ in range(100):
+        if manager.suspended:
+            break
+        threading.Event().wait(0.02)
+    # Let the backup reach the lease before the grant asks the registry.
+    threading.Event().wait(0.2)
+    go.set()
+    asking.join(10)
+    backing_up.join(10)
+    assert not asking.is_alive() and not backing_up.is_alive()
+    assert made and manager.leases.holder(game.red) is None
+
+
+def test_resume_ends_only_the_lease_it_was_sent_for(game):
+    """Control changes hands while the worker resumes: the new holder keeps it."""
+    manager, app = game.library.manager, game.library.app
+    leases = manager.leases
+    lease(game.bob, game.red, 'request')
+    carol = manager.actor_for(manager.auth.user(game.ids.carol))
+    adventure = manager.registry.adventure(game.red)
+
+    def resumed(request):
+        leases.end(game.red, 'release', apply=False)
+        leases.act(game.red, carol, adventure, 'request')
+        return httpx.Response(200, json={'ok': True})
+    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(resumed))
+    assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 200
+    assert leases.holder(game.red) == game.ids.carol
+
+
+def test_an_adventure_without_a_lease_keeps_no_turn_lock(game):
+    leases = game.library.manager.leases
+    lease(game.bob, game.red, 'request')
+    assert game.red in leases.turns
+    lease(game.bob, game.red, 'release')
+    assert leases.holder(game.red) is None and game.red not in leases.turns
 
 
 def test_the_worker_hears_the_role(game):

@@ -18,6 +18,9 @@ FORWARDING_HEADERS = ('x-forwarded-for', 'forwarded', 'x-real-ip')
 OIDC_COOKIE = 'pokesim_oidc'
 # The longest wait that failed logins from other addresses put on one account.
 USER_LOCKOUT = 60
+# A browser that logged in to an account before keeps logging in to it while others guess.
+KNOWN_COOKIE = 'pokesim_known'
+KNOWN_SECONDS = 365 * 86400
 # The roles an owner can give: Can watch, Can play and Can manage.
 GRANT_ROLES = ('viewer', 'player', 'manager')
 
@@ -61,10 +64,17 @@ def install(app, manager):
             raise HTTPException(429, f'Too many attempts. Try again in {wait} seconds.',
                                 headers={'Retry-After': str(wait)})
 
-    def known_address(username, ip):
-        """Whether this account has a live session that started from this address."""
+    def known_browser(request, username):
+        """Whether this browser holds the cookie a past login to this account gave it.
+
+        An address proves nothing behind a proxy, and a forwarded one can be made up, so only a
+        signed cookie the browser itself sends counts.
+        """
+        value = request.cookies.get(KNOWN_COOKIE)
+        if not value:
+            return False
         user = auth.user_by_name(username)
-        return user is not None and any(row['ip'] == ip for row in auth.sessions(user['id']))
+        return user is not None and auth.browser_knows(value, user['id'])
 
     def log_in(request, user, response_data=None):
         """Start a fresh session for `user`. The old cookie, stored or anonymous, is dropped."""
@@ -77,6 +87,9 @@ def install(app, manager):
         actor = manager.actor_for(user)
         response = JSONResponse(response_data or session_payload(manager, actor, session))
         manager.set_session_cookie(response, raw, SESSION_SECONDS)
+        response.set_cookie(KNOWN_COOKIE, auth.known_browser(user['id']), httponly=True, samesite='strict',
+                            secure=manager.public_url.startswith('https:'), max_age=KNOWN_SECONDS,
+                            path='/api/v1/auth/login')
         return response, raw, session
 
     def actor(request):
@@ -120,11 +133,11 @@ def install(app, manager):
             raise HTTPException(403, 'Log in with your single sign-on provider')
         username = str(data.get('username', ''))[:64].strip().casefold()
         # One address guessing at many accounts, or at one, locks itself out for up to 15 minutes.
-        # Guesses at one account from anywhere slow it by at most a minute, and never slow an
-        # address the account already has a session from, so nobody can lock someone else out.
+        # Guesses at one account from anywhere slow it by at most a minute, and never slow a
+        # browser that logged in to it before, so nobody can lock someone else out.
         mine = ('ip:' + address(request), 'pair:' + address(request) + ' ' + username)
         everyone = ('user:' + username,)
-        known = await run_in_threadpool(known_address, username, address(request))
+        known = await run_in_threadpool(known_browser, request, username)
         limited(*mine, *(() if known else everyone))
         user = await run_in_threadpool(auth.verify_password, username, data.get('password'))
         if user is None:
@@ -300,12 +313,14 @@ def install(app, manager):
             raise ValueError('Choose a person to share with')
         if data['user_id'] == manager.registry.adventure(aid)['owner_id']:
             raise ValueError('The owner already has this adventure')
-        new = aid not in auth.grants_for(data['user_id'])
+        before = auth.grants_for(data['user_id']).get(aid)
         auth.grant(aid, data['user_id'], data['role'], actor(request).id)
-        if new:
+        if before is None:
             from . import inbox
             inbox.shared(manager, aid, data['user_id'], data['role'], actor(request))
-        if data['role'] == 'viewer':
+        # Losing manage ends what it allowed: offers sent from the adventure, and a lease that
+        # manage may have taken back from someone.
+        if data['role'] == 'viewer' or (before == 'manager' and data['role'] != 'manager'):
             from . import ownership
             manager.leases.forget(aid, data['user_id'])
             ownership.unshare(manager, aid, data['user_id'], actor(request))
