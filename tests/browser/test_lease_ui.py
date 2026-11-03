@@ -152,3 +152,23 @@ def test_idle_hands_are_warned_then_lose_control(browser, tmp_path, monkeypatch)
         expect(bob.locator('#take-control')).to_have_text('Take control')
         expect(idle).to_be_hidden()
         expect(bob.locator('.controller [data-b="a"]')).to_be_disabled()
+
+
+def test_a_page_that_fell_out_of_the_line_says_so(browser, tmp_path, monkeypatch):
+    from playwright.sync_api import expect
+    from pokesim.app import lease as lease_module
+    with adventure(tmp_path, monkeypatch) as game:
+        bob, carol = open_game(browser, game, 'bob'), open_game(browser, game, 'carol')
+        bob.locator('#take-control').click()
+        expect(bob.locator('#lease-holder')).to_have_text(HOLDING)
+        ask = carol.locator('#take-control')
+        ask.click()
+        expect(ask).to_have_text('Leave the line')
+        # Carol's hidden tab went quiet past the grace, as far as the library can tell.
+        leases = game.manager.leases
+        with leases.lock:
+            for entry in leases.leases[game.aid].queue:
+                entry['beat'] -= lease_module.QUEUE_GRACE_SECONDS + 1
+        leases.sweep()
+        expect(carol.locator('#toast')).to_contain_text('You left the line for control')
+        expect(ask).to_have_text('Ask for control')

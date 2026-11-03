@@ -51,6 +51,11 @@ def transfer(manager, aid, to_uid, actor):
     old = adventure['owner_id']
     if old == to_uid:
         raise ValueError(f'{user["display_name"]} already owns this adventure')
+    return hand_on(manager, aid, old, to_uid, actor)
+
+
+def hand_on(manager, aid, old, to_uid, actor):
+    """Move `aid` from `old` to `to_uid`, who was already checked."""
     release(manager, aid, old, actor)
     # The new owner needs no grant on what they own.
     manager.auth.revoke_grant(aid, to_uid)
@@ -64,7 +69,7 @@ def delete_user(manager, uid, plan, actor):
 
     Nothing is deleted silently. An archived adventure stays on disk, stopped, owned by the admin
     who deleted the user, so it can be given to someone later. One deletion runs at a time, so
-    two admins deleting each other cannot both pass the last-admin check.
+    two plans never hand the same adventure on at once.
     """
     with deleting:
         return _delete_user(manager, uid, plan, actor)
@@ -91,15 +96,17 @@ def _delete_user(manager, uid, plan, actor):
             raise KeyError('User not found')
     if user['role'] == 'admin' and not user['disabled'] and manager.auth._admins() <= 1:
         raise ValueError('Keep at least one admin')
+    # The account goes first, with the last-admin and new-owner checks in its own transaction.
+    # A refusal there leaves everything as it was. After it, nothing below refuses.
+    manager.auth.delete_user(uid, heirs=[target for target in plan.values() if target != 'archive'])
     for aid, target in plan.items():
         if target == 'archive':
             release(manager, aid, uid, actor)
             manager.registry.set_owner(aid, actor.id)
             manager.registry.update(aid, archived=True, desired_state='stopped')
-            manager.background(manager.start_adventure, aid)
             manager.auth.audit('adventure.archive', user_id=actor.id, adventure_id=aid, target=uid)
         else:
-            transfer(manager, aid, target, actor)
+            hand_on(manager, aid, uid, target, actor)
     # Offers this user sent from adventures shared with them, and their place in any lease queue.
     for offer in manager.registry.trade_offers(statuses=[PENDING]):
         if offer.get('sender_id') == uid:
@@ -107,8 +114,11 @@ def _delete_user(manager, uid, plan, actor):
                       'the person who sent it was removed', actor)
     for aid in list(manager.leases.leases):
         manager.leases.forget(aid, uid)
-    manager.auth.delete_user(uid)
     # Their shelf goes with them. A cartridge someone else has, or an adventure plays, stays.
     manager.assets.forget_owner(uid)
     manager.auth.audit('user.delete', user_id=actor.id, target=uid)
+    # Last, once every record is saved: stop the archived adventures.
+    for aid, target in plan.items():
+        if target == 'archive':
+            manager.background(manager.start_adventure, aid)
     return {'ok': True, 'adventures': plan}

@@ -99,7 +99,8 @@ Trust the gateway only when every other client still arrives with its own addres
 
 Wrong passwords from one address lock that address out for up to 15 minutes. Wrong passwords
 for one account from many addresses slow that account by a minute at most, and never slow a
-login from an address the account already has a session from.
+browser that logged in to that account before. A signed cookie marks that browser, so a
+shared or made-up address does not count.
 
 ## View links
 

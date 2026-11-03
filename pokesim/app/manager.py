@@ -297,20 +297,31 @@ class Manager:
         self._closed = True
 
     def background(self, function, *args):
-        """Run `function` in a thread. From a worker thread the task goes to the app's event loop."""
+        """Run `function` in a thread. From a worker thread the task goes to the app's event loop.
+
+        Callers run this after their changes are saved, so it never refuses. With no loop to
+        take the task, before startup or after shutdown, a thread of its own runs it.
+        """
+        def call():
+            try:
+                function(*args)
+            except Exception:
+                log.exception('Background application operation failed')
         try:
             asyncio.get_running_loop()
         except RuntimeError:
-            if self.loop is None or self.loop.is_closed():
-                raise RuntimeError('PokeSim is not running yet') from None
-            self.loop.call_soon_threadsafe(self.background, function, *args)
+            loop = self.loop
+            if loop is not None and loop.is_running():
+                try:
+                    loop.call_soon_threadsafe(self.background, function, *args)
+                    return None
+                except RuntimeError:
+                    pass
+            threading.Thread(target=call, name='pokesim-background', daemon=True).start()
             return None
 
         async def run():
-            try:
-                await asyncio.to_thread(function, *args)
-            except Exception:
-                log.exception('Background application operation failed')
+            await asyncio.to_thread(call)
         task = asyncio.create_task(run())
         self.tasks.add(task)
         task.add_done_callback(self.tasks.discard)
@@ -1475,8 +1486,10 @@ def create_app(manager, shutdown=lambda: None):
             raise HTTPException(403, 'Only the person in control or a manager can resume the autopilot')
         if control in {'resume', 'pause'}:
             # The autopilot takes over again, or the manager stopped it, so nobody holds control.
-            # The lease ends once the worker has done it (see game).
-            request.state.ends_lease = control
+            # The lease ends once the worker has done it (see game), and only the lease held now.
+            current = manager.leases.current(aid)
+            if current is not None:
+                request.state.ends_lease = (control, current)
         return 'viewer' if viewer else policy.adventure_role(actor, adventure)
 
     def lease_route(aid, request, body):
@@ -1659,7 +1672,8 @@ def create_app(manager, shutdown=lambda: None):
             raise HTTPException(503, 'The adventure is reconnecting') from error
         ends_lease = getattr(request.state, 'ends_lease', None)
         if ends_lease and response.status_code < 400:
-            await run_in_threadpool(manager.leases.end, aid, ends_lease, apply=False)
+            reason, current = ends_lease
+            await run_in_threadpool(manager.leases.end, aid, reason, apply=False, only=current)
         if (path in GAME_PAGES and request.method == 'GET' and response.status_code == 200
                 and response.headers.get('content-type', '').startswith('text/html')):
             # The adventure renders its pages without knowing which portraits the library

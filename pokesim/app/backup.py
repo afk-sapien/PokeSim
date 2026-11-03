@@ -62,61 +62,72 @@ def extract_archive(archive, destination, max_expanded=MAX_EXPANDED):
 
 
 def create_backup(manager):
-    with manager.maintenance, manager.registry.lock:
-        if manager.registry.transactions(unresolved=True):
-            raise ValueError('Resolve pending interactions before creating a backup')
-        manager.suspended = True
-        running = list(manager.supervisor.children)
-        playback = {}
+    with manager.maintenance:
+        with manager.registry.lock:
+            if manager.registry.transactions(unresolved=True):
+                raise ValueError('Resolve pending interactions before creating a backup')
+            manager.suspended = True
         try:
-            # A backup ends every control lease, and nobody plays by hand across one.
+            # A backup ends every control lease, and nobody plays by hand across one. A lease
+            # change takes its adventure's turn before the registry's lock, so end them first.
             leases = getattr(manager, 'leases', None)
             if leases is not None:
                 leases.end_all('backup')
-            for aid in running:
-                status = manager.supervisor.child(aid).request('GET', '/api/summary', timeout=5)
-                playback[aid] = 'pause' if status.get('paused') and not status.get('manual_mode') else None
-            for aid in running:
-                manager.supervisor.stop(aid, preserve_desired=True)
-            bid = identifier()
-            backups = manager.root / 'backups'
-            backups.mkdir(exist_ok=True)
-            destination = backups / (bid + '.zip')
-            # Stage beside the archive, never in /tmp: the container mounts /tmp as a 256 MB
-            # tmpfs, so staging a library of any real size there fails in RAM.
-            with tempfile.TemporaryDirectory(prefix='.pokesim-backup-', dir=backups) as temporary:
-                staging = Path(temporary)
-                with closing(sqlite3.connect(staging / 'app.sqlite')) as target:
-                    with manager.registry.lock:
-                        manager.registry.db.backup(target)
-                for name in ('assets', 'adventures', 'interactions', 'legacy_imports'):
-                    source = manager.root / name
-                    if source.exists():
-                        # A sprite download can publish its staged directory while a backup runs.
-                        # Only completed packs belong in the snapshot.
-                        shutil.copytree(source, staging / name, ignore=shutil.ignore_patterns('*.lock', '*.log', '.install-*'))
-                files = {}
-                for path in staging.rglob('*'):
-                    if path.is_file():
-                        files[path.relative_to(staging).as_posix()] = file_checksum(path)
-                manifest = {'format': 1, 'id': bid, 'created_at': time.time(), 'files': files}
-                (staging / 'backup.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-                pending = backups / (bid + '.pending')
-                with zipfile.ZipFile(pending, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
-                    for path in staging.rglob('*'):
-                        if path.is_file():
-                            archive.write(path, path.relative_to(staging))
-                pending.replace(destination)
-            return {'id': bid, 'path': str(destination), 'created_at': manifest['created_at']}
+            with manager.registry.lock:
+                return _create_backup(manager)
         finally:
             manager.suspended = False
-            for aid in running:
-                try:
-                    manager.supervisor.start(aid)
-                    if playback.get(aid):
-                        manager.supervisor.child(aid).request('POST', '/api/control', {'action': playback[aid]})
-                except Exception as error:
-                    manager.registry.update(aid, state='failed', error=str(error))
+
+
+def _create_backup(manager):
+    """Stop the running adventures, write the archive and start them again. Holds the registry's lock."""
+    running = list(manager.supervisor.children)
+    playback = {}
+    try:
+        for aid in running:
+            status = manager.supervisor.child(aid).request('GET', '/api/summary', timeout=5)
+            playback[aid] = 'pause' if status.get('paused') and not status.get('manual_mode') else None
+        for aid in running:
+            manager.supervisor.stop(aid, preserve_desired=True)
+        bid = identifier()
+        backups = manager.root / 'backups'
+        backups.mkdir(exist_ok=True)
+        destination = backups / (bid + '.zip')
+        # Stage beside the archive, never in /tmp: the container mounts /tmp as a 256 MB
+        # tmpfs, so staging a library of any real size there fails in RAM.
+        with tempfile.TemporaryDirectory(prefix='.pokesim-backup-', dir=backups) as temporary:
+            staging = Path(temporary)
+            with closing(sqlite3.connect(staging / 'app.sqlite')) as target:
+                with manager.registry.lock:
+                    manager.registry.db.backup(target)
+            for name in ('assets', 'adventures', 'interactions', 'legacy_imports'):
+                source = manager.root / name
+                if source.exists():
+                    # A sprite download can publish its staged directory while a backup runs.
+                    # Only completed packs belong in the snapshot.
+                    shutil.copytree(source, staging / name, ignore=shutil.ignore_patterns('*.lock', '*.log', '.install-*'))
+            files = {}
+            for path in staging.rglob('*'):
+                if path.is_file():
+                    files[path.relative_to(staging).as_posix()] = file_checksum(path)
+            manifest = {'format': 1, 'id': bid, 'created_at': time.time(), 'files': files}
+            (staging / 'backup.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+            pending = backups / (bid + '.pending')
+            with zipfile.ZipFile(pending, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+                for path in staging.rglob('*'):
+                    if path.is_file():
+                        archive.write(path, path.relative_to(staging))
+            pending.replace(destination)
+        return {'id': bid, 'path': str(destination), 'created_at': manifest['created_at']}
+    finally:
+        manager.suspended = False
+        for aid in running:
+            try:
+                manager.supervisor.start(aid)
+                if playback.get(aid):
+                    manager.supervisor.child(aid).request('POST', '/api/control', {'action': playback[aid]})
+            except Exception as error:
+                manager.registry.update(aid, state='failed', error=str(error))
 
 
 def restore_backup(archive, destination):
