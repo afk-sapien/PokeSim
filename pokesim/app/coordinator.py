@@ -659,6 +659,13 @@ class Coordinator:
         plan = row['plan']
         # A full PC releases one spare to make room, never a hand-picked Pokémon.
         hand_picked = self.hand_picked_keys()
+        leases = getattr(self.manager, 'leases', None)
+        if plan.get('manual') and leases is not None:
+            for aid in plan['participants']:
+                # The lease this trade ended may not have reached the worker yet, and a game
+                # still under manual control cannot prepare. No lock is held here.
+                if not leases.settle(aid, deadline):
+                    raise TimeoutError(f'The adventure did not leave manual control in time (adventure {aid})')
         while len(prepared) != 2:
             if self.closed.is_set() or self.registry.transaction(row['id'])['decision'] == 'ABORT':
                 raise RuntimeError('Cable Club preparation was cancelled')

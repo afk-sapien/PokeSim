@@ -202,7 +202,10 @@ class Manager:
                 if row['desired_state'] == 'stopped':
                     if self.coordinator.reserved(aid):
                         return row
-                    return self.supervisor.stop(aid, preserve_desired=True)
+                    stopped = self.supervisor.stop(aid, preserve_desired=True)
+                    # The next start runs on its autopilot, so no Pause or Resume from this run follows it.
+                    self.leases.stopped(aid)
+                    return stopped
                 self.supervisor.setup_retries.pop(aid, None)
                 return self.supervisor.start(aid)
         except Exception as error:

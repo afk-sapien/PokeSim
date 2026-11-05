@@ -545,10 +545,23 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             if c.action == "take_control" and int(lease) == lease_seen[0] and getattr(emu, "manual_mode", False) is True:
                 # The library sent this grant again. Running it twice would drop the holder's presses.
                 return {"ok": True, "applied": True, "boot": boot}
-            reply = run_control(c)
+            reply = run_control(c, int(lease))
             if c.action in ("take_control", "resume", "pause") and reply["applied"]:
-                lease_seen[0] = int(lease)
+                lease_seen[0] = max(lease_seen[0], int(lease))
             return reply
+
+    def fence(action, generation):
+        """Checked on the game thread right before the control runs. A send of this generation
+        that timed out may still run later, so the generation counts from then, and a second
+        take_control of it does nothing. Returns '' for done already, a reason, or None to run."""
+        def check():
+            if generation < lease_seen[0]:
+                return "Control changed hands"
+            if action == "take_control" and generation == lease_seen[0] and emu.manual_mode is True:
+                return ""
+            lease_seen[0] = generation
+            return None
+        return check
 
     def held_back(action):
         """Why the game would drop this control now, as the emulator says, or None."""
@@ -556,7 +569,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         reason = check(emu, action) if check else None
         return reason if isinstance(reason, str) else None
 
-    def run_control(c):
+    def run_control(c, generation=None):
         # Every answer says whether the game ran the control, so the library never takes a
         # dropped Take Control, Resume or Pause for one that worked.
         if c.action == "press":
@@ -568,7 +581,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             emu.press(str(c.value))
         elif c.action in ("pause", "resume", "take_control") and getattr(type(emu), "control", None):
             try:
-                reason = emu.control(c.action)
+                reason = (emu.control(c.action) if generation is None
+                          else emu.control(c.action, gate=fence(c.action, generation)))
             except (TimeoutError, RuntimeError) as error:
                 raise HTTPException(503, "The adventure is busy. It runs the control once it answers.") from error
             if isinstance(reason, str):

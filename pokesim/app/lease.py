@@ -23,7 +23,7 @@ the sends cross. The worker's answer decides what happens next:
   boot in its summary, and the sweep sends the state again.
 - deferred: the game held it back for now, so the sweep sends it again.
 - refused: a definite no, such as a trade hold. A grant, Resume or Pause from a page is undone
-  and the page hears the worker's reason.
+  and the page hears the worker's reason. Anything else is sent again less and less often.
 - no answer: never guessed at. The sweep sends it again until the worker answers.
 
 A press carries the generation of the lease it was checked against, so the library and the
@@ -56,6 +56,9 @@ END_CHOICES = ('resume', 'pause')
 ANSWER_SECONDS = 12
 # How long a backup waits for every worker to confirm the end of its lease.
 END_ALL_SECONDS = 10
+# The sweep sends a state the worker refused again after 10 s, doubling up to 5 minutes.
+REFUSED_RETRY_SECONDS = 10
+REFUSED_RETRY_LIMIT = 300
 
 
 def idle_limit():
@@ -96,6 +99,11 @@ class Desired:
     # What a definite refusal puts back, called with the turn and `lock` held.
     undo: object = None
     undone: bool = False
+    # What runs once the worker applies it, with no lock held.
+    applied: object = None
+    # How many definite refusals in a row, and when the sweep may send it again.
+    refusals: int = 0
+    retry_at: float = 0
 
 
 def label(user):
@@ -331,9 +339,9 @@ class Leases:
                 if lease is not None and lease.user_id == actor.id:
                     return
                 queue = [entry for entry in lease.queue if entry['user_id'] != actor.id] if lease else []
-            self._grant(aid, actor.user, 'lease.take', queue=queue)
-        if lease is not None:
-            inbox.lease_taken(self.manager, aid, lease.user_id, actor)
+            # The old holder hears only once the worker ran it, since a refusal gives control back.
+            told = (lambda: inbox.lease_taken(self.manager, aid, lease.user_id, actor)) if lease else None
+            self._grant(aid, actor.user, 'lease.take', queue=queue, applied=told)
 
     def touch(self, aid, actor):
         """A button press from the holder. Returns False when this person does not hold control."""
@@ -372,11 +380,12 @@ class Leases:
                     self.desired.pop(aid, None)
             return True
 
-    def want(self, aid, action, undo=None):
+    def want(self, aid, action, undo=None, applied=None):
         """Record what the worker should do next, under a new generation, and start sending it.
-        Call it in the turn. `undo` puts back the state before, should the worker refuse."""
+        Call it in the turn. `undo` puts back the state before, should the worker refuse, and
+        `applied` runs once the worker ran it."""
         with self.lock:
-            desired = self.desired[aid] = Desired(action, self.advance(aid), undo=undo)
+            desired = self.desired[aid] = Desired(action, self.advance(aid), undo=undo, applied=applied)
             self.kick(aid)
             return desired
 
@@ -400,22 +409,39 @@ class Leases:
         outcome, detail, status, boot = self.worker(aid, desired.action, desired.generation)
         with self.turn(aid):
             with self.lock:
-                refused = None
+                refused = told = None
+                warn = False
                 desired.attempts += 1
                 desired.outcome, desired.detail, desired.status = outcome, detail, status
                 # A newer change may have been recorded meanwhile. It is still to be sent.
                 if self.desired.get(aid) is desired:
                     if outcome == 'applied':
-                        desired.confirmed, desired.boot = True, boot
+                        # Once it ran there is nothing to put back. A later refusal of a resend
+                        # to a restarted worker is retried like any other.
+                        desired.confirmed, desired.boot, desired.refusals = True, boot, 0
+                        desired.undo, told, desired.applied = None, desired.applied, None
                     elif outcome == 'refused' and desired.undo is not None:
-                        refused = self.leases.get(aid)
+                        refused, warn = self.leases.get(aid), True
                         desired.undo()
                         desired.undo, desired.undone = None, True
                         if self.leases.get(aid) is refused:
                             refused = None
+                    elif outcome == 'refused':
+                        desired.refusals += 1
+                        warn = desired.refusals == 1
+                        desired.retry_at = self.clock() + min(
+                            REFUSED_RETRY_LIMIT, REFUSED_RETRY_SECONDS * 2 ** (desired.refusals - 1))
                 self.settled.notify_all()
+            if warn:
+                log.warning('Adventure %s refused %s for the control lease with %s: %s',
+                            aid, desired.action, status, detail)
             if refused is not None:
                 self.audit('lease.end', refused.user_id, aid, 'refused')
+        if told is not None:
+            try:
+                told()
+            except Exception:
+                log.exception('Could not tell adventure %s about its control change', aid)
 
     def kick(self, aid):
         """Converge in the background, one send thread per adventure. A change recorded during a
@@ -481,12 +507,19 @@ class Leases:
             self.leases.pop(aid, None)
             for entry in refused.queue if refused else ():
                 self.dropped[aid, entry['user_id']] = 'ended'
+        elif self.manager.suspended:
+            # A backup started meanwhile and keeps every lease off until it is done. The state
+            # the page chose stays desired and is sent again.
+            return
         else:
             # People who joined the line meanwhile keep their place.
             known = {lease.user_id, *(entry['user_id'] for entry in lease.queue)}
             lease.queue += [entry for entry in (refused.queue if refused else ()) if entry['user_id'] not in known]
             self.leases[aid] = lease
             self.generations[aid] = lease.generation
+            # Ending the lease told its line it closed. It is open again.
+            for entry in [{'user_id': lease.user_id}, *lease.queue]:
+                self.dropped.pop((aid, entry['user_id']), None)
         if desired is None:
             self.desired.pop(aid, None)
             return
@@ -519,6 +552,28 @@ class Leases:
                     self.settled.wait(remaining)
         return ended
 
+    def settle(self, aid, deadline):
+        """Wait until the worker confirmed its desired state, or until the monotonic `deadline`.
+        Returns whether it did. Never call it in the turn."""
+        with self.settled:
+            while True:
+                desired = self.desired.get(aid)
+                if desired is None or desired.confirmed:
+                    return True
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self.settled.wait(remaining)
+
+    def stopped(self, aid):
+        """The owner stopped the adventure. It starts again on its autopilot, so it keeps no
+        lease and no desired state for a later run to hear."""
+        with self.turn(aid):
+            if not self.end(aid, 'stopped', apply=False):
+                with self.lock:
+                    self.advance(aid)
+                    self.desired.pop(aid, None)
+
     def forget(self, aid, uid):
         """A grant, user or session went away: end their lease and drop their requests."""
         with self.turn(aid):
@@ -537,11 +592,14 @@ class Leases:
         and send each worker that has not confirmed its desired state the state again. A worker
         that restarted since it confirmed forgot it, so it gets it again too."""
         self._expire()
+        now = self.clock()
         with self.lock:
             for aid, desired in self.desired.items():
                 if desired.confirmed and desired.boot and self.boot(aid) not in (None, desired.boot):
                     desired.confirmed = False
-            unconfirmed = [(aid, desired.generation) for aid, desired in self.desired.items() if not desired.confirmed]
+            # A state the worker refused waits out its backoff before it is sent again.
+            unconfirmed = [(aid, desired.generation) for aid, desired in self.desired.items()
+                           if not desired.confirmed and not (desired.refusals and now < desired.retry_at)]
         for aid, generation in unconfirmed:
             try:
                 running = self.manager.registry.adventure(aid)['state'] == 'running'
@@ -636,9 +694,10 @@ class Leases:
                 self.dropped[aid, entry['user_id']] = 'no_longer_allowed'
         self.end(aid, reason)
 
-    def _grant(self, aid, user, event, queue=(), undo=None):
+    def _grant(self, aid, user, event, queue=(), undo=None, applied=None):
         """Give control to `user`. The worker enters manual mode and drops queued presses first.
-        Should it refuse, `undo` runs, or the lease and desired state from before come back."""
+        Should it refuse, `undo` runs, or the lease and desired state from before come back.
+        `applied` runs once the worker ran it."""
         blocked = self.blocked(aid)
         if blocked:
             raise LeaseRefused(blocked)
@@ -647,7 +706,8 @@ class Leases:
         now = self.clock()
         with self.lock:
             before = self.leases.get(aid), self.desired.get(aid)
-            desired = self.want(aid, 'take_control', undo=undo or (lambda: self._restore(aid, *before)))
+            desired = self.want(aid, 'take_control', undo=undo or (lambda: self._restore(aid, *before)),
+                                applied=applied)
             self.leases[aid] = Lease(user['id'], label(user), now, now, now, list(queue), desired.generation)
         self.audit(event, user['id'], aid)
 
@@ -666,9 +726,10 @@ class Leases:
             reply = self.manager.supervisor.child(aid).request(
                 'POST', '/api/control', {'action': action}, timeout=5, headers={LEASE_HEADER: str(generation)})
         except WorkerError as error:
-            log.warning('Adventure %s answered %s for the control lease with %s: %s', aid, action, error.status, error)
             if 400 <= error.status < 500:
+                # converge logs the first refusal, so a refusal sent again is not logged each time.
                 return 'refused', str(error), error.status, None
+            log.warning('Adventure %s answered %s for the control lease with %s: %s', aid, action, error.status, error)
             return 'unanswered', str(error), error.status, None
         except Exception as error:
             log.warning('Adventure %s did not answer %s for the control lease: %s', aid, action, error)

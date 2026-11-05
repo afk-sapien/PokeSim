@@ -172,3 +172,25 @@ def test_a_page_that_fell_out_of_the_line_says_so(browser, tmp_path, monkeypatch
         leases.sweep()
         expect(carol.locator('#toast')).to_contain_text('You left the line for control')
         expect(ask).to_have_text('Ask for control')
+
+
+def test_a_pause_the_game_has_not_run_yet_says_it_is_on_its_way(browser, tmp_path, monkeypatch):
+    import json
+    from playwright.sync_api import expect
+    detail = 'The adventure is busy. It will pause once it can.'
+
+    def busy(route):
+        # The library took the Pause and sends it again until the game runs it.
+        if route.request.method == 'POST' and json.loads(route.request.post_data or '{}').get('action') == 'pause':
+            route.fulfill(status=202, content_type='application/json',
+                          body=json.dumps({'ok': True, 'applied': False, 'detail': detail}))
+        else:
+            route.continue_()
+    with adventure(tmp_path, monkeypatch) as game:
+        alice = open_game(browser, game, 'alice')
+        alice.route('**/api/control', busy)
+        alice.wait_for_load_state('domcontentloaded')
+        alice.locator('#pause').click()
+        expect(alice.locator('#toast')).to_have_text(detail)
+        expect(alice.locator('#control-mode')).to_have_text('Pausing once the game can')
+        expect(alice.locator('#pause')).to_have_class('key is-pending')

@@ -248,13 +248,16 @@ class Emulator:
             return 'An exchange is holding this adventure'
         return None
 
-    def control(self, name, timeout=4):
-        """Run take_control, resume or pause now. Returns why the game held it back, or None."""
+    def control(self, name, timeout=4, gate=None):
+        """Run take_control, resume or pause now. Returns why the game held it back, or None.
+        `gate` is asked on the game thread first: None runs it, '' counts it as done already."""
         def apply():
             reason = self.held_back(name)
+            if reason is None and gate is not None:
+                reason = gate()
             if reason is None:
                 self._handle_command(name, None)
-            return reason
+            return reason or None
         return self.call(apply, timeout)
 
     def status(self) -> dict:
