@@ -32,10 +32,21 @@ class Clock:
 def game(library, people, monkeypatch):  # noqa: F811
     """Alice owns Red. Bob can play it, Carol can manage it and Dave can watch it."""
     calls = []
+    # What the worker made of the control changes it heard, as the worker's control route keeps it.
+    worker = SimpleNamespace(seen=0, manual=False)
 
     def request(aid):
         def send(method, path, body=None, timeout=None, headers=None):
             calls.append((aid, path, (body or {}).get('action')))
+            lease = int((headers or {}).get(LEASE_HEADER, 0))
+            if path == '/internal/control-status':
+                seen, worker.seen = worker.seen, max(worker.seen, lease)
+                return {'manual': worker.manual, 'lease_seen': seen}
+            action = (body or {}).get('action')
+            if lease and action in {'take_control', 'resume', 'pause'}:
+                if lease < worker.seen:
+                    raise RuntimeError('Control changed hands. Look again and retry.')
+                worker.seen, worker.manual = lease, action == 'take_control'
             return {'ok': True}
         return send
     monkeypatch.setattr(library.manager.supervisor, 'child', lambda aid: SimpleNamespace(
@@ -47,7 +58,7 @@ def game(library, people, monkeypatch):  # noqa: F811
     auth.grant(people.red, people.bob['id'], 'player', people.alice['id'])
     auth.grant(people.red, carol['id'], 'manager', people.alice['id'])
     auth.grant(people.red, dave['id'], 'viewer', people.alice['id'])
-    return SimpleNamespace(library=library, red=people.red, calls=calls, clock=clock,
+    return SimpleNamespace(library=library, red=people.red, calls=calls, clock=clock, worker=worker,
                            alice=library.login('alice'), bob=library.login('bob'), carol=library.login('carol'),
                            dave=library.login('dave'), ids=SimpleNamespace(bob=people.bob['id'], carol=carol['id']))
 
@@ -623,7 +634,7 @@ def test_a_take_control_that_timed_out_moves_the_holder_to_its_generation(game, 
     assert leases.holder(game.red) == game.ids.bob
     # The worker now refuses anything older than the take_control, so Bob's presses carry it too.
     assert press(game.bob, game.red).status_code == 200
-    assert game.library.forwarded[-1].headers[LEASE_HEADER] == str(asked[0])
+    assert int(game.library.forwarded[-1].headers[LEASE_HEADER]) == game.worker.seen > asked[0]
 
 
 def test_a_resume_that_timed_out_moves_the_holder_to_its_generation(game):
@@ -632,7 +643,7 @@ def test_a_resume_that_timed_out_moves_the_holder_to_its_generation(game):
     asked, sent = [], []
 
     def timed_out(request):
-        asked.append(request.headers[LEASE_HEADER])
+        asked.append(int(request.headers[LEASE_HEADER]))
         raise httpx.ReadTimeout('no answer', request=request)
     app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(timed_out))
     assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 503
@@ -640,7 +651,98 @@ def test_a_resume_that_timed_out_moves_the_holder_to_its_generation(game):
     app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(
         lambda request: sent.append(request) or httpx.Response(200, json={'ok': True})))
     assert press(game.bob, game.red).status_code == 200
-    assert sent[-1].headers[LEASE_HEADER] == asked[0]
+    assert int(sent[-1].headers[LEASE_HEADER]) == game.worker.seen > asked[0]
+
+
+def test_a_take_control_the_game_made_without_answering_still_grants_control(game, monkeypatch):
+    leases = game.library.manager.leases
+
+    def made_without_answering(aid, action, generation):
+        game.worker.seen, game.worker.manual = generation, action == 'take_control'
+        return False
+    monkeypatch.setattr(leases, 'worker', made_without_answering)
+    # Nobody held control, and the game is in manual mode, so Bob holds it.
+    assert lease(game.bob, game.red, 'request').json()['you_hold']
+    assert leases.holder(game.red) == game.ids.bob and game.worker.manual
+    assert press(game.bob, game.red).status_code == 200
+    assert int(game.library.forwarded[-1].headers[LEASE_HEADER]) == game.worker.seen
+
+
+def test_a_worker_that_never_says_what_it_did_gets_the_autopilot_back(game, monkeypatch):
+    manager = game.library.manager
+    leases, child, down = manager.leases, manager.supervisor.child, threading.Event()
+
+    def going_down(aid):
+        worker = child(aid)
+
+        def send(method, path, body=None, timeout=None, headers=None):
+            if down.is_set():
+                raise httpx.ConnectError('the worker is restarting')
+            answer = worker.request(method, path, body, timeout, headers)
+            if (body or {}).get('action') == 'take_control':
+                # It took control, then went away before it answered.
+                down.set()
+                raise httpx.ReadTimeout('no answer')
+            return answer
+        return SimpleNamespace(url=worker.url, token=worker.token, request=send)
+    monkeypatch.setattr(manager.supervisor, 'child', going_down)
+    assert lease(game.bob, game.red, 'request').status_code == 409
+    assert leases.holder(game.red) is None and game.worker.manual
+    leases.settle()
+    assert game.worker.manual and leases.unsettled == {game.red: 'resume'}
+    # Once the worker answers again it hears the Resume that puts the autopilot back.
+    down.clear()
+    leases.settle()
+    assert not game.worker.manual and leases.unsettled == {}
+
+
+def test_a_resume_the_game_made_without_answering_ends_the_lease(game):
+    app, leases = game.library.app, game.library.manager.leases
+    lease(game.bob, game.red, 'request')
+
+    def made_without_answering(request):
+        game.worker.seen, game.worker.manual = int(request.headers[LEASE_HEADER]), False
+        raise httpx.ReadTimeout('no answer', request=request)
+    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(made_without_answering))
+    assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 503
+    # The autopilot plays again, so Bob no longer holds control.
+    assert leases.holder(game.red) is None
+    assert press(game.bob, game.red).status_code == 409
+
+
+def test_control_actions_never_fill_the_press_line(game, monkeypatch):
+    monkeypatch.setattr(game.library.manager, 'auth_mode', 'none')
+    page = game.library.browser()
+    page.headers['X-PokeSim-CSRF'] = page.get('/api/v1/session').json()['csrf_token']
+    buttons = ['down', 'a', 'up', 'b', 'left', 'right', 'start', 'select']
+    codes, arrived = line_against_a_stalled_worker(
+        game, [(page, {'action': 'resume'}), (page, {'action': 'resume'}), *presses(page, *buttons)])
+    assert codes == [200] * 10 and arrived == ['resume', 'resume', *buttons]
+
+
+def test_a_control_action_that_waited_too_long_is_dropped(game, monkeypatch):
+    monkeypatch.setattr(manager_module, 'CONTROL_WAIT_SECONDS', 0.2, raising=False)
+    lease(game.bob, game.red, 'request')
+    codes, arrived = line_against_a_stalled_worker(
+        game, [*presses(game.bob, 'down'), (game.alice, {'action': 'resume'})], between=lambda: asyncio.sleep(0.5))
+    assert codes == [200, 409] and arrived == ['down']
+    assert game.library.manager.leases.holder(game.red) == game.ids.bob
+
+
+def test_a_queued_resume_reads_the_lease_at_the_front_of_the_line(game):
+    manager = game.library.manager
+    leases = manager.leases
+    carol = manager.actor_for(manager.auth.user(game.ids.carol))
+    lease(game.bob, game.red, 'request')
+
+    async def hand_over():
+        # Control changes hands while the Resume waits behind Bob's press.
+        leases.end(game.red, 'release', apply=False)
+        leases.act(game.red, carol, manager.registry.adventure(game.red), 'request')
+    codes, arrived = line_against_a_stalled_worker(
+        game, [*presses(game.bob, 'down'), (game.alice, {'action': 'resume'})], between=hand_over)
+    assert codes == [200, 200] and arrived == ['down', 'resume']
+    assert leases.holder(game.red) is None
 
 
 def test_a_resume_without_a_lease_waits_for_a_grant_under_way(game, monkeypatch):
