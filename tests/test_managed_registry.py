@@ -51,6 +51,30 @@ def test_rejects_newer_schema(tmp_path):
         Registry(tmp_path)
 
 
+def test_an_upgrade_keeps_the_older_database_to_go_back_to(tmp_path, caplog):
+    import logging
+    import os
+    first = registry(tmp_path)
+    first.set_setting('kept', 'from 0.6')
+    # A Library from 0.6.x has schema 1.
+    first.db.execute('PRAGMA user_version=1')
+    first.db.close()
+    caplog.set_level(logging.WARNING, logger='pokesim.app.registry')
+    Registry(tmp_path).db.close()
+    copies = sorted(tmp_path.glob('app.sqlite.pre-schema-2-*'))
+    assert len(copies) == 1 and str(copies[0]) in caplog.text
+    with sqlite3.connect(copies[0]) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 1
+        assert json.loads(db.execute("SELECT value FROM settings WHERE key='kept'").fetchone()[0]) == 'from 0.6'
+    if os.name != 'nt':  # Windows has no POSIX permission bits.
+        assert copies[0].stat().st_mode & 0o077 == 0
+    # Once upgraded, and for a new Library, there is nothing to keep.
+    Registry(tmp_path).db.close()
+    Registry(tmp_path / 'new').db.close()
+    assert sorted(tmp_path.glob('app.sqlite.pre-schema-2-*')) == copies
+    assert list((tmp_path / 'new').glob('app.sqlite.pre-*')) == []
+
+
 @pytest.mark.parametrize('name', ['../escape', '/absolute', 'x/../../escape', 'x\\escape', 'C:escape'])
 def test_import_cannot_escape_destination(tmp_path, name):
     archive = tmp_path / 'bad.zip'

@@ -49,6 +49,49 @@ def test_older_roms_go_to_the_library_owner_and_adventure_owners_keep_theirs(tmp
     assert [row['id'] for row in Registry(tmp_path).roms(LIBRARY_OWNER)] == ['played']
 
 
+def test_an_upgrade_stopped_after_making_the_shelves_still_fills_them(tmp_path):
+    registry = Registry(tmp_path)
+    registry.add_rom('kept', 'sha1', 'red')
+    registry.add_rom('played', 'sha1', 'blue')
+    alice = identifier()
+    registry.create('Blue', 'played', {}, identifier(), owner=alice)
+    # The upgrade start made the empty table and stopped before filling it.
+    with registry.lock, registry.db:
+        registry.db.execute('DELETE FROM rom_owners')
+    registry.db.close()
+    reopened = Registry(tmp_path)
+    assert [row['id'] for row in reopened.roms(LIBRARY_OWNER)] == ['played', 'kept']
+    assert [row['id'] for row in reopened.roms(alice)] == ['played']
+
+
+def test_the_shelf_migration_is_one_transaction(tmp_path, monkeypatch):
+    registry = Registry(tmp_path)
+    registry.add_rom('kept', 'sha1', 'red')
+    with registry.lock, registry.db:
+        registry.db.execute('DROP TABLE rom_owners')
+    registry.db.close()
+    import sqlite3
+    real = sqlite3.connect
+
+    class Stopping(sqlite3.Connection):
+        # The start stops when it begins to fill the new shelves.
+        def execute(self, sql, *rows):
+            if sql.startswith('INSERT OR IGNORE INTO rom_owners'):
+                raise RuntimeError('stopped')
+            return super().execute(sql, *rows)
+
+        def executemany(self, sql, rows):
+            if sql.startswith('INSERT OR IGNORE INTO rom_owners'):
+                raise RuntimeError('stopped')
+            return super().executemany(sql, rows)
+    monkeypatch.setattr(sqlite3, 'connect', lambda *args, **options: real(*args, factory=Stopping, **options))
+    with pytest.raises(RuntimeError, match='stopped'):
+        Registry(tmp_path)
+    monkeypatch.setattr(sqlite3, 'connect', real)
+    with sqlite3.connect(tmp_path / 'app.sqlite') as db:
+        assert db.execute("SELECT 1 FROM sqlite_master WHERE name='rom_owners'").fetchone() is None
+
+
 def test_each_person_sees_only_their_own_shelf(shelves, people):  # noqa: F811
     alice, bob = shelves.login('alice'), shelves.login('bob')
     upload(alice, 'blue')

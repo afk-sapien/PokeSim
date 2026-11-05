@@ -28,6 +28,8 @@
 - Fix two trade problems from a fourteenth review. When stopping one adventure fails after a trade, the trade stays finished and the other adventure still stops. An owner's Start just before the stop after a trade keeps the adventure running.
 - Fix a control problem from a fifteenth review. When stopping an adventure fails, its next Start still runs on its autopilot and no longer hears an old Pause.
 - Fix an account problem from a seventeenth review. Deleting the first admin makes the admin who deleted them the Library's owner, so adventures imported from the command line go to a real account. On startup, a Library whose owner was deleted gets its oldest admin as owner, with the adventures that went nowhere.
+- Fix three more problems from the seventeenth review. The login page goes back only to a page on this site, even when the address it was given has a tab or line break in it. An upgrade start that stops partway leaves every older cartridge on the Library owner's shelf on the next start.
+- The first start after upgrading from 0.6.x keeps a copy of the older Library database as `app.sqlite.pre-schema-2-<time>` and logs where it is. 0.6.x cannot open the upgraded database, so going back means restoring that copy, or a backup from before the upgrade. See [Update and roll back](docs/operations.md#update-and-roll-back).
 
 - Tell both sides in their inboxes when an offer ends because an adventure changed hands or was deleted, or its sender lost their share or was deleted. Inbox items about a deleted adventure no longer link to it.
 

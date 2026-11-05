@@ -33,6 +33,20 @@ def log_in(page, url, name, password):
     expect(page).to_have_url(url + '/settings')
 
 
+@pytest.mark.parametrize('wanted', ['/%09/elsewhere.test', '/%0d/elsewhere.test', '/%0a/elsewhere.test',
+                                    '/.//elsewhere.test'])
+def test_logging_in_stays_on_this_site_whatever_next_says(page, tmp_path, monkeypatch, wanted):
+    from playwright.sync_api import expect
+    factory, _ = library(tmp_path, monkeypatch)
+    page.route('**://elsewhere.test/**', lambda route: route.fulfill(body='elsewhere', content_type='text/plain'))
+    with serve(factory) as url:
+        page.goto(url + '/login?next=' + wanted)
+        page.get_by_label('Username').fill('admin')
+        page.get_by_label('Password', exact=True).fill(OLD)
+        page.get_by_role('button', name='Log in').click()
+        expect(page).to_have_url(url + '/')
+
+
 # The library refuses the wrong current password the test types.
 @pytest.mark.expected_errors(*refused('/api/v1/auth/password', 401))
 @pytest.mark.parametrize('width', [390, 1280])

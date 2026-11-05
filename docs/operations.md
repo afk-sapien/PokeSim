@@ -234,6 +234,12 @@ A rollback may require both the previous application version and its matching ba
 Do not run an older version against a library modified by a newer version unless that
 release explicitly supports it. Restore into a separate location to preserve current progress.
 
+The first start of a version with accounts changes the Library database, and 0.6.x cannot open
+it after that. That start keeps a copy of the older database next to it, named
+`app.sqlite.pre-schema-2-<time>`, and logs its path. To go back to 0.6.x, stop PokeSim and
+restore that copy as `app.sqlite`, or restore a backup made before the upgrade. Anything done
+after the upgrade is not in either one.
+
 Gold, Silver and Crystal adventures need 0.5.0 or later. Starting one on 0.4.x fails with
 "Worker exited before becoming ready" and "Unknown settings: celebi_event", because 0.4.x does not know
 Generation II. Older releases cannot be taught a clearer message from this side, so stop those adventures
