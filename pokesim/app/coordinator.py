@@ -914,11 +914,18 @@ class Coordinator:
             self.previews.pop(aid, None)
             if self.registry.adventure(aid)['desired_state'] == 'stopped':
                 # The owner stopped it during the trade, so the stop drops what its run was told.
+                # The stop reads that again under the lock a Start takes, so a Start since wins.
                 leases = getattr(self.manager, 'leases', None)
-                if leases is not None:
-                    leases.stop_worker(aid)
-                else:
-                    self.manager.supervisor.stop(aid)
+                try:
+                    if leases is not None:
+                        leases.stop_worker(aid, only_if_stopped=True)
+                    else:
+                        self.manager.supervisor.stop(aid, only_if_stopped=True)
+                except Exception:
+                    # The exchange is already final. A failed stop marked it recovering again, and
+                    # that pass replayed it and started this worker again. The supervisor already
+                    # recorded the failure on the adventure, as for an owner's own Stop.
+                    log.exception('Could not stop adventure %s after exchange %s', aid, tid)
             else:
                 self.registry.update(aid, state='running', error=None)
         return row

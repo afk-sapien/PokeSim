@@ -371,9 +371,15 @@ class Supervisor:
                 if aid in self.setup_retries and self.setup_retries[aid][0] == float('inf'):
                     self.setup_retries.pop(aid)
 
-    def stop(self, aid, preserve_desired=False):
+    def stop(self, aid, preserve_desired=False, only_if_stopped=False):
+        """Stop the adventure's worker. With `only_if_stopped`, stop it only while the owner still
+        wants it stopped, read under the lock a Start takes, and return None when they started it."""
         with (nullcontext() if self.closed.is_set() else self.admission), self._lock(aid):
-            self.registry.adventure(aid)
+            row = self.registry.adventure(aid)
+            if only_if_stopped:
+                if row['desired_state'] != 'stopped':
+                    return None
+                preserve_desired = True
             if not preserve_desired:
                 self.registry.update(aid, desired_state='stopped')
             with self.guard:
