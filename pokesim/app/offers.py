@@ -45,6 +45,10 @@ class OwnerOnly(PermissionError):
     """Only the owner of the adventure may trade this Pokémon away."""
 
 
+class NoLongerManaged(PermissionError):
+    """The sender stopped managing the adventure, for example after a transfer, while offering."""
+
+
 class LimitReached(ValueError):
     """Too many offers are open or were sent today."""
 
@@ -143,6 +147,10 @@ class TradeOffers(TradeBuilder):
         sender_id = (actor.id if actor is not None else None) or LIBRARY_OWNER
         give, take = self._sides(selection)
         with self.guard:
+            # A transfer ends the old owner's offers and changes the owner under this guard, so
+            # the sender is checked again here: an offer is never made from an adventure they lost.
+            if actor is not None and not can(actor, 'adventure.manage', self.registry.adventure(selection['from_id'])):
+                raise NoLongerManaged('You can no longer offer trades from this adventure')
             pending = self.registry.trade_offers(selection['from_id'], statuses=[PENDING])
             if any(all(row[name] == value for name, value in selection.items()) for row in pending):
                 raise ValueError('You already offered this trade')
@@ -187,6 +195,8 @@ class TradeOffers(TradeBuilder):
         # Both games are asked about their Pokémon before `guard`, which never waits on a game.
         self._owner_check(actor, offer['to_id'], chosen)
         trade = {**offer, 'to_key': chosen}
+        # A trade that finishes after this moment may have moved a Pokémon the check below still saw.
+        started = time.time()
         try:
             give, take = self._check(trade, accepting=True)
         except Gone as error:
@@ -202,11 +212,12 @@ class TradeOffers(TradeBuilder):
         if changes and not confirm:
             raise Changed('. '.join(changes) + '. Accept again to trade anyway', self.public(offer))
         with self.guard:
-            busy = [row for row in self.registry.trade_offers(statuses=[ACCEPTED])
-                    if {(row['from_id'], row['from_key']), (row['to_id'], row['to_key'])}
+            busy = [row for row in self.registry.trade_offers(statuses=[ACCEPTED, 'completed'])
+                    if (row['status'] == ACCEPTED or row['updated_at'] >= started)
+                    and {(row['from_id'], row['from_key']), (row['to_id'], row['to_key'])}
                     & {(trade['from_id'], trade['from_key']), (trade['to_id'], trade['to_key'])}]
             if busy:
-                raise ValueError('One of these Pokémon is already in another accepted trade. Try again when it finishes')
+                raise ValueError('One of these Pokémon is in another trade that is under way or just finished. Try again')
             # Claim the offer before the trade is queued, so an offer that expired or was withdrawn
             # meanwhile never moves a Pokémon. A sweep and a hand-on wait for `guard` too.
             mid = identifier()

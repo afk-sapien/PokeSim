@@ -142,11 +142,10 @@ class Leases:
             generation = self.generations[aid] = next(self.counter)
             return generation
 
-    def restamp(self, aid, lease, generation):
-        """A change the worker never made: the lease still in control carries the new generation."""
+    def reserve(self):
+        """A generation for a change the worker has yet to make. Presses keep theirs until it does."""
         with self.lock:
-            if lease is not None and self.leases.get(aid) is lease:
-                lease.generation = generation
+            return next(self.counter)
 
     def end_choice(self, aid):
         choice = self.manager.registry.setting('lease_end:' + aid)
@@ -423,14 +422,15 @@ class Leases:
         blocked = self.blocked(aid)
         if blocked:
             raise LeaseRefused(blocked)
-        # The old holder's presses are refused from the new generation on, and the worker drops
-        # any it queued when take_control arrives.
-        generation = self.advance(aid)
+        # The new generation starts once the worker took control, so a refused take_control changes
+        # nothing. Until then the old holder's presses still go out, and the worker drops any that
+        # reach it after the take_control.
+        generation = self.reserve()
         if not self.worker(aid, 'take_control', generation):
-            self.restamp(aid, self.current(aid), generation)
             raise LeaseRefused('The adventure is busy with a trade or did not answer. Try again in a moment.')
         now = self.clock()
         with self.lock:
+            self.generations[aid] = generation
             self.leases[aid] = Lease(user['id'], label(user), now, now, now, list(queue), generation)
         self.audit(event, user['id'], aid)
 
