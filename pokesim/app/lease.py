@@ -12,9 +12,13 @@ held across a worker request. Each adventure's turn lock lines up the changes th
 worker, so a hung worker holds up only its own adventure. A turn is always taken before `lock`,
 and before the registry's lock, so nobody may end a lease while holding the registry's lock.
 
-Each grant and end gives the adventure a new generation before its worker hears of it. A press
-carries the generation of the lease it was checked against, so the library and the worker
-refuse a press from a lease that has since changed hands.
+Every change to what the worker should do is recorded first, in the adventure's turn, as its
+desired state: take_control (manual), resume (autopilot) or pause, with a new generation.
+`converge` then sends that state outside the turn. The worker ignores a generation older than
+one it saw, so the newest change wins however the sends cross, and sending a state twice is
+harmless. A send that got no answer is never guessed at: the sweep sends it again until the
+worker answers. A press carries the generation of the lease it was checked against, so the
+library and the worker refuse a press from a lease that has since changed hands.
 """
 from __future__ import annotations
 
@@ -62,6 +66,14 @@ class Lease:
     generation: int = 0
 
 
+@dataclass
+class Desired:
+    """What the worker should be doing, as the control action that gets it there."""
+    action: str
+    generation: int
+    confirmed: bool = False
+
+
 def label(user):
     return user.get('display_name') or user['username']
 
@@ -80,9 +92,9 @@ class Leases:
         # old one never mistakes it for a new one.
         self.generations = {}
         self.counter = itertools.count(1)
-        # Adventures whose worker did not answer whether it made a control change, with the
-        # change that puts it back once it answers again (see reconcile).
-        self.unsettled = {}
+        # Each adventure's desired state, and the adventures with a send to it under way.
+        self.desired = {}
+        self.converging = set()
         self.stop = threading.Event()
 
     @property
@@ -145,19 +157,6 @@ class Leases:
             generation = self.generations[aid] = next(self.counter)
             return generation
 
-    def reserve(self):
-        """A generation for a change the worker has yet to make. Presses keep theirs until it does."""
-        with self.lock:
-            return next(self.counter)
-
-    def restamp(self, aid, lease, generation):
-        """A change the worker may have made without answering: the library starts its generation
-        too, and the lease still in control carries it, so both sides agree."""
-        with self.lock:
-            self.generations[aid] = max(self.generations.get(aid, 0), generation)
-            if lease is not None and self.leases.get(aid) is lease:
-                lease.generation = self.generations[aid]
-
     def end_choice(self, aid):
         choice = self.manager.registry.setting('lease_end:' + aid)
         return choice if choice in END_CHOICES else 'resume'
@@ -208,6 +207,7 @@ class Leases:
             handler(aid, actor, adventure, target)
         else:
             handler(aid, actor, adventure)
+        self.converge(aid)
         return self.status(aid, actor, adventure)
 
     def request(self, aid, actor, adventure):
@@ -309,7 +309,9 @@ class Leases:
             return True
 
     def end(self, aid, reason, *, apply=True, audited=False, only=None):
-        """End the lease on this adventure, if any, and put the autopilot back or keep it paused.
+        """End the lease on this adventure, if any. The worker should then resume or pause, as the
+        owner chose, and a lease action or the sweep sends it. Without `apply` the worker is gone,
+        so it is sent nothing.
 
         With `only`, end it only while that same lease still holds control, not one granted since.
         """
@@ -323,13 +325,77 @@ class Leases:
                     self.dropped[aid, entry['user_id']] = 'ended'
             if lease is None:
                 return False
-            # Presses checked against the ended lease are refused from here on.
-            generation = self.advance(aid)
             if not audited:
                 self.audit('lease.end', lease.user_id, aid, reason)
+            # Presses checked against the ended lease are refused from here on.
             if apply:
-                self.worker(aid, 'pause' if self.end_choice(aid) == 'pause' else 'resume', generation)
+                self.want(aid, self.end_choice(aid))
+            else:
+                with self.lock:
+                    self.advance(aid)
+                    self.desired.pop(aid, None)
             return True
+
+    def want(self, aid, action):
+        """Record what the worker should do next, under a new generation. Call it in the turn."""
+        with self.lock:
+            generation = self.advance(aid)
+            self.desired[aid] = Desired(action, generation)
+            return generation
+
+    def reached(self, aid, generation):
+        """Whether the worker confirmed the desired state recorded under `generation`."""
+        with self.lock:
+            desired = self.desired.get(aid)
+            return desired is not None and desired.generation == generation and desired.confirmed
+
+    def converge(self, aid):
+        """Send the worker its desired state. It takes the turn only to read it, so a caller outside
+        the turn holds up nobody else while a worker hangs. A trade calls it in the turn, to send
+        the worker its state before the trade holds it."""
+        with self.lock:
+            desired = self.desired.get(aid)
+            if desired is None or desired.confirmed:
+                return
+        with self.turn(aid), self.lock:
+            desired = self.desired.get(aid)
+            if desired is None or desired.confirmed:
+                return
+            action, generation = desired.action, desired.generation
+        sent = self.worker(aid, action, generation)
+        with self.lock:
+            desired = self.desired.get(aid)
+            # A newer change may have been recorded meanwhile. It is still to be sent.
+            if sent and desired is not None and desired.generation == generation:
+                desired.confirmed = True
+
+    def kick(self, aid):
+        """Converge in the background, one send per adventure at a time."""
+        with self.lock:
+            if aid in self.converging:
+                return
+            self.converging.add(aid)
+
+        def send():
+            try:
+                self.converge(aid)
+            except Exception:
+                log.exception('Could not send adventure %s its control state', aid)
+            finally:
+                with self.lock:
+                    self.converging.discard(aid)
+        threading.Thread(target=send, name='control-converge', daemon=True).start()
+
+    def choose(self, aid, action, current):
+        """A Resume or Pause from a page, checked against `current`, the lease read for it. It
+        ends that lease and becomes the desired state. Returns its generation, or None when
+        control changed hands since."""
+        with self.turn(aid):
+            if self.current(aid) is not current:
+                return None
+            if current is not None:
+                self.end(aid, action, apply=False)
+            return self.want(aid, action)
 
     def end_all(self, reason):
         """End every lease, including one a change already under way is about to grant.
@@ -339,7 +405,10 @@ class Leases:
         """
         with self.lock:
             held = list(dict.fromkeys([*self.leases, *self.turns]))
-        return [aid for aid in held if self.end(aid, reason)]
+        ended = [aid for aid in held if self.end(aid, reason)]
+        for aid in ended:
+            self.converge(aid)
+        return ended
 
     def forget(self, aid, uid):
         """A grant, user or session went away: end their lease and drop their requests."""
@@ -355,7 +424,25 @@ class Leases:
             self._pass_on(aid, lease, 'revoked')
 
     def sweep(self):
-        """End leases that went quiet or whose holder can no longer play, and drop quiet queued pages."""
+        """End leases that went quiet or whose holder can no longer play, drop quiet queued pages,
+        and send each worker that has not confirmed its desired state the state again."""
+        self._expire()
+        with self.lock:
+            unconfirmed = [(aid, desired.generation) for aid, desired in self.desired.items() if not desired.confirmed]
+        for aid, generation in unconfirmed:
+            try:
+                running = self.manager.registry.adventure(aid)['state'] == 'running'
+            except KeyError:
+                running = False
+            if running:
+                self.kick(aid)
+                continue
+            # A stopped adventure starts again on its autopilot.
+            with self.lock:
+                if getattr(self.desired.get(aid), 'generation', None) == generation:
+                    self.desired.pop(aid, None)
+
+    def _expire(self):
         with self.lock:
             held = list(self.leases)
         for aid in held:
@@ -385,7 +472,6 @@ class Leases:
             while not self.stop.wait(interval):
                 try:
                     self.sweep()
-                    self.settle()
                 except Exception:
                     log.exception('The control lease sweep failed')
         threading.Thread(target=loop, name='control-lease', daemon=True).start()
@@ -434,81 +520,13 @@ class Leases:
         blocked = self.blocked(aid)
         if blocked:
             raise LeaseRefused(blocked)
-        # The new generation starts once the worker answered, so the old holder's presses still go
-        # out meanwhile, and the worker drops any that reach it after the take_control. One that
-        # failed or timed out may still have reached the worker, so the worker says what it did.
-        generation = self.reserve()
-        if not self.worker(aid, 'take_control', generation):
-            generation = self.reconcile(aid, 'take_control', generation)
-            if generation is None:
-                raise LeaseRefused('The adventure is busy with a trade or did not answer. Try again in a moment.')
+        # The old holder's presses are refused from here on, and the worker drops any queued
+        # before the take_control.
         now = self.clock()
         with self.lock:
-            self.generations[aid] = generation
+            generation = self.want(aid, 'take_control')
             self.leases[aid] = Lease(user['id'], label(user), now, now, now, list(queue), generation)
         self.audit(event, user['id'], aid)
-
-    def reconcile(self, aid, action, reserved):
-        """A take_control, resume or pause sent with `reserved` got no answer. Ask the worker
-        whether it made the change, and make the lease match the worker. Call it in the turn.
-
-        Returns the generation to carry on with when the worker made the change, else None. A
-        take_control it made leaves the caller to record the new lease. A worker in manual mode
-        keeps the lease that holds it, or resumes when nobody does, and a worker back on its
-        autopilot ends the lease.
-        """
-        fence = self.reserve()
-        try:
-            state = self.manager.supervisor.child(aid).request(
-                'POST', '/internal/control-status', {}, timeout=5, headers={LEASE_HEADER: str(fence)})
-            applied = int(state['lease_seen']) >= reserved
-            manual = action == 'take_control' if applied else bool(state['manual'])
-        except Exception as error:
-            # Nobody knows what the game is doing, so nobody keeps control, and the game gets
-            # the autopilot back once its worker answers again (see settle).
-            log.warning('Adventure %s did not say whether it made %s: %s', aid, action, error)
-            with self.lock:
-                self.unsettled[aid] = 'pause' if action == 'pause' else 'resume'
-            self.end(aid, 'unanswered', apply=False)
-            return None
-        # The worker refuses anything older than the fence now, so the library starts it too.
-        with self.lock:
-            self.generations[aid] = max(self.generations.get(aid, 0), fence)
-        if applied and action == 'take_control':
-            return fence
-        lease = self.current(aid)
-        if manual and lease is not None:
-            self.restamp(aid, lease, fence)
-        elif manual:
-            # Paused for a player nobody is: the game plays on by itself.
-            if not self.worker(aid, 'resume', self.advance(aid)):
-                with self.lock:
-                    self.unsettled[aid] = 'resume'
-        elif lease is not None:
-            self.end(aid, action if applied else 'autopilot', apply=False)
-        return fence if applied else None
-
-    def settle(self):
-        """Send each worker that went unanswered the change that puts it back, once it answers."""
-        with self.lock:
-            unsettled = list(self.unsettled.items())
-        for aid, action in unsettled:
-            with self.turn(aid):
-                with self.lock:
-                    if self.unsettled.get(aid) != action:
-                        continue
-                    if aid in self.leases:
-                        # Control was granted since, so the worker answered and is in manual mode.
-                        self.unsettled.pop(aid, None)
-                        continue
-                try:
-                    running = self.manager.registry.adventure(aid)['state'] == 'running'
-                except KeyError:
-                    running = False
-                # A stopped adventure starts again on its autopilot.
-                if not running or self.worker(aid, action, self.advance(aid)):
-                    with self.lock:
-                        self.unsettled.pop(aid, None)
 
     def blocked(self, aid):
         coordinator = self.manager.coordinator

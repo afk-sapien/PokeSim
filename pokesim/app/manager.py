@@ -19,7 +19,6 @@ import time
 from urllib.parse import parse_qs, urlencode, urlsplit
 import webbrowser
 
-import anyio.from_thread
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
@@ -1501,6 +1500,9 @@ def create_app(manager, shutdown=lambda: None):
             raise HTTPException(404)
         if not can(actor, action, adventure):
             raise HTTPException(403, 'Your role on this adventure does not allow this')
+        if control in policy.LEASE_ACTIONS and not manager.leases.holds(aid, actor):
+            # Only the holder takes a place in the press line. Its press is checked again at the front.
+            raise HTTPException(409, 'Ask for control first. Someone else may hold it.')
         if control in policy.LEASE_ACTIONS or control in {'resume', 'pause'}:
             # The lease it goes with is read at the front of the press line (see lease_access).
             request.state.lease_control = (actor, adventure, control)
@@ -1522,9 +1524,7 @@ def create_app(manager, shutdown=lambda: None):
             raise HTTPException(403, 'Only the person in control or a manager can resume the autopilot')
         if control in {'resume', 'pause'}:
             # The autopilot takes over again, or the manager stopped it, so nobody holds control.
-            # The lease ends once the worker has done it (see game), and only the lease held now.
-            # With no lease it still runs in the adventure's turn, so it never lands between a
-            # grant's take_control and the new lease.
+            # Only the lease held now ends (see forward).
             request.state.ends_lease = (control, manager.leases.current(aid))
 
     def lease_route(aid, request, body):
@@ -1590,25 +1590,32 @@ def create_app(manager, shutdown=lambda: None):
             # Presses, Take Control, Resume and Pause go to the worker one at a time and in the
             # order they arrived, so a Resume never overtakes a press. The line is an asyncio
             # lock, so a queued press holds no thread while it waits.
-            async with press_line(aid, request, action):
+            lease_control = getattr(request.state, 'lease_control', None)
+            async with press_line(aid, request, action, lease_control[0].id if lease_control else None):
                 if getattr(request.state, 'lease_control', None) is not None:
                     await run_in_threadpool(lease_access, aid, request)
                 return await forward(aid, path, request, viewer, body, role)
         return await forward(aid, path, request, viewer, body, role)
 
-    # Each adventure's line: its lock, how many requests are in it and how many of those are presses.
+    # Each adventure's line: its lock, how many requests are in it, how many of those are presses,
+    # and who has a Take Control in it.
     press_lines = app.state.press_lines = {}
 
     @asynccontextmanager
-    async def press_line(aid, request, action):
-        line = press_lines.setdefault(aid, [asyncio.Lock(), 0, 0])
-        # Only presses are capped, and only presses count toward it. Take Control, Resume and
-        # Pause always join, still in order.
+    async def press_line(aid, request, action, user_id=None):
+        line = press_lines.setdefault(aid, [asyncio.Lock(), 0, 0, set()])
+        # Only presses are capped, and only presses count toward it. Each person has one Take
+        # Control in line at a time. Resume and Pause always join, still in order.
         pressing = action == 'press'
+        taking = action == 'take_control' and user_id is not None
         if pressing and line[2] >= PRESS_LINE_MAX:
             raise HTTPException(429, 'The adventure is behind on presses. Wait a moment and press again.')
+        if taking and user_id in line[3]:
+            raise HTTPException(429, 'Take Control is already on its way. Wait a moment.')
         line[1] += 1
         line[2] += pressing
+        if taking:
+            line[3].add(user_id)
         joined = time.monotonic()
         try:
             async with line[0]:
@@ -1623,6 +1630,8 @@ def create_app(manager, shutdown=lambda: None):
         finally:
             line[1] -= 1
             line[2] -= pressing
+            if taking:
+                line[3].discard(user_id)
             if not line[1]:
                 press_lines.pop(aid, None)
 
@@ -1757,38 +1766,35 @@ def create_app(manager, shutdown=lambda: None):
             headers[LEASE_HEADER] = str(generation)
 
         async def send():
-            # No await between this check and the send. A handover runs on another thread and starts
-            # its generation once the worker took control, so a press that passes here during one
-            # was sent by the holder, and the worker drops it if the take_control got there first.
+            # No await between this check and the send. A handover starts its generation on another
+            # thread, so a press that passes here during one was sent by the holder, and the worker
+            # drops it if the take_control got there first.
             if generation is not None and manager.leases.generation(aid) != generation:
                 return None
             return await client.send(client.build_request(
-                request.method, target, content=body, headers=headers,
-                **({'timeout': 5} if ends_lease else {})), stream=True)
+                request.method, target, content=body, headers=headers), stream=True)
 
-        def resume_in_turn(reason, current):
-            # Resume or Pause and the lease's end happen in one turn, so no handover lands between.
-            with manager.leases.turn(aid):
-                if manager.leases.current(aid) is not current:
-                    return None
-                # The holder's presses stay valid until the worker took the change, so one it
-                # refused leaves them as they were. Ending the lease starts the new generation.
-                reserved = manager.leases.reserve()
-                headers[LEASE_HEADER] = str(reserved)
-                try:
-                    sent = anyio.from_thread.run(send)
-                except BaseException:
-                    # The worker may have made it without answering, so it says what it did.
-                    manager.leases.reconcile(aid, reason, reserved)
-                    raise
-                if sent.status_code < 400 and current is not None:
-                    manager.leases.end(aid, reason, apply=False, only=current)
-                return sent
+        def choose(action, current):
+            # Resume or Pause ends the lease read for it and becomes what the worker should do. The
+            # library sends it, and the sweep sends it again until the worker answers.
+            chosen = manager.leases.choose(aid, action, current)
+            if chosen is None:
+                return None
+            # A send that got no answer may still have got there, so it is sent once more to ask.
+            for _ in range(2):
+                manager.leases.converge(aid)
+            if manager.leases.reached(aid, chosen):
+                return JSONResponse({'ok': True})
+            if manager.leases.generation(aid) != chosen:
+                return None
+            raise HTTPException(503, f'The adventure did not answer. It will {action} once it does.')
+        if ends_lease:
+            response = await run_in_threadpool(choose, *ends_lease)
+            if response is None:
+                raise HTTPException(409, 'Control changed hands. Look again and retry.')
+            return response
         try:
-            if ends_lease:
-                response = await run_in_threadpool(resume_in_turn, *ends_lease)
-            else:
-                response = await send()
+            response = await send()
         except httpx.HTTPError as error:
             raise HTTPException(503, 'The adventure is reconnecting') from error
         if response is None:
