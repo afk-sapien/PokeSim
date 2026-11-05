@@ -380,10 +380,9 @@ class Manager:
         return self.auth.library_owner()
 
     def bind_library_owner(self, uid=None):
-        """Give adventures from before setup, and adventures of missing users, to the first admin."""
-        if uid is not None and self.auth.setting('library_owner') is None:
-            self.auth.set_setting('library_owner', uid)
-        owner = self.auth.library_owner()
+        """Give adventures from before setup, and adventures of missing users, to the first admin.
+        A library owner that was deleted is replaced by `uid`, or else the oldest admin."""
+        owner = self.auth.rebind_library_owner(uid)
         if owner == LIBRARY_OWNER:
             return []
         moved = self.registry.rebind_owners(owner, {user['id'] for user in self.auth.users()})

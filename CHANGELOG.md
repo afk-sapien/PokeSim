@@ -27,6 +27,7 @@
 - Fix more trade and control problems from a thirteenth review. Cancelling a hand-picked trade, or shutting down, no longer waits up to 15 minutes for a game that has not left manual control. An adventure stopped during a trade starts again on its autopilot, not paused. A page whose Pause or Resume another person replaced stops saying it is on its way.
 - Fix two trade problems from a fourteenth review. When stopping one adventure fails after a trade, the trade stays finished and the other adventure still stops. An owner's Start just before the stop after a trade keeps the adventure running.
 - Fix a control problem from a fifteenth review. When stopping an adventure fails, its next Start still runs on its autopilot and no longer hears an old Pause.
+- Fix an account problem from a seventeenth review. Deleting the first admin makes the admin who deleted them the Library's owner, so adventures imported from the command line go to a real account. On startup, a Library whose owner was deleted gets its oldest admin as owner, with the adventures that went nowhere.
 
 - Tell both sides in their inboxes when an offer ends because an adventure changed hands or was deleted, or its sender lost their share or was deleted. Inbox items about a deleted adventure no longer link to it.
 

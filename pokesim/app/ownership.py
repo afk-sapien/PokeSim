@@ -170,7 +170,8 @@ def _delete_owner(manager, uid, user, plan, actor):
         raise ValueError('Keep at least one admin')
     # The account goes first, with the last-admin and new-owner checks in its own transaction.
     # A refusal there leaves everything as it was. After it, nothing below refuses.
-    manager.auth.delete_user(uid, heirs=[target for target in plan.values() if target != 'archive'])
+    manager.auth.delete_user(uid, heirs=[target for target in plan.values() if target != 'archive'],
+                             successor=actor.id)
     # The account is gone and a retry cannot find it, so each step below runs whatever the one
     # before it did.
     for aid, target in plan.items():
