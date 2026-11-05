@@ -488,13 +488,14 @@ def line_against_a_stalled_worker(game, requests, between=None):
         app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(stalled))
         pages, sent = [], []
         try:
-            for count, (client, body) in enumerate(requests, 1):
+            for client, body in requests:
                 pages.append(httpx._client.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://testserver',
                                                        cookies=client.cookies, headers=dict(client.headers)))
+                before = app.state.press_lines.get(game.red, [None, 0])[1]
                 sent.append(asyncio.create_task(pages[-1].post(f'/games/{game.red}/api/control', json=body)))
                 # Each request is sent once the one before it is in line, or was turned away.
                 for _ in range(100):
-                    if sent[-1].done() or app.state.press_lines.get(game.red, [None, 0])[1] >= count:
+                    if sent[-1].done() or app.state.press_lines.get(game.red, [None, 0])[1] > before:
                         break
                     await asyncio.sleep(0.01)
             if between:
@@ -637,20 +638,29 @@ def test_a_resume_that_timed_out_moves_the_holder_to_its_generation(game):
     assert sent[-1].headers[LEASE_HEADER] == asked[0]
 
 
-def test_a_resume_without_a_lease_waits_for_a_grant_under_way(game):
+def test_a_resume_without_a_lease_waits_for_a_grant_under_way(game, monkeypatch):
     manager, app = game.library.manager, game.library.app
     leases, sent = manager.leases, []
     carol = manager.actor_for(manager.auth.user(game.ids.carol))
     adventure = manager.registry.adventure(game.red)
     app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(
         lambda request: sent.append(request) or httpx.Response(200, json={'ok': True})))
-    granting = threading.Event()
+    granting, read, current = threading.Event(), threading.Event(), leases.current
+
+    def reading(aid):
+        found = current(aid)
+        if threading.current_thread() is not granter:
+            read.set()
+        return found
+    monkeypatch.setattr(leases, 'current', reading)
 
     def grant():
-        # Carol's request has sent take_control and not yet recorded her lease.
+        # Carol's request has sent take_control and not yet recorded her lease, and the Resume
+        # has already read that nobody holds control.
         with leases.turn(game.red):
             granting.set()
-            threading.Event().wait(0.3)
+            read.wait(5)
+            threading.Event().wait(0.1)
             leases.act(game.red, carol, adventure, 'request')
     granter = threading.Thread(target=grant)
     granter.start()
