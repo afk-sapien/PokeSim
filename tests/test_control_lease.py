@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from pokesim import config
 from pokesim.app import lease as lease_module
+from pokesim.app import manager as manager_module
 from pokesim.app import policy
 from pokesim.store import Store
 from pokesim.web.app import create_app
@@ -472,10 +473,12 @@ def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(g
     assert arrived == buttons
 
 
-def line_against_a_stalled_worker(game, requests, between=None):
+def line_against_a_stalled_worker(game, requests, between=None, wait=60):
     """Send control requests to a worker that answers none until the last one is in line. Returns
-    the status codes and the actions or buttons in the order the worker heard them."""
+    the status codes and the actions or buttons in the order the worker heard them. A press is
+    dropped after `wait` seconds in line, which is long by default so a slow runner drops none."""
     app, arrived = game.library.app, []
+    usual, manager_module.PRESS_WAIT_SECONDS = manager_module.PRESS_WAIT_SECONDS, wait
 
     async def run():
         answer = asyncio.Event()
@@ -506,7 +509,10 @@ def line_against_a_stalled_worker(game, requests, between=None):
             answer.set()
             for page in pages:
                 await page.aclose()
-    return asyncio.run(run()), arrived
+    try:
+        return asyncio.run(run()), arrived
+    finally:
+        manager_module.PRESS_WAIT_SECONDS = usual
 
 
 def presses(client, *buttons):
@@ -522,11 +528,10 @@ def test_a_full_press_line_turns_the_next_press_away(game):
     assert arrived == buttons
 
 
-def test_a_press_that_waited_too_long_is_dropped(game, monkeypatch):
-    monkeypatch.setattr('pokesim.app.manager.PRESS_WAIT_SECONDS', 0.2)
+def test_a_press_that_waited_too_long_is_dropped(game):
     lease(game.bob, game.red, 'request')
     codes, arrived = line_against_a_stalled_worker(game, presses(game.bob, 'down', 'a'),
-                                                   between=lambda: asyncio.sleep(0.5))
+                                                   between=lambda: asyncio.sleep(0.5), wait=0.2)
     assert codes == [200, 409] and arrived == ['down']
 
 
