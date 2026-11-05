@@ -33,20 +33,19 @@ def game(library, people, monkeypatch):  # noqa: F811
     """Alice owns Red. Bob can play it, Carol can manage it and Dave can watch it."""
     calls = []
     # What the worker made of the control changes it heard, as the worker's control route keeps it.
-    worker = SimpleNamespace(seen=0, manual=False)
+    worker = SimpleNamespace(seen=0, manual=False, action=None, down=False)
 
     def request(aid):
         def send(method, path, body=None, timeout=None, headers=None):
+            if worker.down:
+                raise RuntimeError('Adventure worker is not running')
             calls.append((aid, path, (body or {}).get('action')))
             lease = int((headers or {}).get(LEASE_HEADER, 0))
-            if path == '/internal/control-status':
-                seen, worker.seen = worker.seen, max(worker.seen, lease)
-                return {'manual': worker.manual, 'lease_seen': seen}
             action = (body or {}).get('action')
             if lease and action in {'take_control', 'resume', 'pause'}:
                 if lease < worker.seen:
                     raise RuntimeError('Control changed hands. Look again and retry.')
-                worker.seen, worker.manual = lease, action == 'take_control'
+                worker.seen, worker.manual, worker.action = lease, action == 'take_control', action
             return {'ok': True}
         return send
     monkeypatch.setattr(library.manager.supervisor, 'child', lambda aid: SimpleNamespace(
@@ -71,6 +70,29 @@ def lease(client, aid, action=None, **extra):
 
 def press(client, aid):
     return client.post(f'/games/{aid}/api/control', json={'action': 'press', 'value': 'a'})
+
+
+def control(client, aid, action):
+    return client.post(f'/games/{aid}/api/control', json={'action': action})
+
+
+def worker_down(game):
+    """The worker answers nobody, whether the library or a page asks."""
+    def unreachable(request):
+        raise httpx.ConnectError('the worker is restarting')
+    game.worker.down = True
+    # The library fixture already replaced httpx.AsyncClient, so start from the real class.
+    game.library.app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(unreachable))
+
+
+def worker_up(game):
+    game.worker.down = False
+    game.library.app.state.children = None
+
+
+def converge_in_place(leases, monkeypatch):
+    """The sweep sends each worker its state on this thread, so a test sees it when sweep returns."""
+    monkeypatch.setattr(leases, 'kick', leases.converge, raising=False)
 
 
 def test_roles_map_to_controls():
@@ -247,20 +269,18 @@ def test_resume_and_pause_end_the_lease(game):
     assert leases.holder(game.red) is None
 
 
-def test_a_resume_the_worker_never_got_keeps_the_lease(game):
-    leases, app = game.library.manager.leases, game.library.app
+def test_a_resume_the_worker_never_got_is_sent_once_it_answers(game, monkeypatch):
+    leases = game.library.manager.leases
+    converge_in_place(leases, monkeypatch)
     lease(game.bob, game.red, 'request')
-
-    def unreachable(request):
-        raise httpx.ConnectError('the worker is restarting')
-    # The library fixture already replaced httpx.AsyncClient, so start from the real class.
-    original = httpx._client.AsyncClient
-    app.state.children = original(transport=httpx.MockTransport(unreachable))
-    assert game.carol.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 503
-    assert leases.holder(game.red) == game.ids.bob
-    app.state.children = original(transport=httpx.MockTransport(lambda request: httpx.Response(500)))
-    assert game.carol.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 500
-    assert leases.holder(game.red) == game.ids.bob
+    worker_down(game)
+    assert control(game.carol, game.red, 'resume').status_code == 503
+    # Nobody holds control while the Resume waits for the worker.
+    assert leases.holder(game.red) is None
+    worker_up(game)
+    assert press(game.bob, game.red).status_code == 409
+    leases.sweep()
+    assert game.worker.action == 'resume' and game.worker.seen == leases.generation(game.red)
 
 
 def test_a_slow_worker_holds_up_only_its_own_adventure(game, monkeypatch):
@@ -282,7 +302,7 @@ def test_a_slow_worker_holds_up_only_its_own_adventure(game, monkeypatch):
         # Another page reads and sweeps while Red's worker has not answered.
         assert leases.lock.acquire(timeout=1)
         leases.lock.release()
-        assert lease(game.dave, game.red).json()['holder'] is None
+        assert lease(game.dave, game.red).json()['holder'] == {'name': 'bob'}
     finally:
         answer.set()
         asking.join(5)
@@ -383,29 +403,26 @@ def test_a_backup_during_a_lease_change_does_not_hang(game, monkeypatch):
     assert made and manager.leases.holder(game.red) is None
 
 
-def test_no_handover_lands_while_the_worker_resumes(game):
-    """A handover asked for during Resume waits for it, so nobody holds control while the autopilot plays."""
-    manager, app = game.library.manager, game.library.app
-    leases = manager.leases
+def test_a_grant_while_the_worker_resumes_wins(game, monkeypatch):
+    """Resume ends the lease before the worker hears it, so a request meanwhile is a fresh grant,
+    and the worker ends up in the newest state, Carol's take_control."""
+    manager = game.library.manager
+    leases, worker = manager.leases, manager.leases.worker
     lease(game.bob, game.red, 'request')
     carol = manager.actor_for(manager.auth.user(game.ids.carol))
     adventure = manager.registry.adventure(game.red)
+    asking = threading.Thread(target=leases.act, args=(game.red, carol, adventure, 'request'), daemon=True)
 
-    def hand_over():
-        leases.end(game.red, 'release', apply=False)
-        leases.act(game.red, carol, adventure, 'request')
-    handover = threading.Thread(target=hand_over, daemon=True)
-
-    def resumed(request):
-        handover.start()
-        handover.join(0.3)
-        assert handover.is_alive(), 'the handover landed between Resume and the end of the lease'
-        return httpx.Response(200, json={'ok': True})
-    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(resumed))
-    assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 200
-    handover.join(5)
-    # Carol asked after the autopilot took over, so she holds a fresh lease.
-    assert not handover.is_alive() and leases.holder(game.red) == game.ids.carol
+    def resumed(aid, action, generation):
+        if action == 'resume':
+            # The worker call holds no turn, so Carol's request lands while it is under way.
+            asking.start()
+            asking.join(5)
+            assert not asking.is_alive()
+        return worker(aid, action, generation)
+    monkeypatch.setattr(leases, 'worker', resumed)
+    assert control(game.alice, game.red, 'resume').status_code == 409
+    assert leases.holder(game.red) == game.ids.carol and game.worker.manual
 
 
 def test_resume_refuses_once_control_changed_hands(game, monkeypatch):
@@ -487,9 +504,16 @@ def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(g
 def line_against_a_stalled_worker(game, requests, between=None, wait=60):
     """Send control requests to a worker that answers none until the last one is in line. Returns
     the status codes and the actions or buttons in the order the worker heard them. A press is
-    dropped after `wait` seconds in line, which is long by default so a slow runner drops none."""
-    app, arrived = game.library.app, []
+    dropped after `wait` seconds in line, which is long by default so a slow runner drops none.
+    The library sends Resume and Pause itself, and those are heard too."""
+    app, arrived, leases = game.library.app, [], game.library.manager.leases
     usual, manager_module.PRESS_WAIT_SECONDS = manager_module.PRESS_WAIT_SECONDS, wait
+    worker = leases.worker
+
+    def heard(aid, action, generation):
+        arrived.append(action)
+        return worker(aid, action, generation)
+    leases.worker = heard
 
     async def run():
         answer = asyncio.Event()
@@ -513,6 +537,11 @@ def line_against_a_stalled_worker(game, requests, between=None, wait=60):
                         break
                     await asyncio.sleep(0.01)
             if between:
+                # The first request is at the worker before anything changes.
+                for _ in range(500):
+                    if arrived:
+                        break
+                    await asyncio.sleep(0.01)
                 await between()
             answer.set()
             return [response.status_code for response in await asyncio.gather(*sent)]
@@ -524,6 +553,7 @@ def line_against_a_stalled_worker(game, requests, between=None, wait=60):
         return asyncio.run(run()), arrived
     finally:
         manager_module.PRESS_WAIT_SECONDS = usual
+        del leases.worker
 
 
 def presses(client, *buttons):
@@ -572,36 +602,18 @@ def test_resume_waits_behind_the_presses_before_it(game, monkeypatch):
     assert codes == [200, 200, 200] and arrived == ['down', 'a', 'resume']
 
 
-def test_a_refused_take_control_never_turns_the_holders_presses_away(game, monkeypatch):
-    manager = game.library.manager
-    leases = manager.leases
-    bob = manager.actor_for(manager.auth.user(game.ids.bob))
+def test_a_take_control_the_worker_refused_is_sent_again(game, monkeypatch):
+    leases = game.library.manager.leases
+    converge_in_place(leases, monkeypatch)
     lease(game.bob, game.red, 'request')
-    valid = []
-
-    def refused(aid, action, generation):
-        # While the worker is asked, Bob's presses still carry the newest generation.
-        valid.append(leases.stamp(aid, bob) == leases.generation(aid))
-        return False
-    monkeypatch.setattr(leases, 'worker', refused)
-    assert lease(game.carol, game.red, 'take').status_code == 409
-    assert valid == [True] and leases.holder(game.red) == game.ids.bob
-    assert press(game.bob, game.red).status_code == 200
-
-
-def test_a_refused_resume_never_turns_the_holders_presses_away(game):
-    manager, app = game.library.manager, game.library.app
-    leases = manager.leases
-    bob = manager.actor_for(manager.auth.user(game.ids.bob))
-    lease(game.bob, game.red, 'request')
-    valid = []
-
-    def busy(request):
-        valid.append(leases.stamp(game.red, bob) == leases.generation(game.red))
-        return httpx.Response(409, json={'detail': 'A trade holds this adventure'})
-    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(busy))
-    assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 409
-    assert valid == [True] and leases.holder(game.red) == game.ids.bob
+    worker_down(game)
+    # Carol holds control at once, and Bob's presses are refused from then on.
+    assert lease(game.carol, game.red, 'take').json()['you_hold']
+    worker_up(game)
+    assert press(game.bob, game.red).status_code == 409
+    leases.sweep()
+    assert game.calls[-1] == (game.red, '/api/control', 'take_control') and game.worker.manual
+    assert press(game.carol, game.red).status_code == 200
 
 
 def test_someone_who_cannot_press_never_takes_a_place_in_the_line(game):
@@ -620,40 +632,6 @@ def test_a_full_press_line_still_takes_resume_in_order(game):
     assert codes == [200] * 9 and arrived == [*buttons, 'resume']
 
 
-def test_a_take_control_that_timed_out_moves_the_holder_to_its_generation(game, monkeypatch):
-    leases = game.library.manager.leases
-    lease(game.bob, game.red, 'request')
-    asked = []
-
-    def timed_out(aid, action, generation):
-        # The worker took control, but its answer never came back.
-        asked.append(generation)
-        return False
-    monkeypatch.setattr(leases, 'worker', timed_out)
-    assert lease(game.carol, game.red, 'take').status_code == 409
-    assert leases.holder(game.red) == game.ids.bob
-    # The worker now refuses anything older than the take_control, so Bob's presses carry it too.
-    assert press(game.bob, game.red).status_code == 200
-    assert int(game.library.forwarded[-1].headers[LEASE_HEADER]) == game.worker.seen > asked[0]
-
-
-def test_a_resume_that_timed_out_moves_the_holder_to_its_generation(game):
-    app = game.library.app
-    lease(game.bob, game.red, 'request')
-    asked, sent = [], []
-
-    def timed_out(request):
-        asked.append(int(request.headers[LEASE_HEADER]))
-        raise httpx.ReadTimeout('no answer', request=request)
-    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(timed_out))
-    assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 503
-    assert game.library.manager.leases.holder(game.red) == game.ids.bob
-    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(
-        lambda request: sent.append(request) or httpx.Response(200, json={'ok': True})))
-    assert press(game.bob, game.red).status_code == 200
-    assert int(sent[-1].headers[LEASE_HEADER]) == game.worker.seen > asked[0]
-
-
 def test_a_take_control_the_game_made_without_answering_still_grants_control(game, monkeypatch):
     leases = game.library.manager.leases
 
@@ -668,9 +646,10 @@ def test_a_take_control_the_game_made_without_answering_still_grants_control(gam
     assert int(game.library.forwarded[-1].headers[LEASE_HEADER]) == game.worker.seen
 
 
-def test_a_worker_that_never_says_what_it_did_gets_the_autopilot_back(game, monkeypatch):
+def test_a_take_control_that_got_no_answer_is_sent_until_the_worker_answers(game, monkeypatch):
     manager = game.library.manager
-    leases, child, down = manager.leases, manager.supervisor.child, threading.Event()
+    leases, child, down, went = manager.leases, manager.supervisor.child, threading.Event(), []
+    converge_in_place(leases, monkeypatch)
 
     def going_down(aid):
         worker = child(aid)
@@ -679,34 +658,49 @@ def test_a_worker_that_never_says_what_it_did_gets_the_autopilot_back(game, monk
             if down.is_set():
                 raise httpx.ConnectError('the worker is restarting')
             answer = worker.request(method, path, body, timeout, headers)
-            if (body or {}).get('action') == 'take_control':
+            if (body or {}).get('action') == 'take_control' and not went:
                 # It took control, then went away before it answered.
+                went.append(True)
                 down.set()
                 raise httpx.ReadTimeout('no answer')
             return answer
         return SimpleNamespace(url=worker.url, token=worker.token, request=send)
     monkeypatch.setattr(manager.supervisor, 'child', going_down)
-    assert lease(game.bob, game.red, 'request').status_code == 409
-    assert leases.holder(game.red) is None and game.worker.manual
-    leases.settle()
-    assert game.worker.manual and leases.unsettled == {game.red: 'resume'}
-    # Once the worker answers again it hears the Resume that puts the autopilot back.
+    # Nobody guesses what the worker did: Bob holds control, and the take_control is sent again.
+    assert lease(game.bob, game.red, 'request').json()['you_hold']
+    leases.sweep()
+    assert leases.holder(game.red) == game.ids.bob and not leases.reached(game.red, leases.generation(game.red))
     down.clear()
-    leases.settle()
-    assert not game.worker.manual and leases.unsettled == {}
+    leases.sweep()
+    assert game.worker.manual and leases.reached(game.red, leases.generation(game.red))
 
 
-def test_a_resume_the_game_made_without_answering_ends_the_lease(game):
+def test_a_resume_the_game_made_without_answering_reports_success(game, monkeypatch):
     app, leases = game.library.app, game.library.manager.leases
+    child = game.library.manager.supervisor.child
     lease(game.bob, game.red, 'request')
+    unanswered = []
 
     def made_without_answering(request):
         game.worker.seen, game.worker.manual = int(request.headers[LEASE_HEADER]), False
         raise httpx.ReadTimeout('no answer', request=request)
     app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(made_without_answering))
-    assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 503
-    # The autopilot plays again, so Bob no longer holds control.
-    assert leases.holder(game.red) is None
+
+    def answers_late(aid):
+        worker = child(aid)
+
+        def send(method, path, body=None, timeout=None, headers=None):
+            answer = worker.request(method, path, body, timeout, headers)
+            if (body or {}).get('action') == 'resume' and not unanswered:
+                # The first Resume got there, and its answer never came back.
+                unanswered.append(True)
+                raise httpx.ReadTimeout('no answer')
+            return answer
+        return SimpleNamespace(url=worker.url, token=worker.token, request=send)
+    monkeypatch.setattr(game.library.manager.supervisor, 'child', answers_late)
+    # The game is back on its autopilot, which is what Resume asked for, so the page hears it worked.
+    assert control(game.alice, game.red, 'resume').status_code == 200
+    assert leases.holder(game.red) is None and not game.worker.manual
     assert press(game.bob, game.red).status_code == 409
 
 
@@ -741,8 +735,117 @@ def test_a_queued_resume_reads_the_lease_at_the_front_of_the_line(game):
         leases.act(game.red, carol, manager.registry.adventure(game.red), 'request')
     codes, arrived = line_against_a_stalled_worker(
         game, [*presses(game.bob, 'down'), (game.alice, {'action': 'resume'})], between=hand_over)
-    assert codes == [200, 200] and arrived == ['down', 'resume']
+    assert codes == [200, 200] and arrived == ['down', 'take_control', 'resume']
     assert leases.holder(game.red) is None
+
+
+def test_a_later_pause_wins_over_a_resume_that_got_no_answer(game, monkeypatch):
+    leases = game.library.manager.leases
+    converge_in_place(leases, monkeypatch)
+    lease(game.bob, game.red, 'request')
+    worker_down(game)
+    assert control(game.alice, game.red, 'resume').status_code == 503
+    worker_up(game)
+    assert control(game.alice, game.red, 'pause').status_code == 200
+    # The sweep never sends the older Resume after the Pause.
+    leases.sweep()
+    assert game.calls[-1] == (game.red, '/api/control', 'pause')
+    assert game.worker.action == 'pause' and game.worker.seen == leases.generation(game.red)
+
+
+def test_a_pause_that_got_no_answer_stays_a_pause(game, monkeypatch):
+    app, leases = game.library.app, game.library.manager.leases
+    converge_in_place(leases, monkeypatch)
+    # Nobody holds control, the worker is still in manual mode, and the Pause never gets there.
+    game.worker.manual = True
+
+    def lost(request):
+        raise httpx.ReadTimeout('no answer', request=request)
+    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(lost))
+    worker, failed = leases.worker, []
+
+    def loses_the_first_pause(aid, action, generation):
+        if action == 'pause' and not failed:
+            failed.append(True)
+            return False
+        return worker(aid, action, generation)
+    monkeypatch.setattr(leases, 'worker', loses_the_first_pause)
+    control(game.alice, game.red, 'pause')
+    leases.sweep()
+    assert all(call[2] != 'resume' for call in game.calls)
+    assert game.worker.action == 'pause'
+
+
+def test_a_pass_on_that_got_no_answer_keeps_the_owners_end_choice(game, monkeypatch):
+    leases = game.library.manager.leases
+    converge_in_place(leases, monkeypatch)
+    lease(game.alice, game.red, 'setting', end='pause')
+    lease(game.bob, game.red, 'request')
+    lease(game.carol, game.red, 'request')
+    worker_down(game)
+    # Bob's page went quiet, so control passes to Carol while the worker answers nobody.
+    game.clock.now += lease_module.HEARTBEAT_GRACE_SECONDS + 1
+    lease(game.carol, game.red, 'heartbeat')
+    leases.sweep()
+    assert leases.holder(game.red) == game.ids.carol
+    worker_up(game)
+    leases.sweep()
+    assert game.calls[-1] == (game.red, '/api/control', 'take_control') and game.worker.manual
+    # Carol lets go with nobody waiting while the worker is down. It pauses, as the owner chose.
+    worker_down(game)
+    lease(game.carol, game.red, 'release')
+    worker_up(game)
+    leases.sweep()
+    assert all(call[2] != 'resume' for call in game.calls)
+    assert game.worker.action == 'pause'
+
+
+def test_only_the_holder_takes_a_place_in_the_press_line(game):
+    lease(game.bob, game.red, 'request')
+    # Carol may play but does not hold control. She is turned away before the line, so Bob's next press joins it.
+    codes, arrived = line_against_a_stalled_worker(
+        game, [*presses(game.bob, 'a'), *presses(game.carol, *'abcdefgh'), *presses(game.bob, 'b')])
+    assert codes == [200] + [409] * 8 + [200] and arrived == ['a', 'b']
+
+
+def test_each_person_has_one_take_control_in_line(game):
+    lease(game.bob, game.red, 'request')
+    codes, arrived = line_against_a_stalled_worker(
+        game, [*presses(game.bob, 'a'), (game.bob, {'action': 'take_control'}), (game.bob, {'action': 'take_control'})])
+    assert codes == [200, 200, 429] and arrived == ['a', 'take_control']
+
+
+def test_a_hung_worker_never_holds_up_the_sweep_or_its_turn(game, monkeypatch):
+    manager = game.library.manager
+    leases = manager.leases
+    lease(game.bob, game.red, 'request')
+    worker_down(game)
+    assert control(game.alice, game.red, 'resume').status_code == 503
+    worker_up(game)
+    asked, answer = threading.Event(), threading.Event()
+
+    def hung(aid):
+        def send(method, path, body=None, timeout=None, headers=None):
+            asked.set()
+            answer.wait(10)
+            return {'ok': True}
+        return SimpleNamespace(url='http://127.0.0.1:12345', token='private-worker-token', request=send)
+    monkeypatch.setattr(manager.supervisor, 'child', hung)
+    try:
+        sweeping = threading.Thread(target=leases.sweep, daemon=True)
+        sweeping.start()
+        sweeping.join(5)
+        assert not sweeping.is_alive() and asked.wait(5)
+        # The Resume is on its way to the hung worker, and the adventure's turn is free.
+        def take_turn():
+            with leases.turn(game.red):
+                pass
+        taking = threading.Thread(target=take_turn, daemon=True)
+        taking.start()
+        taking.join(5)
+        assert not taking.is_alive()
+    finally:
+        answer.set()
 
 
 def test_a_resume_without_a_lease_waits_for_a_grant_under_way(game, monkeypatch):
@@ -776,7 +879,7 @@ def test_a_resume_without_a_lease_waits_for_a_grant_under_way(game, monkeypatch)
     granter.join(5)
     # The Resume waited for the grant, found Carol in control and never reached the game.
     assert resumed.status_code == 409 and not sent
-    assert leases.holder(game.red) == game.ids.carol
+    assert leases.holder(game.red) == game.ids.carol and all(call[2] != 'resume' for call in game.calls)
 
 
 def test_a_slow_press_keeps_the_usual_time_limit(game):
