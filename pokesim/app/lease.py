@@ -580,9 +580,11 @@ class Leases:
 
     def stop_worker(self, aid, **options):
         """Stop the adventure's worker and drop what its run was told. Every owner stop goes
-        through here, so no Pause from this run follows the next Start."""
+        through here, so no Pause from this run follows the next Start. Returns None, and leaves
+        the run alone, when `only_if_stopped` found the owner started it again."""
         row = self.manager.supervisor.stop(aid, **options)
-        self.stopped(aid)
+        if row is not None:
+            self.stopped(aid)
         return row
 
     def stopped(self, aid):

@@ -86,9 +86,11 @@ class Supervisor:
         self.starts.append((aid, recovery))
         assert recovery
 
-    def stop(self, aid, preserve_desired=False):
+    def stop(self, aid, preserve_desired=False, only_if_stopped=False):
+        if only_if_stopped and self.registry.adventure(aid)['desired_state'] != 'stopped':
+            return None
         self.stops.append(aid)
-        self.registry.update(aid, state='stopped')
+        return self.registry.update(aid, state='stopped')
 
 
 def test_collection_requests_work_for_one_or_multiple_adventures(setup):
@@ -308,6 +310,55 @@ def test_a_trade_that_stops_the_adventure_leaves_no_pause_for_its_next_run(setup
     assert setup.coordinator.execute(row['id'])['phase'] == 'completed'
     assert aid in setup.supervisor.stops
     assert leases.intended(aid) is None
+
+
+def test_a_stop_that_fails_after_a_trade_still_stops_the_other_adventure(setup):
+    """Both owners stopped their adventure during the trade. The first stop fails, and the
+    finished trade still stops the second, stays final and keeps no error of its own."""
+    left, right = setup.data['left_id'], setup.data['right_id']
+    row = setup.coordinator.propose(setup.data)
+    stop = setup.supervisor.stop
+
+    def failing(aid, **options):
+        if aid == left:
+            setup.registry.update(aid, state='failed', error='Worker exceeded the shutdown deadline')
+            raise RuntimeError('Worker exceeded the shutdown deadline')
+        return stop(aid, **options)
+    setup.supervisor.stop = failing
+    for aid in (left, right):
+        setup.registry.update(aid, desired_state='stopped')
+    setup.coordinator.execute(row['id'])
+    stored = setup.registry.transaction(row['id'])
+    assert stored['phase'] == 'completed' and stored['error'] is None
+    assert setup.supervisor.stops == [right]
+    assert setup.registry.adventure(left)['state'] == 'failed'
+
+
+def test_a_start_just_before_the_stop_after_a_trade_keeps_the_adventure_running(setup):
+    """The owner stopped the adventure during the trade, then started it again just as the
+    trade went to stop it. The Start wins, and the adventure stays wanted running."""
+    from pokesim.app.supervisor import Supervisor as Real
+    aid = setup.data['left_id']
+    real = Real(setup.registry, None, 'http://127.0.0.1:1')
+    lock, started = real._lock(aid), threading.Event()
+
+    class Starting:
+        # The owner's Start gets in just before the stop takes the adventure's lock.
+        def __enter__(self):
+            if not started.is_set():
+                started.set()
+                setup.registry.update(aid, desired_state='running')
+            return lock.__enter__()
+
+        def __exit__(self, *details):
+            return lock.__exit__(*details)
+    real._lock = lambda _: Starting()
+    setup.supervisor.stop = real.stop
+    row = setup.coordinator.propose(setup.data)
+    setup.registry.update(aid, desired_state='stopped')
+    assert setup.coordinator.execute(row['id'])['phase'] == 'completed'
+    assert started.is_set()
+    assert setup.registry.adventure(aid)['desired_state'] == 'running'
 
 
 def test_both_stages_precede_commit_and_both_apply_precede_release(setup):

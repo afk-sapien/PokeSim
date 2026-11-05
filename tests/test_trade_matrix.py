@@ -96,7 +96,7 @@ class Supervisor:
     def start(self, aid, recovery=False):
         assert recovery
 
-    def stop(self, aid):
+    def stop(self, aid, **options):
         self.stops.append(aid)
         self.registry.update(aid, state='stopped')
 
