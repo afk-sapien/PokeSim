@@ -1356,6 +1356,30 @@ def test_a_stopped_adventure_starts_without_its_old_pause(game, monkeypatch):
     assert leases.intended(game.red) is None
 
 
+def test_a_stop_that_fails_leaves_no_old_pause_for_the_next_start(game, monkeypatch):
+    manager = game.library.manager
+    leases = manager.leases
+    converge_in_place(leases, monkeypatch)
+    lease(game.bob, game.red, 'request')
+    assert control(game.alice, game.red, 'pause').status_code == 200
+    assert leases.desired[game.red].confirmed
+
+    def failing(aid, **options):
+        manager.registry.update(aid, state='failed', error='Worker exited with code 1')
+        raise RuntimeError('Worker exited with code 1')
+    monkeypatch.setattr(manager.supervisor, 'stop', failing)
+    manager.registry.update(game.red, desired_state='stopped')
+    with pytest.raises(RuntimeError):
+        manager.start_adventure(game.red)
+    # The owner starts it again, and the new run reports its own boot.
+    manager.registry.update(game.red, state='running', desired_state='running')
+    monkeypatch.setitem(manager.supervisor.children, game.red, SimpleNamespace(watch=(0, {'boot': 'second'})))
+    sent = len(game.calls)
+    leases.sweep()
+    assert (game.red, '/api/control', 'pause') not in game.calls[sent:]
+    assert leases.intended(game.red) is None
+
+
 def test_a_take_the_worker_refuses_tells_the_holder_nothing(game, monkeypatch):
     leases = game.library.manager.leases
     told = []

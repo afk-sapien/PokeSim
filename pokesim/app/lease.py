@@ -582,7 +582,12 @@ class Leases:
         """Stop the adventure's worker and drop what its run was told. Every owner stop goes
         through here, so no Pause from this run follows the next Start. Returns None, and leaves
         the run alone, when `only_if_stopped` found the owner started it again."""
-        row = self.manager.supervisor.stop(aid, **options)
+        try:
+            row = self.manager.supervisor.stop(aid, **options)
+        except Exception:
+            # A stop that failed still ended the run, so its states go with it.
+            self.stopped(aid)
+            raise
         if row is not None:
             self.stopped(aid)
         return row
