@@ -156,6 +156,24 @@ def test_an_offer_from_an_adventure_that_changed_hands_meanwhile_is_refused(offe
     assert offers.registry.trade_offers(left, statuses=['pending']) == []
 
 
+def test_a_trade_that_finished_before_accept_never_blocks_it_when_settled_meanwhile(offers, monkeypatch):
+    service = offers.manager.offers
+    first = service.create(offer_request(offers))
+    second = service.create(offer_request(offers, to_key='party-1'))
+    service.accept(first['id'])
+    # The first trade already ran, but nothing has settled its offer yet.
+    assert offers.coordinator.drain_manual()['phase'] == 'completed'
+    check = service._check
+
+    def swept(*args, **kwargs):
+        found = check(*args, **kwargs)
+        # The sweep settles the first offer while the accept reads both games.
+        service.refresh()
+        return found
+    monkeypatch.setattr(service, '_check', swept)
+    assert service.accept(second['id'], confirm=True)['status'] == 'accepted'
+
+
 def test_a_trade_that_finishes_during_accept_keeps_its_pokemon_out_of_another(offers, monkeypatch):
     service = offers.manager.offers
     first = service.create(offer_request(offers))

@@ -195,7 +195,12 @@ class TradeOffers(TradeBuilder):
         # Both games are asked about their Pokémon before `guard`, which never waits on a game.
         self._owner_check(actor, offer['to_id'], chosen)
         trade = {**offer, 'to_key': chosen}
-        # A trade that finishes after this moment may have moved a Pokémon the check below still saw.
+        sides = {(trade['from_id'], trade['from_key']), (trade['to_id'], trade['to_key'])}
+        # Earlier trades on these Pokémon that already finished are settled first, so only a trade
+        # that finishes after this moment, which the check below may not see, counts as just finished.
+        for row in self.registry.trade_offers(statuses=[ACCEPTED]):
+            if {(row['from_id'], row['from_key']), (row['to_id'], row['to_key'])} & sides:
+                self._settle(row)
         started = time.time()
         try:
             give, take = self._check(trade, accepting=True)
@@ -214,8 +219,7 @@ class TradeOffers(TradeBuilder):
         with self.guard:
             busy = [row for row in self.registry.trade_offers(statuses=[ACCEPTED, 'completed'])
                     if (row['status'] == ACCEPTED or row['updated_at'] >= started)
-                    and {(row['from_id'], row['from_key']), (row['to_id'], row['to_key'])}
-                    & {(trade['from_id'], trade['from_key']), (trade['to_id'], trade['to_key'])}]
+                    and {(row['from_id'], row['from_key']), (row['to_id'], row['to_key'])} & sides]
             if busy:
                 raise ValueError('One of these Pokémon is in another trade that is under way or just finished. Try again')
             # Claim the offer before the trade is queued, so an offer that expired or was withdrawn

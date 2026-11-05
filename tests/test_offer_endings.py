@@ -72,6 +72,32 @@ def test_a_deleted_user_s_offers_tell_whoever_is_left(quiet, people):  # noqa: F
     assert ended(manager, people.admin['id']) == []
 
 
+def test_deleting_a_user_hands_each_adventure_on_in_one_hold_of_the_offers_guard(quiet, people, monkeypatch):  # noqa: F811
+    import threading
+
+    from pokesim.app import ownership
+    guard, give, free = quiet.manager.offers.guard, ownership.give, []
+
+    def watched(*args):
+        # An offer made from another thread would get the guard here, after the trades ended and
+        # before the new owner is recorded.
+        def take():
+            got = guard.acquire(timeout=0.2)
+            free.append(got)
+            if got:
+                guard.release()
+        taker = threading.Thread(target=take)
+        taker.start()
+        taker.join(5)
+        return give(*args)
+    monkeypatch.setattr(ownership, 'give', watched)
+    admin = quiet.login('admin')
+    assert admin.request('DELETE', f'/api/v1/users/{people.alice["id"]}',
+                         json={'adventures': {people.red: people.admin['id']}}).status_code == 200
+    assert free == [False]
+    assert quiet.manager.registry.adventure(people.red)['owner_id'] == people.admin['id']
+
+
 def test_deleting_an_adventure_ends_its_offers_and_unlinks_its_inbox_items(quiet, people):  # noqa: F811
     manager = quiet.manager
     manager.registry.update(people.red, state='stopped', desired_state='stopped')

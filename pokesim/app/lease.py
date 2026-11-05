@@ -147,6 +147,14 @@ class Leases:
         with self.lock:
             return next(self.counter)
 
+    def restamp(self, aid, lease, generation):
+        """A change the worker may have made without answering: the library starts its generation
+        too, and the lease still in control carries it, so both sides agree."""
+        with self.lock:
+            self.generations[aid] = max(self.generations.get(aid, 0), generation)
+            if lease is not None and self.leases.get(aid) is lease:
+                lease.generation = self.generations[aid]
+
     def end_choice(self, aid):
         choice = self.manager.registry.setting('lease_end:' + aid)
         return choice if choice in END_CHOICES else 'resume'
@@ -422,11 +430,12 @@ class Leases:
         blocked = self.blocked(aid)
         if blocked:
             raise LeaseRefused(blocked)
-        # The new generation starts once the worker took control, so a refused take_control changes
-        # nothing. Until then the old holder's presses still go out, and the worker drops any that
-        # reach it after the take_control.
+        # The new generation starts once the worker answered, so the old holder's presses still go
+        # out meanwhile, and the worker drops any that reach it after the take_control. A take_control
+        # that failed or timed out may still have reached the worker, so the holder moves to it too.
         generation = self.reserve()
         if not self.worker(aid, 'take_control', generation):
+            self.restamp(aid, self.current(aid), generation)
             raise LeaseRefused('The adventure is busy with a trade or did not answer. Try again in a moment.')
         now = self.clock()
         with self.lock:
