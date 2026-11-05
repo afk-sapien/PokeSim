@@ -1255,3 +1255,144 @@ def test_deleting_an_adventure_ends_its_lease_and_tells_its_line(game, people): 
     assert leases.holder(game.red) is None
     assert leases.dropped[game.red, game.ids.carol] == 'ended'
     assert lease_ends(manager, game.red) == ['deleted']
+
+
+def test_a_take_control_that_timed_out_runs_once(tmp_path, monkeypatch):
+    """The game thread was slow, so the send timed out, the library sent it again, and both ran later."""
+    from pokesim.emulator import Emulator
+    monkeypatch.setattr(config, 'VIEWER_ONLY', False)
+    queued, ran = [], []
+
+    class Slow(Mock):
+        control = Emulator.control
+
+        def held_back(self, name):
+            return None
+
+        def call(self, function, timeout):
+            queued.append(function)
+            raise TimeoutError('The operation is still pending')
+
+        def _handle_command(self, name, arg):
+            ran.append(name)
+            self.manual_mode = name == 'take_control'
+    emu = Slow(manual_mode=False)
+    with TestClient(create_app(emu, Store(tmp_path))) as worker:
+        def send(action, generation, value=None):
+            return worker.post('/api/control', json={'action': action, 'value': value},
+                               headers={LEASE_HEADER: str(generation)})
+        assert send('take_control', 3).status_code == 503
+        assert send('take_control', 3).status_code == 503
+        while queued:
+            queued.pop(0)()
+        assert send('take_control', 3).status_code == 200
+        while queued:
+            queued.pop(0)()
+        # The old holder's presses stop once the game ran the grant.
+        assert send('press', 2, 'a').status_code == 409
+    assert ran == ['take_control']
+
+
+def test_a_resend_the_restarted_worker_refuses_keeps_who_holds_control(game, monkeypatch):
+    manager = game.library.manager
+    leases = manager.leases
+    converge_in_place(leases, monkeypatch)
+    lease(game.bob, game.red, 'request')
+    assert lease(game.carol, game.red, 'take').json()['you_hold']
+    assert leases.desired[game.red].confirmed
+    # The worker restarted and now refuses the take_control it hears again.
+    game.worker.boot = 'second'
+    monkeypatch.setitem(manager.supervisor.children, game.red, SimpleNamespace(watch=(0, {'boot': 'second'})))
+    game.worker.refuse = 'An exchange is holding this adventure'
+    leases.sweep()
+    assert leases.holder(game.red) == game.ids.carol and leases.intended(game.red) == 'take_control'
+
+
+def test_a_refused_resume_keeps_the_line_open(game):
+    lease(game.bob, game.red, 'request')
+    lease(game.carol, game.red, 'request')
+    game.worker.refuse = 'An exchange is holding this adventure'
+    assert control(game.alice, game.red, 'resume').status_code == 409
+    status = lease(game.carol, game.red).json()
+    assert status['queued'] and 'left_line' not in status
+
+
+def test_a_refused_resume_during_a_backup_brings_no_lease_back(game, monkeypatch):
+    manager = game.library.manager
+    leases = manager.leases
+    lease(game.bob, game.red, 'request')
+    worker = leases.worker
+
+    def backup_starts(aid, action, generation):
+        # The backup starts while the Resume is on its way, and the worker refuses it.
+        if action == 'resume':
+            manager.suspended = True
+            return 'refused', 'An exchange is holding this adventure', 409, None
+        return worker(aid, action, generation)
+    monkeypatch.setattr(leases, 'worker', backup_starts)
+    try:
+        control(game.alice, game.red, 'resume')
+        assert leases.holder(game.red) is None and leases.intended(game.red) == 'resume'
+    finally:
+        manager.suspended = False
+
+
+def test_a_stopped_adventure_starts_without_its_old_pause(game, monkeypatch):
+    manager = game.library.manager
+    leases = manager.leases
+    converge_in_place(leases, monkeypatch)
+    lease(game.bob, game.red, 'request')
+    assert control(game.alice, game.red, 'pause').status_code == 200
+    assert leases.desired[game.red].confirmed
+    monkeypatch.setattr(manager.supervisor, 'stop', lambda aid, **options: manager.registry.update(aid, state='stopped'))
+    manager.registry.update(game.red, desired_state='stopped')
+    manager.start_adventure(game.red)
+    # The owner starts it again, and the new run reports its own boot.
+    manager.registry.update(game.red, state='running', desired_state='running')
+    monkeypatch.setitem(manager.supervisor.children, game.red, SimpleNamespace(watch=(0, {'boot': 'second'})))
+    sent = len(game.calls)
+    leases.sweep()
+    assert (game.red, '/api/control', 'pause') not in game.calls[sent:]
+    assert leases.intended(game.red) is None
+
+
+def test_a_take_the_worker_refuses_tells_the_holder_nothing(game, monkeypatch):
+    leases = game.library.manager.leases
+    told = []
+    monkeypatch.setattr(lease_module.inbox, 'lease_taken', lambda manager, aid, holder, actor: told.append(holder))
+    lease(game.bob, game.red, 'request')
+    game.worker.refuse = 'An exchange is holding this adventure'
+    assert lease(game.carol, game.red, 'take').status_code == 409
+    settle(leases)
+    assert told == [] and leases.holder(game.red) == game.ids.bob
+    game.worker.refuse = None
+    assert lease(game.carol, game.red, 'take').json()['you_hold']
+    settle(leases)
+    assert told == [game.ids.bob]
+
+
+def test_a_state_the_worker_refuses_is_sent_less_often_and_logged_once(game, monkeypatch, caplog):
+    import logging
+    leases = game.library.manager.leases
+    converge_in_place(leases, monkeypatch)
+    lease(game.bob, game.red, 'request')
+    game.worker.refuse = 'An exchange is holding this adventure'
+    caplog.set_level(logging.WARNING, logger=lease_module.__name__)
+    # A trade ended the lease, and the worker refuses the end state with no undo to run.
+    leases.end(game.red, 'trade')
+    settle(leases)
+    for _ in range(5):
+        leases.sweep()
+
+    def resumes():
+        return game.calls.count((game.red, '/api/control', 'resume'))
+    assert resumes() == 1
+    game.clock.now += 10
+    leases.sweep()
+    assert resumes() == 2
+    game.clock.now += 10
+    leases.sweep()
+    # The wait doubled.
+    assert resumes() == 2
+    warnings = [record for record in caplog.records if game.red in record.getMessage()]
+    assert len(warnings) == 1

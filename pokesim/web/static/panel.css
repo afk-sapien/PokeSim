@@ -197,6 +197,8 @@ main.shell { flex: 1 0 auto; min-height: 100vh; padding-bottom: var(--s6); }
 }
 .key--primary:hover { background: var(--signal); filter: brightness(1.12); }
 .key:disabled { opacity: 0.45; cursor: not-allowed; }
+/* A Pause or Resume the library took but the game has not run yet. */
+.key.is-pending { opacity: 0.7; }
 .key--danger { color: var(--crit); border-color: var(--crit); }
 
 /* ---- tag: a type or state, stamped rather than pilled ------------------- */

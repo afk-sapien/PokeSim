@@ -220,6 +220,44 @@ def test_a_hand_picked_trade_never_waits_on_a_worker_under_its_locks(setup):
         proposing.join(5)
 
 
+def test_a_hand_picked_trade_prepares_once_the_worker_left_manual_control(setup):
+    """The trade ended the lease under its locks. Preparing waits, with no lock held, for the
+    worker to run the end of manual control, since a game under it cannot prepare."""
+    from pokesim.app.lease import Lease, Leases
+    leases = setup.manager.leases = Leases(setup.manager)
+    aid, answer, reached = setup.data['left_id'], threading.Event(), threading.Event()
+    leases.leases[aid] = Lease('someone', 'Someone', 0, 0, 0)
+    peer = setup.peers[aid]
+    original, order = peer.request, []
+
+    def hung(method, path, data=None, timeout=None, headers=None):
+        if path == '/api/control':
+            answer.wait(10)
+            order.append('control')
+            return {'ok': True, 'applied': True}
+        if path.endswith('/prepare'):
+            order.append('prepare')
+            reached.set()
+        return original(method, path, data, timeout)
+    peer.request = hung
+    settle = leases.settle
+
+    def waiting(*args):
+        reached.set()
+        return settle(*args)
+    leases.settle = waiting
+    row = setup.coordinator.propose({**manual_request(setup), 'manual': True})
+    running = threading.Thread(target=setup.coordinator.execute, args=(row['id'],), daemon=True)
+    try:
+        running.start()
+        assert reached.wait(5)
+        assert 'prepare' not in order
+    finally:
+        answer.set()
+    running.join(10)
+    assert order[:2] == ['control', 'prepare']
+
+
 def test_both_stages_precede_commit_and_both_apply_precede_release(setup):
     c = setup.coordinator
     row = c.propose(setup.data)
