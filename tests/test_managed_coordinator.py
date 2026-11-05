@@ -187,6 +187,39 @@ def test_a_trade_waits_for_a_grant_under_way(setup):
     assert not setup.coordinator.reserved(aid)
 
 
+def test_a_hand_picked_trade_never_waits_on_a_worker_under_its_locks(setup):
+    """The trade ends the lease and the worker hears in the background, so a hung worker holds
+    up neither maintenance nor the trade."""
+    from pokesim.app.lease import Lease, Leases
+    leases = setup.manager.leases = Leases(setup.manager)
+    aid, asked, answer = setup.data['left_id'], threading.Event(), threading.Event()
+    leases.leases[aid] = Lease('someone', 'Someone', 0, 0, 0)
+    peer = setup.peers[aid]
+    original = peer.request
+
+    def hung(method, path, data=None, timeout=None, headers=None):
+        if path == '/api/control':
+            asked.set()
+            answer.wait(10)
+            return {'ok': True, 'applied': True}
+        return original(method, path, data, timeout)
+    peer.request = hung
+    made = []
+    proposing = threading.Thread(target=lambda: made.append(setup.coordinator.propose({**manual_request(setup), 'manual': True})),
+                                 daemon=True)
+    try:
+        proposing.start()
+        assert asked.wait(5)
+        # The worker is still deciding, and maintenance is free.
+        assert setup.manager.maintenance.acquire(timeout=5)
+        setup.manager.maintenance.release()
+        proposing.join(5)
+        assert made and not leases.holder(aid)
+    finally:
+        answer.set()
+        proposing.join(5)
+
+
 def test_both_stages_precede_commit_and_both_apply_precede_release(setup):
     c = setup.coordinator
     row = c.propose(setup.data)

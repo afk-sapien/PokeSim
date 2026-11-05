@@ -426,6 +426,21 @@ class Emulator:
         if button in BUTTONS:
             self.command('press', button)
 
+    def held_back(self, name):
+        """Why the game drops this command now, or None when it runs it."""
+        if name != 'stop' and self.store.get('trade_hold'):
+            return 'An exchange is holding this adventure'
+        return None
+
+    def control(self, name, timeout=4):
+        """Run take_control, resume or pause now. Returns why the game held it back, or None."""
+        def apply():
+            reason = self.held_back(name)
+            if reason is None:
+                self._handle_command(name, None)
+            return reason
+        return self.call(apply, timeout)
+
     def watch(self):
         self._watch_until = time.monotonic() + 2
 
@@ -988,7 +1003,7 @@ class Emulator:
                 response['error'] = error
             finally:
                 done.set()
-        elif self.store.get('trade_hold') and name != 'stop':
+        elif self.held_back(name):
             return True
         elif name == 'stop':
             return False

@@ -79,14 +79,25 @@ def create_backup(manager):
             manager.suspended = False
 
 
+def intended_playback(manager, aid):
+    """'pause' when the adventure should come back paused. A worker that has not run its last
+    control yet would say otherwise, so the control lease's desired state decides, and the
+    worker's summary only when the library never sent it a control."""
+    leases = getattr(manager, 'leases', None)
+    action = leases.intended(aid) if leases is not None else None
+    if action is not None:
+        return 'pause' if action == 'pause' else None
+    status = manager.supervisor.child(aid).request('GET', '/api/summary', timeout=5)
+    return 'pause' if status.get('paused') and not status.get('manual_mode') else None
+
+
 def _create_backup(manager):
     """Stop the running adventures, write the archive and start them again. Holds the registry's lock."""
     running = list(manager.supervisor.children)
     playback = {}
     try:
         for aid in running:
-            status = manager.supervisor.child(aid).request('GET', '/api/summary', timeout=5)
-            playback[aid] = 'pause' if status.get('paused') and not status.get('manual_mode') else None
+            playback[aid] = intended_playback(manager, aid)
         for aid in running:
             manager.supervisor.stop(aid, preserve_desired=True)
         bid = identifier()

@@ -41,6 +41,8 @@ BEFORE_STALL_CHECKPOINT = 'before-stall.state'
 # Kept by name, so a wrong rewind or restart can be undone from the saves list.
 BEFORE_LOAD_CHECKPOINT = 'before-load.state'
 BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
+# The phases of an exchange's preparation that hold back every command but stop, speed and pause.
+PREPARING = {'travelling', 'storage', 'rendezvous'}
 
 log = logging.getLogger("pokesim.emu")
 
@@ -235,6 +237,25 @@ class Emulator:
     def press(self, button: str):
         if button in BUTTONS:
             self.command("press", button)
+
+    def held_back(self, name):
+        """Why the game drops this command now, or None when it runs it."""
+        if not getattr(self, 'store', None) or name in ('stop', 'speed', 'pause'):
+            return None
+        if (self.store.get('interaction_preparation') or {}).get('phase') in PREPARING:
+            return 'The adventure is getting ready for an exchange'
+        if self.store.get('trade_hold'):
+            return 'An exchange is holding this adventure'
+        return None
+
+    def control(self, name, timeout=4):
+        """Run take_control, resume or pause now. Returns why the game held it back, or None."""
+        def apply():
+            reason = self.held_back(name)
+            if reason is None:
+                self._handle_command(name, None)
+            return reason
+        return self.call(apply, timeout)
 
     def status(self) -> dict:
         from .randomized import status as randomizer_status
@@ -952,13 +973,10 @@ class Emulator:
             return True
         if getattr(self, 'store', None):
             preparation = self.store.get('interaction_preparation') or {}
-            if preparation.get('phase') in {'travelling', 'storage', 'rendezvous'}:
-                if name == 'pause' and getattr(self, 'preparation', None):
-                    from .runtime.preparation import cancel
-                    cancel(self, preparation['id'])
-                elif name not in ('stop', 'speed', 'pause'):
-                    return True
-        if getattr(self, 'store', None) and self.store.get('trade_hold') and name not in ('stop', 'speed', 'pause'):
+            if preparation.get('phase') in PREPARING and name == 'pause' and getattr(self, 'preparation', None):
+                from .runtime.preparation import cancel
+                cancel(self, preparation['id'])
+        if self.held_back(name):
             return True
         if name == "stop":
             return False

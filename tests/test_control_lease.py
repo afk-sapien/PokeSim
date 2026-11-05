@@ -13,6 +13,7 @@ from pokesim import config
 from pokesim.app import lease as lease_module
 from pokesim.app import manager as manager_module
 from pokesim.app import policy
+from pokesim.app.supervisor import WorkerError
 from pokesim.store import Store
 from pokesim.web.app import create_app
 from pokesim.web.security import LEASE_HEADER, role_allows
@@ -32,8 +33,12 @@ class Clock:
 def game(library, people, monkeypatch):  # noqa: F811
     """Alice owns Red. Bob can play it, Carol can manage it and Dave can watch it."""
     calls = []
-    # What the worker made of the control changes it heard, as the worker's control route keeps it.
-    worker = SimpleNamespace(seen=0, manual=False, action=None, down=False)
+    # What Red's worker made of the control changes it heard, as the worker's control route keeps
+    # it, and the newest generation each other worker heard. `defer` is the reason the game holds
+    # a control back, and `refuse` the reason it says no.
+    worker = SimpleNamespace(seen=0, manual=False, action=None, down=False, boot='first', defer=None, refuse=None,
+                             told=threading.Condition())
+    fences = {}
 
     def request(aid):
         def send(method, path, body=None, timeout=None, headers=None):
@@ -42,11 +47,19 @@ def game(library, people, monkeypatch):  # noqa: F811
             calls.append((aid, path, (body or {}).get('action')))
             lease = int((headers or {}).get(LEASE_HEADER, 0))
             action = (body or {}).get('action')
+            if worker.refuse and action != 'speed':
+                raise WorkerError(worker.refuse, 409)
             if lease and action in {'take_control', 'resume', 'pause'}:
-                if lease < worker.seen:
-                    raise RuntimeError('Control changed hands. Look again and retry.')
-                worker.seen, worker.manual, worker.action = lease, action == 'take_control', action
-            return {'ok': True}
+                if lease < (worker.seen if aid == people.red else fences.get(aid, 0)):
+                    raise WorkerError('Control changed hands. Look again and retry.', 409)
+                if worker.defer:
+                    return {'ok': True, 'applied': False, 'reason': worker.defer, 'boot': worker.boot}
+                with worker.told:
+                    fences[aid] = lease
+                    if aid == people.red:
+                        worker.seen, worker.manual, worker.action = lease, action == 'take_control', action
+                    worker.told.notify_all()
+            return {'ok': True, 'applied': True, 'boot': worker.boot}
         return send
     monkeypatch.setattr(library.manager.supervisor, 'child', lambda aid: SimpleNamespace(
         url='http://127.0.0.1:12345', token='private-worker-token', request=request(aid)))
@@ -90,9 +103,21 @@ def worker_up(game):
     game.library.app.state.children = None
 
 
+def settle(leases):
+    """Wait until no send to a worker is under way."""
+    with leases.settled:
+        assert leases.settled.wait_for(lambda: not leases.converging, timeout=10)
+
+
 def converge_in_place(leases, monkeypatch):
-    """The sweep sends each worker its state on this thread, so a test sees it when sweep returns."""
-    monkeypatch.setattr(leases, 'kick', leases.converge, raising=False)
+    """The sweep returns once every send it started got its answer, so a test sees them."""
+    sweep = leases.sweep
+
+    def settled():
+        settle(leases)
+        sweep()
+        settle(leases)
+    monkeypatch.setattr(leases, 'sweep', settled)
 
 
 def test_roles_map_to_controls():
@@ -161,6 +186,7 @@ def test_letting_go_passes_control_on_or_applies_the_owners_choice(game):
 
 def test_quiet_pages_and_idle_hands_lose_control(game, monkeypatch):
     leases = game.library.manager.leases
+    converge_in_place(leases, monkeypatch)
     lease(game.bob, game.red, 'request')
     game.clock.now += lease_module.HEARTBEAT_GRACE_SECONDS - 1
     lease(game.bob, game.red, 'heartbeat')
@@ -274,7 +300,8 @@ def test_a_resume_the_worker_never_got_is_sent_once_it_answers(game, monkeypatch
     converge_in_place(leases, monkeypatch)
     lease(game.bob, game.red, 'request')
     worker_down(game)
-    assert control(game.carol, game.red, 'resume').status_code == 503
+    waiting = control(game.carol, game.red, 'resume')
+    assert waiting.status_code == 202 and 'when the game answers' in waiting.json()['detail']
     # Nobody holds control while the Resume waits for the worker.
     assert leases.holder(game.red) is None
     worker_up(game)
@@ -669,10 +696,10 @@ def test_a_take_control_that_got_no_answer_is_sent_until_the_worker_answers(game
     # Nobody guesses what the worker did: Bob holds control, and the take_control is sent again.
     assert lease(game.bob, game.red, 'request').json()['you_hold']
     leases.sweep()
-    assert leases.holder(game.red) == game.ids.bob and not leases.reached(game.red, leases.generation(game.red))
+    assert leases.holder(game.red) == game.ids.bob and not leases.desired[game.red].confirmed
     down.clear()
     leases.sweep()
-    assert game.worker.manual and leases.reached(game.red, leases.generation(game.red))
+    assert game.worker.manual and leases.desired[game.red].confirmed
 
 
 def test_a_resume_the_game_made_without_answering_reports_success(game, monkeypatch):
@@ -744,7 +771,7 @@ def test_a_later_pause_wins_over_a_resume_that_got_no_answer(game, monkeypatch):
     converge_in_place(leases, monkeypatch)
     lease(game.bob, game.red, 'request')
     worker_down(game)
-    assert control(game.alice, game.red, 'resume').status_code == 503
+    assert control(game.alice, game.red, 'resume').status_code == 202
     worker_up(game)
     assert control(game.alice, game.red, 'pause').status_code == 200
     # The sweep never sends the older Resume after the Pause.
@@ -820,7 +847,7 @@ def test_a_hung_worker_never_holds_up_the_sweep_or_its_turn(game, monkeypatch):
     leases = manager.leases
     lease(game.bob, game.red, 'request')
     worker_down(game)
-    assert control(game.alice, game.red, 'resume').status_code == 503
+    assert control(game.alice, game.red, 'resume').status_code == 202
     worker_up(game)
     asked, answer = threading.Event(), threading.Event()
 
@@ -920,6 +947,116 @@ def test_the_worker_drops_a_press_from_before_control_changed_hands(tmp_path, mo
         assert control('press', 3, 'down').status_code == 409
         assert control('press', 5, 'down').status_code == 200
     assert [call.args for call in emu.press.call_args_list] == [('a',), ('down',)]
+
+
+def test_a_take_control_sent_again_keeps_the_holders_presses(tmp_path, monkeypatch):
+    """The library sends a take_control again when it got no answer. The worker already ran it."""
+    monkeypatch.setattr(config, 'VIEWER_ONLY', False)
+    emu = Mock(manual_mode=False)
+    emu.command.side_effect = lambda name, *args: setattr(emu, 'manual_mode', name == 'take_control')
+    with TestClient(create_app(emu, Store(tmp_path))) as worker:
+        def control(action, generation):
+            return worker.post('/api/control', json={'action': action}, headers={LEASE_HEADER: str(generation)})
+        assert control('take_control', 3).status_code == 200
+        assert control('take_control', 3).status_code == 200
+        # A new grant still runs.
+        control('take_control', 5)
+    assert [call.args for call in emu.command.call_args_list] == [('take_control',), ('take_control',)]
+
+
+def test_a_control_the_game_held_back_is_sent_until_it_runs(game, monkeypatch):
+    leases = game.library.manager.leases
+    converge_in_place(leases, monkeypatch)
+    game.worker.defer = 'The adventure is getting ready for an exchange'
+    assert lease(game.bob, game.red, 'request').json()['you_hold']
+    assert not leases.desired[game.red].confirmed and not game.worker.manual
+    game.worker.defer = None
+    leases.sweep()
+    assert game.worker.manual and leases.desired[game.red].confirmed
+
+
+def test_a_worker_that_restarted_hears_its_control_state_again(game, monkeypatch):
+    manager = game.library.manager
+    leases = manager.leases
+    converge_in_place(leases, monkeypatch)
+    lease(game.bob, game.red, 'request')
+    assert leases.desired[game.red].confirmed
+    # The worker restarts on its autopilot, and the supervisor's last summary names its new run.
+    game.worker.seen, game.worker.manual, game.worker.boot = 0, False, 'second'
+    monkeypatch.setitem(manager.supervisor.children, game.red, SimpleNamespace(watch=(0, {'boot': 'second'})))
+    sent = len(game.calls)
+    leases.sweep()
+    assert game.calls[sent:] == [(game.red, '/api/control', 'take_control')] and game.worker.manual
+    assert leases.desired[game.red].confirmed
+
+
+def test_a_grant_the_worker_refuses_is_undone(game):
+    leases = game.library.manager.leases
+    game.worker.refuse = 'An exchange is holding this adventure'
+    refused = lease(game.bob, game.red, 'request')
+    assert refused.status_code == 409 and refused.json()['detail'] == 'An exchange is holding this adventure'
+    assert leases.holder(game.red) is None and game.red not in leases.desired
+    # A handover the worker refuses leaves Bob in control, and his presses still go through.
+    game.worker.refuse = None
+    lease(game.bob, game.red, 'request')
+    lease(game.carol, game.red, 'request')
+    game.worker.refuse = 'An exchange is holding this adventure'
+    assert lease(game.bob, game.red, 'handover', user_id=game.ids.carol).status_code == 409
+    game.worker.refuse = None
+    status = lease(game.bob, game.red).json()
+    assert status['you_hold'] and [entry['id'] for entry in status['queue']] == [game.ids.carol]
+    assert press(game.bob, game.red).status_code == 200
+    assert press(game.carol, game.red).status_code == 409
+
+
+def test_a_resume_the_worker_refuses_gives_control_back(game):
+    leases = game.library.manager.leases
+    lease(game.bob, game.red, 'request')
+    game.worker.refuse = 'An exchange is holding this adventure'
+    refused = control(game.alice, game.red, 'resume')
+    assert refused.status_code == 409 and refused.json()['detail'] == 'An exchange is holding this adventure'
+    assert leases.holder(game.red) == game.ids.bob and leases.intended(game.red) == 'take_control'
+    game.worker.refuse = None
+    assert press(game.bob, game.red).status_code == 200
+
+
+def test_losing_the_grant_tells_the_worker_without_a_sweep(game):
+    lease(game.bob, game.red, 'request')
+    game.alice.delete(f'/api/v1/adventures/{game.red}/grants/{game.ids.bob}')
+    assert game.library.manager.leases.holder(game.red) is None
+    with game.worker.told:
+        assert game.worker.told.wait_for(lambda: game.worker.action == 'resume', timeout=10)
+
+
+def test_a_backup_tells_every_worker_at_once(game, people, monkeypatch):  # noqa: F811
+    leases = game.library.manager.leases
+    lease(game.bob, game.red, 'request')
+    lease(game.bob, people.blue, 'request')
+    both, worker = threading.Barrier(2), leases.worker
+
+    def together(aid, action, generation):
+        # Each Resume answers only once both were sent, which a send after the other never sees.
+        if action == 'resume':
+            both.wait(10)
+        return worker(aid, action, generation)
+    monkeypatch.setattr(leases, 'worker', together)
+    assert sorted(leases.end_all('backup')) == sorted([game.red, people.blue])
+    assert leases.desired[game.red].confirmed and leases.desired[people.blue].confirmed
+
+
+def test_a_backup_brings_back_the_pause_the_library_sent(game, monkeypatch):
+    """The worker's summary may lag a Pause it has not run yet, so the backup goes by the desired state."""
+    from pokesim.app import backup
+    manager = game.library.manager
+    lease(game.bob, game.red, 'request')
+    assert control(game.alice, game.red, 'pause').status_code == 200
+    monkeypatch.setattr(manager.supervisor, 'children', {game.red: SimpleNamespace(watch=None, stop=lambda *args, **options: None)})
+    monkeypatch.setattr(manager.supervisor, 'stop', lambda aid, **options: None)
+    monkeypatch.setattr(manager.supervisor, 'start', lambda aid, **options: None)
+    sent = len(game.calls)
+    backup.create_backup(manager)
+    assert (game.red, '/api/control', 'pause') in game.calls[sent:]
+    assert (game.red, '/api/summary', None) not in game.calls[sent:]
 
 
 def test_a_page_in_line_hears_that_control_ended(game):

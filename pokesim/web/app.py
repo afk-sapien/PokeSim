@@ -10,6 +10,7 @@ import math
 import httpx
 from pathlib import Path
 import re
+import secrets
 import threading
 
 from fastapi import FastAPI, HTTPException, Query, Header
@@ -479,7 +480,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def summary():
         """A small health and playback view for the supervisor, which polls every few seconds."""
         status = status_summary(emu.status())
-        return {**status, 'viewer_only': view_only()} if isinstance(status, dict) else status
+        return {**status, 'viewer_only': view_only(), 'boot': boot} if isinstance(status, dict) else status
 
     @app.get("/healthz")
     def health():
@@ -526,6 +527,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     # The newest control lease generation the library sent with take_control, resume or pause.
     # A press from an older one is refused, and take_control drops any queued before it.
     lease_lock, lease_seen = threading.Lock(), [0]
+    # Tells this run of the worker from the next, which has heard no control change yet.
+    boot = secrets.token_hex(8)
 
     @app.post("/api/control")
     def control(c: Control, lease: str = Header(default='', alias=LEASE_HEADER)):
@@ -539,15 +542,37 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         with lease_lock:
             if int(lease) < lease_seen[0]:
                 raise HTTPException(409, "Control changed hands. Look again and retry.")
-            if c.action in ("take_control", "resume", "pause"):
+            if c.action == "take_control" and int(lease) == lease_seen[0] and getattr(emu, "manual_mode", False) is True:
+                # The library sent this grant again. Running it twice would drop the holder's presses.
+                return {"ok": True, "applied": True, "boot": boot}
+            reply = run_control(c)
+            if c.action in ("take_control", "resume", "pause") and reply["applied"]:
                 lease_seen[0] = int(lease)
-            return run_control(c)
+            return reply
+
+    def held_back(action):
+        """Why the game would drop this control now, as the emulator says, or None."""
+        check = getattr(type(emu), "held_back", None)
+        reason = check(emu, action) if check else None
+        return reason if isinstance(reason, str) else None
 
     def run_control(c):
+        # Every answer says whether the game ran the control, so the library never takes a
+        # dropped Take Control, Resume or Pause for one that worked.
         if c.action == "press":
             if c.value not in BUTTONS:
                 raise HTTPException(400, "Unknown game button")
+            reason = held_back("press")
+            if reason:
+                return {"ok": True, "applied": False, "reason": reason, "boot": boot}
             emu.press(str(c.value))
+        elif c.action in ("pause", "resume", "take_control") and getattr(type(emu), "control", None):
+            try:
+                reason = emu.control(c.action)
+            except (TimeoutError, RuntimeError) as error:
+                raise HTTPException(503, "The adventure is busy. It runs the control once it answers.") from error
+            if isinstance(reason, str):
+                return {"ok": True, "applied": False, "reason": reason, "boot": boot}
         elif c.action in ("pause", "resume", "take_control", "save", "restart"):
             emu.command(c.action)
         elif c.action == "speed":
@@ -569,7 +594,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             emu.command("load_state", str(c.value))
         else:
             raise HTTPException(400, "unknown action")
-        return {"ok": True}
+        return {"ok": True, "applied": True, "boot": boot}
 
     @app.post('/api/export-save')
     def export_save():

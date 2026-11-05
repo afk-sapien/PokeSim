@@ -1776,18 +1776,22 @@ def create_app(manager, shutdown=lambda: None):
 
         def choose(action, current):
             # Resume or Pause ends the lease read for it and becomes what the worker should do. The
-            # library sends it, and the sweep sends it again until the worker answers.
-            chosen = manager.leases.choose(aid, action, current)
-            if chosen is None:
+            # library sends it, and the sweep sends it again until the worker answers. Should the
+            # worker refuse it, the lease comes back as it was.
+            desired = manager.leases.choose(aid, action, current)
+            if desired is None:
                 return None
-            # A send that got no answer may still have got there, so it is sent once more to ask.
-            for _ in range(2):
-                manager.leases.converge(aid)
-            if manager.leases.reached(aid, chosen):
+            outcome = manager.leases.answer(aid, desired)
+            if outcome == 'applied':
                 return JSONResponse({'ok': True})
-            if manager.leases.generation(aid) != chosen:
+            if outcome == 'superseded':
                 return None
-            raise HTTPException(503, f'The adventure did not answer. It will {action} once it does.')
+            if outcome == 'refused':
+                raise HTTPException(desired.status or 409, desired.detail or 'The adventure refused that')
+            waiting = ('is busy. It will {} once it can' if outcome == 'deferred'
+                       else 'did not answer. It will {} when the game answers').format(action)
+            return JSONResponse({'ok': True, 'applied': False, 'detail': f'The adventure {waiting}.'},
+                                status_code=202)
         if ends_lease:
             response = await run_in_threadpool(choose, *ends_lease)
             if response is None:
