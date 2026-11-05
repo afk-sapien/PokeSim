@@ -22,6 +22,9 @@ VIEWER_PRIVATE = frozenset({'api/states', 'api/export-save'})
 # viewer header it only takes permissions away: the library has already checked the request.
 ROLE_HEADER = 'X-PokeSim-Role'
 ROLES_BELOW_OWNER = ('viewer', 'player', 'manager')
+# The control lease generation a press, take_control, resume or pause was sent under. A worker
+# refuses a press from a generation older than the last control change it heard.
+LEASE_HEADER = 'X-PokeSim-Lease'
 
 
 def viewer_allows(method, path):

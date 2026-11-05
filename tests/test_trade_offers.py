@@ -1,4 +1,6 @@
 """Trade offers: one adventure asks another, often someone else's, for a trade. Accepting queues a manual trade."""
+import threading
+
 import pytest
 
 from pokesim.app import offers as offers_module
@@ -137,6 +139,22 @@ def test_an_offer_that_ends_during_accept_queues_no_trade(offers, monkeypatch):
         service.accept(offer['id'])
     assert [entry for entry in offers.coordinator._manual_entries() if entry['state'] == 'queued'] == []
     assert service.status(offer['id'])['status'] == 'withdrawn'
+
+
+def test_accept_holds_no_guard_while_the_games_answer(offers, monkeypatch):
+    service = offers.manager.offers
+    offer = service.create(offer_request(offers))
+    check, free = service._check, []
+
+    def slow_games(*args, **kwargs):
+        # A refresh on another thread takes the guard while both games are still answering.
+        taker = threading.Thread(target=lambda: free.append(service.guard.acquire(timeout=1) and service.guard.release() is None))
+        taker.start()
+        taker.join(5)
+        return check(*args, **kwargs)
+    monkeypatch.setattr(service, '_check', slow_games)
+    assert service.accept(offer['id'])['status'] == 'accepted'
+    assert free == [True]
 
 
 def test_a_changed_pokemon_needs_the_receiver_to_confirm(offers):

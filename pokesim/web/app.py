@@ -24,7 +24,7 @@ from .event_page import render_event
 from .feed import render_feed
 from .journal_art import annotate as species_art, species_index
 from .pages import GEN2_CONTEXT, render_game_page
-from .security import ROLE_HEADER, ROLES_BELOW_OWNER, VIEWER_HEADER, role_allows, viewer_allows
+from .security import LEASE_HEADER, ROLE_HEADER, ROLES_BELOW_OWNER, VIEWER_HEADER, role_allows, viewer_allows
 from ..trade import preferences
 
 STATIC = Path(__file__).parent / "static"
@@ -523,13 +523,27 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         except ValueError as error:
             raise HTTPException(409, str(error)) from error
 
+    # The newest control lease generation the library sent with take_control, resume or pause.
+    # A press from an older one is refused, and take_control drops any queued before it.
+    lease_lock, lease_seen = threading.Lock(), [0]
+
     @app.post("/api/control")
-    def control(c: Control):
+    def control(c: Control, lease: str = Header(default='', alias=LEASE_HEADER)):
         if store.get("trade_hold") and c.action != "speed":
             raise HTTPException(409, "An exchange is holding this adventure")
         if not control_allowed(c.action):
             raise HTTPException(403, "This instance is view-only" if view_only() and ROLE.get() != 'player'
                                 else "Your role on this adventure does not allow this")
+        if not isinstance(lease, str) or not lease.isdigit():
+            return run_control(c)
+        with lease_lock:
+            if int(lease) < lease_seen[0]:
+                raise HTTPException(409, "Control changed hands. Look again and retry.")
+            if c.action in ("take_control", "resume", "pause"):
+                lease_seen[0] = int(lease)
+            return run_control(c)
+
+    def run_control(c):
         if c.action == "press":
             if c.value not in BUTTONS:
                 raise HTTPException(400, "Unknown game button")

@@ -124,12 +124,12 @@ class Child:
             except OSError:
                 pass
 
-    def request(self, method, path, data=None, timeout=20):
+    def request(self, method, path, data=None, timeout=20, headers=None):
         if not self.url or self.process.poll() is not None:
             raise RuntimeError('Adventure worker is not running')
         with httpx.Client(trust_env=False, timeout=timeout) as client:
             response = client.request(method, self.url + path, json=data,
-                                      headers={'Authorization': 'Bearer ' + self.token})
+                                      headers={**(headers or {}), 'Authorization': 'Bearer ' + self.token})
             if response.is_error:
                 try:
                     detail = response.json().get('detail', response.text[:300])

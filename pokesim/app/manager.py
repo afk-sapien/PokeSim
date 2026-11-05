@@ -35,7 +35,7 @@ from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
 from ..platform_io import lock_file
 from ..web.pages import LEASE_META, SPRITE_META, SPRITE_VERSION
-from ..web.security import ROLE_HEADER, VIEWER_HEADER, protect_response, public_origin, viewer_allows
+from ..web.security import LEASE_HEADER, ROLE_HEADER, VIEWER_HEADER, protect_response, public_origin, viewer_allows
 from .assets import Assets
 from .auth import AuthStore, SetupCode
 from . import policy, trade_settings
@@ -1495,11 +1495,13 @@ def create_app(manager, shutdown=lambda: None):
         if not can(actor, action, adventure):
             raise HTTPException(403, 'Your role on this adventure does not allow this')
         if control in policy.LEASE_ACTIONS:
-            current = manager.leases.current(aid)
-            if current is None or actor.id is None or current.user_id != actor.id:
+            generation = manager.leases.stamp(aid, actor)
+            if generation is None:
                 raise HTTPException(409, 'Ask for control first. Someone else may hold it.')
-            # The press is sent only while this same lease still holds control (see game).
-            request.state.lease_input = (control, current, actor)
+            # The press goes on only while its generation is still the newest (see game).
+            request.state.lease_generation = generation
+        if control == 'press':
+            manager.leases.touch(aid, actor)
         if control == 'resume' and not (manager.leases.holds(aid, actor) or can(actor, 'adventure.manage', adventure)):
             raise HTTPException(403, 'Only the person in control or a manager can resume the autopilot')
         if control in {'resume', 'pause'}:
@@ -1560,6 +1562,35 @@ def create_app(manager, shutdown=lambda: None):
             if len(body) > 65536:
                 raise HTTPException(413, 'Game request is too large')
         body = bytes(body)
+        if request.method == 'POST' and path == 'api/control' and lease_action(body):
+            # Presses go to the worker one at a time and in the order they arrived. The line is
+            # an asyncio lock, so a queued press holds no thread while it waits.
+            async with press_line(aid):
+                return await forward(aid, path, request, viewer, body)
+        return await forward(aid, path, request, viewer, body)
+
+    # Each adventure's line of presses: its lock and how many presses are in it.
+    press_lines = app.state.press_lines = {}
+
+    @asynccontextmanager
+    async def press_line(aid):
+        line = press_lines.setdefault(aid, [asyncio.Lock(), 0])
+        line[1] += 1
+        try:
+            async with line[0]:
+                yield
+        finally:
+            line[1] -= 1
+            if not line[1]:
+                press_lines.pop(aid, None)
+
+    def lease_action(body):
+        try:
+            return json.loads(body or b'{}').get('action') in policy.LEASE_ACTIONS
+        except (ValueError, AttributeError):
+            return False
+
+    async def forward(aid, path, request, viewer, body):
         role = 'viewer' if viewer else 'owner'
         if manager.auth_mode == 'accounts':
             access = await run_in_threadpool(game_access, aid, path, request, viewer, body)
@@ -1685,37 +1716,40 @@ def create_app(manager, shutdown=lambda: None):
             # The species reference only changes with the cartridge, so browsers revalidate it.
             headers['If-None-Match'] = request.headers['if-none-match']
         ends_lease = getattr(request.state, 'ends_lease', None)
-        lease_input = getattr(request.state, 'lease_input', None)
+        generation = getattr(request.state, 'lease_generation', None)
+        if generation is not None:
+            headers[LEASE_HEADER] = str(generation)
 
         async def send():
+            # No await between this check and the send: a handover runs on another thread, but it
+            # starts a new generation before it tells the worker, so a press that passes here was
+            # sent by the holder, and the worker drops it if the take_control got there first.
+            if generation is not None and manager.leases.generation(aid) != generation:
+                return None
             return await client.send(client.build_request(
                 request.method, target, content=body, headers=headers,
-                **({'timeout': 5} if ends_lease or lease_input else {})), stream=True)
-
-        def input_in_turn(control, current, actor):
-            # A press and a handover happen one at a time, so the old holder's press never
-            # reaches the worker after the new holder has control.
-            with manager.leases.turn(aid):
-                if manager.leases.current(aid) is not current:
-                    return None
-                if control == 'press':
-                    manager.leases.touch(aid, actor)
-                return anyio.from_thread.run(send)
+                **({'timeout': 5} if ends_lease else {})), stream=True)
 
         def resume_in_turn(reason, current):
             # Resume or Pause and the lease's end happen in one turn, so no handover lands between.
             with manager.leases.turn(aid):
                 if manager.leases.current(aid) is not current:
                     return None
-                sent = anyio.from_thread.run(send)
+                changed = manager.leases.advance(aid)
+                headers[LEASE_HEADER] = str(changed)
+                try:
+                    sent = anyio.from_thread.run(send)
+                except BaseException:
+                    manager.leases.restamp(aid, current, changed)
+                    raise
                 if sent.status_code < 400:
                     manager.leases.end(aid, reason, apply=False, only=current)
+                else:
+                    manager.leases.restamp(aid, current, changed)
                 return sent
         try:
             if ends_lease:
                 response = await run_in_threadpool(resume_in_turn, *ends_lease)
-            elif lease_input:
-                response = await run_in_threadpool(input_in_turn, *lease_input)
             else:
                 response = await send()
         except httpx.HTTPError as error:
