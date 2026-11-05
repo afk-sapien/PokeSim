@@ -211,8 +211,9 @@ class AuthStore:
     def library_owner(self):
         """The user that adventures from before setup belong to: the first admin, once there is one."""
         bound = self.setting('library_owner')
-        if bound and self.user(bound):
-            return bound
+        with self.lock:
+            if bound and self._active_admin(bound):
+                return bound
         return LIBRARY_OWNER
 
     def free_username(self, wanted):
@@ -247,18 +248,26 @@ class AuthStore:
             ORDER BY id = ? DESC, created_at, id LIMIT 1""", (LIBRARY_OWNER, preferred)).fetchone()
         return rows[0] if rows else None
 
+    def _active_admin(self, uid):
+        return self.db.execute("SELECT 1 FROM users WHERE id=? AND id != ? AND role='admin' AND disabled=0",
+                               (uid, LIBRARY_OWNER)).fetchone() is not None
+
+    def _keep_library_owner(self, preferred=None):
+        """Inside a transaction: when the bound library owner is missing, disabled or no longer an
+        admin, bind `preferred`, or else the oldest admin who can log in."""
+        bound = self.db.execute("SELECT value FROM settings WHERE key='library_owner'").fetchone()
+        if bound is None or not self._active_admin(bound[0]):
+            admin = self._first_admin(preferred)
+            if admin is not None:
+                self.db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)', ('library_owner', admin))
+
     def rebind_library_owner(self, preferred=None):
-        """Bind the library owner to a real admin when the bound one is missing. Returns the owner."""
+        """Bind the library owner to an admin who can log in when the bound one is not. Returns the owner."""
         with self.lock, self.db:
-            bound = self.db.execute("SELECT value FROM settings WHERE key='library_owner'").fetchone()
-            if bound is None or self.db.execute('SELECT 1 FROM users WHERE id=? AND id != ?',
-                                                (bound[0], LIBRARY_OWNER)).fetchone() is None:
-                admin = self._first_admin(preferred)
-                if admin is not None:
-                    self.db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)', ('library_owner', admin))
+            self._keep_library_owner(preferred)
         return self.library_owner()
 
-    def update_user(self, uid, *, role=None, disabled=None, can_create=None, display_name=None):
+    def update_user(self, uid, *, role=None, disabled=None, can_create=None, display_name=None, successor=None):
         current = self.user(uid)
         if current is None or current['placeholder']:
             raise KeyError('User not found')
@@ -285,6 +294,10 @@ class AuthStore:
                             (*values.values(), uid))
             if admins and self._admins() == 0:
                 raise ValueError('Keep at least one admin')
+            # A library owner who is disabled or demoted hands it on, to `successor` or else the
+            # oldest admin, so the command line and adventures from before setup keep an admin.
+            if self.db.execute("SELECT 1 FROM settings WHERE key='library_owner' AND value=?", (uid,)).fetchone():
+                self._keep_library_owner(successor)
         result = self.user(uid)
         # A new role or a disabled account starts from a fresh login.
         if result['role'] != current['role'] or result['disabled']:
@@ -316,9 +329,7 @@ class AuthStore:
             if admins and self._admins() == 0:
                 raise ValueError('Keep at least one admin')
             if self.db.execute("SELECT 1 FROM settings WHERE key='library_owner' AND value=?", (uid,)).fetchone():
-                admin = self._first_admin(successor)
-                if admin is not None:
-                    self.db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)', ('library_owner', admin))
+                self._keep_library_owner(successor)
         self.cache.clear()
 
     def set_password(self, uid, password, *, keep=None):

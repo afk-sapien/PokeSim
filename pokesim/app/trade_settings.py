@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import threading
 
-from .registry import validate_id
+from .registry import TRADE_SETTINGS, validate_id
 
-KEY = 'trade_auto'
+KEY = TRADE_SETTINGS
 # Settings that cover every adventure at once. Only the unwired Ask me first switch lives here.
 LIBRARY_KEY = 'trade_auto_library'
 # Every adventure's settings share one registry value, so each change reads and writes it whole.
@@ -52,7 +52,8 @@ def update(registry, aid, **values):
             raise ValueError(f'Unknown trade setting {name}')
         if value is not None and not isinstance(value, bool):
             raise ValueError(f'{SWITCHES[name]} is either on or off')
-    with _write:
+    # The registry lock too, so a change of owner, which resets these, never lands between the read and the write.
+    with _write, registry.lock:
         settings = _all(registry)
         stored = settings.get(aid)
         # Other stored keys, such as an old wish list, stay as they were.

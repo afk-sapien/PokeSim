@@ -25,6 +25,27 @@ def test_a_transfer_tells_both_sides_of_each_ended_offer(quiet, people):  # noqa
     assert green and len(ended(manager, people.alice['id'])) == 1
 
 
+def test_a_new_owner_starts_with_the_trading_switches_at_their_defaults(quiet, people):  # noqa: F811
+    from pokesim.app import trade_settings
+    registry = quiet.manager.registry
+    defaults = {'enabled': True, 'open_to_offers': False, 'across_owners': False}
+    for aid in (people.red, people.blue):
+        trade_settings.update(registry, aid, enabled=False, open_to_offers=True, across_owners=True)
+    # Bob gives Blue to Alice, who never chose to trade it with other people.
+    moved = quiet.login('bob').post(f'/api/v1/adventures/{people.blue}/transfer', json={'user_id': people.alice['id']})
+    assert moved.status_code == 200, moved.text
+    assert trade_settings.get(registry, people.blue) == defaults
+    # A deletion that hands Red on, and archives Blue under the admin, does the same.
+    trade_settings.update(registry, people.blue, open_to_offers=True, across_owners=True)
+    deleted = quiet.login('admin').request('DELETE', f'/api/v1/users/{people.alice["id"]}',
+                                           json={'adventures': {people.red: people.bob['id'], people.blue: 'archive'}})
+    assert deleted.status_code == 200, deleted.text
+    assert trade_settings.get(registry, people.red) == trade_settings.get(registry, people.blue) == defaults
+    # Switches the owner sets after a transfer stay.
+    trade_settings.update(registry, people.red, open_to_offers=True)
+    assert trade_settings.get(registry, people.red)['open_to_offers'] is True
+
+
 def test_a_revoked_share_ends_offers_the_person_sent_from_it(quiet, people):  # noqa: F811
     manager = quiet.manager
     green = quiet.adventure('Green', people.admin)

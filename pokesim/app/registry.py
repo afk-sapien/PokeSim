@@ -7,6 +7,7 @@ import logging
 import os
 from pathlib import Path
 import sqlite3
+import tempfile
 import threading
 import time
 import uuid
@@ -19,6 +20,10 @@ SCHEMA = 2
 # Adventures from before accounts belong to this placeholder user until setup names the first
 # admin, and so do adventures whose owner no longer exists.
 LIBRARY_OWNER = '0' * 32
+# The setting that holds each adventure's trading switches, read through trade_settings.
+TRADE_SETTINGS = 'trade_auto'
+# Set when this PokeSim made the Library, so a Library from before accounts is told apart.
+CREATED_SCHEMA = 'created_schema'
 
 
 def identifier():
@@ -53,7 +58,8 @@ class Registry:
         if version > SCHEMA:
             self.db.close()
             raise ValueError('This application needs a newer PokeSim version')
-        if version < SCHEMA and self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table'").fetchone():
+        new = self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table'").fetchone() is None
+        if version < SCHEMA and not new:
             self._keep_before_migration()
         self.db.execute('PRAGMA synchronous=FULL')
         with self.db:
@@ -101,6 +107,9 @@ class Registry:
                                 [(rom_id, LIBRARY_OWNER) for rom_id, in bare])
             self.db.executemany('''INSERT OR IGNORE INTO rom_owners (rom_id, user_id)
                 SELECT DISTINCT rom_id, owner_id FROM adventures WHERE rom_id=?''', bare)
+            if new:
+                # Whatever opens it first, the server or `pokesim import`, this Library is not an upgrade.
+                self.db.execute('INSERT OR IGNORE INTO settings VALUES (?, ?)', (CREATED_SCHEMA, json.dumps(SCHEMA)))
             self.db.execute(f'PRAGMA user_version={SCHEMA}')
         if self.setting('application_id') is None:
             self.set_setting('application_id', identifier())
@@ -111,14 +120,30 @@ class Registry:
         it cannot open it after. Restoring the copy is how to go back to that version."""
         stamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
         path = self.root / f'app.sqlite.pre-schema-{SCHEMA}-{stamp}'
-        # Made private before anything is written, since settings can hold an ntfy access token.
-        os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
-        copy = sqlite3.connect(path)
+        # The copy is written under a temporary name and renamed once whole, so the name the
+        # rollback docs restore never holds a partial copy. mkstemp makes it private before
+        # anything is written, since settings can hold an ntfy access token.
+        descriptor, temporary = tempfile.mkstemp(prefix=f'{path.name}.', suffix='.partial', dir=self.root)
+        os.close(descriptor)
         try:
-            # The backup API reads through the write-ahead log, so the copy is one whole file.
-            self.db.backup(copy)
-        finally:
-            copy.close()
+            copy = sqlite3.connect(temporary)
+            try:
+                # The backup API reads through the write-ahead log, so the copy is one whole file.
+                self.db.backup(copy)
+            finally:
+                copy.close()
+            with open(temporary, 'rb') as written:
+                os.fsync(written.fileno())
+            os.replace(temporary, path)
+        except BaseException:
+            Path(temporary).unlink(missing_ok=True)
+            raise
+        if os.name != 'nt':
+            directory = os.open(self.root, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
         log.warning('Kept a copy of the Library database from before this upgrade at %s. '
                     'Restore it to go back to an older PokeSim.', path)
 
@@ -285,12 +310,27 @@ class Registry:
         with self.lock, self.db:
             if owner in self.leaving:
                 raise ValueError('This account is being deleted')
+            before = self.db.execute('SELECT owner_id FROM adventures WHERE id=?', (aid,)).fetchone()
             self.db.execute('UPDATE adventures SET owner_id=? WHERE id=?', (owner, aid))
             self.db.execute('INSERT OR IGNORE INTO rom_owners SELECT rom_id, ?, ? FROM adventures WHERE id=?',
                             (owner, time.time(), aid))
+            if before is not None and before[0] != owner:
+                self._reset_trading(aid)
         result = self.adventure(aid)
         self.write_manifest(result)
         return result
+
+    def _reset_trading(self, aid):
+        """Inside a transaction: a new owner has not opted in to trading with other people, so
+        the adventure's trading switches go back to their defaults."""
+        row = self.db.execute('SELECT value FROM settings WHERE key=?', (TRADE_SETTINGS,)).fetchone()
+        settings = json.loads(row[0]) if row else {}
+        if not isinstance(settings, dict) or not isinstance(settings.get(aid), dict):
+            return
+        # Other stored keys, such as an old wish list, stay as they were.
+        settings[aid] = {key: value for key, value in settings[aid].items()
+                         if key not in {'enabled', 'open_to_offers', 'across_owners'}}
+        self.db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)', (TRADE_SETTINGS, json.dumps(settings)))
 
     def request_lifecycle(self, aid, action, request_id, *, owner=LIBRARY_OWNER):
         request_id = self.scoped_request(request_id, owner)

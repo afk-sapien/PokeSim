@@ -51,6 +51,37 @@ def test_rejects_newer_schema(tmp_path):
         Registry(tmp_path)
 
 
+def test_a_copy_that_fails_partway_leaves_nothing_under_the_rollback_name(tmp_path, monkeypatch):
+    import time
+    # Both starts below fall in the same second.
+    moment = time.gmtime()
+    monkeypatch.setattr(time, 'gmtime', lambda *args: moment)
+    registry = Registry(tmp_path)
+    registry.add_rom('kept', 'sha1', 'red')
+    registry.db.execute('PRAGMA user_version=1')
+    registry.db.close()
+    real = sqlite3.connect
+
+    class Full(sqlite3.Connection):
+        # The disk fills while the copy is written: some pages land, then SQLITE_FULL.
+        def backup(self, target, **options):
+            target.execute('CREATE TABLE partial (x)')
+            target.commit()
+            raise sqlite3.OperationalError('database or disk is full')
+    monkeypatch.setattr(sqlite3, 'connect', lambda *args, **options: real(*args, factory=Full, **options))
+    with pytest.raises(sqlite3.OperationalError, match='full'):
+        Registry(tmp_path)
+    assert [path.name for path in tmp_path.iterdir() if path.name.startswith('app.sqlite.')] == []
+    # A retry in the same second makes the copy and opens the Library.
+    monkeypatch.setattr(sqlite3, 'connect', real)
+    Registry(tmp_path).db.close()
+    [copy] = [path for path in tmp_path.iterdir() if path.name.startswith('app.sqlite.')]
+    assert copy.name.startswith('app.sqlite.pre-schema-2-') and not copy.name.endswith('.partial')
+    kept = real(copy)
+    assert kept.execute('SELECT id FROM roms').fetchall() == [('kept',)]
+    kept.close()
+
+
 def test_an_upgrade_keeps_the_older_database_to_go_back_to(tmp_path, caplog):
     import logging
     import os

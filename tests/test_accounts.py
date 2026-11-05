@@ -12,7 +12,7 @@ import pytest
 from pokesim.app import policy
 from pokesim.app.accounts import USER_LOCKOUT
 from pokesim.app.auth import Limiter
-from pokesim.app.cli import reset_password
+from pokesim.app.cli import reset_password, run
 from pokesim.app.manager import Manager, create_app
 from pokesim.app.providers import OIDC, ProxyAuth, forwarded_client, proxy_networks
 from pokesim.app.registry import identifier
@@ -410,10 +410,21 @@ def test_trades_stay_between_one_owners_adventures(library, people):
     assert status['participants'] == [people.red] and status['attention'] is None
 
 
+def older_library(root):
+    """A Library as 0.6.x left it: tables on schema 1, and nothing that says this PokeSim made it."""
+    import sqlite3
+    Manager(root).close()
+    db = sqlite3.connect(root / 'app.sqlite')
+    with db:
+        db.execute("DELETE FROM settings WHERE key='created_schema'")
+        db.execute('PRAGMA user_version=1')
+    db.close()
+
+
 def test_upgrades_stay_open_and_new_libraries_log_in(tmp_path, monkeypatch):
     monkeypatch.delenv('AUTH', raising=False)
     older = tmp_path / 'older'
-    Manager(older).close()
+    older_library(older)
     reopened = Manager(older, auth='auto')
     assert reopened.auth_mode == 'none'
     reopened.close()
@@ -424,6 +435,18 @@ def test_upgrades_stay_open_and_new_libraries_log_in(tmp_path, monkeypatch):
     asked = Manager(older, auth='auto')
     assert asked.auth_mode == 'accounts'
     asked.close()
+
+
+def test_a_new_library_that_an_import_made_first_still_logs_in(tmp_path, monkeypatch):
+    monkeypatch.delenv('AUTH', raising=False)
+    # `pokesim import` into an empty data directory opens the Library first, without accounts.
+    with pytest.raises(ValueError, match='pokesim.sqlite'):
+        run(SimpleNamespace(command='import', data_dir=tmp_path / 'library', source=tmp_path / 'missing',
+                            rom=tmp_path / 'missing.gb', name='Red', stopped=True))
+    assert (tmp_path / 'library' / 'app.sqlite').exists()
+    server = Manager(tmp_path / 'library', auth='auto')
+    assert server.auth_mode == 'accounts' and server.needs_setup
+    server.close()
 
 
 def test_the_environment_can_create_the_first_admin(library):
@@ -480,6 +503,38 @@ def test_startup_rebinds_a_deleted_library_owner_and_its_adventures(library, peo
     manager.bind_library_owner()
     assert manager.default_owner() == people.admin['id'] != second['id']
     assert manager.registry.adventure(stranded['id'])['owner_id'] == people.admin['id']
+
+
+@pytest.mark.parametrize('change', [{'disabled': True}, {'role': 'member'}], ids=['disabled', 'demoted'])
+def test_turning_off_the_library_owner_hands_it_to_the_admin_who_did(library, people, change):
+    from pokesim.app.registry import LIBRARY_OWNER
+    manager = library.manager
+    second = library.user('second', 'admin')
+    library.user('third', 'admin')
+    changed = library.login('second').patch(f'/api/v1/users/{people.admin["id"]}', json=change)
+    assert changed.status_code == 200, changed.text
+    assert manager.default_owner() == second['id']
+    # `pokesim backup` and the other commands act as an admin who can still log in.
+    token = manager.issue_cli_token()
+    command = TestClient(library.app, headers={'X-PokeSim-CLI-Token': token})
+    assert command.get('/api/v1/users').status_code == 200
+    # Startup gives what is left on the placeholder to that admin, not to the one turned off.
+    stranded = manager.registry.create('Imported', 'fixture', {}, identifier(), owner=LIBRARY_OWNER)
+    manager.bind_library_owner()
+    assert manager.registry.adventure(stranded['id'])['owner_id'] == second['id']
+
+
+def test_startup_rebinds_a_disabled_library_owner(library, people):
+    from pokesim.app.registry import LIBRARY_OWNER
+    manager = library.manager
+    second = library.user('second', 'admin')
+    # A Library from before this fix: the bound owner was disabled and the setting kept them.
+    with manager.auth.lock, manager.auth.db:
+        manager.auth.db.execute('UPDATE users SET disabled=1 WHERE id=?', (people.admin['id'],))
+    stranded = manager.registry.create('Imported', 'fixture', {}, identifier(), owner=LIBRARY_OWNER)
+    manager.bind_library_owner()
+    assert manager.default_owner() == second['id']
+    assert manager.registry.adventure(stranded['id'])['owner_id'] == second['id']
 
 
 def request_from(host, headers):
