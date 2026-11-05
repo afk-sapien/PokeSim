@@ -543,6 +543,17 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                 lease_seen[0] = int(lease)
             return run_control(c)
 
+    @app.post("/internal/control-status")
+    def control_status(lease: str = Header(default='', alias=LEASE_HEADER)):
+        # The library asks this after a take_control, resume or pause it got no answer for.
+        # `lease_seen` says whether that change got here, and the generation sent with this call
+        # turns it away if it is still on its way.
+        with lease_lock:
+            seen = lease_seen[0]
+            if isinstance(lease, str) and lease.isdigit():
+                lease_seen[0] = max(seen, int(lease))
+            return {'manual': bool(getattr(emu, 'manual_mode', False)), 'lease_seen': seen}
+
     def run_control(c):
         if c.action == "press":
             if c.value not in BUTTONS:

@@ -80,6 +80,9 @@ class Leases:
         # old one never mistakes it for a new one.
         self.generations = {}
         self.counter = itertools.count(1)
+        # Adventures whose worker did not answer whether it made a control change, with the
+        # change that puts it back once it answers again (see reconcile).
+        self.unsettled = {}
         self.stop = threading.Event()
 
     @property
@@ -382,6 +385,7 @@ class Leases:
             while not self.stop.wait(interval):
                 try:
                     self.sweep()
+                    self.settle()
                 except Exception:
                     log.exception('The control lease sweep failed')
         threading.Thread(target=loop, name='control-lease', daemon=True).start()
@@ -431,17 +435,80 @@ class Leases:
         if blocked:
             raise LeaseRefused(blocked)
         # The new generation starts once the worker answered, so the old holder's presses still go
-        # out meanwhile, and the worker drops any that reach it after the take_control. A take_control
-        # that failed or timed out may still have reached the worker, so the holder moves to it too.
+        # out meanwhile, and the worker drops any that reach it after the take_control. One that
+        # failed or timed out may still have reached the worker, so the worker says what it did.
         generation = self.reserve()
         if not self.worker(aid, 'take_control', generation):
-            self.restamp(aid, self.current(aid), generation)
-            raise LeaseRefused('The adventure is busy with a trade or did not answer. Try again in a moment.')
+            generation = self.reconcile(aid, 'take_control', generation)
+            if generation is None:
+                raise LeaseRefused('The adventure is busy with a trade or did not answer. Try again in a moment.')
         now = self.clock()
         with self.lock:
             self.generations[aid] = generation
             self.leases[aid] = Lease(user['id'], label(user), now, now, now, list(queue), generation)
         self.audit(event, user['id'], aid)
+
+    def reconcile(self, aid, action, reserved):
+        """A take_control, resume or pause sent with `reserved` got no answer. Ask the worker
+        whether it made the change, and make the lease match the worker. Call it in the turn.
+
+        Returns the generation to carry on with when the worker made the change, else None. A
+        take_control it made leaves the caller to record the new lease. A worker in manual mode
+        keeps the lease that holds it, or resumes when nobody does, and a worker back on its
+        autopilot ends the lease.
+        """
+        fence = self.reserve()
+        try:
+            state = self.manager.supervisor.child(aid).request(
+                'POST', '/internal/control-status', {}, timeout=5, headers={LEASE_HEADER: str(fence)})
+            applied = int(state['lease_seen']) >= reserved
+            manual = action == 'take_control' if applied else bool(state['manual'])
+        except Exception as error:
+            # Nobody knows what the game is doing, so nobody keeps control, and the game gets
+            # the autopilot back once its worker answers again (see settle).
+            log.warning('Adventure %s did not say whether it made %s: %s', aid, action, error)
+            with self.lock:
+                self.unsettled[aid] = 'pause' if action == 'pause' else 'resume'
+            self.end(aid, 'unanswered', apply=False)
+            return None
+        # The worker refuses anything older than the fence now, so the library starts it too.
+        with self.lock:
+            self.generations[aid] = max(self.generations.get(aid, 0), fence)
+        if applied and action == 'take_control':
+            return fence
+        lease = self.current(aid)
+        if manual and lease is not None:
+            self.restamp(aid, lease, fence)
+        elif manual:
+            # Paused for a player nobody is: the game plays on by itself.
+            if not self.worker(aid, 'resume', self.advance(aid)):
+                with self.lock:
+                    self.unsettled[aid] = 'resume'
+        elif lease is not None:
+            self.end(aid, action if applied else 'autopilot', apply=False)
+        return fence if applied else None
+
+    def settle(self):
+        """Send each worker that went unanswered the change that puts it back, once it answers."""
+        with self.lock:
+            unsettled = list(self.unsettled.items())
+        for aid, action in unsettled:
+            with self.turn(aid):
+                with self.lock:
+                    if self.unsettled.get(aid) != action:
+                        continue
+                    if aid in self.leases:
+                        # Control was granted since, so the worker answered and is in manual mode.
+                        self.unsettled.pop(aid, None)
+                        continue
+                try:
+                    running = self.manager.registry.adventure(aid)['state'] == 'running'
+                except KeyError:
+                    running = False
+                # A stopped adventure starts again on its autopilot.
+                if not running or self.worker(aid, action, self.advance(aid)):
+                    with self.lock:
+                        self.unsettled.pop(aid, None)
 
     def blocked(self, aid):
         coordinator = self.manager.coordinator

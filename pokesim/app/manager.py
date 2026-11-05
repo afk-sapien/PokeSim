@@ -50,11 +50,12 @@ SESSION_COOKIE = 'pokesim_session'
 SHARE_COOKIE = 'pokesim_share'
 # An open screen stream checks this often that its viewer may still watch.
 STREAM_RECHECK_SECONDS = 5
-# The control requests that wait in an adventure's press line, how many may wait, and how long a
-# press may wait before it is dropped.
+# The control requests that wait in an adventure's press line, how many presses may wait, and
+# how long a press, or Take Control, Resume or Pause, may wait before it is dropped.
 LINE_ACTIONS = frozenset({'press', 'take_control', 'resume', 'pause'})
 PRESS_LINE_MAX = 8
 PRESS_WAIT_SECONDS = 2
+CONTROL_WAIT_SECONDS = 10
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
                    'api/audio', 'api/lease', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
@@ -1500,6 +1501,15 @@ def create_app(manager, shutdown=lambda: None):
             raise HTTPException(404)
         if not can(actor, action, adventure):
             raise HTTPException(403, 'Your role on this adventure does not allow this')
+        if control in policy.LEASE_ACTIONS or control in {'resume', 'pause'}:
+            # The lease it goes with is read at the front of the press line (see lease_access).
+            request.state.lease_control = (actor, adventure, control)
+        return 'viewer' if viewer else policy.adventure_role(actor, adventure)
+
+    def lease_access(aid, request):
+        """The lease a control request goes with, read at the front of the press line, so a change
+        while it waited counts."""
+        actor, adventure, control = request.state.lease_control
         if control in policy.LEASE_ACTIONS:
             generation = manager.leases.stamp(aid, actor)
             if generation is None:
@@ -1516,7 +1526,6 @@ def create_app(manager, shutdown=lambda: None):
             # With no lease it still runs in the adventure's turn, so it never lands between a
             # grant's take_control and the new lease.
             request.state.ends_lease = (control, manager.leases.current(aid))
-        return 'viewer' if viewer else policy.adventure_role(actor, adventure)
 
     def lease_route(aid, request, body):
         """The control lease of one adventure: GET reads it, POST acts on it."""
@@ -1582,31 +1591,38 @@ def create_app(manager, shutdown=lambda: None):
             # order they arrived, so a Resume never overtakes a press. The line is an asyncio
             # lock, so a queued press holds no thread while it waits.
             async with press_line(aid, request, action):
+                if getattr(request.state, 'lease_control', None) is not None:
+                    await run_in_threadpool(lease_access, aid, request)
                 return await forward(aid, path, request, viewer, body, role)
         return await forward(aid, path, request, viewer, body, role)
 
-    # Each adventure's line of presses: its lock and how many presses are in it.
+    # Each adventure's line: its lock, how many requests are in it and how many of those are presses.
     press_lines = app.state.press_lines = {}
 
     @asynccontextmanager
     async def press_line(aid, request, action):
-        line = press_lines.setdefault(aid, [asyncio.Lock(), 0])
-        # Only presses are capped. Take Control, Resume and Pause always join, still in order.
-        if action == 'press' and line[1] >= PRESS_LINE_MAX:
+        line = press_lines.setdefault(aid, [asyncio.Lock(), 0, 0])
+        # Only presses are capped, and only presses count toward it. Take Control, Resume and
+        # Pause always join, still in order.
+        pressing = action == 'press'
+        if pressing and line[2] >= PRESS_LINE_MAX:
             raise HTTPException(429, 'The adventure is behind on presses. Wait a moment and press again.')
         line[1] += 1
+        line[2] += pressing
         joined = time.monotonic()
         try:
             async with line[0]:
-                # A press that waited behind a stalled worker, or whose page went away, would only
-                # move the player late, so it is dropped instead.
+                # A request that waited behind a stalled worker, or whose page went away, would only
+                # change the game late, so it is dropped instead.
                 if await request.is_disconnected():
                     raise HTTPException(409, 'The page that sent this press closed')
-                if action == 'press' and time.monotonic() - joined > PRESS_WAIT_SECONDS:
-                    raise HTTPException(409, 'That press waited too long and was dropped. Press again.')
+                if time.monotonic() - joined > (PRESS_WAIT_SECONDS if pressing else CONTROL_WAIT_SECONDS):
+                    raise HTTPException(409, 'That press waited too long and was dropped. Press again.' if pressing else
+                                        'The game took too long to get to this. Look again and retry.')
                 yield
         finally:
             line[1] -= 1
+            line[2] -= pressing
             if not line[1]:
                 press_lines.pop(aid, None)
 
@@ -1762,8 +1778,8 @@ def create_app(manager, shutdown=lambda: None):
                 try:
                     sent = anyio.from_thread.run(send)
                 except BaseException:
-                    # The worker may have taken it without answering, so both sides move to it.
-                    manager.leases.restamp(aid, current, reserved)
+                    # The worker may have made it without answering, so it says what it did.
+                    manager.leases.reconcile(aid, reason, reserved)
                     raise
                 if sent.status_code < 400 and current is not None:
                     manager.leases.end(aid, reason, apply=False, only=current)
