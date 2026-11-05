@@ -141,6 +141,41 @@ def test_an_offer_that_ends_during_accept_queues_no_trade(offers, monkeypatch):
     assert service.status(offer['id'])['status'] == 'withdrawn'
 
 
+def test_an_offer_from_an_adventure_that_changed_hands_meanwhile_is_refused(offers, monkeypatch):
+    service, left = offers.manager.offers, offers.data['left_id']
+    sides = service._sides
+
+    def transferred_meanwhile(*args, **kwargs):
+        found = sides(*args, **kwargs)
+        # The owner gives the adventure away while their offer reads both Pokémon.
+        offers.registry.set_owner(left, CAROL)
+        return found
+    monkeypatch.setattr(service, '_sides', transferred_meanwhile)
+    with pytest.raises(PermissionError, match='no longer offer trades'):
+        service.create(offer_request(offers), member(LIBRARY_OWNER))
+    assert offers.registry.trade_offers(left, statuses=['pending']) == []
+
+
+def test_a_trade_that_finishes_during_accept_keeps_its_pokemon_out_of_another(offers, monkeypatch):
+    service = offers.manager.offers
+    first = service.create(offer_request(offers))
+    second = service.create(offer_request(offers, to_key='party-1'))
+    service.accept(first['id'])
+    check = service._check
+
+    def finished_meanwhile(*args, **kwargs):
+        found = check(*args, **kwargs)
+        # The first trade, on the same Pokémon, runs and settles while the accept reads both games.
+        assert offers.coordinator.drain_manual()['phase'] == 'completed'
+        assert service.status(first['id'])['status'] == 'completed'
+        return found
+    monkeypatch.setattr(service, '_check', finished_meanwhile)
+    with pytest.raises(ValueError, match='another trade'):
+        service.accept(second['id'])
+    assert [entry for entry in offers.coordinator._manual_entries() if entry['state'] == 'queued'] == []
+    assert service.status(second['id'])['status'] == 'pending'
+
+
 def test_accept_holds_no_guard_while_the_games_answer(offers, monkeypatch):
     service = offers.manager.offers
     offer = service.create(offer_request(offers))

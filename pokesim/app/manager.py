@@ -50,6 +50,11 @@ SESSION_COOKIE = 'pokesim_session'
 SHARE_COOKIE = 'pokesim_share'
 # An open screen stream checks this often that its viewer may still watch.
 STREAM_RECHECK_SECONDS = 5
+# The control requests that wait in an adventure's press line, how many may wait, and how long a
+# press may wait before it is dropped.
+LINE_ACTIONS = frozenset({'press', 'take_control', 'resume', 'pause'})
+PRESS_LINE_MAX = 8
+PRESS_WAIT_SECONDS = 2
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
                    'api/audio', 'api/lease', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
@@ -601,8 +606,9 @@ def create_app(manager, shutdown=lambda: None):
     async def view_only(request, error):
         return JSONResponse({'detail': str(error)}, status_code=403)
 
-    from .offers import Changed, LimitReached, OwnerOnly
+    from .offers import Changed, LimitReached, NoLongerManaged, OwnerOnly
 
+    @app.exception_handler(NoLongerManaged)
     @app.exception_handler(OwnerOnly)
     async def owner_only(request, error):
         return JSONResponse({'detail': str(error)}, status_code=403)
@@ -1562,10 +1568,12 @@ def create_app(manager, shutdown=lambda: None):
             if len(body) > 65536:
                 raise HTTPException(413, 'Game request is too large')
         body = bytes(body)
-        if request.method == 'POST' and path == 'api/control' and lease_action(body):
-            # Presses go to the worker one at a time and in the order they arrived. The line is
-            # an asyncio lock, so a queued press holds no thread while it waits.
-            async with press_line(aid):
+        action = line_action(body) if request.method == 'POST' and path == 'api/control' else None
+        if action:
+            # Presses, Take Control, Resume and Pause go to the worker one at a time and in the
+            # order they arrived, so a Resume never overtakes a press. The line is an asyncio
+            # lock, so a queued press holds no thread while it waits.
+            async with press_line(aid, request, action):
                 return await forward(aid, path, request, viewer, body)
         return await forward(aid, path, request, viewer, body)
 
@@ -1573,22 +1581,32 @@ def create_app(manager, shutdown=lambda: None):
     press_lines = app.state.press_lines = {}
 
     @asynccontextmanager
-    async def press_line(aid):
+    async def press_line(aid, request, action):
         line = press_lines.setdefault(aid, [asyncio.Lock(), 0])
+        if line[1] >= PRESS_LINE_MAX:
+            raise HTTPException(429, 'The adventure is behind on presses. Wait a moment and press again.')
         line[1] += 1
+        joined = time.monotonic()
         try:
             async with line[0]:
+                # A press that waited behind a stalled worker, or whose page went away, would only
+                # move the player late, so it is dropped instead.
+                if await request.is_disconnected():
+                    raise HTTPException(409, 'The page that sent this press closed')
+                if action == 'press' and time.monotonic() - joined > PRESS_WAIT_SECONDS:
+                    raise HTTPException(409, 'That press waited too long and was dropped. Press again.')
                 yield
         finally:
             line[1] -= 1
             if not line[1]:
                 press_lines.pop(aid, None)
 
-    def lease_action(body):
+    def line_action(body):
         try:
-            return json.loads(body or b'{}').get('action') in policy.LEASE_ACTIONS
+            action = json.loads(body or b'{}').get('action')
         except (ValueError, AttributeError):
-            return False
+            return None
+        return action if action in LINE_ACTIONS else None
 
     async def forward(aid, path, request, viewer, body):
         role = 'viewer' if viewer else 'owner'
@@ -1721,9 +1739,9 @@ def create_app(manager, shutdown=lambda: None):
             headers[LEASE_HEADER] = str(generation)
 
         async def send():
-            # No await between this check and the send: a handover runs on another thread, but it
-            # starts a new generation before it tells the worker, so a press that passes here was
-            # sent by the holder, and the worker drops it if the take_control got there first.
+            # No await between this check and the send. A handover runs on another thread and starts
+            # its generation once the worker took control, so a press that passes here during one
+            # was sent by the holder, and the worker drops it if the take_control got there first.
             if generation is not None and manager.leases.generation(aid) != generation:
                 return None
             return await client.send(client.build_request(
@@ -1735,17 +1753,12 @@ def create_app(manager, shutdown=lambda: None):
             with manager.leases.turn(aid):
                 if manager.leases.current(aid) is not current:
                     return None
-                changed = manager.leases.advance(aid)
-                headers[LEASE_HEADER] = str(changed)
-                try:
-                    sent = anyio.from_thread.run(send)
-                except BaseException:
-                    manager.leases.restamp(aid, current, changed)
-                    raise
+                # The holder's presses stay valid until the worker took the change, so one it
+                # refused leaves them as they were. Ending the lease starts the new generation.
+                headers[LEASE_HEADER] = str(manager.leases.reserve())
+                sent = anyio.from_thread.run(send)
                 if sent.status_code < 400:
                     manager.leases.end(aid, reason, apply=False, only=current)
-                else:
-                    manager.leases.restamp(aid, current, changed)
                 return sent
         try:
             if ends_lease:

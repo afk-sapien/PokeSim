@@ -432,13 +432,14 @@ def test_a_press_from_the_old_holder_never_reaches_the_new_one(game, monkeypatch
     assert press(game.carol, game.red).status_code == 200 and len(sent) == 1
 
 
-def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(game):
+def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(game, monkeypatch):
     """A held arrow key sends a press every 140 ms. A slow worker must not use up the request
     threads that every page and sign in share, and the presses must reach it in order."""
     import anyio.to_thread
+    monkeypatch.setattr('pokesim.app.manager.PRESS_WAIT_SECONDS', 60)
     app, arrived = game.library.app, []
     lease(game.bob, game.red, 'request')
-    buttons = ['down', 'a', 'up', 'b', 'left', 'right', 'start', 'select'] * 2
+    buttons = ['down', 'a', 'up', 'b', 'left', 'right', 'start', 'select']
 
     async def held():
         anyio.to_thread.current_default_thread_limiter().total_tokens = 4
@@ -461,7 +462,7 @@ def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(g
                         break
                     await asyncio.sleep(0.01)
             try:
-                # Sixteen presses wait on the worker, and a page still reads who holds control.
+                # A full line of presses waits on the worker, and a page still reads who holds control.
                 status = await asyncio.wait_for(page.get(f'/games/{game.red}/api/lease'), 3)
                 assert status.status_code == 200 and status.json()['holder'] is not None
             finally:
@@ -469,6 +470,121 @@ def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(g
             return [response.status_code for response in await asyncio.gather(*presses)]
     assert asyncio.run(held()) == [200] * len(buttons)
     assert arrived == buttons
+
+
+def line_against_a_stalled_worker(game, requests, between=None):
+    """Send control requests to a worker that answers none until the last one is in line. Returns
+    the status codes and the actions or buttons in the order the worker heard them."""
+    app, arrived = game.library.app, []
+
+    async def run():
+        answer = asyncio.Event()
+
+        async def stalled(request):
+            sent = json.loads(request.content)
+            arrived.append(sent.get('value') or sent['action'])
+            await answer.wait()
+            return httpx.Response(200, json={'ok': True})
+        app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(stalled))
+        pages, sent = [], []
+        try:
+            for count, (client, body) in enumerate(requests, 1):
+                pages.append(httpx._client.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://testserver',
+                                                       cookies=client.cookies, headers=dict(client.headers)))
+                sent.append(asyncio.create_task(pages[-1].post(f'/games/{game.red}/api/control', json=body)))
+                # Each request is sent once the one before it is in line, or was turned away.
+                for _ in range(100):
+                    if sent[-1].done() or app.state.press_lines.get(game.red, [None, 0])[1] >= count:
+                        break
+                    await asyncio.sleep(0.01)
+            if between:
+                await between()
+            answer.set()
+            return [response.status_code for response in await asyncio.gather(*sent)]
+        finally:
+            answer.set()
+            for page in pages:
+                await page.aclose()
+    return asyncio.run(run()), arrived
+
+
+def presses(client, *buttons):
+    return [(client, {'action': 'press', 'value': button}) for button in buttons]
+
+
+def test_a_full_press_line_turns_the_next_press_away(game):
+    lease(game.bob, game.red, 'request')
+    buttons = ['down', 'a', 'up', 'b', 'left', 'right', 'start', 'select']
+    codes, arrived = line_against_a_stalled_worker(game, presses(game.bob, *buttons, 'a'))
+    # Eight presses wait, the ninth is refused at once, and only the eight reach the game.
+    assert codes == [200] * 8 + [429]
+    assert arrived == buttons
+
+
+def test_a_press_that_waited_too_long_is_dropped(game, monkeypatch):
+    monkeypatch.setattr('pokesim.app.manager.PRESS_WAIT_SECONDS', 0.2)
+    lease(game.bob, game.red, 'request')
+    codes, arrived = line_against_a_stalled_worker(game, presses(game.bob, 'down', 'a'),
+                                                   between=lambda: asyncio.sleep(0.5))
+    assert codes == [200, 409] and arrived == ['down']
+
+
+def test_a_press_from_a_closed_page_is_dropped(game, monkeypatch):
+    from starlette.requests import Request
+    lease(game.bob, game.red, 'request')
+    closed = []
+
+    async def is_disconnected(self):
+        # The second press's page closed while it waited in line.
+        return bool(closed)
+
+    async def close_page():
+        closed.append(True)
+    monkeypatch.setattr(Request, 'is_disconnected', is_disconnected)
+    codes, arrived = line_against_a_stalled_worker(game, presses(game.bob, 'down', 'a'), between=close_page)
+    assert codes[1] == 409 and arrived == ['down']
+
+
+def test_resume_waits_behind_the_presses_before_it(game, monkeypatch):
+    monkeypatch.setattr(game.library.manager, 'auth_mode', 'none')
+    page = game.library.browser()
+    page.headers['X-PokeSim-CSRF'] = page.get('/api/v1/session').json()['csrf_token']
+    # Without accounts nobody holds a lease, so only the line keeps a press from landing after Resume.
+    codes, arrived = line_against_a_stalled_worker(
+        game, [*presses(page, 'down', 'a'), (page, {'action': 'resume'})])
+    assert codes == [200, 200, 200] and arrived == ['down', 'a', 'resume']
+
+
+def test_a_refused_take_control_never_turns_the_holders_presses_away(game, monkeypatch):
+    manager = game.library.manager
+    leases = manager.leases
+    bob = manager.actor_for(manager.auth.user(game.ids.bob))
+    lease(game.bob, game.red, 'request')
+    valid = []
+
+    def refused(aid, action, generation):
+        # While the worker is asked, Bob's presses still carry the newest generation.
+        valid.append(leases.stamp(aid, bob) == leases.generation(aid))
+        return False
+    monkeypatch.setattr(leases, 'worker', refused)
+    assert lease(game.carol, game.red, 'take').status_code == 409
+    assert valid == [True] and leases.holder(game.red) == game.ids.bob
+    assert press(game.bob, game.red).status_code == 200
+
+
+def test_a_refused_resume_never_turns_the_holders_presses_away(game):
+    manager, app = game.library.manager, game.library.app
+    leases = manager.leases
+    bob = manager.actor_for(manager.auth.user(game.ids.bob))
+    lease(game.bob, game.red, 'request')
+    valid = []
+
+    def busy(request):
+        valid.append(leases.stamp(game.red, bob) == leases.generation(game.red))
+        return httpx.Response(409, json={'detail': 'A trade holds this adventure'})
+    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(busy))
+    assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 409
+    assert valid == [True] and leases.holder(game.red) == game.ids.bob
 
 
 def test_a_slow_press_keeps_the_usual_time_limit(game):
