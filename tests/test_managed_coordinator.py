@@ -312,6 +312,24 @@ def test_a_trade_that_stops_the_adventure_leaves_no_pause_for_its_next_run(setup
     assert leases.intended(aid) is None
 
 
+def test_a_stop_that_fails_after_a_trade_leaves_no_pause_for_the_next_run(setup):
+    """The trade ended a lease into a Pause and the owner stopped the adventure. The stop
+    after the trade fails, and the next Start still hears nothing from that run."""
+    from pokesim.app.lease import Desired, Leases
+    leases = setup.manager.leases = Leases(setup.manager)
+    aid = setup.data['left_id']
+    row = setup.coordinator.propose(setup.data)
+    leases.desired[aid] = Desired('pause', leases.advance(aid), confirmed=True, boot='first')
+
+    def failing(aid, **options):
+        setup.registry.update(aid, state='failed', error='Worker exited with code 1')
+        raise RuntimeError('Worker exited with code 1')
+    setup.supervisor.stop = failing
+    setup.registry.update(aid, desired_state='stopped')
+    assert setup.coordinator.execute(row['id'])['phase'] == 'completed'
+    assert leases.intended(aid) is None
+
+
 def test_a_stop_that_fails_after_a_trade_still_stops_the_other_adventure(setup):
     """Both owners stopped their adventure during the trade. The first stop fails, and the
     finished trade still stops the second, stays final and keeps no error of its own."""
