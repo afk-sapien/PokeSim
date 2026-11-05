@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from pokesim import config
 from pokesim.app import lease as lease_module
+from pokesim.app import manager as manager_module
 from pokesim.app import policy
 from pokesim.store import Store
 from pokesim.web.app import create_app
@@ -472,10 +473,12 @@ def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(g
     assert arrived == buttons
 
 
-def line_against_a_stalled_worker(game, requests, between=None):
+def line_against_a_stalled_worker(game, requests, between=None, wait=60):
     """Send control requests to a worker that answers none until the last one is in line. Returns
-    the status codes and the actions or buttons in the order the worker heard them."""
+    the status codes and the actions or buttons in the order the worker heard them. A press is
+    dropped after `wait` seconds in line, which is long by default so a slow runner drops none."""
     app, arrived = game.library.app, []
+    usual, manager_module.PRESS_WAIT_SECONDS = manager_module.PRESS_WAIT_SECONDS, wait
 
     async def run():
         answer = asyncio.Event()
@@ -488,13 +491,14 @@ def line_against_a_stalled_worker(game, requests, between=None):
         app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(stalled))
         pages, sent = [], []
         try:
-            for count, (client, body) in enumerate(requests, 1):
+            for client, body in requests:
                 pages.append(httpx._client.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://testserver',
                                                        cookies=client.cookies, headers=dict(client.headers)))
+                before = app.state.press_lines.get(game.red, [None, 0])[1]
                 sent.append(asyncio.create_task(pages[-1].post(f'/games/{game.red}/api/control', json=body)))
                 # Each request is sent once the one before it is in line, or was turned away.
                 for _ in range(100):
-                    if sent[-1].done() or app.state.press_lines.get(game.red, [None, 0])[1] >= count:
+                    if sent[-1].done() or app.state.press_lines.get(game.red, [None, 0])[1] > before:
                         break
                     await asyncio.sleep(0.01)
             if between:
@@ -505,7 +509,10 @@ def line_against_a_stalled_worker(game, requests, between=None):
             answer.set()
             for page in pages:
                 await page.aclose()
-    return asyncio.run(run()), arrived
+    try:
+        return asyncio.run(run()), arrived
+    finally:
+        manager_module.PRESS_WAIT_SECONDS = usual
 
 
 def presses(client, *buttons):
@@ -521,11 +528,10 @@ def test_a_full_press_line_turns_the_next_press_away(game):
     assert arrived == buttons
 
 
-def test_a_press_that_waited_too_long_is_dropped(game, monkeypatch):
-    monkeypatch.setattr('pokesim.app.manager.PRESS_WAIT_SECONDS', 0.2)
+def test_a_press_that_waited_too_long_is_dropped(game):
     lease(game.bob, game.red, 'request')
     codes, arrived = line_against_a_stalled_worker(game, presses(game.bob, 'down', 'a'),
-                                                   between=lambda: asyncio.sleep(0.5))
+                                                   between=lambda: asyncio.sleep(0.5), wait=0.2)
     assert codes == [200, 409] and arrived == ['down']
 
 
@@ -585,6 +591,90 @@ def test_a_refused_resume_never_turns_the_holders_presses_away(game):
     app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(busy))
     assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 409
     assert valid == [True] and leases.holder(game.red) == game.ids.bob
+
+
+def test_someone_who_cannot_press_never_takes_a_place_in_the_line(game):
+    lease(game.bob, game.red, 'request')
+    # Dave only watches. His presses are turned away before the line, so Bob's next press still joins it.
+    codes, arrived = line_against_a_stalled_worker(
+        game, [*presses(game.bob, 'a'), *presses(game.dave, *'abcdefgh'), *presses(game.bob, 'b')])
+    assert codes == [200] + [403] * 8 + [200] and arrived == ['a', 'b']
+
+
+def test_a_full_press_line_still_takes_resume_in_order(game):
+    lease(game.bob, game.red, 'request')
+    buttons = ['down', 'a', 'up', 'b', 'left', 'right', 'start', 'select']
+    codes, arrived = line_against_a_stalled_worker(
+        game, [*presses(game.bob, *buttons), (game.alice, {'action': 'resume'})])
+    assert codes == [200] * 9 and arrived == [*buttons, 'resume']
+
+
+def test_a_take_control_that_timed_out_moves_the_holder_to_its_generation(game, monkeypatch):
+    leases = game.library.manager.leases
+    lease(game.bob, game.red, 'request')
+    asked = []
+
+    def timed_out(aid, action, generation):
+        # The worker took control, but its answer never came back.
+        asked.append(generation)
+        return False
+    monkeypatch.setattr(leases, 'worker', timed_out)
+    assert lease(game.carol, game.red, 'take').status_code == 409
+    assert leases.holder(game.red) == game.ids.bob
+    # The worker now refuses anything older than the take_control, so Bob's presses carry it too.
+    assert press(game.bob, game.red).status_code == 200
+    assert game.library.forwarded[-1].headers[LEASE_HEADER] == str(asked[0])
+
+
+def test_a_resume_that_timed_out_moves_the_holder_to_its_generation(game):
+    app = game.library.app
+    lease(game.bob, game.red, 'request')
+    asked, sent = [], []
+
+    def timed_out(request):
+        asked.append(request.headers[LEASE_HEADER])
+        raise httpx.ReadTimeout('no answer', request=request)
+    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(timed_out))
+    assert game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'}).status_code == 503
+    assert game.library.manager.leases.holder(game.red) == game.ids.bob
+    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(
+        lambda request: sent.append(request) or httpx.Response(200, json={'ok': True})))
+    assert press(game.bob, game.red).status_code == 200
+    assert sent[-1].headers[LEASE_HEADER] == asked[0]
+
+
+def test_a_resume_without_a_lease_waits_for_a_grant_under_way(game, monkeypatch):
+    manager, app = game.library.manager, game.library.app
+    leases, sent = manager.leases, []
+    carol = manager.actor_for(manager.auth.user(game.ids.carol))
+    adventure = manager.registry.adventure(game.red)
+    app.state.children = httpx._client.AsyncClient(transport=httpx.MockTransport(
+        lambda request: sent.append(request) or httpx.Response(200, json={'ok': True})))
+    granting, read, current = threading.Event(), threading.Event(), leases.current
+
+    def reading(aid):
+        found = current(aid)
+        if threading.current_thread() is not granter:
+            read.set()
+        return found
+    monkeypatch.setattr(leases, 'current', reading)
+
+    def grant():
+        # Carol's request has sent take_control and not yet recorded her lease, and the Resume
+        # has already read that nobody holds control.
+        with leases.turn(game.red):
+            granting.set()
+            read.wait(5)
+            threading.Event().wait(0.1)
+            leases.act(game.red, carol, adventure, 'request')
+    granter = threading.Thread(target=grant)
+    granter.start()
+    granting.wait(5)
+    resumed = game.alice.post(f'/games/{game.red}/api/control', json={'action': 'resume'})
+    granter.join(5)
+    # The Resume waited for the grant, found Carol in control and never reached the game.
+    assert resumed.status_code == 409 and not sent
+    assert leases.holder(game.red) == game.ids.carol
 
 
 def test_a_slow_press_keeps_the_usual_time_limit(game):

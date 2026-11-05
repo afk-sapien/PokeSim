@@ -174,11 +174,14 @@ def _delete_owner(manager, uid, user, plan, actor):
     # The account is gone and a retry cannot find it, so each step below runs whatever the one
     # before it did.
     for aid, target in plan.items():
-        attempt(release, manager, aid, uid, actor)
-        if target == 'archive':
-            attempt(archive, manager, aid, uid, actor)
-        else:
-            attempt(give, manager, aid, uid, target, actor)
+        # As in hand_on, the trades end and the owner changes in one hold of the guard.
+        with manager.offers.guard:
+            attempt(end_trades, manager, aid, actor)
+            if target == 'archive':
+                attempt(archive, manager, aid, uid, actor)
+            else:
+                attempt(give, manager, aid, uid, target, actor)
+        attempt(manager.leases.forget, aid, uid)
     # Offers this user sent from adventures shared with them, and their place in any lease queue.
     for offer in attempt(manager.registry.trade_offers, statuses=[PENDING]) or ():
         if offer.get('sender_id') == uid:

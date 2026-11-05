@@ -1513,9 +1513,9 @@ def create_app(manager, shutdown=lambda: None):
         if control in {'resume', 'pause'}:
             # The autopilot takes over again, or the manager stopped it, so nobody holds control.
             # The lease ends once the worker has done it (see game), and only the lease held now.
-            current = manager.leases.current(aid)
-            if current is not None:
-                request.state.ends_lease = (control, current)
+            # With no lease it still runs in the adventure's turn, so it never lands between a
+            # grant's take_control and the new lease.
+            request.state.ends_lease = (control, manager.leases.current(aid))
         return 'viewer' if viewer else policy.adventure_role(actor, adventure)
 
     def lease_route(aid, request, body):
@@ -1568,14 +1568,22 @@ def create_app(manager, shutdown=lambda: None):
             if len(body) > 65536:
                 raise HTTPException(413, 'Game request is too large')
         body = bytes(body)
+        role = 'viewer' if viewer else 'owner'
+        if manager.auth_mode == 'accounts':
+            # Checked before the press line, so only someone allowed to press takes a place in it.
+            access = await run_in_threadpool(game_access, aid, path, request, viewer, body)
+            if isinstance(access, Response):
+                return access
+            role = access
+            viewer = role == 'viewer'
         action = line_action(body) if request.method == 'POST' and path == 'api/control' else None
         if action:
             # Presses, Take Control, Resume and Pause go to the worker one at a time and in the
             # order they arrived, so a Resume never overtakes a press. The line is an asyncio
             # lock, so a queued press holds no thread while it waits.
             async with press_line(aid, request, action):
-                return await forward(aid, path, request, viewer, body)
-        return await forward(aid, path, request, viewer, body)
+                return await forward(aid, path, request, viewer, body, role)
+        return await forward(aid, path, request, viewer, body, role)
 
     # Each adventure's line of presses: its lock and how many presses are in it.
     press_lines = app.state.press_lines = {}
@@ -1583,7 +1591,8 @@ def create_app(manager, shutdown=lambda: None):
     @asynccontextmanager
     async def press_line(aid, request, action):
         line = press_lines.setdefault(aid, [asyncio.Lock(), 0])
-        if line[1] >= PRESS_LINE_MAX:
+        # Only presses are capped. Take Control, Resume and Pause always join, still in order.
+        if action == 'press' and line[1] >= PRESS_LINE_MAX:
             raise HTTPException(429, 'The adventure is behind on presses. Wait a moment and press again.')
         line[1] += 1
         joined = time.monotonic()
@@ -1608,14 +1617,7 @@ def create_app(manager, shutdown=lambda: None):
             return None
         return action if action in LINE_ACTIONS else None
 
-    async def forward(aid, path, request, viewer, body):
-        role = 'viewer' if viewer else 'owner'
-        if manager.auth_mode == 'accounts':
-            access = await run_in_threadpool(game_access, aid, path, request, viewer, body)
-            if isinstance(access, Response):
-                return access
-            role = access
-            viewer = role == 'viewer'
+    async def forward(aid, path, request, viewer, body, role):
         if path == 'api/lease':
             return await run_in_threadpool(lease_route, aid, request, body)
         # Everything below that reads the registry, the coordinator or the disk runs in a worker
@@ -1755,9 +1757,15 @@ def create_app(manager, shutdown=lambda: None):
                     return None
                 # The holder's presses stay valid until the worker took the change, so one it
                 # refused leaves them as they were. Ending the lease starts the new generation.
-                headers[LEASE_HEADER] = str(manager.leases.reserve())
-                sent = anyio.from_thread.run(send)
-                if sent.status_code < 400:
+                reserved = manager.leases.reserve()
+                headers[LEASE_HEADER] = str(reserved)
+                try:
+                    sent = anyio.from_thread.run(send)
+                except BaseException:
+                    # The worker may have taken it without answering, so both sides move to it.
+                    manager.leases.restamp(aid, current, reserved)
+                    raise
+                if sent.status_code < 400 and current is not None:
                     manager.leases.end(aid, reason, apply=False, only=current)
                 return sent
         try:
