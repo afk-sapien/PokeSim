@@ -241,6 +241,23 @@ class AuthStore:
         return self.db.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=0 AND id != ?",
                                (LIBRARY_OWNER,)).fetchone()[0]
 
+    def _first_admin(self, preferred=None):
+        """`preferred` while it is an admin who can log in, else the oldest such admin, else None."""
+        rows = self.db.execute("""SELECT id FROM users WHERE role='admin' AND disabled=0 AND id != ?
+            ORDER BY id = ? DESC, created_at, id LIMIT 1""", (LIBRARY_OWNER, preferred)).fetchone()
+        return rows[0] if rows else None
+
+    def rebind_library_owner(self, preferred=None):
+        """Bind the library owner to a real admin when the bound one is missing. Returns the owner."""
+        with self.lock, self.db:
+            bound = self.db.execute("SELECT value FROM settings WHERE key='library_owner'").fetchone()
+            if bound is None or self.db.execute('SELECT 1 FROM users WHERE id=? AND id != ?',
+                                                (bound[0], LIBRARY_OWNER)).fetchone() is None:
+                admin = self._first_admin(preferred)
+                if admin is not None:
+                    self.db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)', ('library_owner', admin))
+        return self.library_owner()
+
     def update_user(self, uid, *, role=None, disabled=None, can_create=None, display_name=None):
         current = self.user(uid)
         if current is None or current['placeholder']:
@@ -274,12 +291,13 @@ class AuthStore:
             self.end_sessions(uid)
         return result
 
-    def delete_user(self, uid, heirs=()):
+    def delete_user(self, uid, heirs=(), successor=None):
         """Remove a user with their sessions, sign-ins and grants, and end the links and invites they made.
 
         Every one of `heirs`, the people their adventures go to, must still be able to log in. That
         and the last-admin check run in the same transaction as the deletion, so a demotion or a
-        disable at the same moment cannot slip between them.
+        disable at the same moment cannot slip between them. When the user was the library owner,
+        `successor`, or else the oldest admin left, becomes it in that transaction too.
         """
         current = self.user(uid)
         if current is None or current['placeholder']:
@@ -297,6 +315,10 @@ class AuthStore:
             self.db.execute('DELETE FROM users WHERE id=?', (uid,))
             if admins and self._admins() == 0:
                 raise ValueError('Keep at least one admin')
+            if self.db.execute("SELECT 1 FROM settings WHERE key='library_owner' AND value=?", (uid,)).fetchone():
+                admin = self._first_admin(successor)
+                if admin is not None:
+                    self.db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)', ('library_owner', admin))
         self.cache.clear()
 
     def set_password(self, uid, password, *, keep=None):

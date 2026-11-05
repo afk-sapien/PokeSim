@@ -457,6 +457,31 @@ def test_the_cli_token_acts_as_the_first_admin(library, people):
     assert command.get('/api/v1/users').status_code == 401
 
 
+def test_deleting_the_first_admin_makes_the_deleting_admin_the_library_owner(library, people):
+    second = library.user('second', 'admin')
+    assert library.manager.default_owner() == people.admin['id']
+    deleting = library.login('second')
+    assert deleting.request('DELETE', f'/api/v1/users/{people.admin["id"]}', json={'adventures': {}}).status_code == 200
+    assert library.manager.default_owner() == second['id']
+    # An adventure the command line imports now belongs to someone who can see it.
+    token = library.manager.issue_cli_token()
+    command = TestClient(library.app, headers={'X-PokeSim-CLI-Token': token})
+    assert command.get('/api/v1/session').json()['user']['id'] == second['id']
+
+
+def test_startup_rebinds_a_deleted_library_owner_and_its_adventures(library, people):
+    from pokesim.app.registry import LIBRARY_OWNER
+    manager = library.manager
+    second = library.user('second', 'admin')
+    # A Library from before this fix: the bound owner is gone and an import went to the placeholder.
+    manager.auth.set_setting('library_owner', identifier())
+    stranded = manager.registry.create('Imported', 'fixture', {}, identifier(), owner=LIBRARY_OWNER)
+    assert manager.default_owner() == LIBRARY_OWNER
+    manager.bind_library_owner()
+    assert manager.default_owner() == people.admin['id'] != second['id']
+    assert manager.registry.adventure(stranded['id'])['owner_id'] == people.admin['id']
+
+
 def request_from(host, headers):
     return SimpleNamespace(client=SimpleNamespace(host=host), headers={key.lower(): value for key, value in headers.items()})
 

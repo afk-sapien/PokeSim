@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import os
 from pathlib import Path
 import sqlite3
 import threading
@@ -10,6 +12,8 @@ import time
 import uuid
 
 from ..checkpoints import CheckpointStore
+
+log = logging.getLogger(__name__)
 
 SCHEMA = 2
 # Adventures from before accounts belong to this placeholder user until setup names the first
@@ -49,8 +53,13 @@ class Registry:
         if version > SCHEMA:
             self.db.close()
             raise ValueError('This application needs a newer PokeSim version')
+        if version < SCHEMA and self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table'").fetchone():
+            self._keep_before_migration()
         self.db.execute('PRAGMA synchronous=FULL')
         with self.db:
+            # sqlite3 commits a CREATE TABLE on its own, so the whole migration opens its own
+            # transaction, and a start stopped partway leaves the database as it was.
+            self.db.execute('BEGIN')
             self.db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
             self.db.execute('CREATE TABLE IF NOT EXISTS roms (id TEXT PRIMARY KEY, sha1 TEXT NOT NULL, version TEXT NOT NULL)')
             self.db.execute('''CREATE TABLE IF NOT EXISTS adventures (
@@ -81,19 +90,37 @@ class Registry:
             if 'owner_id' not in columns:
                 self.db.execute(f"ALTER TABLE adventures ADD COLUMN owner_id TEXT NOT NULL DEFAULT '{LIBRARY_OWNER}'")
             # Who has each cartridge on their shelf. The file stays while anyone does.
-            tables = {row[0] for row in self.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             self.db.execute('''CREATE TABLE IF NOT EXISTS rom_owners (
                 rom_id TEXT NOT NULL, user_id TEXT NOT NULL, added_at REAL, PRIMARY KEY (rom_id, user_id))''')
             self.db.execute('CREATE INDEX IF NOT EXISTS rom_owners_user ON rom_owners (user_id)')
-            if 'rom_owners' not in tables:
-                # ROMs from before shelves go to the Library owner, and each adventure's owner keeps its ROM.
-                self.db.execute('INSERT OR IGNORE INTO rom_owners (rom_id, user_id) SELECT id, ? FROM roms', (LIBRARY_OWNER,))
-                self.db.execute('''INSERT OR IGNORE INTO rom_owners (rom_id, user_id) SELECT DISTINCT a.rom_id, a.owner_id
-                    FROM adventures a JOIN roms r ON r.id = a.rom_id''')
+            # ROMs on no shelf, from before shelves, go to the Library owner, and each adventure's
+            # owner keeps its ROM. Checked on every start, so none is left off for good.
+            bare = [(row[0],) for row in self.db.execute(
+                'SELECT id FROM roms WHERE id NOT IN (SELECT rom_id FROM rom_owners)')]
+            self.db.executemany('INSERT OR IGNORE INTO rom_owners (rom_id, user_id) VALUES (?, ?)',
+                                [(rom_id, LIBRARY_OWNER) for rom_id, in bare])
+            self.db.executemany('''INSERT OR IGNORE INTO rom_owners (rom_id, user_id)
+                SELECT DISTINCT rom_id, owner_id FROM adventures WHERE rom_id=?''', bare)
             self.db.execute(f'PRAGMA user_version={SCHEMA}')
         if self.setting('application_id') is None:
             self.set_setting('application_id', identifier())
         self._migrate_adventure_speeds()
+
+    def _keep_before_migration(self):
+        """Copy the Library database before a schema change, since the older PokeSim that made
+        it cannot open it after. Restoring the copy is how to go back to that version."""
+        stamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
+        path = self.root / f'app.sqlite.pre-schema-{SCHEMA}-{stamp}'
+        # Made private before anything is written, since settings can hold an ntfy access token.
+        os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+        copy = sqlite3.connect(path)
+        try:
+            # The backup API reads through the write-ahead log, so the copy is one whole file.
+            self.db.backup(copy)
+        finally:
+            copy.close()
+        log.warning('Kept a copy of the Library database from before this upgrade at %s. '
+                    'Restore it to go back to an older PokeSim.', path)
 
     def _migrate_adventure_speeds(self):
         with self.lock, self.db:

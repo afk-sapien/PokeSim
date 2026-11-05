@@ -189,7 +189,7 @@ def test_nothing_new_can_belong_to_a_user_being_deleted(quiet, people, monkeypat
     auth, registry = manager.auth, manager.registry
     delete, attempts = auth.delete_user, []
 
-    def racing(uid, heirs=()):
+    def racing(uid, heirs=(), successor=None):
         # Bob starts a new adventure and Carol gives him one, after the plan was checked.
         for attempt in (lambda: registry.create('Late', 'fixture', {'starter': 'random'}, identifier(), owner=uid),
                         lambda: registry.set_owner(people.red, uid)):
@@ -197,7 +197,7 @@ def test_nothing_new_can_belong_to_a_user_being_deleted(quiet, people, monkeypat
                 attempts.append(attempt()['id'])
             except ValueError as error:
                 attempts.append(str(error))
-        return delete(uid, heirs=heirs)
+        return delete(uid, heirs=heirs, successor=successor)
     monkeypatch.setattr(auth, 'delete_user', racing)
     done = quiet.login('admin').request('DELETE', f"/api/v1/users/{people.bob['id']}",
                                         json={'adventures': {people.blue: 'archive'}})

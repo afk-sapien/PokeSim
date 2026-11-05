@@ -7,8 +7,14 @@
   let csrf = ''
   const next = () => {
     const wanted = new URLSearchParams(location.search).get('next') || '/'
-    // Only a path on this site. Anything else could send a fresh login to another site.
-    return /^\/(?![/\\])/.test(wanted) ? wanted : '/'
+    // Only a page on this site. Anything else could send a fresh login to another site. The
+    // browser drops a tab or line break from the path, so it is parsed the way the browser will,
+    // and a path that starts with // would read as another site once it is sent back.
+    try {
+      const url = new URL(wanted, location.origin)
+      if (url.origin === location.origin && !url.pathname.startsWith('//')) return url.pathname + url.search + url.hash
+    } catch {}
+    return '/'
   }
   const copy = {
     login: ['Log in', 'Log in to see your adventures.', 'Log in'],
