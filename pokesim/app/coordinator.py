@@ -624,8 +624,8 @@ class Coordinator:
                         # Someone is playing by hand. Automatic trades wait for them.
                         raise Waiting('Someone is playing this adventure by hand')
                     for aid in held:
+                        # The worker hears in the background, so no send waits under these locks.
                         leases.end(aid, 'trade')
-                        leases.converge(aid)
                 plan['plan_digest'] = digest(plan)
                 return self.registry.create_transaction(tid, plan)
 

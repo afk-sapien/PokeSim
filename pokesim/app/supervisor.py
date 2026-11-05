@@ -29,6 +29,13 @@ SETUP_DELAYS = (30, 120, 300)
 VIEWER_IDLE = 300   # seconds before an unwatched stopped-adventure viewer closes
 
 
+class WorkerError(RuntimeError):
+    """The worker answered with an error, with its HTTP status."""
+    def __init__(self, detail, status):
+        super().__init__(detail)
+        self.status = status
+
+
 class Child:
     def __init__(self, bootstrap, command=None):
         self.bootstrap = bootstrap
@@ -135,7 +142,7 @@ class Child:
                     detail = response.json().get('detail', response.text[:300])
                 except ValueError:
                     detail = response.text[:300]
-                raise RuntimeError(str(detail))
+                raise WorkerError(str(detail), response.status_code)
             return response.json()
 
     def stop(self, timeout=50):
