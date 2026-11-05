@@ -86,7 +86,7 @@ class Supervisor:
         self.starts.append((aid, recovery))
         assert recovery
 
-    def stop(self, aid):
+    def stop(self, aid, preserve_desired=False):
         self.stops.append(aid)
         self.registry.update(aid, state='stopped')
 
@@ -256,6 +256,58 @@ def test_a_hand_picked_trade_prepares_once_the_worker_left_manual_control(setup)
         answer.set()
     running.join(10)
     assert order[:2] == ['control', 'prepare']
+
+
+def test_a_cancel_ends_the_wait_for_a_worker_to_leave_manual_control(setup):
+    """The worker never runs the end of manual control. A Cancel stops the trade waiting for it,
+    so it waits neither for the 15 minute preparation limit nor for the trade lock."""
+    from pokesim.app.lease import Lease, Leases
+    leases = setup.manager.leases = Leases(setup.manager)
+    aid, answer, waiting = setup.data['left_id'], threading.Event(), threading.Event()
+    leases.leases[aid] = Lease('someone', 'Someone', 0, 0, 0)
+    peer = setup.peers[aid]
+    original = peer.request
+
+    def hung(method, path, data=None, timeout=None, headers=None):
+        if path == '/api/control':
+            answer.wait(30)
+            return {'ok': True, 'applied': True}
+        return original(method, path, data, timeout)
+    peer.request = hung
+    settle = leases.settle
+
+    def reached(*args):
+        waiting.set()
+        return settle(*args)
+    leases.settle = reached
+    row = setup.coordinator.propose({**manual_request(setup), 'manual': True})
+    running = threading.Thread(target=setup.coordinator.execute, args=(row['id'],), daemon=True)
+    cancelling = threading.Thread(target=setup.coordinator.cancel, args=(row['id'],), daemon=True)
+    try:
+        running.start()
+        assert waiting.wait(5)
+        cancelling.start()
+        cancelling.join(5)
+        assert not cancelling.is_alive()
+        running.join(5)
+        assert not running.is_alive()
+        assert setup.registry.transaction(row['id'])['decision'] == 'ABORT'
+    finally:
+        answer.set()
+
+
+def test_a_trade_that_stops_the_adventure_leaves_no_pause_for_its_next_run(setup):
+    """The owner stopped the adventure during the trade, after the trade ended a lease into
+    a Pause. The trade stops it, and the next Start hears nothing from that run."""
+    from pokesim.app.lease import Desired, Leases
+    leases = setup.manager.leases = Leases(setup.manager)
+    aid = setup.data['left_id']
+    row = setup.coordinator.propose(setup.data)
+    leases.desired[aid] = Desired('pause', leases.advance(aid), confirmed=True, boot='first')
+    setup.registry.update(aid, desired_state='stopped')
+    assert setup.coordinator.execute(row['id'])['phase'] == 'completed'
+    assert aid in setup.supervisor.stops
+    assert leases.intended(aid) is None
 
 
 def test_both_stages_precede_commit_and_both_apply_precede_release(setup):

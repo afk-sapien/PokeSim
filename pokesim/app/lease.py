@@ -59,6 +59,8 @@ END_ALL_SECONDS = 10
 # The sweep sends a state the worker refused again after 10 s, doubling up to 5 minutes.
 REFUSED_RETRY_SECONDS = 10
 REFUSED_RETRY_LIMIT = 300
+# How often a settle checks whether its caller gave up, should nobody wake it.
+SETTLE_CHECK_SECONDS = 1
 
 
 def idle_limit():
@@ -201,6 +203,11 @@ class Leases:
         """What one page shows: who holds control, the queue, and what this person may do."""
         role = self.role(actor, adventure)
         base = {'enforced': self.enforced, 'role': role, 'end': self.end_choice(aid)}
+        with self.lock:
+            desired = self.desired.get(aid)
+            # A page waiting on a Pause or Resume stops waiting once this no longer names it.
+            base['pending'] = (None if desired is None or desired.confirmed else
+                               {'action': desired.action, 'generation': desired.generation})
         if not self.enforced:
             return {**base, 'holder': None, 'you_hold': False, 'queue': [], 'queued': False}
         now = self.clock()
@@ -552,18 +559,31 @@ class Leases:
                     self.settled.wait(remaining)
         return ended
 
-    def settle(self, aid, deadline):
-        """Wait until the worker confirmed its desired state, or until the monotonic `deadline`.
-        Returns whether it did. Never call it in the turn."""
+    def settle(self, aid, deadline, cancelled=None):
+        """Wait until the worker confirmed its desired state, until the monotonic `deadline`, or
+        until `cancelled()` says the caller gave up. Returns whether it confirmed. Never call it
+        in the turn."""
         with self.settled:
             while True:
                 desired = self.desired.get(aid)
                 if desired is None or desired.confirmed:
                     return True
                 remaining = deadline - time.monotonic()
-                if remaining <= 0:
+                if remaining <= 0 or (cancelled is not None and cancelled()):
                     return False
-                self.settled.wait(remaining)
+                self.settled.wait(min(remaining, SETTLE_CHECK_SECONDS) if cancelled else remaining)
+
+    def wake(self):
+        """Wake every settle, so one whose caller gave up returns now."""
+        with self.settled:
+            self.settled.notify_all()
+
+    def stop_worker(self, aid, **options):
+        """Stop the adventure's worker and drop what its run was told. Every owner stop goes
+        through here, so no Pause from this run follows the next Start."""
+        row = self.manager.supervisor.stop(aid, **options)
+        self.stopped(aid)
+        return row
 
     def stopped(self, aid):
         """The owner stopped the adventure. It starts again on its autopilot, so it keeps no

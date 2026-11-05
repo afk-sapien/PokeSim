@@ -202,10 +202,8 @@ class Manager:
                 if row['desired_state'] == 'stopped':
                     if self.coordinator.reserved(aid):
                         return row
-                    stopped = self.supervisor.stop(aid, preserve_desired=True)
                     # The next start runs on its autopilot, so no Pause or Resume from this run follows it.
-                    self.leases.stopped(aid)
-                    return stopped
+                    return self.leases.stop_worker(aid, preserve_desired=True)
                 self.supervisor.setup_retries.pop(aid, None)
                 return self.supervisor.start(aid)
         except Exception as error:
@@ -1793,8 +1791,8 @@ def create_app(manager, shutdown=lambda: None):
                 raise HTTPException(desired.status or 409, desired.detail or 'The adventure refused that')
             waiting = ('is busy. It will {} once it can' if outcome == 'deferred'
                        else 'did not answer. It will {} when the game answers').format(action)
-            return JSONResponse({'ok': True, 'applied': False, 'detail': f'The adventure {waiting}.'},
-                                status_code=202)
+            return JSONResponse({'ok': True, 'applied': False, 'detail': f'The adventure {waiting}.',
+                                 'generation': desired.generation}, status_code=202)
         if ends_lease:
             response = await run_in_threadpool(choose, *ends_lease)
             if response is None:
