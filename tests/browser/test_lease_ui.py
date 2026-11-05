@@ -194,3 +194,33 @@ def test_a_pause_the_game_has_not_run_yet_says_it_is_on_its_way(browser, tmp_pat
         expect(alice.locator('#toast')).to_have_text(detail)
         expect(alice.locator('#control-mode')).to_have_text('Pausing once the game can')
         expect(alice.locator('#pause')).to_have_class('key is-pending')
+
+
+def test_a_pause_another_manager_replaced_stops_saying_it_is_on_its_way(browser, tmp_path, monkeypatch):
+    import json
+    from playwright.sync_api import expect
+    detail = 'The adventure is busy. It will pause once it can.'
+    with adventure(tmp_path, monkeypatch) as game:
+        leases = game.manager.leases
+        # The worker has not run either change, so neither is ever confirmed.
+        monkeypatch.setattr(leases, 'kick', lambda aid: None)
+
+        def busy(route):
+            # The library took the Pause and sends it again until the game runs it.
+            if route.request.method == 'POST' and json.loads(route.request.post_data or '{}').get('action') == 'pause':
+                with leases.turn(game.aid):
+                    desired = leases.want(game.aid, 'pause')
+                route.fulfill(status=202, content_type='application/json', body=json.dumps(
+                    {'ok': True, 'applied': False, 'detail': detail, 'generation': desired.generation}))
+            else:
+                route.continue_()
+        alice = open_game(browser, game, 'alice')
+        alice.route('**/api/control', busy)
+        alice.wait_for_load_state('domcontentloaded')
+        alice.locator('#pause').click()
+        expect(alice.locator('#control-mode')).to_have_text('Pausing once the game can')
+        # Another manager resumes the game before it ran the Pause.
+        with leases.turn(game.aid):
+            leases.want(game.aid, 'resume')
+        expect(alice.locator('#control-mode')).to_have_text('AI is playing', timeout=10000)
+        expect(alice.locator('#pause')).to_have_class('key')

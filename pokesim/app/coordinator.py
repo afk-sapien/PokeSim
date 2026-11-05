@@ -660,14 +660,19 @@ class Coordinator:
         # A full PC releases one spare to make room, never a hand-picked Pokémon.
         hand_picked = self.hand_picked_keys()
         leases = getattr(self.manager, 'leases', None)
+        def cancelled():
+            return self.closed.is_set() or self.registry.transaction(row['id'])['decision'] == 'ABORT'
         if plan.get('manual') and leases is not None:
             for aid in plan['participants']:
                 # The lease this trade ended may not have reached the worker yet, and a game
-                # still under manual control cannot prepare. No lock is held here.
-                if not leases.settle(aid, deadline):
+                # still under manual control cannot prepare. No lock is held here, and a Cancel
+                # or shutdown ends the wait.
+                if not leases.settle(aid, deadline, cancelled):
+                    if cancelled():
+                        raise RuntimeError('Cable Club preparation was cancelled')
                     raise TimeoutError(f'The adventure did not leave manual control in time (adventure {aid})')
         while len(prepared) != 2:
-            if self.closed.is_set() or self.registry.transaction(row['id'])['decision'] == 'ABORT':
+            if cancelled():
                 raise RuntimeError('Cable Club preparation was cancelled')
             for side, aid in zip(('left', 'right'), plan['participants']):
                 if aid in prepared:
@@ -908,7 +913,12 @@ class Coordinator:
         for aid in plan['participants']:
             self.previews.pop(aid, None)
             if self.registry.adventure(aid)['desired_state'] == 'stopped':
-                self.manager.supervisor.stop(aid)
+                # The owner stopped it during the trade, so the stop drops what its run was told.
+                leases = getattr(self.manager, 'leases', None)
+                if leases is not None:
+                    leases.stop_worker(aid)
+                else:
+                    self.manager.supervisor.stop(aid)
             else:
                 self.registry.update(aid, state='running', error=None)
         return row
@@ -972,6 +982,7 @@ class Coordinator:
             if row['phase'] in TERMINAL:
                 return row
             self.registry.update_transaction(tid, decision='ABORT', phase='aborting', error='Cancelled by the owner')
+        self._wake_settles()
         with self.process_guard:
             if self.process and self.process.poll() is None:
                 self.process.terminate()
@@ -1504,8 +1515,15 @@ class Coordinator:
             return preview
         return None
 
+    def _wake_settles(self):
+        """A trade waiting for a worker to leave manual control rechecks whether it should go on."""
+        leases = getattr(self.manager, 'leases', None)
+        if leases is not None:
+            leases.wake()
+
     def close(self):
         self.closed.set()
+        self._wake_settles()
         with self.process_guard:
             process = self.process
             if process and process.poll() is None:

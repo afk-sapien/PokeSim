@@ -64,6 +64,8 @@ let paused = false
 let manualMode = false
 // A Pause, Resume or Take Control the library took but the game has not run yet.
 let pendingControl = null
+// The library's generation for that Pause or Resume, so the page sees when another change replaced it.
+let pendingGeneration = null
 const PENDING = {pause: 'Pausing once the game can', resume: 'Resuming once the game can', take_control: 'Taking control once the game can'}
 let stoppedNow = false
 // This person's role on the adventure. Without accounts everyone is the owner.
@@ -199,6 +201,7 @@ async function control(button, action, value, message) {
     if (reply?.applied === false && reply.detail) {
       // The library sends it again until the game runs it, so the page says it is on its way.
       pendingControl = PENDING[action] ? action : null
+      pendingGeneration = Number.isInteger(reply.generation) ? reply.generation : null
       toast(reply.detail)
     } else if (reply?.applied === false) {
       throw new Error(reply.reason || 'The game did not run that now. Please try again.')
@@ -313,7 +316,10 @@ async function refreshState() {
     set('#control-mode', 'textContent', stopped ? 'Showing the last save' : manualMode ? 'You’re playing. AI paused' : paused ? 'Game paused' : 'AI is playing')
     renderLease()
     const ran = {pause: paused && !manualMode, resume: !paused && !manualMode, take_control: manualMode}
-    if (pendingControl && (stopped || ran[pendingControl])) pendingControl = null
+    // Another manager's Resume, or a take and a later end, replaces what this page asked for.
+    const replaced = pendingGeneration !== null && lease && lease.pending?.generation !== pendingGeneration
+    if (pendingControl && (stopped || ran[pendingControl] || replaced)) pendingControl = null
+    if (!pendingControl) pendingGeneration = null
     if (pendingControl) set('#control-mode', 'textContent', PENDING[pendingControl])
     $('#pause')?.classList.toggle('is-pending', pendingControl === 'pause' || pendingControl === 'resume')
     $('#connection').classList.toggle('is-paused', paused)
