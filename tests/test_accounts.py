@@ -191,6 +191,9 @@ def test_failed_logins_behind_the_proxy_lock_out_only_the_client_that_made_them(
 
 
 def test_guesses_from_everywhere_slow_an_account_by_a_minute_at_most(library, people, monkeypatch):
+    # Held still, since two dozen password checks on a slow runner can outlast the minute.
+    now = time.time()
+    monkeypatch.setattr('pokesim.app.auth.time', SimpleNamespace(time=lambda: now))
     own = browser_at(library, '198.51.100.20')
     first = own.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD})
     assert first.status_code == 200
@@ -598,6 +601,20 @@ def test_startup_rebinds_a_disabled_library_owner(library, people):
     manager.bind_library_owner()
     assert manager.default_owner() == second['id']
     assert manager.registry.adventure(stranded['id'])['owner_id'] == second['id']
+
+
+def test_the_first_admin_a_proxy_names_owns_the_older_library_at_once(library):
+    """Without the bind, older adventures and ROMs stayed on the placeholder until the next start."""
+    manager = library.manager
+    older = manager.registry.create('Older', 'fixture', {}, identifier())
+    assert manager.needs_setup
+    carol = manager.proxy_user('carol', 'admin')
+    assert manager.default_owner() == carol['id']
+    assert manager.registry.adventure(older['id'])['owner_id'] == carol['id']
+    assert manager.registry.owns_rom('fixture', carol['id'])
+    # A later admin from the proxy does not take the Library over.
+    dave = manager.proxy_user('dave', 'admin')
+    assert manager.default_owner() == carol['id'] != dave['id']
 
 
 def request_from(host, headers):

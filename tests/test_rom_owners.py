@@ -1,4 +1,6 @@
 """Each person's cartridge shelf under accounts: one stored file, many owners, nothing shown across shelves."""
+import threading
+
 import pytest
 
 from pokesim.app.registry import LIBRARY_OWNER, Registry, identifier
@@ -124,6 +126,29 @@ def test_removing_ends_only_your_ownership_until_the_last_owner_goes(shelves, pe
     assert bob.delete('/api/v1/cartridges/yellow').status_code == 200
     assert not path.exists()
     assert all(row['version'] != 'yellow' for row in shelves.manager.registry.roms())
+
+
+def test_an_upload_during_the_last_removal_keeps_the_file(shelves, people, monkeypatch):  # noqa: F811
+    alice = shelves.login('alice')
+    upload(alice, 'yellow')
+    path = stored(shelves.manager, 'yellow')
+    assets = shelves.manager.assets
+    delete = assets.delete_rom_files
+    bob = threading.Thread(target=assets.add_cartridge, args=(synthetic('yellow'), 'yellow'),
+                           kwargs={'owner': people.bob['id']})
+
+    def racing(rom_ids):
+        # Bob uploads the same file after Alice's row is released and before the file goes.
+        bob.start()
+        bob.join(1)
+        delete(rom_ids)
+
+    monkeypatch.setattr(assets, 'delete_rom_files', racing)
+    assert alice.delete('/api/v1/cartridges/yellow').status_code == 200
+    bob.join(10)
+    assert not bob.is_alive()
+    assert shelves.manager.registry.owns_rom(path.parent.name, people.bob['id'])
+    assert path.exists()
 
 
 def test_your_own_adventure_blocks_removal_but_someone_elses_does_not(shelves, people):  # noqa: F811
