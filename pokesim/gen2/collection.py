@@ -2,7 +2,7 @@
 from collections import Counter
 
 from ..planning import values
-from ..planning import arbiter
+from ..planning import arbiter, pin
 from ..planning.arbiter import Candidate, Tier
 from ..planning.cost import DECISIONS_PER_BATTLE, FRAMES_PER_BATTLE, FRAMES_PER_TILE
 from ..planning.ledger import FIELD_MOVES
@@ -614,6 +614,12 @@ class Ladder:
         self.undo = {}
         # The rung the last decision picked, which any other rung pays INTERRUPT_FRAMES to cut into.
         self.running = getattr(policy, 'ladder_rung', None)
+        # The next activity a manager set (planning/pin.py). Its rung is always asked.
+        self.pin = getattr(policy, 'pin', None)
+        self.pin_rung = self.pin.key.split(':', 1)[0] if self.pin else None
+        # A survey asks every rung, for the goal list a manager picks from, and changes nothing.
+        self.survey = getattr(policy, 'ladder_survey', False)
+        self.asked, self.labels = set(), {}
 
     def _slots(self):
         policy = self.policy
@@ -678,8 +684,11 @@ class Ladder:
         """Ask rung ``name``, whose best tier is ``tier``. ``build`` gives its goal or None. ``price``,
         given the goal, gives its tier, value and frames of work if they differ from ``tier``, ``value``
         and ``work``."""
-        if self.stopped or self.pick is not None and self.pick.tier < tier:
+        if self.stopped:
             return
+        if self.pick is not None and self.pick.tier < tier and not self.survey and name != self.pin_rung:
+            return
+        self.asked.add(name)
         before = self.save()
         goal = build()
         if goal is None:
@@ -694,10 +703,12 @@ class Ladder:
         candidate = Candidate(f'{name}:{goal.key}', tier, value, work + self.travel(goal),
                               passive=goal.key in PASSIVE, interrupt_frames=interrupt, goal=name)
         self.candidates.append(candidate)
+        self.labels[candidate.key] = goal.label
         if candidate.passive:
             self.passive.append(goal)
             return
-        if self.pick is not None and arbiter.choose([self.pick, candidate]) is not candidate:
+        pinned = self.pin.key if self.pin else None
+        if self.pick is not None and arbiter.choose([self.pick, candidate], pinned=pinned) is not candidate:
             self.load(before)
             return
         changed = self.changed(before)
@@ -774,6 +785,7 @@ def journey(policy, snapshot, mem, Goal):
     from .npc_trades import requests as trade_requests
     state['prerequisites'] = sorted(prerequisites(data, snapshot) | trade_requests(policy, snapshot, getattr(mem, 'memory', None)))
     goal = holds(policy, snapshot, mem, Goal)
+    policy.ladder_hold = goal or None
     if goal:
         policy.ladder_rung, policy.ladder_offers, policy.ladder_pick = None, [], None
         return goal
@@ -856,6 +868,7 @@ def journey(policy, snapshot, mem, Goal):
     policy.ladder_rung, policy.ladder_offers = ladder.rung, ladder.candidates
     policy.ladder_pick = ladder.pick.key if ladder.pick is not None else None
     policy.ladder_decision = getattr(policy, 'decisions', None)
+    policy.ladder_labels = ladder.labels
     goal = ladder.goal
     if state.get('funding') is not None and ('collection', 'funding') not in ladder.undo:
         # A rung that offered nothing, such as the Game Corner prize partner, just asked for League prize
@@ -866,6 +879,7 @@ def journey(policy, snapshot, mem, Goal):
         policy.ladder_rung = 'funding'
         state['phase'] = 'league'
         return league_funding(policy, snapshot, Goal)
+    settle_pin(policy, ladder)
     if goal is not None:
         if ladder.rung in {'breed', 'hatching', 'training'}:
             return while_waiting(policy, snapshot, mem, goal, Goal)
@@ -878,6 +892,76 @@ def journey(policy, snapshot, mem, Goal):
     # Nothing else is useful until the cartridge clock opens a window or a trade brings new work.
     # The plan is rebuilt every step, so clock-gated work starts as soon as its window opens.
     return patrol(policy, snapshot, Goal, waiting_label(policy, snapshot, mem, current_time))
+
+
+def settle_pin(policy, ladder):
+    """Start, end or drop the manager's pin once a decision has weighed the rungs.
+
+    The pin starts when the ladder picks its key and ends, done or not, when a later decision picks
+    something else. A pin whose rung was asked and offered another goal or none cannot run now, so it is
+    dropped with a journal entry. A pin that lost only to upkeep waits for the next decision.
+    """
+    current = ladder.pin
+    if current is None or ladder.survey:
+        return
+    pick = ladder.pick.key if ladder.pick is not None else None
+    if pick == current.key:
+        current.started = True
+    elif current.started:
+        policy.pin = None
+    elif ladder.pin_rung in ladder.asked and all(c.key != current.key for c in ladder.candidates):
+        policy.pin = None
+        pin_events(policy).append(pin.gave_up(current.label, pin.UNAVAILABLE))
+
+
+def pin_events(policy):
+    """Journal rows about the pin that the emulator has not written yet."""
+    if not hasattr(policy, 'pin_events'):
+        policy.pin_events = []
+    return policy.pin_events
+
+
+def survey(policy, snapshot, mem, Goal):
+    """Every rung's candidate for this moment, best first, with labels, and the activity that holds the
+    ladder if one does. Each rung is asked as a decision would ask it and then everything is undone."""
+    ladder = Ladder(policy, snapshot)
+    saved = ladder.save()
+    names = ('ladder_rung', 'ladder_offers', 'ladder_pick', 'ladder_decision', 'ladder_labels', 'ladder_hold')
+    kept = {name: getattr(policy, name, _MISSING) for name in names}
+    rng = policy.rng.getstate() if hasattr(policy, 'rng') else None
+    events = list(pin_events(policy))
+    policy.ladder_survey = True
+    try:
+        journey(policy, snapshot, mem, Goal)
+        offers = arbiter.rank(getattr(policy, 'ladder_offers', None) or [])
+        labels = dict(getattr(policy, 'ladder_labels', None) or {})
+        hold = getattr(policy, 'ladder_hold', None)
+    finally:
+        policy.ladder_survey = False
+        ladder.load(saved)
+        for name, value in kept.items():
+            if value is _MISSING:
+                if hasattr(policy, name):
+                    delattr(policy, name)
+            else:
+                setattr(policy, name, value)
+        if rng is not None:
+            policy.rng.setstate(rng)
+        policy.pin_events = events
+    return offers, labels, hold
+
+
+def goal_list(policy, snapshot, mem, Goal):
+    """The goals a manager can set as the next activity, best first, and why the list is empty."""
+    if 'red' not in policy.completed:
+        return [], 'Finish the story first'
+    offers, labels, hold = survey(policy, snapshot, mem, Goal)
+    goals = [pin.entry(offer.key, labels.get(offer.key, offer.key), offer.tier) for offer in offers]
+    if goals:
+        return goals, None
+    if hold is not None:
+        return [], f'{hold.label} finishes first'
+    return [], 'Nothing to do until the game changes'
 
 
 def hunt_price(policy, snapshot):
