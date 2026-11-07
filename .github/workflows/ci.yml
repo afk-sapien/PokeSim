@@ -87,6 +87,11 @@ jobs:
       - name: Rollback check, a Rust-written Gen 1 state loads into PyBoy 2.7.0
         if: matrix.python == '3.12'
         run: uv run --locked --with pyboy==2.7.0 pytest -q tests/test_pyboy_state_compat.py -rs
+      - name: Live API smoke check against a server started here, with and without accounts
+        if: matrix.python == '3.12'
+        run: |
+          uv run --locked sh tools/smoke_server.sh accounts
+          uv run --locked sh tools/smoke_server.sh none
       - run: python tools/check_web.py
       - run: python tools/check_docs.py
       - run: uv build

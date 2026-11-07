@@ -47,6 +47,31 @@ session of that user, and works while PokeSim runs:
 docker exec pokesim pokesim admin reset-password <username>
 ```
 
+### API reference and smoke check
+
+With accounts on, admins can open `/docs` for the HTTP API reference and `/openapi.json`
+for its schema. Everyone else gets a 404. Without accounts both stay off unless
+`API_DOCS=1` turns them on.
+
+To check a running server through its HTTP API, run this on the machine that holds the
+data:
+
+```sh
+docker exec pokesim pokesim smoke
+```
+
+It acts as an admin through the command line token, so no password is typed. It checks
+health, the login limiter, invites, what one member can reach of another's adventures,
+saves, cartridges, offers and inbox, CSRF, the session role and logout, and that backups
+can be listed. It takes under a minute. Each throwaway user, invite and adventure it makes
+is deleted again, even when a check fails. Their entries in the audit log stay. It prints
+one line per failure and exits non-zero on any. `--with-backup` also makes a backup.
+`--url` checks another address, such as the one behind your proxy. `--rom` gives it a
+cartridge when the library has none, otherwise the adventure checks are skipped.
+
+From a source checkout, `sh tools/smoke_server.sh accounts` or `sh tools/smoke_server.sh none`
+starts a throwaway server and runs the same check against it.
+
 ## Sign in with an identity provider
 
 PokeSim speaks OpenID Connect, so Authelia, Authentik, Keycloak, Pocket ID and similar

@@ -411,6 +411,29 @@ def test_trades_stay_between_one_owners_adventures(library, people):
     assert status['participants'] == [people.red] and status['attention'] is None
 
 
+def test_the_api_reference_is_for_admins_only(library, people):
+    stranger, alice, admin = library.browser(), library.login('alice'), library.login('admin')
+    for path in ('/docs', '/openapi.json'):
+        assert stranger.get(path).status_code == 404, path
+        assert alice.get(path).status_code == 404, path
+        assert admin.get(path).status_code == 200, path
+    schema = admin.get('/openapi.json').json()
+    assert '/api/v1/adventures' in schema['paths'] and '/docs' not in schema['paths']
+    page = admin.get('/docs').text
+    assert '/api/v1/users/{uid}' in page and 'library.users' in page and '<script' not in page
+
+
+def test_without_accounts_the_api_reference_stays_off_unless_turned_on(tmp_path, monkeypatch):
+    monkeypatch.delenv('API_DOCS', raising=False)
+    manager = Manager(tmp_path, 'http://testserver', auth='none')
+    monkeypatch.setattr(manager, 'start', lambda: None)
+    client = TestClient(create_app(manager))
+    assert client.get('/docs').status_code == 404 and client.get('/openapi.json').status_code == 404
+    monkeypatch.setenv('API_DOCS', '1')
+    assert client.get('/docs').status_code == 200 and client.get('/openapi.json').status_code == 200
+    manager.close()
+
+
 def older_library(root):
     """A Library as 0.6.x left it: tables on schema 1, and nothing that says this PokeSim made it."""
     import sqlite3
