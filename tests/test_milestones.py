@@ -199,13 +199,14 @@ def test_perfect_receipt_and_goal_roll_back_together(tracking, monkeypatch):
     assert store.db.execute('SELECT COUNT(*) FROM capture_receipts').fetchone()[0] == 0
 
 
-def test_perfect_duplicates_are_neither_released_nor_traded_even_when_offered():
+def test_perfect_duplicates_are_never_traded_even_when_offered():
     from pokesim.broker.inventory import normalise
     from pokesim.broker.routine import offers, listings
     from pokesim.policies.team import release_target
     perfect = stored(0, trainer_id=123, dvs=(15,) * 5)
     s = snapshot([perfect, replace(perfect, position=1)], party=(partner(1, 99),))
-    assert release_target(s) is None
+    # A perfect duplicate is a spare worth 250 more, so a release takes it only after every plain spare.
+    assert release_target(s) == (0, 1)
     payload = live_status(s.to_dict())
     for entry in payload['storage']['pokemon']:
         entry['trade_preference'] = 'offered'

@@ -1,4 +1,5 @@
 """Persistent Championship reward claims, independent of checkpoint rewinds."""
+import hashlib
 import json
 import random
 import secrets
@@ -95,6 +96,45 @@ def earn(store, count, *, enabled=True):
             value['earned'] += max(0, count - value['observed'])
         value['observed'] = max(value['observed'], count)
         save(store.db, value)
+
+
+_MARKS = {}
+
+
+def _draw(seed, generation):
+    """The trainer ID and DV bytes a reward gift drew from its seed."""
+    if generation == 2:
+        # Core's Gen II box_gift draws the trainer ID, then the two DV bytes, from Random(seed).
+        rng = random.Random(seed)
+        trainer = rng.randrange(65536)
+        return trainer, rng.randrange(256), rng.randrange(256)
+    # trade/event.py gift_slot takes the DV bytes and then the trainer ID from the seed's digest.
+    digest = hashlib.sha256(seed.encode()).digest()
+    return int.from_bytes(digest[2:4], 'big'), digest[0], digest[1]
+
+
+def mark(trainer_id, dvs):
+    """A stored copy's reward mark: its trainer ID and Attack, Defense, Speed and Special DVs."""
+    return trainer_id, tuple(dvs[-4:])
+
+
+def marks(value, generation=1):
+    """The marks of every League reward already delivered, from the ledger alone.
+
+    This also finds rewards delivered before releases knew about them. A random trainer ID and DV pair
+    matches another Pokémon about once in four billion.
+    """
+    seed, delivered = (value or {}).get('seed'), (value or {}).get('delivered', 0)
+    if not seed or not delivered:
+        return frozenset()
+    # One entry per adventure seed, since several adventures can share a process.
+    if _MARKS.get((seed, generation), (None,))[0] != delivered:
+        found = set()
+        for ordinal in range(1, delivered + 1):
+            trainer, first, second = _draw(f'{seed}:{ordinal}', generation)
+            found.add(mark(trainer, (first >> 4, first & 15, second >> 4, second & 15)))
+        _MARKS[seed, generation] = delivered, frozenset(found)
+    return _MARKS[seed, generation][1]
 
 
 def status(store):

@@ -1,4 +1,4 @@
-"""Full Gen II storage frees a slot by releasing a spare duplicate, and waiting on the clock is not a stall."""
+"""Full Gen II storage frees a slot by releasing the lowest-value Pokémon, and waiting on the clock is not a stall."""
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +13,11 @@ def mon(species, *, box=0, position=0, dvs=(8, 8, 8, 8, 8), trainer_id=4321, **e
     return SimpleNamespace(**fields)
 
 
+def strong(species, position=0, **extra):
+    """A perfect, trained Lv 100 copy that outscores any spare, so it is the best copy."""
+    return mon(species, position=position, dvs=(15,) * 5, level=100, stat_exp=(30000,) * 5, **extra)
+
+
 def snapshot(stored, party=(), *, active_box=0, boxes=None):
     return SimpleNamespace(party=tuple(party), stored=tuple(stored), active_box=active_box,
                            box_counts=boxes if boxes is not None else (BOX_CAPACITY,) * 14)
@@ -22,121 +27,125 @@ def test_headroom_counts_free_slots_in_every_box():
     assert headroom(snapshot((), boxes=(20, 18, 15))) == 7
 
 
-def test_the_best_copy_stays_and_the_most_numerous_species_goes_first():
+def test_the_best_copy_stays_and_the_lowest_value_goes_first():
     best = mon(16, position=0, dvs=(15, 14, 14, 14, 14))
     weak = mon(16, position=1, dvs=(2, 2, 2, 2, 2))
     middle = mon(16, position=2, dvs=(9, 9, 9, 9, 9))
     pair = [mon(19, position=3, dvs=(9, 9, 9, 9, 9)), mon(19, position=4, dvs=(3, 3, 3, 3, 3))]
     single = mon(21, position=5)
-    order = spares(snapshot([best, weak, middle, *pair, single]))
-    assert order == [weak, middle, pair[1]]
+    assert spares(snapshot([best, weak, middle, *pair, single])) == [weak, pair[1], middle]
 
 
-def test_party_copies_count_as_the_kept_copy():
+def test_a_party_member_stays_and_a_boxed_upgrade_is_the_best_copy():
     boxed = mon(16, dvs=(0, 2, 2, 2, 2))
     assert spares(snapshot([boxed], party=[mon(16, box=None, position=None)])) == [boxed]
     assert spares(snapshot([boxed])) == []
-
-
-def test_a_boxed_upgrade_survives_even_with_a_weaker_party_copy():
-    boxed = mon(16, dvs=(0, 10, 10, 10, 8))
+    upgrade = mon(16, dvs=(0, 10, 10, 10, 8))
     party = mon(16, box=None, position=None, dvs=(0, 8, 8, 8, 8))
     spare = mon(16, position=1, dvs=(0, 2, 2, 2, 2))
-    for lenient in (False, True):
-        assert spares(snapshot([boxed, spare], party=[party]), lenient=lenient) == [spare]
+    assert spares(snapshot([upgrade, spare], party=[party])) == [spare]
 
 
-def test_special_dv_contributes_to_both_special_stats_when_keeping_an_upgrade():
-    # The boxed copy has a lower raw DV sum but a higher total across the six final stats.
-    boxed = mon(16, dvs=(0, 8, 8, 8, 12))
-    party = mon(16, box=None, position=None, dvs=(0, 10, 10, 10, 8))
-    assert spares(snapshot([boxed], party=[party])) == []
-
-
-def test_plan_demand_and_kept_species_are_never_offered():
+def test_copies_a_plan_needs_go_after_every_spare():
     copies = [mon(16, position=index, dvs=(index + 1,) * 5) for index in range(3)]
-    assert spares(snapshot(copies), demand={16: 2}) == [copies[0]]
-    assert spares(snapshot(copies), keep={16}) == []
+    other = [mon(19, position=3, dvs=(9,) * 5), mon(19, position=4, dvs=(10,) * 5)]
+    # Two linked adventures miss the species, so it keeps two copies and its spare is wanted in trade.
+    assert spares(snapshot([*copies, *other]), demand={16: 2}) == [other[0], copies[0], copies[1]]
 
 
-def test_rare_trained_held_and_partner_pokemon_are_protected():
-    best = mon(16, position=0, dvs=(14, 14, 14, 14, 14))
-    protected = [
-        mon(16, position=1, dvs=(1, 10, 10, 10, 10)),  # shiny
-        mon(16, position=2, held_item=1),
-        mon(16, position=3, stat_exp=(10000, 10000, 0, 0, 0)),
-        mon(16, position=4, egg=True),
-        mon(16, position=5, trainer_id=777, dvs=(5, 5, 5, 5, 5)),
-        mon(16, position=6, trainer_id=888, dvs=(6, 6, 6, 6, 6)),
-    ]
-    plain = mon(16, position=7, dvs=(4, 4, 4, 4, 4))
-    collection = {'breeding': {'parents': [[777, [5, 5, 5, 5, 5]]]}}
+def test_breeding_stock_holds_a_role_for_two_copies_only():
+    copies = [mon(16, position=index, dvs=(index + 1,) * 5) for index in range(6)]
+    # The two best hold the role and stay, the best of them as the best copy, and the rest are spares.
+    assert spares(snapshot(copies), keep={16}) == [copies[0], copies[1], copies[2], copies[3]]
+
+
+def test_valuable_copies_go_last_and_eggs_keep_and_partners_stay():
     from pokesim.trade.preferences import identity
+    best = strong(16)
+    shiny = mon(16, position=1, dvs=(1, 10, 10, 10, 10))
+    trained = mon(16, position=2, stat_exp=(30000,) * 5)
+    egg = mon(16, position=3, egg=True)
+    partner = mon(16, position=4, trainer_id=777, dvs=(5, 5, 5, 5, 5))
+    locked = mon(16, position=5, trainer_id=888, dvs=(6, 6, 6, 6, 6))
+    plain = mon(16, position=6, dvs=(4, 4, 4, 4, 4))
+    collection = {'breeding': {'parents': [[777, [5, 5, 5, 5, 5]]]}}
     preferences = {identity({'trainer_id': 888, 'dvs': (6, 6, 6, 6, 6), 'dex': 16}): {'state': 'locked'}}
-    result = spares(snapshot([best, *protected, plain]), preferences=preferences, partners=plan_partners(collection))
-    assert result == [plain]
+    order = spares(snapshot([best, shiny, trained, egg, partner, locked, plain]), preferences=preferences,
+                   partners=plan_partners(collection))
+    assert order == [plain, trained, shiny]
 
 
-def test_perfect_and_rare_dv_copies_are_protected_in_both_tiers():
-    # Two perfect copies, so one of them is not the kept best copy.
+def test_perfect_and_rare_dv_copies_go_after_plain_ones():
     perfect = [mon(16, position=index, dvs=(15, 15, 15, 15, 15)) for index in range(2)]
     rare = mon(16, position=2, dvs=(13, 15, 15, 14, 15))
     plain = mon(16, position=3, dvs=(4, 4, 4, 4, 4))
-    for lenient in (False, True):
-        assert spares(snapshot([*perfect, rare, plain]), lenient=lenient) == [plain]
+    assert spares(snapshot([*perfect, rare, plain])) == [plain, rare, perfect[1]]
 
 
-def test_the_exp_share_holder_stays_even_in_the_lenient_tier():
+def test_the_exp_share_holder_is_not_protected_because_its_item_comes_off_first():
     from pokesim.gen2.release import EXP_SHARE
     best = mon(16, position=0, dvs=(14, 14, 14, 14, 14))
     holder = mon(16, position=1, held_item=EXP_SHARE)
-    berry = mon(16, position=2, held_item=1)
-    trained = mon(16, position=3, stat_exp=(20000, 0, 0, 0, 0))
-    assert spares(snapshot([best, holder, berry, trained])) == []
-    assert set(map(id, spares(snapshot([best, holder, berry, trained]), lenient=True))) == {id(berry), id(trained)}
+    assert spares(snapshot([best, holder])) == [holder]
 
 
 def test_the_last_copy_and_party_members_are_never_offered():
     lone = mon(16, position=0)
     party = mon(19, box=None, position=None)
-    assert spares(snapshot([lone], party=[party]), lenient=True) == []
+    assert spares(snapshot([lone], party=[party])) == []
 
 
 @pytest.mark.parametrize('species', [144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251])
-def test_a_legendary_copy_is_never_released(species):
-    copies = [mon(species, position=index, dvs=(index + 1,) * 5) for index in range(3)]
-    assert spares(snapshot(copies), lenient=True) == []
+def test_a_duplicate_legendary_goes_after_a_trained_lv_100_spare(species):
+    copies = [mon(species, position=index, dvs=(index + 1,) * 5, level=50) for index in range(2)]
+    veteran = [strong(16, position=2), mon(16, position=3, level=100, stat_exp=(30000,) * 5)]
+    assert spares(snapshot([*copies, *veteran])) == [veteran[1], copies[0]]
 
 
 @pytest.mark.parametrize('landmark', [0x7E, 0x7F])
-def test_a_crystal_gift_or_event_copy_is_never_released(landmark):
-    best = mon(16, position=0, dvs=(14, 14, 14, 14, 14))
+def test_a_crystal_gift_or_event_copy_goes_after_a_caught_one(landmark):
+    best = strong(16)
     # The high byte holds the catch time and level, the low byte the OT gender bit and the landmark.
     marked = mon(16, position=1, caught=0x4A00 | 0x80 | landmark)
     caught = mon(16, position=2, caught=0x4A00 | 0x80 | 0x12)
-    assert spares(snapshot([best, marked, caught]), lenient=True) == [caught]
+    assert spares(snapshot([best, marked, caught])) == [caught, marked]
 
 
-def test_only_the_player_and_linked_adventures_may_lose_a_copy():
+def test_a_pokemon_from_an_unlinked_trainer_goes_after_the_players_own():
     from pokesim.trade.partners import owners
-    best = mon(16, position=0, dvs=(14, 14, 14, 14, 14), trainer_id=4321)
+    best = strong(16)
     own = mon(16, position=1, dvs=(3, 3, 3, 3, 3), trainer_id=4321)
     partner = mon(16, position=2, dvs=(4, 4, 4, 4, 4), trainer_id=13132)
     foreign = mon(16, position=3, dvs=(2, 2, 2, 2, 2), trainer_id=20897)
     view = snapshot([best, own, partner, foreign])
-    assert spares(view, owners=owners(4321, frozenset({13132}))) == [own, partner]
-    assert spares(view, owners=owners(4321, frozenset())) == [own]
+    assert spares(view, owners=owners(4321, frozenset({13132}))) == [own, partner, foreign]
+    assert spares(view, owners=owners(4321, frozenset())) == [own, foreign, partner]
     # Without a known player id nothing is judged by its trainer.
     assert owners(None, frozenset({13132})) is None
-    assert foreign in spares(view, owners=None)
+    assert spares(view, owners=None) == [foreign, own, partner]
 
 
-def test_a_spare_in_the_open_box_goes_before_one_elsewhere():
-    best = mon(16, box=0, position=0, dvs=(14, 14, 14, 14, 14))
-    weak = mon(16, box=0, position=1, dvs=(1, 2, 2, 2, 2))
-    here = mon(16, box=3, position=0, dvs=(5, 5, 5, 5, 5))
-    assert spares(snapshot([best, weak, here], active_box=3)) == [here, weak]
-    assert spares(snapshot([best, weak, here], active_box=0)) == [weak, here]
+def test_a_league_reward_scores_as_a_catch_not_a_trade():
+    from pokesim.rewards import mark
+    from pokesim.trade.partners import owners
+    best = strong(155)
+    reward = mon(155, position=1, dvs=(3, 3, 3, 3, 3), trainer_id=999)
+    traded = mon(155, position=2, dvs=(2, 2, 2, 2, 2), trainer_id=998)
+    marks = frozenset({mark(999, reward.dvs)})
+    assert spares(snapshot([best, reward, traded]), owners=owners(4321, frozenset()), rewards=marks) == [reward, traded]
+
+
+def test_an_owner_request_goes_first_but_never_takes_a_last_copy_unless_named():
+    from pokesim.pcvalue import LAST_COPY
+    from pokesim.trade.preferences import identity
+    best = mon(16, position=0, dvs=(14, 14, 14, 14, 14))
+    weak = mon(16, position=1, dvs=(2, 2, 2, 2, 2))
+    lone = mon(19, position=2)
+    key = lambda row: identity({'trainer_id': row.trainer_id, 'dvs': row.dvs, 'dex': row.species})  # noqa: E731
+    view = snapshot([best, weak, lone])
+    assert spares(view, requested={key(best): 'release'}) == [best, weak]
+    assert spares(view, requested={key(lone): 'release'}) == [weak]
+    assert spares(view, requested={key(lone): LAST_COPY}) == [lone, weak]
 
 
 def test_each_unown_letter_keeps_its_own_copy():

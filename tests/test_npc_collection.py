@@ -126,11 +126,14 @@ def test_full_party_deposit_keeps_locks_field_moves_and_chosen_trade_reserve():
     assert p.collection.trade_candidate(replace(s, party=party[:4] + (locked, offered)), p.collection.project) is None
 
 
-def test_active_npc_reserve_is_not_released_for_storage_space():
+def test_active_npc_reserve_goes_after_every_plain_spare():
     p = StrategicPolicy(1)
     p.collection.project = trade(p.collection, 122)
-    s = with_storage(state(), stored(63), stored(63, 1, trainer=8))
-    assert p._release_target(s) is None
+    s = with_storage(state(), stored(63), stored(63, 1, trainer=8), stored(16, 2, level=5), stored(16, 3, level=30))
+    # Nine free slots, so a refill to BOX_REFILL frees one.
+    s = replace(s, box_counts=(20,) * 11 + (11,))
+    assert p._release_target(s) == (2, 2)
+    assert p._release_target(with_storage(s, stored(63), stored(63, 1, trainer=8))) == (2, 1)
 
 
 def test_dojo_choice_varies_by_seed_and_survives_save():

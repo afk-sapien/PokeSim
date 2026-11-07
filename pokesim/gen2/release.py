@@ -1,32 +1,17 @@
-"""Free PC storage by letting a spare duplicate go, as Generation I does.
+"""Free PC storage by letting the lowest-value Pokémon go, with the rules in pcvalue.py.
 
 Catch goals, one-time encounters and field-move errands all need a free box slot. Once every box
-is full the only way to make room is to release a Pokémon, so a duplicate the collection can spare
-is let go at a PC before storage runs out. Releasing is permanent, so the rules are conservative:
-party members, eggs, shiny, perfect and rare-DV Pokémon, held items, trained partners, locked or
-offered trade partners and every copy a plan still needs are always kept. So are legendaries, Crystal's
-gift and event Pokémon and every Pokémon whose original trainer is neither the player nor a linked
-adventure. Each species (each Unown letter) keeps its best copy, or as many copies as a plan demands.
-
-A trade that needs a free slot uses a lenient tier only when nothing else is spare: a duplicate
-holding an item or trained may then go, weakest first, but eggs, shiny, perfect and rare-DV
-Pokémon, Keep, hand-picked and wished Pokémon and the last copy of a species are still kept. So is a
-Pokémon holding the Exp. Share: a cartridge has only the one, and every later training plan needs it.
+is full the only way to make room is to release a Pokémon. This module turns a Gen II snapshot into
+pcvalue rows: Unown count by letter, Crystal's caught data marks gifts and events, breeding stock is
+capped stock and League rewards are found by their mark. A spare holding an item has it taken off
+first (ledger.py), the Exp. Share included, so no item is lost with the Pokémon.
 """
-from collections import Counter, defaultdict
-from math import isqrt
-
-from pokecore.dvs import is_perfect, is_shiny
-
-from ..investment import rare_find
 from ..trade.preferences import identity, signature
 
 BOX_CAPACITY = 20
-# Stat experience at which a boxed partner counts as trained, as the trade broker keeps it.
-TRAINED_STAT_EXP = 20000
 UNOWN = 201
 # The Exp. Share item number in all three games (pret constants/item_constants.asm). Mr. Pokémon gives the
-# only one, so its holder never goes, even in the lenient tier.
+# only one, so it comes off its holder before a release (ledger.py).
 EXP_SHARE = 0x39
 # The legendary birds, Mewtwo and Mew, the legendary beasts, Lugia, Ho-Oh and Celebi, as the journal names them.
 LEGENDARY_DEX = frozenset({144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251})
@@ -48,14 +33,6 @@ def _letter(mon):
 
 def _group(mon):
     return (UNOWN, _letter(mon)) if mon.species == UNOWN else (mon.species, 0)
-
-
-def quality(mon):
-    """Natural potential first, then training, within one species."""
-    # Special contributes to both Special Attack and Special Defense in Gen II. This ranks
-    # copies by the same fully trained level 100 stat total as the postgame training planner.
-    return (sum(mon.dvs) + mon.dvs[-1], min(mon.dvs), mon.level,
-            sum(isqrt(value) for value in mon.stat_exp), mon.experience)
 
 
 def _keys(mon):
@@ -96,56 +73,104 @@ def gift(mon):
     return (getattr(mon, 'caught', 0) & 0x7F) in (GIFT_LANDMARK, EVENT_LANDMARK)
 
 
-def _protected(mon, reserved, lenient=False, owners=None):
-    """Whether a copy must stay. ``lenient`` lets a held item or training go, for a trade that needs room.
+def rated(snapshot, demand=None, stock=(), preferences=None, partners=(), owners=None, rewards=frozenset(),
+          requested=None, names=None, focus=frozenset(), favor=None):
+    """Every Pokémon scored with pcvalue.rate, in party then box order. ``demand`` maps a species to the
+    linked adventures missing it, which keeps that many copies and counts as trade demand. ``favor`` is
+    the Favor shiny or Favor DVs setting."""
+    from collections import Counter
+    from ..pcvalue import Inputs, rate
+    rows = entries(snapshot, names or {}, preferences, partners, stock, owners, rewards, requested)
+    return rate(rows, Inputs(demand=dict(demand or {}), focus=frozenset(focus), wishes=Counter(demand or {}),
+                             favor=favor))
 
-    ``owners`` are the original trainers whose Pokémon may go (trade/partners.py owners). Any other
-    trainer's Pokémon stays, and so does every legendary, gift and event Pokémon.
+
+def release_rated(policy, snapshot, keep=(), preferences=None):
+    """``rated`` with a running policy's own inputs: plan demand and partners, breeding stock, trade
+    preferences, linked adventures, League reward marks and the owner's release requests.
+
+    ``keep`` adds stock species and ``preferences`` stands in for the stored ones.
     """
-    record = {'dvs': list(mon.dvs)}
-    return bool(mon.egg or is_shiny(record) or is_perfect(record) or rare_find(record) or mon.held_item == EXP_SHARE
-                or mon.species in LEGENDARY_DEX or gift(mon)
-                or owners is not None and mon.trainer_id not in owners
-                or not lenient and (mon.held_item or sum(mon.stat_exp) >= TRAINED_STAT_EXP)
-                or reserved.intersection(_keys(mon)))
+    from pokecore.gen2.breeding import breeding_stock
+    stock = set(breeding_stock(policy.data, [mon.species for mon in snapshot.party + snapshot.stored if not mon.egg]))
+    stock.update(keep)
+    owners = policy.release_owners() if hasattr(policy, 'release_owners') else None
+    marks = policy.league_marks() if hasattr(policy, 'league_marks') else frozenset()
+    requested = policy.release_requests() if hasattr(policy, 'release_requests') else {}
+    favor = policy.pc_favor() if hasattr(policy, 'pc_favor') else None
+    names = {sid: row.get('name', '?') for sid, row in getattr(policy.data, 'species', {}).items()}
+    return rated(snapshot, policy.demand, stock, policy.trade_preferences() if preferences is None else preferences,
+                 plan_partners(policy.collection), owners, marks, requested, names, favor=favor)
 
 
-def spares(snapshot, demand=None, keep=(), preferences=None, partners=(), lenient=False, owners=None):
-    """Boxed Pokémon that can be released, the most numerous species and its weakest copy first.
+def pending(policy, snapshot):
+    """Whether an owner's release request waits for the next PC visit. A Keep, party, egg or unconfirmed
+    last copy request waits without starting one, and a request whose Pokémon has gone is dropped."""
+    from ..pcvalue import requested
+    asked = policy.release_requests() if hasattr(policy, 'release_requests') else {}
+    if not asked:
+        return False
+    held = {key for mon in snapshot.party + snapshot.stored for key in _keys(mon)}
+    if hasattr(policy, 'prune_release_requests') and not set(asked) <= held:
+        if not policy.prune_release_requests(held):
+            return False
+    rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
+    return bool(requested(rated))
 
-    ``demand`` maps species to the copies a plan needs. Species in ``keep`` are never offered.
-    ``preferences`` are the stored trade preferences. Offered and locked partners stay, and so do
-    the ``partners`` a plan relies on (see plan_partners). With ``owners``, only those trainers'
-    Pokémon may go.
+
+def spares(snapshot, demand=None, keep=(), preferences=None, partners=(), owners=None, rewards=frozenset(),
+           requested=None):
+    """Boxed Pokémon that may be released, lowest value first (pcvalue.queue).
+
+    ``demand`` maps species to the copies a plan needs, and species in ``keep`` (breeding stock, a
+    wished species) are capped stock. ``preferences`` are the stored trade preferences, ``partners``
+    the identities a plan relies on (see plan_partners), ``owners`` the player and linked adventures,
+    ``rewards`` the League reward marks and ``requested`` an owner's release requests by identity.
     """
-    demand = demand or {}
-    reserved = {key for key, value in (preferences or {}).items() if value.get('state') in ('offered', 'locked')}
-    reserved.update(partners)
-    groups = defaultdict(list)
+    from ..pcvalue import queue
+    return [row.entry.record for row in queue(rated(snapshot, demand, keep, preferences, partners, owners,
+                                                    rewards, requested))]
+
+
+def entries(snapshot, names, preferences=None, partners=(), stock=(), owners=None, rewards=frozenset(),
+            requested=None):
+    """The party and PC as pcvalue rows.
+
+    ``names`` maps a species to its name. ``preferences`` are the stored trade preferences: Keep locks
+    a Pokémon, and an offered one is capped stock. ``partners`` are the identities a plan relies on
+    (plan_partners), ``stock`` the breeding stock species, ``owners`` the player and linked adventures,
+    ``rewards`` the League reward marks (rewards.marks) and ``requested`` maps an identity to an owner's
+    release request.
+    """
+    from ..pcvalue import Entry
+    from ..rewards import mark
+    preferences, requested = preferences or {}, requested or {}
+    locked = {key for key, value in preferences.items() if value.get('state') in ('locked', 'withdrawn')}
+    offered = {key for key, value in preferences.items() if value.get('state') == 'offered'}
+    rows = []
     for mon in [*snapshot.party, *snapshot.stored]:
-        if not mon.egg and mon.species:
-            groups[_group(mon)].append(mon)
-    result = []
-    for (species, _), copies in groups.items():
-        if species in keep:
-            continue
-        # Party members stay on the team, but a weaker party copy must not cost us a boxed upgrade.
-        party = [mon for mon in copies if mon.box is None]
-        stored = sorted((mon for mon in copies if mon.box is not None), key=quality, reverse=True)
-        kept = sorted(party + stored, key=quality, reverse=True)[:max(1, demand.get(species, 0))]
-        candidates = [mon for mon in stored if mon not in kept]
-        result.extend((len(copies), mon) for mon in candidates if not _protected(mon, reserved, lenient, owners))
-    # A copy without a held item or training goes first. Then the open box, since changing boxes saves
-    # the game and takes about as long as a release. The box with the most spares comes next, so a visit
-    # empties one box before it moves on.
-    per_box = Counter(mon.box for _, mon in result)
-    result.sort(key=lambda row: (bool(row[1].held_item), sum(row[1].stat_exp) >= TRAINED_STAT_EXP,
-                                 row[1].box != snapshot.active_box, -per_box[row[1].box], -row[0],
-                                 quality(row[1]), row[1].box, row[1].position))
-    return [mon for _, mon in result]
+        keys = set(_keys(mon))
+        if mark(mon.trainer_id, mon.dvs) in rewards:
+            origin = 'reward'
+        elif mon.species in LEGENDARY_DEX:
+            origin = 'legendary'
+        elif gift(mon):
+            origin = 'gift'
+        elif owners is not None and mon.trainer_id not in owners:
+            origin = 'traded'
+        else:
+            origin = 'caught'
+        rows.append(Entry(
+            None if mon.box is None else (mon.box, mon.position), _group(mon), names.get(mon.species, '?'),
+            mon.level, mon.experience, tuple(mon.dvs), tuple(mon.stat_exp), bool(mon.egg), origin,
+            bool(locked & keys), bool(set(partners) & keys), bool(offered & keys) or mon.species in stock,
+            next((requested[key] for key in keys if key in requested), ''), mon,
+            bool(offered & keys) and mon.species not in stock))
+    return rows
 
 
-def target(snapshot, demand=None, keep=(), preferences=None, partners=(), allowed=None, lenient=False, owners=None):
+def target(snapshot, demand=None, keep=(), preferences=None, partners=(), allowed=None, owners=None,
+           rewards=frozenset(), requested=None):
     """The next spare to release, or None."""
-    return next((mon for mon in spares(snapshot, demand, keep, preferences, partners, lenient, owners)
+    return next((mon for mon in spares(snapshot, demand, keep, preferences, partners, owners, rewards, requested)
                  if allowed is None or allowed(mon)), None)

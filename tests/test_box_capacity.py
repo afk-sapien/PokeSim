@@ -258,8 +258,8 @@ def test_one_copy_of_every_species_always_survives_a_release():
     # 239 copies of one species, minus the single keeper the rule protects.
     assert len(spare) == 238
     box, position = release_target(s)
-    assert (box, position) == (11, 0), 'a duplicate in the open box goes first'
-    assert release_target(stuffed(active_box=4)) == (4, 0), 'even when a weaker copy waits in another box'
+    assert (box, position) == (11, 0), 'among equal copies the open box goes first'
+    assert release_target(stuffed(active_box=4)) == (4, 0), 'copies close in value go from the open box first'
 
 
 def test_a_party_member_counts_as_the_surviving_copy():
@@ -280,11 +280,11 @@ def test_equal_level_duplicates_keep_exactly_one():
     assert len(spare_copies(s)) == 2
 
 
-def test_an_evolution_partner_is_protected_from_release():
-    s = snap(party=(mon(),), stored_pokemon=((0, 124, 8, ''), (0, 124, 5, '')),
-             box_counts=(2,) + (0,) * 11, boxed_pokemon=((124, 8), (124, 5)))
+def test_an_evolution_partner_goes_after_every_plain_spare():
+    s = snap(party=(mon(),), stored_pokemon=((0, 124, 8, ''), (0, 124, 5, ''), (0, 171, 9, ''), (0, 171, 6, '')),
+             box_counts=(4,) + (0,) * 11, boxed_pokemon=((124, 8), (124, 5), (171, 9), (171, 6)))
     assert release_target(s) == (0, 1)
-    assert release_target(s, {124}) is None
+    assert release_target(s, {124}) == (0, 3)
 
 
 def test_storage_buffer_sends_the_run_to_a_pc_to_free_slots():

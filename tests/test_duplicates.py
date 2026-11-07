@@ -87,10 +87,10 @@ def test_trained_party_member_remains_the_keeper_over_perfect_dvs():
     assert_spares(snapshot([stored(0, dvs=(15,) * 5)], party=(partner,)), [])
 
 
-def test_exact_ties_keep_one_copy_and_protected_species_are_never_offered():
+def test_exact_ties_keep_one_copy_and_stock_species_are_not_spares():
     s = snapshot([stored(0), stored(1)])
     assert_spares(s, [(0, 1, 20)])
-    assert spare_copies(s, protected=(0x99,)) == []
+    assert spare_copies(s, stock=(0x99,)) == []
     assert release_target(snapshot([stored(0)])) is None
 
 

@@ -385,13 +385,13 @@ def test_a_species_a_peer_asked_for_is_offered_while_another_copy_stays():
     from pokesim.broker.routine import offers
     JYNX = 124
     # Red's Cerulean exchange brings Jynx again and again; Yellow has no Jynx of its own.
-    # The veteran is protected and the fresh copy was the keeper, so neither was ever offered.
+    # The trained veteran is the best copy by PC value, so the fresh copy is a spare and is offered.
     payload = status({JYNX, MAGIKARP}, stored=[(JYNX, 100), (JYNX, 5), (MAGIKARP, 5)])
     for row, dvs, stat_exp in zip(payload['storage']['pokemon'], ((12, 12, 12, 12, 12), (13, 12, 12, 12, 12), (1, 1, 1, 1, 1)),
                                   ((60000,) * 5, (0,) * 5, (0,) * 5)):
         row.update(dvs=dvs, stat_exp=stat_exp, moves=[1])
     red = inventory.normalise('red', 'http://red', payload)
-    assert JYNX not in {copy.dex for copy in offers(red, True)}
+    assert [copy.level for copy in offers(red, True) if copy.dex == JYNX] == [5]
     asked = [copy for copy in offers(red, True, {'124': 1}) if copy.dex == JYNX]
     assert [copy.level for copy in asked] == [5]
     # A lone copy still waits for the last-copy rule.
