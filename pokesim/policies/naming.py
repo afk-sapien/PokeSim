@@ -39,12 +39,19 @@ class NamingController:
         text = ScreenText(scr.text.upper())
         if not scr.naming:
             self.target = self.subject = None
+            if scr.cursor and scr.yes_no and "NICKNAME" in text and not configured_pool():
+                # Nicknames are off or the pool is empty, so the Pokémon keeps its species name.
+                return Action("a" if scr.menu_index else "down", 6, 24)
             if scr.cursor and ((scr.yes_no and "NICKNAME" in text) or
                                (not snapshot.started and "NEW NAME" in text)):
                 return Action("up" if scr.menu_index else "a", 6, 24)
             return None
 
         subject = "pokemon" if "NICKNAME" in text else "rival" if "RIVAL" in text else "player"
+        if subject == "pokemon" and not configured_pool():
+            # The prompt was answered YES before nicknames went off. A blank name keeps the species name.
+            self.target, self.subject = None, subject
+            return Action("b" if scr.rows[2][10:20].strip() else "start", 6, 24)
         if self.target is None or self.subject != subject:
             pool = configured_pool() if subject == "pokemon" else TRAINER_NAMES
             occupied = self.used | {snapshot.player_name, snapshot.rival_name}

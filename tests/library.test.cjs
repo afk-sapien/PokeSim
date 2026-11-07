@@ -526,6 +526,51 @@ test('a running Generation I adventure can change fair wild DVs and shows its ra
   assert.equal('randomizer' in settings, false)
 })
 
+test('the nicknames switch saves through the play route for both generations, running or stopped', async () => {
+  for (const [version, state, play_pending] of [['red', 'running', false], ['crystal', 'stopped', false], ['blue', 'running', true]]) {
+    const game = {id: 'f'.repeat(32), name: 'Game', version, state, settings: {}}
+    const view = library({respond(path, options) {
+      if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+      if (path.endsWith('/play')) return {ok: true, json: async () => ({play_pending})}
+      if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+    }})
+    await settle()
+    for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+    view.click('settings', game.id)
+    assert.equal(view.element('#settings-nicknames').checked, true)
+    assert.notEqual(view.element('#settings-nicknames').disabled, true)
+    assert.notEqual(view.element('#settings-nicknames-label').hidden, true)
+    view.element('#settings-nicknames').checked = false
+    view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+    await settle()
+    const patches = view.calls.filter(call => call.options.method === 'PATCH')
+    assert.equal('nicknames' in JSON.parse(patches[0].options.body).settings, false)
+    assert.equal(patches[1].path, `/api/v1/adventures/${game.id}/play`)
+    assert.deepEqual(JSON.parse(patches[1].options.body), {nicknames: false})
+    assert.equal(view.element('#notice').textContent, play_pending
+      ? 'Settings saved. The nickname setting will apply when this adventure reconnects.' : 'Adventure settings saved.')
+  }
+  // An unchanged switch sends nothing to the play route.
+  const game = {id: 'f'.repeat(32), name: 'Game', version: 'red', state: 'stopped', settings: {nicknames: false}}
+  const view = library({respond(path, options) {
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+    if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+  }})
+  await settle()
+  for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+  view.click('settings', game.id)
+  assert.equal(view.element('#settings-nicknames').checked, false)
+  view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+  await settle()
+  assert.equal(view.calls.some(call => call.path.endsWith('/play')), false)
+})
+
+test('the nickname pool editor says an empty pool means no nicknames', () => {
+  const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
+  assert.match(html, /<p id="nickname-empty-hint" class="note">Empty pool = no nicknames<\/p>/)
+  assert.match(html, /id="settings-nicknames" type="checkbox" role="switch"/)
+})
+
 test('the randomizer is off until chosen and sends a canonical share code', async () => {
   async function create(fill) {
     const view = library()

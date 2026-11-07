@@ -20,6 +20,7 @@ import psutil
 from ..downloads import DataDownloadError
 from .registry import digest, identifier
 from .resources import ObservedSpeed, ProcessUsage, recent_activity
+from ..runtime.settings import PLAY_SETTINGS
 
 log = logging.getLogger(__name__)
 
@@ -296,6 +297,8 @@ class Supervisor:
                 child = self.child_factory(bootstrap)
                 child.pace = ObservedSpeed()
                 child.observer = self.worker_output
+                # The worker starts with these play settings, so only later changes are sent.
+                child.play_settings = {name: settings.get(name, default) for name, default in PLAY_SETTINGS.items()}
                 self.children[aid] = child
                 self.registry.update(aid, state='starting', generation=generation, error=None)
             try:
@@ -518,6 +521,33 @@ class Supervisor:
             child.request('POST', '/internal/nicknames', parts, timeout=5)
             child.nickname_settings = fingerprint
 
+    def play_settings(self, aid):
+        """Play settings a running worker follows live. On is stored as absent."""
+        settings = self.registry.adventure(aid)['settings']
+        return {name: settings.get(name, default) for name, default in PLAY_SETTINGS.items()}
+
+    def push_play(self, aid):
+        """Send play settings to a running worker. True means they apply when it reconnects."""
+        with self.guard:
+            child = self.children.get(aid)
+        if child is None:
+            return False
+        try:
+            self.sync_play(aid, child)
+        except (RuntimeError, OSError, KeyError, httpx.HTTPError):
+            log.warning('Adventure %s will receive its play settings when it reconnects', aid)
+            return True
+        return not child.url
+
+    def sync_play(self, aid, child):
+        if not child.url:
+            return
+        values = self.play_settings(aid)
+        if getattr(child, 'play_settings', None) != values:
+            if child.request('POST', '/internal/play', values, timeout=5) != values:
+                raise RuntimeError('Worker did not acknowledge the play settings')
+            child.play_settings = values
+
     def update_nicknames(self):
         with self.guard:
             children = list(self.children.items())
@@ -589,6 +619,7 @@ class Supervisor:
                     try:
                         self.sync_notifications(aid, child)
                         self.sync_nicknames(child)
+                        self.sync_play(aid, child)
                     except (RuntimeError, OSError, KeyError, httpx.HTTPError):
                         # Undelivered notification settings never make a healthy game look stale.
                         log.warning('Adventure %s has not accepted its notification settings yet', aid)

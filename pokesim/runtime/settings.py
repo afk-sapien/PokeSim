@@ -8,6 +8,21 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
+# Per-adventure play settings and their defaults. They change while the adventure runs
+# through PATCH /api/v1/adventures/{aid}/play, and a default is stored as absent.
+PLAY_SETTINGS = {'nicknames': True}
+
+
+def validate_play_settings(values):
+    """Check a play settings change. Each value must have its default's type."""
+    if not isinstance(values, dict) or not values or set(values) - set(PLAY_SETTINGS):
+        raise ValueError(f'Change only these play settings: {", ".join(PLAY_SETTINGS)}')
+    for name, value in values.items():
+        if type(value) is not type(PLAY_SETTINGS[name]):
+            raise ValueError(f'{name} must be a boolean')
+    return values
+
+
 def validate_speed(value):
     if type(value) not in (int, float) or not math.isfinite(value) or not (value == 0 or 0.1 <= value <= 16):
         raise ValueError('Speed must be 0 for Max, or between 0.1 and 16')
@@ -20,6 +35,7 @@ class SimulationSettings:
     data_dir: str
     game_data_dir: str
     public_url: str = 'http://127.0.0.1:8000'
+    nicknames: bool = True
     nickname_prefixes: tuple[str, ...] = ()
     nickname_suffixes: tuple[str, ...] = ()
     nickname_names: tuple[str, ...] = ()
@@ -86,7 +102,7 @@ class SimulationSettings:
             from ..randomized import validate
             object.__setattr__(self, 'randomizer', validate(self.randomizer, cartridge.version))
         for name in ('viewer_only', 'fast_text', 'battle_animations', 'league_rewards', 'mew_event', 'celebi_event',
-                     'extra_store_items', 'fair_wild_dvs'):
+                     'extra_store_items', 'fair_wild_dvs', 'nicknames'):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f'{name} must be a boolean')
         if self.seed is not None and type(self.seed) is not int:

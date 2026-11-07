@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a Nicknames switch to each adventure's settings, in all six games. Off, the bot answers NO at every nickname prompt, so caught, gift and reward Pokémon keep their species names. Player and rival naming is unchanged. The switch applies at once, including while the adventure runs, through the new `PATCH /api/v1/adventures/{aid}/play` route. A saved nickname pool that leaves no names now also means no nicknames, where before the Library refused to save it. A Library that never saved a pool still uses the built-in names.
+
 ## 0.6.2
 
 - Publish the container image for linux/arm64 as well as linux/amd64, so it runs on a Raspberry Pi 4 or 5, an ARM NAS or an Apple silicon Mac without emulation. The release workflow builds and tests each architecture on its own native runner, pushes each as `<version>-linux-<arch>` and joins them into one multi-platform tag, then checks anonymously that the tag serves both and that each pulls the tested image ([#269](https://github.com/afk-sapien/PokeSim/issues/269)).
