@@ -56,6 +56,10 @@ def parser():
     admin_actions = admin.add_subparsers(dest='action', required=True)
     reset = _options(admin_actions.add_parser('reset-password', help='Give a user a new random password and log them out'))
     reset.add_argument('username')
+    smoke = _options(commands.add_parser('smoke', help='Check a running application through its HTTP API'))
+    smoke.add_argument('--url', help='Address to check, defaults to the one in manager.json')
+    smoke.add_argument('--rom', type=Path, help='Cartridge for the adventure checks, defaults to one in the library')
+    smoke.add_argument('--with-backup', action='store_true', help='Also make a backup, which takes a while')
     return result
 
 
@@ -173,8 +177,41 @@ def run(args):
         app.close()
 
 
+def smoke_check(args):
+    """Run the live checks with this machine's command line token, so no admin password is needed.
+    Prints one line per skipped check and per failure, and exits non-zero on any failure."""
+    import logging
+    from . import smoke
+    # One line per request would bury the result.
+    logging.getLogger('httpx').setLevel(logging.WARNING)
+    root = getattr(args, 'data_dir', Path(os.environ.get('POKESIM_APP_DIR', 'pokesim-app'))).expanduser().resolve()
+    try:
+        url = args.url or json.loads((root / 'manager.json').read_text(encoding='utf-8'))['url']
+        token = (root / 'cli.token').read_text(encoding='ascii').strip()
+    except (OSError, ValueError, KeyError) as error:
+        raise ValueError('Start the PokeSim application for this data directory before using this command') from error
+    rom = args.rom
+    if rom is None:
+        # A cartridge already in the library. The check adds it as a throwaway member and removes it again.
+        rom = next(iter(sorted((root / 'assets' / 'roms').glob('*/rom.gb'))), None)
+    report = smoke.run(url.rstrip('/'), token, rom=rom.read_bytes() if rom else None, with_backup=args.with_backup)
+    for line in report.skipped:
+        print(f'SKIP {line}')
+    for line in report.failures:
+        print(f'FAIL {line}', file=sys.stderr)
+    if report.failures:
+        raise SystemExit(1)
+    print(f'PokeSim smoke: {report.passed} checks passed, {report.mode} mode')
+
+
 def main(argv=None):
     args = parser().parse_args(argv)
+    if args.command == 'smoke':
+        try:
+            return smoke_check(args)
+        except (ValueError, OSError) as error:
+            print(f'PokeSim: {error}', file=sys.stderr)
+            raise SystemExit(1) from error
     try:
         result = run(args)
     except (ValueError, OSError, httpx.HTTPError) as error:

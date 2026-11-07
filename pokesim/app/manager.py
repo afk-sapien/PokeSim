@@ -803,6 +803,24 @@ def create_app(manager, shutdown=lambda: None):
         manager.set_session_cookie(response, session_id, manager.anonymous_seconds)
         return response
 
+    def api_reference(request):
+        """The API reference is for admins. Without accounts it stays off unless API_DOCS turns it on.
+        Everyone else gets the same 404 as for a path that does not exist."""
+        from .providers import env_flag
+        allowed = request.state.actor.admin if manager.auth_mode == 'accounts' else env_flag('API_DOCS')
+        if not allowed:
+            raise HTTPException(404, 'Not Found')
+        return app.openapi()
+
+    @app.get('/openapi.json', include_in_schema=False)
+    def openapi_schema(request: Request):
+        return api_reference(request)
+
+    @app.get('/docs', include_in_schema=False, response_class=HTMLResponse)
+    def api_docs(request: Request):
+        from ..web.api_docs import render_api_docs
+        return render_api_docs(api_reference(request), policy.ROUTE_ACTIONS)
+
     from .accounts import install as install_accounts
     install_accounts(app, manager)
     from . import inbox as inbox_module
