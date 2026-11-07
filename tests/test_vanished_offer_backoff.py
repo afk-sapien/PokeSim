@@ -31,7 +31,7 @@ def test_a_vanished_offer_is_skipped_quietly_and_then_left_out(setup, monkeypatc
     assert (left, peer.key) in c.ineligible
     assert left in caplog.text and peer.key in caplog.text
     # The next pass no longer picks it, so nothing else is proposed and nothing fails.
-    def propose(data):
+    def propose(data, **chosen):
         raise Picked(data)
     monkeypatch.setattr(c, 'propose', propose)
     assert c.schedule_once() is None

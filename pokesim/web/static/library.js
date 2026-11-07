@@ -856,6 +856,8 @@
       return
     }
     if (button.dataset.action === 'settings') {
+      // The dialog's controls belong to this adventure, so a member who owns it can change them.
+      document.querySelectorAll('#adventure-settings-form [data-owner]').forEach(element => { element.dataset.id = game.id })
       $('#settings-id').value = game.id
       $('#settings-name').value = game.name
       const speed = String(game.settings?.speed ?? 1)
@@ -917,6 +919,7 @@
         input.disabled = johto || running(game)
       }
       $('#settings-event-steps-label').textContent = johto ? 'Steps between gift, trade, Sudowoodo and Snorlax returns' : 'Steps between gift, trade and Snorlax returns'
+      permissions()
       $('#adventure-settings').showModal()
       return
     }

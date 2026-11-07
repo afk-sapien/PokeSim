@@ -112,7 +112,12 @@ def end_trades(manager, aid, actor=None):
         end_offer(manager, offer, status, 'The adventure changed hands', f"{inbox.adventure_name(manager, aid)} changed hands", actor)
     coordinator = manager.coordinator
     for entry in coordinator._manual_entries():
-        if entry['state'] == 'queued' and aid in (entry.get('left_id'), entry.get('right_id')):
+        if aid not in (entry.get('left_id'), entry.get('right_id')):
+            continue
+        if entry['state'] == 'starting':
+            # Its owners are checked again before it is recorded, and this stops it if it got past.
+            coordinator._manual_update(entry['id'], cancel_requested=True)
+        elif entry['state'] == 'queued':
             try:
                 coordinator.cancel_queued(entry['id'])
             except (KeyError, ValueError):

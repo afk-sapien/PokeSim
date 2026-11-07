@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter, deque
-from contextlib import ExitStack, closing
+from contextlib import ExitStack, closing, nullcontext
 from dataclasses import asdict
 import hashlib
 import json
@@ -548,8 +548,13 @@ class Coordinator:
         return bool(modern.get('time_capsule_ready') and offer.get('time_capsule_compatible')
                     and classic.get('time_capsule_compatible') is not False)
 
-    def propose(self, data, actor=None):
-        """Record an exchange. With `actor`, only while they still own both adventures."""
+    def propose(self, data, actor=None, owners=None, across=None):
+        """Record an exchange. With `actor`, only while they still own both adventures.
+
+        `owners` maps each adventure to the owner it had when the trade was chosen, and `across`
+        is whether both had automatic trading with other people on then. Either one changing
+        before the exchange is recorded refuses it.
+        """
         from .ownership import owned_by
         required = {'left_id', 'right_id', 'left_key', 'right_key'}
         if not isinstance(data, dict) or not required <= set(data) or set(data) - required - {'request_id', 'manual'}:
@@ -606,10 +611,12 @@ class Coordinator:
         if not manual and not self._last_copies_useful(give, take, self._benefit(left, take), self._benefit(right, give)):
             raise ValueError('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
         # A transfer ends queued trades under `offers.guard`, so the owner is checked again under it.
-        with self.manager.maintenance, owned_by(self.manager, actor, participants), self.guard:
+        with self.manager.maintenance, self._offers_guard(), owned_by(self.manager, actor, participants), self.guard:
             existing = self._admit(tid, selection)
             if existing:
                 return existing
+            if owners is not None:
+                self._still_chosen(owners, across, manual)
             campaigns = {aid: self.registry.adventure(aid)['campaign_id'] for aid in participants}
             plan = {**selection, 'participants': participants, 'campaign_ids': campaigns,
                     'attempt_id': identifier(), 'kind': 'cable_trade', 'display_offers': display_offers}
@@ -631,6 +638,20 @@ class Coordinator:
                         leases.end(aid, 'trade')
                 plan['plan_digest'] = digest(plan)
                 return self.registry.create_transaction(tid, plan)
+
+    def _offers_guard(self):
+        offers = getattr(self.manager, 'offers', None)
+        return offers.guard if offers is not None else nullcontext()
+
+    def _still_chosen(self, owners, across, manual):
+        """Refuse a trade whose adventures changed hands, or lost trading with other people, since it was chosen."""
+        for aid, owner in owners.items():
+            if self.registry.adventure(aid).get('owner_id') != owner:
+                if manual:
+                    raise ValueError('Cancelled: an adventure changed hands before the trade started')
+                raise Waiting('An adventure changed hands')
+        if across is not None and across != all(trade_settings.get(self.registry, aid)['across_owners'] for aid in owners):
+            raise Waiting('Trading with other people changed')
 
     def _admit(self, tid, selection):
         """The exchange already recorded under this request ID, or None if a new one may start."""
@@ -1175,9 +1196,16 @@ class Coordinator:
             return self.drain_manual()
         if candidates:
             _, left_id, right_id, left_key, right_key = max(candidates, key=lambda item: item[0])
+            pair = (left_id, right_id)
             try:
                 row = self.propose({'left_id': left_id, 'right_id': right_id,
-                                    'left_key': left_key, 'right_key': right_key, 'request_id': identifier()})
+                                    'left_key': left_key, 'right_key': right_key, 'request_id': identifier()},
+                                   owners={aid: owners[aid] for aid in pair},
+                                   across=all(settings[aid]['across_owners'] for aid in pair))
+            except Waiting as error:
+                # An owner or a trading switch changed during the scan. The next pass scores again.
+                log.info('Automatic trade skipped: %s', error)
+                return None
             except Ineligible as error:
                 # Offers change while inventories are read (a release, a League visit), so this
                 # is expected now and then. The next pass picks something else.
@@ -1350,11 +1378,13 @@ class Coordinator:
                 raise ValueError('Choose a Pokémon on each side')
         if selection['left_id'] == selection['right_id']:
             raise ValueError('Choose two different adventures')
+        owners = {}
         for aid in (selection['left_id'], selection['right_id']):
             game = self.registry.adventure(aid)
             reason = self.manual_game_reason(game)
             if reason:
                 raise ValueError(f'{game["name"]}: {reason}')
+            owners[aid] = game.get('owner_id')
         if self.closed.is_set() or self.manager.suspended:
             raise ValueError('Trading is paused for application maintenance')
         with self.manual_guard:
@@ -1371,7 +1401,7 @@ class Coordinator:
                 pass
             now = time.time()
             entry = {'id': mid, **selection, 'state': 'queued', 'error': None, 'names': names_shown,
-                     'cancel_requested': False, 'created_at': now, 'updated_at': now}
+                     'owners': owners, 'cancel_requested': False, 'created_at': now, 'updated_at': now}
             entries.append(entry)
             self._manual_save(entries)
         return entry
@@ -1408,7 +1438,7 @@ class Coordinator:
                     continue    # Cancelled after it was read, so it stays cancelled.
                 try:
                     row = self.propose({name: head[name] for name in ('left_id', 'right_id', 'left_key', 'right_key')}
-                                       | {'request_id': head['id'], 'manual': True})
+                                       | {'request_id': head['id'], 'manual': True}, owners=head.get('owners'))
                 except Waiting:
                     # An adventure is still busy with another trade. This one keeps its place.
                     self._manual_update(head['id'], state='queued')
