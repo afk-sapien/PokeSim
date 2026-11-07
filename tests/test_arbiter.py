@@ -123,8 +123,8 @@ def test_balanced_gives_the_old_order(monkeypatch):
     monkeypatch.setattr(config, 'PLAY_STYLE', BALANCED)
     everything = styled() + [candidate('hunt:post', Tier.FILLER, value=3.0, frames=10, hunt=HUNT_POSTGAME)]
     assert [c.key for c in rank(everything)] == old_order(everything)
-    assert [c.key for c in rank(everything, BALANCED)] == old_order(everything)
-    assert [c.key for c in rank(everything[::-1], BALANCED)] == old_order(everything)
+    assert [c.key for c in rank(everything, style=BALANCED)] == old_order(everything)
+    assert [c.key for c in rank(everything[::-1], style=BALANCED)] == old_order(everything)
 
 
 def test_an_unknown_style_ranks_as_balanced(monkeypatch):
@@ -145,7 +145,7 @@ def test_the_style_is_read_from_the_adventure(monkeypatch):
 
 
 def test_story_ranks_filler_below_the_plan_and_upgrades_below_progress():
-    keys = [c.key for c in rank(styled(), STORY)]
+    keys = [c.key for c in rank(styled(), style=STORY)]
     assert keys == ['story', 'heal', 'entry', 'marathon', 'train', 'collect_plan', 'shiny', 'hunt:later',
                     'hunt:now']
     upgrade = candidate('train', Tier.UPGRADE, value=50.0, frames=1)
@@ -154,7 +154,7 @@ def test_story_ranks_filler_below_the_plan_and_upgrades_below_progress():
 
 
 def test_collector_before_the_champion_promotes_only_hunts_catchable_now():
-    keys = [c.key for c in rank(styled(), COLLECTOR)]
+    keys = [c.key for c in rank(styled(), style=COLLECTOR)]
     assert keys == ['story', 'heal', 'entry', 'hunt:now', 'marathon', 'train', 'shiny', 'hunt:later',
                     'collect_plan']
     # The promoted hunt is worth far more per frame, yet a story goal in its rank still goes first.
@@ -166,15 +166,15 @@ def test_collector_after_the_champion_ranks_hunts_with_progress():
     rich = candidate('hunt:post', Tier.FILLER, value=9.0, frames=10, hunt=HUNT_POSTGAME)
     entry = candidate('entry', Tier.PROGRESS, value=0.01, frames=10 ** 6)
     race = candidate('marathon', Tier.RACE, value=50.0, frames=1)
-    assert [c.key for c in rank([race, entry, rich], COLLECTOR)] == ['hunt:post', 'entry', 'marathon']
+    assert [c.key for c in rank([race, entry, rich], style=COLLECTOR)] == ['hunt:post', 'entry', 'marathon']
     poor = candidate('hunt:post', Tier.FILLER, value=0.001, frames=10 ** 6, hunt=HUNT_POSTGAME)
-    assert [c.key for c in rank([race, entry, poor], COLLECTOR)] == ['entry', 'hunt:post', 'marathon']
-    assert [c.key for c in rank([race, entry, rich], BALANCED)] == ['entry', 'marathon', 'hunt:post']
+    assert [c.key for c in rank([race, entry, poor], style=COLLECTOR)] == ['entry', 'hunt:post', 'marathon']
+    assert [c.key for c in rank([race, entry, rich], style=BALANCED)] == ['entry', 'marathon', 'hunt:post']
 
 
 @pytest.mark.parametrize('style', PLAY_STYLES)
 def test_story_and_upkeep_never_move(style):
-    keys = [c.key for c in rank(styled(), style)]
+    keys = [c.key for c in rank(styled(), style=style)]
     assert keys[:2] == ['story', 'heal']
     for tier in (Tier.STORY, Tier.UPKEEP):
         fixed = candidate('fixed', tier, value=0.0, frames=10 ** 9)
@@ -190,3 +190,33 @@ def test_hunt_kinds_and_the_ladder_check():
     assert not ahead(entry, Tier.FILLER, COLLECTOR)
     assert ahead(candidate('heal', Tier.UPKEEP), Tier.FILLER, COLLECTOR)
     assert not ahead(entry, Tier.PROGRESS, BALANCED)
+
+
+def pin_world():
+    return [candidate('story', Tier.STORY, value=0.01, frames=10 ** 6),
+            candidate('heal', Tier.UPKEEP, value=0.1, frames=10 ** 5),
+            candidate('hunt', Tier.PROGRESS, value=5.0, frames=100),
+            candidate('rematch', Tier.FILLER, value=0.01, frames=10 ** 6),
+            candidate('clock', Tier.FILLER, value=99.0, frames=1, passive=True)]
+
+
+def test_a_pinned_key_ranks_first_after_upkeep():
+    world = pin_world()
+    assert [c.key for c in rank(world, pinned='rematch')] == ['heal', 'rematch', 'story', 'hunt']
+    assert choose(world, pinned='rematch').key == 'heal'
+    without_upkeep = [c for c in world if c.key != 'heal']
+    assert choose(without_upkeep, pinned='rematch').key == 'rematch'
+
+
+def test_a_pin_never_goes_above_upkeep_and_a_passive_pin_is_never_chosen():
+    world = pin_world()
+    assert rank(world, pinned='heal')[0].key == 'heal'
+    assert 'clock' not in [c.key for c in rank(world, pinned='clock')]
+    assert choose(world, pinned='clock').key == choose(world).key
+
+
+def test_without_a_pin_the_order_is_unchanged():
+    world = pin_world()
+    assert rank(world) == rank(world, pinned=None) == rank(world, pinned='gone')
+    assert choose(world) is choose(world, pinned=None)
+    assert [c.key for c in rank(world)] == ['story', 'heal', 'hunt', 'rematch']

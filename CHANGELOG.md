@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Let a manager set the next activity from the game page. The **Next activity** picker lists the goals the planner can start now, from its own list. The planner runs the chosen goal once, after upkeep such as healing, and then goes back to its own order. **Cancel** drops it. A goal that cannot run now is refused with the reason. A load, a restart or a stuck run clears the pick, and a stuck run writes "Gave up on" the goal to the journal. The API is `GET /api/goals` and the `pin_goal` and `unpin_goal` controls.
+
 - Add a Nicknames switch to each adventure's settings, in all six games. Off, the bot answers NO at every nickname prompt, so caught, gift and reward Pokémon keep their species names. Player and rival naming is unchanged. The switch applies at once, including while the adventure runs, through the new `PATCH /api/v1/adventures/{aid}/play` route. A saved nickname pool that leaves no names now also means no nicknames, where before the Library refused to save it. A Library that never saved a pool still uses the built-in names.
 
 - Add a Play style choice to each adventure's settings, in all six games: Balanced, Story first or Collector. Balanced is the default and plays as before. Story first ranks filler side projects below the planned story and Pokédex goals. Collector ranks better DV copy and repeat catch hunts with new Pokédex entries, so they compete on value per frame instead of waiting behind training and races. Story and upkeep goals never move. The choice applies at once, including while the adventure runs, through the `PATCH /api/v1/adventures/{aid}/play` route. An unknown style is refused.

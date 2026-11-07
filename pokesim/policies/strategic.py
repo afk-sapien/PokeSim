@@ -334,8 +334,30 @@ class StrategicPolicy(Policy):
     def describe(self):
         return f"strategic ({self.mode})"
 
+    @property
+    def pin(self):
+        return self.collection.pin
+
+    def goals(self, snapshot):
+        if snapshot is None or not snapshot.valid:
+            return [], 'Not available now'
+        return self.collection.goal_list(snapshot, self.nav, self.rng)
+
+    def pin_goal(self, snapshot, key):
+        if snapshot is None or not snapshot.valid:
+            raise ValueError('Not available now')
+        return self.collection.set_pin(snapshot, self.nav, self.rng, key)
+
+    def unpin_goal(self):
+        self.collection.clear_pin()
+
+    def drop_pin(self):
+        return self.collection.drop_pin()
+
     def details(self):
+        pin = self.collection.pin
         return {"collection": self.collection.details(), "objective": self.goal.to_dict(), "action": self.mode, "reason": self.reason,
+                "pin": pin.to_dict() if pin else None,
                 "milestones": self.completed.copy(), "recoveries": self.recoveries,
                 "decisions": self.decisions, "visited_tiles": len(self.nav.visits),
                 "journey": self.journey,

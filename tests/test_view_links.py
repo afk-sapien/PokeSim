@@ -92,7 +92,7 @@ def test_game_paths_are_unchanged(managed, method, path):
     assert VIEWER_HEADER.lower() not in request.headers
 
 
-@pytest.mark.parametrize('path', ['api/states', 'api/export-save'])
+@pytest.mark.parametrize('path', ['api/states', 'api/export-save', 'api/goals'])
 def test_view_link_never_reads_saves(managed, path):
     assert managed.client.get(f'/view/{managed.aid}/{path}').status_code == 403
     assert managed.forwarded == []

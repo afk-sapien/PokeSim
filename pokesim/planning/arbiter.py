@@ -107,25 +107,41 @@ def ahead(candidate, tier, style=None):
     return standing(candidate, style) < ceiling(tier, style)
 
 
-def _order(candidate, style=BALANCED):
-    return *standing(candidate, style), -candidate.score, candidate.key
+def _lane(candidate, pinned):
+    """Where a pin puts a candidate. Upkeep still goes first, then the pinned key, then the rest."""
+    if pinned is None:
+        return 0
+    if candidate.tier == Tier.UPKEEP:
+        return 0
+    return 1 if candidate.key == pinned else 2
 
 
-def rank(candidates, style=None):
+def _order(candidate, pinned=None, style=BALANCED):
+    return _lane(candidate, pinned), *standing(candidate, style), -candidate.score, candidate.key
+
+
+def rank(candidates, pinned=None, style=None):
     """The candidates that may be chosen, best first, under ``style`` or the adventure's play style.
-    Passive candidates are left out."""
+    Passive candidates are left out.
+
+    ``pinned`` is the key a manager set as the next activity. It goes after upkeep and before every
+    other candidate. Without a pin, or when no active candidate has its key, the order is the usual one.
+    """
     style = play_style(style)
-    return sorted((candidate for candidate in candidates if not candidate.passive),
-                  key=lambda candidate: _order(candidate, style))
+    active = [candidate for candidate in candidates if not candidate.passive]
+    if all(candidate.key != pinned for candidate in active):
+        pinned = None
+    return sorted(active, key=lambda candidate: _order(candidate, pinned, style))
 
 
-def choose(candidates, state=None, style=None):
+def choose(candidates, state=None, pinned=None, style=None):
     """The candidate to run next, or None when the list is empty or holds only passive waits.
 
     ``state`` is the snapshot the candidates were built from. The arbiter reads nothing from it, since
-    each adapter puts what the snapshot says into its candidates.
+    each adapter puts what the snapshot says into its candidates. ``pinned`` and ``style`` are as for
+    ``rank``.
     """
-    ranked = rank(candidates, style)
+    ranked = rank(candidates, pinned, style)
     return ranked[0] if ranked else None
 
 

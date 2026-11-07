@@ -1,4 +1,5 @@
 """Bounded collecting expeditions and evolution projects for a continuing adventure."""
+import random
 import time
 from collections import Counter
 from dataclasses import asdict, replace
@@ -19,6 +20,7 @@ REFUSES_EVOLUTION = {25} if YELLOW else set()
 from .navigation import DIRS
 from .director import AdventureDirector, category, new_entry
 from ..planning import values
+from ..planning import arbiter, pin
 from ..planning.arbiter import NOT_HUNT, Candidate, Tier, hunt
 from ..planning import cost
 from ..planning.cost import FRAMES_PER_TILE
@@ -454,6 +456,8 @@ class Collection:
         self.marathon_previous = None
         # The arbiter's picks beside the director's, for the log and the replay audit. Never saved.
         self.shadow = Shadow()
+        # The next activity a manager set (planning/pin.py). Never saved.
+        self.pin = None
 
     def demand(self):
         return self.peer_demand if time.monotonic() < self.demand_until else {}
@@ -517,6 +521,7 @@ class Collection:
             spent.pop(key, None)
 
     def load(self, data):
+        self.pin = None
         self.next_marathon = data.get('next_marathon', 0)
         self.marathon_records = data.get('marathon_records', {})
         self.activity_events = data.get('activity_events', [])
@@ -550,15 +555,19 @@ class Collection:
         self.was_in_battle = False
         self.idle_token = None
 
-    def abandon(self, reason):
+    def abandon(self, reason, stand_down=True):
+        """Leave the running project. ``stand_down`` False leaves it free to start again at once, for a
+        project a manager set aside rather than one that failed."""
         if not self.project:
             return False
         project = self.project
+        self.end_pin(self.project_key)
         self.record_quality_search()
         self.finish_marathon(False)
         label = name(project['species']) if project.get('species') else project['method'].title()
         progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
-        self.director.finish(project, self.elapsed, False, reason, progressed)
+        if stand_down:
+            self.director.finish(project, self.elapsed, False, reason, progressed)
         self.history = (self.history + [f'Changed plan: {label}. {reason}'])[-6:]
         self.project = None
         self.remaining = 0
@@ -793,6 +802,7 @@ class Collection:
                 progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
                 self.director.finish(project, self.elapsed, bool(finished),
                                      'Target reached' if finished else 'Expedition time budget reached', progressed)
+                self.end_pin(self.project_key)
                 self.project = None
             elif idle.stand_down and not s.in_battle:
                 self.abandon('No encounter, training gain, or new route in two minutes')
@@ -932,7 +942,6 @@ class Collection:
                 self.elapsed >= self.next_marathon, funds_short(s), tuple(sorted(self.demand().items())))
 
     def choose(self,s,nav,rng,main):
-        from ..trade.preferences import identity
         if s.map in LEAGUE or not s.party or not s.owned or not event_set(s.event_flags,'EVENT_GOT_POKEDEX') or main.key.startswith(('heal','party_','teach_','restock')):
             return None
         if not self.completed_champion:
@@ -948,10 +957,61 @@ class Collection:
         token = self.plan_token(s)
         if token == self.idle_token:
             return None
+        offered = self.offers(s, nav, rng)
+        if isinstance(offered, Goal):
+            return offered
+        options, projects, travel, _ = offered
+        pinned = self.pin.key if self.pin else None
+        if pinned is not None and pinned not in projects:
+            # The pinned goal dropped out of the list, so it cannot run now.
+            self.activity_events.append(pin.gave_up(self.drop_pin(), pin.UNAVAILABLE))
+            pinned = None
+        if pinned is None:
+            self.project = self.director.select(options, projects)
+        else:
+            self.project = self.director.select(options, projects, pinned=pinned)
+        if self.project is None:
+            # Nothing to do until the game changes, so the plan is not drawn again until then.
+            self.idle_token = token
+            return None
+        if self.pin and self.project['key'] == self.pin.key:
+            self.pin.started = True
+        # A catch is progress that gives the budget back, so a hunt's budget covers its first catch.
+        self.project['expected_frames'] = ((travel.get(self.project['key']) or 0) * FRAMES_PER_TILE
+                                           + kind_frames({**self.project, 'catch_goal': 1}, self.wild))
+        shadow = getattr(self, 'shadow', None)
+        if shadow is not None:
+            # The arbiter decides here, so this point always agrees. The overworld chain around it
+            # still reuses these candidates for its own comparison.
+            shadow.changed('collection', self.project['key'])
+            shadow.compare('collection', lambda: options, self.project['key'])
+        if self.project['method'] == 'rematch':
+            self.prepare_league_rotation(s)
+        if self.project['method'] == 'marathon':
+            self.next_marathon = self.elapsed + marathon.INTERVAL
+            self.marathon_previous = None
+        if self.project.get('dv_hunt'):
+            self.last_hunt[str(self.project['species'])] = self.elapsed
+        self.project['initial_owned'] = list(s.owned)
+        self.idle_frames = 0
+        self.project_maps = [s.map]
+        self.project_flags = list(s.event_flags)
+        self.progress_token = None
+        # Any other project's budget lives on the monitor and keeps what it spent before.
+        if not budgeted(self.project):
+            self.remaining = training.TRAINING_BUDGET if self.project['method'] == 'train' else marathon.BUDGET
+        nav.path.clear()
+        return self.goal(s)
+
+    def offers(self, s, nav, rng):
+        """The projects the plan can start now, as the arbiter's options, the projects by key, the travel
+        to each and a label for each. A Goal instead when the plan must first reopen Victory Road."""
+        from ..trade.preferences import identity
         bag = dict(s.items)
         held = [(p.species,p.level,None) for p in s.party] + [(sid,level,box) for box,sid,level,nick in s.stored_pokemon]
         candidates = []
         travel = {}
+        labels = {}
         def add(project):
             key = str(project.get('species',0)) + ':' + project['method'] + ':' + str(project.get('map',0)) + ':' + str(project.get('fragment',''))
             if legendary_project(project):
@@ -973,6 +1033,7 @@ class Collection:
                         preparation = distance + 80 if project.get('box') is not None else 0
                         project['travel_distance'] = work_distance + preparation
                     travel[key] = project.get('travel_distance', distance)
+                    labels[key] = goal.title
                     candidates.append({**project,'key':key})
         sources = self.sources()
         held_individuals = [asdict(mon) for mon in s.party] + s.storage_entries()
@@ -1181,37 +1242,55 @@ class Collection:
         options = party_first([candidate(project, travel.get(project['key']), best_tails, short, s.owned, self.wild,
                                          champion=self.completed_champion)
                                for project in candidates], projects)
-        self.project = self.director.select(options, projects)
-        if self.project is None:
-            # Nothing to do until the game changes, so the plan is not drawn again until then.
-            self.idle_token = token
+        return options, projects, travel, labels
+
+    def goal_list(self, s, nav, rng):
+        """The projects a manager can set as the next activity, best first, and why the list is empty.
+
+        The plan is drawn on a copy of ``rng``, so listing the goals never changes what the run does.
+        """
+        if not self.completed_champion:
+            return [], 'The story comes first until the Champion is beaten'
+        if s.map in LEAGUE or not s.party or not s.owned or not event_set(s.event_flags, 'EVENT_GOT_POKEDEX'):
+            return [], 'Not available now'
+        copy = random.Random()
+        copy.setstate(rng.getstate())
+        offered = self.offers(s, nav, copy)
+        if isinstance(offered, Goal):
+            return [], offered.reason
+        options, _, _, labels = offered
+        goals = [pin.entry(option.key, labels.get(option.key, option.key), option.tier)
+                 for option in arbiter.rank(options)]
+        return goals, None if goals else 'Nothing to do until the game changes'
+
+    def set_pin(self, s, nav, rng, key):
+        """Set ``key`` as the next activity. A ValueError says why it cannot be."""
+        goals, reason = self.goal_list(s, nav, rng)
+        match = next((goal for goal in goals if goal['key'] == key), None)
+        if match is None:
+            if key in self.director.monitor._table(STOOD_DOWN) and self.director.waiting(key, self.elapsed):
+                raise ValueError('It stood down after a failed try. Try again later')
+            raise ValueError(reason or pin.UNAVAILABLE.capitalize())
+        if self.project and self.project_key != key:
+            self.abandon('A manager set the next activity', stand_down=False)
+        self.pin = pin.Pin(key, match['label'], started=self.project_key == key)
+        self.idle_token = None
+        return self.pin
+
+    def clear_pin(self):
+        self.pin = None
+
+    def drop_pin(self):
+        """Drop the pin. Returns the label dropped, or None with no pin."""
+        if self.pin is None:
             return None
-        # A catch is progress that gives the budget back, so a hunt's budget covers its first catch.
-        self.project['expected_frames'] = ((travel.get(self.project['key']) or 0) * FRAMES_PER_TILE
-                                           + kind_frames({**self.project, 'catch_goal': 1}, self.wild))
-        shadow = getattr(self, 'shadow', None)
-        if shadow is not None:
-            # The arbiter decides here, so this point always agrees. The overworld chain around it
-            # still reuses these candidates for its own comparison.
-            shadow.changed('collection', self.project['key'])
-            shadow.compare('collection', lambda: options, self.project['key'])
-        if self.project['method'] == 'rematch':
-            self.prepare_league_rotation(s)
-        if self.project['method'] == 'marathon':
-            self.next_marathon = self.elapsed + marathon.INTERVAL
-            self.marathon_previous = None
-        if self.project.get('dv_hunt'):
-            self.last_hunt[str(self.project['species'])] = self.elapsed
-        self.project['initial_owned'] = list(s.owned)
-        self.idle_frames = 0
-        self.project_maps = [s.map]
-        self.project_flags = list(s.event_flags)
-        self.progress_token = None
-        # Any other project's budget lives on the monitor and keeps what it spent before.
-        if not budgeted(self.project):
-            self.remaining = training.TRAINING_BUDGET if self.project['method'] == 'train' else marathon.BUDGET
-        nav.path.clear()
-        return self.goal(s)
+        label, self.pin = self.pin.label, None
+        return label
+
+    def end_pin(self, key):
+        """The pinned project ended, done or not, so the pin has had its one run."""
+        if self.pin is not None and self.pin.started and self.pin.key == key:
+            self.pin = None
 
     def project_goal(self,s,p):
         mode=p['method']

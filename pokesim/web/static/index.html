@@ -16,7 +16,7 @@
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
-<link rel="stylesheet" href="${game_base}/static/panel.css?v=stopped-1">
+<link rel="stylesheet" href="${game_base}/static/panel.css?v=next-1">
 <link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=locks-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
@@ -71,6 +71,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <div class="plan-now"><p class="micro" id="objective-heading">Plan</p><h2 class="headline" id="objective">Finding the way forward</h2><p class="body" id="decision" hidden></p></div>
 <div class="plan-state"><p class="micro">Now</p><p class="value"><i class="lamp" data-on="ok" aria-hidden="true"></i><span id="progress-state">Exploring</span></p><p class="note" id="last-achievement">Waiting for the first achievement.</p></div>
 <div class="plan-next"><p class="micro">Next</p><p class="value" id="next-objective">Finding the next milestone</p><p class="note plan-meta"><span id="action-tag"></span><span id="progress"></span></p></div>
+<div class="plan-pick" id="next-activity" hidden><label class="micro" for="next-activity-goal">Next activity</label><p class="value" id="next-activity-status" hidden></p><div class="plan-pick-controls"><select id="next-activity-goal"><option value="">Choose a goal</option></select><button type="button" class="key" id="next-activity-set" disabled>Set</button><button type="button" class="key" id="next-activity-cancel" hidden>Cancel</button></div><p class="note" id="next-activity-note" role="status"></p></div>
 </section>
 </main>
 
@@ -90,6 +91,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <script src="${game_base}/static/audio.js?v=5"></script>
 <script src="${game_base}/static/mon-grid.js?v=locks-1"></script>
 <script src="${game_base}/static/party-popup.js?v=1"></script>
-<script src="${game_base}/static/app.js?v=stopped-1"></script>
+<script src="${game_base}/static/next-activity.js?v=1"></script>
+<script src="${game_base}/static/app.js?v=next-1"></script>
 </body>
 </html>

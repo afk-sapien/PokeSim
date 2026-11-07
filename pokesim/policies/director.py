@@ -91,15 +91,15 @@ class AdventureDirector:
             self.monitor._table(STOOD_DOWN)[key] = deadline - RETRY.wait(self.failures.get(key, 0))
 
     @staticmethod
-    def select(candidates, projects):
+    def select(candidates, projects, pinned=None):
         """The project the utility arbiter picks from ``candidates``, or None.
 
         ``projects`` maps each candidate's key to its project. The arbiter takes the highest tier and
         then the most value per expected frame, with ties on key. The tier filters, fixed priorities and
         recent-kind decay that used to decide here are gone, since a stalled project now stands down
-        and waits under the monitor's backoff.
+        and waits under the monitor's backoff. ``pinned`` is the key a manager set as the next activity.
         """
-        pick = arbiter.choose(candidates)
+        pick = arbiter.choose(candidates, pinned=pinned)
         return None if pick is None else projects[pick.key]
 
     def finish(self, project, elapsed, success, reason, progressed=False):

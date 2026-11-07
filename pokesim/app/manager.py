@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 STATIC = Path(__file__).parents[1] / 'web' / 'static'
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
-                   'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
+                   'api/audio', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'api/goals', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
 
 # Pages a person opens. A stopped adventure answers these with its status page, not raw JSON.
 GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon',
