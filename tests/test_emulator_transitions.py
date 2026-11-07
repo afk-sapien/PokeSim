@@ -89,6 +89,21 @@ def test_a_rewind_or_restart_first_keeps_the_game_it_replaces(emu, monkeypatch, 
     assert not list(emu.store.states.glob('auto-*.state'))
 
 
+@pytest.mark.parametrize('chosen', ['before-load.state', 'before-restart.state'])
+def test_undoing_a_rewind_or_restart_loads_the_game_from_before_it(emu, monkeypatch, chosen):
+    """Loading before-load.state first wrote the present over it, so the undo reloaded the present."""
+    (emu.store.states / chosen).write_bytes(b'past')
+    monkeypatch.setattr(emu, '_state_bytes', lambda: b'present', raising=False)
+    monkeypatch.setattr(emu, '_manifest', lambda: {'frame': 900}, raising=False)
+    loaded = []
+    monkeypatch.setattr(emu, '_load_state_file', lambda path: loaded.append(path.read_bytes()), raising=False)
+    emu._handle_command('load_state', chosen)
+    assert loaded == [b'past']
+    # The undo can be undone in turn, and the copy it held on to is gone.
+    assert (emu.store.states / 'before-load.state').read_bytes() == b'present'
+    assert {path.name for path in emu.store.states.iterdir()} == {chosen, 'before-load.state', 'before-load.json'}
+
+
 def test_taking_control_drops_queued_presses(emu):
     emu.manual_mode = emu.paused = False
     emu._handle_command('take_control', None)

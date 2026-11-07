@@ -346,6 +346,9 @@ class Store:
     def keep_as(self, path: Path, name: str):
         self.checkpoints.keep_as(path, name)
 
+    def held(self, path: Path, replaced: str):
+        return self.checkpoints.held(path, replaced)
+
     def write_stall_bundle(self, *args, **kwargs) -> Path:
         return self.checkpoints.write_stall_bundle(*args, **kwargs)
 

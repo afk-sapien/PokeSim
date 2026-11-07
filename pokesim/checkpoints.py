@@ -1,12 +1,14 @@
 """Checkpoint files, manifests, validation, and retention independent of SQLite."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import gzip
 import hashlib
 import io
 import json
 import logging
 import os
+import secrets
 import shutil
 import tempfile
 import time
@@ -212,6 +214,26 @@ class CheckpointStore:
             except OSError:
                 shutil.copyfile(source, pending)
             os.replace(pending, (self.states / name).with_suffix(suffix))
+
+    @contextmanager
+    def held(self, path: Path, replaced: str):
+        """Yield `path` to load. When it is `replaced`, which is about to be written over, yield a second
+        link to the game it holds now, and remove that link afterwards."""
+        if path.name != replaced:
+            yield path
+            return
+        held = self.states / f'.pending-held-{secrets.token_hex(4)}.state'
+        try:
+            for suffix in ('.state', '.json'):
+                if path.with_suffix(suffix).exists():
+                    try:
+                        os.link(path.with_suffix(suffix), held.with_suffix(suffix))
+                    except OSError:
+                        shutil.copyfile(path.with_suffix(suffix), held.with_suffix(suffix))
+            yield held
+        finally:
+            for suffix in ('.state', '.json'):
+                held.with_suffix(suffix).unlink(missing_ok=True)
 
     @property
     def stalls(self) -> Path:

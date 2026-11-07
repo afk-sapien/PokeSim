@@ -66,6 +66,40 @@ def test_journal_saves_are_compressed_and_keep_their_manifest(gen2_emu):
         assert source.read() == raw
 
 
+def test_a_new_holder_of_the_controls_never_runs_queued_presses(gen2_emu):
+    """Gen 1 already drops them. Gen 2 kept them, so the next holder ran the last holder's presses."""
+    import queue
+    emu = gen2_emu
+    emu.manual = queue.Queue(maxsize=16)
+    emu.manual.put('old press')
+    emu._handle_command('take_control', None)
+    assert emu.manual_mode and emu.manual.empty()
+
+
+@pytest.mark.parametrize('command,kept', [('load_state', 'before-load.state'), ('restart', 'before-restart.state')])
+def test_a_gen2_rewind_or_restart_first_keeps_the_game_it_replaces(gen2_emu, command, kept):
+    emu = gen2_emu
+    (emu.store.states / 'chosen.state').write_bytes(b'chosen')
+    emu._state_bytes = Mock(return_value=b'before')
+    emu._manifest = Mock(return_value={'frame': 900})
+    emu._load_state_file = Mock()
+    emu._handle_command(command, 'chosen.state')
+    assert (emu.store.states / kept).read_bytes() == b'before'
+
+
+def test_undoing_a_gen2_rewind_loads_the_game_from_before_it(gen2_emu):
+    emu = gen2_emu
+    (emu.store.states / 'before-load.state').write_bytes(b'past')
+    emu._state_bytes = Mock(return_value=b'present')
+    emu._manifest = Mock(return_value={'frame': 900})
+    loaded = []
+    emu._load_state_file = lambda path: loaded.append(path.read_bytes())
+    emu._handle_command('load_state', 'before-load.state')
+    assert loaded == [b'past']
+    assert (emu.store.states / 'before-load.state').read_bytes() == b'present'
+    assert {path.name for path in emu.store.states.iterdir()} == {'before-load.state', 'before-load.json'}
+
+
 @pytest.mark.parametrize('error', [ValueError('refused'), OSError('unreadable'), EOFError('truncated')])
 def test_a_broken_rewind_never_ends_the_run(gen2_emu, error):
     emu = gen2_emu

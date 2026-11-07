@@ -1,6 +1,7 @@
 """Accounts: setup, login, invites, who sees and controls which adventure, share links and sign-in providers."""
 import ipaddress
 import os
+import time
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
@@ -422,7 +423,8 @@ def older_library(root):
 
 
 def test_upgrades_stay_open_and_new_libraries_log_in(tmp_path, monkeypatch):
-    monkeypatch.delenv('AUTH', raising=False)
+    for name in ('AUTH', 'POKESIM_ADMIN_USER', 'POKESIM_ADMIN_PASSWORD'):
+        monkeypatch.delenv(name, raising=False)
     older = tmp_path / 'older'
     older_library(older)
     reopened = Manager(older, auth='auto')
@@ -435,6 +437,25 @@ def test_upgrades_stay_open_and_new_libraries_log_in(tmp_path, monkeypatch):
     asked = Manager(older, auth='auto')
     assert asked.auth_mode == 'accounts'
     asked.close()
+
+
+def test_an_upgrade_with_an_admin_in_the_environment_logs_in(tmp_path, monkeypatch):
+    """.env.example sets both, and the Library stayed open while the admin was never made."""
+    monkeypatch.delenv('AUTH', raising=False)
+    older_library(tmp_path)
+    monkeypatch.setenv('POKESIM_ADMIN_USER', 'owner')
+    monkeypatch.setenv('POKESIM_ADMIN_PASSWORD', PASSWORD)
+    upgraded = Manager(tmp_path, auth='auto')
+    assert upgraded.auth_mode == 'accounts'
+    assert upgraded.bootstrap_admin('owner', PASSWORD)['role'] == 'admin'
+    upgraded.close()
+    # One of the two alone creates nobody, so it does not lock the Library.
+    second = tmp_path / 'second'
+    older_library(second)
+    monkeypatch.delenv('POKESIM_ADMIN_PASSWORD')
+    half = Manager(second, auth='auto')
+    assert half.auth_mode == 'none'
+    half.close()
 
 
 def test_a_new_library_that_an_import_made_first_still_logs_in(tmp_path, monkeypatch):
@@ -466,6 +487,25 @@ def test_reset_password_from_the_command_line(library, people):
     library.login('alice', result['password'])
     with pytest.raises(ValueError):
         reset_password(library.manager.root, 'nobody')
+    # The row that holds adventures for the owner of an older Library is nobody to log in as.
+    with pytest.raises(ValueError, match='No user is called'):
+        reset_password(library.manager.root, '#library-owner')
+
+
+def test_cookieless_session_requests_cannot_lock_out_new_browsers(library, people):
+    """About 1024 of them filled the table for a day, and every new browser got 429 and no CSRF token."""
+    flood = TestClient(library.app)
+    for _ in range(1100):
+        flood.cookies.clear()
+        assert flood.get('/api/v1/session').status_code == 200
+    # Many addresses at once push out the oldest, not the newcomer.
+    for number in range(1100):
+        library.manager.anonymous_session(None, f'10.0.{number // 250}.{number % 250}')
+    assert len(library.manager.sessions) <= 1024
+    newest = max(library.manager.sessions.values(), key=lambda session: session['expires'])
+    # Until a login it lasts an hour, not a day.
+    assert newest['expires'] <= time.time() + 3600
+    library.login('alice')
 
 
 def test_the_cli_token_acts_as_the_first_admin(library, people):
