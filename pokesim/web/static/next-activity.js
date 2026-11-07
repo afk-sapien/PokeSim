@@ -7,6 +7,10 @@
   let busy = false
   // The pin key the picker last drew for. Undefined until the first draw, so that draw loads the list.
   let shown
+  // True while the planner offers nothing to choose, so a state refresh keeps the list hidden.
+  let empty = false
+  // When the list was last read. A hidden empty list cannot take focus, so it is read again each minute.
+  let asked = 0
 
   const status = pin => pin ? `Next: ${pin.label}` : ''
 
@@ -35,18 +39,19 @@
     line.textContent = status(pin)
     line.hidden = !active
     $('#next-activity-cancel').hidden = !active
-    $('#next-activity-goal').hidden = active
-    $('#next-activity-set').hidden = active
+    $('#next-activity-goal').hidden = active || empty
+    $('#next-activity-set').hidden = active || empty
     const key = pin ? pin.key : null
     if (owner && key !== shown) {
       shown = key
       if (!active) load()
-    }
+    } else if (owner && !active && empty && Date.now() - asked > 60000) load()
   }
 
   async function load() {
     const select = $('#next-activity-goal')
     if (!select || !owner) return
+    asked = Date.now()
     try {
       const response = await PokeSim.fetch('/api/goals', {cache: 'no-store'})
       if (!response.ok) throw new Error(FAILED)
@@ -58,6 +63,10 @@
       select.add(new Option(goals.length ? 'Choose a goal' : 'No goals to choose now', ''))
       for (const goal of goals) select.add(new Option(goal.label, goal.key))
       if (goals.some(goal => goal.key === chosen)) select.value = chosen
+      // With nothing to choose, the row shows only the planner's reason, not an empty list and a dead button.
+      empty = !goals.length
+      select.hidden = empty
+      $('#next-activity-set').hidden = empty
       $('#next-activity-set').disabled = !goals.length
       note(goals.length ? '' : body.reason)
     } catch (error) {

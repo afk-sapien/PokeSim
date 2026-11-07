@@ -157,7 +157,8 @@ function renderLease() {
   const box = $('#lease')
   const status = leaseEnforced ? lease : null
   const manages = role === 'manager' || role === 'owner'
-  if (box) box.hidden = !status || stoppedNow || (!status.holder && role !== 'owner')
+  // The box speaks only while someone plays by hand or waits to. What happens when control ends is in Settings.
+  if (box) box.hidden = !status || stoppedNow || !(status.holder || status.queued || status.idle_warning || status.queue?.length)
   $('.controller')?.querySelectorAll('[data-b]').forEach((button) => { button.disabled = !holding() })
   const take = $('#take-control')
   if (take) {
@@ -188,9 +189,6 @@ function renderLease() {
       queue.innerHTML = rows.map((entry) => `<li><span>${esc(entry.name)} asks for control</span>${status.you_hold ? `<button class="key" data-lease-action="handover" data-user="${esc(entry.id)}">Hand over</button>` : ''}<button class="key" data-lease-action="refuse" data-user="${esc(entry.id)}">Refuse</button></li>`).join('')
     }
   }
-  set('#lease-end-field', 'hidden', role !== 'owner')
-  const end = $('#lease-end')
-  if (end && document.activeElement !== end) end.value = status.end || 'resume'
 }
 
 async function control(button, action, value, message) {
@@ -476,22 +474,6 @@ $('#lease-queue')?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-lease-action]')
   if (button) leaseAction(button, button.dataset.leaseAction, button.dataset.user)
 })
-if ($('#lease-end')) $('#lease-end').onchange = async (event) => {
-  const select = event.currentTarget
-  select.disabled = true
-  try {
-    const response = await PokeSim.fetch('/api/lease', {method: 'POST', headers: {'content-type': 'application/json'},
-      body: JSON.stringify({action: 'setting', end: select.value})})
-    if (!response.ok) throw new Error(await problem(response, 'That choice could not be saved. Please try again.'))
-    lease = await response.json()
-    toast(lease.end === 'pause' ? 'The game will stay paused when someone stops playing.' : 'The AI will play again when someone stops playing.')
-  } catch (error) {
-    toast(error.message, true)
-  } finally {
-    select.disabled = false
-    renderLease()
-  }
-}
 // The library ends a lease whose page goes quiet, and drops a quiet page from the queue, so a
 // holding or waiting page checks in. Browsers slow a hidden tab's timers, so a page that comes
 // back into view checks in at once and hears whether it is still in line.
@@ -695,7 +677,7 @@ function renderIntent(strategy) {
   // Side by side in the plan row, a next step identical to the current one just reads as an echo.
   const next = strategy.next?.title
   const repeated = Boolean(next) && next === (shownObjective?.title || strategy.objective?.title)
-  set('#next-objective', 'textContent', repeated ? 'Still on this one' : next || 'Continue the journey')
+  set('#next-objective', 'textContent', repeated ? 'Finish the plan first' : next || 'Continue the journey')
 }
 
 // A party member opens the same detail popup as the PC page (party-popup.js).

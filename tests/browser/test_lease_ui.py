@@ -89,7 +89,10 @@ def test_ask_refuse_hand_over_and_take_back(browser, tmp_path, monkeypatch):
         bob, carol = open_game(browser, game, 'bob'), open_game(browser, game, 'carol')
         take = bob.locator('#take-control')
         expect(take).to_have_text('Take control')
+        # With nobody in control or in line the box under the screen stays out of the way.
+        expect(bob.locator('#lease')).to_be_hidden()
         take.click()
+        expect(carol.locator('#lease')).to_be_visible()
         expect(take).to_have_text('Let AI play')
         expect(bob.locator('#lease-holder')).to_have_text(HOLDING)
         expect(bob.locator('#lease-idle')).to_be_hidden()
