@@ -215,3 +215,41 @@ def test_live_progress_uses_achievement_age_and_recovery_state(monkeypatch):
     assert emu.progress_status()['last_achievement']['age_seconds'] == 500
     emu.policy.recover_stall(snap(frame=100))
     assert emu.progress_status()['state'] == 'recovering'
+
+
+def _stuck_emulator():
+    from pokesim.emulator import MAX_RELOADS
+    from pokesim.policies.strategic import StrategicPolicy
+    emu = Emulator.__new__(Emulator)
+    emu.policy = StrategicPolicy(7)
+    emu.snapshot = snap(frame=1000)
+    emu.unstick_streak = MAX_RELOADS
+    emu.input_epoch = 0
+    emu.events = []
+    emu._handle_events = lambda events, snapshot: emu.events.extend(events)
+    emu.store = Mock()
+    return emu
+
+
+def test_exhausted_reloads_give_up_the_collection_project():
+    from test_collection import sid
+    emu = _stuck_emulator()
+    emu.policy.collection.project = {'method': 'gift', 'species': sid(133)}
+    Emulator._unstick(emu, 0, 'stuck')
+    emu.store.autosaves.assert_not_called()
+    assert emu.policy.collection.project is None
+    assert emu.unstick_streak == 0 and not emu.reloads_exhausted
+    assert [event.title for event in emu.events][-1].startswith('Gave up on')
+
+
+def test_exhausted_reloads_without_a_project_stop_reloading_and_stall(caplog, monkeypatch):
+    emu = _stuck_emulator()
+    emu.policy.collection.project = None
+    emu.last_achievement, emu.frame = None, 1000
+    monkeypatch.setattr('pokesim.emulator.time.time', lambda: 5000)
+    with caplog.at_level('ERROR', logger='pokesim.emu'):
+        for _ in range(3):
+            Emulator._unstick(emu, 0, 'stuck')
+    emu.store.autosaves.assert_not_called()
+    assert sum('not reloading again' in record.getMessage() for record in caplog.records) == 1
+    assert emu.progress_status()['state'] == 'stalled'
