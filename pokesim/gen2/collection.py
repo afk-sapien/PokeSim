@@ -10,7 +10,8 @@ from ..planning.stance import HUNT
 from .menus import ChangeBox, FieldMove, Storage, Teach, Use
 from .navigation import DIRS
 from pokecore.gen2.ram import Memory
-from .standdown import (exhausted, forget, hunt_key, search_expected, spend, stand_down, standing_down)
+from ..planning.monitor import STOOD_DOWN
+from .standdown import (exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down, standing_down)
 
 
 def matching_time(value, current):
@@ -687,6 +688,10 @@ class Ladder:
         if self.stopped:
             return
         if self.pick is not None and arbiter.ahead(self.pick, tier) and not self.survey and name != self.pin_rung:
+            return
+        if (name != self.pin_rung and self.policy.collection.get(STOOD_DOWN)
+                and standing_down(self.policy, rung_key(name))):
+            # The watchdog gave up on this rung after its reloads did not help (emulator.py).
             return
         self.asked.add(name)
         before = self.save()
