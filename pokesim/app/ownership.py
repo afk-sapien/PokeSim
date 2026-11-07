@@ -1,4 +1,5 @@
 """Moving adventures between people: a transfer, a revoked share and deleting a user."""
+from contextlib import contextmanager
 import logging
 import threading
 
@@ -7,6 +8,33 @@ from .offers import OPEN, PENDING
 
 log = logging.getLogger(__name__)
 deleting = threading.Lock()
+
+
+class NoLongerOwner(PermissionError):
+    """The caller lost the adventure, or the right to own it, while the request ran."""
+
+
+def require_owner(manager, actor, adventure):
+    """Refuse unless `actor`, read again from the accounts, may own `adventure`. Call it holding
+    `offers.guard`, which a transfer holds while the owner changes."""
+    from .policy import can
+    fresh = manager.fresh_actor(actor)
+    if fresh is None or not can(fresh, 'adventure.own', adventure):
+        raise NoLongerOwner('You no longer own this adventure')
+
+
+@contextmanager
+def owned_by(manager, actor, aids):
+    """Hold `offers.guard` and refuse unless `actor` still owns each of `aids`. A trade queued or
+    recorded inside it cannot outlast a transfer, which ends trades under the same guard. Without
+    an actor nothing is checked."""
+    if actor is None:
+        yield
+        return
+    with manager.offers.guard:
+        for aid in aids:
+            require_owner(manager, actor, manager.registry.adventure(aid))
+        yield
 
 
 def end_offer(manager, offer, status, reason, why, actor=None):
@@ -54,10 +82,12 @@ def recheck(manager, uid, actor=None):
             return can(who, action, manager.registry.adventure(aid))
         except KeyError:
             return False
-    for offer in manager.registry.trade_offers(statuses=[PENDING]):
-        if offer.get('sender_id') == uid and not allowed(offer['from_id'], 'adventure.manage'):
-            end_offer(manager, offer, 'withdrawn', 'The person who sent it can no longer manage the adventure',
-                      'the person who sent it can no longer manage the adventure', actor)
+    # Under `offers.guard`, so an offer they are making meanwhile is either refused or ended here.
+    with manager.offers.guard:
+        for offer in manager.registry.trade_offers(statuses=[PENDING]):
+            if offer.get('sender_id') == uid and not allowed(offer['from_id'], 'adventure.manage'):
+                end_offer(manager, offer, 'withdrawn', 'The person who sent it can no longer manage the adventure',
+                          'the person who sent it can no longer manage the adventure', actor)
     with manager.leases.lock:
         held = list(manager.leases.leases)
     for aid in held:
@@ -106,6 +136,13 @@ def hand_on(manager, aid, old, to_uid, actor):
     # The owner changes under `offers.guard` too, so an offer the old owner makes meanwhile is
     # either ended here or finds, under the guard, that they no longer manage the adventure.
     with manager.offers.guard:
+        # Another transfer may have moved the adventure since `actor` was read, so the right to give
+        # it and its owner are read again here.
+        adventure = manager.registry.adventure(aid)
+        require_owner(manager, actor, adventure)
+        old = adventure['owner_id']
+        if old == to_uid:
+            raise ValueError('They already own this adventure')
         end_trades(manager, aid, actor)
         result = give(manager, aid, old, to_uid, actor)
     manager.leases.forget(aid, old)
@@ -187,10 +224,12 @@ def _delete_owner(manager, uid, user, plan, actor):
                 attempt(give, manager, aid, uid, target, actor)
         attempt(manager.leases.forget, aid, uid)
     # Offers this user sent from adventures shared with them, and their place in any lease queue.
-    for offer in attempt(manager.registry.trade_offers, statuses=[PENDING]) or ():
-        if offer.get('sender_id') == uid:
-            attempt(end_offer, manager, offer, 'withdrawn', 'The person who sent it was removed',
-                    'the person who sent it was removed', actor)
+    # Under the guard, as in recheck.
+    with manager.offers.guard:
+        for offer in attempt(manager.registry.trade_offers, statuses=[PENDING]) or ():
+            if offer.get('sender_id') == uid:
+                attempt(end_offer, manager, offer, 'withdrawn', 'The person who sent it was removed',
+                        'the person who sent it was removed', actor)
     with manager.leases.lock:
         held = list(manager.leases.leases)
     for aid in held:

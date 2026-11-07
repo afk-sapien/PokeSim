@@ -52,6 +52,8 @@ SESSION_COOKIE = 'pokesim_session'
 SHARE_COOKIE = 'pokesim_share'
 # An open screen stream checks this often that its viewer may still watch.
 STREAM_RECHECK_SECONDS = 5
+# A JSON body must arrive whole within this many seconds.
+BODY_SECONDS = 30
 # The control requests that wait in an adventure's press line, how many presses may wait, and
 # how long a press, or Take Control, Resume or Pause, may wait before it is dropped.
 LINE_ACTIONS = frozenset({'press', 'take_control', 'resume', 'pause'})
@@ -534,11 +536,23 @@ class Manager:
 
 
 async def json_body(request, limit=65536):
+    """The request's JSON object, read within BODY_SECONDS.
+
+    The access check ran before the body arrived, so the rights are checked again once it has, and
+    ``request.state.actor`` becomes the actor read now.
+    """
     raw = bytearray()
-    async for chunk in request.stream():
-        raw.extend(chunk)
-        if len(raw) > limit:
-            raise HTTPException(413, 'Request is too large')
+    try:
+        async with asyncio.timeout(BODY_SECONDS):
+            async for chunk in request.stream():
+                raw.extend(chunk)
+                if len(raw) > limit:
+                    raise HTTPException(413, 'Request is too large')
+    except TimeoutError as error:
+        raise HTTPException(408, 'The request body took too long') from error
+    recheck = getattr(request.state, 'recheck', None)
+    if recheck is not None:
+        await recheck(request)
     try:
         value = json.loads(raw or b'{}')
     except ValueError as error:
@@ -642,7 +656,9 @@ def create_app(manager, shutdown=lambda: None):
         return JSONResponse({'detail': str(error)}, status_code=403)
 
     from .offers import Changed, LimitReached, NoLongerManaged, OwnerOnly
+    from .ownership import NoLongerOwner
 
+    @app.exception_handler(NoLongerOwner)
     @app.exception_handler(NoLongerManaged)
     @app.exception_handler(OwnerOnly)
     async def owner_only(request, error):
@@ -722,6 +738,15 @@ def create_app(manager, shutdown=lambda: None):
             return JSONResponse({'detail': 'Only the owner of this adventure can do this'}, status_code=403)
         return None
 
+    async def recheck(request):
+        """Read who is asking again once the body is in, and refuse if they may no longer do this."""
+        actor = await run_in_threadpool(manager.actor, request)
+        refused = await run_in_threadpool(check_route, request, actor)
+        if refused is not None:
+            detail = json.loads(refused.body or b'{}').get('detail', 'You can no longer do this')
+            raise HTTPException(refused.status_code, detail)
+        request.state.actor = actor
+
     @app.middleware('http')
     async def access(request, call_next):
         expected = urlsplit(manager.public_url)
@@ -753,6 +778,8 @@ def create_app(manager, shutdown=lambda: None):
                     protect_response(refused)
                     refused.headers['Cache-Control'] = 'no-store'
                     return refused
+                if changing:
+                    request.state.recheck = recheck
         response = await call_next(request)
         protect_response(response)
         response.headers['Cache-Control'] = cache_policy(
@@ -1219,7 +1246,7 @@ def create_app(manager, shutdown=lambda: None):
         manager.check_available()
         data = await json_body(request)
         require(request, 'adventure.own', data.get('left_id'), data.get('right_id'))
-        row = await asyncio.to_thread(manager.coordinator.propose, data)
+        row = await asyncio.to_thread(manager.coordinator.propose, data, request.state.actor)
         manager.background(manager.coordinator.execute, row['id'])
         return row
 
@@ -1246,7 +1273,7 @@ def create_app(manager, shutdown=lambda: None):
         manager.check_available()
         data = await json_body(request)
         await run_in_threadpool(require, request, 'adventure.own', data.get('from_id'), data.get('to_id'))
-        trade = await asyncio.to_thread(manager.builder.create, data)
+        trade = await asyncio.to_thread(manager.builder.create, data, request.state.actor)
         manager.background(manager.coordinator.drain_manual)
         return trade
 
@@ -1565,7 +1592,17 @@ def create_app(manager, shutdown=lambda: None):
     def lease_access(aid, request):
         """The lease a control request goes with, read at the front of the press line, so a change
         while it waited counts."""
-        actor, adventure, control = request.state.lease_control
+        _, _, control = request.state.lease_control
+        # The wait for the front can take seconds, so the rights are read again here too.
+        actor = manager.actor(request)
+        actor = policy.Actor(actor.user, actor.grants)
+        try:
+            adventure = manager.registry.adventure(aid)
+        except (KeyError, ValueError):
+            raise HTTPException(404, 'Adventure not found') from None
+        if not can(actor, policy.CONTROL_ACTIONS[control], adventure):
+            raise HTTPException(403, 'Your role on this adventure does not allow this')
+        request.state.lease_control = (actor, adventure, control)
         if control in policy.LEASE_ACTIONS:
             generation = manager.leases.stamp(aid, actor)
             if generation is None:

@@ -548,7 +548,9 @@ class Coordinator:
         return bool(modern.get('time_capsule_ready') and offer.get('time_capsule_compatible')
                     and classic.get('time_capsule_compatible') is not False)
 
-    def propose(self, data):
+    def propose(self, data, actor=None):
+        """Record an exchange. With `actor`, only while they still own both adventures."""
+        from .ownership import owned_by
         required = {'left_id', 'right_id', 'left_key', 'right_key'}
         if not isinstance(data, dict) or not required <= set(data) or set(data) - required - {'request_id', 'manual'}:
             raise ValueError('Choose two adventures and their Pokémon')
@@ -603,7 +605,8 @@ class Coordinator:
             raise ValueError('The Time Capsule needs an unlocked Gen II adventure and compatible Kanto Pokémon')
         if not manual and not self._last_copies_useful(give, take, self._benefit(left, take), self._benefit(right, give)):
             raise ValueError('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
-        with self.manager.maintenance, self.guard:
+        # A transfer ends queued trades under `offers.guard`, so the owner is checked again under it.
+        with self.manager.maintenance, owned_by(self.manager, actor, participants), self.guard:
             existing = self._admit(tid, selection)
             if existing:
                 return existing
