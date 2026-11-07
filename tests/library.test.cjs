@@ -565,6 +565,52 @@ test('the nicknames switch saves through the play route for both generations, ru
   assert.equal(view.calls.some(call => call.path.endsWith('/play')), false)
 })
 
+test('the play style select saves through the play route, running or stopped', async () => {
+  for (const [version, state, play_pending] of [['red', 'running', false], ['gold', 'stopped', false], ['yellow', 'running', true]]) {
+    const game = {id: 'f'.repeat(32), name: 'Game', version, state, settings: {}}
+    const view = library({respond(path, options) {
+      if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+      if (path.endsWith('/play')) return {ok: true, json: async () => ({play_pending})}
+      if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+    }})
+    await settle()
+    for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+    view.click('settings', game.id)
+    assert.equal(view.element('#settings-play-style').value, 'balanced')
+    assert.notEqual(view.element('#settings-play-style').disabled, true)
+    view.element('#settings-play-style').value = 'collector'
+    view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+    await settle()
+    const patches = view.calls.filter(call => call.options.method === 'PATCH')
+    assert.equal('play_style' in JSON.parse(patches[0].options.body).settings, false)
+    assert.equal(patches[1].path, `/api/v1/adventures/${game.id}/play`)
+    assert.deepEqual(JSON.parse(patches[1].options.body), {play_style: 'collector'})
+    assert.equal(view.element('#notice').textContent, play_pending
+      ? 'Settings saved. The play style will apply when this adventure reconnects.' : 'Adventure settings saved.')
+  }
+  // A saved style shows in the select, and changing it with the switch sends both in one call.
+  const game = {id: 'f'.repeat(32), name: 'Game', version: 'red', state: 'running', settings: {play_style: 'story'}}
+  const view = library({respond(path, options) {
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+    if (path.endsWith('/play')) return {ok: true, json: async () => ({play_pending: true})}
+    if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+  }})
+  await settle()
+  for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+  view.click('settings', game.id)
+  assert.equal(view.element('#settings-play-style').value, 'story')
+  view.element('#settings-play-style').value = 'balanced'
+  view.element('#settings-nicknames').checked = false
+  view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+  await settle()
+  const plays = view.calls.filter(call => call.path.endsWith('/play'))
+  assert.equal(plays.length, 1)
+  assert.deepEqual(JSON.parse(plays[0].options.body), {nicknames: false, play_style: 'balanced'})
+  assert.equal(view.element('#notice').textContent, 'Settings saved. The play settings will apply when this adventure reconnects.')
+  const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
+  assert.match(html, /<select id="settings-play-style" data-owner><option value="balanced">Balanced<\/option><option value="story">Story first<\/option><option value="collector">Collector<\/option><\/select>/)
+})
+
 test('the nickname pool editor says an empty pool means no nicknames', () => {
   const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
   assert.match(html, /<p id="nickname-empty-hint" class="note">Empty pool = no nicknames<\/p>/)

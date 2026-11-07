@@ -123,10 +123,10 @@ def goal_candidate(goal, collection, kind=None):
         inner = (shadow.picked.get('collection') if shadow.last.get('collection') == project.get('key')
                  else shadow.built.get('collection', {}).get(project.get('key'))) if project else None
         if inner:
-            return Candidate(key, inner.tier, inner.value, inner.expected_frames, goal=kind)
+            return Candidate(key, inner.tier, inner.value, inner.expected_frames, hunt=inner.hunt, goal=kind)
         return Candidate(key, Tier.PROGRESS, values.SMALL, EXPECTED_FRAMES['other'], goal=kind)
     if kind == 'plan':
-        return Candidate(key, Tier.FILLER, 0.0, ERRAND_FRAMES, goal=kind)
+        return Candidate(key, Tier.FILLER, 0.0, ERRAND_FRAMES, plan=True, goal=kind)
     if kind in ERRANDS:
         return Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal=kind)
     tier = Tier.PROGRESS if collection.completed_champion else Tier.STORY
@@ -162,10 +162,12 @@ class Choice:
 
     def errand_candidate(self, key, kind, frames=ERRAND_FRAMES):
         """An errand that serves the pick. It takes the pick's tier and value, at least a small one, so it
-        goes before the longer pick. It pays an errand's frames again to cut into another errand."""
+        goes before the longer pick. It pays an errand's frames again to cut into another errand. It ranks
+        as the pick does under every play style."""
         held = self.pick
         return Candidate(key, held.tier, max(held.value, values.SMALL), frames,
-                         interrupt_frames=ERRAND_FRAMES if self.errand else 0.0, goal=kind)
+                         interrupt_frames=ERRAND_FRAMES if self.errand else 0.0, hunt=held.hunt, plan=held.plan,
+                         goal=kind)
 
     def wins(self, candidate):
         """Whether ``candidate`` would replace the pick. A goal under the pick's own key is its update.
@@ -1367,6 +1369,7 @@ class StrategicPolicy(Policy):
         gain, _, _, _, before = upgrade
         interrupt = TEACH_FRAMES if self.collection.project else 0.0
         return Candidate('teach_battle', choice.pick.tier, values.move_gain(before, before + gain), TEACH_FRAMES,
+                         hunt=choice.pick.hunt, plan=choice.pick.plan,
                          interrupt_frames=interrupt, goal='moves')
 
     def _hm_option(self, s):

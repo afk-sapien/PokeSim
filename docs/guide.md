@@ -322,6 +322,18 @@ The switch applies at once, including while the adventure runs. The same happens
 saved Library nickname pool leaves no names, for example after unchecking every built-in
 word and name. A Library that never saved a pool uses the built-in names.
 
+Each adventure also has a Play style, Balanced by default. Balanced plays as before. Story
+first ranks filler side projects, such as an optional TM purchase, below the planned story
+and Pokédex goals, so they wait until nothing else is left. Optional upgrades such as
+training already wait for new entries in every style. Collector ranks collection hunts,
+better DV copies and repeat catches, with new Pokédex entries, so they compete on value per
+frame instead of waiting behind training and races. Collection hunts begin once the Champion
+is beaten. A hunt offered earlier would rank with new entries only for a species catchable
+now, and a story goal would win a tie. Story and upkeep
+goals, such as healing, never move in any style. The style applies at once, including while
+the adventure runs, through the same `PATCH /api/v1/adventures/{aid}/play` route as the
+Nicknames switch.
+
 New strategic adventures also choose a random starter. The choice is saved before the
 Pokémon is received, so restoring a checkpoint does not reroll it. `STARTER` selects a
 fixed partner when desired. Checkpoints from older releases retain the previous

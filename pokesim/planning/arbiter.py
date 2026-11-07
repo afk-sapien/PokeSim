@@ -4,6 +4,7 @@ Each generation's adapter turns its goal sources into candidates. A candidate sa
 it buys and how many frames it is expected to take. The arbiter takes the highest tier that has an
 active candidate and, within it, the most value per frame. A candidate that cuts into a running goal
 adds the frames lost by leaving it. Ties break on key, so the same list always gives the same pick.
+The adventure's play style can move filler and collection hunts to another rank, never STORY or UPKEEP.
 
 A passive candidate, such as Day Care steps or a clock wait, accrues while something else runs and is
 never chosen. The arbiter keeps no game knowledge and no value weights. Values come in on each
@@ -29,6 +30,24 @@ class Tier(IntEnum):
     FILLER = 5
 
 
+# Play styles, chosen per adventure and read from config.PLAY_STYLE on each ranking. Balanced ranks by
+# tier alone. Story ranks filler below the plan placeholder. Collector ranks collection hunts with
+# PROGRESS, before the Champion only those for species catchable now. STORY and UPKEEP never move.
+BALANCED, STORY, COLLECTOR = 'balanced', 'story', 'collector'
+PLAY_STYLES = (BALANCED, STORY, COLLECTOR)
+
+# What kind of collection hunt a candidate is. Only the Collector style reads it.
+NOT_HUNT = ''
+HUNT_NOW = 'now'              # Before the Champion, a hunt for a species catchable now.
+HUNT_LATER = 'later'          # Before the Champion, a hunt for a species not catchable now.
+HUNT_POSTGAME = 'postgame'    # After the Champion, any collection hunt.
+
+
+def hunt(champion, catchable):
+    """The hunt kind of a collection hunt, from whether the Champion is beaten and the species is catchable now."""
+    return HUNT_POSTGAME if champion else HUNT_NOW if catchable else HUNT_LATER
+
+
 @dataclass(frozen=True)
 class Candidate:
     key: str
@@ -41,6 +60,10 @@ class Candidate:
     passive: bool = False
     # Frames lost by cutting into the running goal: the walk back to it and any puzzle that resets.
     interrupt_frames: float = 0.0
+    # One of the hunt kinds above, for a collection hunt the Collector style can promote.
+    hunt: str = NOT_HUNT
+    # The plan placeholder, or an errand that serves it. The Story style ranks filler below it.
+    plan: bool = False
     # The adapter's own goal, handed back with the pick. It takes no part in comparing candidates.
     goal: object = field(default=None, compare=False)
 
@@ -50,22 +73,59 @@ class Candidate:
         return self.value / max(self.expected_frames + self.interrupt_frames, 1.0)
 
 
-def _order(candidate):
-    return candidate.tier, -candidate.score, candidate.key
+def play_style(style=None):
+    """``style``, or else the adventure's play style. An unknown style ranks as Balanced."""
+    if style is None:
+        from .. import config
+        style = getattr(config, 'PLAY_STYLE', BALANCED)
+    return style if style in PLAY_STYLES else BALANCED
 
 
-def rank(candidates):
-    """The candidates that may be chosen, best first. Passive candidates are left out."""
-    return sorted((candidate for candidate in candidates if not candidate.passive), key=_order)
+def standing(candidate, style=BALANCED):
+    """Where ``candidate`` ranks under ``style``, as (rank, loses ties). A lower rank goes first.
+
+    A hunt Collector promotes before the Champion loses ties to the goals already in its rank.
+    """
+    tier = candidate.tier
+    if style == COLLECTOR and tier > Tier.PROGRESS and candidate.hunt in (HUNT_NOW, HUNT_POSTGAME):
+        return int(Tier.PROGRESS), candidate.hunt == HUNT_NOW
+    if style == STORY and tier == Tier.FILLER and not candidate.plan:
+        return int(Tier.FILLER) + 1, False
+    return int(tier), False
 
 
-def choose(candidates, state=None):
+def ceiling(tier, style=BALANCED):
+    """The best standing any candidate in ``tier`` can reach under ``style``."""
+    if style == COLLECTOR and tier > Tier.PROGRESS:
+        return int(Tier.PROGRESS), False
+    return int(tier), False
+
+
+def ahead(candidate, tier, style=None):
+    """Whether ``candidate`` ranks above every candidate ``tier`` could offer, so that tier cannot win."""
+    style = play_style(style)
+    return standing(candidate, style) < ceiling(tier, style)
+
+
+def _order(candidate, style=BALANCED):
+    return *standing(candidate, style), -candidate.score, candidate.key
+
+
+def rank(candidates, style=None):
+    """The candidates that may be chosen, best first, under ``style`` or the adventure's play style.
+    Passive candidates are left out."""
+    style = play_style(style)
+    return sorted((candidate for candidate in candidates if not candidate.passive),
+                  key=lambda candidate: _order(candidate, style))
+
+
+def choose(candidates, state=None, style=None):
     """The candidate to run next, or None when the list is empty or holds only passive waits.
 
     ``state`` is the snapshot the candidates were built from. The arbiter reads nothing from it, since
     each adapter puts what the snapshot says into its candidates.
     """
-    ranked = rank(candidates)
+    ranked = rank(candidates, style)
     return ranked[0] if ranked else None
 
 
@@ -105,7 +165,8 @@ def compare(candidates, state, chosen_key):
     if not active:
         return Comparison(chosen_key, pick, PASSIVE)
     best = active[0]
-    if pick.tier < best.tier:
+    style = play_style()
+    if standing(pick, style) < standing(best, style):
         return Comparison(chosen_key, pick, TIER)
     if pick.score > best.score:
         return Comparison(chosen_key, pick, SCORE)

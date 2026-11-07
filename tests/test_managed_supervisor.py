@@ -256,7 +256,7 @@ def test_play_settings_reach_a_running_worker_and_retry(supervisor):
     aid = adventure(supervisor)
     supervisor.start(aid)
     child = supervisor.children[aid]
-    assert child.play_settings == {'nicknames': True}
+    assert child.play_settings == {'nicknames': True, 'play_style': 'balanced'}
     supervisor.registry.update(aid, settings={'nicknames': False})
     def fail(*args, **kwargs):
         raise RuntimeError('Worker reconnecting')
@@ -271,11 +271,15 @@ def test_play_settings_reach_a_running_worker_and_retry(supervisor):
     # The monitor retries until the worker acknowledges, then sends nothing more.
     supervisor.sync_play(aid, child)
     supervisor.sync_play(aid, child)
-    assert calls == [{'nicknames': False}]
-    # On is stored as absent.
+    assert calls == [{'nicknames': False, 'play_style': 'balanced'}]
+    # A new play style reaches the running worker at once.
+    supervisor.registry.update(aid, settings={'nicknames': False, 'play_style': 'collector'})
+    assert supervisor.push_play(aid) is False
+    assert calls[-1] == {'nicknames': False, 'play_style': 'collector'}
+    # On and Balanced are stored as absent.
     supervisor.registry.update(aid, settings={})
     assert supervisor.push_play(aid) is False
-    assert calls[-1] == {'nicknames': True}
+    assert calls[-1] == {'nicknames': True, 'play_style': 'balanced'}
     # A stopped adventure reads the saved setting when it next starts.
     assert supervisor.push_play(adventure(supervisor)) is False
 

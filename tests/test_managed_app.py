@@ -360,6 +360,34 @@ def test_play_settings_save_running_or_stopped_and_push_live(client, monkeypatch
     assert manager.registry.adventure(row['id'])['settings'].get('nicknames', True) is True
 
 
+def test_the_play_style_route_takes_only_known_styles(client, monkeypatch):
+    client, manager = client
+    headers = login(client, manager)
+    pushed = []
+    monkeypatch.setattr(manager.supervisor, 'push_play', lambda aid: pushed.append(aid) or False)
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    row = client.post('/api/v1/adventures', headers=headers,
+                      json={'name': 'Story run', 'rom_id': 'fixture-rom', 'play_style': 'story'}).json()
+    assert row['settings']['play_style'] == 'story'
+    route = f"/api/v1/adventures/{row['id']}/play"
+    for bad in ({'play_style': 'fast'}, {'play_style': 1}, {'play_style': None}, {'play_style': True},
+                {'play_style': 'Collector'}):
+        response = client.patch(route, headers=headers, json=bad)
+        assert response.status_code == 409 and 'balanced, story, collector' in response.text
+    assert pushed == []
+    manager.registry.update(row['id'], state='running')
+    collector = client.patch(route, headers=headers, json={'play_style': 'collector'})
+    assert collector.status_code == 200 and collector.json()['settings']['play_style'] == 'collector'
+    both = client.patch(route, headers=headers, json={'nicknames': False, 'play_style': 'story'})
+    assert both.json()['settings']['play_style'] == 'story' and both.json()['settings']['nicknames'] is False
+    # Balanced is stored as absent, so older releases still open the adventure.
+    balanced = client.patch(route, headers=headers, json={'play_style': 'balanced'})
+    assert balanced.status_code == 200 and 'play_style' not in balanced.json()['settings']
+    assert pushed == [row['id']] * 3
+    assert client.patch(f"/api/v1/adventures/{row['id']}", headers=headers,
+                        json={'settings': {'play_style': 'story'}}).status_code == 409
+
+
 def test_create_saves_normalized_intro_names_and_rejects_later_edits(client):
     client, manager = client
     headers = login(client, manager)
