@@ -325,6 +325,13 @@ nicknames fit the ten-character limit. Choices avoid repeats until their pool ru
 `SEED` makes the name sequence repeatable, and naming state is included in policy saves.
 Existing names are kept when resuming a game. Player and rival names are chosen on a new run.
 
+Each adventure has a Nicknames switch in its settings, on by default. Off, the bot answers
+NO at every nickname prompt and new Pokémon keep their species names. League rewards and
+gifts placed in a box keep their species names too. Player and rival naming is not affected.
+The switch applies at once, including while the adventure runs. The same happens when the
+saved Library nickname pool leaves no names, for example after unchecking every built-in
+word and name. A Library that never saved a pool uses the built-in names.
+
 New strategic adventures also choose a random starter. The choice is saved before the
 Pokémon is received, so restoring a checkpoint does not reroll it. `STARTER` selects a
 fixed partner when desired. Checkpoints from older releases retain the previous

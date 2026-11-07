@@ -207,13 +207,103 @@ def test_full_names_and_exclusions_reach_the_effective_pool(monkeypatch):
     assert name_pool() != pool
 
 
-def test_nickname_empty_pool_and_long_full_names_are_rejected():
+def test_an_empty_nickname_pool_is_accepted_and_long_full_names_are_rejected():
     import pytest
-    from pokesim.nicknames import CURATED_NAMES, NAME_PREFIXES, nickname_defaults, validate_parts
-    with pytest.raises(ValueError, match='at least one'):
-        validate_parts({**nickname_defaults(), 'nickname_excluded_prefixes': list(NAME_PREFIXES),
-                        'nickname_excluded_names': list(CURATED_NAMES)})
+    from pokesim.nicknames import CURATED_NAMES, NAME_PREFIXES, name_pool, nickname_defaults, validate_parts
+    empty = validate_parts({**nickname_defaults(), 'nickname_excluded_prefixes': list(NAME_PREFIXES),
+                            'nickname_excluded_names': list(CURATED_NAMES)})
+    assert empty['nickname_excluded_names'] == list(CURATED_NAMES)
+    assert name_pool(*(tuple(value) for value in empty.values())) == ()
     with pytest.raises(ValueError, match='1 to 10'):
         validate_parts({**nickname_defaults(), 'nickname_names': ['ELEVENABCDE']})
     result = validate_parts({**nickname_defaults(), 'nickname_names': ['TENLETTERS']})
     assert result['nickname_names'] == ['TENLETTERS']
+
+
+def nickname_mode(monkeypatch, mode):
+    """Set up nicknames as on with no saved pool, off, or on with a saved pool that leaves nothing."""
+    from pokesim import config
+    from pokesim.nicknames import CURATED_NAMES, NAME_PREFIXES, NICKNAME_FIELDS
+    for field in NICKNAME_FIELDS:
+        monkeypatch.setattr(config, field.upper(), ())
+    monkeypatch.setattr(config, 'NICKNAMES', mode != 'off')
+    if mode == 'empty':
+        monkeypatch.setattr(config, 'NICKNAME_EXCLUDED_PREFIXES', NAME_PREFIXES)
+        monkeypatch.setattr(config, 'NICKNAME_EXCLUDED_NAMES', CURATED_NAMES)
+
+
+def nickname_prompt(menu_index):
+    mem = fake_mem({8: "               YES", 9: "               NO", 14: "Give a NICKNAME"})
+    mem[W_TILEMAP + (8 + menu_index) * 20 + 14] = 0xED
+    mem[W_CURRENT_MENU_ITEM] = menu_index
+    return Screen(mem)
+
+
+def test_gen1_no_saved_pool_still_gives_built_in_nicknames(monkeypatch):
+    from pokesim.nicknames import configured_pool
+    nickname_mode(monkeypatch, 'unsaved')
+    assert configured_pool() and set(configured_pool()) <= set(POKEMON_NAMES)
+    controller = NamingController(1)
+    assert controller.step(nickname_prompt(0), snap()).button == "a"
+    controller.step(Screen(grid('NICKNAME')), snap())
+    assert controller.target in POKEMON_NAMES
+
+
+@pytest.mark.parametrize('mode', ('off', 'empty'))
+def test_gen1_answers_no_when_nicknames_are_off_or_the_saved_pool_is_empty(monkeypatch, mode):
+    from pokesim.nicknames import configured_pool
+    nickname_mode(monkeypatch, mode)
+    assert configured_pool() == ()
+    controller = NamingController(1)
+    assert controller.step(nickname_prompt(0), snap()).button == "down"
+    assert controller.step(nickname_prompt(1), snap()).button == "a"
+    # A naming screen opened before the switch clears its letters and accepts the species name.
+    assert controller.step(Screen(grid('NICKNAME', entered='AB')), snap()).button == "b"
+    assert controller.step(Screen(grid('NICKNAME')), snap()).button == "start"
+    # Player and rival naming still pick names.
+    controller.step(Screen(grid('YOUR NAME')), snap())
+    assert controller.target in TRAINER_NAMES
+
+
+def gen2_nickname_prompt():
+    from types import SimpleNamespace
+    rows = [''] * 18
+    rows[8], rows[9] = '              ▶YES', '               NO'
+    rows[14], rows[16] = 'Give a nickname to', 'the received EEVEE?'
+    return SimpleNamespace(text='\n'.join(rows), tiles=rows)
+
+
+def test_gen2_no_saved_pool_leaves_the_nickname_prompt_to_the_policy(monkeypatch):
+    from pokesim.gen2.naming import Naming
+    nickname_mode(monkeypatch, 'unsaved')
+    assert Naming(1).step(gen2_nickname_prompt(), None) is None
+
+
+@pytest.mark.parametrize('mode', ('off', 'empty'))
+def test_gen2_answers_no_when_nicknames_are_off_or_the_saved_pool_is_empty(monkeypatch, mode):
+    from pokesim.gen2.naming import Naming
+    nickname_mode(monkeypatch, mode)
+    assert Naming(1).step(gen2_nickname_prompt(), None) == 'b'
+    other = gen2_nickname_prompt()
+    other.tiles[14], other.tiles[16] = 'Save the game?', ''
+    assert Naming(1).step(other, None) is None
+
+
+@pytest.mark.parametrize('mode,expected', [('unsaved', 'caller'), ('off', 'no'), ('empty', 'no')])
+def test_gen2_catches_hand_the_nickname_prompt_to_core_only_when_naming(monkeypatch, mode, expected):
+    from pokesim.gen2.menus import Throw
+    nickname_mode(monkeypatch, mode)
+    task = Throw(4)
+    monkeypatch.setattr(Throw, 'options', lambda self, snapshot: {})
+    assert task.build(None).nickname == expected
+
+
+@pytest.mark.parametrize('mode', ('off', 'empty'))
+def test_rewards_keep_the_species_name_without_nicknames(monkeypatch, mode):
+    from pokesim.trade import event
+    nickname_mode(monkeypatch, 'unsaved')
+    named = event.gift_slot('reward-name', random_name=True)
+    nickname_mode(monkeypatch, mode)
+    plain = event.gift_slot('reward-name', random_name=True)
+    assert plain == event.gift_slot('reward-name')
+    assert plain.nick == 'MEW' and named.nick != 'MEW'

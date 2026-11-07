@@ -177,6 +177,21 @@ def serve(bootstrap, parent_stream, ready_stream):
                 return {'ok': True}
             return runtime.call(apply)
 
+        @app.post('/internal/play')
+        def play(data: dict):
+            from fastapi import HTTPException
+            from .. import config
+            from .settings import validate_play_settings
+            try:
+                validate_play_settings(data)
+            except ValueError as error:
+                raise HTTPException(400, str(error)) from error
+            def apply():
+                for name, value in data.items():
+                    setattr(config, name.upper(), value)
+                return {name: getattr(config, name.upper()) for name in data}
+            return runtime.call(apply)
+
         @app.post('/internal/notifications')
         def notifications(data: dict):
             from fastapi import HTTPException

@@ -39,9 +39,10 @@ def gift_slot(seed, species=MEW, *, random_name=False):
     struct[27:29] = digest[:2]
     struct[29:29 + len(moves)] = bytes(MOVES[move]['pp'] for move in moves)
     nickname = base['name']
-    if random_name:
-        from ..nicknames import configured_pool
-        pool = configured_pool()
+    from ..nicknames import configured_pool
+    # With nicknames off or an empty pool, the reward keeps its species name.
+    pool = configured_pool() if random_name else ()
+    if pool:
         # Keep naming independent of the draw and stable across delivery retries.
         name_hash = hashlib.sha256(f'nickname:{seed}'.encode()).digest()
         nickname = pool[int.from_bytes(name_hash, 'big') % len(pool)]
