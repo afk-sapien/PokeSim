@@ -33,6 +33,8 @@ CONTROL_ACTIONS = {
     'speed': 'adventure.manage',
     'load_state': 'adventure.manage',
     'restart': 'adventure.own',
+    'pin_goal': 'adventure.manage',
+    'unpin_goal': 'adventure.manage',
 }
 LEASE_ACTIONS = {'press', 'take_control'}
 
@@ -190,6 +192,7 @@ ROUTE_ACTIONS = {
     ('DELETE', '/api/v1/adventures/{aid}'): 'adventure.own',
     ('POST', '/api/v1/adventures/{aid}/archive'): 'adventure.own',
     ('PATCH', '/api/v1/adventures/{aid}'): 'adventure.own',
+    ('PATCH', '/api/v1/adventures/{aid}/play'): 'adventure.manage',
     ('GET', '/api/v1/settings'): 'library.read',
     ('PATCH', '/api/v1/settings'): 'library.settings',
     ('GET', '/api/v1/portraits'): 'library.read',
