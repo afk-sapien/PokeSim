@@ -14,8 +14,8 @@ CONTENT_POLICY = chr(59).join((
 # The library marks a request that arrived through a /view/ link with this header. Only the
 # library can reach a worker, and the header can only take permissions away.
 VIEWER_HEADER = 'X-PokeSim-Viewer'
-# Game routes that list or hand out saves. A view link never reads these.
-VIEWER_PRIVATE = frozenset({'api/states', 'api/export-save'})
+# Game routes that list or hand out saves, or the goal list a manager picks from. A view link never reads these.
+VIEWER_PRIVATE = frozenset({'api/states', 'api/export-save', 'api/goals'})
 
 
 # Under accounts the library names the adventure role of a person below the owner. Like the

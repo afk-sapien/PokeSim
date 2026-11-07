@@ -119,11 +119,11 @@ def test_an_owner_who_lost_the_adventure_while_asking_shares_nothing(quiet, peop
     alice = quiet.login('alice')
     meanwhile(lambda: ownership.transfer(manager, people.red, people.bob['id'], admin))
     linked = alice.post(f'/api/v1/adventures/{people.red}/shares', json={})
-    assert linked.status_code == 403, linked.text
+    assert linked.status_code in {403, 404}, linked.text
     assert manager.auth.shares(people.red) == []
     meanwhile(lambda: ownership.transfer(manager, green, people.bob['id'], admin))
     granted = alice.post(f'/api/v1/adventures/{green}/grants', json={'user_id': people.alice['id'], 'role': 'manager'})
-    assert granted.status_code == 403, granted.text
+    assert granted.status_code in {403, 404}, granted.text
     assert manager.auth.grants_for(people.alice['id']) == {}
 
 

@@ -117,6 +117,13 @@ def test_game_actions_deny_what_they_do_not_know():
     assert policy.game_action('DELETE', 'api/state') is None
 
 
+def test_play_settings_and_the_next_activity_need_their_roles():
+    assert policy.ROUTE_ACTIONS[('PATCH', '/api/v1/adventures/{aid}/play')] == 'adventure.manage'
+    assert policy.game_action('POST', 'api/control', 'pin_goal') == 'adventure.manage'
+    assert policy.game_action('POST', 'api/control', 'unpin_goal') == 'adventure.manage'
+    assert policy.game_action('GET', 'api/goals') == 'adventure.watch'
+
+
 def test_a_fresh_library_asks_for_setup_and_needs_the_logged_code(library):
     client = library.client
     assert client.get('/', follow_redirects=False).headers['location'] == '/setup'

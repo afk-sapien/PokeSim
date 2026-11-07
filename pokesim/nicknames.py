@@ -124,14 +124,16 @@ def validate_parts(values):
             if part not in cleaned:
                 cleaned.append(part)
         result[field] = cleaned
-    complete = {**nickname_defaults(), **result}
-    if not name_pool(*(tuple(complete[key]) for key in NICKNAME_FIELDS)):
-        raise ValueError('Keep at least one available nickname')
+    # A pool that leaves no names is allowed. It means the bot keeps every species name.
     return result
 
 
 @lru_cache(maxsize=16)
 def name_pool(prefixes=(), suffixes=(), full_names=(), excluded_prefixes=(), excluded_suffixes=(), excluded_names=()):
+    """The names a pool gives. User parts add to the built-ins, so only exclusions can empty it.
+
+    A Library that never saved a pool sends six empty lists, which is the built-in pool.
+    """
     if not any((prefixes, suffixes, full_names, excluded_prefixes, excluded_suffixes, excluded_names)):
         return tuple(name for name in POKEMON_NAMES if name not in MENU_WORDS)
     names = dict.fromkeys(name for name in (*CURATED_NAMES, *full_names) if name not in MENU_WORDS)
@@ -145,7 +147,13 @@ def name_pool(prefixes=(), suffixes=(), full_names=(), excluded_prefixes=(), exc
 
 
 def configured_pool():
+    """Names the bot may give in this adventure. Empty means keep the species name.
+
+    It is empty when the adventure turns nicknames off or the saved pool leaves no names.
+    """
     from . import config
+    if not getattr(config, 'NICKNAMES', True):
+        return ()
     return name_pool(*(tuple(getattr(config, key.upper(), ())) for key in NICKNAME_FIELDS))
 
 

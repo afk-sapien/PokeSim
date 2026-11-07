@@ -262,8 +262,10 @@ class TradeBuilder:
 
     # Trade
 
-    def create(self, data):
-        """Check both Pokémon now and queue the trade. It starts when the Cable Club and both games are free."""
+    def create(self, data, actor=None):
+        """Check both Pokémon now and queue the trade. It starts when the Cable Club and both games are free.
+        With `actor`, the trade is queued only while they still own both adventures."""
+        from .ownership import owned_by
         if not isinstance(data, dict) or not set(FIELDS) <= set(data) or set(data) - set(FIELDS) - {'request_id'}:
             raise ValueError('Choose a Pokémon to trade and one to receive')
         selection = {name: data[name] for name in FIELDS}
@@ -284,9 +286,10 @@ class TradeBuilder:
             self.registry.adventure(selection[name])
             self._writer(selection[name])
         give, take = self._check(selection)
-        entry = self.coordinator.enqueue_manual({'left_id': selection['from_id'], 'left_key': selection['from_key'],
-                                                 'right_id': selection['to_id'], 'right_key': selection['to_key'],
-                                                 'request_id': request_id, 'names': {'left': _name(give), 'right': _name(take)}})
+        with owned_by(self.manager, actor, (selection['from_id'], selection['to_id'])):
+            entry = self.coordinator.enqueue_manual({'left_id': selection['from_id'], 'left_key': selection['from_key'],
+                                                     'right_id': selection['to_id'], 'right_key': selection['to_key'],
+                                                     'request_id': request_id, 'names': {'left': _name(give), 'right': _name(take)}})
         return self.coordinator.manual_status(entry['id'])
 
     def cancel(self, mid):

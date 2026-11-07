@@ -53,13 +53,18 @@ def _finish(manager, aid):
 
 
 def delete_adventure(manager, aid, confirmation, actor=None):
+    from .ownership import require_owner
     validate_id(aid)
-    with manager.maintenance, manager.coordinator.guard, manager.supervisor._lock(aid):
+    # `offers.guard` is the lock a transfer holds, so the owner cannot change between the check below
+    # and the deletion.
+    with manager.maintenance, manager.offers.guard, manager.coordinator.guard, manager.supervisor._lock(aid):
         manager.check_available()
         marker = manager.registry.setting(PREFIX + aid)
         if marker and marker.get('complete'):
             return {'deleted': aid}
         row = manager.registry.adventure(aid)
+        if actor is not None:
+            require_owner(manager, actor, row)
         if confirmation != row['name']:
             raise ValueError('Type the adventure name to confirm permanent deletion')
         if row['state'] not in {'stopped', 'failed', 'deleting'} or row['desired_state'] != 'stopped':

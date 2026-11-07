@@ -875,6 +875,9 @@
       $('#settings-palette-note').textContent = refused ? `This adventure has not accepted the palette yet: ${refused}` : 'GBC-inspired colors applied to the whole screen. Changes apply immediately, including while paused.'
       $('#settings-palette').disabled = colour
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
+      // Nicknames and Play style save through the play route, so they stay editable while the adventure runs.
+      $('#settings-nicknames').checked = game.settings?.nicknames !== false
+      $('#settings-play-style').value = game.settings?.play_style || 'balanced'
       $('#settings-randomizer').hidden = !game.settings?.randomizer
       $('#settings-randomizer-code').textContent = game.settings?.randomizer || ''
       const randomized = parseShareCode(game.settings?.randomizer || '')
@@ -959,8 +962,15 @@
       }
       const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
         settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), ...($('#settings-palette').disabled ? {} : {palette: $('#settings-palette').value || 'original'}), ...rewards}}, 'PATCH')
+      const changes = {}
+      const nicknames = $('#settings-nicknames').checked
+      if (game && nicknames !== (game.settings?.nicknames !== false)) changes.nicknames = nicknames
+      const style = $('#settings-play-style').value || 'balanced'
+      if (game && style !== (game.settings?.play_style || 'balanced')) changes.play_style = style
+      const play = Object.keys(changes).length ? await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}/play`, changes, 'PATCH') : {}
+      const playLabel = 'nicknames' in changes ? ('play_style' in changes ? 'play settings' : 'nickname setting') : 'play style'
       $('#adventure-settings').close()
-      const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette', result.fair_wild_dvs_pending && 'fair wild DVs setting'].filter(Boolean).join(' and ')
+      const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette', result.fair_wild_dvs_pending && 'fair wild DVs setting', play.play_pending && playLabel].filter(Boolean).join(' and ')
       notice(pending ? `Settings saved. The ${pending} will apply when this adventure reconnects.` : 'Adventure settings saved.')
     }) }
   $('#notify-add').onclick = () => openIntegration()

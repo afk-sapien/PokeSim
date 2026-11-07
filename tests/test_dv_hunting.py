@@ -79,6 +79,43 @@ def test_training_toward_a_credit_ranks_above_every_quality_hunt():
     assert candidate(train('train', 10), 10, {}, False, set()).tier == Tier.UPGRADE
 
 
+def test_collection_hunts_are_marked_for_the_collector_style():
+    from pokesim.planning import arbiter
+    from pokesim.planning.arbiter import COLLECTOR, HUNT_LATER, HUNT_NOW, HUNT_POSTGAME, NOT_HUNT, Tier
+    from pokesim.policies.collection import candidate
+    hunt = {'method': 'grass', 'key': 'hunt', 'species': sid(10), 'map': 51, 'repeat': True, 'dv_hunt': True,
+            'catch_goal': 3}
+    repeat = {'method': 'grass', 'key': 'repeat', 'species': sid(16), 'map': 12, 'repeat': True}
+    for project in (hunt, repeat):
+        assert candidate(project, 10, {sid(10): 100}, False, set(), champion=True).hunt == HUNT_POSTGAME
+        assert candidate(project, 10, {sid(10): 100}, False, set()).hunt == HUNT_NOW
+        assert candidate(project, None, {sid(10): 100}, False, set()).hunt == HUNT_LATER
+    assert candidate(train('train', 10), 10, {}, False, set(), champion=True).hunt == NOT_HUNT
+    entry = {'method': 'grass', 'key': 'entry', 'species': sid(10), 'map': 51}
+    assert candidate(entry, 10, {}, False, set(), champion=True).hunt == NOT_HUNT
+    # After the Champion a quality hunt ranks with training only under Collector.
+    quality = candidate(hunt, 10, {sid(10): 100}, False, set(), champion=True)
+    trainer = candidate(train('train', 10), 10, {}, False, set())
+    assert trainer.tier == Tier.UPGRADE
+    assert arbiter.choose([quality, trainer], style='balanced') is trainer
+    assert arbiter.choose([quality, trainer], style=COLLECTOR) is quality
+
+
+def test_the_plan_placeholder_and_its_errands_rank_as_the_plan():
+    from types import SimpleNamespace
+    from pokesim.planning.arbiter import STORY, Candidate, Tier, choose
+    from pokesim.policies.strategic import Choice, goal_candidate
+    plan = goal_candidate(SimpleNamespace(key='collect_plan'), None, kind='plan')
+    assert plan.plan and plan.tier == Tier.FILLER
+    errand = Choice(SimpleNamespace(key='collect_plan'), plan).errand_candidate('buy', 'buy')
+    assert errand.plan and errand.tier == Tier.FILLER
+    # A filler side project beats the worthless plan placeholder unless the style puts the story first.
+    side = Candidate('buy_tm', Tier.FILLER, 1.0, 1000)
+    assert choose([side, plan], style='balanced') is side
+    assert choose([side, plan], style=STORY) is plan
+    assert choose([side, errand], style=STORY) is errand
+
+
 def test_a_due_marathon_outranks_training_and_quality_hunts_but_not_new_entries():
     from pokesim.planning.arbiter import Tier
     from pokesim.policies import marathon

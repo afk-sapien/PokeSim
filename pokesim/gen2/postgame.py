@@ -381,8 +381,9 @@ def candidate(policy, snapshot, activity):
         per_catch = (search_expected(activity['row'].get('chance', 10)) + decisions) / (1 + catches)
         on_site = search_expected(activity['row'].get('chance', 10))
         travel = max(0, (activity.get('expected') or on_site) - on_site)
+        # The hunt's row comes from the encounters open at this time of day, so it is catchable now.
         return Candidate('quality', HUNT_TIER, catch_value(odds) * needed, travel + per_catch * needed,
-                         goal='postgame quality')
+                         hunt=arbiter.hunt('champion' in getattr(policy, 'completed', {}), True), goal='postgame quality')
     if kind == 'train':
         level = max((mon.level for mon in held(snapshot) if ident(mon) == activity['identity']), default=0)
         steps = max(1, activity['level_goal'] - level)

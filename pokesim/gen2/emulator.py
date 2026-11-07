@@ -424,6 +424,38 @@ class Emulator:
             raise response['error']
         return response['result']
 
+    def goals(self):
+        """The goals a manager can set as the next activity. Runs on the game thread."""
+        from ..planning.pin import listing
+        goals, reason = self.policy.goals(self.snapshot)
+        return listing(goals, self.policy.pin, reason)
+
+    def pin_goal(self, key):
+        """Set the next activity. A ValueError says why the planner cannot take it now."""
+        return self.policy.pin_goal(self.snapshot, key).to_dict()
+
+    def unpin_goal(self):
+        self.policy.unpin_goal()
+
+    def _drop_pin(self, reason):
+        """Drop the manager's pin before a recovery, and journal it here since a reload loses any note."""
+        from ..events import Event as Entry
+        from ..planning.pin import gave_up
+        drop = getattr(getattr(self, 'policy', None), 'drop_pin', None)
+        label = drop() if drop else None
+        if label is not None and getattr(self, 'snapshot', None) is not None:
+            self._event(Entry(**gave_up(label, reason)), self.snapshot)
+
+    def _report_pin(self, snapshot):
+        """Write a pin the planner dropped to the journal."""
+        from ..events import Event as Entry
+        rows = getattr(self.policy, 'pin_events', None)
+        if not isinstance(rows, list) or not rows:
+            return
+        self.policy.pin_events = []
+        for row in rows:
+            self._event(Entry(**row), snapshot)
+
     def press(self, button):
         if button in BUTTONS:
             self.command('press', button)
@@ -580,6 +612,8 @@ class Emulator:
         for button in BUTTONS:
             self.pb.button_release(button)
         self.frame = metadata.get('frame', 0)
+        # A pin belongs to the moment it was set, so it never outlives a load.
+        self.policy.unpin_goal()
         self.policy.load_state_dict(metadata.get('policy_state', {}))
         self.policy.on_restore()
         self.play_clock.restore(metadata.get('play_clock'))
@@ -846,6 +880,8 @@ class Emulator:
 
     def _unstick(self, since_frame, why):
         """Go back to an autosave from before the trouble started, or power-cycle when there is none."""
+        from ..planning.pin import STUCK
+        Emulator._drop_pin(self, STUCK)
         if self.unstick_streak >= MAX_RELOADS:
             # Reloading again would only replay the same trouble. Leave the run as it is, flagged as
             # stalled, and say so once rather than at every guard check.
@@ -1147,6 +1183,7 @@ class Emulator:
                         action = self.policy.step(snapshot, self.pb.memory, stack_pointer(self.pb))
                         self._report_missed_shiny(snapshot)
                         self._report_marathon(snapshot)
+                        self._report_pin(snapshot)
                     if action.button:
                         self.pb.button_press(action.button)
                     try:

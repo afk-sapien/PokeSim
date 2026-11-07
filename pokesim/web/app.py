@@ -513,6 +513,16 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             raise HTTPException(403, "This instance is view-only")
         return [p.name for p in sorted(store.states.glob("*.state"), key=lambda p: p.stat().st_mtime, reverse=True)]
 
+    @app.get('/api/goals')
+    def goals():
+        """The planner's own goal list, best first, and the next activity a manager set."""
+        if view_only():
+            raise HTTPException(403, 'This instance is view-only')
+        try:
+            return emu.call(emu.goals, timeout=10)
+        except (RuntimeError, TimeoutError) as error:
+            raise HTTPException(409, str(error)) from error
+
     @app.post('/api/trade')
     def trade(c: Control, authorization: str = Header(default='')):
         if not config.TRADE_TOKEN or not hmac.compare_digest(authorization, 'Bearer ' + config.TRADE_TOKEN):
@@ -606,6 +616,17 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             if refusal:
                 raise HTTPException(409, refusal)
             emu.command("load_state", str(c.value))
+        elif c.action == "pin_goal":
+            if not isinstance(c.value, str) or not c.value.strip():
+                raise HTTPException(400, "Choose a goal from the list")
+            key = c.value
+            try:
+                pin = emu.call(lambda: emu.pin_goal(key), timeout=10)
+            except (ValueError, RuntimeError, TimeoutError) as error:
+                raise HTTPException(409, str(error)) from error
+            return {"ok": True, "pin": pin}
+        elif c.action == "unpin_goal":
+            emu.call(emu.unpin_goal, timeout=10)
         else:
             raise HTTPException(400, "unknown action")
         return {"ok": True, "applied": True, "boot": boot}

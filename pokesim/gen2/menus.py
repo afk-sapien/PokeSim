@@ -511,7 +511,9 @@ class Throw(CoreTask):
 
     def build(self, snapshot):
         # The policy names caught Pokémon, so the nickname prompt is handed back to it.
-        return UseItem(self.item, nickname='caller', **self.options(snapshot))
+        # With nicknames off or an empty pool, Core answers NO itself.
+        from ..nicknames import configured_pool
+        return UseItem(self.item, nickname='caller' if configured_pool() else 'no', **self.options(snapshot))
 
 
 @dataclass
