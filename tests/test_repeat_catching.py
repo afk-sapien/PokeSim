@@ -110,10 +110,13 @@ def test_demand_keeps_needed_copies_without_blocking_all_duplicate_cleanup():
     from test_duplicates import snapshot, stored
     policy = StrategicPolicy(1)
     copies = [stored(i, species=sid(69), level=10 + i) for i in range(3)]
+    copies += [stored(3, species=sid(16), level=30), stored(4, species=sid(16), level=40)]
+    # Nine free slots, so a refill to BOX_REFILL frees one.
+    s = replace(snapshot(copies), box_counts=(20,) * 11 + (11,))
     policy.collection.set_demand({69: 3})
-    assert policy._release_target(snapshot(copies)) is None
+    assert policy._release_target(s) == (0, 3), 'the needed copies wait behind every spare'
     policy.collection.set_demand({69: 2})
-    assert policy._release_target(snapshot(copies)) == (0, 0)
+    assert policy._release_target(s) == (0, 0)
 
 
 def test_a_hunt_stocks_thirty_balls_only_while_the_purse_stays_above_funds_needed():

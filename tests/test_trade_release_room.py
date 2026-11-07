@@ -1,4 +1,4 @@
-"""A trade never fails for a full PC while a safe spare duplicate can be released to make room.
+"""A trade never fails for a full PC while a spare duplicate can be released to make room.
 
 Regression: a hand-picked trade between Red and Gold failed with "An adventure needs a free PC slot
 to prepare its Pokémon for this trade". Gold held six in the party and 280 in the PC: 54 eggs, which
@@ -46,26 +46,23 @@ def gold_like():
 
 def test_a_trade_may_release_a_spare_holding_an_item_but_never_an_egg_or_a_last_copy():
     snapshot = gold_like()
-    assert spares(snapshot) == []
-    order = spares(snapshot, lenient=True)
     # The weakest boxed Snorlax goes first. The lead and best copies, the eggs and the single Bulbasaur stay.
-    assert [(m.box, m.position) for m in order] == [(11, 1), (4, 3)]
+    assert [(m.box, m.position) for m in spares(snapshot)] == [(11, 1), (4, 3)]
     plain = mon(SNORLAX, box=6, position=0, dvs=(13, 13, 13, 13, 13))
     trained = mon(SNORLAX, box=6, position=1, dvs=(2, 2, 2, 2, 2), stat_exp=(30000,) * 5)
     roomy = full([*snapshot.stored, plain, trained], party=snapshot.party)
-    # A copy without an item or training still goes before one with either.
-    assert spares(roomy, lenient=True)[0] is plain
-    assert spares(roomy)[0] is plain
+    # Training outscores DVs, so the trained copy becomes the best copy and the rest go lowest score first.
+    assert [(m.box, m.position) for m in spares(roomy)] == [(11, 1), (4, 3), (6, 0), (13, 5)]
 
 
-def test_a_lenient_release_still_keeps_shiny_perfect_and_rare_copies():
+def test_shiny_and_perfect_copies_go_after_plain_ones():
     best = mon(SNORLAX, box=1, position=0, dvs=(13, 13, 13, 13, 13))
     shiny = mon(SNORLAX, box=1, position=1, dvs=(1, 10, 10, 10, 10), held_item=146)
     perfect = mon(SNORLAX, box=1, position=2, dvs=(15, 15, 15, 15, 15), held_item=146)
     egg = mon(SNORLAX, box=1, position=3, egg=True, level=5)
-    # With a shiny and a perfect copy kept, the plain copy is the only spare, even with items allowed.
-    assert spares(full([best, shiny, perfect, egg]), lenient=True) == [best]
-    assert spares(full([shiny, perfect, egg]), lenient=True) == []
+    # The shiny scores highest, so it is the best copy and stays. The plain copy goes before the perfect one.
+    assert spares(full([best, shiny, perfect, egg])) == [best, perfect]
+    assert spares(full([shiny, perfect, egg])) == [perfect]
 
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
@@ -82,18 +79,20 @@ def test_trade_spare_protects_keep_hand_picked_and_wished_pokemon(gen2_data):
     policy = Policy(gen2_data, seed=1, starter='chikorita')
     snapshot = gold_like()
     weakest, middle, best = sorted(snapshot.stored[4:], key=lambda m: sum(m.dvs))
-    # Six in the party and every box full, so the Leftovers can never come off. The weakest spare may go
-    # with them, since the lead and the other boxed Snorlax still hold Leftovers.
-    assert policy.release_target(snapshot) is weakest
+    # Six in the party and every box full, so the Leftovers can never come off. The spares may go with
+    # them, since the lead and the other boxed Snorlax still hold Leftovers. A refill takes both spares in
+    # one visit, box by box, so the visit starts in box 4. A trade gives up the weakest.
+    assert policy.release_target(snapshot) is middle
     assert policy.trade_spare(snapshot) is weakest
     key = lambda m: identity({'trainer_id': m.trainer_id, 'dvs': m.dvs, 'dex': m.species})  # noqa: E731
-    # A Pokémon set to Never trade, one hand-picked for a trade (even by an older trainer-and-DV key) and a wished species stay.
+    # A Pokémon set to Never trade and one hand-picked for a trade (even by an older trainer-and-DV key) stay.
     policy.trade_preferences = lambda: {key(weakest): {'state': 'locked'}}
     assert policy.trade_spare(snapshot) is middle
     # With the weaker spares protected, the boxed upgrade stays even though the party has a copy.
     assert policy.trade_spare(snapshot, protect=[key(middle).split('-')[0]]) is None
     assert policy.trade_spare(snapshot, protect=[key(middle), key(best)]) is None
-    assert policy.trade_spare(snapshot, wished=[SNORLAX]) is None
+    # A wished species is stock, which holds a role for two copies only, so a third copy may still go.
+    assert policy.trade_spare(snapshot, wished=[SNORLAX]) is middle
 
 
 def preparation(spare=None, boxes=(20,) * 14):

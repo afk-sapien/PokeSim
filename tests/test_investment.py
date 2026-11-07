@@ -7,7 +7,8 @@ from pokesim.broker.inventory import normalise
 from pokesim.investment import assessment, training_investment
 from pokesim.policies.collection import Collection
 from pokesim.policies.director import AdventureDirector
-from pokesim.policies.team import release_target
+from pokesim.pcvalue import queue
+from pokesim.policies.team import release_rated, release_target
 from pokesim.web.pokedex import live_status
 from test_duplicates import stored, snapshot
 from test_level100_priority import individual, postgame, candidates
@@ -37,15 +38,16 @@ def test_invalid_dvs_do_not_claim_rarity():
         assert assessment(partner(dvs=dvs))['dv_top_percent'] is None
 
 
-def test_current_and_future_strength_survive_until_replacement_catches_up():
+def test_the_trained_veteran_stays_until_the_rare_newcomer_catches_up():
     newcomer = stored(0, level=5, dvs=RARE)
     veteran = stored(1, level=100, dvs=POOR, stat_exp=(65535,) * 5)
-    assert release_target(snapshot([newcomer, veteran])) is None
+    assert release_target(snapshot([newcomer, veteran])) == (0, 0)
     assert release_target(snapshot([replace(newcomer, level=100, stat_exp=(65535,) * 5), veteran])) == (0, 1)
 
 
-def test_rare_find_is_not_released_even_with_a_better_copy():
-    assert release_target(snapshot([stored(0, dvs=RARE), stored(1, dvs=(15,) * 5)])) is None
+def test_a_rare_find_goes_only_after_a_plain_spare():
+    s = snapshot([stored(0, dvs=RARE), stored(1, dvs=(15,) * 5), stored(2, dvs=POOR)])
+    assert [row.entry.slot for row in queue(release_rated(s))] == [(0, 2), (0, 0)]
 
 
 def test_automatic_trade_protects_rare_candidate_and_trained_veteran():

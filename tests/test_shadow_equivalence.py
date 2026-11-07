@@ -37,14 +37,14 @@ def scenario(name, generation):
     return loaded
 
 
-def replay(loaded, enabled):
+def replay(loaded, enabled, frames=FRAMES):
     from pokesim.ram import read_snapshot
     run, _ = open_run(loaded)
     read = run.read if hasattr(run, 'read') else lambda: read_snapshot(run.pb.memory, run.frame)
     try:
         run.policy.shadow.enabled = enabled
         start, trace = run.frame, []
-        while run.frame - start < FRAMES:
+        while run.frame - start < frames:
             snapshot = read()
             run.step(snapshot)
             goal = run.policy.goal
@@ -55,18 +55,19 @@ def replay(loaded, enabled):
         run.stop()
 
 
-# Each case and the shadow points it reaches within FRAMES.
-CASES = [('red-partial-training-20260915', 1, {'overworld', 'collection'}),
-         ('red-cerulean-cave-hunt-20261008', 1, {'overworld', 'collection'}),
-         ('gold-expshare-full-bag-20261027', 2, {'ladder'}),
-         ('silver-np-gate-corner-20261020', 2, {'ladder', 'postgame'})]
+# Each case, the shadow points it reaches and the frames it needs to reach them. The Silver run first
+# frees seven box slots, up to the refill mark, before it trains.
+CASES = [('red-partial-training-20260915', 1, {'overworld', 'collection'}, FRAMES),
+         ('red-cerulean-cave-hunt-20261008', 1, {'overworld', 'collection'}, FRAMES),
+         ('gold-expshare-full-bag-20261027', 2, {'ladder'}, FRAMES),
+         ('silver-np-gate-corner-20261020', 2, {'ladder', 'postgame'}, 55000)]
 
 
-@pytest.mark.parametrize('name,generation,points', CASES)
-def test_the_chosen_goal_is_the_same_with_the_shadow_on_or_off(name, generation, points):
+@pytest.mark.parametrize('name,generation,points,frames', CASES)
+def test_the_chosen_goal_is_the_same_with_the_shadow_on_or_off(name, generation, points, frames):
     loaded = scenario(name, generation)
-    on, on_state, summary = replay(loaded, True)
-    off, off_state, idle = replay(loaded, False)
+    on, on_state, summary = replay(loaded, True, frames)
+    off, off_state, idle = replay(loaded, False, frames)
     assert set(summary['decisions']) == points, summary
     assert not summary['failed'], summary
     assert not idle['decisions']

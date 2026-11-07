@@ -119,10 +119,10 @@ def walk_spent(data, snapshot, goal='walk'):
     return budget_spent(books, goal, books.snapshot(snapshot))
 
 
-# Worth of a boxed spare: a plain duplicate, a trained one, and more for one holding an item. Training
-# took many battles, so it weighs more than any cheap item. An item held by a released spare is lost
-# with it, so its price counts too, halved when the bag holds more of it.
-PLAIN, TRAINED, HELD = 1, 50, 10
+# Worth of a boxed spare: its PC score (pcvalue.py) plus this, and more for one holding an item. An
+# item held by a released spare is lost with it, so its price counts too, halved when the bag holds
+# more of it. A copy a plan needs comes after every spare, so KEPT is above any score.
+PLAIN, HELD, KEPT = 1, 10, 5000
 # A spare in another box costs a box change first, which saves the game and takes about as long as a
 # release. So a spare in the open box goes before a near equal one elsewhere.
 BOX_CHANGE = 10
@@ -137,42 +137,47 @@ def member(mon):
 
 
 def box_units(policy, snapshot, allowed=lambda mon: True):
-    """Boxed spares that could go to free a slot, worth least first.
+    """Boxed Pokémon that could go to free a slot, worth least first.
 
-    A plain spare goes as it is. A spare holding an item no plan wants may go with its item, worth the
-    item's price as well. Any held spare may also have its item taken off first, which keeps the item
-    but needs a free party slot and a bag entry, so it is chosen only when both are free. A spare
-    holding an item some plan wants goes only that way, unless the party and every box are full so
-    the item can never come off. It then goes with its item while the bag or another Pokémon keeps a
-    copy, so a full box frees a slot as it does in Red, Blue and Yellow.
+    Each is worth its PC score (pcvalue.py): an owner's release request goes first, then spares, then
+    copies a plan needs. The ones a refill needs are ranked for one PC visit (pcvalue.releases), open
+    box first, since every box change saves the game. A spare holding an item no plan wants may go with its item, worth the item's
+    price as well. Any held spare may also have its item taken off first, which keeps the item but
+    needs a free party slot and a bag entry, so it is chosen only when both are free. A spare holding
+    an item some plan wants goes only that way, unless the party and every box are full so the item
+    can never come off. It then goes with its item while the bag or another Pokémon keeps a copy, so a
+    full box frees a slot as it does in Red, Blue and Yellow.
     """
-    from pokecore.gen2.breeding import breeding_stock
-    from .release import TRAINED_STAT_EXP, plan_partners, spares
+    from ..planning.ledger import box_wanted
+    from ..pcvalue import deadlocked, queue, releases, requested
+    from .release import release_rated
     from .standdown import standing_down
     data = policy.data
-    keep = breeding_stock(data, [mon.species for mon in snapshot.party + snapshot.stored if not mon.egg])
-    partners = plan_partners(policy.collection)
-    preferences = policy.trade_preferences()
-    owners = policy.release_owners() if hasattr(policy, 'release_owners') else None
-    plain = spares(snapshot, policy.demand, keep, preferences, partners, owners=owners)
-    lenient = spares(snapshot, policy.demand, keep, preferences, partners, lenient=True, owners=owners)
+    rated = release_rated(policy, snapshot)
+    # The journal says once when nothing in the PC may go (pcvalue.full_notice).
+    policy.pc_deadlock = deadlocked(rated)
+    visit = {row.entry.slot: index for index, row in
+             enumerate(releases(rated, max(box_wanted(headroom(snapshot), True), len(requested(rated)), 1),
+                                snapshot.active_box))}
     wanted = wanted_items(data)
     bag = dict(snapshot.pockets.get('items', ()))
     sealed = len(snapshot.party) >= PARTY_SIZE and headroom(snapshot) == 0
     holders = Counter(row.held_item for row in snapshot.party + snapshot.stored if row.held_item)
     rows = []
-    for rank, mon in enumerate(plain):
-        if allowed(mon):
-            rows.append(Unit(('mon', mon.box, mon.position), BOX, PLAIN + moved(snapshot, mon), 'release',
-                             detail=mon, order=(0, rank)))
-    plain = {(mon.box, mon.position) for mon in plain}
-    for rank, mon in enumerate(lenient):
-        if (mon.box, mon.position) in plain or not allowed(mon):
+    for rank, row in enumerate(queue(rated)):
+        mon = row.entry.record
+        if not allowed(mon):
             continue
         key = ('mon', mon.box, mon.position)
-        base = (TRAINED if sum(mon.stat_exp) >= TRAINED_STAT_EXP else PLAIN) + moved(snapshot, mon)
+        if row.entry.requested:
+            worth = 0
+        elif row.entry.slot in visit:
+            worth = visit[row.entry.slot]
+        else:
+            worth = len(visit) + row.score + (KEPT if row.status == 'kept' else 0)
+        base = PLAIN + worth + moved(snapshot, mon)
         if not mon.held_item:
-            rows.append(Unit(key, BOX, base, 'release', detail=mon, order=(1, rank)))
+            rows.append(Unit(key, BOX, base, 'release', detail=mon, order=(0, rank)))
             continue
         price = data.item_attributes.get(mon.held_item, {}).get('price', 0)
         lost = price // 2 if bag.get(mon.held_item) else price
@@ -252,10 +257,11 @@ def release_step(policy, snapshot):
     """
     from ..planning.ledger import box_wanted
     from .menus import ChangeBox
+    from .release import pending
     step = unequip_step(policy, snapshot)
     if step is not None:
         return step
-    if not box_wanted(headroom(snapshot), True):
+    if not box_wanted(headroom(snapshot), True) and not pending(policy, snapshot):
         return 'wait'
     unit = policy.storage_target(snapshot)
     if unit is None:

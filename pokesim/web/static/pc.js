@@ -86,6 +86,10 @@ function render() {
   $('#pc-grid').classList.toggle('pc-party-grid', !all && selectedBox === 0)
   $('#pc-boxes-view').setAttribute('aria-pressed', String(!all))
   $('#pc-all-view').setAttribute('aria-pressed', String(all))
+  $('#pc-favor').value = latest?.pc_favor || ''
+  $('#pc-favor').disabled = viewer() || !fresh
+  $('#pc-deadlock').hidden = !latest?.pc_deadlock
+  $('#pc-deadlock').textContent = latest?.pc_deadlock || ''
   const key = JSON.stringify([storage, party, selectedBox, query, all, sort, order, rating])
   if (key === signature) return
   signature = key
@@ -95,7 +99,7 @@ function render() {
   $('#box-picker').innerHTML = `<button data-box="0" aria-pressed="${selectedBox === 0}" class="${selectedBox === 0 ? 'selected' : ''}"><span class="bp-name">Party</span><small>${party.length} / 6</small>${fillMeter(party.length, 6)}</button>` + counts.map((count, index) => `<button data-box="${index + 1}" aria-pressed="${index + 1 === selectedBox}" class="${index + 1 === selectedBox ? 'selected' : ''}"><span class="bp-name">Box ${index + 1}${index + 1 === storage?.active_box ? '<i class="lamp" data-on="ok" title="Receiving new catches"></i><span class="vh">, receiving catches</span>' : ''}</span><small>${count} / 20</small>${fillMeter(count, 20)}</button>`).join('')
   if (focusedBox) $(`[data-box="${focusedBox}"]`)?.focus()
   const focusedMon = document.activeElement?.dataset.mon
-  const card = (mon, index) => monCard(mon, index, {all})
+  const card = (mon, index) => monCard(mon, index, {all, ...releaseMark(mon)})
   if (all) {
     paintCards($('#pc-grid'), residents.map(card), '<p class="dex-empty">No Pokémon match these filters.</p>')
   } else {
@@ -117,12 +121,86 @@ let shown = null
 let locking = {key: '', note: ''}
 const viewer = () => String(PokeSim.base || '').startsWith('/view/') || latest?.viewer_only === true
 
+// The card tag for the next PC_SHOWN releases and for an owner's pending Release.
+function releaseMark(mon) {
+  const next = mon.pc_value?.next
+  if (mon.release_requested) return {tags: '<span class="tag pc-release-tag" title="Goes first at the next PC visit">Release asked</span>', label: 'release asked, goes first at the next PC visit'}
+  if (!next) return {}
+  return {tags: `<span class="tag pc-release-tag" title="Number ${next} in line when a catch needs a box slot">Next ${next}</span>`, label: `number ${next} in line for release`}
+}
+
+// A Release in flight, and the message to show under the button.
+let releasing = {key: '', note: ''}
+
+// The PC value breakdown and the Release control. Watchers see the breakdown only.
+function releasePanel(mon) {
+  const value = mon.pc_value
+  if (!value || mon.box === 0) return ''
+  const esc = MonGrid.esc
+  const place = mon.release_requested ? 'Goes first at the next PC visit.'
+    : value.next ? `Number ${value.next} in line when a catch needs a box slot.`
+      : value.status === 'floor' ? 'Never released automatically.' : value.status === 'kept' ? 'Kept for a plan. Goes only after every spare.' : 'A spare.'
+  const busy = releasing.key === mon.trade_key
+  const note = releasing.key === `done:${mon.trade_key}` && releasing.note ? `<p class="lock-note" role="status">${esc(releasing.note)}</p>` : ''
+  let control = ''
+  if (!viewer() && fresh && mon.trade_key && !mon.trade_ambiguous) {
+    if (mon.release_requested) {
+      control = `<button type="button" class="key pc-release-cancel" data-release-key="${esc(mon.trade_key)}"${busy ? ' disabled' : ''}>Cancel release</button>`
+    } else if (['Keep', 'Egg'].includes(value.reason)) {
+      control = `<span class="micro">${value.reason === 'Keep' ? 'Set to Keep, so it cannot be released' : 'Eggs are never released'}</span>`
+    } else {
+      const last = value.reason === 'Only copy'
+      const ask = last ? `<label class="field pc-release-confirm" for="pc-release-name"><span class="micro">Your only ${esc(mon.name)}. Type its name to release it</span><input id="pc-release-name" autocomplete="off" spellcheck="false"></label>` : ''
+      control = `${ask}<button type="button" class="key pc-release-button" data-release-key="${esc(mon.trade_key)}"${busy ? ' disabled' : ''}>Release at next PC visit</button>`
+    }
+  }
+  return `<section class="pc-value" aria-label="PC value"><h3 class="legend">PC value</h3><p class="pc-value-text">${esc(value.text)}</p><p class="micro">${esc(place)}</p><div class="pc-release-row">${control}</div>${note}</section>`
+}
+
+// Ask for one boxed Pokémon to go first at the next PC visit, or cancel that request.
+async function requestRelease(button, cancel) {
+  const key = button.dataset.releaseKey
+  const mon = shown
+  if (!key || !mon || mon.trade_key !== key || releasing.key === key) return
+  releasing = {key, note: ''}
+  button.disabled = true
+  let note = cancel ? 'Release cancelled.' : 'Release asked. It goes at the next PC visit.'
+  try {
+    const confirm = $('#pc-detail-body #pc-release-name')?.value || ''
+    const response = await PokeSim.fetch('/api/pc/release', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({key, box: mon.box, position: mon.position, confirm, cancel})})
+    if (!response.ok) {
+      let detail = ''
+      try { detail = (await response.json()).detail } catch (_) {}
+      throw new Error(typeof detail === 'string' && detail ? detail : 'Could not save the release.')
+    }
+    for (const record of storage?.pokemon || []) if (record.trade_key === key) record.release_requested = !cancel
+  } catch (error) {
+    note = error.message
+  }
+  releasing = {key: `done:${key}`, note}
+  signature = ''
+  render()
+  if (shown?.trade_key === key && $('#pc-detail').open) redraw(current(key) || shown)
+  await refresh()
+}
+
+async function setFavor(favor) {
+  try {
+    const response = await PokeSim.fetch('/api/pc/favor', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({favor: favor || null})})
+    if (!response.ok) throw new Error('Could not save the release order.')
+    if (latest) latest.pc_favor = favor || null
+  } catch (_) {}
+  signature = ''
+  await refresh()
+}
+
 function detail(mon) {
   shown = mon
   // The lock sits under the head. The guide and Pokédex links share the footer with Trade…
   const top = MonGrid.lockControl(mon, {viewer: viewer(), stale: !fresh, busy: locking.key && locking.key === mon.trade_key,
     note: locking.note && locking.key === `done:${mon.trade_key}` ? locking.note : ''})
-  $('#pc-detail-body').innerHTML = MonGrid.detail(mon, {links: false, top, trade: false})
+  $('#pc-detail-body').innerHTML = MonGrid.detail(mon, {links: false, top, trade: false}) + releasePanel(mon)
   $('#pc-trade-action').innerHTML = `${MonGrid.detailLinks(mon)}${tradeLink(mon)}`
   if (!$('#pc-detail').open) $('#pc-detail').showModal()
   fitSprites($('#pc-detail-body'))
@@ -240,7 +318,8 @@ async function refresh() {
     $('#connection').classList.remove('is-offline')
     render()
     // An open popup shows the fresh lock unless a change is still saving.
-    const again = shown && $('#pc-detail').open && locking.key !== shown.trade_key && current(shown.trade_key)
+    const again = shown && $('#pc-detail').open && locking.key !== shown.trade_key && releasing.key !== shown.trade_key
+      && document.activeElement?.id !== 'pc-release-name' && current(shown.trade_key)
     if (again) redraw(again)
     if (first) openRequested()
   } catch (_) {
@@ -299,11 +378,15 @@ $('#pc-close').onclick = () => $('#pc-detail').close()
 $('#pc-detail').onclose = () => {
   shown = null
   if (!locking.key || locking.key.startsWith('done:')) locking = {key: '', note: ''}
+  if (!releasing.key || releasing.key.startsWith('done:')) releasing = {key: '', note: ''}
 }
 $('#pc-detail-body').onclick = (event) => {
   const button = event.target.closest?.('.lock-toggle')
   if (button) return toggleLock(button)
+  const release = event.target.closest?.('.pc-release-button, .pc-release-cancel')
+  if (release) return requestRelease(release, release.classList.contains('pc-release-cancel'))
 }
+$('#pc-favor').onchange = (event) => setFavor(event.target.value)
 $('#pc-detail').onclick = (event) => {
   if (event.target !== $('#pc-detail')) return
   const rect = event.target.getBoundingClientRect()

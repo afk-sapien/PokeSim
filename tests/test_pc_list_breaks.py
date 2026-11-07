@@ -140,10 +140,11 @@ def test_a_trade_never_offers_the_spare_the_game_is_releasing(participant):
     snap = replace(snapshot(copies, party=snap.party), map=89, x=13, y=4)
     emu.snapshot = snap
     emu.policy = policy = StrategicPolicy(7)
-    assert sorted(offer['position'] for offer in runtime_inventory(emu, snap)['offers']) == [1, 2, 3]
+    # The Lv 30 Pidgey is the best copy, so only the two spares are offered.
+    assert sorted(offer['position'] for offer in runtime_inventory(emu, snap)['offers']) == [2, 3]
     policy.release_spare = release_target(snap)
     assert policy.release_spare == (0, 1)
-    assert sorted(offer['position'] for offer in runtime_inventory(emu, snap)['offers']) == [1, 3]
+    assert sorted(offer['position'] for offer in runtime_inventory(emu, snap)['offers']) == [3]
 
 
 def test_every_gen1_game_passes_the_stack_pointer():

@@ -137,7 +137,7 @@
     const blocked = options.blocked ? String(options.blocked) : ''
     const locked = options.locked ?? isLocked(mon)
     const level = Number.isFinite(mon.level) ? mon.level : null
-    const label = `${esc(mon.nick || mon.name)}${level === null ? '' : `, level ${level}`}${mon.type_names?.length ? ', ' + esc(mon.type_names.join(' / ')) : ''}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${mon.shiny ? ', shiny, protected from release and trading' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}${locked ? ', locked, never traded automatically' : ''}${options.label ? ', ' + esc(options.label) : ''}${blocked ? `, cannot be picked: ${esc(blocked)}` : ''}`
+    const label = `${esc(mon.nick || mon.name)}${level === null ? '' : `, level ${level}`}${mon.type_names?.length ? ', ' + esc(mon.type_names.join(' / ')) : ''}, ${mon.box === 0 ? 'party' : `box ${mon.box}`}${', ' + ratingLabel(mon)}${mon.shiny ? ', shiny, protected from trading' : ''}${mon.perfect_dvs ? ', perfect DVs, preserved for the collection' : ''}${locked ? ', locked, never traded automatically' : ''}${options.label ? ', ' + esc(options.label) : ''}${blocked ? `, cannot be picked: ${esc(blocked)}` : ''}`
     const classes = ['pc-mon', mon.perfect_dvs ? 'perfect-entry' : '', blocked ? 'is-blocked' : '', options.pressed ? 'is-chosen' : ''].filter(Boolean).join(' ')
     const state = [options.pressed !== undefined ? ` aria-pressed="${options.pressed ? 'true' : 'false'}"` : '', blocked ? ` aria-disabled="true" title="${esc(blocked)}"` : ''].join('')
     const metrics = options.all ? `<span class="pc-metrics"><span class="pc-power">Battle Power <b>${Number.isFinite(mon.battle_power) ? mon.battle_power.toLocaleString() : 'Unavailable'}</b></span><span>Stat Power <b>${Number.isFinite(mon.power) ? mon.power.toLocaleString() : 'Unavailable'}</b></span><span>Total DVs <b>${formatTotal(mon, 'dvs')}</b></span><span>Stat exp. <b>${formatTotal(mon, 'stat_exp')}</b></span></span>` : ''
@@ -171,7 +171,7 @@
   }
 
   function tradeBadge(trade, mon) {
-    if (!trade) return isProtected(mon) ? '<span class="tag trade-tag trade-tag--protected" title="Protected from automatic release and trading">Protected</span>' : ''
+    if (!trade) return isProtected(mon) ? '<span class="tag trade-tag trade-tag--protected" title="Protected from automatic trading">Protected</span>' : ''
     const key = trade.state === 'Protected' ? 'protected' : 'keep'
     return `<span class="tag trade-tag trade-tag--${key}" title="${esc(trade.state)}${trade.note ? `. ${esc(trade.note)}` : ''}">${key === 'keep' ? lockIcon(true) : ''}${esc(trade.state)}</span>`
   }

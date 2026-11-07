@@ -11,6 +11,9 @@ from ..strategy_data import ITEMS, MAPS, MATCHUPS, MOVES, PRICES, SPECIES
 
 W_BATTLE_MON = 0xD014
 W_ENEMY_MON = 0xCFE5
+W_ENEMY_SPECIES2 = 0xCFD8
+W_ENEMY_STATUS3 = 0xD069
+TRANSFORMED = 8
 W_PLAYER_DISABLED_MOVE = 0xD06D
 BALLS = (ITEMS["POKE_BALL"], ITEMS["GREAT_BALL"], ITEMS["ULTRA_BALL"])
 # Balls a hunt stocks while the purse stays above funds_needed. Postgame hunts on three Red saves threw
@@ -35,7 +38,9 @@ def read_battler(mem, base):
         disabled = (mem[W_PLAYER_DISABLED_MOVE] >> 4) - 1
         if 0 <= disabled < len(pp):
             pp[disabled] = 0
-    return PartyMon(b[0], word(1), word(15), b[14], "", b[4], (b[5], b[6]),
+    # Transform copies the player's species over the foe's, and species2 keeps the one that was met.
+    species = mem[W_ENEMY_SPECIES2] if base == W_ENEMY_MON and mem[W_ENEMY_STATUS3] & TRANSFORMED else b[0]
+    return PartyMon(species, word(1), word(15), b[14], "", b[4], (b[5], b[6]),
                     tuple(b[8:12]), tuple(pp), word(17), word(19), word(21), word(23))
 
 

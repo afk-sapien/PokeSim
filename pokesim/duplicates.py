@@ -1,11 +1,8 @@
-"""Conservative duplicate retention shared by the player and trade broker."""
-from collections import defaultdict
+"""Quality ranks within one species, which training, trading and checkpoint trims compare by."""
 from math import isqrt
 
 from .strategy_data import MOVES, SPECIES
-from .shiny import is_shiny
-from .milestones import is_perfect
-from .investment import potential_power, veteran, rare_find
+from .investment import potential_power
 
 
 def dv_quality(mon):
@@ -38,29 +35,3 @@ def quality(mon):
     return (potential_power(mon) or -1, *dv_quality(mon), mon['level'], sum(isqrt(value) for value in mon.get('stat_exp', ())),
             sum(coverage.values()) + utility, mon.get('experience', 0),
             sum(mon.get('dvs', ())))
-
-
-def spare_entries(party, stored, protected=()):
-    """Keep future potential and current strength, with party members winning ties.
-
-    Every perfect individual is retained. A trained veteran survives until its
-    replacement matches its current Power. Party members are never offered.
-    Older payloads without individual data retain the original level-only rule.
-    """
-    groups = defaultdict(list)
-    for mon in [*party, *stored]:
-        groups[mon['species']].append(mon)
-    keepers = {}
-    veterans = {}
-    for species, copies in groups.items():
-        detailed = all(len(mon.get('dvs', ())) == 5 and
-                       len(mon.get('stat_exp', ())) == 5 and 'moves' in mon
-                       for mon in copies)
-        if detailed:
-            keepers[species] = max(copies, key=quality)
-            veterans[species] = veteran(copies)
-        else:
-            keepers[species] = next((mon for mon in party if mon['species'] == species),
-                                    max(copies, key=lambda mon: mon['level']))
-    return [mon for mon in stored if mon['species'] not in protected and not is_perfect(mon) and not is_shiny(mon) and not rare_find(mon)
-            and mon is not keepers[mon['species']] and mon is not veterans.get(mon['species'])]

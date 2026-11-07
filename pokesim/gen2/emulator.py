@@ -214,8 +214,7 @@ class Emulator:
         self.options_applied = False
         self.policy = Policy(self.data, seed=config.SEED, starter=config.STARTER)
         self.policy.load_state_dict(store.get('policy_state', {}))
-        self.policy.trade_preferences = store.trade_preferences
-        self.policy.trade_partners = store.trade_partners
+        store.attach(self.policy, 2)
         self.speed = config.SPEED
         self.paused = False
         self.frozen = False
@@ -727,8 +726,12 @@ class Emulator:
         self._note_league_entry(before, snapshot)
         for event in journal.events(before, snapshot, self.history, self.data, Event):
             self._event(event, snapshot)
-        for event in self.releases.observe(self.policy.menu, snapshot, self.data, Event):
+        for event in self.releases.observe(self.policy.menu, snapshot, self.data, Event, self._pc_value_text):
             self._event(event, snapshot)
+        from ..pcvalue import DEADLOCK, full_notice
+        if full_notice(self.store, bool(getattr(self.policy, 'pc_deadlock', False))):
+            self._event(Event('pc_full', 'PC full', f'{DEADLOCK} Release or unlock one from the PC tab.',
+                              priority=HIGH), snapshot)
         if before:
             for mon in snapshot.party:
                 matches = [old for old in before.party if (old.trainer_id, old.dvs) == (mon.trainer_id, mon.dvs)]
@@ -1107,8 +1110,7 @@ class Emulator:
             self.previous = self.snapshot = None
             self.history = {'maps': [], 'owned': [], 'badges': 0, 'league': 0}
             self.policy = Policy(self.data, seed=config.SEED, starter=config.STARTER)
-            self.policy.trade_preferences = self.store.trade_preferences
-            self.policy.trade_partners = self.store.trade_partners
+            self.store.attach(self.policy, 2)
             self.play_clock = PlayClock()
             self.paused = self.manual_mode = False
             # The old run's bests and reload streak would hold the new one stalled for good, and the
@@ -1229,6 +1231,40 @@ class Emulator:
                              'last_achievement': achievement, 'quiet_game_minutes': round(quiet_minutes, 1)},
                 'league_rewards': rewards.status(self.store), 'legendary_recovery': self.legendary_recovery.state_dict(),
                 'randomizer': randomizer_status()}
+
+    def _pc_value_text(self, snapshot, mon):
+        """The PC value breakdown of a boxed Pokémon a release is about to take, for its journal entry."""
+        if not hasattr(self.policy, 'pc_rated'):
+            return ''
+        member = journal._member(mon)
+        row = next((row for row in self.policy.pc_rated(snapshot)
+                    if not row.entry.egg and journal._member(row.entry.record) == member), None)
+        return row.describe() if row else ''
+
+    def pc_values(self):
+        """Each boxed Pokémon's PC value by (box, position), and whether nothing may go (pcvalue.annotate)."""
+        from ..pcvalue import annotate, deadlocked
+
+        def view():
+            if self.snapshot is None:
+                return {}, False
+            rated = self.policy.pc_rated(self.snapshot)
+            return annotate(rated, self.snapshot.active_box), deadlocked(rated)
+        return self.call(view, timeout=5)
+
+    def request_release(self, box, position, key, confirm=''):
+        """Store the owner's Release for the boxed Pokémon at (box, position), or raise ValueError."""
+        from ..pcvalue import pc_request
+        from .release import _keys
+
+        def request():
+            if self.snapshot is None:
+                raise ValueError('Wait for the adventure to be ready before releasing.')
+            value = pc_request(self.policy.pc_rated(self.snapshot), (box, position), key,
+                               lambda mon: _keys(mon)[0], confirm)
+            self.store.set_release_request(key, value)
+            return value
+        return self.call(request)
 
     def set_trade_preference(self, key, state):
         from ..trade.preferences import update

@@ -121,14 +121,17 @@ class Releases:
     def __init__(self):
         self.member = self.mon = None
         self.missing = 0
+        self.value = ''
 
-    def observe(self, menu, snapshot, data, event):
+    def observe(self, menu, snapshot, data, event, value=None):
+        """``value(snapshot, mon)`` gives the spare's PC value text, which its entry quotes."""
         from .menus import Release
         task = menu if isinstance(menu, Release) and menu.member else None
         if task is not None and task.member != self.member:
             mon = next((mon for mon in snapshot.stored if _member(mon) == task.member), None)
             if mon is not None:
                 self.member, self.mon, self.missing = task.member, mon, 0
+                self.value = value(snapshot, mon) if value else ''
         if self.member is None:
             return []
         if any(_member(mon) == self.member for mon in snapshot.party + snapshot.stored):
@@ -142,6 +145,7 @@ class Releases:
             return []
         mon, self.member, self.mon = self.mon, None, None
         name = _species(data, mon.species)
+        quote = f' PC value: {self.value}.' if self.value else ''
         return [event('release', f'Said goodbye to a spare {name}',
-                      f'Storage was nearly full, so a duplicate {name} Lv {mon.level} was let go on {snapshot.map_name}.',
+                      f'Storage was nearly full, so a duplicate {name} Lv {mon.level} was let go on {snapshot.map_name}.{quote}',
                       priority=MINIMAL, notable=False)]

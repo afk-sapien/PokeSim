@@ -1,4 +1,5 @@
-"""A release lets go only of the player's own Pokémon and copies from linked adventures, never a legendary or a gift.
+"""Where a Pokémon came from adds to its PC value: a stranger's trade, a gift and a legendary go after
+the player's own copies and copies from linked adventures, but none of them is kept by origin alone.
 
 Linked adventures are learned two ways: the original trainer of each Pokémon that arrives in a completed
 exchange, and the trainer ids the coordinator passes with its collection requests.
@@ -7,8 +8,9 @@ from dataclasses import replace
 
 import pytest
 
+from pokesim.pcvalue import queue
 from pokesim.policies.collection import gift_species
-from pokesim.policies.team import SPECIES, kept_by_origin, release_target
+from pokesim.policies.team import SPECIES, release_rated, release_target
 from pokesim.ram import StoredMon
 from pokesim.runtime.participant import Participant, _promote, merge_partners
 from pokesim.store import Store
@@ -25,23 +27,34 @@ def stored(position, species=16, **changes):
                              trainer_id=PLAYER), **changes)
 
 
-def snapshot(copies, player=PLAYER, active=0):
+def snapshot(copies, player=PLAYER, active=0, **changes):
     return snap(stored_details=tuple(copies), stored_pokemon=tuple((p.box, p.species, p.level, p.nick) for p in copies),
-                player_id=player, active_box=active)
+                player_id=player, active_box=active, **changes)
+
+
+# Nine free slots, so a refill to BOX_REFILL frees one.
+ONE_NEEDED = {'box_counts': (20,) * 11 + (11,)}
 
 
 def best_and(*others, species=16):
-    return [stored(0, species, dvs=(14,) * 5), *others]
+    return [stored(0, species, level=60, dvs=(14,) * 5), *others]
 
 
-def test_the_player_and_partner_copies_may_go_but_a_strangers_stays():
+def order(s, **inputs):
+    """Stored slots in release order."""
+    return [row.entry.slot for row in queue(release_rated(s, **inputs))]
+
+
+def test_the_player_and_partner_copies_go_before_a_strangers():
     own = stored(1, dvs=(3,) * 5)
     partner = stored(2, dvs=(2,) * 5, trainer_id=SILVER)
     stranger = stored(3, dvs=(1,) * 5, trainer_id=STRANGER)
     s = snapshot(best_and(own, partner, stranger))
-    assert release_target(s, partners=frozenset({SILVER})) == (0, 2)
-    assert release_target(s) == (0, 1)
-    assert release_target(snapshot(best_and(stranger))) is None
+    assert order(s, partners=frozenset({SILVER})) == [(0, 2), (0, 1), (0, 3)]
+    assert order(s) == [(0, 1), (0, 3), (0, 2)]
+    assert release_target(snapshot(best_and(own, partner, stranger), **ONE_NEEDED), partners=frozenset({SILVER})) == (0, 2)
+    # A stranger's copy is only worth more. It still goes when it is the only spare.
+    assert release_target(snapshot(best_and(stranger))) == (0, 3)
 
 
 def test_an_unknown_player_leaves_the_trainer_out_of_the_rules():
@@ -50,20 +63,23 @@ def test_an_unknown_player_leaves_the_trainer_out_of_the_rules():
 
 
 @pytest.mark.parametrize('dex', [144, 145, 146, 150, 151])
-def test_a_legendary_copy_is_never_released(dex):
+def test_a_legendary_copy_goes_after_every_plain_spare(dex):
     copies = [stored(position, dex, dvs=(position + 1,) * 5) for position in range(3)]
-    assert release_target(snapshot(copies)) is None
+    pidgey = [stored(3, dvs=(14,) * 5), stored(4, dvs=(15,) * 5)]
+    s = snapshot(copies + pidgey)
+    assert order(s) == [(0, 3), (0, 0), (0, 1)]
+    assert ('Legendary', 200) in next(row for row in release_rated(s) if row.entry.slot == (0, 0)).parts
 
 
-def test_the_players_own_gift_copy_stays_but_a_partners_may_go():
+def test_the_players_own_gift_copy_goes_after_a_partners():
     eevee = BY_DEX[133]
     own = stored(1, 133, dvs=(3,) * 5)
     partner = stored(2, 133, dvs=(2,) * 5, trainer_id=SILVER)
-    s = snapshot(best_and(own, species=133))
-    assert release_target(s, gifts=frozenset({eevee})) is None
-    assert release_target(snapshot(best_and(own, partner, species=133)), partners=frozenset({SILVER}),
-                          gifts=frozenset({eevee})) == (0, 2)
-    assert kept_by_origin(s, {'species': eevee, 'trainer_id': PLAYER}, gifts=frozenset({eevee}))
+    s = snapshot(best_and(own, partner, species=133))
+    assert order(s, partners=frozenset({SILVER}), gifts=frozenset({eevee})) == [(0, 2), (0, 1)]
+    assert order(s, partners=frozenset({SILVER})) == [(0, 2), (0, 1)]
+    rows = {row.entry.slot: row for row in release_rated(s, partners=frozenset({SILVER}), gifts=frozenset({eevee}))}
+    assert ('Gift', 80) in rows[0, 1].parts and ('Gift', 80) not in rows[0, 2].parts
 
 
 def test_gift_and_fossil_species_count_with_their_evolutions():
@@ -83,12 +99,12 @@ def test_the_open_box_goes_first():
     assert release_target(snapshot([best, weak, here], active=0)) == (0, 1)
 
 
-def test_shiny_and_rare_dv_copies_are_never_released():
+def test_shiny_and_rare_dv_copies_go_after_a_plain_spare():
     shiny = stored(1, dvs=(0, 2, 10, 10, 10))
     rare = stored(2, dvs=(13, 15, 15, 14, 15))
-    perfect = stored(0, dvs=(15,) * 5)
-    assert release_target(snapshot([perfect, shiny, rare])) is None
-    assert release_target(snapshot([perfect, shiny, rare, stored(3)])) == (0, 3)
+    perfect = stored(0, level=60, dvs=(15,) * 5)
+    assert order(snapshot([perfect, shiny, rare])) == [(0, 2), (0, 1)]
+    assert order(snapshot([perfect, shiny, rare, stored(3)])) == [(0, 3), (0, 2), (0, 1)]
 
 
 def test_the_received_trainer_id_comes_from_the_struct_in_both_generations():
@@ -179,7 +195,7 @@ def test_the_strategic_policy_passes_the_stored_partners_to_the_release():
     from pokesim.policies.strategic import StrategicPolicy
     policy = StrategicPolicy(7)
     partner = stored(1, dvs=(2,) * 5, trainer_id=SILVER)
-    s = snapshot(best_and(partner))
-    assert policy._release_target(s) is None
+    s = snapshot(best_and(partner, stored(2, dvs=(4,) * 5)), **ONE_NEEDED)
+    assert policy._release_target(s) == (0, 2)
     policy.trade_partners = lambda: frozenset({SILVER})
     assert policy._release_target(s) == (0, 1)

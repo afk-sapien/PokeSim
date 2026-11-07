@@ -120,6 +120,18 @@ body[data-page="pc"] .pc-toolbar .field--grow { flex-basis: 200px; }
 @media (max-width: 400px) {
   .stat { padding: 0 var(--s3); }
 }
+/* ---- release order: the PC value in the popup and the next five marks ---- */
+.pc-deadlock { margin: 0 0 var(--s4); padding: var(--s3) var(--s4); color: var(--ink); font: 14px / 1.4 var(--font-text); border-left: 3px solid var(--warn); }
+.pc-deadlock[hidden] { display: none; }
+.pc-release-tag { border-color: var(--signal); }
+.pc-value { margin-top: var(--s4); padding-top: var(--s3); border-top: var(--hair) solid var(--rule); }
+.pc-value .legend { margin: 0 0 var(--s2); }
+.pc-value-text { margin: 0 0 var(--s1); font: 14px / 1.4 var(--font-text); overflow-wrap: anywhere; }
+.pc-release-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); margin-top: var(--s3); }
+.pc-release-row:empty { display: none; }
+.pc-release-confirm { flex: 1 1 220px; }
+.pc-release-row .key { min-height: 38px; }
+
 /* The card a link from the Pokédex asked for. */
 .pc-mon.is-target { outline: 2px solid var(--signal); outline-offset: 2px; }
 

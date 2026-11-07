@@ -50,24 +50,51 @@ def rows(policy, view):
     return {(unit.detail.position, unit.action): unit.value for unit in ledger.box_units(policy, view)}
 
 
-def test_spares_are_worth_their_training_and_the_item_they_would_lose():
+def score(policy, view, position):
+    """The PC score (pcvalue.py) of the boxed Pokémon at ``position``."""
+    from pokesim.gen2.release import release_rated
+    return next(row.score for row in release_rated(policy, view) if row.entry.slot and row.entry.slot[1] == position)
+
+
+def roomy(view):
+    """``view`` with room left in the open box, so no refill is due."""
+    from pokesim.planning.ledger import BOX_REFILL
+    view.box_counts = (BOX_CAPACITY - BOX_REFILL,) + (BOX_CAPACITY,) * 13
+    return view
+
+
+def worth(policy, view, position):
+    """The worth box_units gives the boxed Pokémon at ``position`` before its item and box change: its
+    place in the PC visit when a refill takes it, otherwise after the visit by its score."""
+    from pokesim.gen2.release import release_rated
+    from pokesim.pcvalue import releases, requested
+    from pokesim.planning.ledger import box_wanted
+    rated = release_rated(policy, view)
+    needed = max(box_wanted(ledger.headroom(view), True), len(requested(rated)), 1)
+    visit = [row.entry.slot[1] for row in releases(rated, needed, view.active_box)]
+    return visit.index(position) if position in visit else len(visit) + score(policy, view, position)
+
+
+def test_spares_are_worth_their_score_and_the_item_they_would_lose():
     plain = mon(1)
     trained = mon(2, stat_exp=(20000, 0, 0, 0, 0))
     berry = mon(3, held_item=BERRY)
     stone = mon(4, held_item=EVERSTONE)
-    found = rows(Policy(), snapshot([BEST, plain, trained, berry, stone], PARTY))
-    assert found == {
-        (1, 'release'): ledger.PLAIN,
-        (2, 'release'): ledger.TRAINED,
+    view = snapshot([BEST, plain, trained, berry, stone], PARTY)
+    value = {position: ledger.PLAIN + worth(Policy(), view, position) for position in range(1, 5)}
+    assert value[2] > value[1]
+    assert rows(Policy(), view) == {
+        (1, 'release'): value[1],
+        (2, 'release'): value[2],
         # A Bitter Berry no plan wants may go with its holder, but taking it off first costs less.
-        (3, 'release'): ledger.HELD + ledger.PLAIN + 20,
-        (3, 'unequip'): ledger.HELD + ledger.PLAIN,
+        (3, 'release'): ledger.HELD + value[3] + 20,
+        (3, 'unequip'): ledger.HELD + value[3],
         # An Everstone a plan uses never leaves with its holder.
-        (4, 'unequip'): ledger.HELD + ledger.PLAIN,
+        (4, 'unequip'): ledger.HELD + value[4],
     }
     # The bag already holds Bitter Berries, so losing one costs half its price.
-    found = rows(Policy(), snapshot([BEST, berry], PARTY, items=[(BERRY, 3)]))
-    assert found[(3, 'release')] == ledger.HELD + ledger.PLAIN + 10
+    view = snapshot([BEST, berry], PARTY, items=[(BERRY, 3)])
+    assert rows(Policy(), view)[(3, 'release')] == ledger.HELD + ledger.PLAIN + worth(Policy(), view, 3) + 10
 
 
 def test_a_spare_standing_down_skips_the_unequip_route():
@@ -75,17 +102,19 @@ def test_a_spare_standing_down_skips_the_unequip_route():
     policy = Policy()
     berry = mon(3, held_item=BERRY)
     stand_down(policy, ledger.unequip_key(berry))
-    assert rows(policy, snapshot([BEST, berry], PARTY)) == {(3, 'release'): ledger.HELD + ledger.PLAIN + 20}
+    view = snapshot([BEST, berry], PARTY)
+    assert rows(policy, view) == {(3, 'release'): ledger.HELD + ledger.PLAIN + worth(policy, view, 3) + 20}
 
 
 def test_the_cheapest_spare_goes_and_unequip_waits_for_a_party_slot():
     policy = Policy()
     berry = mon(3, held_item=BERRY)
-    trained = mon(2, stat_exp=(20000, 0, 0, 0, 0))
-    unit = ledger.storage_unit(policy, snapshot([BEST, trained, berry], PARTY))
+    trained = mon(2, stat_exp=(100000, 0, 0, 0, 0))
+    # With room left only the cheapest goes in this visit. A refill would take all of them anyway.
+    unit = ledger.storage_unit(policy, roomy(snapshot([BEST, trained, berry], PARTY)))
     assert (unit.action, unit.detail) == ('unequip', berry)
     # With six in the party nobody can be withdrawn, so the holder goes with its berry.
-    unit = ledger.storage_unit(policy, snapshot([BEST, trained, berry], PARTY + [mon(None, box=None, species=2)]))
+    unit = ledger.storage_unit(policy, roomy(snapshot([BEST, trained, berry], PARTY + [mon(None, box=None, species=2)])))
     assert (unit.action, unit.detail) == ('release', berry)
     # A plain spare goes before any of them.
     plain = mon(1)
@@ -196,12 +225,13 @@ def test_a_full_party_and_full_boxes_let_a_wanted_item_go_while_a_copy_stays():
     # The holder can never be withdrawn, so its Everstone cannot come off. A second Everstone held by
     # another Pokémon, or one in the bag, keeps the item, so the spare may go with its stone.
     stone, other = mon(3, held_item=EVERSTONE), mon(4, species=19, held_item=EVERSTONE)
-    found = rows(Policy(), snapshot([BEST, stone, other], FULL))
-    assert found == {(3, 'release'): ledger.HELD + ledger.PLAIN + 200, (3, 'unequip'): ledger.HELD + ledger.PLAIN}
-    unit = ledger.storage_unit(Policy(), snapshot([BEST, stone, other], FULL))
+    view = snapshot([BEST, stone, other], FULL)
+    cost = ledger.HELD + ledger.PLAIN + worth(Policy(), view, 3)
+    assert rows(Policy(), view) == {(3, 'release'): cost + 200, (3, 'unequip'): cost}
+    unit = ledger.storage_unit(Policy(), view)
     assert (unit.action, unit.detail) == ('release', stone)
     bagged = rows(Policy(), snapshot([BEST, stone], FULL, items=[(EVERSTONE, 1)]))
-    assert bagged[(3, 'release')] == ledger.HELD + ledger.PLAIN + 100
+    assert bagged[(3, 'release')] == cost + 100
     # A plain spare still goes first.
     plain = mon(1)
     assert ledger.storage_unit(Policy(), snapshot([BEST, plain, stone, other], FULL)).detail == plain
@@ -222,8 +252,9 @@ def test_the_last_wanted_item_stays_and_a_free_slot_keeps_the_unequip_route():
 def test_a_spare_in_another_box_costs_a_box_change():
     best = mon(0, box=1, dvs=(15, 15, 15, 15, 15))
     here, away = mon(1, box=0), mon(2, box=1, dvs=(3, 3, 3, 3, 3))
-    found = rows(Policy(), snapshot([best, here, away], PARTY))
-    assert found == {(1, 'release'): ledger.PLAIN, (2, 'release'): ledger.PLAIN + ledger.BOX_CHANGE}
+    view = snapshot([best, here, away], PARTY)
+    assert rows(Policy(), view) == {(1, 'release'): ledger.PLAIN + worth(Policy(), view, 1),
+                                    (2, 'release'): ledger.PLAIN + worth(Policy(), view, 2) + ledger.BOX_CHANGE}
     # The weaker copy waits in box 1, but the one in the open box goes first.
     assert ledger.storage_unit(Policy(), snapshot([best, here, away], PARTY)).detail == here
 
@@ -238,10 +269,14 @@ class Owned(Policy):
         return owners(4321, self.partners)
 
 
-def test_a_copy_from_an_unknown_trainer_is_never_released():
+def test_a_copy_from_an_unknown_trainer_is_worth_more_than_one_from_a_linked_adventure():
+    from pokesim.pcvalue import WEIGHTS
     traded = mon(1, trainer_id=13132)
-    assert rows(Owned(frozenset()), snapshot([BEST, traded], PARTY)) == {}
-    assert rows(Owned(frozenset({13132})), snapshot([BEST, traded], PARTY)) == {(1, 'release'): ledger.PLAIN}
+    # A plainer spare is the one this visit takes, so the traded copy is worth its score.
+    view = roomy(snapshot([BEST, traded, mon(2, dvs=(1,) * 5)], PARTY))
+    linked = rows(Owned(frozenset({13132})), view)[(1, 'release')]
+    assert linked == ledger.PLAIN + worth(Owned(frozenset({13132})), view, 1)
+    assert rows(Owned(frozenset()), view)[(1, 'release')] == linked + WEIGHTS['traded']
 
 
 def test_release_owners_reads_the_player_and_the_linked_adventures():

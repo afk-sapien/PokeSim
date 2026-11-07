@@ -713,7 +713,9 @@ class Policy:
         partners = plan_partners(self.collection)
         key = (snapshot.party, snapshot.stored, snapshot.active_box, snapshot.pockets.get('items', ()),
                tuple(sorted(self.demand.items())), tuple(self.collection.get('prerequisites', ())),
-               tuple(sorted(map(str, partners))), self.release_owners(), self.decisions // 600)
+               tuple(sorted(map(str, partners))), self.release_owners(), self.decisions // 600,
+               tuple(sorted(self.release_requests().items())) if hasattr(self, 'release_requests') else (),
+               self.pc_favor() if hasattr(self, 'pc_favor') else None)
         if self.release_cache[0] != key:
             self.release_cache = (key, (storage_unit(self, snapshot), storage_unit(self, snapshot, direct=True)))
         return self.release_cache[1]
@@ -724,6 +726,11 @@ class Policy:
         from ..trade.partners import owners
         player = Memory(self.memory, self.data).word('wPlayerID') if self.memory is not None else None
         return owners(player, self.trade_partners())
+
+    def pc_rated(self, snapshot):
+        """Every Pokémon scored as the next release scores it (pcvalue.py), for the PC tab."""
+        from .release import release_rated
+        return release_rated(self, snapshot)
 
     def release_target(self, snapshot):
         """The spare duplicate to release next straight from the box, or None."""
@@ -738,13 +745,11 @@ class Policy:
     def trade_spare(self, snapshot, protect=(), wished=()):
         """The spare to release so a trade can be prepared with every box full, or None.
 
-        The usual release target comes first. Failing that, a trade may also let go of a spare
-        duplicate that holds an item or has been trained. Neither ever takes an egg, a party member,
-        a shiny, perfect or rare-DV Pokémon, one set to Never trade or Prefer to trade, the ``protect`` trade keys
-        (hand-picked for a trade), a ``wished`` species, a species' last or best copy or a plan partner.
+        It is the lowest-value Pokémon that may go (pcvalue.py). The ``protect`` trade keys, hand-picked
+        for a trade, stay as if set to Keep, and a ``wished`` species counts as stock.
         """
-        from pokecore.gen2.breeding import breeding_stock
-        from .release import _keys, plan_partners, target
+        from ..pcvalue import queue
+        from .release import _keys, release_rated
         from pokecore.identity import same
         preferences = dict(self.trade_preferences())
         if protect:
@@ -753,16 +758,8 @@ class Policy:
                 own = _keys(mon)[0]
                 if any(same(own, key) for key in protect):
                     preferences[own] = {'state': 'locked'}
-        keep = set(breeding_stock(self.data, [mon.species for mon in snapshot.party + snapshot.stored if not mon.egg]))
-        keep.update(wished)
-        partners = plan_partners(self.collection)
-        allowed = lambda mon: self.allowed(Release(mon.box, mon.position), snapshot)  # noqa: E731
-        owners = self.release_owners()
-        for lenient in (False, True):
-            mon = target(snapshot, self.demand, keep, preferences, partners, allowed, lenient, owners)
-            if mon is not None:
-                return mon
-        return None
+        return next((row.entry.record for row in queue(release_rated(self, snapshot, wished, preferences))
+                     if self.allowed(Release(row.entry.record.box, row.entry.record.position), snapshot)), None)
 
     def unloaded(self, snapshot, mem):
         """Whether the cartridge restarted to its opening while memory still shows the save it read.
@@ -816,9 +813,10 @@ class Policy:
         slots up to the refill mark.
         """
         from ..planning.ledger import box_wanted
-        from .release import headroom
-        # A spare whose item is coming off keeps the visit going until it is gone, even past the refill mark.
-        unequipping = bool(self.collection.get('unequip'))
+        from .release import headroom, pending
+        # A spare whose item is coming off keeps the visit going until it is gone, even past the refill
+        # mark, and an owner's release request starts a visit of its own.
+        unequipping = bool(self.collection.get('unequip')) or pending(self, snapshot)
         # A catch goes to a free party slot first, so a new visit counts those as room. Without this a PC
         # errand that deposits one partner before it withdraws another started a release visit in between.
         room = headroom(snapshot) + (0 if releasing else max(6 - len(snapshot.party), 0))

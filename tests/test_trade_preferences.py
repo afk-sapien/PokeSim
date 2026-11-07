@@ -324,10 +324,12 @@ def test_a_lock_left_under_an_older_key_still_locks(current):
     assert not routine.proposals([red, normal(payload('blue', ZUBAT))], allow_last_copies=True)
 
 
-def test_a_lock_left_under_an_older_key_keeps_the_partner_from_release(monkeypatch):
+def test_a_lock_left_under_an_older_key_keeps_the_partner_from_release():
+    from types import SimpleNamespace
     from pokesim.policies import storage
-    rows = [{'box': 1, 'position': i, 'species': 133, 'trainer_id': 100, 'dvs': [i + 1] * 5} for i in range(2)]
-    snapshot = Mock(storage_entries=lambda: rows)
-    monkeypatch.setattr(storage, 'release_target', lambda snapshot, protected, reserved, *_: reserved)
+    rows = [{'box': 1, 'position': i, 'species': 133, 'level': 20, 'trainer_id': 100, 'dvs': [i + 1] * 5}
+            for i in range(3)]
+    snapshot = SimpleNamespace(party=(), box_counts=(), active_box=1, storage_entries=lambda: rows)
+    assert storage.StorageController.release_target(snapshot, {}, {}) == (1, 0)
     choices = {preferences.signature(rows[0]): {'state': 'locked'}}
-    assert storage.StorageController.release_target(snapshot, {}, choices) == {(1, 0)}
+    assert storage.StorageController.release_target(snapshot, {}, choices) == (1, 1)

@@ -6,7 +6,7 @@ import pytest
 
 from pokesim.shiny import is_shiny, shiny_bytes, ShinyTracker, record, status
 from pokesim.store import Store
-from pokesim.duplicates import spare_entries
+from pokesim.broker.inventory import spare_entries
 
 
 def test_every_dv_combination_matches_gen2_rule():
@@ -20,10 +20,11 @@ def test_every_dv_combination_matches_gen2_rule():
         assert not is_shiny({'dvs': dvs})
 
 
-def test_shinies_are_not_release_candidates():
+def test_a_shiny_spare_goes_only_after_every_plain_spare():
     shiny = dict(species=165, level=5, dvs=(0,2,10,10,10), stat_exp=(0,)*5, moves=(1,), box=1, position=1)
     better = {**shiny, 'level': 50, 'dvs': (15,)*5, 'position': 2}
-    assert spare_entries([], [shiny,better]) == []
+    plain = {**shiny, 'level': 30, 'dvs': (9,)*5, 'position': 3}
+    assert spare_entries([], [shiny, better, plain]) == [plain, shiny]
 
 
 def test_receipts_survive_reopen_without_double_counting(tmp_path):

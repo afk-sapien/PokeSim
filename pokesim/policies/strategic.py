@@ -29,7 +29,8 @@ from ..planning.arbiter import Candidate, Tier
 from ..planning.monitor import STOOD_DOWN
 from ..planning.stance import FLEE_TRIES, STORY, TRAIN
 from .awareness import ActionWatch
-from .team import development_candidate, potential, readiness, reserve_to_deposit, storage_headroom
+from .team import (development_candidate, held_identities, potential, readiness, release_note, requested_slots,
+                   reserve_to_deposit, storage_headroom)
 from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
@@ -287,6 +288,8 @@ class StrategicPolicy(Policy):
         self.pc = StorageController()
         # The spare the run lets go next as (box, position). Trading never offers it.
         self.release_spare = None
+        # Its (species, PC value text) for the journal, and whether nothing in the PC may go.
+        self.release_note, self.pc_deadlock = None, False
         self.pending_trade_key = None
         self.goal_attempts = 0
         self.observed_map = None
@@ -551,7 +554,8 @@ class StrategicPolicy(Policy):
         )
         # A release visit under way keeps going to the refill mark, so the next catch does not send the
         # run back to the PC for one more slot.
-        release = self._release_target(s) if box_wanted(storage_headroom(s), self.release_spare is not None) else None
+        release = (self._release_target(s) if box_wanted(storage_headroom(s), self.release_spare is not None)
+                   or self.release_pending(s) else None)
         self.release_spare = release
         if release and not withdrawing_partner and s.map not in league_rooms:
             # Room to catch is a precondition of every catch, so its enabler replaces the pick.
@@ -1341,8 +1345,33 @@ class StrategicPolicy(Policy):
         self.pc.avoid = frozenset(key[1:] for key, until in self.shortcut.failures.items()
                                   if key[0] == 'release' and until > snapshot.frame) | guarded(snapshot, self.sp)
         self.pc.partners = frozenset(self.trade_partners()) if hasattr(self, 'trade_partners') else frozenset()
-        return self.pc.release_target(snapshot, self.collection.project, self._preferences(), self.collection,
-                                      self.pc.avoid, self.pc.partners)
+        target = self.pc.release_target(snapshot, self.collection.project, self._preferences(), self.collection,
+                                        self.pc.avoid, self.pc.partners, *self.release_inputs())
+        # The journal quotes the chosen Pokémon's PC value, and says once when nothing may go.
+        self.release_note, self.pc_deadlock = release_note()
+        return target
+
+    def pc_rated(self, snapshot):
+        """Every Pokémon scored as the next release scores it (pcvalue.py), for the PC tab."""
+        partners = frozenset(self.trade_partners()) if hasattr(self, 'trade_partners') else frozenset()
+        return self.pc.rated(snapshot, self.collection.project, self._preferences(), self.collection, partners,
+                             *self.release_inputs())
+
+    def release_pending(self, snapshot):
+        """Whether an owner's release request waits for the next PC visit. A request whose Pokémon has
+        gone is dropped."""
+        requests = self.release_requests() if hasattr(self, 'release_requests') else {}
+        if not requests:
+            return False
+        if hasattr(self, 'prune_release_requests') and not set(requests) <= held_identities(snapshot):
+            requests = self.prune_release_requests(held_identities(snapshot))
+        return bool(requested_slots(snapshot, requests, self._preferences(), self.pc.avoid))
+
+    def release_inputs(self):
+        """The League reward marks, the owner's release requests and the Favor setting, from the emulator's hooks."""
+        return (self.league_marks() if hasattr(self, 'league_marks') else frozenset(),
+                self.release_requests() if hasattr(self, 'release_requests') else {},
+                self.pc_favor() if hasattr(self, 'pc_favor') else None)
 
     def _pc_target(self, snapshot):
         return self.pc.target(snapshot, self.goal.key, self.collection.project, self._preferences(), self.collection)

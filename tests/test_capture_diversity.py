@@ -5,7 +5,8 @@ import pytest
 
 from pokesim.policies.battle import choose_battle, useful_capture
 from pokesim.policies.strategic import StrategicPolicy
-from pokesim.policies.team import release_target
+from pokesim.pcvalue import queue
+from pokesim.policies.team import release_rated, release_target
 from pokesim.screen import Screen
 from pokesim.strategy_data import ITEMS, SPECIES
 from test_duplicates import snapshot, stored
@@ -78,13 +79,17 @@ def test_safari_flees_unneeded_duplicate_but_catches_missing_species():
     assert policy._dispatch(missing, Screen(memory), 'safari', memory)[0].button == 'a'
 
 
-def test_cleanup_targets_abundance_before_low_level_rarity():
+def test_cleanup_releases_the_lowest_value_spares_first():
     copies = [stored(i, species=sid(67), level=41 + i) for i in range(4)]
     copies += [stored(4, species=sid(25), level=3), stored(5, species=sid(25), level=4)]
     state = snapshot(copies)
+    assert [row.entry.slot for row in queue(release_rated(state))] == [(0, 4), (0, 0), (0, 1), (0, 2)]
+    # Stock holds a plan role for its best two copies, so the second best Machoke waits behind every spare.
+    rated = {row.entry.slot: row.status for row in release_rated(state, stock={sid(67)})}
+    assert rated[0, 2] == 'kept' and rated[0, 1] == 'spare'
+    # One PC visit releases them in slot order, skipping slots it cannot reach.
     assert release_target(state) == (0, 0)
     assert release_target(state, reserved={(0, 0)}) == (0, 1)
-    assert release_target(state, protected={sid(67)}) == (0, 4)
     assert release_target(state, reserved={(0, 0), (0, 1), (0, 2)}) == (0, 4)
 
 
