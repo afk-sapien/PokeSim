@@ -683,10 +683,10 @@ class Ladder:
     def offer(self, name, tier, value, work, build, price=None):
         """Ask rung ``name``, whose best tier is ``tier``. ``build`` gives its goal or None. ``price``,
         given the goal, gives its tier, value and frames of work if they differ from ``tier``, ``value``
-        and ``work``."""
+        and ``work``, and may add the hunt kind the Collector style reads."""
         if self.stopped:
             return
-        if self.pick is not None and self.pick.tier < tier and not self.survey and name != self.pin_rung:
+        if self.pick is not None and arbiter.ahead(self.pick, tier) and not self.survey and name != self.pin_rung:
             return
         self.asked.add(name)
         before = self.save()
@@ -697,11 +697,13 @@ class Ladder:
             self.stopped = (before.get(('collection', 'funding')) is None
                             and self.policy.collection.get('funding') is not None)
             return
+        kind = arbiter.NOT_HUNT
         if price is not None:
-            tier, value, work = price(goal)
+            tier, value, work, *rest = price(goal)
+            kind = rest[0] if rest else kind
         interrupt = INTERRUPT_FRAMES if self.running is not None and name != self.running else 0.0
         candidate = Candidate(f'{name}:{goal.key}', tier, value, work + self.travel(goal),
-                              passive=goal.key in PASSIVE, interrupt_frames=interrupt, goal=name)
+                              passive=goal.key in PASSIVE, interrupt_frames=interrupt, hunt=kind, goal=name)
         self.candidates.append(candidate)
         self.labels[candidate.key] = goal.label
         if candidate.passive:
@@ -978,13 +980,13 @@ def hunt_price(policy, snapshot):
 
 
 def postgame_price(policy, snapshot):
-    """The postgame activity's own tier, value and frames, or a filler League run's."""
+    """The postgame activity's own tier, value, frames and hunt kind, or a filler League run's."""
     from . import postgame
     activity = postgame.state(policy).get('activity')
     if not activity:
         return Tier.FILLER, values.SMALL, LEAGUE_FRAMES
     candidate = postgame.candidate(policy, snapshot, activity)
-    return candidate.tier, candidate.value, candidate.expected_frames * DECISION_FRAMES
+    return candidate.tier, candidate.value, candidate.expected_frames * DECISION_FRAMES, candidate.hunt
 
 
 def pokedex_hunt(policy, snapshot, Goal, current_time):

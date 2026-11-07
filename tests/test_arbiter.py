@@ -1,5 +1,9 @@
-from pokesim.planning.arbiter import (IDLE, KEY, PASSIVE, SCORE, TIER, UNLISTED, Candidate, Tier, choose,
-                                      compare, rank)
+import pytest
+
+from pokesim import config
+from pokesim.planning.arbiter import (BALANCED, COLLECTOR, HUNT_LATER, HUNT_NOW, HUNT_POSTGAME, IDLE, KEY,
+                                      PASSIVE, PLAY_STYLES, SCORE, STORY, TIER, UNLISTED, Candidate, Tier,
+                                      ahead, choose, compare, hunt, play_style, rank)
 
 
 def candidate(key, tier=Tier.PROGRESS, value=1.0, frames=1000.0, **extra):
@@ -94,6 +98,98 @@ def test_compare_names_the_difference():
     assert compare([], None, 'gone').pick is None
     assert compare([story, candidate('clock', passive=True)], None, 'clock').difference == PASSIVE
     assert compare([story], None, None).difference == IDLE
+
+
+def styled():
+    """One candidate of each kind a play style can treat differently."""
+    return [
+        candidate('story', Tier.STORY, value=0.01, frames=10 ** 6),
+        candidate('heal', Tier.UPKEEP, value=0.1, frames=10 ** 5),
+        candidate('entry', Tier.PROGRESS, value=1.0, frames=10 ** 4),
+        candidate('marathon', Tier.RACE, value=1.0, frames=10 ** 4),
+        candidate('train', Tier.UPGRADE, value=5.0, frames=10),
+        candidate('hunt:now', Tier.FILLER, value=9.0, frames=10, hunt=HUNT_NOW),
+        candidate('hunt:later', Tier.FILLER, value=9.0, frames=10, hunt=HUNT_LATER),
+        candidate('shiny', Tier.FILLER, value=50.0, frames=1),
+        candidate('collect_plan', Tier.FILLER, value=0.0, frames=1, plan=True),
+    ]
+
+
+def old_order(candidates):
+    return [c.key for c in sorted(candidates, key=lambda c: (c.tier, -c.score, c.key))]
+
+
+def test_balanced_gives_the_old_order(monkeypatch):
+    monkeypatch.setattr(config, 'PLAY_STYLE', BALANCED)
+    everything = styled() + [candidate('hunt:post', Tier.FILLER, value=3.0, frames=10, hunt=HUNT_POSTGAME)]
+    assert [c.key for c in rank(everything)] == old_order(everything)
+    assert [c.key for c in rank(everything, style=BALANCED)] == old_order(everything)
+    assert [c.key for c in rank(everything[::-1], style=BALANCED)] == old_order(everything)
+
+
+def test_an_unknown_style_ranks_as_balanced(monkeypatch):
+    assert play_style('fast') == BALANCED and play_style(STORY) == STORY
+    monkeypatch.setattr(config, 'PLAY_STYLE', 'fast')
+    assert play_style() == BALANCED
+    assert [c.key for c in rank(styled())] == old_order(styled())
+
+
+def test_the_style_is_read_from_the_adventure(monkeypatch):
+    shiny = candidate('shiny', Tier.FILLER, value=50.0, frames=1)
+    plan = candidate('collect_plan', Tier.FILLER, value=0.0, frames=1, plan=True)
+    monkeypatch.setattr(config, 'PLAY_STYLE', BALANCED)
+    assert choose([shiny, plan]) is shiny
+    monkeypatch.setattr(config, 'PLAY_STYLE', STORY)
+    assert choose([shiny, plan]) is plan
+    assert compare([shiny, plan], None, 'shiny').difference == TIER
+
+
+def test_story_ranks_filler_below_the_plan_and_upgrades_below_progress():
+    keys = [c.key for c in rank(styled(), style=STORY)]
+    assert keys == ['story', 'heal', 'entry', 'marathon', 'train', 'collect_plan', 'shiny', 'hunt:later',
+                    'hunt:now']
+    upgrade = candidate('train', Tier.UPGRADE, value=50.0, frames=1)
+    entry = candidate('entry', Tier.PROGRESS, value=0.01, frames=10 ** 6)
+    assert choose([upgrade, entry], style=STORY) is entry
+
+
+def test_collector_before_the_champion_promotes_only_hunts_catchable_now():
+    keys = [c.key for c in rank(styled(), style=COLLECTOR)]
+    assert keys == ['story', 'heal', 'entry', 'hunt:now', 'marathon', 'train', 'shiny', 'hunt:later',
+                    'collect_plan']
+    # The promoted hunt is worth far more per frame, yet a story goal in its rank still goes first.
+    assert choose([candidate('hunt:now', Tier.FILLER, value=9.0, frames=10, hunt=HUNT_NOW),
+                   candidate('entry', Tier.PROGRESS, value=0.01, frames=10 ** 6)], style=COLLECTOR).key == 'entry'
+
+
+def test_collector_after_the_champion_ranks_hunts_with_progress():
+    rich = candidate('hunt:post', Tier.FILLER, value=9.0, frames=10, hunt=HUNT_POSTGAME)
+    entry = candidate('entry', Tier.PROGRESS, value=0.01, frames=10 ** 6)
+    race = candidate('marathon', Tier.RACE, value=50.0, frames=1)
+    assert [c.key for c in rank([race, entry, rich], style=COLLECTOR)] == ['hunt:post', 'entry', 'marathon']
+    poor = candidate('hunt:post', Tier.FILLER, value=0.001, frames=10 ** 6, hunt=HUNT_POSTGAME)
+    assert [c.key for c in rank([race, entry, poor], style=COLLECTOR)] == ['entry', 'hunt:post', 'marathon']
+    assert [c.key for c in rank([race, entry, rich], style=BALANCED)] == ['entry', 'marathon', 'hunt:post']
+
+
+@pytest.mark.parametrize('style', PLAY_STYLES)
+def test_story_and_upkeep_never_move(style):
+    keys = [c.key for c in rank(styled(), style=style)]
+    assert keys[:2] == ['story', 'heal']
+    for tier in (Tier.STORY, Tier.UPKEEP):
+        fixed = candidate('fixed', tier, value=0.0, frames=10 ** 9)
+        rivals = [candidate(c.key, c.tier, 10 ** 6, 1, hunt=c.hunt, plan=c.plan) for c in styled()
+                  if c.tier > tier]
+        assert choose(rivals + [fixed], style=style) is fixed
+
+
+def test_hunt_kinds_and_the_ladder_check():
+    assert hunt(True, False) == HUNT_POSTGAME and hunt(False, True) == HUNT_NOW and hunt(False, False) == HUNT_LATER
+    entry = candidate('entry', Tier.PROGRESS)
+    assert ahead(entry, Tier.FILLER, BALANCED) and ahead(entry, Tier.FILLER, STORY)
+    assert not ahead(entry, Tier.FILLER, COLLECTOR)
+    assert ahead(candidate('heal', Tier.UPKEEP), Tier.FILLER, COLLECTOR)
+    assert not ahead(entry, Tier.PROGRESS, BALANCED)
 
 
 def pin_world():
