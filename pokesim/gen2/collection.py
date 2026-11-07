@@ -10,6 +10,7 @@ from ..planning.stance import HUNT
 from .menus import ChangeBox, FieldMove, Storage, Teach, Use
 from .navigation import DIRS
 from pokecore.gen2.ram import Memory
+from ..planning.monitor import STOOD_DOWN
 from .standdown import (exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down, standing_down)
 
 
@@ -688,7 +689,8 @@ class Ladder:
             return
         if self.pick is not None and arbiter.ahead(self.pick, tier) and not self.survey and name != self.pin_rung:
             return
-        if name != self.pin_rung and standing_down(self.policy, rung_key(name)):
+        if (name != self.pin_rung and self.policy.collection.get(STOOD_DOWN)
+                and standing_down(self.policy, rung_key(name))):
             # The watchdog gave up on this rung after its reloads did not help (emulator.py).
             return
         self.asked.add(name)
