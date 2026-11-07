@@ -298,7 +298,18 @@ def main():
         serve(bootstrap, sys.stdin, ready_stream)
     except Exception as error:
         log.exception('Adventure worker failed')
+        # A supervisor still waiting for readiness shows this instead of a bare exit.
+        report_failure(ready_stream, error)
         raise SystemExit(1) from error
+
+
+def report_failure(stream, error):
+    try:
+        stream.write(json.dumps({'protocol': PROTOCOL, 'event': 'error',
+                                 'error': (str(error) or type(error).__name__)[:1000]}) + '\n')
+        stream.flush()
+    except (OSError, ValueError):
+        pass
 
 
 if __name__ == '__main__':
