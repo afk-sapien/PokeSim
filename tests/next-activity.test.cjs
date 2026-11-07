@@ -66,6 +66,8 @@ test('an empty list shows the reason and cannot be set', async () => {
   await settle()
   assert.equal(element('#next-activity-note').textContent, 'The story comes first until the Champion is beaten')
   assert.equal(element('#next-activity-set').disabled, true)
+  assert.equal(element('#next-activity-set').hidden, true)
+  assert.equal(element('#next-activity-goal').hidden, true)
 })
 
 test('setting a goal shows Next and a Cancel button, and Cancel brings the picker back', async () => {

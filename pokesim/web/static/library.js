@@ -20,6 +20,9 @@
   let csrf = ''
   let owner = false
   let canCreate = false
+  // Only accounts have control leases, so only they ask what happens after someone plays by hand.
+  let accounts = false
+  let leaseEnd = null
   let adventures = []
   let busy = false
   let refreshing = false
@@ -105,6 +108,7 @@
       csrf = session.csrf_token || ''
       owner = session.role === 'owner' || session.role === 'admin'
       canCreate = owner || Boolean(session.user?.can_create)
+      accounts = session.auth === 'accounts'
       showAccount(session)
       permissions()
       // Settings for accounts reuse this session, since a second first request would make
@@ -885,6 +889,16 @@
       // Nicknames and Play style save through the play route, so they stay editable while the adventure runs.
       $('#settings-nicknames').checked = game.settings?.nicknames !== false
       $('#settings-play-style').value = game.settings?.play_style || 'balanced'
+      leaseEnd = null
+      const handsOn = accounts && game.access === 'owner'
+      $('#settings-lease-end-label').hidden = !handsOn
+      $('#settings-lease-end-note').hidden = !handsOn
+      $('#settings-lease-end').value = 'resume'
+      if (handsOn) api(`${gameUrl(game.id)}api/lease`).then(status => {
+        if ($('#settings-id').value !== game.id) return
+        leaseEnd = status.end || 'resume'
+        $('#settings-lease-end').value = leaseEnd
+      }).catch(() => { $('#settings-lease-end-label').hidden = $('#settings-lease-end-note').hidden = true })
       $('#settings-randomizer').hidden = !game.settings?.randomizer
       $('#settings-randomizer-code').textContent = game.settings?.randomizer || ''
       const randomized = parseShareCode(game.settings?.randomizer || '')
@@ -975,6 +989,9 @@
       const style = $('#settings-play-style').value || 'balanced'
       if (game && style !== (game.settings?.play_style || 'balanced')) changes.play_style = style
       const play = Object.keys(changes).length ? await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}/play`, changes, 'PATCH') : {}
+      const end = $('#settings-lease-end').value
+      // The lease route takes only its own fields, so this skips write and its request id.
+      if (game && leaseEnd && end !== leaseEnd) await api(`${gameUrl(game.id)}api/lease`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'setting', end})})
       const playLabel = 'nicknames' in changes ? ('play_style' in changes ? 'play settings' : 'nickname setting') : 'play style'
       $('#adventure-settings').close()
       const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette', result.fair_wild_dvs_pending && 'fair wild DVs setting', play.play_pending && playLabel].filter(Boolean).join(' and ')
