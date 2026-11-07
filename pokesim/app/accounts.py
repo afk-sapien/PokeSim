@@ -11,6 +11,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ..web.pages import template
 from .auth import KNOWN_SECONDS, SESSION_SECONDS, private_address
+from .policy import can
 from .providers import default_gateways, env_flag
 
 log = logging.getLogger(__name__)
@@ -93,6 +94,12 @@ def install(app, manager):
 
     def actor(request):
         return request.state.actor
+
+    def still_owner(aid, request):
+        """Check ownership again from the accounts. Call it holding `offers.guard`, which a transfer
+        and a deleted owner's hand-on also hold, so rights read before the body arrived never decide."""
+        if not can(manager.actor(request), 'adventure.own', manager.registry.adventure(aid)):
+            raise HTTPException(403, 'You no longer own this adventure')
 
     async def body(request):
         from .manager import json_body
@@ -321,17 +328,21 @@ def install(app, manager):
             raise ValueError('Choose a person to share with')
         if data['user_id'] == manager.registry.adventure(aid)['owner_id']:
             raise ValueError('The owner already has this adventure')
-        before = auth.grants_for(data['user_id']).get(aid)
-        auth.grant(aid, data['user_id'], data['role'], actor(request).id)
+        # Losing manage ends what it allowed: offers sent from the adventure, and a lease that
+        # manage may have taken back from someone.
+        with manager.offers.guard:
+            still_owner(aid, request)
+            before = auth.grants_for(data['user_id']).get(aid)
+            auth.grant(aid, data['user_id'], data['role'], actor(request).id)
+            demoted = data['role'] == 'viewer' or (before == 'manager' and data['role'] != 'manager')
+            if demoted:
+                from . import ownership
+                ownership.unshare(manager, aid, data['user_id'], actor(request))
+        if demoted:
+            manager.leases.forget(aid, data['user_id'])
         if before is None:
             from . import inbox
             inbox.shared(manager, aid, data['user_id'], data['role'], actor(request))
-        # Losing manage ends what it allowed: offers sent from the adventure, and a lease that
-        # manage may have taken back from someone.
-        if data['role'] == 'viewer' or (before == 'manager' and data['role'] != 'manager'):
-            from . import ownership
-            manager.leases.forget(aid, data['user_id'])
-            ownership.unshare(manager, aid, data['user_id'], actor(request))
         auth.audit('grant.add', user_id=actor(request).id, adventure_id=aid, target=f"{data['user_id']} {data['role']}",
                    ip=manager.client_address(request))
         return sharing_of(aid)
@@ -339,9 +350,11 @@ def install(app, manager):
     @app.delete('/api/v1/adventures/{aid}/grants/{uid}')
     def remove_grant(aid: str, uid: str, request: Request):
         from . import ownership
-        auth.revoke_grant(aid, uid)
+        # Under `guard`, so an offer the manager is making meanwhile is either refused or ended here.
+        with manager.offers.guard:
+            auth.revoke_grant(aid, uid)
+            ownership.unshare(manager, aid, uid, actor(request))
         manager.leases.forget(aid, uid)
-        ownership.unshare(manager, aid, uid, actor(request))
         auth.audit('grant.remove', user_id=actor(request).id, adventure_id=aid, target=uid, ip=manager.client_address(request))
         return sharing_of(aid)
 
@@ -358,7 +371,12 @@ def install(app, manager):
         data = await body(request)
         if set(data) - {'seconds', 'legacy'}:
             raise ValueError('Unsupported share link options')
-        raw, share = auth.create_share(aid, actor(request).id, seconds=data.get('seconds'))
+        return await run_in_threadpool(share_link, aid, data, request)
+
+    def share_link(aid, data, request):
+        with manager.offers.guard:
+            still_owner(aid, request)
+            raw, share = auth.create_share(aid, actor(request).id, seconds=data.get('seconds'))
         if data.get('legacy') is True:
             # The old /view/ link this one replaces leaves the share list.
             auth.set_setting('legacy_link:' + aid, share['id'])

@@ -93,6 +93,14 @@ class TradeOffers(TradeBuilder):
         if self._protected(aid, key):
             raise OwnerOnly('Only the owner can trade this Pokémon away')
 
+    def _still_manages(self, actor, aid):
+        """Whether `actor` manages `aid` by the grants stored now. Call it holding `guard`, which an
+        unshare or a transfer also holds, so the rights read at the start of a request never decide."""
+        if actor is None:
+            return True
+        fresh = self.manager.fresh_actor(actor)
+        return fresh is not None and can(fresh, 'adventure.manage', self.registry.adventure(aid))
+
     def _limits(self, sender_id, to_id):
         now = self.clock()
         if self.registry.count_trade_offers(sender_id=sender_id, statuses=OPEN) >= MAX_PENDING:
@@ -149,7 +157,7 @@ class TradeOffers(TradeBuilder):
         with self.guard:
             # A transfer ends the old owner's offers and changes the owner under this guard, so
             # the sender is checked again here: an offer is never made from an adventure they lost.
-            if actor is not None and not can(actor, 'adventure.manage', self.registry.adventure(selection['from_id'])):
+            if not self._still_manages(actor, selection['from_id']):
                 raise NoLongerManaged('You can no longer offer trades from this adventure')
             pending = self.registry.trade_offers(selection['from_id'], statuses=[PENDING])
             if any(all(row[name] == value for name, value in selection.items()) for row in pending):
@@ -222,6 +230,9 @@ class TradeOffers(TradeBuilder):
                     and {(row['from_id'], row['from_key']), (row['to_id'], row['to_key'])} & sides]
             if busy:
                 raise ValueError('One of these Pokémon is in another trade that is under way or just finished. Try again')
+            # The receiver may have lost the adventure while the games were asked, as in create.
+            if not self._still_manages(actor, offer['to_id']):
+                raise NoLongerManaged('You can no longer accept trades for this adventure')
             # Claim the offer before the trade is queued, so an offer that expired or was withdrawn
             # meanwhile never moves a Pokémon. A sweep and a hand-on wait for `guard` too.
             mid = identifier()
