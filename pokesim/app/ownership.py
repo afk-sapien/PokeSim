@@ -32,7 +32,7 @@ def change_user(manager, uid, actor=None, *, wait=True, **changes):
     recheck takes adventure turns. With `wait=False` the recheck runs in the background, for
     a caller on the event loop.
     """
-    result = manager.auth.update_user(uid, **changes)
+    result = manager.auth.update_user(uid, **changes, successor=actor.id if actor else None)
     if wait:
         recheck(manager, uid, actor)
     else:

@@ -39,7 +39,7 @@ from .assets import Assets
 from .auth import AuthStore, SetupCode
 from . import policy, trade_settings
 from .policy import Actor, can
-from .registry import LIBRARY_OWNER, Registry, identifier, validate_id
+from .registry import CREATED_SCHEMA, LIBRARY_OWNER, Registry, identifier, validate_id
 from .supervisor import AdventureRunning, Supervisor
 
 log = logging.getLogger(__name__)
@@ -91,10 +91,9 @@ class Manager:
         self.lock = (self.root / 'application.lock').open('a+b')
         try:
             lock_file(self.lock)
-            fresh = not (self.root / 'app.sqlite').exists()
             self.registry = Registry(self.root)
             self.auth = AuthStore(self.root)
-            self.auth_mode = self.resolve_auth(auth, fresh)
+            self.auth_mode = self.resolve_auth(auth)
             self.oidc = self.proxy = None
             self.trusted_proxies = []
             self.gateways = set()
@@ -341,8 +340,12 @@ class Manager:
                 thread.join(max(0, deadline - time.monotonic()))
 
     # Accounts ---------------------------------------------------------------------------
-    def resolve_auth(self, requested, fresh):
-        """none or accounts. Upgrades with nothing configured stay open, and new libraries log in."""
+    def resolve_auth(self, requested):
+        """none or accounts. Upgrades with nothing configured stay open, and new libraries log in.
+
+        A Library is new when this PokeSim made it, whether the server or `pokesim import` did,
+        and an upgrade when it comes from before accounts, not by whether app.sqlite was there.
+        """
         if requested == 'auto':
             requested = os.environ.get('AUTH', '').strip().lower() or 'auto'
         if requested in {'none', 'accounts'}:
@@ -350,7 +353,8 @@ class Manager:
         if requested != 'auto':
             raise ValueError('AUTH must be none or accounts')
         configured = os.environ.get('OIDC_ISSUER') or os.environ.get('AUTH_PROXY_HEADER')
-        if fresh or configured or self.auth.setup_done() or self.registry.setting('accounts'):
+        new = self.registry.setting(CREATED_SCHEMA) is not None
+        if new or configured or self.auth.setup_done() or self.registry.setting('accounts'):
             return 'accounts'
         return 'none'
 

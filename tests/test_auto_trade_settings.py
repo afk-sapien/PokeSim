@@ -44,6 +44,7 @@ class SlowRegistry:
     """Holds the shared value and pauses between reading it and writing it back."""
     def __init__(self):
         self.values = {}
+        self.lock = threading.RLock()
 
     def setting(self, key, default=None):
         value = self.values.get(key, default)
