@@ -57,3 +57,23 @@ class Policy:
 
     def details(self) -> dict:
         return {}
+
+    def goals(self, snapshot) -> tuple[list[dict], str | None]:
+        """The goals a manager can set as the next activity, and why the list is empty."""
+        return [], 'This policy has no goal list'
+
+    def pin_goal(self, snapshot, key):
+        """Set ``key`` as the next activity. A ValueError says why it cannot be."""
+        raise ValueError('This policy has no goal list')
+
+    @property
+    def pin(self):
+        """The next activity a manager set, or None."""
+        return None
+
+    def unpin_goal(self):
+        pass
+
+    def drop_pin(self):
+        """Drop the pin. Returns the label dropped, or None with no pin."""
+        return None

@@ -50,22 +50,38 @@ class Candidate:
         return self.value / max(self.expected_frames + self.interrupt_frames, 1.0)
 
 
-def _order(candidate):
-    return candidate.tier, -candidate.score, candidate.key
+def _lane(candidate, pinned):
+    """Where a pin puts a candidate. Upkeep still goes first, then the pinned key, then the rest."""
+    if pinned is None:
+        return 0
+    if candidate.tier == Tier.UPKEEP:
+        return 0
+    return 1 if candidate.key == pinned else 2
 
 
-def rank(candidates):
-    """The candidates that may be chosen, best first. Passive candidates are left out."""
-    return sorted((candidate for candidate in candidates if not candidate.passive), key=_order)
+def _order(candidate, pinned=None):
+    return _lane(candidate, pinned), candidate.tier, -candidate.score, candidate.key
 
 
-def choose(candidates, state=None):
+def rank(candidates, pinned=None):
+    """The candidates that may be chosen, best first. Passive candidates are left out.
+
+    ``pinned`` is the key a manager set as the next activity. It goes after upkeep and before every
+    other candidate. Without a pin, or when no active candidate has its key, the order is the usual one.
+    """
+    active = [candidate for candidate in candidates if not candidate.passive]
+    if all(candidate.key != pinned for candidate in active):
+        pinned = None
+    return sorted(active, key=lambda candidate: _order(candidate, pinned))
+
+
+def choose(candidates, state=None, pinned=None):
     """The candidate to run next, or None when the list is empty or holds only passive waits.
 
     ``state`` is the snapshot the candidates were built from. The arbiter reads nothing from it, since
-    each adapter puts what the snapshot says into its candidates.
+    each adapter puts what the snapshot says into its candidates. ``pinned`` is as for ``rank``.
     """
-    ranked = rank(candidates)
+    ranked = rank(candidates, pinned)
     return ranked[0] if ranked else None
 
 

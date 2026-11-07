@@ -94,3 +94,33 @@ def test_compare_names_the_difference():
     assert compare([], None, 'gone').pick is None
     assert compare([story, candidate('clock', passive=True)], None, 'clock').difference == PASSIVE
     assert compare([story], None, None).difference == IDLE
+
+
+def pin_world():
+    return [candidate('story', Tier.STORY, value=0.01, frames=10 ** 6),
+            candidate('heal', Tier.UPKEEP, value=0.1, frames=10 ** 5),
+            candidate('hunt', Tier.PROGRESS, value=5.0, frames=100),
+            candidate('rematch', Tier.FILLER, value=0.01, frames=10 ** 6),
+            candidate('clock', Tier.FILLER, value=99.0, frames=1, passive=True)]
+
+
+def test_a_pinned_key_ranks_first_after_upkeep():
+    world = pin_world()
+    assert [c.key for c in rank(world, pinned='rematch')] == ['heal', 'rematch', 'story', 'hunt']
+    assert choose(world, pinned='rematch').key == 'heal'
+    without_upkeep = [c for c in world if c.key != 'heal']
+    assert choose(without_upkeep, pinned='rematch').key == 'rematch'
+
+
+def test_a_pin_never_goes_above_upkeep_and_a_passive_pin_is_never_chosen():
+    world = pin_world()
+    assert rank(world, pinned='heal')[0].key == 'heal'
+    assert 'clock' not in [c.key for c in rank(world, pinned='clock')]
+    assert choose(world, pinned='clock').key == choose(world).key
+
+
+def test_without_a_pin_the_order_is_unchanged():
+    world = pin_world()
+    assert rank(world) == rank(world, pinned=None) == rank(world, pinned='gone')
+    assert choose(world) is choose(world, pinned=None)
+    assert [c.key for c in rank(world)] == ['story', 'heal', 'hunt', 'rematch']

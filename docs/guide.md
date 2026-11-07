@@ -122,7 +122,17 @@ A previously silent save may need the next music change before all channels play
 | `/api/pokedex/status` | JSON: Pokédex, party, boxes and collection plan in full. `?view=pc` leaves out the plan; `?view=dex` keeps only who holds each species |
 | `/api/events` | JSON event list (`limit`, `all`, `types`, `min_priority`, `before`) |
 | `/api/progress` | JSON history of badges, Pokédex owned and seen, League wins, level 100 species and perfect finds, one row per change |
-| `/api/control` | POST an `action` and optional `value`. Actions: `pause`, `resume`, `take_control`, `save`, `restart`, `speed`, `load_state`, `press` |
+| `/api/goals` | JSON: the goals the planner can start now, best first, as `key`, `label` and `tier`, with the active `pin` and a `reason` when the list is empty. A view link cannot read it |
+| `/api/control` | POST an `action` and optional `value`. Actions: `pause`, `resume`, `take_control`, `save`, `restart`, `speed`, `load_state`, `press`, `pin_goal`, `unpin_goal` |
+
+`pin_goal` takes a `key` from `/api/goals` as its `value` and sets it as the next
+activity. The planner runs that goal once, after any upkeep such as healing, and then
+goes back to its own order. Nothing is queued behind it. A key that is not on the list
+now is refused with 409 and the reason, and nothing changes. The pin clears when the goal
+ends, on `unpin_goal`, when a save loads and when the game restarts. A stuck run drops it
+and writes "Gave up on" the goal to the journal. `/api/state` shows it as `strategy.pin`.
+Red, Blue and Yellow offer goals once the Champion is beaten. Gold, Silver and Crystal
+offer them once Red is beaten.
 
 ## Notifications
 

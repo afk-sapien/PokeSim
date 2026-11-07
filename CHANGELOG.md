@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Let a manager set the next activity from the game page. The **Next activity** picker lists the goals the planner can start now, from its own list. The planner runs the chosen goal once, after upkeep such as healing, and then goes back to its own order. **Cancel** drops it. A goal that cannot run now is refused with the reason. A load, a restart or a stuck run clears the pick, and a stuck run writes "Gave up on" the goal to the journal. The API is `GET /api/goals` and the `pin_goal` and `unpin_goal` controls.
+
 ## 0.6.2
 
 - Publish the container image for linux/arm64 as well as linux/amd64, so it runs on a Raspberry Pi 4 or 5, an ARM NAS or an Apple silicon Mac without emulation. The release workflow builds and tests each architecture on its own native runner, pushes each as `<version>-linux-<arch>` and joins them into one multi-platform tag, then checks anonymously that the tag serves both and that each pulls the tested image ([#269](https://github.com/afk-sapien/PokeSim/issues/269)).

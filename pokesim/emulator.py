@@ -27,6 +27,7 @@ from .legendary import LegendaryRecovery
 from .loop_errors import loop_failed
 from .play_clock import PlayClock
 from .palettes import PALETTES, recolor, validate_palette
+from .planning import pin
 from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext, stack_pointer
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot
@@ -229,6 +230,25 @@ class Emulator:
             raise response['error']
         return response.get('result')
 
+    def goals(self):
+        """The goals a manager can set as the next activity. Runs on the game thread."""
+        goals, reason = self.policy.goals(self.snapshot)
+        return pin.listing(goals, self.policy.pin, reason)
+
+    def pin_goal(self, key):
+        """Set the next activity. A ValueError says why the planner cannot take it now."""
+        return self.policy.pin_goal(self.snapshot, key).to_dict()
+
+    def unpin_goal(self):
+        self.policy.unpin_goal()
+
+    def _drop_pin(self, reason):
+        """Drop the manager's pin before a recovery, and journal it here since a reload loses any note."""
+        drop = getattr(getattr(self, 'policy', None), 'drop_pin', None)
+        label = drop() if drop else None
+        if label is not None and getattr(self, 'snapshot', None) is not None:
+            self._handle_events([Event(**pin.gave_up(label, reason))], self.snapshot)
+
     def press(self, button: str):
         if button in BUTTONS:
             self.command("press", button)
@@ -331,6 +351,8 @@ class Emulator:
         # policy action must not inherit that button from the saved joypad.
         for button in BUTTONS:
             self.pb.button_release(button)
+        # A pin belongs to the moment it was set, so it never outlives a load.
+        self.policy.unpin_goal()
         if metadata:
             self.policy.load_state_dict(metadata["policy_state"])
             announced = getattr(self, 'mem', RunMemory()).playtime_milestones.copy()
@@ -733,6 +755,7 @@ class Emulator:
 
     def _unstick(self, since: float, why: str):
         """Go back to an autosave from before the trouble started (or power-cycle if there is none)."""
+        Emulator._drop_pin(self, pin.STUCK)
         saves = self.store.autosaves()
         older = [p for p in saves if p.stat().st_mtime < since - 30]
         target = older[-1] if older else (saves[0] if saves else None)
@@ -783,6 +806,7 @@ class Emulator:
         elif config.STUCK_RELOAD_SECONDS and now - self.stuck_since > config.STUCK_RELOAD_SECONDS:
             recover = getattr(self.policy, 'recover_stall', None)
             if recover and self.snapshot and self.snapshot.valid and not self.snapshot.in_battle:
+                self._drop_pin(pin.STUCK)
                 recover(self.snapshot)
                 self.stuck_since = now
                 self.input_epoch += 1
