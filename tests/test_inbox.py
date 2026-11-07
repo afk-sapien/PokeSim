@@ -8,7 +8,7 @@ from pokesim.app.auth import AuthStore
 from pokesim.app.manager import Manager, create_app
 
 from test_accounts import PASSWORD, library, people  # noqa: F401  (fixtures)
-from test_control_lease import game, lease  # noqa: F401  (fixture)
+from test_control_lease import game, lease, settle  # noqa: F401  (fixture)
 from test_managed_coordinator import setup  # noqa: F401  (fixture)
 from test_trade_offers import member, offer_request, offers  # noqa: F401  (fixture)
 
@@ -142,6 +142,8 @@ def test_control_requests_reach_the_holder_and_the_owner(game):  # noqa: F811
     lease(game.carol, game.red, 'request')
     assert len(auth.inbox(bob)) == 1
     lease(game.alice, game.red, 'take')
+    # The old holder is told from the send thread, once the worker ran the take.
+    settle(game.library.manager.leases)
     assert kinds(auth, bob) == ['lease.requested', 'lease.taken']
     assert auth.inbox(bob)[0]['text'] == 'alice took control of Red from you.'
     assert kinds(auth, alice) == ['lease.requested']

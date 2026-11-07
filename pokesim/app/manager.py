@@ -424,9 +424,13 @@ class Manager:
         with self.auth.lock:
             user = self.auth.identity_user('proxy', 'header', name)
             if user is None:
+                first = self.needs_setup
                 user = self.auth.create_user(self.auth.free_username(name), role=role, display_name=name)
                 self.auth.link_identity(user['id'], 'proxy', 'header', name)
                 self.auth.audit('user.create', user_id=user['id'], target='proxy')
+                # Setup is done from here on, so its route never binds the older adventures and ROMs.
+                if first and role == 'admin':
+                    self.bind_library_owner(user['id'])
         # Only a real change rechecks, in the background, since this runs on every request.
         if user['role'] != role:
             from . import ownership

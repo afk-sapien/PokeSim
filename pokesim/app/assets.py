@@ -68,18 +68,21 @@ class Assets:
         version = cartridge.version if cartridge else ROM_NAMES[sha1].split()[1].lower()
         sha256 = hashlib.sha256(raw).hexdigest()
         path = self.root / 'roms' / sha256 / 'rom.gb'
-        path.parent.mkdir(parents=True, exist_ok=True)
-        known = self.registry.owns_rom(sha256, owner)
-        if not path.exists():
-            status = 'repaired' if known else 'added'
-            CheckpointStore.atomic_write(path, raw)
-        elif hashlib.sha256(path.read_bytes()).hexdigest() != sha256:
-            # The upload was verified above, so it can safely replace a damaged stored copy.
-            status = 'repaired' if known else 'added'
-            CheckpointStore.atomic_write(path, raw)
-        else:
-            status = 'same' if known else 'added'
-        rom = self.registry.add_rom(sha256, sha1, version, owner)
+        # Under the lock that removals delete files in, so a file seen here is never deleted
+        # before this owner's row exists.
+        with self.registry.lock:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            known = self.registry.owns_rom(sha256, owner)
+            if not path.exists():
+                status = 'repaired' if known else 'added'
+                CheckpointStore.atomic_write(path, raw)
+            elif hashlib.sha256(path.read_bytes()).hexdigest() != sha256:
+                # The upload was verified above, so it can safely replace a damaged stored copy.
+                status = 'repaired' if known else 'added'
+                CheckpointStore.atomic_write(path, raw)
+            else:
+                status = 'same' if known else 'added'
+            rom = self.registry.add_rom(sha256, sha1, version, owner)
         title = SLOT_TITLES.get(version, f'Pokémon {version.capitalize()}')
         moved = slot is not None and slot != version
         if moved:
@@ -155,14 +158,15 @@ class Assets:
                 raise ValueError(f'{title} cannot be removed because this {count} it: {names}. '
                                  'Delete those adventures first. Archived adventures count, since they can be restored.')
             gone = self.registry.release_roms(ids, owner)
-        self.delete_rom_files(gone)
+            # Inside the lock, so an upload of the same file cannot add an owner between the two.
+            self.delete_rom_files(gone)
         return {'version': version, 'title': title, 'message': f'{title} removed. Add it again at any time.'}
 
     def forget_owner(self, uid):
         """A deleted user's shelf. Files nobody else has, and no adventure plays, are deleted."""
         with self.registry.lock:
             gone = self.registry.release_roms(None, uid)
-        self.delete_rom_files(gone)
+            self.delete_rom_files(gone)
         return gone
 
     def delete_rom_files(self, rom_ids):

@@ -375,6 +375,9 @@ class Emulator:
         self.snapshot = read_snapshot(self.pb.memory, self.frame)
         if self.snapshot.started:
             self.play_clock.seed(self.snapshot.playtime_seconds)
+        # A restart empties the gift ledger. Loading a game from before it would otherwise count
+        # every earlier League win as new on the next win, and pay each gift out again.
+        rewards.initialize(self.store, getattr(self, 'mem', RunMemory()).championships)
 
     def _reset_transient(self, *, clear_observation=False):
         """Discard queued input and recovery timers without erasing durable progress."""

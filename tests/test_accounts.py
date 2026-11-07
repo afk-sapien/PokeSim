@@ -600,6 +600,20 @@ def test_startup_rebinds_a_disabled_library_owner(library, people):
     assert manager.registry.adventure(stranded['id'])['owner_id'] == second['id']
 
 
+def test_the_first_admin_a_proxy_names_owns_the_older_library_at_once(library):
+    """Without the bind, older adventures and ROMs stayed on the placeholder until the next start."""
+    manager = library.manager
+    older = manager.registry.create('Older', 'fixture', {}, identifier())
+    assert manager.needs_setup
+    carol = manager.proxy_user('carol', 'admin')
+    assert manager.default_owner() == carol['id']
+    assert manager.registry.adventure(older['id'])['owner_id'] == carol['id']
+    assert manager.registry.owns_rom('fixture', carol['id'])
+    # A later admin from the proxy does not take the Library over.
+    dave = manager.proxy_user('dave', 'admin')
+    assert manager.default_owner() == carol['id'] != dave['id']
+
+
 def request_from(host, headers):
     return SimpleNamespace(client=SimpleNamespace(host=host), headers={key.lower(): value for key, value in headers.items()})
 

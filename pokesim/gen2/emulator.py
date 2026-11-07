@@ -595,6 +595,10 @@ class Emulator:
         from .legendary import Recovery
         self.legendary_recovery = Recovery(metadata.get('legendary_recovery'))
         self.snapshot = self._read()
+        # A restart empties the gift ledger. Loading a game from before it would otherwise count
+        # every earlier League win as new on the next win, and pay each gift out again.
+        from .. import rewards
+        rewards.initialize(self.store, self.snapshot.hall_of_fame_count if self.snapshot else 0)
         self.audio.clear()
         self.options_applied = False
         self._reset_watch()
