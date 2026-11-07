@@ -38,6 +38,8 @@
 
 ## Unreleased
 
+- Stop Gold, Silver and Crystal runs from walking to a PC forever for room that does not exist. With a full party and every box full of Pokémon a release may not take, such as League rewards from other trainers, a gift sent the run to a PC to deposit a partner. The PC had no room, so the run turned it off and walked back, through every reload, for days. Gifts and the Game Corner prize partner now wait until a slot is free. The watchdog also escalates now: after 12 reloads that did not help, it blocks the stuck collection goal for a while, journals "Gave up on" that goal, and lets the next goal run.
+
 - Say why an adventure could not start when none of its autosaves restores. The error now names each reason a save was refused, how many saves it covered and the first one, instead of only how many were tried. A worker that fails before it is ready now sends that reason to the Library, which used to show only "Worker exited before becoming ready" ([#321](https://github.com/afk-sapien/PokeSim/issues/321)).
 
 - Let a manager set the next activity from the game page. The **Next activity** picker lists the goals the planner can start now, from its own list. The planner runs the chosen goal once, after upkeep such as healing, and then goes back to its own order. **Cancel** drops it. A goal that cannot run now is refused with the reason. A load, a restart or a stuck run clears the pick, and a stuck run writes "Gave up on" the goal to the journal. The API is `GET /api/goals` and the `pin_goal` and `unpin_goal` controls.
