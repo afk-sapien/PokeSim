@@ -126,6 +126,8 @@ class Policy:
         self.puzzle_cache = {}
         self.memory = None
         self.sp = None
+        # The next activity a manager set (planning/pin.py). Never saved.
+        self.pin = None
         self.resetting_puzzle = None
         self.unreachable_waits = 0
         # The arbiter's picks beside the ladder's, for the log and the replay audit. Never saved.
@@ -143,6 +145,7 @@ class Policy:
     def load_state_dict(self, state):
         from .gamecorner import Coins, Prize, Slots
         from .npc_trades import Trade
+        self.pin = None
         self.starter = state.get('starter', self.starter)
         self.completed = state.get('completed', {})
         self.collection = state.get('collection', {'target': None})
@@ -281,10 +284,37 @@ class Policy:
     def describe(self):
         return f'strategic ({self.mode})'
 
+    def goals(self, snapshot):
+        """The goals a manager can set as the next activity, and why the list is empty."""
+        from .collection import goal_list
+        if snapshot is None or self.memory is None:
+            return [], 'Not available now'
+        return goal_list(self, snapshot, Memory(self.memory, self.data), Goal)
+
+    def pin_goal(self, snapshot, key):
+        """Set ``key`` as the next activity. A ValueError says why it cannot be."""
+        from ..planning.pin import UNAVAILABLE, Pin
+        goals, reason = self.goals(snapshot)
+        match = next((goal for goal in goals if goal['key'] == key), None)
+        if match is None:
+            raise ValueError(reason or UNAVAILABLE.capitalize())
+        self.pin = Pin(key, match['label'], started=getattr(self, 'ladder_pick', None) == key)
+        return self.pin
+
+    def unpin_goal(self):
+        self.pin = None
+
+    def drop_pin(self):
+        """Drop the pin. Returns the label dropped, or None with no pin."""
+        label = self.pin.label if self.pin else None
+        self.pin = None
+        return label
+
     def details(self):
         from .collection import active_target
         from .marathon import details as marathon_details
         return {'action': self.mode, 'decisions': self.decisions, 'starter': self.starter,
+                'pin': self.pin.to_dict() if self.pin else None,
                 'milestones': dict(self.completed), 'recoveries': self.recoveries, 'visited_tiles': len(self.nav.visits),
                 'objective': {'key': self.goal.key, 'label': self.goal.label, 'reason': self.goal.label} if self.goal else {},
                 'collection': {'version': self.data.game, 'dex_total': 251,

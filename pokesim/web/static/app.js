@@ -346,6 +346,7 @@ async function refreshState() {
     const since = age < 60 ? 'just now' : age < 3600 ? `${Math.floor(age / 60)}m ago` : `${Math.floor(age / 3600)}h ago`
     set('#last-achievement', 'textContent', achievement ? `Last achievement: ${achievement.title}, ${since}` : 'Waiting for the first achievement.')
     set('#strategy-panel', 'hidden', !objective)
+    globalThis.NextActivity?.update(state)
     renderIntent(strategy || {})
     const steady = steadyObjective(objective)
     if (steady) {

@@ -7,6 +7,28 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from ..planning.arbiter import PLAY_STYLES
+
+
+# Per-adventure play settings and their defaults. They change while the adventure runs
+# through PATCH /api/v1/adventures/{aid}/play, and a default is stored as absent.
+PLAY_SETTINGS = {'nicknames': True, 'play_style': 'balanced'}
+# The values a play setting may take, for those that are not a switch.
+PLAY_CHOICES = {'play_style': PLAY_STYLES}
+
+
+def validate_play_settings(values):
+    """Check a play settings change. A switch must be a boolean and a choice one of its values."""
+    if not isinstance(values, dict) or not values or set(values) - set(PLAY_SETTINGS):
+        raise ValueError(f'Change only these play settings: {", ".join(PLAY_SETTINGS)}')
+    for name, value in values.items():
+        if name in PLAY_CHOICES:
+            if not isinstance(value, str) or value not in PLAY_CHOICES[name]:
+                raise ValueError(f'{name} must be one of {", ".join(PLAY_CHOICES[name])}')
+        elif type(value) is not type(PLAY_SETTINGS[name]):
+            raise ValueError(f'{name} must be a boolean')
+    return values
+
 
 def validate_speed(value):
     if type(value) not in (int, float) or not math.isfinite(value) or not (value == 0 or 0.1 <= value <= 16):
@@ -20,6 +42,8 @@ class SimulationSettings:
     data_dir: str
     game_data_dir: str
     public_url: str = 'http://127.0.0.1:8000'
+    nicknames: bool = True
+    play_style: str = 'balanced'
     nickname_prefixes: tuple[str, ...] = ()
     nickname_suffixes: tuple[str, ...] = ()
     nickname_names: tuple[str, ...] = ()
@@ -86,13 +110,13 @@ class SimulationSettings:
             from ..randomized import validate
             object.__setattr__(self, 'randomizer', validate(self.randomizer, cartridge.version))
         for name in ('viewer_only', 'fast_text', 'battle_animations', 'league_rewards', 'mew_event', 'celebi_event',
-                     'extra_store_items', 'fair_wild_dvs'):
+                     'extra_store_items', 'fair_wild_dvs', 'nicknames'):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f'{name} must be a boolean')
         if self.seed is not None and type(self.seed) is not int:
             raise ValueError('seed must be an integer or null')
         for name, choices in {'fossil_preference': {'auto', 'helix', 'dome', 'amber'},
-                              'dojo_preference': {'auto', 'hitmonlee', 'hitmonchan'}}.items():
+                              'dojo_preference': {'auto', 'hitmonlee', 'hitmonchan'}, **PLAY_CHOICES}.items():
             if not isinstance(getattr(self, name), str) or getattr(self, name) not in choices:
                 raise ValueError(f'Unknown {name}')
         ranges = {

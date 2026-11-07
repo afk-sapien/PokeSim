@@ -123,10 +123,10 @@ def goal_candidate(goal, collection, kind=None):
         inner = (shadow.picked.get('collection') if shadow.last.get('collection') == project.get('key')
                  else shadow.built.get('collection', {}).get(project.get('key'))) if project else None
         if inner:
-            return Candidate(key, inner.tier, inner.value, inner.expected_frames, goal=kind)
+            return Candidate(key, inner.tier, inner.value, inner.expected_frames, hunt=inner.hunt, goal=kind)
         return Candidate(key, Tier.PROGRESS, values.SMALL, EXPECTED_FRAMES['other'], goal=kind)
     if kind == 'plan':
-        return Candidate(key, Tier.FILLER, 0.0, ERRAND_FRAMES, goal=kind)
+        return Candidate(key, Tier.FILLER, 0.0, ERRAND_FRAMES, plan=True, goal=kind)
     if kind in ERRANDS:
         return Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal=kind)
     tier = Tier.PROGRESS if collection.completed_champion else Tier.STORY
@@ -162,10 +162,12 @@ class Choice:
 
     def errand_candidate(self, key, kind, frames=ERRAND_FRAMES):
         """An errand that serves the pick. It takes the pick's tier and value, at least a small one, so it
-        goes before the longer pick. It pays an errand's frames again to cut into another errand."""
+        goes before the longer pick. It pays an errand's frames again to cut into another errand. It ranks
+        as the pick does under every play style."""
         held = self.pick
         return Candidate(key, held.tier, max(held.value, values.SMALL), frames,
-                         interrupt_frames=ERRAND_FRAMES if self.errand else 0.0, goal=kind)
+                         interrupt_frames=ERRAND_FRAMES if self.errand else 0.0, hunt=held.hunt, plan=held.plan,
+                         goal=kind)
 
     def wins(self, candidate):
         """Whether ``candidate`` would replace the pick. A goal under the pick's own key is its update.
@@ -332,8 +334,30 @@ class StrategicPolicy(Policy):
     def describe(self):
         return f"strategic ({self.mode})"
 
+    @property
+    def pin(self):
+        return self.collection.pin
+
+    def goals(self, snapshot):
+        if snapshot is None or not snapshot.valid:
+            return [], 'Not available now'
+        return self.collection.goal_list(snapshot, self.nav, self.rng)
+
+    def pin_goal(self, snapshot, key):
+        if snapshot is None or not snapshot.valid:
+            raise ValueError('Not available now')
+        return self.collection.set_pin(snapshot, self.nav, self.rng, key)
+
+    def unpin_goal(self):
+        self.collection.clear_pin()
+
+    def drop_pin(self):
+        return self.collection.drop_pin()
+
     def details(self):
+        pin = self.collection.pin
         return {"collection": self.collection.details(), "objective": self.goal.to_dict(), "action": self.mode, "reason": self.reason,
+                "pin": pin.to_dict() if pin else None,
                 "milestones": self.completed.copy(), "recoveries": self.recoveries,
                 "decisions": self.decisions, "visited_tiles": len(self.nav.visits),
                 "journey": self.journey,
@@ -1367,6 +1391,7 @@ class StrategicPolicy(Policy):
         gain, _, _, _, before = upgrade
         interrupt = TEACH_FRAMES if self.collection.project else 0.0
         return Candidate('teach_battle', choice.pick.tier, values.move_gain(before, before + gain), TEACH_FRAMES,
+                         hunt=choice.pick.hunt, plan=choice.pick.plan,
                          interrupt_frames=interrupt, goal='moves')
 
     def _hm_option(self, s):

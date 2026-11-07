@@ -62,7 +62,7 @@ PRESS_WAIT_SECONDS = 2
 CONTROL_WAIT_SECONDS = 10
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
-                   'api/audio', 'api/lease', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
+                   'api/audio', 'api/lease', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'api/goals', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
 
 # Pages a person opens. A stopped adventure answers these with its status page, not raw JSON.
 GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon',
@@ -153,7 +153,7 @@ class Manager:
         allowed = {'trainer_name', 'rival_name', 'speed', 'starter', 'policy', 'auto_start', 'seed', 'fast_text', 'battle_animations',
                    'autosave_seconds', 'keep_autosaves', 'stream_fps', 'viewer_only', 'league_rewards',
                    'mew_event', 'celebi_event', 'extra_store_items', 'fair_wild_dvs', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
-                   'fossil_preference', 'dojo_preference', 'event_retention_days', 'palette', 'randomizer'}
+                   'fossil_preference', 'dojo_preference', 'event_retention_days', 'palette', 'randomizer', 'nicknames', 'play_style'}
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise ValueError('Unsupported adventure settings')
         result = {'starter': 'random', 'policy': 'strategic', 'auto_start': False, **values}
@@ -175,9 +175,17 @@ class Manager:
                      'extra_store_items', 'fair_wild_dvs'):
             if name in result and type(result[name]) is not bool:
                 raise ValueError(f'{name} must be a boolean')
+        from ..runtime.settings import PLAY_SETTINGS, validate_play_settings
+        played = {name: result[name] for name in PLAY_SETTINGS if name in result}
+        if played:
+            validate_play_settings(played)
         # Off is stored as absent, so releases that predate the setting still open the adventure.
         if result.get('fair_wild_dvs') is False:
             del result['fair_wild_dvs']
+        # Play settings at their default are stored as absent for the same reason.
+        for name, default in PLAY_SETTINGS.items():
+            if result.get(name, default) == default:
+                result.pop(name, None)
         if 'randomizer' in result:
             from ..randomized import validate
             result['randomizer'] = validate(result['randomizer'])
@@ -949,6 +957,8 @@ def create_app(manager, shutdown=lambda: None):
             'celebi_event': data.get('celebi_event', True),
             'extra_store_items': data.get('extra_store_items', True),
             **({'fair_wild_dvs': data['fair_wild_dvs']} if 'fair_wild_dvs' in data else {}),
+            **({'nicknames': data['nicknames']} if 'nicknames' in data else {}),
+            **({'play_style': data['play_style']} if 'play_style' in data else {}),
             **({'randomizer': data['randomizer']} if data.get('randomizer') else {}),
             'legendary_return_steps': data.get('legendary_return_steps', 1000000),
             'event_return_steps': data.get('event_return_steps', 100000),
@@ -1055,6 +1065,20 @@ def create_app(manager, shutdown=lambda: None):
             result['palette_pending'] = await asyncio.to_thread(manager.supervisor.push_palette, aid)
         if 'fair_wild_dvs' in data.get('settings', {}):
             result['fair_wild_dvs_pending'] = await asyncio.to_thread(manager.supervisor.push_fair_wild_dvs, aid)
+        return result
+
+    @app.patch('/api/v1/adventures/{aid}/play')
+    async def edit_play(aid: str, request: Request):
+        """Change how the bot plays. Running or stopped, the change is saved and a running game gets it live."""
+        manager.check_available()
+        from ..runtime.settings import validate_play_settings
+        changes = validate_play_settings(await json_body(request))
+        adventure = manager.registry.adventure(aid)
+        if manager.coordinator.reserved(aid):
+            raise ValueError('Settings are frozen until the trade is resolved')
+        settings = manager.validate_adventure_settings({**adventure['settings'], **changes})
+        result = manager.registry.update(aid, settings=settings)
+        result['play_pending'] = await asyncio.to_thread(manager.supervisor.push_play, aid)
         return result
 
     @app.get('/api/v1/settings')

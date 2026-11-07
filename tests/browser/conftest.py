@@ -16,6 +16,7 @@ import uvicorn
 from pokesim import config
 from pokesim.broker import inventory, routine
 from pokesim.events import Event
+from pokesim.planning import pin
 from pokesim.ram import PartyMon, Snapshot, StoredMon
 from pokesim.store import Store
 from pokesim.trade import preferences
@@ -228,6 +229,12 @@ class SyntheticEmulator:
 
     def set_trade_preference(self, key, state):
         preferences.update(self.store, live_status(self.snapshot.to_dict()), key, state)
+
+    def call(self, function, timeout=30):
+        return function()
+
+    def goals(self):
+        return pin.listing([], None, 'The planner has nothing to offer yet')
 
     def board(self):
         if not self.connected:

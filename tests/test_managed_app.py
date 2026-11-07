@@ -319,6 +319,75 @@ def test_global_nickname_settings_are_validated_persisted_and_reset(client, monk
     assert result.status_code == 200 and len(calls) == 2
 
 
+def test_an_empty_nickname_pool_is_saved(client, monkeypatch):
+    client, manager = client
+    headers = login(client, manager)
+    monkeypatch.setattr(manager.supervisor, 'update_nicknames', lambda: [])
+    from pokesim.nicknames import CURATED_NAMES, NAME_PREFIXES
+    payload = {'nickname_prefixes': [], 'nickname_suffixes': [], 'nickname_excluded_prefixes': list(NAME_PREFIXES),
+               'nickname_excluded_names': list(CURATED_NAMES)}
+    result = client.patch('/api/v1/settings', json=payload, headers=headers)
+    assert result.status_code == 200
+    assert manager.registry.setting('nickname_parts')['nickname_excluded_names'] == list(CURATED_NAMES)
+
+
+def test_play_settings_save_running_or_stopped_and_push_live(client, monkeypatch):
+    client, manager = client
+    headers = login(client, manager)
+    pushed = []
+    monkeypatch.setattr(manager.supervisor, 'push_play', lambda aid: pushed.append(aid) or False)
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    row = client.post('/api/v1/adventures', headers=headers, json={'name': 'Plain names', 'rom_id': 'fixture-rom'}).json()
+    assert 'nicknames' not in row['settings']
+    route = f"/api/v1/adventures/{row['id']}/play"
+    assert client.patch(route, json={'nicknames': False}).status_code == 403
+    for bad in ({'nicknames': 0}, {'nicknames': 'off'}, {'nicknames': None}, {'play_style': 'fast'},
+                {'nicknames': False, 'speed': 4}, {}):
+        assert client.patch(route, headers=headers, json=bad).status_code == 409
+    assert client.patch(route, headers=headers, json=[False]).status_code == 400
+    assert pushed == []
+    stopped = client.patch(route, headers=headers, json={'nicknames': False})
+    assert stopped.status_code == 200 and stopped.json()['settings']['nicknames'] is False
+    assert stopped.json()['play_pending'] is False and pushed == [row['id']]
+    manager.registry.update(row['id'], state='running')
+    # The general settings route still keeps play settings to the play route while running.
+    assert client.patch(f"/api/v1/adventures/{row['id']}", headers=headers,
+                        json={'settings': {'nicknames': True}}).status_code == 409
+    running = client.patch(route, headers=headers, json={'nicknames': True})
+    # On is stored as absent, so older releases still open the adventure.
+    assert running.status_code == 200 and 'nicknames' not in running.json()['settings']
+    assert pushed == [row['id'], row['id']]
+    assert manager.registry.adventure(row['id'])['settings'].get('nicknames', True) is True
+
+
+def test_the_play_style_route_takes_only_known_styles(client, monkeypatch):
+    client, manager = client
+    headers = login(client, manager)
+    pushed = []
+    monkeypatch.setattr(manager.supervisor, 'push_play', lambda aid: pushed.append(aid) or False)
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+    row = client.post('/api/v1/adventures', headers=headers,
+                      json={'name': 'Story run', 'rom_id': 'fixture-rom', 'play_style': 'story'}).json()
+    assert row['settings']['play_style'] == 'story'
+    route = f"/api/v1/adventures/{row['id']}/play"
+    for bad in ({'play_style': 'fast'}, {'play_style': 1}, {'play_style': None}, {'play_style': True},
+                {'play_style': 'Collector'}):
+        response = client.patch(route, headers=headers, json=bad)
+        assert response.status_code == 409 and 'balanced, story, collector' in response.text
+    assert pushed == []
+    manager.registry.update(row['id'], state='running')
+    collector = client.patch(route, headers=headers, json={'play_style': 'collector'})
+    assert collector.status_code == 200 and collector.json()['settings']['play_style'] == 'collector'
+    both = client.patch(route, headers=headers, json={'nicknames': False, 'play_style': 'story'})
+    assert both.json()['settings']['play_style'] == 'story' and both.json()['settings']['nicknames'] is False
+    # Balanced is stored as absent, so older releases still open the adventure.
+    balanced = client.patch(route, headers=headers, json={'play_style': 'balanced'})
+    assert balanced.status_code == 200 and 'play_style' not in balanced.json()['settings']
+    assert pushed == [row['id']] * 3
+    assert client.patch(f"/api/v1/adventures/{row['id']}", headers=headers,
+                        json={'settings': {'play_style': 'story'}}).status_code == 409
+
+
 def test_create_saves_normalized_intro_names_and_rejects_later_edits(client):
     client, manager = client
     headers = login(client, manager)
