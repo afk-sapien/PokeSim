@@ -69,7 +69,8 @@ def reset_password(root, username):
     store = AuthStore(root)
     try:
         user = store.user_by_name(username)
-        if user is None:
+        # The placeholder row holds an older Library's adventures and is nobody to log in as.
+        if user is None or user['placeholder']:
             raise ValueError(f'No user is called {username}')
         password = secrets.token_urlsafe(12)
         store.set_password(user['id'], password)

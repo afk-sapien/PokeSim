@@ -1014,13 +1014,15 @@ class Emulator:
         elif name == "load_state":
             p = self.store.state_path(arg)
             if p:
-                self._checkpoint_before(BEFORE_LOAD_CHECKPOINT)
-                try:
-                    self._load_state_file(p)
-                except ValueError as error:
-                    log.warning("Rewind to %s refused: %s", p.name, error)
-                else:
-                    log.info("loaded %s", p.name)
+                # Undoing a rewind loads before-load itself, so it is held while the checkpoint replaces it.
+                with self.store.held(p, BEFORE_LOAD_CHECKPOINT) as source:
+                    self._checkpoint_before(BEFORE_LOAD_CHECKPOINT)
+                    try:
+                        self._load_state_file(source)
+                    except ValueError as error:
+                        log.warning("Rewind to %s refused: %s", p.name, error)
+                    else:
+                        log.info("loaded %s", p.name)
         elif name == "restart":
             log.warning("restarting run from power-on")
             self._checkpoint_before(BEFORE_RESTART_CHECKPOINT)

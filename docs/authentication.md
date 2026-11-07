@@ -32,7 +32,8 @@ adventure that existed before accounts belongs to this first admin.
 
 To skip the code, set `POKESIM_ADMIN_USER` and `POKESIM_ADMIN_PASSWORD` on the first start.
 PokeSim creates that admin only while it has none, so later starts ignore both values.
-Remove them once the admin exists.
+Remove them once the admin exists. On a Library from an older release, setting both also
+turns accounts on, just as `AUTH=accounts` does.
 
 Logins last 14 days. After five wrong passwords PokeSim makes each next try wait, up to 15
 minutes, and says how long.

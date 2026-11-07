@@ -44,6 +44,9 @@ from .supervisor import AdventureRunning, Supervisor
 
 log = logging.getLogger(__name__)
 STATIC = Path(__file__).parents[1] / 'web' / 'static'
+# Browsers with no login. One address keeps a few tabs, and the whole table stays small.
+ANONYMOUS_PER_ADDRESS = 16
+ANONYMOUS_SESSIONS = 1024
 CLI_HEADER = 'x-pokesim-cli-token'
 SESSION_COOKIE = 'pokesim_session'
 SHARE_COOKIE = 'pokesim_share'
@@ -352,7 +355,9 @@ class Manager:
             return requested
         if requested != 'auto':
             raise ValueError('AUTH must be none or accounts')
-        configured = os.environ.get('OIDC_ISSUER') or os.environ.get('AUTH_PROXY_HEADER')
+        # A first admin in the environment asks for accounts too, or bootstrap_admin finds nothing to set up.
+        admin = os.environ.get('POKESIM_ADMIN_USER', '').strip() and os.environ.get('POKESIM_ADMIN_PASSWORD')
+        configured = os.environ.get('OIDC_ISSUER') or os.environ.get('AUTH_PROXY_HEADER') or admin
         new = self.registry.setting(CREATED_SCHEMA) is not None
         if new or configured or self.auth.setup_done() or self.registry.setting('accounts'):
             return 'accounts'
@@ -470,13 +475,26 @@ class Manager:
                 return session
         return None
 
-    def anonymous_session(self, role):
+    @property
+    def anonymous_seconds(self):
+        """Without accounts this is the browser's whole session. With them it only lasts until a login."""
+        return 86400 if self.auth_mode == 'none' else 3600
+
+    def anonymous_session(self, role, address=None):
+        """A new CSRF token for a browser with no login. A full table drops its oldest sessions, first
+        those of the same address, so cookieless requests can never turn every new browser away."""
         session_id = secrets.token_urlsafe(32)
-        current = {'csrf_token': secrets.token_urlsafe(32), 'role': role, 'expires': time.time() + 86400}
+        now = time.time()
+        current = {'csrf_token': secrets.token_urlsafe(32), 'role': role, 'expires': now + self.anonymous_seconds,
+                   'address': address}
         with self.session_lock:
-            self.sessions = {key: value for key, value in self.sessions.items() if value['expires'] > time.time()}
-            if len(self.sessions) >= 1024:
-                raise HTTPException(429, 'Too many active browser sessions')
+            # A dict keeps insertion order, so the first entries are the oldest.
+            self.sessions = {key: value for key, value in self.sessions.items() if value['expires'] > now}
+            same = [key for key, value in self.sessions.items() if value['address'] == address]
+            for key in same[:max(0, len(same) - ANONYMOUS_PER_ADDRESS + 1)]:
+                del self.sessions[key]
+            while len(self.sessions) >= ANONYMOUS_SESSIONS:
+                del self.sessions[next(iter(self.sessions))]
             self.sessions[session_id] = current
         return session_id, current
 
@@ -765,9 +783,9 @@ def create_app(manager, shutdown=lambda: None):
                      'setup_recommended': True}
             if current is not None:
                 return {'csrf_token': current['csrf_token'], 'role': current['role'], **extra}
-            session_id, current = manager.anonymous_session('admin')
+            session_id, current = manager.anonymous_session('admin', manager.client_address(request))
             response = JSONResponse({'csrf_token': current['csrf_token'], 'role': current['role'], **extra})
-            manager.set_session_cookie(response, session_id, 86400)
+            manager.set_session_cookie(response, session_id, manager.anonymous_seconds)
             return response
         from .accounts import session_payload
         current = manager.browser_session(request, actor)
@@ -780,9 +798,9 @@ def create_app(manager, shutdown=lambda: None):
             return response
         if current is not None:
             return session_payload(manager, actor, current)
-        session_id, current = manager.anonymous_session(None)
+        session_id, current = manager.anonymous_session(None, manager.client_address(request))
         response = JSONResponse(session_payload(manager, actor, current))
-        manager.set_session_cookie(response, session_id, 86400)
+        manager.set_session_cookie(response, session_id, manager.anonymous_seconds)
         return response
 
     from .accounts import install as install_accounts
