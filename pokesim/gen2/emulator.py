@@ -845,10 +845,36 @@ class Emulator:
         self.waiting = False
         self.stall.frame = None
 
+    def _give_up(self, why):
+        """Block the collection rung that every reload left stuck, so the next goal runs instead.
+
+        The rung and the objectives under it stand down (standdown.py) and come back later, and the
+        reloads start over for whatever runs next. A story goal has no rung to block, so it stays
+        flagged as stalled.
+        """
+        from .standdown import rung_key, stalled_objectives, stand_down
+        policy, snapshot = getattr(self, 'policy', None), getattr(self, 'snapshot', None)
+        rung, goal = getattr(policy, 'ladder_rung', None), getattr(policy, 'goal', None)
+        if rung is None or not getattr(snapshot, 'started', False):
+            return False
+        for key in [rung_key(rung), *stalled_objectives(policy)['keys']]:
+            stand_down(policy, key)
+        label = goal.label if goal is not None else rung
+        log.error('%s and %d reloads did not help, blocking %s for now', why, self.unstick_streak, rung)
+        self._event(Event('stall', f'Gave up on “{label}” for now',
+                          f'{why.capitalize()} at {snapshot.map_name} and {self.unstick_streak} reloads did not '
+                          'help, so it waits while other goals run.', priority=HIGH), snapshot)
+        policy.goal, policy.menu, policy.ladder_rung = None, None, None
+        self.unstick_streak, self.reloads_exhausted = 0, False
+        self._reset_watch()
+        return True
+
     def _unstick(self, since_frame, why):
         """Go back to an autosave from before the trouble started, or power-cycle when there is none."""
         from ..planning.pin import STUCK
         Emulator._drop_pin(self, STUCK)
+        if self.unstick_streak >= MAX_RELOADS and Emulator._give_up(self, why):
+            return
         if self.unstick_streak >= MAX_RELOADS:
             # Reloading again would only replay the same trouble. Leave the run as it is, flagged as
             # stalled, and say so once rather than at every guard check.

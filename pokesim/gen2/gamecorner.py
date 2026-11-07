@@ -5,7 +5,7 @@ import re
 from pokecore.gen2.tables import prizes
 
 from .menus import MAX_STEPS, SLOT_MAX_STEPS, choose
-from .quests import room_for_gift
+from .quests import no_room, room_for_gift
 
 
 def journey(policy, snapshot, Goal):
@@ -27,6 +27,8 @@ def journey(policy, snapshot, Goal):
             return None
         return policy.person(snapshot, 'collection_coins', 'Buy coins for the prize partner',
                              'GOLDENROD_GAME_CORNER', 'GoldenrodGameCornerCoinVendorScript')
+    if no_room(snapshot):
+        return None
     room = room_for_gift(policy, snapshot, Goal)
     if room:
         return room
