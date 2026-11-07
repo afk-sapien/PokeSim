@@ -38,7 +38,8 @@ def import_directory(manager, source, *, rom=None, name=None, stopped=False, own
             starter = 'random'
             if desktop and (source / 'settings.json').is_file():
                 starter = json.loads((source / 'settings.json').read_text(encoding='utf-8')).get('starter', starter)
-            asset = manager.assets.install_rom(rom.read_bytes())
+            owner = owner or manager.default_owner()
+            asset = manager.assets.install_rom(rom.read_bytes(), owner)
             settings = manager.validate_adventure_settings({'starter': starter})
             aid_request = identifier()
             # Inside the application folder, not /tmp, which the container caps at 256 MB.
@@ -53,7 +54,7 @@ def import_directory(manager, source, *, rom=None, name=None, stopped=False, own
                 for path in checkpoints.autosaves():
                     checkpoints.checkpoint_metadata(path)
                 adventure = manager.registry.create(name or source.name, asset['id'], settings, aid_request,
-                                                    owner=owner or manager.default_owner())
+                                                    owner=owner)
                 target = manager.root / 'adventures' / adventure['id']
                 try:
                     shutil.copytree(stage, target, dirs_exist_ok=True)

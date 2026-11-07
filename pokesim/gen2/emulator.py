@@ -1062,7 +1062,9 @@ class Emulator:
             for path in self.store.states.glob('auto-*.state'):
                 path.unlink()
                 path.with_suffix('.json').unlink(missing_ok=True)
-            for key in ('trade_barrier', 'custom-reward-barrier-v1', 'custom-reward-pending-v1',
+            # The trade and reward barriers stay. Named checkpoints from before them survive a restart,
+            # and loading one would undo a trade the partner keeps, or a reward.
+            for key in ('custom-reward-pending-v1',
                         'league-rewards-v1', 'gen2-mythical-gift-v1', 'gen2-gs-ball-distribution-v1', 'gen2-league-partners-v1',
                         'gen2-mew-returns-v1'):
                 self.store.set(key, None)

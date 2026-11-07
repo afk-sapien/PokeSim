@@ -171,6 +171,33 @@ def test_a_shared_adventure_hides_its_rom_from_people_without_it(shelves, people
     assert shelves.login('alice').get(f'/api/v1/adventures/{aid}').json()['rom_id'] == 'alices-own'
 
 
+def test_an_imported_cartridge_is_the_importers_and_stays_gone_once_removed(shelves, people, tmp_path):  # noqa: F811
+    """Imports filed the cartridge under the placeholder owner too. Removing it left that row, and the
+    next start gave it to the first admin, so the removed cartridge came back on someone's shelf."""
+    import sqlite3
+    from contextlib import closing
+    from pokesim.app.deletion import delete_adventure
+    from pokesim.app.migration import import_directory
+    manager = shelves.manager
+    source = tmp_path / 'legacy'
+    source.mkdir()
+    with closing(sqlite3.connect(source / 'pokesim.sqlite')) as db, db:
+        db.execute('CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT)')
+    (source / 'rom.gb').write_bytes(synthetic('yellow'))
+    adventure = import_directory(manager, source, name='Old', stopped=True, owner=people.bob['id'])
+    rom_id = adventure['rom_id']
+    assert not manager.registry.owns_rom(rom_id, LIBRARY_OWNER)
+    path = stored(manager, 'yellow')
+    delete_adventure(manager, adventure['id'], 'Old')
+    bob = shelves.login('bob')
+    assert bob.delete('/api/v1/cartridges/yellow').status_code == 200
+    assert not path.exists()
+    assert all(row['version'] != 'yellow' for row in manager.registry.roms())
+    # A restart hands the placeholder's shelf to the library owner, and there is nothing left to hand over.
+    manager.bind_library_owner()
+    assert 'yellow' not in installed(shelves.login('admin'))
+
+
 def test_a_deleted_users_shelf_goes_with_them(shelves, people):  # noqa: F811
     alice, bob = shelves.login('alice'), shelves.login('bob')
     upload(alice, 'gold')

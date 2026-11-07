@@ -1042,9 +1042,9 @@ class Emulator:
             self.mem = RunMemory()
             self.legendary_recovery = LegendaryRecovery()
             self.last_achievement = None
-            self.store.set("trade_barrier", None)
+            # The trade and reward barriers stay. Named checkpoints from before them survive a restart,
+            # and loading one would undo a trade the partner keeps, or a reward.
             self.store.clear_trade_preferences()
-            self.store.set("custom-reward-barrier-v1", None)
             self.store.set("custom-reward-pending-v1", None)
             if hasattr(self, 'milestones'):
                 self.milestones.reset()

@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.app.legacy_import import import_pair, validate_pair
-from pokesim.app.registry import Registry
+from pokesim.app.registry import LIBRARY_OWNER, Registry
 from pokesim.checkpoints import CheckpointStore
 from pokesim.store import Store
 
@@ -46,9 +46,9 @@ def legacy(tmp_path):
     (work / 'result.json').write_text(json.dumps({'id': '12345', 'status': 'staged', 'states': states, 'hashes': hashes}))
     registry = Registry(tmp_path / 'application')
     class Assets:
-        def install_rom(self, raw):
-            return registry.add_rom(sha256(raw).hexdigest(), sha1(raw).hexdigest(), raw.decode())
-    manager = SimpleNamespace(root=registry.root, registry=registry, assets=Assets(),
+        def install_rom(self, raw, owner):
+            return registry.add_rom(sha256(raw).hexdigest(), sha1(raw).hexdigest(), raw.decode(), owner)
+    manager = SimpleNamespace(root=registry.root, registry=registry, assets=Assets(), default_owner=lambda: LIBRARY_OWNER,
         maintenance=threading.RLock(), suspended=False, validate_adventure_settings=lambda value: value)
     yield manager, sources, roms, coordinator
     registry.db.close()
