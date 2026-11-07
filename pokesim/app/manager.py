@@ -543,6 +543,13 @@ class Manager:
         return forwarded_client(peer, ','.join(request.headers.getlist('x-forwarded-for')), networks)
 
 
+async def after_body(request):
+    """Check the rights again once a body is in, as `json_body` does, for routes that stream it."""
+    recheck = getattr(request.state, 'recheck', None)
+    if recheck is not None:
+        await recheck(request)
+
+
 async def json_body(request, limit=65536):
     """The request's JSON object, read within BODY_SECONDS.
 
@@ -558,9 +565,7 @@ async def json_body(request, limit=65536):
                     raise HTTPException(413, 'Request is too large')
     except TimeoutError as error:
         raise HTTPException(408, 'The request body took too long') from error
-    recheck = getattr(request.state, 'recheck', None)
-    if recheck is not None:
-        await recheck(request)
+    await after_body(request)
     try:
         value = json.loads(raw or b'{}')
     except ValueError as error:
@@ -912,6 +917,7 @@ def create_app(manager, shutdown=lambda: None):
             raw.extend(chunk)
             if len(raw) > MAX_ROM:
                 raise HTTPException(413, 'The cartridge file is too large. Game Boy ROMs are at most 2 MB, and a ZIP may be at most 4 MB.')
+        await after_body(request)
         return bytes(raw)
 
     async def add_cartridge(request, slot=None):
@@ -1523,6 +1529,7 @@ def create_app(manager, shutdown=lambda: None):
                     if total > 2 * 1024**3:
                         raise HTTPException(413, 'Backup upload exceeds 2 GB')
                     output.write(chunk)
+            await after_body(request)
             result = await asyncio.to_thread(inspect_backup, manager, pending)
             os.utime(pending, (time.time(), result['created_at']))
             pending.replace(directory / (bid + '.zip'))
@@ -1553,6 +1560,7 @@ def create_app(manager, shutdown=lambda: None):
                     if total > 512 * 1024**2:
                         raise HTTPException(413, 'Import archive exceeds 512 MB')
                     output.write(chunk)
+            await after_body(request)
             return await asyncio.to_thread(import_archive, manager, path, owner=owner_of(request))
         finally:
             path.unlink(missing_ok=True)

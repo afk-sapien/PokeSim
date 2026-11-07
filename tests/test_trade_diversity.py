@@ -31,7 +31,7 @@ def selection(setup, monkeypatch, inventories, coordinator=None):
     c = coordinator or setup.coordinator
     selected = []
     monkeypatch.setattr(c, 'inventory', inventories.__getitem__)
-    def propose(data):
+    def propose(data, **chosen):
         selected.append(data)
         return {'id': 'selected'}
     monkeypatch.setattr(c, 'propose', propose)

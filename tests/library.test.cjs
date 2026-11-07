@@ -34,7 +34,9 @@ function library(options = {}) {
   const location = {hash: options.hash || '', pathname: '/', search: '', replace() {}}
   const context = vm.createContext({
     document: {body: {dataset: {page: options.page || 'library', adventure: options.adventure || ''}}, querySelector: element,
-      querySelectorAll: () => [], addEventListener(name, callback) {
+      // Controls that need rights, as the real page lists them, when a test names them.
+      querySelectorAll: selector => selector.endsWith('[data-owner]') ? (options.ownerControls || []).map(element) : [],
+      addEventListener(name, callback) {
       listeners[name] = callback
       if (name === 'click') clicks.push(callback)
     }, hidden: false},
@@ -609,6 +611,22 @@ test('the play style select saves through the play route, running or stopped', a
   assert.equal(view.element('#notice').textContent, 'Settings saved. The play settings will apply when this adventure reconnects.')
   const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
   assert.match(html, /<select id="settings-play-style" data-owner><option value="balanced">Balanced<\/option><option value="story">Story first<\/option><option value="collector">Collector<\/option><\/select>/)
+})
+
+test('a member who owns an adventure can change its play settings and rewards', async () => {
+  const controls = ['#settings-nicknames', '#settings-play-style', '#settings-league-rewards', '#settings-mew-event']
+  const game = {id: 'f'.repeat(32), name: 'Game', version: 'red', state: 'stopped', access: 'owner', settings: {}}
+  const view = library({ownerControls: controls, respond(path) {
+    if (path === '/api/v1/session') return {ok: true, json: async () => ({csrf_token: 'csrf', role: 'member', auth: 'accounts', authenticated: true, user: {id: 'm'}})}
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+  }})
+  await settle()
+  for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+  view.click('settings', game.id)
+  for (const control of controls) {
+    assert.equal(view.element(control).dataset.id, game.id, control)
+    assert.equal(view.element(control).disabled, false, control)
+  }
 })
 
 test('the nickname pool editor says an empty pool means no nicknames', () => {

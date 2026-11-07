@@ -28,7 +28,7 @@ class Chosen(Exception):
 
 
 def capture(coordinator, monkeypatch):
-    def propose(data):
+    def propose(data, **chosen):
         raise Chosen(data)
     monkeypatch.setattr(coordinator, 'propose', propose)
 
