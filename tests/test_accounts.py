@@ -554,6 +554,16 @@ def test_reset_password_from_the_command_line(library, people):
         reset_password(library.manager.root, '#library-owner')
 
 
+def test_any_password_that_is_not_empty_is_accepted(library, people):
+    library.manager.auth.create_user('carol', 'a')
+    carol = library.login('carol', 'a')
+    assert carol.post('/api/v1/auth/password', json={'current_password': 'a', 'password': 'bc'}).status_code == 200
+    assert carol.post('/api/v1/auth/password', json={'current_password': 'bc', 'password': ''}).status_code == 409
+    library.login('carol', 'bc')
+    with pytest.raises(ValueError, match='Choose a password'):
+        library.manager.auth.create_user('dave', '')
+
+
 def test_cookieless_session_requests_cannot_lock_out_new_browsers(library, people):
     """About 1024 of them filled the table for a day, and every new browser got 429 and no CSRF token."""
     flood = TestClient(library.app)
