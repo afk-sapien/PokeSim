@@ -574,6 +574,15 @@ class AuthStore:
         with self.lock, self.db:
             self.db.execute('DELETE FROM grants WHERE adventure_id=? AND user_id=?', (adventure_id, uid))
 
+    def hand_over(self, adventure_id, uid):
+        """Drop the new owner's grant and turn off every share link, in one transaction.
+
+        Returns how many live links were turned off."""
+        with self.lock, self.db:
+            self.db.execute('DELETE FROM grants WHERE adventure_id=? AND user_id=?', (adventure_id, uid))
+            return self.db.execute('UPDATE shares SET revoked_at=? WHERE adventure_id=? AND revoked_at IS NULL',
+                                   (time.time(), adventure_id)).rowcount
+
     def grants(self, adventure_id):
         with self.lock:
             rows = self.db.execute('''SELECT grants.*, users.username, users.display_name FROM grants

@@ -114,9 +114,12 @@ def hand_on(manager, aid, old, to_uid, actor):
 
 def give(manager, aid, old, to_uid, actor):
     """Record `to_uid` as the owner of `aid`, once `old` was released from it."""
-    # The new owner needs no grant on what they own.
-    manager.auth.revoke_grant(aid, to_uid)
     result = manager.registry.set_owner(aid, to_uid)
+    # The new owner needs no grant on what they own, and the old owner's links go with them.
+    # Shares live in auth.sqlite, so this follows the owner change, which a link made before it
+    # cannot outlast.
+    if manager.auth.hand_over(aid, to_uid):
+        inbox.links_ended(manager, aid, to_uid, actor)
     manager.auth.audit('adventure.transfer', user_id=actor.id, adventure_id=aid, target=f'{old} {to_uid}')
     return result
 

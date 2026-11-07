@@ -160,6 +160,11 @@ def shared(manager, aid, uid, role, actor):
     notify(manager, uid, 'share.added', text, adventure_id=aid, link=game_link(aid), actor=actor)
 
 
+def links_ended(manager, aid, uid, actor):
+    notify(manager, uid, 'share.ended', 'Share links were turned off when this adventure changed hands',
+           adventure_id=aid, link=game_link(aid), actor=actor)
+
+
 def summary(manager, actor):
     """The unread count the Library's adventure list carries, or nothing without an account."""
     if not enabled(manager) or actor.user is None or actor.user.get('placeholder'):

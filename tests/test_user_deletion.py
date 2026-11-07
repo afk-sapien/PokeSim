@@ -1,5 +1,6 @@
 """Running caps, giving an adventure to someone else, and deleting a user without losing their adventures."""
 import threading
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -93,6 +94,21 @@ def test_a_transfer_moves_ownership_and_clears_the_old_owners_open_work(quiet, p
     # Alice no longer sees it, Bob owns it now.
     assert alice.get(f'/api/v1/adventures/{people.red}').status_code in {403, 404}
     assert quiet.login('bob').get(f'/api/v1/adventures/{people.red}').json()['access'] == 'owner'
+
+
+def test_a_transfer_turns_off_the_old_share_links(quiet, people):  # noqa: F811
+    alice = quiet.login('alice')
+    url = alice.post(f'/api/v1/adventures/{people.red}/shares', json={}).json()['url']
+    visitor = quiet.browser()
+    assert visitor.get(urlsplit(url).path, follow_redirects=False).status_code == 303
+    assert visitor.get(f'/view/{people.red}/api/state').status_code == 200
+    moved = alice.post(f'/api/v1/adventures/{people.red}/transfer', json={'user_id': people.bob['id']})
+    assert moved.status_code == 200, moved.text
+    assert visitor.get(f'/view/{people.red}/api/state').status_code in {401, 403, 404}
+    assert quiet.browser().get(urlsplit(url).path, follow_redirects=False).status_code in {403, 404}
+    assert quiet.manager.auth.shares(people.red) == []
+    notices = [item['text'] for item in quiet.manager.auth.inbox(people.bob['id'])]
+    assert 'Share links were turned off when this adventure changed hands' in notices
 
 
 def test_only_the_owner_transfers_and_only_to_a_real_person(quiet, people):  # noqa: F811
