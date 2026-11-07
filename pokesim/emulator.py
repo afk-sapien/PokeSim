@@ -341,19 +341,25 @@ class Emulator:
                 "error": self.fatal_error}
 
     def _restore_first_valid(self, paths):
-        errors = []
+        errors = {}
         for path in paths:
             try:
                 self._load_state_file(path)
                 log.info("resumed from %s", path.name)
                 return
             except Exception as error:
-                errors.append(path.name)
-                log.warning("cannot restore %s: %s", path.name, error)
+                reason = str(error).rstrip('.') or type(error).__name__
+                errors.setdefault(f"{type(error).__name__}: {reason}"[:200], []).append(path.name)
+                log.warning("cannot restore %s: %s", path.name, reason, exc_info=not isinstance(error, ValueError))
                 self.pb.stop(save=False)
                 self.pb = self._boot()
                 self._audio_enabled = False
-        raise RuntimeError(f"No compatible autosave could be restored ({len(errors)} tried). Restore a backup or use a new data directory.")
+        # The reasons travel to the Library and the server log, where the adventure's own log is out of reach.
+        tried = sum(map(len, errors.values()))
+        reasons = ''.join(f" {reason} ({len(names)} {'save' if len(names) == 1 else 'saves'}, first {names[0]})."
+                          for reason, names in list(errors.items())[:3])
+        raise RuntimeError(f"No compatible autosave could be restored ({tried} tried).{reasons} "
+                           "Restore a backup or use a new data directory.")
 
     def _load_state_file(self, path: Path):
         metadata = self.store.checkpoint_metadata(path)
