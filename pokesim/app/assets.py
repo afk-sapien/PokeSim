@@ -71,6 +71,10 @@ class Assets:
         # Under the lock that removals delete files in, so a file seen here is never deleted
         # before this owner's row exists.
         with self.registry.lock:
+            # An upload still streaming when its owner was deleted would leave a row, and a file,
+            # nobody removes.
+            if owner in self.registry.leaving:
+                raise ValueError('This account is being deleted')
             path.parent.mkdir(parents=True, exist_ok=True)
             known = self.registry.owns_rom(sha256, owner)
             if not path.exists():

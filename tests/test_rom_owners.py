@@ -1,4 +1,5 @@
 """Each person's cartridge shelf under accounts: one stored file, many owners, nothing shown across shelves."""
+import hashlib
 import threading
 
 import pytest
@@ -221,6 +222,26 @@ def test_an_imported_cartridge_is_the_importers_and_stays_gone_once_removed(shel
     # A restart hands the placeholder's shelf to the library owner, and there is nothing left to hand over.
     manager.bind_library_owner()
     assert 'yellow' not in installed(shelves.login('admin'))
+
+
+def test_an_upload_racing_its_owners_deletion_leaves_nothing(shelves, people, monkeypatch):  # noqa: F811
+    from pokesim import cartridges
+    manager = shelves.manager
+    admin = shelves.login('admin')
+    real = cartridges.identify
+
+    def deleted_meanwhile(raw):
+        # The admin deletes Alice while her upload is still being checked.
+        gone = admin.request('DELETE', f'/api/v1/users/{people.alice["id"]}',
+                             json={'adventures': {people.red: 'archive'}})
+        assert gone.status_code == 200, gone.text
+        return real(raw)
+
+    monkeypatch.setattr(cartridges, 'identify', deleted_meanwhile)
+    with pytest.raises(ValueError, match='being deleted'):
+        manager.assets.add_cartridge(synthetic('gold'), 'gold', owner=people.alice['id'])
+    assert not any(row['version'] == 'gold' for row in manager.registry.roms())
+    assert not (manager.assets.root / 'roms' / hashlib.sha256(synthetic('gold')).hexdigest()).exists()
 
 
 def test_a_deleted_users_shelf_goes_with_them(shelves, people):  # noqa: F811

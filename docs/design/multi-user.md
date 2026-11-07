@@ -96,7 +96,7 @@ Each adventure has one owner and a `grants` table: adventure id, user id, role, 
 | manager | Can manage | Pause, save, change speed, goals and settings, load saves, rewind, make trade offers, turn auto-trading on or off. Only the owner answers an offer. |
 | owner | Owner | Restart, share and unshare, transfer, archive and delete. |
 
-Ownership only moves by transfer. Transferring an adventure, revoking a grant or deleting a user withdraws the affected user's outgoing offers, declines their incoming ones, cancels queued trades and ends their lease.
+Ownership only moves by transfer. Transferring an adventure, revoking a grant or deleting a user withdraws the affected user's outgoing offers, declines their incoming ones, cancels queued trades and ends their lease. A transfer also turns off every share link to the adventure, and the new owner's inbox says so.
 
 ### Share links
 
