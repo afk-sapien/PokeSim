@@ -847,6 +847,8 @@
       $('#settings-palette-note').textContent = refused ? `This adventure has not accepted the palette yet: ${refused}` : 'GBC-inspired colors applied to the whole screen. Changes apply immediately, including while paused.'
       $('#settings-palette').disabled = colour
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
+      // Nicknames saves through the play route, so it stays editable while the adventure runs.
+      $('#settings-nicknames').checked = game.settings?.nicknames !== false
       $('#settings-randomizer').hidden = !game.settings?.randomizer
       $('#settings-randomizer-code').textContent = game.settings?.randomizer || ''
       const randomized = parseShareCode(game.settings?.randomizer || '')
@@ -931,8 +933,10 @@
       }
       const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
         settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), ...($('#settings-palette').disabled ? {} : {palette: $('#settings-palette').value || 'original'}), ...rewards}}, 'PATCH')
+      const nicknames = $('#settings-nicknames').checked
+      const play = game && nicknames !== (game.settings?.nicknames !== false) ? await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}/play`, {nicknames}, 'PATCH') : {}
       $('#adventure-settings').close()
-      const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette', result.fair_wild_dvs_pending && 'fair wild DVs setting'].filter(Boolean).join(' and ')
+      const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette', result.fair_wild_dvs_pending && 'fair wild DVs setting', play.play_pending && 'nickname setting'].filter(Boolean).join(' and ')
       notice(pending ? `Settings saved. The ${pending} will apply when this adventure reconnects.` : 'Adventure settings saved.')
     }) }
   $('#notify-add').onclick = () => openIntegration()

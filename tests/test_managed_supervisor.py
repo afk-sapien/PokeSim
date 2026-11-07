@@ -252,6 +252,34 @@ def test_fair_wild_dvs_reaches_a_running_worker_and_retries(supervisor):
     assert calls == [True, False]
 
 
+def test_play_settings_reach_a_running_worker_and_retry(supervisor):
+    aid = adventure(supervisor)
+    supervisor.start(aid)
+    child = supervisor.children[aid]
+    assert child.play_settings == {'nicknames': True}
+    supervisor.registry.update(aid, settings={'nicknames': False})
+    def fail(*args, **kwargs):
+        raise RuntimeError('Worker reconnecting')
+    child.request = fail
+    assert supervisor.push_play(aid) is True
+    calls = []
+    def request(method, path, data, timeout):
+        assert path == '/internal/play'
+        calls.append(dict(data))
+        return data
+    child.request = request
+    # The monitor retries until the worker acknowledges, then sends nothing more.
+    supervisor.sync_play(aid, child)
+    supervisor.sync_play(aid, child)
+    assert calls == [{'nicknames': False}]
+    # On is stored as absent.
+    supervisor.registry.update(aid, settings={})
+    assert supervisor.push_play(aid) is False
+    assert calls[-1] == {'nicknames': True}
+    # A stopped adventure reads the saved setting when it next starts.
+    assert supervisor.push_play(adventure(supervisor)) is False
+
+
 def test_palette_is_independent_retries_and_survives_worker_restart(supervisor):
     first, second = adventure(supervisor), adventure(supervisor)
     supervisor.start(first)
