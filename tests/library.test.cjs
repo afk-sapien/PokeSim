@@ -154,6 +154,26 @@ test('the page for a failed adventure explains the failure and is not a library'
   assert.match(view.element('#stopped-lede').textContent, /could not start/)
 })
 
+test('the page for an adventure a cap kept stopped says why, without the failure lamp or retry note', async () => {
+  const id = 'b'.repeat(32)
+  const error = 'Ann has 1 of 1 adventures running. Stop one before starting another'
+  const view = library({page: 'stopped', adventure: id, respond(path) {
+    return path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: [{id, name: 'Capped', version: 'red',
+      state: 'stopped', error, summary: {next_retry: Date.now() / 1000 + 120}}]})} : null
+  }})
+  await settle()
+  const page = view.element('#stopped-card').innerHTML
+  assert.match(page, /<h2 class="status-headline">Stopped</)
+  assert.match(page, /role="alert">Ann has 1 of 1 adventures running/)
+  assert.doesNotMatch(page, /data-on="crit"|try again by itself|>Retry</)
+  const archived = library({page: 'stopped', adventure: id, respond(path) {
+    return path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: [{id, name: 'Capped', version: 'red',
+      state: 'stopped', archived: true, error}]})} : null
+  }})
+  await settle()
+  assert.doesNotMatch(archived.element('#stopped-card').innerHTML, /role="alert"/)
+})
+
 test('settings mutations send only fields accepted by the manager', async () => {
   const view = library()
   await settle()

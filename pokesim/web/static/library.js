@@ -324,7 +324,8 @@
     const lamp = failed ? 'crit' : busyState ? 'warn' : ''
     const headline = game.archived ? 'Archived' : failed ? 'Failed to start' : busyState ? `${stateLabel(game)}…` : 'Stopped'
     const setup = busyState && game.summary?.setup ? `<p class="status-detail">${esc(game.summary.setup)}…</p>` : ''
-    const reason = failed && game.error ? explainError(game) : ''
+    // A stopped adventure can say why too, such as one a running cap kept from starting with PokeSim.
+    const reason = game.error && !game.archived ? explainError(game) : ''
     const raw = typeof game.error === 'string' ? game.error : ''
     const technical = reason && raw && raw !== reason ? `<details class="status-technical"><summary>Technical details</summary><p>${esc(raw)}</p></details>` : ''
     const again = failed ? retryNote(game) : ''
