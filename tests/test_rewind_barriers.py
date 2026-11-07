@@ -44,6 +44,62 @@ def test_a_save_taken_after_the_reward_barrier_may_still_be_loaded(tmp_path):
         store.close()
 
 
+def restartable(tmp_path, generation):
+    """An emulator with its game mocked out, enough to restart and then try a rewind."""
+    from types import SimpleNamespace
+    if generation == 1:
+        import queue
+        from pokesim.emulator import Emulator
+        from pokesim.events import RunMemory
+        from pokesim.play_clock import PlayClock
+        emu = Emulator.__new__(Emulator)
+        emu.mem, emu.play_clock, emu.manual, emu.speed = RunMemory(), PlayClock(), queue.Queue(), 1
+        emu.input_epoch = 0
+    else:
+        from pokesim.gen2.emulator import Emulator
+        emu = Emulator.__new__(Emulator)
+        emu.data, emu.fatal_error = None, None
+        emu._sync_clock, emu._autosave = Mock(), Mock()
+        emu.tracker, emu.steps = Mock(), Mock()
+        emu.statistics = SimpleNamespace(previous=None, records=Mock())
+    emu.store = Store(tmp_path)
+    emu.pb, emu._boot, emu.policy = Mock(), Mock(return_value=Mock()), Mock()
+    emu.paused = emu.manual_mode = False
+    emu._state_bytes = Mock(return_value=b'now')
+    emu._manifest = Mock(return_value={'trade_id': 't1', 'reward_id': 'r1', 'policy_state': {}, 'run_memory': {}})
+    return emu
+
+
+@pytest.mark.parametrize('generation', [1, 2])
+@pytest.mark.parametrize('barrier', BARRIERS)
+def test_a_restart_keeps_the_barriers_so_an_older_checkpoint_stays_refused(tmp_path, monkeypatch, generation, barrier):
+    """Restarting cleared them, so loading a checkpoint from before a trade brought the traded Pokemon back
+    while the partner kept it too, and a custom reward could be undone the same way."""
+    if generation == 2:
+        from pokesim.gen2 import emulator as module
+        from types import SimpleNamespace
+        monkeypatch.setattr(module, 'Policy', lambda *args, **kwargs: SimpleNamespace(trade_preferences=None))
+    from pokesim.web.app import rewind_refusal
+    emu = restartable(tmp_path, generation)
+    try:
+        emu.store.set('trade_barrier', 't1')
+        emu.store.set('custom-reward-barrier-v1', 'r1')
+        older = {'trade_id': 't1', 'reward_id': 'r1', 'policy_state': {}, 'run_memory': {}}
+        older[dict(BARRIER_FIELDS)[barrier]] = 'older'
+        emu.store.write_checkpoint(b'old', older, 'league-entry.state')
+        emu._handle_command('restart', None)
+        assert emu.store.get('trade_barrier') == 't1' and emu.store.get('custom-reward-barrier-v1') == 'r1'
+        assert rewind_refusal(emu.store, 'league-entry.state')
+        emu.pb = Mock()
+        emu._handle_command('load_state', 'league-entry.state')
+        emu.pb.load_state.assert_not_called()
+    finally:
+        emu.store.close()
+
+
+BARRIER_FIELDS = [('trade_barrier', 'trade_id'), ('custom-reward-barrier-v1', 'reward_id')]
+
+
 @pytest.mark.parametrize('barrier', BARRIERS)
 def test_gen2_load_state_command_refused_by_a_barrier_is_not_fatal(tmp_path, barrier):
     from pokesim.gen2.emulator import Emulator

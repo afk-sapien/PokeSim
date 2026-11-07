@@ -42,8 +42,8 @@ class Assets:
         self.item_artwork = PortraitPacks(registry, self.cancelled, sets=SETS, legacy='generation-i',
                                          versions=VERSION_SETS, pack='item-artwork', setting='item_artwork')
 
-    def install_rom(self, raw):
-        return self.add_cartridge(raw)['rom']
+    def install_rom(self, raw, owner=LIBRARY_OWNER):
+        return self.add_cartridge(raw, owner=owner)['rom']
 
     def add_cartridge(self, raw, slot=None, owner=LIBRARY_OWNER):
         """Verify an uploaded cartridge, store it once and file it under the game it really is.

@@ -196,7 +196,8 @@ def import_pair(manager, *, sources, roms, coordinator_root, stopped=False, name
                 return [registry.adventure(aid) for aid in json.loads(previous['result'])['ids']]
             settings_by_peer = {name: manager.validate_adventure_settings(
                 {'policy': evidence['peers'][name]['policy']}) for name in PEERS}
-            assets = {name: manager.assets.install_rom(Path(roms[name]).read_bytes()) for name in PEERS}
+            owner = manager.default_owner()
+            assets = {name: manager.assets.install_rom(Path(roms[name]).read_bytes(), owner) for name in PEERS}
             if any(assets[name]['version'] != name for name in PEERS):
                 raise ValueError('The explicit legacy peer mapping does not match the ROM editions')
             ids = {name: identifier() for name in PEERS}
