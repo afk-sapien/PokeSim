@@ -650,6 +650,8 @@ class Coordinator:
                 if manual:
                     raise ValueError('Cancelled: an adventure changed hands before the trade started')
                 raise Waiting('An adventure changed hands')
+        if not manual and not all(trade_settings.get(self.registry, aid)['enabled'] for aid in owners):
+            raise Waiting('Auto trading was turned off')
         if across is not None and across != all(trade_settings.get(self.registry, aid)['across_owners'] for aid in owners):
             raise Waiting('Trading with other people changed')
 
@@ -1346,9 +1348,26 @@ class Coordinator:
             entry = next((item for item in entries if item['id'] == mid), None)
             if entry is None or entry['state'] != 'queued':
                 return False
+            if entry.get('cancel_requested'):
+                entry.update(state='cancelled', error='Cancelled by the owner', updated_at=time.time())
+                self._manual_save(entries)
+                return False
             entry.update(state='starting', updated_at=time.time())
             self._manual_save(entries)
         return True
+
+    def _manual_requeue(self, mid):
+        """Put a trade that could not start back in line, unless a cancel was asked for meanwhile."""
+        with self.manual_guard:
+            entries = self._manual_entries()
+            entry = next((item for item in entries if item['id'] == mid), None)
+            if entry is None:
+                return
+            if entry.get('cancel_requested'):
+                entry.update(state='cancelled', error='Cancelled by the owner', updated_at=time.time())
+            else:
+                entry.update(state='queued', updated_at=time.time())
+            self._manual_save(entries)
 
     def manual_waiting(self):
         return any(entry['state'] in MANUAL_WAITING for entry in self._manual_entries())
@@ -1426,7 +1445,7 @@ class Coordinator:
                         self.registry.transaction(entry['id'])
                         self._manual_update(entry['id'], state='started')
                     except KeyError:
-                        self._manual_update(entry['id'], state='queued')
+                        self._manual_requeue(entry['id'])
             while not self.closed.is_set() and not self.manager.suspended:
                 head = next((entry for entry in self._manual_entries() if entry['state'] == 'queued'), None)
                 if head is None:
@@ -1440,8 +1459,9 @@ class Coordinator:
                     row = self.propose({name: head[name] for name in ('left_id', 'right_id', 'left_key', 'right_key')}
                                        | {'request_id': head['id'], 'manual': True}, owners=head.get('owners'))
                 except Waiting:
-                    # An adventure is still busy with another trade. This one keeps its place.
-                    self._manual_update(head['id'], state='queued')
+                    # An adventure is still busy with another trade. This one keeps its place,
+                    # unless its owner cancelled it meanwhile.
+                    self._manual_requeue(head['id'])
                     break
                 except Missing as error:
                     # Checked again now it is this trade's turn. Neither save was touched.
