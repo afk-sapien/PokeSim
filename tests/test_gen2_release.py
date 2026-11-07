@@ -49,16 +49,17 @@ def test_a_party_member_stays_and_a_boxed_upgrade_is_the_best_copy():
 def test_copies_a_plan_needs_go_after_every_spare():
     copies = [mon(16, position=index, dvs=(index + 1,) * 5) for index in range(3)]
     other = [mon(19, position=3, dvs=(9,) * 5), mon(19, position=4, dvs=(10,) * 5)]
-    assert spares(snapshot([*copies, *other]), demand={16: 2}) == [copies[0], other[0], copies[1]]
+    # Two linked adventures miss the species, so it keeps two copies and its spare is wanted in trade.
+    assert spares(snapshot([*copies, *other]), demand={16: 2}) == [other[0], copies[0], copies[1]]
 
 
 def test_breeding_stock_holds_a_role_for_two_copies_only():
     copies = [mon(16, position=index, dvs=(index + 1,) * 5) for index in range(6)]
-    # The best copy stays, the next two hold the role and go last, and the three weakest are spares.
-    assert spares(snapshot(copies), keep={16}) == [copies[0], copies[1], copies[2], copies[3], copies[4]]
+    # The two best hold the role and stay, the best of them as the best copy, and the rest are spares.
+    assert spares(snapshot(copies), keep={16}) == [copies[0], copies[1], copies[2], copies[3]]
 
 
-def test_valuable_copies_go_last_and_eggs_keep_and_partners_never_before_a_plain_spare():
+def test_valuable_copies_go_last_and_eggs_keep_and_partners_stay():
     from pokesim.trade.preferences import identity
     best = strong(16)
     shiny = mon(16, position=1, dvs=(1, 10, 10, 10, 10))
@@ -71,7 +72,7 @@ def test_valuable_copies_go_last_and_eggs_keep_and_partners_never_before_a_plain
     preferences = {identity({'trainer_id': 888, 'dvs': (6, 6, 6, 6, 6), 'dex': 16}): {'state': 'locked'}}
     order = spares(snapshot([best, shiny, trained, egg, partner, locked, plain]), preferences=preferences,
                    partners=plan_partners(collection))
-    assert order == [plain, trained, shiny, partner]
+    assert order == [plain, trained, shiny]
 
 
 def test_perfect_and_rare_dv_copies_go_after_plain_ones():

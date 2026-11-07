@@ -139,7 +139,7 @@ function releasePanel(mon) {
   const esc = MonGrid.esc
   const place = mon.release_requested ? 'Goes first at the next PC visit.'
     : value.next ? `Number ${value.next} in line when a catch needs a box slot.`
-      : value.status === 'floor' ? 'Never released automatically.' : value.status === 'kept' ? 'Kept for a plan. Goes only after every spare.' : 'A spare.'
+      : value.status === 'floor' ? 'Never released automatically.' : value.status === 'kept' ? 'A copy linked adventures need. Goes only after every spare.' : 'A spare.'
   const busy = releasing.key === mon.trade_key
   const note = releasing.key === `done:${mon.trade_key}` && releasing.note ? `<p class="lock-note" role="status">${esc(releasing.note)}</p>` : ''
   let control = ''

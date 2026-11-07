@@ -116,7 +116,9 @@ def test_demand_keeps_needed_copies_without_blocking_all_duplicate_cleanup():
     policy.collection.set_demand({69: 3})
     assert policy._release_target(s) == (0, 3), 'the needed copies wait behind every spare'
     policy.collection.set_demand({69: 2})
-    assert policy._release_target(s) == (0, 0)
+    # The third Bellsprout is a spare now, but linked demand still prices it above the Pidgey.
+    assert policy._release_target(s) == (0, 3)
+    assert policy._release_target(replace(snapshot(copies[:3] + copies[4:]), box_counts=s.box_counts)) == (0, 0)
 
 
 def test_a_hunt_stocks_thirty_balls_only_while_the_purse_stays_above_funds_needed():

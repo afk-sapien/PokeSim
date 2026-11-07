@@ -900,25 +900,29 @@ class Emulator:
     def _release_journal(self, events, snap):
         """Quote the PC value of a spare the policy let go, and say once when the PC is full with nothing that may go."""
         from .pcvalue import DEADLOCK, full_notice
+        from .policies.team import storage_headroom
         policy = getattr(self, 'policy', None)
-        note = getattr(policy, 'release_note', None)
+        # The note of the release the policy started, not the next target's.
+        note = getattr(policy, 'released_note', None)
         for ev in events:
             if ev.type == 'release' and note and ev.title == f"Said goodbye to a spare {SPECIES_NAMES.get(note[0], f'#{note[0]}')}":
                 ev.body += f' PC value: {note[1]}.'
-        if policy is not None and full_notice(self.store, bool(getattr(policy, 'pc_deadlock', False))):
+        blocked = bool(getattr(policy, 'pc_deadlock', False)) and storage_headroom(snap) <= 0
+        if policy is not None and full_notice(self.store, blocked):
             events.append(Event('pc_full', 'PC full', f'{DEADLOCK} Release or unlock one from the PC tab.',
                                 priority=HIGH, tags='warning'))
 
     def pc_values(self):
         """Each boxed Pokémon's PC value by (box, position), and whether nothing may go (pcvalue.annotate)."""
         from .pcvalue import annotate, deadlocked
+        from .policies.team import storage_headroom
 
         def view():
             snap = self.snapshot
             if snap is None or not hasattr(self.policy, 'pc_rated'):
                 return {}, False
             rated = self.policy.pc_rated(snap)
-            return annotate(rated, snap.active_box), deadlocked(rated)
+            return annotate(rated, snap.active_box), deadlocked(rated, storage_headroom(snap))
         return self.call(view, timeout=5)
 
     def request_release(self, box, position, key, confirm=''):

@@ -153,9 +153,9 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
     from .release import release_rated
     from .standdown import standing_down
     data = policy.data
-    rated = release_rated(policy, snapshot)
-    # The journal says once when nothing in the PC may go (pcvalue.full_notice).
-    policy.pc_deadlock = deadlocked(rated)
+    rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
+    # The journal says once when the PC is full and nothing in it may go (pcvalue.full_notice).
+    policy.pc_deadlock = deadlocked(rated, headroom(snapshot))
     visit = {row.entry.slot: index for index, row in
              enumerate(releases(rated, max(box_wanted(headroom(snapshot), True), len(requested(rated)), 1),
                                 snapshot.active_box))}

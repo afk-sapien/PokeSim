@@ -4,7 +4,7 @@ from dataclasses import asdict
 from .battle import HEALING, damage, effectiveness, ranked_moves
 from ..events import LEGENDARY_DEX
 from ..game_data import current_variant
-from ..ram import BOX_CAPACITY, PartyMon
+from ..ram import BOX_CAPACITY, DEX_NAMES, PartyMon
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, event_set
 
 OPPONENTS = {
@@ -63,11 +63,13 @@ def storage_headroom(s):
 
 def release_rated(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts=frozenset(),
                   rewards=frozenset(), requested=None, demand=None, favor=None):
-    """Every Pokémon scored with pcvalue.rate. ``demand`` maps a Pokédex number to the copies a plan needs,
-    ``favor`` is the Favor shiny or Favor DVs setting and the rest are as in ``entries``."""
+    """Every Pokémon scored with pcvalue.rate. ``demand`` maps a Pokédex number to the linked adventures
+    missing it, which keeps that many copies and counts as trade demand. ``favor`` is the Favor shiny or
+    Favor DVs setting and the rest are as in ``entries``."""
+    from collections import Counter
     from ..pcvalue import Inputs, rate
     return rate(entries(s, preferences, roles, stock, partners, gifts, rewards, requested),
-                Inputs(demand=dict(demand or {}), favor=favor))
+                Inputs(demand=dict(demand or {}), wishes=Counter(demand or {}), favor=favor))
 
 
 def spare_copies(s, stock=()):
@@ -98,7 +100,8 @@ def release_target(s, stock=(), reserved=(), partners=frozenset(), gifts=frozens
     reserved = frozenset(reserved)
     freeze = lambda mapping: tuple(sorted((mapping or {}).items()))  # noqa: E731
     key = (tuple(s.party), getattr(s, 'stored_details', None), getattr(s, 'stored_pokemon', None),
-           frozenset(stock), reserved, frozenset(partners), frozenset(gifts), getattr(s, 'player_id', None),
+           frozenset(stock.items() if isinstance(stock, dict) else stock), reserved, frozenset(partners), frozenset(gifts),
+           getattr(s, 'player_id', None),
            getattr(s, 'active_box', None), tuple(getattr(s, 'box_counts', ()) or ()),
            tuple(sorted((key, (value or {}).get('state')) for key, value in (preferences or {}).items())),
            freeze(demand), frozenset(rewards), freeze(requested), frozenset(roles), favor)
@@ -119,13 +122,21 @@ def release_note():
     return (note[0] if note else None), bool(note and note[1])
 
 
+def stock_kind(stock, species):
+    """'plan', 'trade' or None for a species in ``stock``. A plain set counts as plan stock."""
+    if species not in stock:
+        return None
+    return stock[species] if isinstance(stock, dict) else 'plan'
+
+
 def entries(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts=frozenset(), rewards=frozenset(),
             requested=None):
     """The party and PC as pcvalue rows.
 
     ``preferences`` are the stored trade preferences: Keep locks a Pokémon, and an offered one is
     capped stock. ``roles`` are the trade keys of the Pokémon a running project relies on and ``stock``
-    the species it works with, ``partners`` the linked adventures' trainer ids, ``gifts`` the species this version
+    the species it works with (a dict from plan_inputs marks a trade's give 'trade', which holds a role
+    but no floor), ``partners`` the linked adventures' trainer ids, ``gifts`` the species this version
     gives only as a gift or fossil, ``rewards`` the League reward marks (rewards.marks) and
     ``requested`` maps an identity to an owner's release request.
     """
@@ -139,6 +150,7 @@ def entries(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts
         data = SPECIES.get(mon['species'], {})
         dex, trainer, dvs = data.get('dex', 0), mon.get('trainer_id'), tuple(mon.get('dvs') or ())
         state = (preferences.get(identity(mon)) or {}).get('state') if preferences and trainer is not None else None
+        kind = stock_kind(stock, mon['species'])
         if trainer is not None and len(dvs) == 5 and mark(trainer, dvs) in rewards:
             origin = 'reward'
         elif dex in LEGENDARY_DEX:
@@ -150,11 +162,13 @@ def entries(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts
         else:
             origin = 'caught'
         rows.append(Entry(
-            None if mon['box'] is None else (mon['box'], mon['position']), (dex, 0), data.get('name', '?').title(),
+            None if mon['box'] is None else (mon['box'], mon['position']), (dex, 0),
+            DEX_NAMES.get(dex, data.get('name', '?').replace('_', ' ').title()),
             mon['level'], mon.get('experience', 0), dvs, tuple(mon.get('stat_exp') or ()), False, origin,
             state in ('locked', 'withdrawn') or bool(preferences) and legacy_lock(preferences, mon),
-            trainer is not None and identity(mon) in roles, state == 'offered' or mon['species'] in stock,
-            requested.get(identity(mon), '') if trainer is not None else '', mon))
+            trainer is not None and identity(mon) in roles, state == 'offered' or kind is not None,
+            requested.get(identity(mon), '') if trainer is not None else '', mon,
+            kind == 'trade' or state == 'offered' and kind != 'plan'))
     return rows
 
 
@@ -169,10 +183,13 @@ def requested_slots(s, requested, preferences=None, reserved=()):
 
 
 def held_identities(s):
-    """The trade identity of every Pokémon in the party and the PC."""
+    """The trade identity of every Pokémon in the party and the PC, or None while a boxed row is only the
+    compact species and level fallback, which names no trainer, so no request can be told gone."""
     from ..trade.preferences import identity
-    return {identity(mon) for mon in [*(asdict(mon) for mon in s.party), *s.storage_entries()]
-            if mon.get('trainer_id') is not None}
+    stored = s.storage_entries()
+    if any(mon.get('trainer_id') is None for mon in stored):
+        return None
+    return {identity(mon) for mon in [*(asdict(mon) for mon in s.party), *stored] if mon.get('trainer_id') is not None}
 
 
 def _release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards, requested, roles, favor):
@@ -183,7 +200,8 @@ def _release_target(s, stock, reserved, partners, gifts, preferences, demand, re
     chosen = releases(rated, max(box_wanted(storage_headroom(s), True), 1), getattr(s, 'active_box', None))
     row = chosen[0] if chosen else None
     return (row.entry.slot if row else None,
-            ((row.entry.record['species'], row.describe()) if row else None, deadlocked(every)))
+            ((row.entry.record['species'], row.describe()) if row else None,
+             deadlocked(every, storage_headroom(s))))
 
 
 def reserve_to_deposit(s, *, prefer_completed=False):

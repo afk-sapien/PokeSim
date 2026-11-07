@@ -729,7 +729,9 @@ class Emulator:
         for event in self.releases.observe(self.policy.menu, snapshot, self.data, Event, self._pc_value_text):
             self._event(event, snapshot)
         from ..pcvalue import DEADLOCK, full_notice
-        if full_notice(self.store, bool(getattr(self.policy, 'pc_deadlock', False))):
+        from .release import headroom
+        # The ledger sets the flag only when it looks for room, so a box with room again clears it here.
+        if full_notice(self.store, bool(getattr(self.policy, 'pc_deadlock', False)) and headroom(snapshot) <= 0):
             self._event(Event('pc_full', 'PC full', f'{DEADLOCK} Release or unlock one from the PC tab.',
                               priority=HIGH), snapshot)
         if before:
@@ -1244,12 +1246,13 @@ class Emulator:
     def pc_values(self):
         """Each boxed Pokémon's PC value by (box, position), and whether nothing may go (pcvalue.annotate)."""
         from ..pcvalue import annotate, deadlocked
+        from .release import headroom
 
         def view():
             if self.snapshot is None:
                 return {}, False
             rated = self.policy.pc_rated(self.snapshot)
-            return annotate(rated, self.snapshot.active_box), deadlocked(rated)
+            return annotate(rated, self.snapshot.active_box), deadlocked(rated, headroom(self.snapshot))
         return self.call(view, timeout=5)
 
     def request_release(self, box, position, key, confirm=''):

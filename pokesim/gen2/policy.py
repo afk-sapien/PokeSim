@@ -106,6 +106,7 @@ class Policy:
         # And this with the store's linked adventure trainer ids (trade/partners.py), whose Pokémon may be released.
         self.trade_partners = frozenset
         self.release_cache = (None, None)
+        self.rated_cache = (None, None)
         self.refused_in_row = 0
         self.result_ref = None
         self.recoveries = 0
@@ -709,13 +710,8 @@ class Policy:
         """The ledger's next box unit and the next one that can go straight from the box. Kept until
         storage or the plans change."""
         from .ledger import storage_unit
-        from .release import plan_partners
-        partners = plan_partners(self.collection)
-        key = (snapshot.party, snapshot.stored, snapshot.active_box, snapshot.pockets.get('items', ()),
-               tuple(sorted(self.demand.items())), tuple(self.collection.get('prerequisites', ())),
-               tuple(sorted(map(str, partners))), self.release_owners(), self.decisions // 600,
-               tuple(sorted(self.release_requests().items())) if hasattr(self, 'release_requests') else (),
-               self.pc_favor() if hasattr(self, 'pc_favor') else None)
+        key = (self.rating_key(snapshot), snapshot.pockets.get('items', ()),
+               tuple(self.collection.get('prerequisites', ())), self.decisions // 600)
         if self.release_cache[0] != key:
             self.release_cache = (key, (storage_unit(self, snapshot), storage_unit(self, snapshot, direct=True)))
         return self.release_cache[1]
@@ -727,10 +723,27 @@ class Policy:
         player = Memory(self.memory, self.data).word('wPlayerID') if self.memory is not None else None
         return owners(player, self.trade_partners())
 
+    def rating_key(self, snapshot):
+        """Everything the PC values read: the Pokémon, the plans, the trade settings, the linked
+        adventures, the League rewards, the owner's release requests and the Favor setting."""
+        from .release import plan_partners
+        preferences = self.trade_preferences()
+        return (snapshot.party, snapshot.stored, snapshot.active_box, tuple(sorted(self.demand.items())),
+                tuple(sorted(map(str, plan_partners(self.collection)))), self.release_owners(),
+                tuple(sorted((key, (value or {}).get('state')) for key, value in preferences.items())),
+                frozenset(self.league_marks()) if hasattr(self, 'league_marks') else frozenset(),
+                tuple(sorted(self.release_requests().items())) if hasattr(self, 'release_requests') else (),
+                self.pc_favor() if hasattr(self, 'pc_favor') else None)
+
     def pc_rated(self, snapshot):
-        """Every Pokémon scored as the next release scores it (pcvalue.py), for the PC tab."""
+        """Every Pokémon scored as the next release scores it (pcvalue.py), for the PC tab, the ledger
+        and the owner's requests. Kept until rating_key changes, so a waiting request does not rate the
+        whole PC on every decision."""
         from .release import release_rated
-        return release_rated(self, snapshot)
+        key = self.rating_key(snapshot)
+        if self.rated_cache[0] != key:
+            self.rated_cache = (key, release_rated(self, snapshot))
+        return self.rated_cache[1]
 
     def release_target(self, snapshot):
         """The spare duplicate to release next straight from the box, or None."""

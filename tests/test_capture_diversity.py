@@ -84,9 +84,9 @@ def test_cleanup_releases_the_lowest_value_spares_first():
     copies += [stored(4, species=sid(25), level=3), stored(5, species=sid(25), level=4)]
     state = snapshot(copies)
     assert [row.entry.slot for row in queue(release_rated(state))] == [(0, 4), (0, 0), (0, 1), (0, 2)]
-    # Stock holds a plan role for its best two copies, so the second best Machoke waits behind every spare.
+    # Stock holds a plan role for its best two copies, so the second best Machoke is a floor.
     rated = {row.entry.slot: row.status for row in release_rated(state, stock={sid(67)})}
-    assert rated[0, 2] == 'kept' and rated[0, 1] == 'spare'
+    assert rated[0, 2] == 'floor' and rated[0, 1] == 'spare'
     # One PC visit releases them in slot order, skipping slots it cannot reach.
     assert release_target(state) == (0, 0)
     assert release_target(state, reserved={(0, 0)}) == (0, 1)

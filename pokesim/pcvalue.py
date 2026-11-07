@@ -6,15 +6,16 @@ wanting it in trade, and where it came from. Where it came from is only one inpu
 Pokémon by itself.
 
 When room is needed, the lowest-value Pokémon goes first. A few never go: Keep-locked Pokémon, eggs,
-party members and the best copy of each species (each Unown letter), so the Pokédex never loses an
-entry. Each species keeps its best copy, or the copies a plan or the focus needs. The rest are
-spares, released lowest score first, and only when room is needed. Copies a plan needs come after
-every spare. So the PC can only fill with nothing to release when every slot is locked or the last
-copy of its species.
+party members, the best copy of each species (each Unown letter), so the Pokédex never loses an
+entry, and the copies a running plan relies on. Each species keeps its best copy, or the copies a
+plan or the focus needs. The rest are spares, released lowest score first, and only when room is
+needed. Copies the demand needs come after every spare. So the PC can only fill with nothing to
+release when every slot is locked, a plan's or the last copy of its species.
 
 The generation adapters (release.py in each generation) turn their snapshot into ``Entry`` rows, so
 this module knows nothing about either cartridge.
 """
+import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
@@ -52,7 +53,7 @@ TRAINED_STAT_EXP = 100000
 # change saves the game, about 4000 frames, and a plain spare is worth under 200.
 VISIT_BAND = 50
 LAST_COPY = 'last copy'
-DEADLOCK = 'PC full: every stored Pokémon is Keep-locked or the only copy of its species.'
+DEADLOCK = 'PC full: every stored Pokémon is Keep-locked, a plan\'s or the only copy of its species.'
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class Entry:
     stock: bool = False     # breeding stock or an offered trade partner, capped at ROLE_COPIES
     requested: str = ''     # 'release' when the owner asked, LAST_COPY when the confirm named the last copy
     record: object = field(default=None, compare=False, hash=False)
+    trade: bool = False     # the stock is a trade's give or an offered partner, so it holds a role but no floor
 
     @property
     def dex(self):
@@ -80,7 +82,8 @@ class Entry:
 
 @dataclass(frozen=True)
 class Inputs:
-    """What the adventure wants. ``demand`` maps a dex number to the copies a plan needs."""
+    """What the adventure wants. ``demand`` maps a dex number to the copies a plan needs and ``wishes``
+    to the linked adventures that want it in trade."""
     demand: dict = field(default_factory=dict)
     focus: frozenset = frozenset()
     wishes: Counter = field(default_factory=Counter)
@@ -92,7 +95,7 @@ class Rated:
     entry: Entry
     score: int
     parts: list
-    # floor (never released), kept (needed copy, after every spare) or spare
+    # floor (never released automatically), kept (needed copy, after every spare) or spare
     status: str = 'spare'
     reason: str = ''
 
@@ -164,6 +167,9 @@ def rate(entries, inputs=Inputs()):
         for index, row in enumerate(rated):
             if index == 0:
                 row.status, row.reason = 'floor', 'Only copy' if len(rated) == 1 else 'Best copy'
+            elif row.entry in roles and not row.entry.trade:
+                # A plan's trainee, partner or stock within ROLE_COPIES. Only an owner's request takes it.
+                row.status, row.reason = 'floor', 'Plan role'
             elif index < need or row.entry in roles:
                 row.status = 'kept'
             if row.entry.locked:
@@ -205,8 +211,8 @@ def releases(rated, needed, active_box=None):
     """The ``needed`` lowest-value releases, ordered for one PC visit.
 
     Values within VISIT_BAND count as equal, and among equal values the open box goes first, then the
-    box holding the most of them, since every box change saves the game. The visit then takes the open
-    box first, then the box holding the most of the chosen ones.
+    box holding the most of them, since every box change saves the game. The visit takes the owner's
+    requests first, then the open box, then the box holding the most of the chosen ones.
     """
     candidates = list(filter(may_go, rated))
     band = lambda row: (not row.entry.requested, ORDER.get(row.status, 0), row.score // VISIT_BAND)  # noqa: E731
@@ -215,8 +221,9 @@ def releases(rated, needed, active_box=None):
                          _rank(row), row.entry.slot)
     chosen = sorted(candidates, key=order)[:max(needed, 0)]
     per_box = Counter(row.entry.slot[0] for row in chosen)
-    return sorted(chosen, key=lambda row: (row.entry.slot[0] != active_box, -per_box[row.entry.slot[0]],
-                                           row.entry.slot))
+    # Owner requests stay in front, so one never waits past a visit behind spares from another box.
+    return sorted(chosen, key=lambda row: (not row.entry.requested, row.entry.slot[0] != active_box,
+                                           -per_box[row.entry.slot[0]], row.entry.slot))
 
 
 SHOWN = 5
@@ -250,10 +257,17 @@ def request_value(row, confirm=''):
     if row.reason == 'Egg':
         raise ValueError('An egg is never released.')
     if row.reason == 'Only copy':
-        if confirm.strip().casefold() != row.entry.name.casefold():
+        if plain_name(confirm) != plain_name(row.entry.name):
             raise ValueError(f'This is your only {row.entry.name}. Type its name to confirm.')
         return LAST_COPY
     return 'release'
+
+
+def plain_name(name):
+    """A species name to compare typed text with: no accents, spaces or punctuation, ♀ as F and ♂ as M,
+    so "mr mime" names Mr. Mime and "Nidoran F" names Nidoran♀."""
+    text = unicodedata.normalize('NFKD', str(name).replace('♀', 'F').replace('♂', 'M'))
+    return ''.join(char for char in text if char.isalnum()).casefold()
 
 
 def full_notice(store, blocked):
@@ -265,6 +279,7 @@ def full_notice(store, blocked):
     return blocked and not logged
 
 
-def deadlocked(rated):
-    """Whether no Pokémon may go: every one is Keep-locked, in the party or the last copy of its species."""
-    return not queue(rated)
+def deadlocked(rated, free):
+    """Whether the PC is full, ``free`` being its free slots, and no Pokémon may go: every one is
+    Keep-locked, a plan's, in the party or the last copy of its species."""
+    return free <= 0 and not queue(rated)

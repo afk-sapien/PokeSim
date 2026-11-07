@@ -1,6 +1,9 @@
 """An owner's release request is stored by trade identity, starts the next PC visit, goes first and is
 dropped once its Pokémon has gone. A Keep, party, egg or unconfirmed last copy request never starts one."""
+from dataclasses import replace
 from types import SimpleNamespace
+
+import pytest
 
 from pokesim import config
 from pokesim.gen2 import ledger
@@ -59,6 +62,46 @@ def test_a_gen1_request_waits_for_a_visit_unless_it_is_kept():
     assert requested_slots(gen1_snapshot(best_and(weak, lone)), {gen1_key(lone): 'release'}) == []
     assert requested_slots(gen1_snapshot(best_and(weak, lone)), {gen1_key(lone): LAST_COPY}) == [(0, 2)]
     assert gen1_key(weak) in held_identities(s)
+
+
+
+def test_compact_fallback_rows_never_drop_a_request():
+    weak = stored(1, dvs=(2,) * 5)
+    full = gen1_snapshot(best_and(weak))
+    compact = replace(full, stored_details=())
+    assert held_identities(compact) is None
+    from pokesim.policies.strategic import StrategicPolicy
+    policy = StrategicPolicy(7)
+    asked = {gen1_key(weak): 'release', 'gone': 'release'}
+    policy.release_requests = lambda: dict(asked)
+    policy.prune_release_requests = lambda held: pytest.fail('pruned from compact rows')
+    policy.release_pending(compact)
+    policy.prune_release_requests = lambda held: {key: value for key, value in asked.items() if key in held}
+    assert policy.release_pending(full)
+
+
+def test_the_gen1_menu_takes_the_planners_choice():
+    from pokesim.policies.strategic import StrategicPolicy
+    cheap, asked = stored(1, dvs=(1,) * 5), stored(2, dvs=(9,) * 5)
+    s = gen1_snapshot(best_and(cheap, asked), box_counts=(20,) * 12)
+    policy = StrategicPolicy(7)
+    policy.release_requests = lambda: {gen1_key(asked): 'release'}
+    assert policy._release_target(s) == (0, 2)
+    # The PC menu ranks with the same call, so release_changed never cancels the menu's pick.
+    assert policy.pc.box_target(s, 'party_release', None, {}) == 0
+    assert policy.pc.target(s, 'party_release', None, {}) == 2
+    policy.pc_favor = lambda: 'dvs'
+    assert policy.pc.target(s, 'party_release', None, {}) == policy._release_target(s)[1]
+
+
+def test_the_gen1_full_notice_needs_a_full_pc():
+    from pokesim.policies.strategic import StrategicPolicy
+    lone = [stored(0, level=60), stored(1, 19)]
+    policy = StrategicPolicy(7)
+    policy._release_target(gen1_snapshot(lone, box_counts=(2,) + (0,) * 11))
+    assert not policy.pc_deadlock
+    policy._release_target(gen1_snapshot(lone, box_counts=(20,) * 12))
+    assert policy.pc_deadlock
 
 
 class Requests(Policy):
@@ -125,3 +168,36 @@ def test_the_pc_api_refuses_a_kept_pokemon_and_watchers(game, monkeypatch):
     assert client.post('/api/pc/release', json=body).status_code == 403
     assert client.post('/api/pc/favor', json={'favor': 'shiny'}).status_code == 403
     assert store.release_requests() == {} and store.pc_favor() is None
+
+
+def test_gen2_pc_values_are_rated_once_until_an_input_changes():
+    import os
+    from pokesim.gen2.data import GameData
+    from pokesim.gen2.policy import Policy as Gen2Policy
+    if not os.environ.get('GEN2_DATA_DIR'):
+        pytest.skip('Set GEN2_DATA_DIR to generated local game data')
+    policy = Gen2Policy(GameData.load(os.environ['GEN2_DATA_DIR'], 'crystal'), seed=1, starter='cyndaquil')
+    weak = mon(1)
+    view = snapshot([BEST, weak], PARTY)
+    asked = {}
+    policy.release_requests = lambda: dict(asked)
+    first = policy.pc_rated(view)
+    assert policy.pc_rated(view) is first and pending(policy, view) is False
+    asked[key(weak)] = 'release'
+    assert policy.pc_rated(view) is not first and pending(policy, view)
+    # Linked adventures missing the species add trade demand to its spare.
+    policy.demand = {16: 1}
+    assert 'Wanted in trade' in policy.pc_rated(view)[-1].describe()
+
+
+def test_the_gen1_release_keeps_the_note_of_the_pokemon_it_took():
+    from pokesim.policies.strategic import StrategicPolicy
+    cheap, other = stored(1, dvs=(1,) * 5), stored(2, dvs=(3,) * 5)
+    s = gen1_snapshot(best_and(cheap, other), box_counts=(20,) * 12)
+    policy = StrategicPolicy(7)
+    assert policy._release_target(s) == (0, 1)
+    taken = policy.release_note
+    policy._request(s, ('release', 1), 'Let a spare go')
+    # The next target's note replaces release_note, but the journal quotes the one taken.
+    policy._release_target(gen1_snapshot(best_and(other), box_counts=(20,) * 12))
+    assert policy.released_note == taken and policy.release_note != taken

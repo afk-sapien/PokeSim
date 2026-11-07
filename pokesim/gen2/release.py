@@ -75,11 +75,14 @@ def gift(mon):
 
 def rated(snapshot, demand=None, stock=(), preferences=None, partners=(), owners=None, rewards=frozenset(),
           requested=None, names=None, focus=frozenset(), favor=None):
-    """Every Pokémon scored with pcvalue.rate, in party then box order. ``favor`` is the Favor shiny or
-    Favor DVs setting."""
+    """Every Pokémon scored with pcvalue.rate, in party then box order. ``demand`` maps a species to the
+    linked adventures missing it, which keeps that many copies and counts as trade demand. ``favor`` is
+    the Favor shiny or Favor DVs setting."""
+    from collections import Counter
     from ..pcvalue import Inputs, rate
     rows = entries(snapshot, names or {}, preferences, partners, stock, owners, rewards, requested)
-    return rate(rows, Inputs(demand=dict(demand or {}), focus=frozenset(focus), favor=favor))
+    return rate(rows, Inputs(demand=dict(demand or {}), focus=frozenset(focus), wishes=Counter(demand or {}),
+                             favor=favor))
 
 
 def release_rated(policy, snapshot, keep=(), preferences=None):
@@ -111,7 +114,8 @@ def pending(policy, snapshot):
     if hasattr(policy, 'prune_release_requests') and not set(asked) <= held:
         if not policy.prune_release_requests(held):
             return False
-    return bool(requested(release_rated(policy, snapshot)))
+    rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
+    return bool(requested(rated))
 
 
 def spares(snapshot, demand=None, keep=(), preferences=None, partners=(), owners=None, rewards=frozenset(),
@@ -160,7 +164,8 @@ def entries(snapshot, names, preferences=None, partners=(), stock=(), owners=Non
             None if mon.box is None else (mon.box, mon.position), _group(mon), names.get(mon.species, '?'),
             mon.level, mon.experience, tuple(mon.dvs), tuple(mon.stat_exp), bool(mon.egg), origin,
             bool(locked & keys), bool(set(partners) & keys), bool(offered & keys) or mon.species in stock,
-            next((requested[key] for key in keys if key in requested), ''), mon))
+            next((requested[key] for key in keys if key in requested), ''), mon,
+            bool(offered & keys) and mon.species not in stock))
     return rows
 
 
