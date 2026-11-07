@@ -21,6 +21,16 @@ def rock_smash_task(policy, snapshot):
     return Teach(249, slot) if slot is not None else None
 
 
+def no_room(snapshot):
+    """The party and every box are full, so a gift has nowhere to go until a release frees a slot.
+
+    Depositing a partner needs a box slot too. Without this a run whose boxes held only Pokémon it may
+    not release walked to a PC for room, found none and turned it off, for days.
+    """
+    from .release import headroom
+    return len(snapshot.party) >= 6 and headroom(snapshot) == 0
+
+
 def room_for_gift(policy, snapshot, Goal):
     if len(snapshot.party) < 6:
         return None
@@ -32,6 +42,8 @@ def gifts(policy, snapshot, Goal):
     data = policy.data
     if not snapshot.event('EVENT_GOT_MASTER_BALL_FROM_ELM'):
         return policy.person(snapshot, 'gift_master_ball', 'Receive Elm’s Master Ball', 'ELMS_LAB', 'ProfElmScript')
+    if no_room(snapshot):
+        return None
     if not snapshot.event('EVENT_GOT_EEVEE'):
         if snapshot.event('EVENT_MET_BILL'):
             return Goal('meet_bill', 'Meet Bill in Ecruteak', 'ECRUTEAK_POKECENTER_1F', 4, 5)
@@ -439,8 +451,10 @@ def arrive(policy, snapshot):
         return None
     if snapshot.box_counts[snapshot.active_box] >= 20:
         box = next((index for index, count in enumerate(snapshot.box_counts) if count < 20), None)
-        if box is not None:
-            policy.menu = ChangeBox(box)
+        if box is None:
+            # No box has room, so there is nothing to deposit into. The gift rungs wait for a release.
+            return 'b'
+        policy.menu = ChangeBox(box)
     else:
         if len(snapshot.party) < 2:
             return 'b'

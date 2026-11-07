@@ -63,6 +63,11 @@ def train_key(identity):
     return 'train:' + json.dumps(identity)
 
 
+def rung_key(name):
+    """A collection rung the stuck watchdog gave up on, once every reload replayed the same trouble."""
+    return f'rung:{name}'
+
+
 def team_key(team):
     return 'team:' + json.dumps(list(team))
 
