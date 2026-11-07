@@ -191,6 +191,9 @@ def test_failed_logins_behind_the_proxy_lock_out_only_the_client_that_made_them(
 
 
 def test_guesses_from_everywhere_slow_an_account_by_a_minute_at_most(library, people, monkeypatch):
+    # Held still, since two dozen password checks on a slow runner can outlast the minute.
+    now = time.time()
+    monkeypatch.setattr('pokesim.app.auth.time', SimpleNamespace(time=lambda: now))
     own = browser_at(library, '198.51.100.20')
     first = own.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD})
     assert first.status_code == 200
