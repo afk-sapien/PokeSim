@@ -40,6 +40,7 @@ class Smoke:
         self.usernames = []
         self.invite_ids = []
         self.adventure = None
+        self.cartridge = None
 
     # Helpers -----------------------------------------------------------------------------------
     def check(self, name, ok, detail=''):
@@ -151,7 +152,8 @@ class Smoke:
         return people
 
     def isolation(self, a, b):
-        """Member A reaches none of member B's adventure, save, cartridge shelf or inbox."""
+        """Member A reaches none of member B's adventure, save or inbox. Both see the Library shelf,
+        and neither may change it."""
         inbox = a.client.get('/api/v1/inbox')
         self.expect('member A reads their own inbox', inbox, 200)
         other = a.client.get('/api/v1/inbox', params={'user_id': b.id, 'uid': b.id})
@@ -160,8 +162,16 @@ class Smoke:
         if self.rom is None:
             self.report.skipped.append("member B's adventure and cartridge: no cartridge to add, pass --rom")
             return
-        added = self.require('member B adds a cartridge', b.client.post(
-            '/api/v1/assets/rom', content=self.rom, headers={'Content-Type': 'application/octet-stream'}))
+        upload = {'content': self.rom, 'headers': {'Content-Type': 'application/octet-stream'}}
+        before = self.require('the admin reads the Library shelf', self.admin.get('/api/v1/assets'))['roms']
+        self.expect('member B cannot add a cartridge', b.client.post('/api/v1/assets/rom', **upload), REFUSED)
+        added = self.require('the admin adds a cartridge', self.admin.post('/api/v1/assets/rom', **upload))
+        if added['id'] not in {row['id'] for row in before}:
+            if any(row['version'] == added['version'] for row in before):
+                # Removal goes by slot, and would take the cartridge that was there first too.
+                self.report.skipped.append(f"removing the {added['version']} cartridge it added: that slot had one already")
+            else:
+                self.cartridge = added['version']
         name = f'Smoke check {secrets.token_hex(3)}'
         made = self.require('member B creates an adventure', b.client.post('/api/v1/adventures', json={
             'name': name, 'rom_id': added['id'], 'request_id': uuid.uuid4().hex}))
@@ -184,12 +194,12 @@ class Smoke:
         self.check("member A's list leaves out member B's adventure", listed.status_code == 200
                    and aid not in {row['id'] for row in listed.json()['adventures']}, f'got {listed.status_code}')
         shelf = a.client.get('/api/v1/assets')
-        self.check("member A cannot see member B's cartridge", shelf.status_code == 200
-                   and added['id'] not in {row['id'] for row in shelf.json()['roms']}, f'got {shelf.status_code}')
-        self.expect("member A cannot remove member B's cartridge",
+        self.check('member A sees the Library cartridge', shelf.status_code == 200
+                   and added['id'] in {row['id'] for row in shelf.json()['roms']}, f'got {shelf.status_code}')
+        self.expect('member A cannot remove the cartridge',
                     a.client.delete(f"/api/v1/cartridges/{added['version']}"), REFUSED)
-        kept = b.client.get('/api/v1/assets')
-        self.check('member B keeps the cartridge', kept.status_code == 200
+        kept = self.admin.get('/api/v1/assets')
+        self.check('the Library keeps the cartridge', kept.status_code == 200
                    and added['id'] in {row['id'] for row in kept.json()['roms']}, f'got {kept.status_code}')
 
     def admin_routes(self, a, b):
@@ -265,6 +275,8 @@ class Smoke:
             aid, name = self.adventure
             step('the adventure', lambda: admin.request('DELETE', f'/api/v1/adventures/{aid}', json={'confirmation': name}),
                  (200, 404))
+        if self.cartridge:
+            step('the cartridge', lambda: admin.delete(f'/api/v1/cartridges/{self.cartridge}'), (200, 404))
         if self.usernames:
             users = step('listing users', lambda: admin.get('/api/v1/users'))
             games = step('listing adventures', lambda: admin.get('/api/v1/adventures'))

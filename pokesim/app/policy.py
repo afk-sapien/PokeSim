@@ -102,8 +102,8 @@ def can(actor, action, adventure=None):
             return False
         if action == 'library.read':
             return True
-        if action in {'library.create', 'library.cartridges'}:
-            # A member who may create adventures keeps their own cartridge shelf.
+        if action == 'library.create':
+            # A member who may create adventures plays any cartridge on the Library shelf.
             return actor.admin or bool(actor.user['can_create'])
         return actor.admin
     needed = ADVENTURE_ACTIONS.get(action)

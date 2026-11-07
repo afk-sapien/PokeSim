@@ -95,18 +95,9 @@ class Registry:
                 self.db.execute("ALTER TABLE adventures ADD COLUMN provenance TEXT NOT NULL DEFAULT '{}'")
             if 'owner_id' not in columns:
                 self.db.execute(f"ALTER TABLE adventures ADD COLUMN owner_id TEXT NOT NULL DEFAULT '{LIBRARY_OWNER}'")
-            # Who has each cartridge on their shelf. The file stays while anyone does.
-            self.db.execute('''CREATE TABLE IF NOT EXISTS rom_owners (
-                rom_id TEXT NOT NULL, user_id TEXT NOT NULL, added_at REAL, PRIMARY KEY (rom_id, user_id))''')
-            self.db.execute('CREATE INDEX IF NOT EXISTS rom_owners_user ON rom_owners (user_id)')
-            # ROMs on no shelf, from before shelves, go to the Library owner, and each adventure's
-            # owner keeps its ROM. Checked on every start, so none is left off for good.
-            bare = [(row[0],) for row in self.db.execute(
-                'SELECT id FROM roms WHERE id NOT IN (SELECT rom_id FROM rom_owners)')]
-            self.db.executemany('INSERT OR IGNORE INTO rom_owners (rom_id, user_id) VALUES (?, ?)',
-                                [(rom_id, LIBRARY_OWNER) for rom_id, in bare])
-            self.db.executemany('''INSERT OR IGNORE INTO rom_owners (rom_id, user_id)
-                SELECT DISTINCT rom_id, owner_id FROM adventures WHERE rom_id=?''', bare)
+            # The Library has one shelf that admins manage, so the per-user shelves of earlier
+            # builds go. Only that table is dropped, and every ROM row and file stays.
+            self.db.execute('DROP TABLE IF EXISTS rom_owners')
             if new:
                 # Whatever opens it first, the server or `pokesim import`, this Library is not an upgrade.
                 self.db.execute('INSERT OR IGNORE INTO settings VALUES (?, ?)', (CREATED_SCHEMA, json.dumps(SCHEMA)))
@@ -196,54 +187,22 @@ class Registry:
         with self.lock:
             return [self.decode(row) for row in self.db.execute('SELECT * FROM adventures ORDER BY created_at, id')]
 
-    def roms(self, owner=None):
-        """Every stored ROM, or only those on `owner`'s shelf."""
+    def roms(self):
         with self.lock:
-            if owner is None:
-                return [dict(row) for row in self.db.execute('SELECT * FROM roms ORDER BY version, id')]
-            return [dict(row) for row in self.db.execute('''SELECT r.* FROM roms r JOIN rom_owners o ON o.rom_id = r.id
-                WHERE o.user_id=? ORDER BY r.version, r.id''', (owner,))]
+            return [dict(row) for row in self.db.execute('SELECT * FROM roms ORDER BY version, id')]
 
-    def owns_rom(self, rom_id, owner):
+    def has_rom(self, rom_id):
         with self.lock:
-            return self.db.execute('SELECT 1 FROM rom_owners WHERE rom_id=? AND user_id=?', (rom_id, owner)).fetchone() is not None
+            return self.db.execute('SELECT 1 FROM roms WHERE id=?', (rom_id,)).fetchone() is not None
 
-    def shelved_at(self, owner):
-        """When each ROM went onto `owner`'s shelf, so nobody learns when someone else added the same file.
-        Shelves from before this was kept have no time."""
-        with self.lock:
-            return {row[0]: row[1] for row in self.db.execute('SELECT rom_id, added_at FROM rom_owners WHERE user_id=?', (owner,))}
-
-    def add_rom(self, rom_id, sha1, version, owner=LIBRARY_OWNER):
+    def add_rom(self, rom_id, sha1, version):
         with self.lock, self.db:
             self.db.execute('INSERT OR IGNORE INTO roms VALUES (?, ?, ?)', (rom_id, sha1, version))
-            self.db.execute('INSERT OR IGNORE INTO rom_owners VALUES (?, ?, ?)', (rom_id, owner, time.time()))
         return {'id': rom_id, 'sha1': sha1, 'version': version}
 
     def remove_roms(self, rom_ids):
         with self.lock, self.db:
             self.db.executemany('DELETE FROM roms WHERE id=?', [(rom_id,) for rom_id in rom_ids])
-            self.db.executemany('DELETE FROM rom_owners WHERE rom_id=?', [(rom_id,) for rom_id in rom_ids])
-
-    def release_roms(self, rom_ids=None, owner=None):
-        """Take ROMs off `owner`'s shelf, or every ROM `owner` has when `rom_ids` is None.
-
-        Returns the ROMs nobody has any more and no adventure plays, which are forgotten here
-        so the caller can delete their files.
-        """
-        with self.lock, self.db:
-            if rom_ids is None:
-                rom_ids = [row[0] for row in self.db.execute('SELECT rom_id FROM rom_owners WHERE user_id=?', (owner,))]
-            if owner is None:
-                self.db.executemany('DELETE FROM rom_owners WHERE rom_id=?', [(rom_id,) for rom_id in rom_ids])
-            else:
-                self.db.executemany('DELETE FROM rom_owners WHERE rom_id=? AND user_id=?',
-                                    [(rom_id, owner) for rom_id in rom_ids])
-            orphans = [rom_id for rom_id in rom_ids
-                       if self.db.execute('SELECT 1 FROM rom_owners WHERE rom_id=?', (rom_id,)).fetchone() is None
-                       and self.db.execute('SELECT 1 FROM adventures WHERE rom_id=?', (rom_id,)).fetchone() is None]
-            self.db.executemany('DELETE FROM roms WHERE id=?', [(rom_id,) for rom_id in orphans])
-        return orphans
 
     @staticmethod
     def scoped_request(request_id, owner):
@@ -281,8 +240,6 @@ class Registry:
                 VALUES (?,?,?,?,?,?,?,?,?,?)''',
                 (aid, campaign, name, rom_id, rom['version'], json.dumps({'speed': 1, **settings}), 'stopped', 'stopped', time.time(),
                  validate_id(owner)))
-            # Whoever owns an adventure has its cartridge, so removing it from a shelf never strands the game.
-            self.db.execute('INSERT OR IGNORE INTO rom_owners VALUES (?, ?, ?)', (rom_id, owner, time.time()))
             self.db.execute('INSERT INTO operations VALUES (?, ?, ?, ?)',
                             (request_id, 'create', fingerprint, json.dumps({'id': aid})))
         result = self.adventure(aid)
@@ -296,12 +253,6 @@ class Registry:
             rows = [row['id'] for row in self.db.execute('SELECT id, owner_id FROM adventures')
                     if row['owner_id'] == LIBRARY_OWNER or row['owner_id'] not in known]
             self.db.executemany('UPDATE adventures SET owner_id=? WHERE id=?', [(owner, aid) for aid in rows])
-            shelf = [tuple(row) for row in self.db.execute('SELECT rom_id, user_id, added_at FROM rom_owners')
-                     if row[1] == LIBRARY_OWNER or row[1] not in known]
-            self.db.executemany('INSERT OR IGNORE INTO rom_owners VALUES (?, ?, ?)',
-                                [(rom_id, owner, added) for rom_id, _, added in shelf])
-            self.db.executemany('DELETE FROM rom_owners WHERE rom_id=? AND user_id=?',
-                                [(rom_id, user) for rom_id, user, _ in shelf if user != owner])
         return rows
 
     def set_owner(self, aid, owner):
@@ -313,8 +264,6 @@ class Registry:
                 raise ValueError('This account is being deleted')
             before = self.db.execute('SELECT owner_id FROM adventures WHERE id=?', (aid,)).fetchone()
             self.db.execute('UPDATE adventures SET owner_id=? WHERE id=?', (owner, aid))
-            self.db.execute('INSERT OR IGNORE INTO rom_owners SELECT rom_id, ?, ? FROM adventures WHERE id=?',
-                            (owner, time.time(), aid))
             if before is not None and before[0] != owner:
                 self._reset_trading(aid)
         result = self.adventure(aid)

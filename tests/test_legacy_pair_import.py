@@ -47,7 +47,7 @@ def legacy(tmp_path):
     registry = Registry(tmp_path / 'application')
     class Assets:
         def install_rom(self, raw, owner):
-            return registry.add_rom(sha256(raw).hexdigest(), sha1(raw).hexdigest(), raw.decode(), owner)
+            return registry.add_rom(sha256(raw).hexdigest(), sha1(raw).hexdigest(), raw.decode())
     manager = SimpleNamespace(root=registry.root, registry=registry, assets=Assets(), default_owner=lambda: LIBRARY_OWNER,
         maintenance=threading.RLock(), suspended=False, validate_adventure_settings=lambda value: value)
     yield manager, sources, roms, coordinator
