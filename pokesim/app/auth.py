@@ -32,7 +32,7 @@ MAX_INVITE_SECONDS = 30 * 86400
 SESSION_CACHE_SECONDS = 5
 LAST_SEEN_SECONDS = 60
 USERNAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.@-]{0,63}')
-MIN_PASSWORD = 10
+# A password only has to be non-empty. The cap guards request size and is never shown.
 MAX_PASSWORD = 256
 # Inbox items kept per user. Older ones go when a new one arrives.
 INBOX_KEEP = 200
@@ -59,8 +59,10 @@ def validate_username(value):
 
 
 def validate_password(value):
-    if not isinstance(value, str) or not MIN_PASSWORD <= len(value) <= MAX_PASSWORD:
-        raise ValueError(f'Choose a password of {MIN_PASSWORD} to {MAX_PASSWORD} characters')
+    if not isinstance(value, str) or not value:
+        raise ValueError('Choose a password')
+    if len(value) > MAX_PASSWORD:
+        raise ValueError('That password is too long')
     return value
 
 

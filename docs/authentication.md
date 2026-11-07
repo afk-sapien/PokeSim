@@ -26,9 +26,9 @@ With accounts on and no admin yet, PokeSim writes a one-time setup code to its l
 docker logs pokesim 2>&1 | grep 'one-time code'
 ```
 
-Open `/setup`, enter the code and choose a username and a password of at least 10
-characters. The code works once and lasts an hour. A restart prints a new one. Every
-adventure that existed before accounts belongs to this first admin.
+Open `/setup`, enter the code and choose a username and a password. The code works
+once and lasts an hour. A restart prints a new one. Every adventure that existed
+before accounts belongs to this first admin.
 
 To skip the code, set `POKESIM_ADMIN_USER` and `POKESIM_ADMIN_PASSWORD` on the first start.
 PokeSim creates that admin only while it has none, so later starts ignore both values.
