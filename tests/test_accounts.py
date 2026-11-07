@@ -73,6 +73,23 @@ def library(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def meanwhile(monkeypatch):
+    """Queue a change that runs while the next request body streams, after the access middleware
+    read who is asking and before the handler acts."""
+    from starlette.requests import Request
+    stream = Request.stream
+    changes = []
+
+    async def streaming(self):
+        while changes:
+            changes.pop(0)()
+        async for chunk in stream(self):
+            yield chunk
+    monkeypatch.setattr(Request, 'stream', streaming)
+    return changes.append
+
+
+@pytest.fixture
 def people(library):
     """An admin, two members, and one adventure for each member."""
     admin = library.user('admin', 'admin')
@@ -325,6 +342,18 @@ def test_watchers_read_the_game_but_only_whoever_holds_control_presses_buttons(l
     assert stranger.get(f'/games/{people.red}/api/state').status_code == 401
     page = stranger.get(f'/games/{people.red}/', follow_redirects=False)
     assert page.status_code in {303, 307} and page.headers['location'].startswith('/login?next=')
+
+
+def test_a_role_lost_while_the_game_request_streams_counts(library, people, meanwhile):
+    auth, bob = library.manager.auth, library.login('bob')
+    auth.grant(people.red, people.bob['id'], 'manager', people.alice['id'])
+    meanwhile(lambda: auth.grant(people.red, people.bob['id'], 'player', people.alice['id']))
+    paused = bob.post(f'/games/{people.red}/api/control', json={'action': 'pause'})
+    assert paused.status_code == 403, paused.text
+    meanwhile(lambda: auth.grant(people.red, people.bob['id'], 'viewer', people.alice['id']))
+    asked = bob.post(f'/games/{people.red}/api/lease', json={'action': 'request'})
+    assert asked.status_code == 403, asked.text
+    assert not library.manager.leases.holds(people.red, library.manager.actor_for(people.bob))
 
 
 def test_admin_only_routes_refuse_members(library, people):

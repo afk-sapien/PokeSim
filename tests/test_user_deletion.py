@@ -6,7 +6,7 @@ import pytest
 
 from pokesim.app.registry import identifier
 
-from test_accounts import library, people  # noqa: F401  (fixtures)
+from test_accounts import library, meanwhile, people  # noqa: F401  (fixtures)
 
 
 @pytest.fixture
@@ -109,6 +109,22 @@ def test_a_transfer_turns_off_the_old_share_links(quiet, people):  # noqa: F811
     assert quiet.manager.auth.shares(people.red) == []
     notices = [item['text'] for item in quiet.manager.auth.inbox(people.bob['id'])]
     assert 'Share links were turned off when this adventure changed hands' in notices
+
+
+def test_an_owner_who_lost_the_adventure_while_asking_shares_nothing(quiet, people, meanwhile):  # noqa: F811
+    from pokesim.app import ownership
+    manager = quiet.manager
+    admin = manager.actor_for(people.admin)
+    green = quiet.adventure('Green', people.alice)
+    alice = quiet.login('alice')
+    meanwhile(lambda: ownership.transfer(manager, people.red, people.bob['id'], admin))
+    linked = alice.post(f'/api/v1/adventures/{people.red}/shares', json={})
+    assert linked.status_code == 403, linked.text
+    assert manager.auth.shares(people.red) == []
+    meanwhile(lambda: ownership.transfer(manager, green, people.bob['id'], admin))
+    granted = alice.post(f'/api/v1/adventures/{green}/grants', json={'user_id': people.alice['id'], 'role': 'manager'})
+    assert granted.status_code == 403, granted.text
+    assert manager.auth.grants_for(people.alice['id']) == {}
 
 
 def test_only_the_owner_transfers_and_only_to_a_real_person(quiet, people):  # noqa: F811

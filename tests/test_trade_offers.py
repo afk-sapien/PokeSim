@@ -34,6 +34,8 @@ def offers(setup):  # noqa: F811
     # These tests answer offers by hand. Offers between two adventures of one owner start at once,
     # which test_an_offer_between_one_owners_adventures_starts_at_once covers.
     setup.manager.offers.auto_accept = False
+    # The actor as the accounts hold it now. Tests that revoke a grant meanwhile replace this.
+    setup.manager.fresh_actor = lambda actor: actor
     return setup
 
 
@@ -154,6 +156,27 @@ def test_an_offer_from_an_adventure_that_changed_hands_meanwhile_is_refused(offe
     with pytest.raises(PermissionError, match='no longer offer trades'):
         service.create(offer_request(offers), member(LIBRARY_OWNER))
     assert offers.registry.trade_offers(left, statuses=['pending']) == []
+
+
+def test_an_offer_from_a_manager_whose_grant_ended_meanwhile_is_refused(offers):
+    service, left, right = offers.manager.offers, offers.data['left_id'], offers.data['right_id']
+    # Carol's actor was read with the manager grant. The owner removed it before her offer arrived.
+    stale = member(CAROL, **{left: 'manager'})
+    offers.manager.fresh_actor = lambda actor: member(actor.id)
+    with pytest.raises(PermissionError, match='no longer offer trades'):
+        service.create(offer_request(offers), stale)
+    assert offers.registry.trade_offers(left, statuses=['pending']) == []
+    offers.manager.fresh_actor = lambda actor: None
+    with pytest.raises(PermissionError, match='no longer offer trades'):
+        service.create(offer_request(offers), stale)
+    # The receiver's grant ended the same way while they accepted.
+    offers.manager.fresh_actor = lambda actor: actor
+    offer = service.create(offer_request(offers))
+    offers.manager.fresh_actor = lambda actor: member(actor.id)
+    with pytest.raises(PermissionError, match='no longer accept trades'):
+        service.accept(offer['id'], member(CAROL, **{right: 'manager'}))
+    assert service.status(offer['id'])['status'] == 'pending'
+    assert [entry for entry in offers.coordinator._manual_entries() if entry['state'] == 'queued'] == []
 
 
 def test_a_trade_that_finished_before_accept_never_blocks_it_when_settled_meanwhile(offers, monkeypatch):

@@ -463,6 +463,15 @@ class Manager:
         grants = self.auth.grants_for(user['id']) if user and user['role'] != 'admin' else {}
         return Actor(user, grants, share)
 
+    def fresh_actor(self, actor):
+        """`actor` read again from the accounts, or None once that user is gone or disabled."""
+        if self.auth_mode == 'none':
+            return actor
+        user = self.auth.user(actor.id) if actor.id else None
+        if user is None or user['disabled']:
+            return None
+        return self.actor_for(user, actor.share)
+
     def browser_session(self, request, actor=None):
         """The session that holds this browser's CSRF token: a stored login or an anonymous one."""
         session_id = request.cookies.get(SESSION_COOKIE, '')
@@ -1517,9 +1526,10 @@ def create_app(manager, shutdown=lambda: None):
 
         A watcher gets the view-only game. A player or manager gets the game with only the
         controls their role allows. A share link counts only under /view/, which is also the
-        only path its cookie is sent to. Control presses also need the control lease.
+        only path its cookie is sent to. Control presses also need the control lease. The rights
+        are read again here, after the body arrived, so a change while it streamed counts.
         """
-        actor = request.state.actor
+        actor = manager.actor(request)
         if not viewer:
             actor = policy.Actor(actor.user, actor.grants)
         if actor.user is None and actor.share is None:
@@ -1574,7 +1584,8 @@ def create_app(manager, shutdown=lambda: None):
     def lease_route(aid, request, body):
         """The control lease of one adventure: GET reads it, POST acts on it."""
         from .lease import END_CHOICES, LeaseRefused
-        actor = request.state.actor
+        # Read again now that the body arrived, like game_access.
+        actor = manager.actor(request)
         if request.url.path.startswith('/games/'):
             actor = policy.Actor(actor.user, actor.grants)
         adventure = manager.registry.adventure(aid)
