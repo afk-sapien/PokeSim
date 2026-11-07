@@ -44,6 +44,8 @@ GAME_POSTS = {
     'api/control': None,  # decided by the body action, see CONTROL_ACTIONS
     'api/lease': 'adventure.play',  # the manager serves it and checks each lease action itself
     'api/trading/preferences': 'adventure.manage',
+    'api/pc/release': 'adventure.manage',  # an only-copy release by name too
+    'api/pc/favor': 'adventure.manage',
     'api/export-save': 'adventure.own',
 }
 # Query flags that change what a game read returns, with the action each one needs. A flag

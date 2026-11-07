@@ -45,7 +45,8 @@ def status():
 
 
 def client(tmp_path, monkeypatch, **kwargs):
-    store = SimpleNamespace(shots=tmp_path, get=lambda _: None, trade_preferences=lambda: {})
+    store = SimpleNamespace(shots=tmp_path, get=lambda _: None, trade_preferences=lambda: {},
+                            release_requests=lambda: {}, pc_favor=lambda: None)
     emu = SimpleNamespace(status=status)
     return TestClient(create_app(emu, store, **kwargs))
 
@@ -140,6 +141,7 @@ def test_pokedex_status_views_trim_for_their_page_and_default_stays_full(tmp_pat
     # Broker and tools read the default view and need every record in full.
     assert full.json()['storage']['pokemon'][0]['move_details'] and full.json()['plan']
     assert 'plan' not in pc.json()
+    # Without PC values or release requests the PC view keeps every record in full and adds nothing.
     assert pc.json()['storage'] == full.json()['storage'] and pc.json()['party'] == full.json()['party']
     assert dex.json()['plan'] == full.json()['plan']
     assert set(dex.json()['storage']['pokemon'][0]) <= set(HOLDER_FIELDS)

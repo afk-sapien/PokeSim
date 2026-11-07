@@ -93,8 +93,7 @@ class Emulator:
         self.frozen = False
         self.manual_mode = False
         self.policy = make_policy(config.POLICY, config.SEED)
-        self.policy.trade_preferences = store.trade_preferences
-        self.policy.trade_partners = store.trade_partners
+        store.attach(self.policy, 1)
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.frame_image: bytes = b""
@@ -615,6 +614,7 @@ class Emulator:
             log.info("dropped %d transient event(s)", dropped)
         self.pending = [ev for ev in new if ev.still is not None]
         events += [ev for ev in new if ev.still is None]
+        self._release_journal(events, snap)
         restored_legendary = False
         if (self.rom_sha1 in config.GEN1_ROM_SHA1 and not self.manual_mode
                 and not self.store.get('trade_hold')):
@@ -936,6 +936,48 @@ class Emulator:
                                    f'Objective: {objective}. On {snap.map_name} after {quiet[1]} real minutes '
                                    f'and {details.get("recoveries", 0)} recoveries. The saved moment is attached '
                                    'to this journal entry.', priority=HIGH, tags='warning')], snap)
+
+    def _release_journal(self, events, snap):
+        """Quote the PC value of a spare the policy let go, and say once when the PC is full with nothing that may go."""
+        from .pcvalue import DEADLOCK, full_notice
+        from .policies.team import storage_headroom
+        policy = getattr(self, 'policy', None)
+        # The note of the release the policy started, not the next target's.
+        note = getattr(policy, 'released_note', None)
+        for ev in events:
+            if ev.type == 'release' and note and ev.title == f"Said goodbye to a spare {SPECIES_NAMES.get(note[0], f'#{note[0]}')}":
+                ev.body += f' PC value: {note[1]}.'
+        blocked = bool(getattr(policy, 'pc_deadlock', False)) and storage_headroom(snap) <= 0
+        if policy is not None and full_notice(self.store, blocked):
+            events.append(Event('pc_full', 'PC full', f'{DEADLOCK} Release or unlock one from the PC tab.',
+                                priority=HIGH, tags='warning'))
+
+    def pc_values(self):
+        """Each boxed Pokémon's PC value by (box, position), and whether nothing may go (pcvalue.annotate)."""
+        from .pcvalue import annotate, deadlocked
+        from .policies.team import storage_headroom
+
+        def view():
+            snap = self.snapshot
+            if snap is None or not hasattr(self.policy, 'pc_rated'):
+                return {}, False
+            rated = self.policy.pc_rated(snap)
+            return annotate(rated, snap.active_box), deadlocked(rated, storage_headroom(snap))
+        return self.call(view, timeout=5)
+
+    def request_release(self, box, position, key, confirm=''):
+        """Store the owner's Release for the boxed Pokémon at (box, position), or raise ValueError."""
+        from .pcvalue import pc_request
+        from .trade.preferences import identity
+
+        def request():
+            snap = self.snapshot
+            if snap is None or not hasattr(self.policy, 'pc_rated'):
+                raise ValueError('Wait for the adventure to be ready before releasing.')
+            value = pc_request(self.policy.pc_rated(snap), (box, position), key, identity, confirm)
+            self.store.set_release_request(key, value)
+            return value
+        return self.call(request)
 
     def set_trade_preference(self, key, state):
         done, response = threading.Event(), {}

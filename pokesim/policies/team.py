@@ -1,12 +1,10 @@
 """Opponent preparation and party development using observable team capabilities."""
 from dataclasses import asdict
-from collections import Counter
 
 from .battle import HEALING, damage, effectiveness, ranked_moves
-from ..duplicates import quality, spare_entries
 from ..events import LEGENDARY_DEX
 from ..game_data import current_variant
-from ..ram import BOX_CAPACITY, PartyMon
+from ..ram import BOX_CAPACITY, DEX_NAMES, PartyMon
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, event_set
 
 OPPONENTS = {
@@ -63,73 +61,147 @@ def storage_headroom(s):
     return sum(BOX_CAPACITY - count for count in s.box_counts)
 
 
-def spare_copies(s, protected=()):
-    """Boxed duplicates that can be given up, as (box, position, level).
+def release_rated(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts=frozenset(),
+                  rewards=frozenset(), requested=None, demand=None, favor=None):
+    """Every Pokémon scored with pcvalue.rate. ``demand`` maps a Pokédex number to the linked adventures
+    missing it, which keeps that many copies and counts as trade demand. ``favor`` is the Favor shiny or
+    Favor DVs setting and the rest are as in ``entries``."""
+    from collections import Counter
+    from ..pcvalue import Inputs, rate
+    return rate(entries(s, preferences, roles, stock, partners, gifts, rewards, requested),
+                Inputs(demand=dict(demand or {}), wishes=Counter(demand or {}), favor=favor))
 
-    Keep future potential, the strongest current partner, and rare finds. Party
-    members stay on the team and win exact ties. Species in `protected` are never offered.
+
+def spare_copies(s, stock=()):
+    """Boxed duplicates that may be given up, lowest value first, as (box, position, level).
+
+    Species in ``stock`` hold a plan role for their best copies (pcvalue.ROLE_COPIES).
     """
-    return [(mon['box'], mon['position'], mon['level']) for mon in
-            spare_entries([asdict(mon) for mon in s.party], s.storage_entries(), protected)]
+    from ..pcvalue import queue
+    return [(*row.entry.slot, row.entry.level) for row in queue(release_rated(s, stock=stock))
+            if row.status == 'spare' and not row.entry.requested]
 
 
-_RELEASE = [None, None]
+# The last release_target inputs, its answer, and the chosen Pokémon's species and PC value text with
+# whether nothing at all may go (release_note).
+_RELEASE = [None, None, None]
 
 
-def release_target(s, protected=(), reserved=(), partners=frozenset(), gifts=frozenset()):
-    """Reduce the most numerous species first, keeping its best copy and all protections.
+def release_target(s, stock=(), reserved=(), partners=frozenset(), gifts=frozenset(), preferences=None,
+                   demand=None, rewards=frozenset(), requested=None, roles=(), favor=None):
+    """The next Pokémon to release as (box, position), or None (pcvalue.py).
 
-    This ranks every stored copy and is asked on every step while storage is tight, so the
-    answer is kept until the party, the PC or the protections change. A slot the PC list cannot
-    reach belongs in ``reserved``, as pc_list.guarded gives it.
-    ``partners`` and ``gifts`` are as in kept_by_origin.
+    The lowest-value Pokémon that may go is chosen among the ones a refill needs, ordered for one PC
+    visit: the open box first, then the box holding the most of them. This ranks every stored copy and
+    is asked on every step while storage is tight, so the answer is kept until the party, the PC or the
+    inputs change. A slot the PC list cannot reach, or whose release just failed, belongs in
+    ``reserved``. The other inputs are as in ``entries``.
     """
     reserved = frozenset(reserved)
+    freeze = lambda mapping: tuple(sorted((mapping or {}).items()))  # noqa: E731
     key = (tuple(s.party), getattr(s, 'stored_details', None), getattr(s, 'stored_pokemon', None),
-           frozenset(protected), reserved, frozenset(partners), frozenset(gifts), getattr(s, 'player_id', None),
-           getattr(s, 'active_box', None))
+           frozenset(stock.items() if isinstance(stock, dict) else stock), reserved, frozenset(partners), frozenset(gifts),
+           getattr(s, 'player_id', None),
+           getattr(s, 'active_box', None), tuple(getattr(s, 'box_counts', ()) or ()),
+           tuple(sorted((key, (value or {}).get('state')) for key, value in (preferences or {}).items())),
+           freeze(demand), frozenset(rewards), freeze(requested), frozenset(roles), favor)
     try:
         hash(key)
     except TypeError:
-        return _release_target(s, protected, reserved, partners, gifts)
+        key = object()
     if _RELEASE[0] != key:
-        _RELEASE[:] = [key, _release_target(s, protected, reserved, partners, gifts)]
+        _RELEASE[:] = [key, *_release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards,
+                                             requested, roles, favor)]
     return _RELEASE[1]
 
 
-def kept_by_origin(s, mon, partners=frozenset(), gifts=frozenset()):
-    """Whether a boxed copy stays because of where it came from.
-
-    A legendary always stays. So does a Pokémon from any trainer other than the player and the linked
-    adventures in ``partners``: an in-game trade or a game outside PokeSim cannot give it again. The
-    player's own copy of a species in ``gifts``, which this version only gives as a gift or fossil, stays
-    too. A record without a trainer id comes from an older payload and is judged by the other rules.
-    """
-    if SPECIES.get(mon['species'], {}).get('dex') in LEGENDARY_DEX:
-        return True
-    player, trainer = getattr(s, 'player_id', None), mon.get('trainer_id')
-    if player is None or trainer is None:
-        return False
-    if trainer != player:
-        return trainer not in partners
-    return mon['species'] in gifts
+def release_note():
+    """The last release_target answer's (species, PC value text), None when it found none, and whether
+    nothing at all may go, so the journal can say why and say once that the PC is full."""
+    note = _RELEASE[2]
+    return (note[0] if note else None), bool(note and note[1])
 
 
-def _release_target(s, protected, reserved, partners=frozenset(), gifts=frozenset()):
-    party = [asdict(mon) for mon in s.party]
-    stored = s.storage_entries()
-    counts = Counter(mon['species'] for mon in [*party, *stored])
-    spare = [mon for mon in spare_entries(party, stored, protected)
-             if (mon['box'], mon['position']) not in reserved and not kept_by_origin(s, mon, partners, gifts)]
-    if not spare:
+def stock_kind(stock, species):
+    """'plan', 'trade' or None for a species in ``stock``. A plain set counts as plan stock."""
+    if species not in stock:
         return None
-    # The open box first, since changing boxes saves the game and takes about as long as a release.
-    # Then the box with the most spares, so a visit empties one box before it moves on.
-    per_box = Counter(mon['box'] for mon in spare)
-    active = getattr(s, 'active_box', None)
-    target = min(spare, key=lambda mon: (mon['box'] != active, -per_box[mon['box']], -counts[mon['species']],
-                                         quality(mon), mon['box'], mon['position']))
-    return target['box'], target['position']
+    return stock[species] if isinstance(stock, dict) else 'plan'
+
+
+def entries(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts=frozenset(), rewards=frozenset(),
+            requested=None):
+    """The party and PC as pcvalue rows.
+
+    ``preferences`` are the stored trade preferences: Keep locks a Pokémon, and an offered one is
+    capped stock. ``roles`` are the trade keys of the Pokémon a running project relies on and ``stock``
+    the species it works with (a dict from plan_inputs marks a trade's give 'trade', which holds a role
+    but no floor), ``partners`` the linked adventures' trainer ids, ``gifts`` the species this version
+    gives only as a gift or fossil, ``rewards`` the League reward marks (rewards.marks) and
+    ``requested`` maps an identity to an owner's release request.
+    """
+    from ..pcvalue import Entry
+    from ..rewards import mark
+    from ..trade.preferences import identity, legacy_lock
+    preferences, requested = preferences or {}, requested or {}
+    player = getattr(s, 'player_id', None)
+    rows = []
+    for mon in [*(asdict(mon) | {'box': None} for mon in s.party), *s.storage_entries()]:
+        data = SPECIES.get(mon['species'], {})
+        dex, trainer, dvs = data.get('dex', 0), mon.get('trainer_id'), tuple(mon.get('dvs') or ())
+        state = (preferences.get(identity(mon)) or {}).get('state') if preferences and trainer is not None else None
+        kind = stock_kind(stock, mon['species'])
+        if trainer is not None and len(dvs) == 5 and mark(trainer, dvs) in rewards:
+            origin = 'reward'
+        elif dex in LEGENDARY_DEX:
+            origin = 'legendary'
+        elif trainer == player and mon['species'] in gifts:
+            origin = 'gift'
+        elif player is not None and trainer is not None and trainer != player and trainer not in partners:
+            origin = 'traded'
+        else:
+            origin = 'caught'
+        rows.append(Entry(
+            None if mon['box'] is None else (mon['box'], mon['position']), (dex, 0),
+            DEX_NAMES.get(dex, data.get('name', '?').replace('_', ' ').title()),
+            mon['level'], mon.get('experience', 0), dvs, tuple(mon.get('stat_exp') or ()), False, origin,
+            state in ('locked', 'withdrawn') or bool(preferences) and legacy_lock(preferences, mon),
+            trainer is not None and identity(mon) in roles, state == 'offered' or kind is not None,
+            requested.get(identity(mon), '') if trainer is not None else '', mon,
+            kind == 'trade' or state == 'offered' and kind != 'plan'))
+    return rows
+
+
+def requested_slots(s, requested, preferences=None, reserved=()):
+    """The boxed slots of the owner's release requests that a release may take, outside ``reserved``.
+    A Keep, party, egg or unconfirmed last copy request waits, so it never starts a visit."""
+    from ..pcvalue import requested as asked
+    if not requested:
+        return []
+    return [row.entry.slot for row in asked(release_rated(s, preferences, requested=requested))
+            if row.entry.slot not in frozenset(reserved)]
+
+
+def held_identities(s):
+    """The trade identity of every Pokémon in the party and the PC, or None while a boxed row is only the
+    compact species and level fallback, which names no trainer, so no request can be told gone."""
+    from ..trade.preferences import identity
+    stored = s.storage_entries()
+    if any(mon.get('trainer_id') is None for mon in stored):
+        return None
+    return {identity(mon) for mon in [*(asdict(mon) for mon in s.party), *stored] if mon.get('trainer_id') is not None}
+
+
+def _release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards, requested, roles, favor):
+    from ..planning.ledger import box_wanted
+    from ..pcvalue import deadlocked, releases
+    every = release_rated(s, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor)
+    rated = [row for row in every if row.entry.slot not in reserved]
+    chosen = releases(rated, max(box_wanted(storage_headroom(s), True), 1), getattr(s, 'active_box', None))
+    row = chosen[0] if chosen else None
+    return (row.entry.slot if row else None,
+            ((row.entry.record['species'], row.describe()) if row else None,
+             deadlocked(every, storage_headroom(s))))
 
 
 def reserve_to_deposit(s, *, prefer_completed=False):

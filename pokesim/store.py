@@ -281,6 +281,50 @@ class Store:
             self._trade_partners = add(self.db, ids)
             return self._trade_partners
 
+    def league_marks(self, generation=1):
+        """The marks of every League reward delivered so far (rewards.marks)."""
+        from . import rewards
+        with self.lock:
+            return rewards.marks(rewards.ledger(self.db), generation)
+
+    def release_requests(self):
+        """The owner's pending PC releases: trade identity to 'release', or pcvalue.LAST_COPY when the
+        confirm named a last copy."""
+        return dict(self.get('release_requests', {}) or {})
+
+    def _change_release_requests(self, change):
+        with self.lock, self.db:
+            row = self.db.execute("SELECT v FROM kv WHERE k='release_requests'").fetchone()
+            requests = dict(json.loads(row["v"]) if row else {})
+            changed = change(dict(requests))
+            if changed != requests:
+                self.db.execute("INSERT OR REPLACE INTO kv(k,v) VALUES ('release_requests',?)", (json.dumps(changed),))
+            return changed
+
+    def set_release_request(self, key, value):
+        """Add a release request, or drop it when ``value`` is empty."""
+        return self._change_release_requests(
+            lambda requests: {**requests, key: value} if value else {k: v for k, v in requests.items() if k != key})
+
+    def prune_release_requests(self, held):
+        """Drop requests for Pokémon no longer held, once their release is done."""
+        return self._change_release_requests(
+            lambda requests: {key: value for key, value in requests.items() if key in held})
+
+    def pc_favor(self):
+        """The Favor shiny or Favor DVs setting from the PC tab, or None."""
+        value = self.get('pc_favor')
+        return value if value in ('shiny', 'dvs') else None
+
+    def attach(self, policy, generation=1):
+        """Give a policy the stored trade settings and the release inputs pcvalue reads."""
+        policy.trade_preferences = self.trade_preferences
+        policy.trade_partners = self.trade_partners
+        policy.league_marks = lambda: self.league_marks(generation)
+        policy.release_requests = self.release_requests
+        policy.prune_release_requests = self.prune_release_requests
+        policy.pc_favor = self.pc_favor
+
     def upgrade_trade_preferences(self, collection):
         """Move trade settings saved under older trainer and DV keys, once per process.
 

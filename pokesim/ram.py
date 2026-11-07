@@ -55,6 +55,7 @@ from pokecore.storage import decode_box, memory_bytes
 
 # Yellow's opening scene, where Oak catches Pikachu before the player has a party.
 BATTLE_TYPE_PIKACHU = 4
+W_ENEMY_STATUS3, TRANSFORMED = 0xD069, 8
 
 TABLES = load("tables.json")
 MAP_NAMES = {int(k): place_name(v) for k, v in TABLES["maps"].items()}   # display spelling
@@ -371,6 +372,9 @@ def read_snapshot(mem, frame: int) -> Snapshot:
     if isinstance(mem, YellowMemory):
         decoded['pikachu_happiness'] = mem.raw[PIKACHU_HAPPINESS]
     decoded['player_id'] = mem[W_PLAYER_ID] << 8 | mem[W_PLAYER_ID + 1]
+    if decoded['in_battle'] and mem[W_ENEMY_STATUS3] & TRANSFORMED:
+        # A transformed Ditto reads as the player's species, and species2 keeps the one that was met.
+        decoded['enemy_species'] = mem[W_ENEMY_SPECIES2]
     return Snapshot(frame=frame, **decoded, box_counts=box_counts,
                     stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
                     stored_details=stored, unlisted=unlisted)

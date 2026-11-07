@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
 <link rel="stylesheet" href="${game_base}/static/panel.css?v=pass2-1">
 <link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=locks-1">
-<link rel="stylesheet" href="${game_base}/static/panel-pc.css?v=dex-copies-1">
+<link rel="stylesheet" href="${game_base}/static/panel-pc.css?v=release-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
 </head>
@@ -50,8 +50,10 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <input id="pc-scope" type="hidden" value="box">
 <label class="field" id="pc-sort-control" hidden for="pc-sort"><span class="micro">Sort by</span><span class="select"><select id="pc-sort"><option value="box">Location and slot</option><option value="battle_power">Battle Power</option><option value="power">Stat Power</option><option value="stat_total">Stat total</option><option value="level">Level</option><option value="HP">Max HP</option><option value="Attack">Attack</option><option value="Defense">Defense</option><option value="Speed">Speed</option><option value="Special">Special</option><option value="dv_stars">DV star rating</option><option value="dvs">Total DVs</option><option value="stat_exp">Total stat experience</option><option value="experience">Total experience</option><option value="dex">Pokédex number</option><option value="name">Species name</option><option value="nick">Nickname</option></select></span></label>
 <label class="field" id="pc-order-control" hidden for="pc-order"><span class="micro">Order</span><span class="select"><select id="pc-order"><option value="asc">Lowest first</option><option value="desc">Highest first</option></select></span></label>
+<label class="field" id="pc-favor-control" for="pc-favor"><span class="micro">Release order</span><span class="select"><select id="pc-favor"><option value="">Balanced</option><option value="shiny">Favor shiny</option><option value="dvs">Favor DVs</option></select></span></label>
 <span class="pc-count micro" id="pc-count">0 Pokémon</span>
 </div>
+<p class="pc-deadlock panel" id="pc-deadlock" role="status" hidden></p>
 
 <section id="pc-workspace" class="pc-workspace" aria-label="PC storage">
 <div id="pc-sidebar" class="pc-sidebar">
@@ -77,7 +79,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 </footer>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="${game_base}/static/mon-grid.js?v=locks-1"></script>
-<script src="${game_base}/static/pc.js?v=locks-1"></script>
+<script src="${game_base}/static/mon-grid.js?v=release-1"></script>
+<script src="${game_base}/static/pc.js?v=release-1"></script>
 </body>
 </html>

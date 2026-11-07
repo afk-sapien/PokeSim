@@ -493,3 +493,68 @@ test('boxes lay out in rows that divide 20 and the party in rows that divide 6',
   const css = fs.readFileSync('pokesim/web/static/panel-pc.css', 'utf8')
   for (const columns of css.matchAll(/\.pc-box-grid[^{]*\{ grid-template-columns: repeat\((\d+)/g)) assert.equal(20 % Number(columns[1]), 0)
 })
+
+test('the next releases are tagged and the popup shows the PC value with a Release button', async () => {
+  const value = (extra) => ({score: 40, text: 'Score 40: Lv 20 +20', status: 'spare', reason: '', next: null, requested: null, ...extra})
+  const view = pc([
+    mon(1, 1, 20, {trade_key: 'a', pc_value: value({next: 1})}),
+    mon(1, 2, 20, {trade_key: 'b', release_requested: true, pc_value: value({requested: 'release'})}),
+    mon(1, 3, 20, {trade_key: 'c', name: 'Rattata', pc_value: value({status: 'floor', reason: 'Only copy'})}),
+    mon(1, 4, 20, {trade_key: 'd', pc_value: value({status: 'floor', reason: 'Keep'})}),
+  ], '?box=1')
+  await view.ready()
+  const grid = view.element('#pc-grid').innerHTML
+  assert.match(grid, /pc-release-tag[^>]*>Next 1</)
+  assert.match(grid, /pc-release-tag[^>]*>Release asked</)
+  const open = index => { view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: String(index)}})}})
+    return view.element('#pc-detail-body').innerHTML }
+  const next = open(0)
+  assert.match(next, /Score 40: Lv 20 \+20/)
+  assert.match(next, /Number 1 in line/)
+  assert.match(next, /class="key pc-release-button" data-release-key="a"/)
+  assert.doesNotMatch(next, /pc-release-name/)
+  assert.match(open(1), /pc-release-cancel" data-release-key="b"/)
+  const last = open(2)
+  assert.match(last, /Your only Rattata\. Type its name/)
+  assert.match(last, /id="pc-release-name"/)
+  const kept = open(3)
+  assert.match(kept, /cannot be released/)
+  assert.doesNotMatch(kept, /pc-release-button/)
+})
+
+test('Release posts the slot and the typed name, and a refusal shows its reason', async () => {
+  const pokemon = [mon(2, 5, 20, {trade_key: 'k', name: 'Rattata', pc_value: {score: 40, text: 'Only copy. Score 40', status: 'floor', reason: 'Only copy', next: null, requested: null}})]
+  const button = {dataset: {releaseKey: 'k'}, disabled: false, classList: {contains: () => false}}
+  const click = view => view.element('#pc-detail-body').onclick({target: {closest: selector => selector.includes('pc-release') ? button : null}})
+  const view = pc(pokemon, '?box=2')
+  await view.ready()
+  view.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  view.element('#pc-detail-body #pc-release-name').value = 'rattata'
+  await click(view)
+  const posts = view.calls.filter(call => call.options?.method === 'POST')
+  assert.equal(posts.length, 1)
+  assert.match(posts[0].path, /\/api\/pc\/release$/)
+  assert.deepEqual(JSON.parse(posts[0].options.body), {key: 'k', box: 2, position: 5, confirm: 'rattata', cancel: false})
+  const refused = pc(pokemon, '?box=2', [], '', 'This is your only Rattata. Type its name to confirm.')
+  await refused.ready()
+  refused.element('#pc-grid').onclick({target: {closest: () => ({dataset: {mon: '0'}})}})
+  button.disabled = false
+  await click(refused)
+  assert.match(refused.element('#pc-detail-body').innerHTML, /lock-note" role="status">This is your only Rattata/)
+})
+
+test('the release order select saves the favor', async () => {
+  const view = pc([mon(1, 1, 20)], '?box=1')
+  await view.ready()
+  await view.element('#pc-favor').onchange({target: {value: 'shiny'}})
+  const posts = view.calls.filter(call => call.options?.method === 'POST')
+  assert.match(posts[0].path, /\/api\/pc\/favor$/)
+  assert.deepEqual(JSON.parse(posts[0].options.body), {favor: 'shiny'})
+  assert.equal(view.element('#pc-favor-control').hidden, false)
+})
+
+test('a view link never sees the release order select', async () => {
+  const view = pc([mon(1, 1, 20)], '?box=1', [], '/view/abc')
+  await view.ready()
+  assert.equal(view.element('#pc-favor-control').hidden, true)
+})

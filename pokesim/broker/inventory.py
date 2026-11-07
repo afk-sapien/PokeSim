@@ -1,7 +1,6 @@
 """One instance's Pokédex status, normalised for trade planning.
 
-Duplicate retention uses the same rule as the player, including individual qualities when
-available and a level-only fallback for older peers.
+Spare duplicates come from the same PC value score the player releases by (pcvalue.py).
 """
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from ..duplicates import spare_entries
 from ..investment import automatic_trade_protected
 from ..shiny import is_shiny
 from ..milestones import is_perfect
@@ -129,6 +127,21 @@ def placed(stored) -> list[dict]:
     return out
 
 
+def spare_entries(party, stored):
+    """Boxed copies that are spares by the PC value score, lowest value first.
+
+    The best copy of each species stays, party members count, and Keep-locked or eggs never go.
+    """
+    from ..pcvalue import Entry, queue, rate
+    rows = [Entry(None if index < len(party) else (mon['box'], mon['position']), (mon['species'], 0),
+                  mon.get('name', ''), mon['level'], mon.get('experience', 0), tuple(mon.get('dvs') or ()),
+                  tuple(mon.get('stat_exp') or ()), bool(mon.get('egg')),
+                  locked=mon.get('trade_preference') in ('locked', 'withdrawn'),
+                  stock=mon.get('trade_preference') == 'offered', record=mon)
+            for index, mon in enumerate([*party, *stored])]
+    return [row.entry.record for row in queue(rate(rows)) if row.status == 'spare']
+
+
 def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory:
     if not payload.get('started'):
         return Inventory(instance=instance, url=url, started=False,
@@ -162,8 +175,8 @@ def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory
         player_name=payload.get('player_name', ''), version=payload.get('version', ''),
         phase=payload.get('phase', ''), owned=owned, seen=frozenset(payload.get('seen') or ()),
         party=tuple(party), stored=tuple(to_copy(mon) for mon in boxes),
-        spares=tuple(to_copy(mon) for mon in spare_entries(party, boxes, off_limits)
-                     if (mon['box'], mon['position']) in available_slots),
+        spares=tuple(to_copy(mon) for mon in spare_entries(party, boxes)
+                     if mon['species'] not in off_limits and (mon['box'], mon['position']) in available_slots),
         tradeable=tuple(to_copy(mon) for mon in available if mon['species'] not in off_limits),
         hunting=hunting,
         missing=tuple(dex for dex in range(1, int(payload.get('dex_total', 151)) + 1) if dex not in owned))

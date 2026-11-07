@@ -76,7 +76,8 @@ class CapReached(Exception):
 def public_game_path(method, path):
     """Allow public routes before HTTP client URL normalization can change them."""
     if method == 'POST':
-        return path in {'api/control', 'api/lease', 'api/trading/preferences', 'api/export-save'}
+        return path in {'api/control', 'api/lease', 'api/trading/preferences', 'api/pc/release', 'api/pc/favor',
+                        'api/export-save'}
     if method not in {'GET', 'HEAD'}:
         return False
     if path in GAME_READ_PATHS:

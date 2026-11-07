@@ -141,6 +141,18 @@ class TradePreference(BaseModel):
     state: Literal['auto', 'first', 'keep', 'offered', 'withdrawn', 'locked', 'unlocked']
 
 
+class ReleaseRequest(BaseModel):
+    key: str
+    box: int
+    position: int
+    confirm: str = ''
+    cancel: bool = False
+
+
+class PcFavor(BaseModel):
+    favor: Literal['shiny', 'dvs'] | None = None
+
+
 def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adventure_name: str = '',
                browser_origin: str | None = None) -> FastAPI:
     gen2 = getattr(emu, 'generation', 1) == 2
@@ -372,7 +384,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                               'viewer_only': view_only()})
         if view == 'pc':
             # The PC draws party and boxes in full but never the collection plan. It hides the lock for watchers.
-            return fast_json({**{key: value for key, value in payload.items() if key != 'plan'}, 'viewer_only': view_only()})
+            return fast_json({**pc_values({key: value for key, value in payload.items() if key != 'plan'}),
+                              'viewer_only': view_only()})
         if view == 'dex':
             # The Pokédex lists who holds each species, never their moves or stats.
             storage = payload.get('storage')
@@ -381,6 +394,26 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             return fast_json({**payload, 'party': [pick(mon, HOLDER_FIELDS) for mon in payload.get('party') or []],
                               'storage': storage})
         return fast_json(payload)
+
+    def pc_values(payload):
+        """Add each boxed Pokémon's PC value (pcvalue.annotate), the owner's pending requests and the
+        Favor setting. The PC draws without them while the adventure is busy."""
+        from ..pcvalue import DEADLOCK  # pcvalue loads Red and Blue data, which a Gold-only Library lacks
+        storage = payload.get('storage')
+        try:
+            values, deadlock = emu.pc_values() if hasattr(emu, 'pc_values') else ({}, False)
+        except (RuntimeError, TimeoutError, ValueError):
+            values, deadlock = {}, False
+        requests = store.release_requests()
+        if isinstance(storage, dict):
+            # A field is sent only when set, so a full PC stays inside the page's payload budget.
+            def mark(mon):
+                value = values.get((mon.get('box', 0) - 1, mon.get('position', 0) - 1))
+                return {**mon, **({'pc_value': value} if value else {}),
+                        **({'release_requested': True} if mon.get('trade_key') in requests else {})}
+            storage = {**storage, 'pokemon': [mark(mon) for mon in storage.get('pokemon') or []]}
+        return {**payload, 'storage': storage, 'pc_favor': store.pc_favor(),
+                'pc_deadlock': DEADLOCK if deadlock else None}
 
     def pokedex_status(plan=True):
         status = emu.status()
@@ -427,6 +460,28 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             result = trading.unavailable(payload, instance, message)
         return slim_offers({**result, 'viewer_only': view_only(),
                             'holding': bool(store.get('trade_hold'))})
+
+    @app.post('/api/pc/release')
+    def pc_release(choice: ReleaseRequest):
+        """Ask for a boxed Pokémon to go first at the next PC visit, or cancel that request."""
+        if view_only():
+            raise HTTPException(403, 'This instance is view-only')
+        if choice.cancel:
+            store.set_release_request(choice.key, '')
+            return {'ok': True, 'request': None}
+        try:
+            value = emu.request_release(choice.box - 1, choice.position - 1, choice.key, choice.confirm)
+        except (ValueError, RuntimeError, TimeoutError) as error:
+            raise HTTPException(409, str(error)) from error
+        return {'ok': True, 'request': value}
+
+    @app.post('/api/pc/favor')
+    def pc_favor(choice: PcFavor):
+        """Favor shiny or Favor DVs doubles that part of every PC score."""
+        if view_only():
+            raise HTTPException(403, 'This instance is view-only')
+        store.set('pc_favor', choice.favor)
+        return {'ok': True, 'favor': choice.favor}
 
     @app.post('/api/trading/preferences')
     def trading_preference(choice: TradePreference):

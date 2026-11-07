@@ -412,7 +412,7 @@ def test_without_exp_share_a_stone_evolution_still_runs(data):
     assert goal.key == 'collection_evolve_item' and policy.collection['training']['target'] == 134
 
 
-def test_the_exp_share_holder_is_never_released_or_traded(data):
+def test_the_exp_share_holder_is_a_spare_but_never_traded(data):
     from pokesim.gen2.release import EXP_SHARE, spares
     from pokesim.gen2.trading import _kept
     assert data.items['EXP_SHARE'] == EXP_SHARE
@@ -420,7 +420,8 @@ def test_the_exp_share_holder_is_never_released_or_traded(data):
     other = mon(16, box=0, position=1, held_item=data.items['POTION'], dvs=(2, 2, 2, 2, 2))
     best = mon(16, box=0, position=2, dvs=(12, 12, 12, 12, 12))
     state = snapshot([lead()], [holder, other, best])
-    assert spares(state, lenient=True) == [other]
+    # The holder may go, but the Exp. Share is a wanted item, so the ledger takes it off first.
+    assert spares(state) == [other, holder]
     assert _kept({'species': 16, 'held_item': EXP_SHARE, 'trade_key': 'k', 'dvs': [3] * 5}, set()) == 'Holds the Exp. Share'
 
 
