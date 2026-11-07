@@ -230,8 +230,7 @@ All five releases shipped on the `feature/multi-user` branch. Where they differ 
 - Only an adventure's owner answers an offer. A manager can send offers but not accept or decline them.
 - `pokesim admin reset-password` shipped in release 1.
 - An archived adventure of a deleted user belongs to the admin who deleted them, so it always has an owner who can restore it or give it away.
-- The shared ROM shelf toggle is not built. Every shelf is private. ROMs from before shelves belong to the Library owner, and each adventure's owner has its ROM.
-- A member who can create adventures can add cartridges. Each person sees only their own ROM ids, which are hashes, and an adventure shared with someone who lacks its ROM hides its `rom_id`.
+- Per-user shelves and the shared ROM shelf toggle are gone. The Library has one cartridge shelf that only admins manage, through `library.cartridges`. Everyone who can create adventures sees every cartridge and starts adventures from it, and creation checks the cartridge is on the shelf. Removal is refused while any adventure, of anyone, plays it, and deleting a user leaves every cartridge. The first start drops the `rom_owners` table of release 5 and keeps every ROM row and file.
 - The admin backup download still contains ROM files.
 - The game page has no inbox yet, and inbox text is English only.
 

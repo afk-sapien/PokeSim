@@ -10,7 +10,9 @@ set up the first admin, see [Authentication](authentication.md).
 | See adventures | Every adventure | Their own, and ones shared with them |
 | Create adventures | Yes | If the admin allows it |
 | Press buttons, change settings, start and stop | Every adventure | Their own |
-| Backups, imports, ROMs, Library settings | Yes | No |
+| Add or remove cartridges | Yes | No |
+| Start an adventure from a Library cartridge | Yes | If they may create adventures |
+| Backups, imports, Library settings | Yes | No |
 | Invite people, change roles | Yes | No |
 
 An adventure belongs to the person who created it. Adventures from before accounts, and
@@ -94,16 +96,16 @@ account. You cannot delete your own account or the last admin.
 
 ## Cartridges
 
-Each person has their own cartridge shelf in Settings. Admins and members who can create
-adventures add cartridges there, and nobody sees anyone else's shelf. PokeSim stores each
-cartridge file once, however many people add it.
+The Library has one cartridge shelf, in Settings under Game cartridges. Only admins add and
+remove cartridges there. Members do not see that panel.
 
-Removing a cartridge takes it off your shelf only. It is refused while one of your own
-adventures plays it. The file is deleted once nobody has it on their shelf and no
-adventure plays it. Deleting a user empties their shelf the same way.
+Everyone who can create adventures sees every cartridge on the shelf and can start an
+adventure from any of them. A member sees only their own adventures in the list of what
+plays each cartridge.
 
-Cartridges added before accounts belong to the admin who set up the Library, and the
-owner of each adventure has its cartridge. Admin backups contain the cartridge files.
+Removing a cartridge deletes its file. It is refused while any adventure plays it, whoever
+owns that adventure. Archived adventures count, since they can be restored. Deleting a user
+leaves every cartridge on the shelf. Admin backups contain the cartridge files.
 
 ## Running limits
 

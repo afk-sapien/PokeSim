@@ -35,7 +35,8 @@ function library(options = {}) {
   const context = vm.createContext({
     document: {body: {dataset: {page: options.page || 'library', adventure: options.adventure || ''}}, querySelector: element,
       // Controls that need rights, as the real page lists them, when a test names them.
-      querySelectorAll: selector => selector.endsWith('[data-owner]') ? (options.ownerControls || []).map(element) : [],
+      querySelectorAll: selector => selector.endsWith('[data-owner]') ? (options.ownerControls || []).map(element)
+        : selector === '[data-admin-hint]' ? ['#empty-add-cartridge', '#create-add-cartridge'].map(element) : [],
       addEventListener(name, callback) {
       listeners[name] = callback
       if (name === 'click') clicks.push(callback)
@@ -794,6 +795,19 @@ test('with no cartridges the library and the dialog both point to Settings', asy
   assert.equal(view.element('#create-submit').hidden, true)
   assert.equal(view.element('#rom-id').value, '')
   assert.equal(view.element('#create-supported').textContent, 'Red, Blue, Yellow, Gold, Silver or Crystal')
+})
+
+test('a member with no cartridges is told to ask an admin, not sent to Settings', async () => {
+  const view = library({slots: SHELF.map(version => slot(version, version === 'red' ? 'red-rom' : '')), respond: path => path === '/api/v1/session'
+    ? {ok: true, json: async () => ({csrf_token: 'csrf', role: 'member', auth: 'accounts', authenticated: true, user: {id: 'm', can_create: true}})} : null})
+  await settle()
+  await view.element('#new-adventure').onclick()
+  await settle()
+  const cards = view.element('#game-choices').innerHTML
+  assert.doesNotMatch(cards, /href="\/settings/)
+  assert.match(cards, /Not in the Library/)
+  assert.equal(view.element('#empty-add-cartridge').hidden, true)
+  assert.equal(view.element('#create-add-cartridge').hidden, true)
 })
 
 test('a starter from the wrong game is refused before the adventure is created', async () => {

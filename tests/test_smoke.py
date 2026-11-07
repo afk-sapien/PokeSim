@@ -10,14 +10,14 @@ from test_accounts import library  # noqa: F401  (fixture)
 
 @pytest.fixture
 def served(library, monkeypatch):  # noqa: F811
-    """The accounts Library with an admin, its command line token and a cartridge anyone may add."""
+    """The accounts Library with an admin, its command line token and a cartridge for the admin to add."""
     manager = library.manager
     admin = library.user('admin', 'admin')
     manager.bind_library_owner(admin['id'])
     token = manager.issue_cli_token()
 
     def add_cartridge(raw, slot=None, owner=None):
-        rom = manager.registry.add_rom('fixture', 'sha1', 'red', owner)
+        rom = manager.registry.add_rom('smoke', 'sha1', 'blue')
         return {'rom': rom, 'title': 'Pokémon Red', 'message': 'added', 'raw': raw}
     monkeypatch.setattr(manager.assets, 'add_cartridge', add_cartridge)
     monkeypatch.setattr(manager.assets, 'install_portraits_quietly', lambda raw: 0)
@@ -32,7 +32,7 @@ def run(library, **options):  # noqa: F811
 
 def traces(manager):
     return ({user['id'] for user in manager.auth.users()}, [row['id'] for row in manager.auth.invites()],
-            {row['id'] for row in manager.registry.adventures()}, manager.registry.roms(None))
+            {row['id'] for row in manager.registry.adventures()}, manager.registry.roms())
 
 
 def test_a_sound_library_passes_and_keeps_no_trace(served):

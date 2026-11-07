@@ -239,8 +239,6 @@ def _delete_owner(manager, uid, user, plan, actor):
         held = list(manager.leases.leases)
     for aid in held:
         attempt(manager.leases.forget, aid, uid)
-    # Their shelf goes with them. A cartridge someone else has, or an adventure plays, stays.
-    attempt(manager.assets.forget_owner, uid)
     attempt(manager.auth.audit, 'user.delete', user_id=actor.id, target=uid)
     # Last, once every record is saved: stop the archived adventures.
     for aid, target in plan.items():

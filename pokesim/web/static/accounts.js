@@ -271,6 +271,8 @@
         const panel = document.getElementById(`${heading}-settings-heading`)?.closest('section')
         if (panel) panel.hidden = true
       }
+      // Admins manage the cartridges on the Library shelf.
+      $('#cartridges').hidden = true
     }
     $('#password-form').hidden = session.methods?.password === false
     $('#oidc-link').hidden = !session.methods?.oidc

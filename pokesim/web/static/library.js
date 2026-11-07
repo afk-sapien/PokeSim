@@ -635,7 +635,7 @@
     // Every slot reserves the same two button places so the keys line up across a row.
     const spacer = '<span class="cartridge-action-spacer" aria-hidden="true"></span>'
     const actions = state === 'coming' ? `<div class="cartridge-actions">${spacer}${spacer}</div>`
-      : `<div class="cartridge-actions"><button type="button" class="key${state === 'empty' || rom?.file_missing ? ' key--primary' : ''}" data-cartridge-upload="${id}" data-owner data-create aria-label="${state === 'installed' ? 'Replace' : 'Upload'} ${esc(slot.title)}">${state === 'installed' ? 'Replace' : 'Upload'}</button>${state === 'installed' ? `<button type="button" class="key" data-cartridge-remove="${id}" data-owner data-create aria-label="Remove ${esc(slot.title)}">Remove</button>` : spacer}</div>`
+      : `<div class="cartridge-actions"><button type="button" class="key${state === 'empty' || rom?.file_missing ? ' key--primary' : ''}" data-cartridge-upload="${id}" data-owner aria-label="${state === 'installed' ? 'Replace' : 'Upload'} ${esc(slot.title)}">${state === 'installed' ? 'Replace' : 'Upload'}</button>${state === 'installed' ? `<button type="button" class="key" data-cartridge-remove="${id}" data-owner aria-label="Remove ${esc(slot.title)}">Remove</button>` : spacer}</div>`
     const feedback = cartridgeFeedback[slot.version]
     return `<article class="cartridge-slot" id="cartridge-${id}" data-slot="${id}" data-state="${state}" aria-labelledby="cartridge-${id}-name"><div class="cartridge-face" aria-hidden="true"><span></span></div><div class="cartridge-info"><h3 class="cartridge-name" id="cartridge-${id}-name">${esc(slot.title)}</h3><p class="cartridge-state micro">${esc(status)}</p>${facts}${hint}</div><p class="cartridge-feedback${feedback?.error ? ' is-error' : ''}" role="status">${esc(feedback?.text || '')}</p>${actions}</article>`
   }
@@ -651,6 +651,7 @@
     }
     const none = cartridgesLoaded && !installed().length
     $('#empty-needs-cartridge').hidden = !none
+    adminHints()
     $('#empty-ready').hidden = none
     $('#empty-supported').textContent = supportedGames
     if (page === 'settings' && cartridgesLoaded && !shelfTargeted && /^#cartridge/.test(location.hash)) {
@@ -661,6 +662,11 @@
       target?.querySelector('[data-cartridge-upload]')?.focus({preventScroll: true})
     }
     permissions()
+  }
+  // Admins fill the Library shelf. A member is told to ask one instead of being sent to Settings.
+  function adminHints() {
+    document.querySelectorAll('[data-admin-hint]').forEach(element => { element.hidden = !owner })
+    document.querySelectorAll('[data-member-hint]').forEach(element => { element.hidden = owner })
   }
   async function refreshCartridges() {
     const data = await api('/api/v1/cartridges')
@@ -756,7 +762,9 @@
   function gameCard(slot, selected) {
     const id = esc(slot.version)
     if (!slot.installed) {
-      const action = slot.supported ? `<a class="game-card-add" href="/settings#cartridge-${id}">Add cartridge</a>` : '<span class="game-card-add">Coming in this release</span>'
+      // Only admins add cartridges, so a member sees what is missing without a link to add it.
+      const action = !slot.supported ? '<span class="game-card-add">Coming in this release</span>'
+        : owner ? `<a class="game-card-add" href="/settings#cartridge-${id}">Add cartridge</a>` : '<span class="game-card-add">Not in the Library</span>'
       return `<div class="game-card is-missing" data-version="${id}"><span class="game-card-name">${esc(slot.title)}</span><span class="game-card-meta">${slot.supported ? 'Not installed' : 'Not playable yet'}</span>${action}</div>`
     }
     return `<label class="game-card" data-version="${id}"><input type="radio" name="game" value="${esc(slot.rom.id)}" data-version="${id}"${selected ? ' checked' : ''}><span class="game-card-name">${esc(slot.title)}</span><span class="game-card-meta">Generation ${slot.generation === 2 ? 'II' : 'I'}</span></label>`
@@ -775,6 +783,7 @@
     const none = !ready.length
     $('#create-form').classList.toggle('needs-cartridge', none)
     $('#create-needs-cartridge').hidden = !none
+    adminHints()
     $('#create-submit').hidden = none
     $('#create-supported').textContent = supportedGames
     updateStarters()
@@ -833,7 +842,8 @@
       $('#create-progress').textContent = ''
       $('#create-dialog').showModal()
       if (installed().length) $('#new-name').focus()
-      else $('#create-add-cartridge').focus()
+      else if (owner) $('#create-add-cartridge').focus()
+      else $('#create-dialog [data-close]').focus()
     })
   }
   $('#new-adventure').onclick = openCreate
