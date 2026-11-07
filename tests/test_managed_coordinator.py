@@ -1133,9 +1133,12 @@ def test_cancelling_manual_trades_before_commit(setup):
     c._manual_update(starting['id'], state='starting')
     assert c.cancel_manual(starting['id'])['cancellable'] is False
     c._manual_update(starting['id'], state='queued')    # A restart puts it back in line with the request kept.
-    result = c.drain_manual()
-    assert result['phase'] == 'aborted'
-    assert setup.registry.transaction(starting['id'])['error'] == 'Cancelled by the owner'
+    # Its turn comes, and the cancel asked for is kept: nothing is recorded or sent.
+    assert c.drain_manual() is None
+    status = c.manual_status(starting['id'])
+    assert status['state'] == 'cancelled' and status['error'] == 'Cancelled by the owner'
+    with pytest.raises(KeyError):
+        setup.registry.transaction(starting['id'])
     assert setup.cable_calls == []
     started = c.enqueue_manual(manual_request(setup))
     row = c.propose({**{name: started[name] for name in ('left_id', 'right_id', 'left_key', 'right_key')},

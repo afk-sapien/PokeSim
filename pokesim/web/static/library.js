@@ -81,6 +81,12 @@
     if (id) return adventures.find(game => game.id === id)?.access === 'owner'
     return element.hasAttribute('data-create') && canCreate
   }
+  // A dialog for one adventure: its controls belong to that adventure, so a member who owns it can use them.
+  function openFor(dialog, game) {
+    document.querySelectorAll(`${dialog} [data-owner]`).forEach(element => { element.dataset.id = game.id })
+    permissions()
+    $(dialog).showModal()
+  }
   function permissions() {
     document.querySelectorAll('[data-owner]').forEach(element => { element.disabled = !allowed(element) || busy || element.hasAttribute('data-blocked') })
     if (notifyIntegration) renderNotifyProvider()
@@ -852,12 +858,10 @@
       $('#delete-name').textContent = game.name
       $('#delete-confirmation').value = ''
       $('#adventure-delete-dialog .dialog-feedback').textContent = ''
-      $('#adventure-delete-dialog').showModal()
+      openFor('#adventure-delete-dialog', game)
       return
     }
     if (button.dataset.action === 'settings') {
-      // The dialog's controls belong to this adventure, so a member who owns it can change them.
-      document.querySelectorAll('#adventure-settings-form [data-owner]').forEach(element => { element.dataset.id = game.id })
       $('#settings-id').value = game.id
       $('#settings-name').value = game.name
       const speed = String(game.settings?.speed ?? 1)
@@ -919,8 +923,7 @@
         input.disabled = johto || running(game)
       }
       $('#settings-event-steps-label').textContent = johto ? 'Steps between gift, trade, Sudowoodo and Snorlax returns' : 'Steps between gift, trade and Snorlax returns'
-      permissions()
-      $('#adventure-settings').showModal()
+      openFor('#adventure-settings', game)
       return
     }
     if (button.dataset.action === 'download-save') {

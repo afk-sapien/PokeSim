@@ -277,7 +277,16 @@ class Manager:
             if (not adventure['archived'] and adventure['state'] != 'recovering'
                     and (adventure['desired_state'] == 'running' or adventure['settings'].get('auto_start'))):
                 try:
-                    self.registry.update(adventure['id'], desired_state='running')
+                    if adventure['desired_state'] != 'running':
+                        # Started only because it starts with PokeSim, so it takes a place under the caps
+                        # like any other start. One already running keeps its place.
+                        with self.cap_lock:
+                            try:
+                                self.check_running_cap(adventure['id'])
+                            except CapReached as error:
+                                self.registry.update(adventure['id'], state='stopped', error=str(error))
+                                continue
+                            self.registry.update(adventure['id'], desired_state='running')
                     self.supervisor.start(adventure['id'])
                 except Exception as error:
                     self.registry.update(adventure['id'], state='failed', error=str(error))
