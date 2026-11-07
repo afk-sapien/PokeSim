@@ -308,10 +308,9 @@ async function refreshState() {
     }
     manualMode = state.manual_mode
     $('.game-card')?.classList.toggle('is-manual', manualMode)
-    // The bezel's power LED is lit while the game runs and dark while it is paused.
+    // The status lamp under the screen follows the game: lit while it runs, amber while it is paused.
     $('.game-card')?.classList.toggle('is-paused', Boolean(paused) && !manualMode)
-    set('#on-air-label', 'textContent', stopped ? 'Stopped' : manualMode ? 'Manual' : paused ? 'Paused' : 'Live')
-    set('#control-mode', 'textContent', stopped ? 'Showing the last save' : manualMode ? 'You’re playing. AI paused' : paused ? 'Game paused' : 'AI is playing')
+    set('#control-mode', 'textContent', stopped ? 'Stopped. Showing the last save' : manualMode ? 'You’re playing. AI paused' : paused ? 'Game paused' : 'AI is playing')
     renderLease()
     const ran = {pause: paused && !manualMode, resume: !paused && !manualMode, take_control: manualMode}
     // Another manager's Resume, or a take and a later end, replaces what this page asked for.
@@ -322,6 +321,8 @@ async function refreshState() {
     $('#pause')?.classList.toggle('is-pending', pendingControl === 'pause' || pendingControl === 'resume')
     $('#connection').classList.toggle('is-paused', paused)
     $('#connection').classList.remove('is-offline')
+    // The live page says what is playing once, under the screen. The rail speaks there only when the connection drops.
+    $('#connection').classList.toggle('is-quiet', Boolean($('#control-mode')))
     set('#status', 'textContent', stopped ? 'Stopped' : manualMode ? 'In control' : paused ? 'Paused' : 'Running')
     $('#connection').title = stopped ? 'Adventure stopped. Start it from the library.' : manualMode ? 'You’re in control' : paused ? 'Game paused' : 'Adventure in progress'
     set('#pause', 'textContent', paused && !manualMode ? 'Resume' : 'Pause')
@@ -405,6 +406,7 @@ async function refreshState() {
   } catch (_) {
     set('#status', 'textContent', 'Reconnecting…')
     $('#connection').title = ''
+    $('#connection').classList.remove('is-quiet')
     $('#connection').classList.add('is-offline')
   } finally {
     stateBusy = false

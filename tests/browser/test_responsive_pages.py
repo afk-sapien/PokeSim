@@ -99,11 +99,15 @@ def _live_keys(page):
     return page.evaluate('''() => {
       const deck = document.querySelector('.deck.controls')
       const edge = deck.getBoundingClientRect()
-      const keys = [...deck.querySelectorAll('.key, .live-speed select')].filter(el => el.offsetParent)
+      // The speed key is its label: the word Speed beside the select.
+      const keys = [...deck.querySelectorAll('.key, .live-speed')].filter(el => el.offsetParent)
         .map(el => {
           const box = el.getBoundingClientRect()
           let clipped = el.scrollWidth > el.clientWidth + 1
-          if (el.tagName !== 'SELECT') {
+          if (el.classList.contains('live-speed')) {
+            const select = el.querySelector('select')
+            clipped = clipped || select.scrollWidth > select.clientWidth + 1
+          } else {
             const range = document.createRange()
             range.selectNodeContents(el)
             clipped = clipped || range.getClientRects().length > 1

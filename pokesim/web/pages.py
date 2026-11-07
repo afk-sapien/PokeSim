@@ -57,14 +57,16 @@ def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', 
     """A viewer (a /view/ link) gets the same page without library navigation or a view link."""
     navigation = view_link = ''
     if base_path and not viewer:
-        # A compact key in the top rail: a link glyph, swapped for a tick while
-        # the "Copied" note shows. The label stays for screen readers.
+        # A compact key in the top rail: a link glyph and the words View link,
+        # the glyph swapped for a tick while the "Copied" note shows. The words
+        # show while the rail status is quiet. The label and tooltip always stay.
         view_link = ('<button id="copy-view-link" class="rail-key" type="button" aria-label="Copy view link" '
                      'title="Copy a link that shows this adventure without controls" '
                      f'data-view-link="/view/{html.escape(adventure_id, quote=True)}/">'
                      '<svg class="rail-key-icon" viewBox="0 0 16 16" aria-hidden="true">'
                      '<path class="glyph-link" d="M6.5 9.5l3-3M7 4.5l1.3-1.3a2.5 2.5 0 0 1 3.5 3.5L10.5 8M9 11.5l-1.3 1.3a2.5 2.5 0 0 1-3.5-3.5L5.5 8"/>'
                      '<path class="glyph-done" d="M3 8.5l3 3 7-7"/></svg>'
+                     '<span class="rail-key-text" aria-hidden="true">View link</span>'
                      '<span class="rail-key-note" role="status"></span></button>')
         navigation = ('<nav class="breadcrumb" aria-label="Breadcrumb">'
                       '<span class="adventure-switch">'
