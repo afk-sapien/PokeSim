@@ -132,7 +132,8 @@ class Registry:
                 self.db.backup(copy)
             finally:
                 copy.close()
-            with open(temporary, 'rb') as written:
+            # Opened for writing, since Windows flushes only a handle that can write.
+            with open(temporary, 'r+b') as written:
                 os.fsync(written.fileno())
             os.replace(temporary, path)
         except BaseException:
