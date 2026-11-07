@@ -163,6 +163,21 @@ def test_all_broken_saves_fail_without_starting_a_new_game(store):
     assert path.read_bytes() == b'partial'
 
 
+def test_a_failed_restore_names_each_reason_and_the_save_it_refused(store):
+    # Issue #321: the error said only how many saves were tried, so the cause stayed in the adventure's own log.
+    other = [store.write_checkpoint(b'valid', dict(metadata(), rom_sha1='different')) for _ in range(2)]
+    broken = store.autosave_path()
+    broken.write_bytes(b'partial')
+    emu = restore_emulator(store)
+    with pytest.raises(RuntimeError) as caught:
+        emu._restore_first_valid([other[1], other[0], broken])
+    message = str(caught.value)
+    assert message.startswith('No compatible autosave could be restored (3 tried). ')
+    assert f'ValueError: Checkpoint was created with a different ROM (2 saves, first {other[1].name}).' in message
+    assert f'(1 save, first {broken.name}).' in message
+    assert message.endswith(' Restore a backup or use a new data directory.') and '..' not in message
+
+
 def test_event_retention_removes_only_expired_event_attachments(store):
     from pokesim.events import Event
     event = Event('map', 'test', notable=True)

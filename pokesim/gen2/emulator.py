@@ -382,7 +382,8 @@ class Emulator:
                 log.exception('Cannot restore Gen II checkpoint %s', path.name)
         else:
             if errors:
-                raise ValueError('No compatible Gen II autosave could be restored') from errors[-1]
+                raise ValueError(f'No compatible Gen II autosave could be restored ({len(errors)} tried). '
+                                 f'The newest was refused: {str(errors[0]).rstrip(".")[:200]}') from errors[-1]
             self._sync_clock()
         from .. import rewards
         rewards.initialize(self.store, self.snapshot.hall_of_fame_count if self.snapshot else 0)
