@@ -44,6 +44,7 @@ BEFORE_LOAD_CHECKPOINT = 'before-load.state'
 BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
 # The phases of an exchange's preparation that hold back every command but stop, speed and pause.
 PREPARING = {'travelling', 'storage', 'rendezvous'}
+MAX_RELOADS = 12  # reloads in a row without progress after which reloading stops, as in Generation II
 
 log = logging.getLogger("pokesim.emu")
 
@@ -324,7 +325,7 @@ class Emulator:
         state = 'recovering' if (self.invalid_since or time.time() - self.last_reload < 30
                                  or mode == 'finding another approach') else 'making_progress' if age is not None and age < 120 else 'exploring'
         stall, now = getattr(self, 'stall', None), time.time()
-        if stall and stall.stalled(self.frame, now):
+        if stall and stall.stalled(self.frame, now) or getattr(self, 'reloads_exhausted', False):
             state = 'stalled'
         return {'state': state, 'quiet_game_minutes': stall.quiet(self.frame, now)[0] if stall else 0,
                 'last_achievement': {
@@ -698,7 +699,7 @@ class Emulator:
             if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
                 self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
             if ev.type in PROGRESS_EVENTS:
-                self.unstick_streak = 0
+                self.unstick_streak, self.reloads_exhausted = 0, False
             if ev.type in PROGRESS_EVENTS and getattr(self, 'stall', None):
                 self.stall.progress(self.frame, time.time())
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
@@ -799,15 +800,54 @@ class Emulator:
         except Exception:
             log.exception("cannot keep the save from before %s", name)
 
+    def _reset_watch(self):
+        now = time.time()
+        self.stuck_since = self.last_reload = now
+        self.invalid_since = self.battle_since = None
+
+    def _give_up(self, why):
+        """Abandon the collection project that every reload left stuck, so the next goal runs instead.
+
+        The project stands down in the director and comes back later, and the reloads start over for
+        whatever runs next. A story goal has no project to abandon, so it stays flagged as stalled.
+        """
+        policy, snapshot = getattr(self, 'policy', None), getattr(self, 'snapshot', None)
+        collection = getattr(policy, 'collection', None)
+        if not getattr(collection, 'project', None) or not getattr(snapshot, 'started', False):
+            return False
+        goal = getattr(policy, 'goal', None)
+        label = goal.title if goal is not None else 'the current project'
+        collection.abandon(f'{why.capitalize()} and {self.unstick_streak} reloads did not help')
+        log.error('%s and %d reloads did not help, giving up on %s for now', why, self.unstick_streak, label)
+        self._handle_events([Event('stall', f'Gave up on “{label}” for now',
+                                   f'{why.capitalize()} at {snapshot.map_name} and {self.unstick_streak} reloads '
+                                   'did not help, so it waits while other goals run.', priority=HIGH)], snapshot)
+        policy.on_restore()
+        self.unstick_streak, self.reloads_exhausted = 0, False
+        Emulator._reset_watch(self)
+        self.input_epoch += 1
+        return True
+
     def _unstick(self, since: float, why: str):
         """Go back to an autosave from before the trouble started (or power-cycle if there is none)."""
         Emulator._drop_pin(self, pin.STUCK)
+        self.unstick_streak = getattr(self, 'unstick_streak', 0)
+        if self.unstick_streak >= MAX_RELOADS and Emulator._give_up(self, why):
+            return
+        if self.unstick_streak >= MAX_RELOADS:
+            # Reloading again would only replay the same trouble. Leave the run as it is, flagged as
+            # stalled, and say so once rather than at every guard check.
+            if not getattr(self, 'reloads_exhausted', False):
+                log.error('%s and %d reloads did not help, not reloading again', why, self.unstick_streak)
+                self.reloads_exhausted = True
+            Emulator._reset_watch(self)
+            return
         saves = self.store.autosaves()
         older = [p for p in saves if p.stat().st_mtime < since - 30]
         target = older[-1] if older else (saves[0] if saves else None)
         # A recent save inside the League can already be lost: one frozen partner left and an
         # opponent that never attacks. If going back a little did not help, restart the attempt.
-        self.unstick_streak = getattr(self, 'unstick_streak', 0) + 1
+        self.unstick_streak += 1
         entry = self.store.state_path(LEAGUE_CHECKPOINT)
         if self.unstick_streak >= 2 and entry and self.snapshot is not None and self.snapshot.map in LEAGUE:
             log.warning("%s again with no progress, restarting the League attempt", why)
