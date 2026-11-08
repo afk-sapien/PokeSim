@@ -97,6 +97,16 @@ def shadow_kind(project):
     return kind
 
 
+def improves(s, species, dvs):
+    """True when a wild ``species`` with ``dvs`` has a rarer DV total than every copy held. A held copy
+    without DV data, as in a compact snapshot, is not counted."""
+    tail = assessment({'dvs': dvs})['dv_top_percent']
+    held = [assessment(mon)['dv_top_percent'] for mon in [asdict(p) for p in s.party] + s.storage_entries()
+            if mon['species'] == species]
+    held = [value for value in held if value is not None]
+    return tail is None or not held or tail < min(held)
+
+
 def can_train(mon):
     """True unless ``mon``'s attacking moves hold fewer than TRAINING_PP uses between heals. A row
     without its moves, from an older snapshot, is not judged."""
@@ -466,10 +476,18 @@ class Collection:
         self.peer_demand = dict(requests)
         self.demand_until = time.monotonic() + 180
 
-    def repeat_target(self, species, map_id=None):
+    def repeat_target(self, species, map_id=None, snapshot=None, dvs=None):
+        """The species a wild battle should catch as a repeat, or None.
+
+        A DV hunt takes any species on its map, but given the wild ``dvs`` and the ``snapshot`` it
+        only takes a catch that beats every copy held. Otherwise Yellow's Tauros hunt caught every
+        owned Nidoran, Cubone and Exeggcute in the Safari Zone and released them at the next PC.
+        """
         if dex(species) in getattr(self, 'returned_legendaries', ()):
             return species
         project = self.project or {}
+        if project.get('dv_hunt') and snapshot is not None and dvs is not None and not improves(snapshot, species, dvs):
+            return None
         if project.get('dv_hunt') and map_id == project.get('map'):
             return species
         return project.get('species') if project.get('repeat') else None
