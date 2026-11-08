@@ -89,6 +89,12 @@ downloads to the release and verifies every uploaded checksum. Versions containi
 stable release of its line. A fix to an older line moves only that line, and release
 candidates move neither. Each moved tag is pulled anonymously and checked against the tested image.
 
+After each publication, move `main` to the next development version, such as
+`python tools/release_version.py 0.7.0.dev0`. A development version moves only
+`pyproject.toml`, `pokesim/__init__.py`, the lockfile and the Dockerfile, so builds from
+`main` report it. The installers, Compose files and docs keep naming the published
+release, and the pin check requires them to agree on it.
+
 ## Emulator dependencies are GitHub release wheels
 
 PokeSim depends on `pokecore` and `pyboy-rs`, which are not on PyPI. `pyproject.toml` names
