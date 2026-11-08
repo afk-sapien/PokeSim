@@ -38,8 +38,11 @@ COPY pyproject.toml setup.py uv.lock LICENSE THIRD_PARTY_NOTICES.md /usr/share/p
 COPY licenses /usr/share/pokesim/licenses
 ARG VERSION=0.7.0.dev0
 ARG REVISION=unknown
+# The PRAGMA user_version of app.sqlite this build writes. tools/deploy_host.sh passes it.
+ARG SCHEMA=unknown
 ENV POKESIM_REVISION=$REVISION
-LABEL org.opencontainers.image.source="https://github.com/afk-sapien/PokeSim" \
+LABEL io.github.afk-sapien.pokesim.schema=$SCHEMA \
+      org.opencontainers.image.source="https://github.com/afk-sapien/PokeSim" \
       org.opencontainers.image.title="pokesim" \
       org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.revision=$REVISION \

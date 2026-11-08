@@ -10,7 +10,7 @@ from .base import Action, Policy
 from ..planning.ledger import box_wanted
 from pokecore.textmatch import ScreenText
 from .battle import (BALLS, CURES, HEALING, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
-                     healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
+                     enemy_dvs, healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .pickups import Pickups, ground_item
@@ -701,7 +701,7 @@ class StrategicPolicy(Policy):
             self.flee_tries, self.fleeing = 0, False
         if kind == "safari":
             missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
-            targeted = self.collection.repeat_target(s.enemy_species, s.map) == s.enemy_species
+            targeted = self.collection.repeat_target(s.enemy_species, s.map, s, enemy_dvs(mem)) == s.enemy_species
             if not s.can_catch or not (s.enemy_shiny or missing or targeted or useful_capture(s, s.enemy_species, s.enemy_level)):
                 self.reason = ('Leave the encounter because the party and active box are full' if not s.can_catch
                                else 'Leave an unnecessary duplicate already covered by the collection')
@@ -739,7 +739,7 @@ class StrategicPolicy(Policy):
                                             {'catch_cut': 15, 'catch_surf': 57, 'catch_strength': 70}.get(self.goal.key), collect_missing=True,
                                             capture_species=self.collection.project['species']
                                             if legendary_project(self.collection.project) else None,
-                                            repeat_species=self.collection.repeat_target(enemy.species, s.map),
+                                            repeat_species=self.collection.repeat_target(enemy.species, s.map, s, enemy_dvs(mem)),
                                             training_index=self.collection.trainee(s, self.collection.project)
                                             if self.collection.project and self.collection.project['method'] == 'train' else None,
                                             kind=getattr(self.goal, 'kind', STORY), flee_tries=self.flee_tries)
