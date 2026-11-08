@@ -43,6 +43,8 @@
 
 - Stop Red, Blue and Yellow DV hunts from catching Pokémon only to release them. A hunt took every species on its map, so a postgame Yellow hunting Tauros caught about 1500 owned Nidoran, Exeggcute and Cubone a day in the Safari Zone and released nearly all of them at the next Pokémon Center. A hunt now reads the wild Pokémon's DVs and catches it only when they beat every copy already held, for the target and for other species alike. Missing and shiny Pokémon are still always caught.
 
+- Heal before a boss battle when the party is not ready, in all six games. Before a gym leader, an Elite Four member, the Champion, the Gen I rival in the League or Red, a Pokémon under half its HP, or under half the PP of the attacks it fights with, sends the party to a Pokémon Center first. Each attack's PP counts by how hard it hits, so a spent Flamethrower is not hidden by a full Strength. One approach takes at most three such trips. With no Center in reach, or the trips used, the party goes in as it stands and the journal says "Went in unready".
+
 ## 0.6.2
 
 - Publish the container image for linux/arm64 as well as linux/amd64, so it runs on a Raspberry Pi 4 or 5, an ARM NAS or an Apple silicon Mac without emulation. The release workflow builds and tests each architecture on its own native runner, pushes each as `<version>-linux-<arch>` and joins them into one multi-platform tag, then checks anonymously that the tag serves both and that each pulls the tested image ([#269](https://github.com/afk-sapien/PokeSim/issues/269)).

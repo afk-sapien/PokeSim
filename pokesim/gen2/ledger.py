@@ -12,6 +12,7 @@ run sells valuables and spare TMs only when it has no ball and no money for one.
 from collections import Counter
 import math
 
+from ..planning import boss
 from ..planning.ledger import BOX, HP, MONEY, PARTY, PP, PRICELESS, Ledger, Need, Resources, Shortfall, Unit
 from .champion_shop import SUPPLIES
 from .menus import Release
@@ -19,14 +20,13 @@ from .release import headroom
 
 # A Pokémon under this share of its HP sends the run to a Pokémon Center.
 HEAL_LINE = 0.6
-# An attack counts toward a Pokémon's PP room only when it hits at least this share as hard as the
-# Pokémon's strongest attack. A Typhlosion with Flamethrower and Strength spent still had 30 PP of
-# Cut, so it never went to heal and met Misty and Brock with Cut alone, and lost.
-STRONG_SHARE = 0.5
-# Hits an attack lands in one use, as the battle scores it.
-HITS = {'EFFECT_MULTI_HIT': 3, 'EFFECT_DOUBLE_HIT': 2, 'EFFECT_POISON_MULTI_HIT': 2}
-# A move that knocks out its user is the last choice in battle, so it is weighed as one.
-SELF_KO = {'EFFECT_SELFDESTRUCT', 'EFFECT_EXPLOSION'}
+# How the Gold, Silver and Crystal move table names the attacks the boss check weighs apart
+# (planning/boss.py): hits per use as the battle scores them, the self-KO moves, and level and set damage.
+EFFECTS = boss.Effects(
+    hits={'EFFECT_MULTI_HIT': 3, 'EFFECT_DOUBLE_HIT': 2, 'EFFECT_POISON_MULTI_HIT': 2},
+    self_ko=frozenset({'EFFECT_SELFDESTRUCT', 'EFFECT_EXPLOSION'}),
+    level=frozenset({'EFFECT_LEVEL_DAMAGE', 'EFFECT_PSYWAVE'}),
+    fixed={'EFFECT_STATIC_DAMAGE': 0})
 # Distinct entries each Gen 2 pocket holds.
 POCKET_SLOTS = {'items': 20, 'balls': 12}
 PARTY_SIZE = 6
@@ -103,26 +103,24 @@ def attack_strength(data, mon, move):
     """How hard ``move`` hits for ``mon`` against no foe in particular, or 0 for a move with no power.
 
     Power with the same type bonus and hit count the battle scores, the level for Seismic Toss and
-    Night Shade, and a tenth for a move that knocks out its user.
+    Night Shade, and a tenth for a move that knocks out its user. The rule is shared with Red, Blue and
+    Yellow in planning/boss.py.
     """
-    entry = data.moves.get(move, {})
-    power = entry.get('power', 0)
-    if not power:
-        return 0
-    effect = entry.get('effect')
-    if effect in {'EFFECT_LEVEL_DAMAGE', 'EFFECT_PSYWAVE'}:
-        return mon.level
-    if effect == 'EFFECT_STATIC_DAMAGE':
-        return power
-    stab = 1.5 if entry.get('type') in data.species.get(mon.species, {}).get('types', ()) else 1
-    return power * stab * HITS.get(effect, 1) * (0.1 if effect in SELF_KO else 1)
+    return boss.attack_strength(data.moves.get(move, {}), data.species.get(mon.species, {}).get('types', ()),
+                                mon.level, EFFECTS)
 
 
 def strong_pp(data, mon):
-    """Uses left of the attacks ``mon`` fights with: those within STRONG_SHARE of its strongest."""
-    strengths = [attack_strength(data, mon, move) for move in mon.moves]
-    line = max(strengths, default=0) * STRONG_SHARE
-    return sum(pp for strength, pp in zip(strengths, mon.pp) if strength and strength >= line)
+    """Uses left of the attacks ``mon`` fights with: those within boss.STRONG_SHARE of its strongest."""
+    return boss.strong_uses([attack_strength(data, mon, move) for move in mon.moves], mon.pp)
+
+
+def fighters(data, snapshot):
+    """The party as the boss check reads it (planning/boss.py), eggs left out. A state with no
+    maximum PP read counts each move's base PP."""
+    return tuple(boss.fighter(mon.hp, mon.max_hp, [attack_strength(data, mon, move) for move in mon.moves], mon.pp,
+                              getattr(mon, 'max_pp', ()) or [data.moves.get(move, {}).get('pp', 0) for move in mon.moves])
+                 for mon in snapshot.party if not mon.egg)
 
 
 def battle_room(data, snapshot):

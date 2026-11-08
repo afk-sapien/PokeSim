@@ -977,21 +977,68 @@ class Policy:
         return (not self.goal.key.startswith('push_') and not well_item
                 and (not self.collection.get('contest') or not mem.byte('wStatusFlags2') & 4))
 
-    def healing(self, snapshot):
+    # Goals that end in a gym leader, Elite Four, Champion or Red battle, which the boss check guards
+    # (planning/boss.py). The rival's battles are scripted on the way to other goals, so none is a goal.
+    BOSSES = frozenset({'zephyr', 'hive', 'plain', 'fog', 'storm', 'mineral', 'glacier', 'clair',
+                        'league_will', 'league_koga', 'league_bruno', 'league_karen', 'league_lance',
+                        'surge', 'sabrina', 'erika', 'janine', 'misty', 'brock', 'blaine', 'blue', 'red'})
+
+    def heal_blocked(self, snapshot):
+        """Whether healing stands down here: the League, the transmitter room, Ice Path, the Goldenrod
+        warehouse, or Burned Tower before the beasts run."""
         if (self.in_transmitter_room(snapshot) or self.in_league(snapshot)
                 or self.constant(snapshot).startswith('ICE_PATH_')
                 or self.constant(snapshot) in {
                     'GOLDENROD_UNDERGROUND_WAREHOUSE', 'GOLDENROD_UNDERGROUND_SWITCH_ROOM_ENTRANCES'}):
-            return None
-        if (snapshot.map == self.data.map_ids['BURNED_TOWER_B1F']
+            return True
+        return (snapshot.map == self.data.map_ids['BURNED_TOWER_B1F']
                 and (not snapshot.event('EVENT_RELEASED_THE_BEASTS') or self.data.game == 'crystal'
-                     and not snapshot.event('EVENT_EUSINE_IN_BURNED_TOWER'))):
+                     and not snapshot.event('EVENT_EUSINE_IN_BURNED_TOWER')))
+
+    def boss_ready(self, snapshot, blocked):
+        """The boss check before the goal under way (planning/boss.py): READY, HEAL or UNREADY.
+
+        HEAL needs a Pokémon Center the heal walk can reach. UNREADY goes in anyway, and the journal
+        says so once per approach.
+        """
+        from ..planning import boss
+        from .ledger import fighters
+        gate = getattr(self, 'boss_gate', None)
+        if gate is None:
+            gate = self.boss_gate = boss.Gate()
+        goal = self.goal
+        key = goal.key if goal is not None and goal.key in self.BOSSES else None
+        party = fighters(self.data, snapshot)
+        verdict = gate.decide(key, party, lambda: not blocked and self.center(snapshot) is not None, where=snapshot.map)
+        if verdict == boss.UNREADY and not getattr(self, 'ladder_survey', False) and gate.note():
+            from .collection import pin_events
+            names = [mon.name for mon in snapshot.party if not mon.egg]
+            pin_events(self).append(boss.unready_event(goal.label, party, names))
+        return verdict
+
+    def healing(self, snapshot):
+        from ..planning import boss
+        from .ledger import walk_spent
+        if self.heal_blocked(snapshot):
+            if any(not mon.egg for mon in getattr(snapshot, 'party', ())):
+                # No walk out from here, so a boss ahead is met as the party stands.
+                self.boss_ready(snapshot, True)
             return None
         healthy = [mon for mon in snapshot.party if not mon.egg]
-        from .ledger import walk_spent
-        if not healthy or not walk_spent(self.data, snapshot):
+        if not healthy or not walk_spent(self.data, snapshot) and self.boss_ready(snapshot, False) != boss.HEAL:
             self.healing_map = None
             return None
+        center = self.center(snapshot)
+        if center is None:
+            self.healing_map = None
+            return None
+        mid, nurse = center
+        self.healing_map = mid
+        return Goal('heal', 'Restore the team at a Pokémon Center', self.data.maps[mid]['constant'],
+                    nurse['x'], nurse['y'] + 2, 'up')
+
+    def center(self, snapshot):
+        """The Pokémon Center the heal walk goes to, as (map, nurse), or None when none is reachable."""
         cut = bool(snapshot.badges & 2) and any(15 in mon.moves for mon in snapshot.party)
         surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
         choices = []
@@ -1015,13 +1062,10 @@ class Policy:
                     self.data.maps[step[1][0]]['constant'].startswith('ICE_PATH_') for step in walk):
                 choices.append((len(route), mid, nurse))
         if not choices:
-            self.healing_map = None
             return None
         # Keep to the center already chosen while it stays reachable, so the trip does not switch halfway.
         _, mid, nurse = next((choice for choice in choices if choice[1] == self.healing_map), min(choices))
-        self.healing_map = mid
-        return Goal('heal', 'Restore the team at a Pokémon Center', self.data.maps[mid]['constant'],
-                    nurse['x'], nurse['y'] + 2, 'up')
+        return mid, nurse
 
     TALK_STALL_FRAMES = 80
     TALK_FAIL_FRAMES = 110
