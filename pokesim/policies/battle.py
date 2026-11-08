@@ -5,6 +5,8 @@ live battle stats, Generation I type categories, accuracy, and special effects.
 """
 from dataclasses import dataclass
 
+from pokecore.dvs import hp_dv
+
 from ..planning.stance import FLEE, HUNT, STORY, TRAVEL, Encounter, stance
 from ..ram import PartyMon
 from ..strategy_data import ITEMS, MAPS, MATCHUPS, MOVES, PRICES, SPECIES
@@ -42,6 +44,13 @@ def read_battler(mem, base):
     species = mem[W_ENEMY_SPECIES2] if base == W_ENEMY_MON and mem[W_ENEMY_STATUS3] & TRANSFORMED else b[0]
     return PartyMon(species, word(1), word(15), b[14], "", b[4], (b[5], b[6]),
                     tuple(b[8:12]), tuple(pp), word(17), word(19), word(21), word(23))
+
+
+def enemy_dvs(mem):
+    """The wild Pokémon's DVs, ordered HP, Attack, Defense, Speed, Special as stored copies are."""
+    attack, defense = mem[W_ENEMY_MON + 12] >> 4, mem[W_ENEMY_MON + 12] & 15
+    speed, special = mem[W_ENEMY_MON + 13] >> 4, mem[W_ENEMY_MON + 13] & 15
+    return (hp_dv(attack, defense, speed, special), attack, defense, speed, special)
 
 
 def effectiveness(move_type, defender_types):
