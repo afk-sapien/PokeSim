@@ -1356,11 +1356,13 @@ class StrategicPolicy(Policy):
         self.release_note, self.pc_deadlock = release_note()
         return target
 
-    def pc_rated(self, snapshot):
-        """Every Pokémon scored as the next release scores it (pcvalue.py), for the PC tab."""
+    def pc_rated(self, snapshot, marks=frozenset()):
+        """Every Pokémon scored as the next release scores it (pcvalue.py), for the PC tab. Extra League
+        reward ``marks`` rate a gift before it is delivered."""
         partners = frozenset(self.trade_partners()) if hasattr(self, 'trade_partners') else frozenset()
+        rewards, requested, favor = self.release_inputs()
         return self.pc.rated(snapshot, self.collection.project, self._preferences(), self.collection, partners,
-                             *self.release_inputs())
+                             frozenset(rewards) | marks, requested, favor)
 
     def release_pending(self, snapshot):
         """Whether an owner's release request waits for the next PC visit. A request whose Pokémon has

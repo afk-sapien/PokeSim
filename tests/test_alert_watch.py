@@ -37,5 +37,16 @@ def test_an_alert_the_command_could_not_hand_over_is_tried_again(tmp_path, monke
     state = tmp_path / 'alerts.json'
     assert run(monkeypatch, state, [problem('help:a')], [sys.executable, '-c', 'raise SystemExit(1)']) == 1
     assert json.loads(state.read_text()) == []
-    assert run(monkeypatch, state, [problem('help:a')]) == 0
+    assert run(monkeypatch, state, [problem('help:a')], [sys.executable, '-c', '']) == 0
     assert json.loads(state.read_text()) == ['help:a']
+
+
+def test_a_run_with_no_command_prints_alerts_but_marks_none_seen(tmp_path, monkeypatch, capsys):
+    # The overnight watch runs without a command and shares the timer's state file.
+    state = tmp_path / 'alerts.json'
+    assert run(monkeypatch, state, [problem('help:a')]) == 0
+    assert 'asked for help' in capsys.readouterr().out and not state.exists()
+    out = tmp_path / 'tasks.txt'
+    command = [sys.executable, '-c', f'import sys; open({str(out)!r}, "a").write(sys.stdin.read())']
+    assert run(monkeypatch, state, [problem('help:a')], command) == 0
+    assert 'asked for help' in out.read_text()
