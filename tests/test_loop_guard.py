@@ -63,3 +63,12 @@ def test_the_same_save_reloaded_again_and_again_trips_the_guard(tmp_path):
         assert guard.looping(store) is None
     finally:
         store.close()
+
+
+def test_gen2_help_request_names_why_the_run_loops():
+    from types import SimpleNamespace
+
+    from pokesim.gen2.emulator import Emulator
+    guard = SimpleNamespace(looping=lambda store: 'It received and released Chikorita 6 times.')
+    assert Emulator._looping(SimpleNamespace(loop_guard=guard, store=None)) == 'It received and released Chikorita 6 times.'
+    assert Emulator._looping(SimpleNamespace(store=None)) is None
