@@ -910,9 +910,9 @@ class Emulator:
         return True
 
     def _looping(self):
-        """Whether the loop guard sees the same gift and release, or the same reload, repeating."""
+        """Why the loop guard sees the same gift and release, or the same reload, repeating, or None."""
         guard = getattr(self, 'loop_guard', None)
-        return bool(guard and guard.looping(self.store))
+        return guard.looping(self.store) if guard else None
 
     def _unstick(self, since_frame, why):
         """Go back to an autosave from before the trouble started, or power-cycle when there is none."""

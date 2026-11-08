@@ -252,3 +252,18 @@ def test_a_gen2_league_gift_the_pc_would_release_is_settled_without_sending_it(t
         assert store.events() == [] and store.get(PENDING) is None and saves == []
     finally:
         store.close()
+
+
+@pytest.mark.parametrize(('status', 'free', 'wasted'), [
+    ('spare', 100, True), ('kept', 100, False), ('kept', 3, True), ('floor', 3, False)])
+def test_a_league_gift_short_of_the_best_copy_is_wasted_when_the_pc_needs_room(status, free, wasted):
+    from pokesim import rewards
+    row = SimpleNamespace(entry=SimpleNamespace(slot=(1, 1)), status=status)
+    policy = SimpleNamespace(pc_rated=lambda _: [row])
+    counts = [20] * 12
+    for index in range(12):
+        take = min(free, 20)
+        counts[index] -= take
+        free -= take
+    assert rewards.wasted(policy, SimpleNamespace(box_counts=tuple(counts)), (1, 1)) is wasted
+    assert rewards.wasted(policy, SimpleNamespace(box_counts=tuple(counts)), (2, 1)) is False
