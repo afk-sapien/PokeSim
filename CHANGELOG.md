@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Send a Gold, Silver or Crystal Pokémon to heal once its strong attacks run out, even when a weak one has PP left. A level 84 Typhlosion carried Kanto with Flamethrower and Strength, and when both were spent, 30 PP of Cut kept it from the Pokémon Center. It met Misty and Brock with Cut and Swift alone, fainted, and the weak rest of the party could not finish the battle. The heal walk now counts only attacks that hit at least half as hard as the Pokémon's strongest.
+
 - Stop two linked games trading the same species back and forth. Each copy scored a small gain, and the receiver's PC released it at the next visit. Before an automatic trade, each receiver now rates the incoming Pokémon with its own PC rules, and a trade one of them would release is skipped. A Pokémon that completes a Pokédex entry is always sent. After a trade or a refusal, the same two games leave that species pair alone for 6 hours.
 
 - Skip a Gold, Silver or Crystal event return or gift the PC would release. Gold caught the returning Sudowoodo and released it 11 seconds later, and took the Eevee gift only to release it. A due return or gift the PC would rate as a spare now waits for the next walking milestone, and the journal says so once. The loop guard counts a caught return or completed gift as progress only once it has stayed in the PC for a check.
