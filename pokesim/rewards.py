@@ -98,6 +98,24 @@ def earn(store, count, *, enabled=True):
         save(store.db, value)
 
 
+def wasted(policy, snapshot, slot):
+    """Whether the gift staged at ``slot`` would only be released at the next PC visit: a spare by the
+    PC value rules (pcvalue.py). Sending it anyway turns every League win into a gift and a release."""
+    rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else ()
+    return any(row.entry.slot == slot and row.status == 'spare' for row in rated)
+
+
+def skip(store, ordinal):
+    """Settle League reward ``ordinal`` without a gift, as rewards earned while they were off are."""
+    with store.lock, store.db:
+        value = ledger(store.db)
+        if value['delivered'] + 1 != ordinal or value['earned'] < ordinal:
+            raise ValueError('The League gift claim changed')
+        value['delivered'] = ordinal
+        value['skipped'] = value.get('skipped', 0) + 1
+        save(store.db, value)
+
+
 _MARKS = {}
 
 

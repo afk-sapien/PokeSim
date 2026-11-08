@@ -180,3 +180,75 @@ def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, f
             assert status(store)['total'] == 1
     finally:
         store.close()
+
+
+def spare_at(slot):
+    """A policy whose PC rating calls the Pokémon at ``slot`` a spare."""
+    row = SimpleNamespace(entry=SimpleNamespace(slot=slot), status='spare')
+    return SimpleNamespace(on_restore=lambda: None, pc_rated=lambda _: [row])
+
+
+def test_a_league_gift_the_pc_would_release_is_settled_without_sending_it(tmp_path, monkeypatch):
+    from pokesim import ram
+    from test_trade_save import Memory, populate
+
+    store = Store(tmp_path)
+    try:
+        rewards.earn(store, 1)
+        before = snap(hall_of_fame_count=1, box_counts=(0,) * 12)
+        memory = populate(Memory(), contents=())
+        species = select_reward(before, rewards.ledger(store.db), True, league_rewards=True)[2]
+        from pokesim.strategy_data import SPECIES
+        after = replace(before, box_counts=(1,) + (0,) * 11, owned=before.owned | {SPECIES[species]['dex']},
+                        stored_pokemon=((0, species, 5, 'GIFT'),))
+        monkeypatch.setattr(ram, 'read_snapshot', lambda mem, _: before if mem is memory else after)
+        clone = SimpleNamespace(memory=populate(Memory(), contents=()), load_state=lambda _: None,
+                                save_state=lambda stream: stream.write(b'reward-checkpoint'), stop=lambda **_: None)
+        saves = []
+        emu = SimpleNamespace(store=store, paused=False, manual_mode=False, pb=SimpleNamespace(memory=memory),
+                              frame=100, _state_bytes=lambda: b'source', _autosave=lambda: saves.append(1),
+                              _boot=lambda: clone, _load_state_file=lambda _: None,
+                              policy=spare_at((0, 0)), input_epoch=0)
+        assert deliver(emu, league_rewards=True) is None
+        value = rewards.ledger(store.db)
+        assert (value['delivered'], value['skipped']) == (1, 1)
+        assert store.events() == [] and store.get(PENDING) is None and saves == []
+        # The claim is settled, so the next call has nothing to send.
+        assert deliver(emu, league_rewards=True) is None
+    finally:
+        store.close()
+
+
+def test_a_gen2_league_gift_the_pc_would_release_is_settled_without_sending_it(tmp_path, monkeypatch):
+    import random
+    from pokesim import config
+    from pokesim.gen2 import rewards as gen2_rewards
+
+    store = Store(tmp_path)
+    try:
+        rewards.earn(store, 1)
+        species = random.Random(f'{rewards.ledger(store.db)["seed"]}:1').choice((152, 155, 158))
+        before = SimpleNamespace(valid=True, started=True, in_battle=False, tiles=[''] * 18, party=(), badges=0,
+                                 items=(), event_flags=b'', owned=frozenset(), stored=(), box_counts=(0,) * 14,
+                                 hall_of_fame_count=1, map_name='Goldenrod Pokémon Center')
+        gift = SimpleNamespace(box=0, position=0, shiny=False)
+        after = SimpleNamespace(**{**vars(before), 'owned': frozenset({species}), 'stored': (gift,),
+                                   'box_counts': (1,) + (0,) * 13})
+        clone = SimpleNamespace(memory='clone', stop=lambda **_: None)
+        monkeypatch.setattr(config, 'LEAGUE_REWARDS', True, raising=False)
+        monkeypatch.setattr(config, 'MEW_EVENT', False, raising=False)
+        monkeypatch.setattr(gen2_rewards, 'read_snapshot', lambda mem, *_: after if mem == 'clone' else before)
+        monkeypatch.setattr(gen2_rewards, 'Memory', lambda *_: SimpleNamespace(byte=lambda _: 0))
+        monkeypatch.setattr(gen2_rewards, 'clone_emulator', lambda _: clone)
+        monkeypatch.setattr(gen2_rewards, 'gift', lambda *_: None)
+        saves = []
+        policy = spare_at((0, 0))
+        policy.menu = None
+        emu = SimpleNamespace(store=store, paused=False, manual_mode=False, preparation=None, policy=policy,
+                              pb=SimpleNamespace(memory='live'), data=None, frame=100, _autosave=lambda: saves.append(1))
+        assert gen2_rewards.deliver(emu) is None
+        value = rewards.ledger(store.db)
+        assert (value['delivered'], value['skipped']) == (1, 1)
+        assert store.events() == [] and store.get(PENDING) is None and saves == []
+    finally:
+        store.close()

@@ -30,6 +30,9 @@ def deliver(emu):
     mythical = getattr(config, 'MEW_EVENT', False)
     if not league and not mythical or emu.paused or emu.manual_mode or emu.preparation or emu.store.get('trade_hold'):
         return None
+    if (guard := getattr(emu, 'loop_guard', None)) and guard.looping(emu.store):
+        # A run caught in a loop gets no gifts until it makes real progress.
+        return None
     before = read_snapshot(emu.pb.memory, emu.data, emu.frame)
     mem = Memory(emu.pb.memory, emu.data)
     if (not before.valid or not before.started or before.in_battle or mem.byte('wScriptRunning')
@@ -50,8 +53,6 @@ def deliver(emu):
     space = next(((box, count) for box, count in enumerate(before.box_counts) if count < 20), None)
     if species is None or space is None:
         return None
-    source = emu._autosave()
-    metadata = emu.store.checkpoint_metadata(source)
     clone = clone_emulator(emu)
     try:
         gift(clone.memory, emu.data, species, seed, *space)
@@ -63,11 +64,19 @@ def deliver(emu):
                 or any(existing.get((mon.box, mon.position), mon) != mon for mon in after.stored)):
             raise ValueError('The Gen II gift changed unrelated adventure state')
         shiny_gift = any(mon.shiny for mon in after.stored if (mon.box, mon.position) not in existing)
+        slot = next((mon.box, mon.position) for mon in after.stored if (mon.box, mon.position) not in existing)
+        if kind == 'league_reward' and not shiny_gift and rewards.wasted(emu.policy, after, slot):
+            # A copy the PC would release at once is never sent, so a League rerun cannot become a
+            # gift and release loop.
+            rewards.skip(emu.store, ordinal)
+            return None
         output = io.BytesIO()
         clone.save_state(output)
         raw = output.getvalue()
     finally:
         clone.stop(save=False)
+    source = emu._autosave()
+    metadata = emu.store.checkpoint_metadata(source)
     identifier = uuid.uuid4().hex
     directory = emu.store.dir / 'custom-rewards' / identifier
     directory.mkdir(parents=True)

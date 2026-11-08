@@ -625,6 +625,10 @@ class Participant:
             for key in ('interaction_preparation', 'trade_hold'):
                 self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?,?)', (key, 'null'))
         self.emu.paused = False
+        if getattr(self.emu, 'generation', 1) == 1 and (pb := getattr(self.emu, 'pb', None)):
+            # The game copies a received nickname byte for byte, damage included.
+            from ..ram import repair_party_nicknames
+            repair_party_nicknames(pb.memory)
         self.emu.policy.on_restore()
         self.emu.stuck_since = time.time()
         return record

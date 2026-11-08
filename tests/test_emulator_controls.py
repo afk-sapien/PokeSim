@@ -72,6 +72,7 @@ def test_restore_discards_policy_intent_and_refreshes_snapshot(tmp_path, monkeyp
     emu.pending = ['obsolete event']
     expected = snap(frame=900)
     monkeypatch.setattr('pokesim.emulator.read_snapshot', lambda memory, frame: expected)
+    monkeypatch.setattr('pokesim.emulator.repair_party_nicknames', lambda memory: [])
     emu._load_state_file(path)
     assert emu.snapshot == expected and emu.input_epoch == 8
     assert emu.pending == [] and emu.prev_snapshot is None
@@ -101,6 +102,7 @@ def test_restore_keeps_total_victories_separate_from_reward_count(tmp_path, monk
                 'policy': config.POLICY, 'policy_state': {}, 'run_memory': {'championships': 100}}
     monkeypatch.setattr(emu.store, 'checkpoint_metadata', lambda _: metadata)
     monkeypatch.setattr('pokesim.emulator.read_snapshot', lambda *_: snap())
+    monkeypatch.setattr('pokesim.emulator.repair_party_nicknames', lambda memory: [])
     try:
         rewards.initialize(emu.store, 107)
         rewards.earn(emu.store, 108, enabled=True)

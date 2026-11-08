@@ -454,3 +454,17 @@ def test_the_manager_sends_watchdog_alerts_through_notifications(client, monkeyp
     assert client.get('/api/v1/watchdog').json()['enabled'] is False
     assert client.patch('/api/v1/watchdog', json={'enabled': 'no'}).status_code == 422
     assert client.patch('/api/v1/watchdog', json={'other': True}).status_code == 422
+
+
+def test_the_problems_file_lets_a_watch_outside_the_app_see_the_main_page_alerts(world, tmp_path):
+    import json
+    from pokesim.app.watchdog import PROBLEMS_FILE
+    world.manager.root = tmp_path
+    world.registry.rows = [game()]
+    world.child(seen=status(stuck=1000))
+    world.tick()
+    rows = json.loads((tmp_path / PROBLEMS_FILE).read_text())
+    assert [(row['key'], row['kind'], row['adventure_id']) for row in rows] == [(f'stuck:{AID}', 'stuck', AID)]
+    world.child(seen=status(stuck=5))
+    world.tick(60)
+    assert json.loads((tmp_path / PROBLEMS_FILE).read_text()) == []
