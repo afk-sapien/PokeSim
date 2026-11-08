@@ -282,6 +282,36 @@ class Snapshot:
         }
 
 
+NAME_END = 0x50
+
+
+def repair_party_nicknames(mem):
+    """End each party nickname at its first text command byte, and return the party slots changed.
+
+    Bytes below 0x60 other than the 0x50 terminator are text commands, which the naming screen can
+    never type. A nickname that holds one draws differently from how its bytes decode, so the party
+    menu never matches the party and every action through it fails. Live, a traded Butterfree's
+    name lost its terminator to 0x55 and kept a Yellow run from healing or using Surf for hours.
+    """
+    repaired = []
+    try:
+        count = mem[W_PARTY_COUNT]
+    except TypeError:
+        # Only a stand-in without real memory, as in unit tests, cannot be read by address.
+        return repaired
+    for index in range(min(count, 6)):
+        start = W_PARTY_NICKS + index * 11
+        for offset in range(11):
+            value = mem[start + offset]
+            if value == NAME_END:
+                break
+            if value < 0x60:
+                mem[start + offset] = NAME_END
+                repaired.append(index)
+                break
+    return repaired
+
+
 def read_box_counts(mem) -> tuple[int, ...]:
     current = mem[W_CURRENT_BOX]
     active = current & 0x7F

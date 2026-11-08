@@ -42,6 +42,16 @@
 
 ## Unreleased
 
+- Stop League reward gifts from looping through the PC. Since PC values, a reward copy counts as a spare, so a gift that went into a box was released at the next PC visit, which made room for the next gift. A Silver run spent hours receiving and releasing Lv 5 starters. A gift the PC would release is now settled as skipped, with no gift and no save. Shiny Gen II gifts are always sent.
+
+- Ask for help when a run loops. The same Pokémon received and released 6 times, or the same save reloaded 6 times, since the last real progress (a badge, catch, evolution, League win, trainer, level or new map) now shows "The run is caught in a loop" on the main page, and the run stops gifts and reloads until it makes progress.
+
+- Back off the whole game after a trade times out on the way to the Cable Club, as a full PC already does. A stuck run used to be picked for trade after trade, once per Pokémon it offered.
+
+- Repair a Red, Blue or Yellow party nickname that holds a text command byte, when a save loads and when a trade ends. A traded name with a damaged ending drew differently from its bytes, so the party menu never matched and the run could not heal, use Surf or switch.
+
+- Write the problems the main page shows to `watchdog-problems.json` in the data directory, so a host can watch them. `tools/alert_watch.sh` runs a command once per new problem.
+
 - Stop Red, Blue and Yellow runs from reloading forever when reloads do not help. After 12 reloads in a row without progress, the watchdog gives up the stuck collection project for a while, journals "Gave up on" that goal and lets the next goal run, as Gold, Silver and Crystal already do. A story goal has no project to give up, so the run stops reloading, says so once in the log and shows as stalled.
 
 - Give every stored Pokémon a PC value and release the cheapest first, in all six games. A Pokémon's popup on the PC page shows its value, what it is made of and whether it is a spare, kept for a plan or never released. The next five to go carry a mark on their cards. A legendary or one-time event Pokémon, such as a second Mew or Ho-Oh, counts 200, as much as a trained Lv 100 spare, and still goes before any shiny. Ordinary gifts count 80. Keep-locked Pokémon, the best or only copy of a species, the party and eggs are never released automatically. **Release at next PC visit** puts a Pokémon first in the queue, and an only copy asks for its name first. The **Release order** select can favor shiny or DV copies. Visits take the cheapest box by box, so a visit can run longer but costs less per freed slot. The journal names the value of each released Pokémon, and a PC with nothing left to release says so once on the PC page and in the journal. The API is `POST /api/pc/release` and `POST /api/pc/favor`.

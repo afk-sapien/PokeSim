@@ -30,9 +30,9 @@ from .palettes import PALETTES, recolor, validate_palette
 from .planning import pin
 from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext, stack_pointer
-from .ram import SPECIES_NAMES, Snapshot, read_snapshot
+from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
 from .screen import W_OPTIONS
-from .stalls import PROGRESS_EVENTS, StallWatch, advanced
+from .stalls import PROGRESS_EVENTS, LoopGuard, StallWatch, advanced
 from .strategy_data import MAPS
 
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
@@ -110,6 +110,7 @@ class Emulator:
         self.last_achievement = achievements[0] if achievements else None
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
+        self.loop_guard = LoopGuard()
         self.policy.load_state_dict(store.get("policy_state", {}))
         self.commands: queue.Queue = queue.Queue()
         self.manual: queue.Queue = queue.Queue(maxsize=2)
@@ -313,7 +314,12 @@ class Emulator:
     def help_request(self, strategy):
         """Ask the owner for a hand when live play has stopped making game progress."""
         stall = getattr(self, 'stall', None)
-        if self.paused or self.manual_mode or not stall or not stall.stalled(self.frame, time.time()):
+        if self.paused or self.manual_mode:
+            return None
+        guard = getattr(self, 'loop_guard', None)
+        if loop := guard and guard.looping(self.store):
+            return {'reason': f'The run is caught in a loop. {loop}', 'action': strategy.get('action', '')}
+        if not stall or not stall.stalled(self.frame, time.time()):
             return None
         return {'reason': 'The policy has stopped making game progress', 'action': strategy.get('action', '')}
 
@@ -400,6 +406,8 @@ class Emulator:
         self._reset_transient(clear_observation=True)
         self.legendary_recovery = LegendaryRecovery((metadata or {}).get('legendary_recovery'))
         self.play_clock.restore(metadata.get("play_clock") if metadata else None)
+        if repaired := repair_party_nicknames(self.pb.memory):
+            log.warning('Ended the damaged nicknames of party slots %s at their first text command', repaired)
         self.snapshot = read_snapshot(self.pb.memory, self.frame)
         if self.snapshot.started:
             self.play_clock.seed(self.snapshot.playtime_seconds)
@@ -698,9 +706,12 @@ class Emulator:
             eid = self.store.add_event(ev, snap, png, None)
             if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
                 self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
-            if ev.type in PROGRESS_EVENTS:
+            guard = getattr(self, 'loop_guard', None)
+            if ev.type == 'obtain' and guard and guard.looping(self.store):
+                pass   # a gift in a gift and release loop is not progress
+            elif ev.type in PROGRESS_EVENTS:
                 self.unstick_streak, self.reloads_exhausted = 0, False
-            if ev.type in PROGRESS_EVENTS and getattr(self, 'stall', None):
+            if ev.type in PROGRESS_EVENTS and getattr(self, 'stall', None) and not (ev.type == 'obtain' and guard and guard.reason):
                 self.stall.progress(self.frame, time.time())
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
             if blank:
@@ -834,7 +845,8 @@ class Emulator:
         self.unstick_streak = getattr(self, 'unstick_streak', 0)
         if self.unstick_streak >= MAX_RELOADS and Emulator._give_up(self, why):
             return
-        if self.unstick_streak >= MAX_RELOADS:
+        guard = getattr(self, 'loop_guard', None)
+        if self.unstick_streak >= MAX_RELOADS or guard and guard.looping(self.store):
             # Reloading again would only replay the same trouble. Leave the run as it is, flagged as
             # stalled, and say so once rather than at every guard check.
             if not getattr(self, 'reloads_exhausted', False):
@@ -854,6 +866,8 @@ class Emulator:
             target, saves = entry, [entry] + saves
         if target:
             log.warning("%s for %ds, reloading %s", why, time.time() - since, target.name)
+            if guard:
+                guard.reloaded(target.name)
             candidates = [target] + [p for p in reversed(saves) if p != target]
             self._restore_first_valid(candidates)
             # The emulator is deterministic, so the same save and the same choices would replay the

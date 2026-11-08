@@ -1,6 +1,12 @@
 """Notice a run that keeps playing without achieving anything."""
 from __future__ import annotations
 
+import logging
+import re
+import time
+
+log = logging.getLogger(__name__)
+
 FRAMES_PER_GAME_MINUTE = 3600
 # A managed trade is arranged by the coordinator, so it says nothing about the run's own progress.
 PROGRESS_EVENTS = ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map')
@@ -56,3 +62,63 @@ def advanced(previous, snapshot):
     return held(snapshot) > held(previous) or (len(snapshot.party) == len(previous.party)
                                                and experience(snapshot) > experience(previous))
 
+
+
+# Events a gift and release loop cannot fake. A received gift, an item and a release are left out.
+REAL_PROGRESS = ('badge', 'catch', 'evolve', 'champion', 'trainer', 'level', 'map')
+# Repeats that count as a loop: the same Pokémon received and released, or the same save reloaded.
+LOOP_LIMIT = 6
+LOOP_EVENTS = 400
+# Gen II names the species, Gen I the nickname and then the species in brackets.
+_RECEIVED = re.compile(r'^Received (?:[^(]+ \()?(.+?)\)? (?:from|for) ')
+_RELEASED = re.compile(r'^Said goodbye to a spare (.+?)(?: Lv \d+)?$')
+
+
+class LoopGuard:
+    """Notice a run caught repeating itself since its last real progress, in either generation.
+
+    Live, a League gift went in and the same starter came out at every PC visit, hundreds of times,
+    and each gift counted as progress, so neither the reload limit nor the stall alert ever fired.
+    The same save was also reloaded over and over. Once either repeats LOOP_LIMIT times, the run
+    asks for help, gifts stop and reloading stops, until it makes real progress again.
+    """
+
+    def __init__(self, limit=LOOP_LIMIT, every=30, clock=time.time):
+        self.limit, self.every, self.clock = limit, every, clock
+        self.reloads, self.since = {}, None
+        self.reason, self.checked = None, None
+
+    def reloaded(self, name):
+        self.reloads[name] = self.reloads.get(name, 0) + 1
+        self.checked = None
+
+    def looping(self, store):
+        """Why the run is in a loop, or None. Reads the journal at most once every ``every`` seconds."""
+        now = self.clock()
+        if self.checked is not None and now - self.checked < self.every:
+            return self.reason
+        self.checked = now
+        marks = ','.join('?' * len(REAL_PROGRESS))
+        with store.lock:
+            latest = store.db.execute(f'SELECT MAX(id) FROM events WHERE type IN ({marks})', REAL_PROGRESS).fetchone()[0]
+            rows = store.db.execute("SELECT type, title FROM events WHERE id > ? AND type IN ('obtain', 'release') "
+                                    'ORDER BY id DESC LIMIT ?', (latest or 0, LOOP_EVENTS)).fetchall()
+        if latest != self.since:
+            self.since, self.reloads = latest, {}
+        received, released = {}, {}
+        for kind, title in rows:
+            match = (_RECEIVED if kind == 'obtain' else _RELEASED).match(title)
+            if match:
+                counts = received if kind == 'obtain' else released
+                counts[match.group(1)] = counts.get(match.group(1), 0) + 1
+        reason = None
+        churn = max(((min(count, received.get(name, 0)), name) for name, count in released.items()), default=(0, ''))
+        if churn[0] >= self.limit:
+            reason = f'It received and released {churn[1]} {churn[0]} times without other progress'
+        elif self.reloads and max(self.reloads.values()) >= self.limit:
+            name, count = max(self.reloads.items(), key=lambda item: item[1])
+            reason = f'It reloaded {name} {count} times without progress'
+        if reason and reason != self.reason:
+            log.error('Loop guard: %s', reason)
+        self.reason = reason
+        return reason

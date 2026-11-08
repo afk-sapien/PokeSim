@@ -18,7 +18,7 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
-from ..stalls import StallWatch
+from ..stalls import LoopGuard, StallWatch
 from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
@@ -241,6 +241,7 @@ class Emulator:
         self.explored = set()
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
+        self.loop_guard = LoopGuard()
         self.reloads = 0
         self.last_reload = 0.0
         self.unstick_streak = 0
@@ -908,13 +909,18 @@ class Emulator:
         self._reset_watch()
         return True
 
+    def _looping(self):
+        """Whether the loop guard sees the same gift and release, or the same reload, repeating."""
+        guard = getattr(self, 'loop_guard', None)
+        return bool(guard and guard.looping(self.store))
+
     def _unstick(self, since_frame, why):
         """Go back to an autosave from before the trouble started, or power-cycle when there is none."""
         from ..planning.pin import STUCK
         Emulator._drop_pin(self, STUCK)
         if self.unstick_streak >= MAX_RELOADS and Emulator._give_up(self, why):
             return
-        if self.unstick_streak >= MAX_RELOADS:
+        if self.unstick_streak >= MAX_RELOADS or Emulator._looping(self):
             # Reloading again would only replay the same trouble. Leave the run as it is, flagged as
             # stalled, and say so once rather than at every guard check.
             if not getattr(self, 'reloads_exhausted', False):
@@ -950,6 +956,8 @@ class Emulator:
         wins = getattr(self.snapshot, 'hall_of_fame_count', 0)
         if target:
             log.warning('%s for %.1f game minutes, reloading %s', why, max(0, self.frame - since_frame) / 3600, target.name)
+            if guard := getattr(self, 'loop_guard', None):
+                guard.reloaded(target.name)
             for path in [target] + [path for path in reversed(saves) if path != target]:
                 try:
                     self._load_state_file(path)
@@ -1167,6 +1175,7 @@ class Emulator:
             self.unstick_streak = 0
             self.reloads_exhausted = False
             self.league_restarts = (0, 0)
+            self.loop_guard = LoopGuard()
             self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                     config.STALL_ALERT_REPEAT_HOURS)
             self._reset_watch()
@@ -1260,7 +1269,8 @@ class Emulator:
         quiet_minutes = max(0, self.frame - self.progress_frame) / 3600
         live = not self.paused and not self.manual_mode
         waiting = live and self.waiting
-        stalled = live and not waiting and (self.stall.stalled(self.frame, time.time()) or self.unstick_streak >= STALL_RELOADS)
+        loop = live and Emulator._looping(self)
+        stalled = live and not waiting and (self.stall.stalled(self.frame, time.time()) or self.unstick_streak >= STALL_RELOADS) or bool(loop)
         recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
                 'stopped': self.frozen,
@@ -1271,7 +1281,7 @@ class Emulator:
                 'uptime': int(time.time() - self.started_at), 'stuck_seconds': int(time.time() - self.stuck_since),
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,
-                'help_request': {'reason': 'The policy has stopped making game progress',
+                'help_request': {'reason': f'The run is caught in a loop. {loop}' if loop else 'The policy has stopped making game progress',
                                  'action': self.policy.mode} if stalled else None,
                 'progress': {'state': 'stalled' if stalled else 'waiting' if waiting else 'recovering' if recovering
                              else 'making_progress',
