@@ -50,3 +50,28 @@ def test_a_center_past_ice_path_is_never_the_healing_trip(data, monkeypatch):
 def test_a_center_with_no_known_walk_is_chosen_by_the_map_links(data, monkeypatch):
     policy = policy_at(data, monkeypatch, {})
     assert policy.healing(snapshot(data, 'BLACKTHORN_CITY', 21, 30)).map_name == 'BLACKTHORN_POKECENTER_1F'
+
+
+def mon(data, species, level, moves, pp):
+    ids = {entry['constant']: mid for mid, entry in data.moves.items()}
+    return SimpleNamespace(egg=False, species=species, level=level, hp=200, max_hp=200, status=0,
+                           moves=tuple(ids[name] for name in moves), pp=tuple(pp))
+
+
+def test_a_spare_weak_attack_does_not_hide_spent_strong_ones(data):
+    # Gold after the League: a lone level 84 Typhlosion carried Kanto with Flamethrower and Strength.
+    # Both ran out, but 30 PP of Cut kept the heal walk away, so it met Misty and Brock with Cut and
+    # Swift alone. It fainted and the weak rest of the party could not finish either battle.
+    from pokesim.gen2.ledger import battle_room, walk_spent
+    from pokesim.planning.ledger import PP
+    moves = ('FLAMETHROWER', 'STRENGTH', 'CUT', 'SWIFT')
+    farfetchd = mon(data, 83, 18, ('PECK', 'SAND_ATTACK', 'LEER', 'FLY'), (35, 15, 30, 15))
+    spent = SimpleNamespace(party=(mon(data, 157, 84, moves, (0, 0, 30, 20)), farfetchd))
+    assert battle_room(data, spent)[PP] == 0
+    assert walk_spent(data, spent)
+    # One use of Strength left is still an attack worth fighting with.
+    left = SimpleNamespace(party=(mon(data, 157, 84, moves, (0, 1, 30, 20)), farfetchd))
+    assert battle_room(data, left)[PP] == 1
+    assert not walk_spent(data, left)
+    # A Pokémon whose attacks are all weak counts every one of them.
+    assert battle_room(data, SimpleNamespace(party=(farfetchd,)))[PP] == 50

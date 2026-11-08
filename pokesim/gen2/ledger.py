@@ -19,6 +19,14 @@ from .release import headroom
 
 # A Pokémon under this share of its HP sends the run to a Pokémon Center.
 HEAL_LINE = 0.6
+# An attack counts toward a Pokémon's PP room only when it hits at least this share as hard as the
+# Pokémon's strongest attack. A Typhlosion with Flamethrower and Strength spent still had 30 PP of
+# Cut, so it never went to heal and met Misty and Brock with Cut alone, and lost.
+STRONG_SHARE = 0.5
+# Hits an attack lands in one use, as the battle scores it.
+HITS = {'EFFECT_MULTI_HIT': 3, 'EFFECT_DOUBLE_HIT': 2, 'EFFECT_POISON_MULTI_HIT': 2}
+# A move that knocks out its user is the last choice in battle, so it is weighed as one.
+SELF_KO = {'EFFECT_SELFDESTRUCT', 'EFFECT_EXPLOSION'}
 # Distinct entries each Gen 2 pocket holds.
 POCKET_SLOTS = {'items': 20, 'balls': 12}
 PARTY_SIZE = 6
@@ -91,19 +99,45 @@ def ledger(data, boxes=None):
     return Ledger(lambda snapshot, kinds: read(data, snapshot, kinds, boxes))
 
 
+def attack_strength(data, mon, move):
+    """How hard ``move`` hits for ``mon`` against no foe in particular, or 0 for a move with no power.
+
+    Power with the same type bonus and hit count the battle scores, the level for Seismic Toss and
+    Night Shade, and a tenth for a move that knocks out its user.
+    """
+    entry = data.moves.get(move, {})
+    power = entry.get('power', 0)
+    if not power:
+        return 0
+    effect = entry.get('effect')
+    if effect in {'EFFECT_LEVEL_DAMAGE', 'EFFECT_PSYWAVE'}:
+        return mon.level
+    if effect == 'EFFECT_STATIC_DAMAGE':
+        return power
+    stab = 1.5 if entry.get('type') in data.species.get(mon.species, {}).get('types', ()) else 1
+    return power * stab * HITS.get(effect, 1) * (0.1 if effect in SELF_KO else 1)
+
+
+def strong_pp(data, mon):
+    """Uses left of the attacks ``mon`` fights with: those within STRONG_SHARE of its strongest."""
+    strengths = [attack_strength(data, mon, move) for move in mon.moves]
+    line = max(strengths, default=0) * STRONG_SHARE
+    return sum(pp for strength, pp in zip(strengths, mon.pp) if strength and strength >= line)
+
+
 def battle_room(data, snapshot):
     """The HP and PP the party can spend before a Pokémon Center is due.
 
     HP is the fewest points any Pokémon has left above the heal line, and none for one with a status.
-    PP is the fewest attack uses left to any Pokémon that has an attack. A party with no attack at all
+    PP is the fewest uses left to any Pokémon that has an attack of the attacks it fights with
+    (strong_pp), so a spare weak attack does not hide spent strong ones. A party with no attack at all
     is never sent to heal for PP, so its PP room is one. Either at zero means the heal walk is due.
     """
     def power(move):
         return data.moves.get(move, {}).get('power', 0)
     mons = [mon for mon in snapshot.party if not mon.egg]
     hp = min((0 if mon.status else max(0, mon.hp - math.ceil(mon.max_hp * HEAL_LINE) + 1) for mon in mons), default=0)
-    pp = min((sum(pp for move, pp in zip(mon.moves, mon.pp) if power(move))
-              for mon in mons if any(power(move) for move in mon.moves)), default=1)
+    pp = min((strong_pp(data, mon) for mon in mons if any(power(move) for move in mon.moves)), default=1)
     return {HP: hp, PP: pp}
 
 
