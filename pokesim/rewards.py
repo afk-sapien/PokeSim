@@ -98,13 +98,35 @@ def earn(store, count, *, enabled=True):
         save(store.db, value)
 
 
-def wasted(policy, snapshot, slot):
-    """Whether the gift staged at ``slot`` only costs a release: a spare by the PC value rules
-    (pcvalue.py), or any copy short of the best when the boxes, with it, are below the reserve that
-    starts a release visit. Such a gift either goes itself or pushes out the cheapest other copy, so
-    sending it turns every League win into a gift and a release."""
+def staged_mark(seed, generation=1):
+    """The reward mark of the League gift drawn from ``seed``, before the ledger counts it delivered."""
+    trainer, first, second = _draw(seed, generation)
+    return mark(trainer, (first >> 4, first & 15, second >> 4, second & 15))
+
+
+def wasted(policy, snapshot, slot, seed, generation=1):
+    """Whether the gift staged at ``slot`` from ``seed`` only costs a release: a spare by the PC value
+    rules (pcvalue.py), or any copy short of the best when the boxes, with it, are below the reserve
+    that starts a release visit. Such a gift either goes itself or pushes out the cheapest other copy,
+    so sending it turns every League win into a gift and a release.
+
+    The gift is rated as the League reward it is. Until the ledger counts it, its mark is unknown, and
+    an unmarked gift rates as a Pokémon traded in, the best copy of its species.
+    """
     from .planning.ledger import box_wanted
-    rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else ()
+    hook = vars(policy).get('league_marks')
+    policy.league_marks = lambda: frozenset(hook() if hook else ()) | {staged_mark(seed, generation)}
+    try:
+        if generation == 2:
+            from .gen2.release import release_rated
+            rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
+        else:
+            rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else ()
+    finally:
+        if hook is None:
+            del policy.league_marks
+        else:
+            policy.league_marks = hook
     row = next((row for row in rated if row.entry.slot == slot), None)
     if row is None:
         return False

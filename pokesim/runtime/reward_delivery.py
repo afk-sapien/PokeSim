@@ -114,7 +114,7 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
             raise ValueError('The custom gift did not match the staged Pokémon')
         held = {(mon['box'], mon['position']) for mon in before.storage_entries()}
         slot = next((slot for mon in after.storage_entries() if (slot := (mon['box'], mon['position'])) not in held), None)
-        if kind == 'league_reward' and slot and rewards.wasted(emu.policy, after, slot):
+        if kind == 'league_reward' and slot and rewards.wasted(emu.policy, after, slot, seed):
             # A copy the PC would release at once is never sent, so a League rerun cannot become a
             # gift and release loop.
             rewards.skip(emu.store, ordinal)

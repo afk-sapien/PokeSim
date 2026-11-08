@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Stop League reward gifts from looping through the PC. Since PC values, a reward copy counts as a spare, so a gift that went into a box was released at the next PC visit, which made room for the next gift. A Silver run spent hours receiving and releasing Lv 5 starters. A gift the PC would release, or a copy short of the best while the boxes are nearly full, is now settled as skipped, with no gift and no save. Shiny Gen II gifts are always sent.
+- Stop League reward gifts from looping through the PC. Since PC values, a reward copy counts as a spare, so a gift that went into a box was released at the next PC visit, which made room for the next gift. A Silver run spent hours receiving and releasing Lv 5 starters. A gift the PC would release, or a copy short of the best while the boxes are nearly full, is now settled as skipped, with no gift and no save. Shiny Gen II gifts are always sent. The check rates the gift as the League reward it is. Until it was counted delivered, it rated as a traded copy, the best of its species, so most gifts were still sent.
 
 - Ask for help when a run loops. The same Pokémon received and released 6 times, or the same save reloaded 6 times, since the last real progress (a badge, catch, evolution, League win, trainer, level or new map) now shows "The run is caught in a loop" on the main page, and the run stops gifts and reloads until it makes progress.
 

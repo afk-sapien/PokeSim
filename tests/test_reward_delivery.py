@@ -265,5 +265,30 @@ def test_a_league_gift_short_of_the_best_copy_is_wasted_when_the_pc_needs_room(s
         take = min(free, 20)
         counts[index] -= take
         free -= take
-    assert rewards.wasted(policy, SimpleNamespace(box_counts=tuple(counts)), (1, 1)) is wasted
-    assert rewards.wasted(policy, SimpleNamespace(box_counts=tuple(counts)), (2, 1)) is False
+    assert rewards.wasted(policy, SimpleNamespace(box_counts=tuple(counts)), (1, 1), 'seed:1') is wasted
+    assert rewards.wasted(policy, SimpleNamespace(box_counts=tuple(counts)), (2, 1), 'seed:1') is False
+
+
+@pytest.mark.parametrize('generation', [1, 2])
+def test_a_staged_league_gift_is_rated_as_a_reward_not_a_traded_copy(generation, monkeypatch):
+    from pokesim import rewards
+    from pokesim.gen2 import release
+    staged = rewards.staged_mark('seed:1', generation)
+    seen = []
+
+    def rate(policy, _snapshot):
+        seen.append(policy.league_marks())
+        return [SimpleNamespace(entry=SimpleNamespace(slot=(1, 1)), status='spare')]
+
+    policy = SimpleNamespace()
+    policy.league_marks = lambda: frozenset({('old', ())})
+    hook = policy.league_marks
+    if generation == 1:
+        policy.pc_rated = lambda snapshot: rate(policy, snapshot)
+    else:
+        monkeypatch.setattr(release, 'release_rated', rate)
+    assert rewards.wasted(policy, SimpleNamespace(box_counts=(0,) * 12), (1, 1), 'seed:1', generation)
+    assert seen == [frozenset({('old', ()), staged})] and policy.league_marks is hook
+    bare = SimpleNamespace(pc_rated=lambda snapshot: rate(bare, snapshot))
+    assert rewards.wasted(bare, SimpleNamespace(box_counts=(0,) * 12), (1, 1), 'seed:1', generation)
+    assert seen[-1] == frozenset({staged}) and not hasattr(bare, 'league_marks')
