@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'tools' / 'deploy_host.sh'
+# The fake ssh and gh are shell scripts on PATH, which Windows does not run.
+pytestmark = pytest.mark.skipif(os.name == 'nt', reason='deploys from a POSIX shell')
 
 
 def git(repo, *args):
