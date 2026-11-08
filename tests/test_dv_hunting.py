@@ -173,6 +173,25 @@ def test_dv_hunts_accept_weak_incidental_duplicates_with_bounded_attempts():
     assert c.repeat_target(enemy.species) is None
 
 
+def test_dv_hunts_only_catch_a_copy_that_beats_every_held_copy():
+    from pokesim.policies.battle import W_ENEMY_MON, enemy_dvs
+    c = Collection()
+    c.project = {'species': sid(10), 'method': 'grass', 'repeat': True, 'dv_hunt': True, 'map': 51}
+    held = replace(individual(5, 2, 13), dvs=(15, 1, 3, 5, 7))
+    s = postgame(party=(individual(100, 1), held), in_battle=1)
+    assert c.repeat_target(sid(13), 51, s, (0, 0, 0, 0, 0)) is None
+    assert c.repeat_target(sid(13), 51, s, (15, 1, 3, 5, 7)) is None
+    assert c.repeat_target(sid(13), 51, s, (15, 15, 15, 15, 15)) == sid(13)
+    # A species with no copy held, or the hunt's own target, is judged the same way.
+    assert c.repeat_target(sid(16), 51, s, (0, 0, 0, 0, 0)) == sid(16)
+    s = postgame(party=(individual(100, 1), replace(held, species=sid(10))), in_battle=1)
+    assert c.repeat_target(sid(10), 194, s, (0, 0, 0, 0, 0)) is None
+    assert c.repeat_target(sid(10), 194, s, (15, 15, 15, 15, 15)) == sid(10)
+    mem = bytearray(0x10000)
+    mem[W_ENEMY_MON + 12:W_ENEMY_MON + 14] = b'\x13\x57'
+    assert enemy_dvs(mem) == (15, 1, 3, 5, 7)
+
+
 def test_isolated_league_side_opens_passage_before_another_local_hunt():
     from types import SimpleNamespace
     from pokesim.strategy_data import MAPS

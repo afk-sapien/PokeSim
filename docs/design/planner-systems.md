@@ -1,6 +1,6 @@
 # Planner systems: replacing special cases
 
-Status: historical record. S1 to S5 shipped between 0.5.x and 0.6.0, and S3 step 9 (mastery credit) is parked after options B and 3 missed their bars. The proposal below was first read from main at `efc9491`. Its As built notes record what shipped.
+Status: historical record. S1 to S5 shipped between 0.5.x and 0.6.0, and S3 step 9 (mastery credit) is parked after options B and 3 missed their bars. The proposal below was first read from main at `efc9491`. Its As built notes record what shipped. The next step is proposed in [Goal system v2](goal-system.md).
 
 Most stuck loops of the last month were fixed with a special case: sell a repel, skip a wait when the boxes are full, close two gate tiles, cap one hunt. Each fix works, but the next loop needs another one. This document lists those fixes, groups them by the mechanism that is missing, and proposes five systems that replace them.
 
