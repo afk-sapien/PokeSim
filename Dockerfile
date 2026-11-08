@@ -36,7 +36,7 @@ COPY --from=build /notices /usr/share/pokesim
 COPY --from=build /app/pokesim /usr/share/pokesim/source/pokesim
 COPY pyproject.toml setup.py uv.lock LICENSE THIRD_PARTY_NOTICES.md /usr/share/pokesim/source/
 COPY licenses /usr/share/pokesim/licenses
-ARG VERSION=0.6.2
+ARG VERSION=0.7.0.dev0
 ARG REVISION=unknown
 # The PRAGMA user_version of app.sqlite this build writes. tools/deploy_host.sh passes it.
 ARG SCHEMA=unknown
