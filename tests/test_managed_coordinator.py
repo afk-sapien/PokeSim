@@ -53,6 +53,8 @@ class Peer:
             self.collection_requests = data['requests']
             self.collection_payload = data
             return {'requests': data['requests']}
+        if operation == 'would_keep':
+            return {'keep': True}
         tid = data['id']
         if operation == 'prepare':
             self.prepared.append(dict(data))

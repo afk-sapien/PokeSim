@@ -74,23 +74,23 @@ def gift(mon):
 
 
 def rated(snapshot, demand=None, stock=(), preferences=None, partners=(), owners=None, rewards=frozenset(),
-          requested=None, names=None, focus=frozenset(), favor=None):
+          requested=None, names=None, focus=frozenset(), favor=None, extra=()):
     """Every Pokémon scored with pcvalue.rate, in party then box order. ``demand`` maps a species to the
     linked adventures missing it, which keeps that many copies and counts as trade demand. ``favor`` is
-    the Favor shiny or Favor DVs setting."""
+    the Favor shiny or Favor DVs setting, and ``extra`` rows are rated after the PC."""
     from collections import Counter
     from ..pcvalue import Inputs, rate
-    rows = entries(snapshot, names or {}, preferences, partners, stock, owners, rewards, requested)
+    rows = entries(snapshot, names or {}, preferences, partners, stock, owners, rewards, requested) + list(extra)
     return rate(rows, Inputs(demand=dict(demand or {}), focus=frozenset(focus), wishes=Counter(demand or {}),
                              favor=favor))
 
 
-def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset()):
+def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset(), extra=()):
     """``rated`` with a running policy's own inputs: plan demand and partners, breeding stock, trade
     preferences, linked adventures, League reward marks and the owner's release requests.
 
     ``keep`` adds stock species, ``preferences`` stands in for the stored ones and ``marks`` adds
-    League reward marks, such as a gift's before it is delivered.
+    League reward marks, such as a gift's before it is delivered. ``extra`` rows are rated with the PC.
     """
     from pokecore.gen2.breeding import breeding_stock
     stock = set(breeding_stock(policy.data, [mon.species for mon in snapshot.party + snapshot.stored if not mon.egg]))
@@ -101,7 +101,25 @@ def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset()
     favor = policy.pc_favor() if hasattr(policy, 'pc_favor') else None
     names = {sid: row.get('name', '?') for sid, row in getattr(policy.data, 'species', {}).items()}
     return rated(snapshot, policy.demand, stock, policy.trade_preferences() if preferences is None else preferences,
-                 plan_partners(policy.collection), owners, marks, requested, names, favor=favor)
+                 plan_partners(policy.collection), owners, marks, requested, names, favor=favor, extra=extra)
+
+
+def keeps_another(policy, snapshot, dex, level=5):
+    """Whether the PC would keep one more copy of ``dex`` whose DVs are not known yet.
+
+    A walking return or a repeat gift is skipped when its Pokémon would be the next spare, as
+    Sudowoodo, Eevee and Tyrogue were, received and released again every return. Its DVs are rolled
+    in the encounter, so it is rated with none and only beats copies through a plan's demand or by
+    being the first. Crystal's caught data marks a gift, which Gold and Silver cannot tell from a catch.
+    """
+    from ..pcvalue import Entry
+    names = getattr(policy.data, 'species', {})
+    origin = 'gift' if getattr(policy.data, 'game', '') == 'crystal' else 'caught'
+    if dex in LEGENDARY_DEX:
+        origin = 'legendary'
+    phantom = Entry((-1, 0), (dex, 0), names.get(dex, {}).get('name', '?'), level, origin=origin)
+    rows = release_rated(policy, snapshot, extra=(phantom,))
+    return rows[-1].status != 'spare'
 
 
 def pending(policy, snapshot):
