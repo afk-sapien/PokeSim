@@ -87,7 +87,7 @@ A goal is one record. Every tier's work becomes a goal made from a template.
 ```python
 @dataclass(frozen=True)
 class Goal:
-    key: str              # stable, such as 'hunt:gold:sentret:shiny'
+    key: str              # stable, such as 'hunt:gold:161:shiny:3f9a2c'
     template: str         # 'hunt', 'story', 'upkeep', 'race', 'upgrade', 'filler'
     what: dict            # template fields, such as species and DV rule
     done: Condition       # S2 condition that ends the goal as a success
@@ -99,10 +99,12 @@ class Goal:
 Rules:
 
 1. A root goal comes from a template, the owner or a share code.
-2. A support goal comes from an unmet need. S1 turns a shortage into a `Need`. S2 turns an unmet precondition into an enabler. Each becomes a child goal with `parent` set.
-3. S3 ranks every live goal in the tree in one pass. A child inherits no priority. It is scored on its own value, which includes the value it unlocks for its parent.
-4. S4 measures each goal by the typed progress events it owns (section 4).
-5. A goal ends as done, stopped or expired. Each end writes one progress event. The tree then falls back to the next goal S3 ranks.
+2. The key is the template, the game, the species or target, a readable tag, and the first 6 hex characters of a SHA-256 over the canonical JSON of `what`. Two hunts for the same species with different DV rules get different keys.
+3. A support goal comes from an unmet need. S1 turns a shortage into a `Need`. S2 turns an unmet precondition into an enabler. Each becomes a child goal with `parent` set.
+4. S3 ranks every live goal in the tree in one pass. A child inherits no priority. It is scored on its own value, which includes the value it unlocks for its parent.
+5. A support child (heal, balls, money, a rod) charges its frames to its root goal and to the root's tier, not to UPKEEP. A hunt that spends most of its time healing shows that time as hunt time, and the tier budgets in section 8 see it.
+6. S4 measures each goal by the typed progress events it owns (section 4).
+7. A goal ends as done, stopped or expired. Each end writes one progress event. The tree then falls back to the next goal S3 ranks.
 
 A root with `stop=never` never ends. Its children still end. That is how "shiny Magikarp, never stop" keeps buying balls and fighting for money.
 
@@ -117,8 +119,8 @@ The hunt is the reference template. The owner's main goals are shiny and high-DV
 class Hunt:
     species: int                     # national dex number
     shiny: bool = False
-    dv_min: tuple = ()               # (stat, minimum) pairs, stats named atk, def, spd, spc, hp
-    dv_total: int = 0                # minimum DV sum, 0 for none
+    dv_min: tuple = ()               # (stat, minimum) pairs, stats named atk, def, spd, spc
+    dv_total: int = 0                # minimum sum of the 4 stored DVs, 0 for none, at most 60
     where: str = 'auto'              # 'auto' or a map constant
     method: str = 'auto'             # 'auto', 'grass', 'old rod', 'good rod', 'super rod', 'headbutt'
     stop: Stop = Stop.never()
@@ -137,20 +139,27 @@ class Stop:
 
 Rules for the fields:
 
-1. A Gen I hunt may not name `hp`. The HP DV is built from the low bits of the other four (`pokecore/dvs.py:6` `hp_dv`). The form shows it as derived.
-2. `shiny` in Gen I means shiny once moved to Gen II, which is the existing rule in `pokecore/dvs.py:44` `is_shiny`.
-3. `where='auto'` picks the map and method with the most target encounters per frame, from the generated game data, at the current time of day. It is re-chosen when the period changes.
-4. `done` is built from the fields. A catch that meets every DV rule and the shiny rule is done.
-5. A DV-threshold hunt keeps the best catch so far. Its score is the sum of shortfalls under each minimum, lower is better, and zero is done.
+1. No hunt may name `hp`, in either generation. The HP DV is built from the low bits of the other four in Gen I (`pokecore/dvs.py:6` `hp_dv`) and in Gen II (`pokecore/gen2/ram.py:68` in `individual`). The form shows it as derived.
+2. `dv_total` is the sum of the 4 stored DVs (Attack, Defense, Speed and Special), so its range is 0 to 60.
+3. `shiny` in Gen I means shiny once moved to Gen II, which is the existing rule in `pokecore/dvs.py:44` `is_shiny`.
+4. The form and the share code decoder reject impossible rules. Shiny fixes Defense, Speed and Special at 10, so shiny with a Defense, Speed or Special minimum above 10 is rejected. Shiny also needs Attack bit 1 set, so shiny with an Attack minimum of 16 or more cannot occur and a `dv_total` above 45 (15 plus 3 times 10) is rejected too.
+5. `where='auto'` picks the map and method with the most target encounters per frame, from the generated game data, at the current time of day. It is re-chosen when the period changes.
+6. If the hunt has no target at this time of day, it parks when the owner chose the map and moves when `where` is auto.
+7. `done` is built from the fields. A catch that meets every DV rule and the shiny rule is done.
+8. A DV-threshold hunt keeps the best catch so far. Its score is the sum of shortfalls under each minimum, lower is better, and zero is done.
+9. A Gen I DV-threshold hunt with Fair wild DVs off is allowed. The form shows a warning that the cartridge draw is correlated and the odds are unknown. It requires a stop when. The Live page shows the DV rate observed from the hunt's encounters, so the owner can see how often the rule is met in practice.
+10. A hunt takes the tier the owner gives it. The default is PROGRESS, so a never-ending hunt does not outrank STORY. The owner may set it to STORY on the form.
 
 ### Game time is frames
 
 Gen I playtime caps at 255:59:59 and Yellow is stuck there. Gen II caps at 999:59. So every game-time stop, budget or rate counts emulated frames, never the in-game clock.
 
-1. `Stop.frames` reads `PlayClock.frames` (`play_clock.py`). That clock already counts frames, ignores cartridge limits, and never moves back on a reload because `restore` keeps the larger count.
-2. One game hour is 216000 frames (`FRAMES_PER_GAME_MINUTE` 3600 in `stalls.py:11`, times 60).
-3. Rates such as encounters per game hour are encounters per 216000 PlayClock frames.
-4. The form's "game hours" field stores frames. The page converts for display only.
+1. All frame counts come from `PlayClock.frames` (`play_clock.py`). That clock already counts frames, ignores cartridge limits, and never moves back on a reload because `restore` keeps the larger count.
+2. `Stop.frames` counts only the PlayClock frames spent while the goal or one of its children is the active goal. Frames while the goal is parked (night on a fixed map, a clock wait) or outranked by another goal do not count. S4 keeps this count per goal, beside the frames it already tracks for the budget.
+3. `Stop.real_seconds` counts running wall time only, under the same rule. Paused time does not count.
+4. One game hour is 216000 frames (`FRAMES_PER_GAME_MINUTE` 3600 in `stalls.py:11`, times 60).
+5. Rates such as encounters per game hour are encounters per 216000 active PlayClock frames.
+6. The form's "game hours" field stores frames. The page converts for display only.
 
 ### The hidden Pokémon and Stop when fields
 
@@ -178,9 +187,9 @@ The format follows the randomizer code (`PSR1-<GAME>-<OPTS>-<seed>`, `pokecore/r
 `PSH1-<GAME>-<BODY>-<CHECK>`
 
 1. `GAME` is the cartridge, such as `GOLD`.
-2. `BODY` is Crockford base32 of a packed record: species (9 bits), flags (shiny, method, where-is-auto), four or five DV minimums (4 bits each), DV total (7 bits), a map id when `where` is not auto, and each stop limit as a varint.
+2. `BODY` is Crockford base32 of a packed record: species (9 bits), flags (shiny, method, where-is-auto), four DV minimums (4 bits each), DV total (6 bits), a map id only when the owner picked one, and each stop limit as a varint. An auto location stays auto, so a code works across versions of the data.
 3. `CHECK` is two base32 characters of a CRC over the rest.
-4. Decoding rejects a code for another game, a species the game lacks, and an `hp` minimum on Gen I.
+4. Decoding rejects a code for another game, a species the game lacks, and every impossible rule from the list above.
 
 Example: shiny Sentret on Route 29 in Gold with no stop would read like `PSH1-GOLD-5H2R0K8-QT`. The exact characters come from the encoder.
 
@@ -208,24 +217,39 @@ Every tier writes typed progress events to one store table, `progress_events`. T
 | Kind | Net | Written by |
 |---|---|---|
 | `dex` | yes | any tier, on a new owned entry |
-| `catch` | yes when held rises or `improve` follows, else no | every catch, from the same hook that writes `capture_receipts` |
-| `improve` | yes | the goal whose score got better |
-| `receive` | only if the identity is new and kept | gifts, returns, trades, hatches |
+| `improve` | yes | the goal whose score got better, or the oracle when a kept Pokémon fills family demand or a plan need |
+| `item` | yes for a needed item, no for a sale | UPKEEP and STORY |
+| `badge`, `league`, `event`, `area` | yes | STORY |
+| `checkpoint` | yes | RACE, one per marathon checkpoint |
+| `catch` | no | every catch, from the same hook that writes `capture_receipts` |
+| `receive` | no | gifts, returns, trades, hatches |
 | `release` | no | every release, with the reason from the oracle |
 | `room` | no | S1 make_room |
-| `item` | yes for a needed item, no for a sale | UPKEEP and STORY |
-| `level` | yes | any battle |
-| `badge`, `league`, `event`, `area` | yes | STORY |
-| `encounter` | no | FILLER and hunts. It feeds the rates |
-| `checkpoint` | yes | RACE, one per marathon checkpoint |
+| `level` | no | any battle. A training goal whose score rises writes its own `improve` |
 | `goal` | no | every goal start, done, stop, expire and stand-down |
 | `plan` | no | diagnostics, such as boss ready's "Went in unready" |
 
-Net Pokémon gains count. Churn does not. A `receive` then `release` of the same species with no `improve` between them nets zero, and LoopGuard counts it as one churn cycle.
+Net comes only from `dex`, `improve`, a needed `item`, and the STORY and RACE kinds. A catch or a receive is never net by itself. A duplicate catch raises the held count, so counting held rises as progress would count churn as progress. When a caught or received Pokémon is kept because it fills family demand or a plan need, the oracle writes a separate `improve` row for it. LoopGuard still counts receive and release cycles by species from the `receive` and `release` rows.
+
+### Encounter counters
+
+Encounters are not rows. A shiny hunt would write about 20000 of them. S4 keeps one counter row per goal per game hour in a table `encounter_counts`:
+
+| Field | Meaning |
+|---|---|
+| `goal` | goal key |
+| `hour` | active PlayClock frames divided by 216000 |
+| `encounters` | all wild encounters in that hour |
+| `target` | encounters with the target species |
+| `met_rule` | target encounters whose DVs met the hunt's rule, for the observed DV rate |
+
+The rates in the absolute checks and the observed DV rate read these counters. They never count as net.
 
 ### Which definitions it replaces
 
-The five lists in section 1 become one function, `progress.counts(event) -> bool`, that reads `net`. `LoopGuard` reads `receive`, `release` and `catch` rows by `species` instead of titles. The watchdog's `_quiet` fingerprint becomes "the newest `net` row frame".
+The five lists in section 1 become one function, `progress.counts(event) -> bool`, that reads `net`. `LoopGuard` reads `receive` and `release` rows by `species` instead of titles. The watchdog's `_quiet` fingerprint becomes "the newest `net` row frame".
+
+This switch happens in two steps (section 13). First the rows are written in shadow mode and nothing reads them for decisions. The five readers move to `net` only after the two-week replay meets its bar.
 
 ### The Kanto Marathon case
 
@@ -233,13 +257,17 @@ Each marathon checkpoint writes a `checkpoint` row with `tier=RACE` and `net=1`.
 
 ### Absolute checks per goal
 
-S4 keeps three numbers per goal, all over PlayClock frames.
+S4 keeps three numbers per goal, all over active PlayClock frames.
 
-1. Encounters per game hour for the target species. A hunt with no end reports this rate and an expected time to success, not a stall.
+1. Encounters per game hour for the target species, from `encounter_counts`. A hunt with no end reports this rate and an expected time to success, not a stall.
 2. Catches per improvement. This is `catch` rows over `improve` rows for the goal. A high ratio means the goal catches a lot and gains little.
-3. Churn flag. It is set when the best kept score stays flat over N catches for the goal. The recommended N is 20 (question 6). The flag shows on the Live page and in the report.
+3. Churn flag. It is set when the best kept score stays flat over N catches for the goal. N is 10. By construction every hunt catch must improve, so 10 flat catches is already a fault. The two-week replay may raise N. The flag shows on the Live page and in the report.
 
-A stall for a hunt is a rate problem: the target encounter rate drops below a quarter of its expected rate for one game hour while the goal is active. A goal that is waiting on a clock or a condition is parked, not stalled.
+### The stall rule
+
+A goal is stalled when no `net` row lands in the window, unless the active goal reports a healthy rate. A hunt's rate is healthy while its target encounter rate stays at or above a quarter of its expected rate. A goal that is waiting on a clock or a condition is parked, not stalled.
+
+Liveness is a separate check (section 6). A hung worker writes no rows and reports no rate, so it would look the same as a stall. The liveness check tells them apart.
 
 ## 5. The worth oracle
 
@@ -263,9 +291,21 @@ class Worth:
 
 1. Every producer calls `worth` before it acquires. Producers are gifts, returns, trades, breeding, hunts and training.
 2. A producer that will take the mon calls `S1.reserve` for a slot before it starts. The reservation names the goal and is released on done, stop or rewind.
-3. Invested Pokémon are locked. A mon is invested when this run hatched it, or its stat experience reaches `TRAINED_STAT_EXP` (100000, `pcvalue.py:51`), or a live goal names its identity. A locked mon is never in `releases`.
-4. Demand counts by evolution family. A family is the evolution tree from the generated data. The family's demand is the sum of its unowned dex entries and open plan needs. A bred Squirtle then counts toward Wartortle and Blastoise. It is not a spare just because a Blastoise is held. This fixes the case where a bred Squirtle was released as a spare Blastoise, which `plan_partners` (`gen2/release.py:53`) could not see.
-5. The hunt's `focus` sets the family's focus weight (`WEIGHTS['focus']` 150). The best candidate for an open DV hunt is locked until the hunt ends.
+3. Invested Pokémon are locked. A mon is invested when its stat experience reaches `TRAINED_STAT_EXP` (100000, `pcvalue.py:51`), or a live goal names its identity. A locked mon is never in `releases`.
+4. Hatches are not locked. A hatched mon is kept by family demand and plan needs, as any other mon is. A lock on every hatch would fill the boxes with eggs nobody needs.
+5. Demand counts by evolution family. A family is the evolution tree from the generated data. It keeps one mon per stage the dex still needs, plus one per open plan need, and no more. A bred Squirtle then counts toward Wartortle and Blastoise. It is not a spare just because a Blastoise is held. This fixes the case where a bred Squirtle was released as a spare Blastoise, which `plan_partners` (`gen2/release.py:53`) could not see. A mon kept for this reason writes an `improve` row (section 4).
+6. The hunt's `focus` sets the family's focus weight (`WEIGHTS['focus']` 150). The best candidate for an open DV hunt is locked until the hunt ends.
+
+### Box full of locked mons
+
+If every party and box slot holds a locked or demanded mon, nothing can be released. The oracle reports a `full_locked` state instead of a spare.
+
+1. Every producer that needs a slot parks. It does not retry, catch, release or reload.
+2. One alert fires, once per entry into the state. It names the box counts and the goals waiting for room.
+3. Goals that need no slot keep running.
+4. The state ends when a slot frees up, from a goal ending, a lock lifting or the owner releasing a mon. Producers then unpark.
+
+Parked producers write no rows and spend no budget, so the state can never loop. `pcvalue.deadlocked` (`pcvalue.py:282`) and `full_notice` (`:273`) are the starting point for it.
 
 ### Call sites it replaces
 
@@ -315,6 +355,17 @@ Every timer counts PlayClock frames. The Gen I wall-clock guard at `emulator.py:
 
 `help_request` and `progress_status` are written once, in the supervisor. Gen II gets stall bundles through `Adapter.bundle`.
 
+### Liveness, the one wall-clock check
+
+Frames cannot see a hung worker, because a hung worker runs no frames. So there is exactly one wall-clock check, in two places.
+
+1. The supervisor records the PlayClock frame and the wall time on every tick.
+2. While the adventure is running (not paused, not in manual mode, not stopping), PlayClock must advance. If it has not moved for 15 real minutes, the adventure is not live.
+3. The watchdog runs the same check from outside the worker, from the `play_clock` field in status. A worker that stops answering status counts as not moving.
+4. Not live raises one liveness alert. It is not a stall and it does not climb the reload ladder. The fix is a worker restart.
+
+The stall rule in section 4 runs only while the adventure is live. Stalls and liveness are reported as different alert types.
+
 ### The rewind event
 
 A reload moves the cartridge back. Today each ledger finds out on its own, or does not. The supervisor emits one event:
@@ -333,7 +384,7 @@ Every ledger reconciles on it.
 | Ledger | Reconcile |
 |---|---|
 | S1 reservations | drop reservations made after `save_frame` |
-| Claims ledger (section 7) | claims staged after `save_frame` go back to open. Delivered claims stay spent |
+| Claims ledger (section 7) | claims staged or delivered after `save_frame` go back to open. A gift delivered after the save is not in the reloaded cartridge, so it must be delivered again |
 | `capture_receipts` | receipts after `save_frame` are marked rewound, not deleted |
 | `progress_events` | rows after `save_frame` get `rewound=1` and stop counting as net |
 | S4 monitor | spent frames stay spent, because the frames were really used |
@@ -361,8 +412,11 @@ One table, `claims`:
 1. A source makes a claim `open` when it is earned (wins, steps, return interval).
 2. Before staging, the pipeline calls `worth`. If `keep` is false, the claim goes to `declined` with the reasons. This replaces `wasted()` and `keeps_another`.
 3. If `keep` is true, it reserves a slot through S1 and goes to `staged`.
-4. The generation writes the mon into the cartridge. The claim goes to `delivered`.
-5. A rewind sends staged claims back to `open`.
+4. Delivery is idempotent. Before it writes, the generation reads party and boxes for the claim's identity (the reward seed sets the DVs and trainer id). If the mon is already there, the claim goes straight to `delivered` with no write.
+5. Otherwise the generation writes the mon into the cartridge. The claim goes to `delivered`.
+6. A rewind sends claims staged or delivered after `save_frame` back to `open`. The next delivery finds the cartridge without the mon and writes it again. A rewind to a save that already holds the mon finds it in step 4 and writes nothing.
+
+Today the Gen II ledger takes the next ordinal from the stored `delivered` count (`gen2/rewards.py:44`) and raises it when the gift is written (`:95`). A reload does not move that count back. What keeps a gift from being lost today is the ownership barrier: after a delivery, `custom-reward-barrier-v1` refuses every save older than that gift (`emulator.py:348` in Gen I, `gen2/emulator.py:552` `_behind_barrier` in Gen II). The ledger keeps that barrier. Reopening a claim on rewind covers the saves the barrier lets through, and the idempotent check in step 4 makes a second delivery safe either way.
 
 It replaces the pairs `runtime/reward_delivery.py` and `gen2/rewards.py`, `legendary_returns.py` and `gen2/returns.py`, and `mew_returns.py` and `gen2/steps.py`. `store.league_marks` becomes the `league` rows.
 
@@ -381,7 +435,7 @@ S4 has a budget per goal. This adds a share cap per tier over a rolling window o
 
 A tier over its cap is skipped by S3 until the window rolls. The RACE limit stops the re-offer loop the spec reports. A RACE goal that stands down waits a full interval, as a finished one does.
 
-A hunt goal takes the tier the owner gives it. The default is PROGRESS, so a never-ending hunt still yields to STORY.
+A support child charges its frames to its root goal's tier, not to UPKEEP (section 2, rule 5). So the heal, ball and money trips of a PROGRESS hunt count against PROGRESS, and UPKEEP's 20% cap holds only upkeep that no root asked for.
 
 ## 9. The report button
 
@@ -392,8 +446,8 @@ It appears on every stall alert, on the Live page and in the notification link. 
 1. App version and commit.
 2. Game and generation.
 3. Location: map name and coordinates.
-4. Stall type: no progress, loop, churn, low encounter rate, or given up.
-5. The goal tree with S4 numbers.
+4. Alert type: no progress, loop, churn, low encounter rate, box full of locked mons, not live, or given up.
+5. The goal tree with S4 numbers: every live goal plus the last 20 ended ones.
 6. The last 200 `progress_events` rows and the last 100 journal titles.
 7. The last 300 lines of `worker.log`.
 
@@ -401,7 +455,7 @@ It appears on every stall alert, on the Live page and in the notification link. 
 
 ROMs, saves, usernames, emails, `PUBLIC_URL`, IPs, tokens and notification credentials (`NTFY_URL`, `NTFY_TOKEN`, `TRADE_TOKEN`, `TRADING_URL`). The stall bundle's `.state` files are never read.
 
-The report is built from an allowlist of fields. It is not a scrub of a full dump. Log lines pass through a filter that replaces URLs, IP addresses, email addresses and token-like strings with a tag.
+The report is built from an allowlist of fields. It is not a scrub of a full dump. Log lines and journal titles pass through a filter that replaces URLs, IP addresses, email addresses, token-like strings and absolute paths with a tag. The filter also replaces every account name and every adventure title it reads from the store, so a name or title in a log line is caught even when it looks like plain text.
 
 ### Flow
 
@@ -412,7 +466,7 @@ The report is built from an allowlist of fields. It is not a scrub of a full dum
 
 ### Redaction test
 
-`tests/test_stall_report.py` builds an adventure with a sentinel in every banned source: `PUBLIC_URL`, `NTFY_URL`, `NTFY_TOKEN`, `TRADE_TOKEN`, an account name, an email, an IP in a log line, a save path and the ROM path. It builds the report and the issue link. It fails if any sentinel appears in either, or if the link holds a field outside version, game and stall type.
+`tests/test_stall_report.py` builds an adventure with a sentinel in every banned source: `PUBLIC_URL`, `NTFY_URL`, `NTFY_TOKEN`, `TRADE_TOKEN`, an account name, an adventure title, an email, an IP in a log line, an absolute path in a log line, a save path and the ROM path. The account name and the adventure title also appear inside log lines and journal titles. It builds the report and the issue link. It fails if any sentinel appears in either, or if the link holds a field outside version, game and stall type.
 
 The guide and the self-hosting doc say the report is built locally and sent only by the user. There is no telemetry.
 
@@ -429,17 +483,17 @@ Facts:
 
 Walk:
 
-1. The owner saves the hunt: Sentret, Shiny, Where Route 29, Stop when Never. The goal is `hunt:gold:161:shiny`, tier PROGRESS.
+1. The owner saves the hunt: Sentret, Shiny, Where Route 29, Stop when Never. The goal is `hunt:gold:161:shiny:<h6>`, where `<h6>` is the hash of `what` (section 2, rule 2). Its tier is PROGRESS.
 2. `done` is "a shiny Sentret is held". `stop` is never.
-3. S3 picks the hunt. S5 sets FLEE for every encounter but a shiny Sentret, and CATCH for that.
-4. Each encounter writes an `encounter` row. S4 reports Sentret encounters per game hour and an expected wait of about 8192 Sentret encounters, which is about 20480 grass encounters in the day.
-5. At night the hunt's `feasible` is false because Route 29 has no Sentret. The goal is parked, not stalled. S3 runs the next goal until morning.
+3. S3 picks the hunt. S5 asks the oracle on every encounter, not only on Sentret. The hunt sets CATCH for a shiny Sentret. The oracle sets CATCH for any shiny and for any species the dex is missing, as the Gen I fix on `gen1-catch-churn` already does (commit 9565d12, "Missing and shiny Pokémon are still always caught"). Every other encounter is FLEE.
+4. Each encounter adds to the goal's `encounter_counts` row for the current game hour. It writes no row of its own. S4 reports Sentret encounters per game hour and an expected wait of about 8192 Sentret encounters, which is about 20480 grass encounters in the day.
+5. At night Route 29 has no Sentret. The owner chose the map, so the hunt parks rather than moves (section 3, rule 6). Its `feasible` is false, the goal is parked, not stalled, and its `Stop.frames` count does not advance. S3 runs the next goal until morning.
 6. Balls run low. S1 raises `Need(POKE_BALL)`. A child UPKEEP goal walks to the Cherrygrove mart.
 7. Money runs low. Wild battles in Gen II pay no money, so S1 raises a money need. S3 picks a trainer rematch or a sale as the child goal.
 8. HP or PP runs low. A child heal goal runs.
 9. The root never ends. Each child ends on its own and writes a `goal` row.
 
-The watchdog sees `encounter` rows and child `net` rows. It reports a rate, not a stall. A stall alert fires only if the Sentret rate drops below a quarter of expected for one game hour in the day.
+The watchdog sees the encounter counters and the child `net` rows. The hunt reports a healthy rate, so no `net` row in the window is not a stall. A stall alert fires only if the Sentret rate drops below a quarter of expected for one game hour in the day. Separately, the liveness check alerts if PlayClock stops moving for 15 real minutes.
 
 ### (b) Red, a Pidgey with Atk, Def, Spd and Spc at least 12, stop after 3 game hours
 
@@ -447,20 +501,21 @@ Facts:
 
 1. In Gen I the HP DV is built from the low bits of Attack, Defense, Speed and Special (`pokecore/dvs.py:6`). The form shows HP as derived.
 2. Each of the four DVs is at least 12 in 4 of 16 values. With uniform DVs, all four is 1 in 256.
-3. Uniform DVs need the Fair wild DVs setting. With it off, the cartridge draws correlated bytes (`fair_dvs.py:1-12`), and the odds of this set are not known. See question 1.
+3. Uniform DVs need the Fair wild DVs setting. With it off, the cartridge draws correlated bytes (`fair_dvs.py:1-12`), and the odds of this set are not known. The hunt is still allowed (section 3, rule 9).
 4. Red lists Pidgey in the grass of Route 1 (map 12) and Route 2 (map 13) at levels 2 to 5, and on later routes.
 5. 3 game hours is 648000 PlayClock frames. It is never read from the cartridge clock, which caps at 255:59:59 in Gen I and is stuck there in Yellow.
 
 Walk:
 
-1. The goal is `hunt:red:16:dv`, `dv_min` atk, def, spd and spc at 12, `Stop(frames=648000)`.
+1. The goal is `hunt:red:16:dv:<h6>`, `dv_min` atk, def, spd and spc at 12, `Stop(frames=648000)`. The hash keeps it apart from another Pidgey hunt with a different rule.
 2. `where='auto'` picks Route 1 or Route 2 by Pidgey encounters per frame.
-3. The planner reads the wild DVs in battle. S5 sets CATCH when the shortfall score beats the best kept Pidgey for this goal, and FLEE or FIGHT otherwise.
-4. Each better catch writes `catch` and `improve`. The new best is locked by the goal.
-5. The oracle marks the old best as not locked. It stays only while the dex needs a Pidgey. Otherwise it is the cheapest spare and goes at the next release. That release writes `release` with reason "replaced by a better hunt catch".
-6. If a catch reaches zero shortfall, the goal is done.
-7. If 648000 frames pass first, the goal expires. It writes a `goal` row that names the best kept, such as "Atk 13, Def 12, Spd 9, Spc 14". The best stays locked as the hunt's result. S3 falls back to the next goal.
-8. Catches per improvement and the churn flag show if the run keeps catching Pidgey with no gain.
+3. The planner reads the wild DVs in battle. S5 asks the oracle on every encounter. It sets CATCH for any shiny, for any species the dex is missing (as in (a)), and for a Pidgey whose shortfall score beats the best kept Pidgey for this goal. It sets FLEE or FIGHT otherwise.
+4. If Fair wild DVs is off, the form showed the warning and required this stop when. The Live page shows the observed DV rate from `encounter_counts`: Pidgey encounters that met the rule over all Pidgey encounters.
+5. Each better catch writes `catch` (net 0) and `improve` (net 1). The new best is locked by the goal.
+6. The oracle marks the old best as not locked. It stays only while family demand or a plan need wants a Pidgey. Otherwise it is the cheapest spare and goes at the next release. That release writes `release` with reason "replaced by a better hunt catch".
+7. If a catch reaches zero shortfall, the goal is done.
+8. `Stop.frames` counts only frames while this hunt or one of its children is active. If 648000 active frames pass first, the goal expires. It writes a `goal` row that names the best kept, such as "Atk 13, Def 12, Spd 9, Spc 14". The best stays locked as the hunt's result. S3 falls back to the next goal.
+9. Catches per improvement and the churn flag show if the run keeps catching Pidgey with no gain. Every hunt catch must improve, so 10 flat catches set the flag.
 
 ### (c) Crystal, shiny Magikarp, never stops, no Old Rod
 
@@ -473,12 +528,13 @@ Facts:
 
 Walk:
 
-1. The goal is `hunt:crystal:129:shiny`, `method='auto'`, never stops.
+1. The goal is `hunt:crystal:129:shiny:<h6>`, `method='auto'`, never stops.
 2. Auto picks the Old Rod, because it is the earliest rod with Magikarp. The hunt's precondition is `Item(OLD_ROD)`.
 3. S2 finds it unmet. Its enabler is `Event(EVENT_GOT_OLD_ROD)` at the Route 32 guru. A child goal `get:old_rod` is spawned with `parent` set to the hunt. S2's `Reach` checks the walk to Route 32.
 4. The child talks to the guru, answers YES, and ends done when the flag is set. It writes `event` and `item`.
 5. The hunt becomes feasible. Auto picks Route 32, next to the Pokémon Center, for fast heals.
-6. Ball, money and heal children run as in (a). The root never ends.
+6. Each bite adds to the goal's `encounter_counts` row. S5 asks the oracle on every bite, so any shiny and any missing dex entry is caught, as in (a).
+7. Ball, money and heal children run as in (a). They and `get:old_rod` charge their frames to PROGRESS, the root's tier. The root never ends.
 
 ## 11. Fitting in work in progress
 
@@ -492,7 +548,7 @@ In the goal tree it is the `done` precondition of each boss goal. HEAL spawns a 
 
 `tools/live_soak.py` runs the real Manager on the cold backup and three seeded post-game rungs for 2 game hours. It checks releases, receipts, churn, real progress, reloads, journal growth and repeated titles per game hour against a baseline. `deploy_host.sh` refuses a commit without a passing report.
 
-It is the soak gate for every PR below from PR 2 on. After PR 2 its invariants read `progress_events` instead of titles. That closes its blind spot where duplicate catches write no event. Its other blind spots stay listed in its report.
+It is the soak gate for every PR below from PR 2 on. After PR 3 switches the readers to `net`, its invariants read `progress_events` instead of titles. During PR 2's shadow mode it reads titles as today and also reports where the shadow rows disagree. That closes its blind spot where duplicate catches write no event. Its other blind spots stay listed in its report.
 
 ## 12. Two-week journal replay on the deploy host
 
@@ -503,7 +559,7 @@ This checks the progress model on real history before the stall tiers switch to 
 `tools/replay_progress.py`:
 
 ```
-replay_progress.py run STORES_DIR --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 20]
+replay_progress.py run STORES_DIR --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10]
 replay_progress.py report REPORT_JSON
 ```
 
@@ -532,12 +588,12 @@ Each PR is proved by the live soak gate and by behavioral parity tests. The soak
 | # | Scope | Agent time | Proof |
 |---|---|---|---|
 | 1 | Behavioral parity tests | 3 hours | the new tests pass on main, with known gaps marked xfail and named |
-| 2 | `progress_events` table and kinds. Catches, marathon checkpoints and goal ends write them. The five definitions and LoopGuard read `net` | 5 hours | parity tests, soak, a test that a marathon checkpoint and a duplicate catch each write a row |
-| 3 | `tools/replay_progress.py` and the two-week replay | 3 hours plus 1 hour run | the report in section 12 meets its bar |
-| 4 | Worth oracle with locks and family demand. Every call site in section 5 moves to it | 6 hours | parity tests, soak, the bred Squirtle case as a test |
-| 5 | Claims ledger and shared gift pipeline | 6 hours | parity tests, soak, staged claims reopen after a rewind |
-| 6 | `runtime/supervision.py`, one ladder, the rewind event, frame clocks, Gen II stall bundles | 6 hours | parity tests, soak, both generations give the same ladder for the same scripted stall |
-| 7 | Goal record, hunt template, stop when in frames, per-tier budgets, the shared goal shape in `state.strategy` | 8 hours | the three test goals as headless tests, soak, the `state.strategy` entry leaves ALLOWED |
+| 2 | `progress_events` and `encounter_counts` tables and kinds, in shadow mode. Catches, receives, releases, marathon checkpoints and goal ends write rows. Nothing reads them for decisions yet | 4 hours | parity tests, soak, a test that a marathon checkpoint and a duplicate catch each write a row and that a catch and a receive are net 0 |
+| 3 | `tools/replay_progress.py` and the two-week replay. Once the report meets its bar, the five definitions, LoopGuard and the watchdog switch to `net`, with the stall rule's healthy-rate exception | 4 hours plus 1 hour run | the report in section 12 meets its bar, parity tests, soak |
+| 4 | Worth oracle with locks, family demand and the `full_locked` state. Every call site in section 5 moves to it | 6 hours | parity tests, soak, the bred Squirtle case as a test, a full box of locked mons parks producers and fires one alert |
+| 5 | Claims ledger and shared gift pipeline, with idempotent delivery | 6 hours | parity tests, soak, staged and delivered claims reopen after a rewind, a second delivery of a held mon writes nothing |
+| 6 | `runtime/supervision.py`, one ladder, the rewind event, frame clocks, the liveness check in the supervisor and the watchdog, Gen II stall bundles | 6 hours | parity tests, soak, both generations give the same ladder for the same scripted stall, a frozen PlayClock raises one liveness alert after 15 real minutes |
+| 7 | Goal record with the `what` hash in the key, hunt template, stop when in active frames, per-tier budgets with support children charged to the root's tier, the shared goal shape in `state.strategy` | 8 hours | the three test goals as headless tests, soak, the `state.strategy` entry leaves ALLOWED |
 | 8 | Hidden Pokémon and Stop when fields, share codes | 4 hours | round-trip tests for codes, a page test for the form |
 | 9 | Report button, `stall-report.yml`, redaction test, guide and self-hosting text | 4 hours | `tests/test_stall_report.py`, `tests/test_no_private_strings.py` |
 
@@ -557,13 +613,13 @@ PR 1 adds `tests/test_behavior_parity.py`. It runs the same scripted situations 
 
 Cases that fail today are marked xfail with the PR that fixes them. PR 7 then removes `state.strategy` from `ALLOWED` and adds `state.strategy.goal` to `REQUIRED`, with the fields key, title, tier, done and stop.
 
-## 14. Open questions
+## 14. Decisions
 
-1. Should a Gen I DV-threshold hunt be allowed with Fair wild DVs off? Recommended: yes, with a warning on the form that the odds are unknown, and a required stop when.
-2. When a fixed-location hunt has no target at this time of day, should it park or move? Recommended: park if the owner chose the map, move if `where` is auto.
-3. How far does family demand reach? Recommended: one kept per stage the dex still needs, plus one per open plan need, and no more.
-4. Should a never-ending hunt be able to outrank STORY? Recommended: no by default. The owner may set the tier to STORY on the form.
-5. Does real-time stop when count paused time? Recommended: no. It counts running time only.
-6. What N should the churn flag use? Recommended: 20 catches, checked in the two-week replay before it is fixed.
-7. Should share codes carry a fixed map? Recommended: only when the owner picked one. Auto stays auto, so a code works across versions of the data.
-8. Should the report include the goal tree's full history or only live goals? Recommended: live goals plus the last 20 ended ones.
+1. A Gen I DV-threshold hunt is allowed with Fair wild DVs off. The form shows a warning that the odds are unknown, requires a stop when, and the Live page shows the DV rate observed from encounters (section 3, rule 9).
+2. A fixed-location hunt with no target at this time of day parks if the owner chose the map and moves if `where` is auto.
+3. Family demand keeps one mon per stage the dex still needs, plus one per open plan need, and no more.
+4. A never-ending hunt does not outrank STORY by default. The owner may set the tier to STORY on the form.
+5. A real-time stop when counts running time only. Paused time does not count.
+6. The churn flag uses N = 10 catches, because every hunt catch must improve by construction. The two-week replay may raise it.
+7. A share code carries a fixed map only when the owner picked one. Auto stays auto, so a code works across versions of the data.
+8. The report holds the live goals plus the last 20 ended ones.
