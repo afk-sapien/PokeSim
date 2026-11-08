@@ -241,7 +241,11 @@ from the watch's own clone, never a working checkout. Add `--enable` to start th
 
 `DEPLOY_HOST=<ssh alias> DEPLOY_DIR=<app folder> sh tools/deploy_host.sh <full commit sha>` builds that commit,
 takes a cold backup and starts the new image. It refuses a commit without green `ci gate`
-and `install gate` checks, or a host short of space. If the new image is not healthy or
+and `install gate` checks, or a host short of space. It also refuses a commit that does
+not contain the one the host runs, read from the running image's revision label, so a
+deploy never drops work. Use `--rollback-to <full commit sha>` to deploy an older commit
+on purpose. It always refuses a commit whose data schema is older than the live
+`app.sqlite`, because that app would not start on the data. If the new image is not healthy or
 fails the smoke check, it restores `.env` and restarts the old image. It keeps the 5
 newest backups and their images. While it runs, `deploy.lock` in the app folder keeps
 the alert watch quiet for up to 15 minutes. Each deploy adds a line to `deploy.log`.

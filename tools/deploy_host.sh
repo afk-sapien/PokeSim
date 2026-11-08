@@ -1,11 +1,16 @@
 #!/bin/sh
 # Build one commit into an image and deploy it to the managed app on a Docker host over SSH.
 # Usage: DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh <full commit sha>
+#        DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh --rollback-to <full commit sha>
 #   DEPLOY_DIR    app folder on the host with compose.yaml and .env, required
 #   VERSION       image version, by default the version in pyproject.toml at that commit
 #   MIN_FREE_GB   free space the host and this machine must keep, by default 10
 #   CHECK_CORE    pokecore version the image must hold, optional
 #   CHECK_FILE and CHECK_TEXT   a file in the pokesim package that must contain the text, optional
+# The commit must contain the deployed commit, read from the running image's revision label, so a
+# deploy never drops work the app already runs. Only --rollback-to deploys a commit outside that line.
+# Its data schema, the PRAGMA user_version of app.sqlite, must not be older than the live data's,
+# even for a rollback, because an older app refuses newer data. The image carries it as a label.
 # The commit must have green `ci gate` and `install gate` checks on GitHub. The script stops the app,
 # takes a cold backup of the folder, tests it with gzip -t, starts the new image with up --wait and runs
 # the smoke check. If any step after the backup fails, it puts .env back and restarts the old image.
@@ -15,7 +20,12 @@
 # While it runs, DEPLOY_DIR/deploy.lock names the commit, so the alert watch stays quiet. Each deploy
 # appends one line to DEPLOY_DIR/deploy.log.
 set -eu
-SHA=${1:?usage: DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh <full commit sha>}
+ROLLBACK=
+if [ "${1:-}" = --rollback-to ]; then
+  ROLLBACK=1
+  shift
+fi
+SHA=${1:?usage: DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh [--rollback-to] <full commit sha>}
 HOST=${DEPLOY_HOST:?set DEPLOY_HOST to the SSH alias of the Docker host}
 DIR=${DEPLOY_DIR:?set DEPLOY_DIR to the app folder on the host}
 MIN_FREE_GB=${MIN_FREE_GB:-10}
@@ -31,6 +41,44 @@ git -C "$ROOT" fetch -q origin
 git -C "$ROOT" cat-file -e "$SHA^{commit}"
 VERSION=${VERSION:-$(git -C "$ROOT" show "$SHA:pyproject.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -1)}
 TAG=pokesim:$VERSION-local-$SHORT
+SCHEMA=$(git -C "$ROOT" show "$SHA:pokesim/app/registry.py" | sed -n 's/^SCHEMA = \([0-9]*\)$/\1/p' | head -1)
+[ -n "$SCHEMA" ] || { echo "deploy: no SCHEMA in pokesim/app/registry.py at $SHORT" >&2; exit 1; }
+
+# The image the host is set to run, the commit in its revision label, and the schema of the live data.
+# compose run reads the data through the app's own mounts, so this works while the app is stopped too.
+live=$(ssh -o BatchMode=yes "$HOST" sh -s -- "$DIR" <<'LIVE'
+set -eu
+cd "$1"
+image=$(sed -n 's/^POKESIM_IMAGE=//p' .env)
+docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image"
+docker compose run --rm -T --no-deps --entrypoint python pokesim -c "
+import sqlite3
+from pathlib import Path
+path = Path('/data/app.sqlite')
+print(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True).execute('PRAGMA user_version').fetchone()[0] if path.exists() else 0)" </dev/null
+LIVE
+) || { echo "deploy: could not read the running image and data schema on $HOST, refusing" >&2; exit 1; }
+DEPLOYED=$(echo "$live" | sed -n 1p)
+LIVE_SCHEMA=$(echo "$live" | sed -n 2p)
+case $LIVE_SCHEMA in
+  '' | *[!0-9]*) echo "deploy: could not read the live data schema on $HOST ($LIVE_SCHEMA), refusing" >&2; exit 1 ;;
+esac
+if [ "$SCHEMA" -lt "$LIVE_SCHEMA" ]; then
+  echo "deploy: $SHORT has data schema $SCHEMA, older than the live data's $LIVE_SCHEMA, refusing" >&2
+  exit 1
+fi
+if [ -z "$ROLLBACK" ]; then
+  if ! git -C "$ROOT" cat-file -e "$DEPLOYED^{commit}" 2>/dev/null; then
+    echo "deploy: the running image names commit '$DEPLOYED', which this clone does not have, refusing" >&2
+    echo "deploy: fetch it, or pass --rollback-to to deploy $SHORT anyway" >&2
+    exit 1
+  fi
+  if ! git -C "$ROOT" merge-base --is-ancestor "$DEPLOYED" "$SHA"; then
+    echo "deploy: $SHORT does not contain the deployed commit $(echo "$DEPLOYED" | cut -c1-7), refusing" >&2
+    echo "deploy: pass --rollback-to to deploy it anyway" >&2
+    exit 1
+  fi
+fi
 
 # Only a commit whose own gate checks passed is deployed.
 for gate in 'ci gate' 'install gate'; do
@@ -51,7 +99,7 @@ if [ "$(free_gb "$WORK")" -lt "$MIN_FREE_GB" ]; then
 fi
 
 git -C "$ROOT" archive "$SHA" | tar x -C "$WORK"
-docker build -q --build-arg VERSION="$VERSION" --build-arg REVISION="$SHA" -t "$TAG" "$WORK"
+docker build -q --build-arg VERSION="$VERSION" --build-arg REVISION="$SHA" --build-arg SCHEMA="$SCHEMA" -t "$TAG" "$WORK"
 docker run --rm --entrypoint python -e CHECK_CORE="${CHECK_CORE:-}" -e CHECK_FILE="${CHECK_FILE:-}" \
   -e CHECK_TEXT="${CHECK_TEXT:-}" -e REVISION="$SHA" "$TAG" -c "
 import importlib.metadata as m, importlib.util as u, os
