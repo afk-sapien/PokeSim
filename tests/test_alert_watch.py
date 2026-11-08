@@ -77,7 +77,7 @@ def host(tmp_path):
 
     def check(answer):
         env = {**os.environ, 'PATH': f'{ssh.parent}{os.pathsep}{os.environ["PATH"]}', 'ANSWER': answer,
-               'POKESIM_WATCH_HOST': 'apphost', 'POKESIM_WATCH_LOGS': str(tmp_path / 'logs')}
+               'POKESIM_WATCH_HOST': 'apphost', 'POKESIM_WATCH_APP_DIR': '/srv/app', 'POKESIM_WATCH_LOGS': str(tmp_path / 'logs')}
         env.pop('POKESIM_WATCH_ALERT_COMMAND', None)
         return subprocess.run(['bash', str(TOOLS / 'alert_watch.sh')], env=env, capture_output=True, text=True).stdout
     return check

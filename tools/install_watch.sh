@@ -2,7 +2,8 @@
 # Install the overnight and alert watch as systemd user units that run from the watch's own clone.
 # Usage: sh tools/install_watch.sh
 # Put the settings in ~/.config/pokesim-watch.env first, one VAR=value per line:
-#   POKESIM_WATCH_HOST, POKESIM_WATCH_SITE, POKESIM_WATCH_ALERT_COMMAND and POKESIM_WATCH_NTFY.
+#   POKESIM_WATCH_HOST, POKESIM_WATCH_APP_DIR, POKESIM_WATCH_SITE, POKESIM_WATCH_ALERT_COMMAND
+#   and POKESIM_WATCH_NTFY.
 # The units are copied and reloaded. The timers are enabled only with --enable.
 set -eu
 HERE=$(cd "$(dirname "$0")/.." && pwd)

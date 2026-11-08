@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build one commit into an image and deploy it to the managed app on a Docker host over SSH.
 # Usage: DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh <full commit sha>
-#   DEPLOY_DIR    app folder on the host with compose.yaml and .env, by default /docker/pokesim-app
+#   DEPLOY_DIR    app folder on the host with compose.yaml and .env, required
 #   VERSION       image version, by default the version in pyproject.toml at that commit
 #   MIN_FREE_GB   free space the host and this machine must keep, by default 10
 #   CHECK_CORE    pokecore version the image must hold, optional
@@ -17,7 +17,7 @@
 set -eu
 SHA=${1:?usage: DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh <full commit sha>}
 HOST=${DEPLOY_HOST:?set DEPLOY_HOST to the SSH alias of the Docker host}
-DIR=${DEPLOY_DIR:-/docker/pokesim-app}
+DIR=${DEPLOY_DIR:?set DEPLOY_DIR to the app folder on the host}
 MIN_FREE_GB=${MIN_FREE_GB:-10}
 REPO=afk-sapien/PokeSim
 ROOT=$(git rev-parse --show-toplevel)

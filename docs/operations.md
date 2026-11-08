@@ -233,13 +233,13 @@ container or a file it cannot read becomes one "app down" alert. `tools/overnigh
 runs nightly. It runs the real-cartridge tests at the commit the app was built from and
 the smoke check inside the container. Install both as systemd user units with
 `sh tools/install_watch.sh`, after writing `~/.config/pokesim-watch.env` with
-`POKESIM_WATCH_HOST`, `POKESIM_WATCH_SITE`, `POKESIM_WATCH_ALERT_COMMAND` and
-`POKESIM_WATCH_NTFY`, an ntfy topic URL that hears about a failed watch. The units run
+`POKESIM_WATCH_HOST`, `POKESIM_WATCH_APP_DIR` (the app folder on that host),
+`POKESIM_WATCH_SITE`, `POKESIM_WATCH_ALERT_COMMAND` and `POKESIM_WATCH_NTFY`, an ntfy topic URL that hears about a failed watch. The units run
 from the watch's own clone, never a working checkout. Add `--enable` to start the timers.
 
 ### Deploying a commit to a hosted app
 
-`DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh <full commit sha>` builds that commit,
+`DEPLOY_HOST=<ssh alias> DEPLOY_DIR=<app folder> sh tools/deploy_host.sh <full commit sha>` builds that commit,
 takes a cold backup and starts the new image. It refuses a commit without green `ci gate`
 and `install gate` checks, or a host short of space. If the new image is not healthy or
 fails the smoke check, it restores `.env` and restarts the old image. It keeps the 5
