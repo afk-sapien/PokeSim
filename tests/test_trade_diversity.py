@@ -13,7 +13,7 @@ def inventory(*offers):
             'offers': list(offers)}
 
 
-def completed(setup, left_key='previous-left', right_key='previous-right', phase='completed'):
+def completed(setup, left_key='previous-left', right_key='previous-right', phase='completed', at=0):
     left, right = setup.data['left_id'], setup.data['right_id']
     tid = identifier()
     plan = {'participants': [left, right], 'left_id': left, 'right_id': right,
@@ -23,7 +23,7 @@ def completed(setup, left_key='previous-left', right_key='previous-right', phase
     setup.registry.create_transaction(tid, plan)
     setup.registry.update_transaction(tid, phase=phase, decision='COMMIT' if phase == 'completed' else 'ABORT')
     with setup.registry.lock, setup.registry.db:
-        setup.registry.db.execute('UPDATE interactions SET updated_at=0 WHERE id=?', (tid,))
+        setup.registry.db.execute('UPDATE interactions SET updated_at=? WHERE id=?', (at, tid))
     return plan
 
 
@@ -106,4 +106,50 @@ def test_new_campaign_does_not_inherit_previous_campaign_visits(setup, monkeypat
     left, right = setup.data['left_id'], setup.data['right_id']
     setup.registry.update(left, campaign_id=identifier())
     inventories = {left: inventory(offer('new-left', 25)), right: inventory(offer('returning', 19))}
+    assert selection(setup, monkeypatch, inventories) is not None
+
+
+def test_the_same_species_pair_waits_after_a_trade(setup, monkeypatch):
+    # Live, two games swapped the same two species back and forth for small gains.
+    import time
+    completed(setup, at=time.time() - 3600)
+    left, right = setup.data['left_id'], setup.data['right_id']
+    inventories = {left: inventory(offer('again', 25), offer('other', 16)), right: inventory(offer('new-right', 19))}
+    selected = selection(setup, monkeypatch, inventories)
+    assert 'other' in selected.values()
+    # A new Pokédex entry still justifies the same pair.
+    inventories[right]['owned'] = [19]
+    assert 'again' in selection(setup, monkeypatch, {left: inventory(offer('again', 25)), right: inventories[right]}).values()
+
+
+def test_a_trade_the_receiver_would_release_is_skipped_and_its_pair_waits(setup, monkeypatch):
+    from pokesim.app.coordinator import pair_key
+    left, right = setup.data['left_id'], setup.data['right_id']
+    c = setup.coordinator
+    asked = []
+    def would_keep(aid, mon):
+        asked.append((aid, mon['dex']))
+        return mon['dex'] != 25
+    monkeypatch.setattr(c, '_would_keep', would_keep)
+    # Both gain a level, and the lower level 25 ranks first.
+    inventories = {left: inventory(offer('spare', 25), offer('kept', 16, 30)), right: inventory(offer('new-right', 19))}
+    selected = selection(setup, monkeypatch, inventories)
+    assert 'kept' in selected.values() and (right, 25) in asked
+    assert pair_key(left, right, {'dex': 25}, {'dex': 19}) in c.refused_pairs
+    # The refused pair is not asked about again while it waits.
+    asked.clear()
+    selection(setup, monkeypatch, inventories)
+    assert (right, 25) not in asked
+
+
+def test_a_worker_that_cannot_answer_does_not_block_its_trade(setup, monkeypatch):
+    left, right = setup.data['left_id'], setup.data['right_id']
+    c = setup.coordinator
+    def refuse(aid, operation, data=None, recovery=False):
+        if operation == 'would_keep':
+            raise RuntimeError('Adventure worker did not answer')
+        return original(aid, operation, data, recovery)
+    original = c._request
+    monkeypatch.setattr(c, '_request', refuse)
+    inventories = {left: inventory(offer('only', 25, 30)), right: inventory(offer('new-right', 19))}
     assert selection(setup, monkeypatch, inventories) is not None

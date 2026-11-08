@@ -62,13 +62,13 @@ def storage_headroom(s):
 
 
 def release_rated(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts=frozenset(),
-                  rewards=frozenset(), requested=None, demand=None, favor=None):
+                  rewards=frozenset(), requested=None, demand=None, favor=None, extra=()):
     """Every Pokémon scored with pcvalue.rate. ``demand`` maps a Pokédex number to the linked adventures
     missing it, which keeps that many copies and counts as trade demand. ``favor`` is the Favor shiny or
-    Favor DVs setting and the rest are as in ``entries``."""
+    Favor DVs setting, ``extra`` adds rows such as an incoming trade, and the rest are as in ``entries``."""
     from collections import Counter
     from ..pcvalue import Inputs, rate
-    return rate(entries(s, preferences, roles, stock, partners, gifts, rewards, requested),
+    return rate([*entries(s, preferences, roles, stock, partners, gifts, rewards, requested), *extra],
                 Inputs(demand=dict(demand or {}), wishes=Counter(demand or {}), favor=favor))
 
 
