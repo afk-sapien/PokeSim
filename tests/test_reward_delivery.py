@@ -185,10 +185,11 @@ def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, f
 def spare_at(slot):
     """A policy whose PC rating calls the Pokémon at ``slot`` a spare."""
     row = SimpleNamespace(entry=SimpleNamespace(slot=slot), status='spare')
-    return SimpleNamespace(on_restore=lambda: None, pc_rated=lambda _: [row])
+    return SimpleNamespace(on_restore=lambda: None, pc_rated=lambda *_, **__: [row])
 
 
-def test_a_league_gift_the_pc_would_release_is_settled_without_sending_it(tmp_path, monkeypatch):
+@pytest.mark.parametrize('shiny', [False, True])
+def test_a_league_gift_the_pc_would_release_is_settled_without_sending_it(tmp_path, monkeypatch, shiny):
     from pokesim import ram
     from test_trade_save import Memory, populate
 
@@ -209,6 +210,16 @@ def test_a_league_gift_the_pc_would_release_is_settled_without_sending_it(tmp_pa
                               frame=100, _state_bytes=lambda: b'source', _autosave=lambda: saves.append(1),
                               _boot=lambda: clone, _load_state_file=lambda _: None,
                               policy=spare_at((0, 0)), input_epoch=0)
+        monkeypatch.setattr(rewards, 'staged_shiny', lambda *_: shiny)
+        if shiny:
+            # A shiny gift goes on to be sent, even though the PC calls it a spare.
+            def sent(_stream):
+                raise LookupError('sent')
+            clone.save_state = sent
+            with pytest.raises(LookupError, match='sent'):
+                deliver(emu, league_rewards=True)
+            assert rewards.ledger(store.db)['skipped'] == 0
+            return
         assert deliver(emu, league_rewards=True) is None
         value = rewards.ledger(store.db)
         assert (value['delivered'], value['skipped']) == (1, 1)
@@ -259,7 +270,7 @@ def test_a_gen2_league_gift_the_pc_would_release_is_settled_without_sending_it(t
 def test_a_league_gift_short_of_the_best_copy_is_wasted_when_the_pc_needs_room(status, free, wasted):
     from pokesim import rewards
     row = SimpleNamespace(entry=SimpleNamespace(slot=(1, 1)), status=status)
-    policy = SimpleNamespace(pc_rated=lambda _: [row])
+    policy = SimpleNamespace(pc_rated=lambda *_, **__: [row])
     counts = [20] * 12
     for index in range(12):
         take = min(free, 20)
@@ -276,19 +287,26 @@ def test_a_staged_league_gift_is_rated_as_a_reward_not_a_traded_copy(generation,
     staged = rewards.staged_mark('seed:1', generation)
     seen = []
 
-    def rate(policy, _snapshot):
-        seen.append(policy.league_marks())
+    def rate(_policy, _snapshot, marks=frozenset()):
+        seen.append(marks)
         return [SimpleNamespace(entry=SimpleNamespace(slot=(1, 1)), status='spare')]
 
-    policy = SimpleNamespace()
-    policy.league_marks = lambda: frozenset({('old', ())})
-    hook = policy.league_marks
+    hook = lambda: frozenset({('old', ())})  # noqa: E731
+    policy = SimpleNamespace(league_marks=hook)
     if generation == 1:
-        policy.pc_rated = lambda snapshot: rate(policy, snapshot)
+        policy.pc_rated = lambda snapshot, marks=frozenset(): rate(policy, snapshot, marks)
     else:
         monkeypatch.setattr(release, 'release_rated', rate)
     assert rewards.wasted(policy, SimpleNamespace(box_counts=(0,) * 12), (1, 1), 'seed:1', generation)
-    assert seen == [frozenset({('old', ()), staged})] and policy.league_marks is hook
-    bare = SimpleNamespace(pc_rated=lambda snapshot: rate(bare, snapshot))
-    assert rewards.wasted(bare, SimpleNamespace(box_counts=(0,) * 12), (1, 1), 'seed:1', generation)
-    assert seen[-1] == frozenset({staged}) and not hasattr(bare, 'league_marks')
+    # The mark goes to the rating, and the shared hook other readers use is never touched.
+    assert seen == [frozenset({staged})] and policy.league_marks is hook
+
+
+def test_a_shiny_gen1_league_gift_is_always_sent():
+    from pokesim import rewards
+    from pokesim.shiny import shiny_bytes
+    seeds = [f'seed:{index}' for index in range(20000)]
+    shiny = next(seed for seed in seeds if rewards.staged_shiny(seed))
+    _, first, second = rewards._draw(shiny, 1)
+    assert shiny_bytes(bytes((first, second)))
+    assert not rewards.staged_shiny(next(seed for seed in seeds if seed != shiny))

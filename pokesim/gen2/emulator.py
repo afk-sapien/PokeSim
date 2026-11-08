@@ -18,7 +18,7 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
-from ..stalls import LoopGuard, StallWatch
+from ..stalls import LoopGuard, StallWatch, stalled_state
 from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
@@ -1225,7 +1225,8 @@ class Emulator:
         live = not self.paused and not self.manual_mode
         waiting = live and self.waiting
         loop = live and Emulator._looping(self)
-        stalled = live and not waiting and (self.stall.stalled(self.frame, time.time()) or self.unstick_streak >= STALL_RELOADS) or bool(loop)
+        stalled = stalled_state(live, waiting, self.stall.stalled(self.frame, time.time())
+                                or self.unstick_streak >= STALL_RELOADS, loop)
         recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
                 'stopped': self.frozen,

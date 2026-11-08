@@ -27,8 +27,8 @@ def test_the_same_gift_and_release_repeated_trips_the_guard_until_real_progress(
             add(store, 'obtain', 'Received Chikorita from a custom PokeSim gift')
             add(store, 'release', 'Said goodbye to a spare Chikorita')
         assert guard.looping(store) is None
-        # Gen I words its gift with the nickname first.
-        add(store, 'obtain', 'Received CHIKO (Chikorita) for League reward #9')
+        # Gen I words its gift with the nickname first and the species in capitals.
+        add(store, 'obtain', 'Received CHIKO (CHIKORITA) for League reward #9')
         add(store, 'release', 'Said goodbye to a spare Chikorita')
         clock.now += 60
         assert 'received and released Chikorita 6 times' in guard.looping(store)
@@ -87,3 +87,69 @@ def test_catching_a_returning_legendary_ends_the_loop(tmp_path):
         assert guard.looping(store) is None
     finally:
         store.close()
+
+
+def test_gen1_gifts_and_releases_pair_by_species_across_spellings(tmp_path):
+    # The real Gen I titles: the gift names the species as strategy data does, the release as RAM does.
+    store = Store(tmp_path)
+    try:
+        for index in range(LOOP_LIMIT):
+            add(store, 'obtain', f'Received SOUPJUDGE (SQUIRTLE) for League reward #{index}')
+            add(store, 'release', 'Said goodbye to a spare Squirtle')
+            add(store, 'obtain', f'Received MIMIC (MR.MIME) for League reward #{index}')
+            add(store, 'release', 'Said goodbye to a spare Mr. Mime Lv 5')
+        reason = LoopGuard().looping(store)
+        assert 'received and released Squirtle 6 times' in reason or 'Mr. Mime 6 times' in reason
+    finally:
+        store.close()
+
+
+def test_a_reload_replaying_the_same_journal_is_not_progress(tmp_path):
+    store, clock = Store(tmp_path), Clock()
+    try:
+        add(store, 'map', 'Reached Route 30')
+        add(store, 'level', 'CHIKO grew to level 9')
+        guard = LoopGuard(clock=clock)
+        assert guard.looping(store) is None
+        for _ in range(LOOP_LIMIT):
+            guard.reloaded('auto-v1-1.state')
+            # The reload rewinds the run, and the replay journals the same map and level again.
+            add(store, 'map', 'Reached Route 30')
+            add(store, 'level', 'CHIKO grew to level 9')
+            clock.now += 60
+            guard.looping(store)
+        assert 'reloaded auto-v1-1.state 6 times' in guard.looping(store)
+        add(store, 'level', 'CHIKO grew to level 10')
+        clock.now += 60
+        assert guard.looping(store) is None
+    finally:
+        store.close()
+
+
+def test_the_web_thread_and_the_emulator_thread_share_one_guard(tmp_path):
+    import threading
+    store = Store(tmp_path)
+    try:
+        guard = LoopGuard(every=0)
+        for _ in range(LOOP_LIMIT):
+            add(store, 'obtain', 'Received Totodile from a custom PokeSim gift')
+            add(store, 'release', 'Said goodbye to a spare Totodile')
+        reasons = []
+        threads = [threading.Thread(target=lambda: reasons.extend(guard.looping(store) for _ in range(50)))
+                   for _ in range(4)]
+        threads.append(threading.Thread(target=lambda: [guard.reloaded('a.state') for _ in range(200)]))
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert len(reasons) == 200 and all('Totodile 6 times' in reason for reason in reasons)
+    finally:
+        store.close()
+
+
+def test_a_waiting_run_is_not_shown_stalled_even_while_it_loops():
+    from pokesim.stalls import stalled_state
+    assert stalled_state(True, False, False, 'It reloaded a.state 6 times without progress')
+    assert not stalled_state(True, True, False, 'It reloaded a.state 6 times without progress')
+    assert not stalled_state(True, True, True, None) and not stalled_state(False, False, True, 'loop')
+    assert stalled_state(True, False, True, None)
