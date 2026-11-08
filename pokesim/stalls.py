@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import time
 
 log = logging.getLogger(__name__)
@@ -64,14 +65,27 @@ def advanced(previous, snapshot):
 
 
 
+def stalled_state(live, waiting, stuck, loop):
+    """Whether the status shows a run as stalled: live, stuck or looping, and never while it waits."""
+    return bool(live and not waiting and (stuck or loop))
+
+
 # Events a gift and release loop cannot fake. A received gift, an item and a release are left out.
 REAL_PROGRESS = ('badge', 'catch', 'event_return', 'evolve', 'hatch', 'champion', 'trainer', 'level', 'map')
 # Repeats that count as a loop: the same Pokémon received and released, or the same save reloaded.
 LOOP_LIMIT = 6
 LOOP_EVENTS = 400
+# How far back a progress entry is compared after a reload. A reload rewinds the run, and the replay
+# journals the same maps, trainers and levels again, which is not progress.
+REPLAY_EVENTS = 2000
 # Gen II names the species, Gen I the nickname and then the species in brackets.
 _RECEIVED = re.compile(r'^Received (?:[^(]+ \()?(.+?)\)? (?:from|for) ')
 _RELEASED = re.compile(r'^Said goodbye to a spare (.+?)(?: Lv \d+)?$')
+
+
+def species_key(name):
+    """One key per species for both spellings: Gen I gifts say SQUIRTLE or MR.MIME, releases Squirtle or Mr. Mime."""
+    return re.sub(r"[\s.'’]", '', name.casefold())
 
 
 class LoopGuard:
@@ -81,44 +95,67 @@ class LoopGuard:
     and each gift counted as progress, so neither the reload limit nor the stall alert ever fired.
     The same save was also reloaded over and over. Once either repeats LOOP_LIMIT times, the run
     asks for help, gifts stop and reloading stops, until it makes real progress again.
+
+    The web status thread and the emulator thread both ask, so the state is behind a lock.
     """
 
     def __init__(self, limit=LOOP_LIMIT, every=30, clock=time.time):
         self.limit, self.every, self.clock = limit, every, clock
-        self.reloads, self.since = {}, None
+        self.reloads, self.since, self.scanned = {}, None, None
         self.reason, self.checked = None, None
+        self.lock = threading.Lock()
 
     def reloaded(self, name):
-        self.reloads[name] = self.reloads.get(name, 0) + 1
-        self.checked = None
+        with self.lock:
+            self.reloads[name] = self.reloads.get(name, 0) + 1
+            self.checked = None
 
     def looping(self, store):
         """Why the run is in a loop, or None. Reads the journal at most once every ``every`` seconds."""
-        now = self.clock()
-        if self.checked is not None and now - self.checked < self.every:
-            return self.reason
-        self.checked = now
+        with self.lock:
+            now = self.clock()
+            if self.checked is not None and now - self.checked < self.every:
+                return self.reason
+            self.checked = now
+            with store.lock:
+                self._advance(store)
+                rows = store.db.execute("SELECT type, title FROM events WHERE id > ? AND type IN ('obtain', 'release') "
+                                        'ORDER BY id DESC LIMIT ?', (self.since or 0, LOOP_EVENTS)).fetchall()
+            received, released, names = {}, {}, {}
+            for kind, title in rows:
+                match = (_RECEIVED if kind == 'obtain' else _RELEASED).match(title)
+                if match:
+                    key = species_key(match.group(1))
+                    counts = received if kind == 'obtain' else released
+                    counts[key] = counts.get(key, 0) + 1
+                    if kind == 'release':
+                        names[key] = match.group(1)
+            reason = None
+            churn = max(((min(count, received.get(key, 0)), key) for key, count in released.items()), default=(0, ''))
+            if churn[0] >= self.limit:
+                reason = f'It received and released {names[churn[1]]} {churn[0]} times without other progress'
+            elif self.reloads and max(self.reloads.values()) >= self.limit:
+                name, count = max(self.reloads.items(), key=lambda item: item[1])
+                reason = f'It reloaded {name} {count} times without progress'
+            if reason and reason != self.reason:
+                log.error('Loop guard: %s', reason)
+            self.reason = reason
+            return reason
+
+    def _advance(self, store):
+        """Move ``since`` to the newest real progress entry. Only entries after the last scan are read,
+        and after a reload one that repeats a recent entry is the replay, not progress."""
         marks = ','.join('?' * len(REAL_PROGRESS))
-        with store.lock:
-            latest = store.db.execute(f'SELECT MAX(id) FROM events WHERE type IN ({marks})', REAL_PROGRESS).fetchone()[0]
-            rows = store.db.execute("SELECT type, title FROM events WHERE id > ? AND type IN ('obtain', 'release') "
-                                    'ORDER BY id DESC LIMIT ?', (latest or 0, LOOP_EVENTS)).fetchall()
-        if latest != self.since:
-            self.since, self.reloads = latest, {}
-        received, released = {}, {}
-        for kind, title in rows:
-            match = (_RECEIVED if kind == 'obtain' else _RELEASED).match(title)
-            if match:
-                counts = received if kind == 'obtain' else released
-                counts[match.group(1)] = counts.get(match.group(1), 0) + 1
-        reason = None
-        churn = max(((min(count, received.get(name, 0)), name) for name, count in released.items()), default=(0, ''))
-        if churn[0] >= self.limit:
-            reason = f'It received and released {churn[1]} {churn[0]} times without other progress'
-        elif self.reloads and max(self.reloads.values()) >= self.limit:
-            name, count = max(self.reloads.items(), key=lambda item: item[1])
-            reason = f'It reloaded {name} {count} times without progress'
-        if reason and reason != self.reason:
-            log.error('Loop guard: %s', reason)
-        self.reason = reason
-        return reason
+        if self.scanned is None:
+            self.since = self.scanned = store.db.execute(
+                f'SELECT MAX(id) FROM events WHERE type IN ({marks})', REAL_PROGRESS).fetchone()[0] or 0
+            return
+        fresh = store.db.execute(f'SELECT id, type, title FROM events WHERE id > ? AND type IN ({marks}) ORDER BY id',
+                                 (self.scanned, *REAL_PROGRESS)).fetchall()
+        for row_id, kind, title in fresh:
+            self.scanned = row_id
+            if self.reloads and store.db.execute(
+                    'SELECT 1 FROM events WHERE id BETWEEN ? AND ? AND type = ? AND title = ? LIMIT 1',
+                    (row_id - REPLAY_EVENTS, row_id - 1, kind, title)).fetchone():
+                continue
+            self.since, self.reloads = row_id, {}

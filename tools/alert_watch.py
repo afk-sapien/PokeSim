@@ -7,7 +7,8 @@ The app's watchdog keeps the problems the main page shows (help requests, stalls
 failures, errors) in watchdog-problems.json in its data directory. This compares them with the keys
 seen on the last run, prints each new one, and runs COMMAND once per new alert with the alert text on
 stdin, for example a script that hands it to an agent. An alert that clears and comes back is new
-again. Nothing is posted anywhere unless COMMAND does it.
+again. Nothing is posted anywhere unless COMMAND does it. Without COMMAND it only prints, and leaves
+the state alone, so a run that hands nothing over cannot mark an alert as seen.
 """
 import json
 import subprocess
@@ -42,6 +43,8 @@ def main(argv):
             # Keep it unseen, so the next run hands it over again.
             failed = True
             problems = [row for row in problems if row['key'] != problem['key']]
+    if not command:
+        return 0
     state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text(json.dumps(sorted(row['key'] for row in problems)), encoding='utf-8')
     return 1 if failed else 0

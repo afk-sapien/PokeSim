@@ -735,11 +735,13 @@ class Policy:
                 tuple(sorted(self.release_requests().items())) if hasattr(self, 'release_requests') else (),
                 self.pc_favor() if hasattr(self, 'pc_favor') else None)
 
-    def pc_rated(self, snapshot):
+    def pc_rated(self, snapshot, marks=frozenset()):
         """Every Pokémon scored as the next release scores it (pcvalue.py), for the PC tab, the ledger
         and the owner's requests. Kept until rating_key changes, so a waiting request does not rate the
-        whole PC on every decision."""
+        whole PC on every decision. Extra League reward ``marks`` give a one-off rating."""
         from .release import release_rated
+        if marks:
+            return release_rated(self, snapshot, marks=marks)
         key = self.rating_key(snapshot)
         if self.rated_cache[0] != key:
             self.rated_cache = (key, release_rated(self, snapshot))

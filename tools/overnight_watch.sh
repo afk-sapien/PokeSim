@@ -137,6 +137,7 @@ fi
 echo "-- main-page alerts on $HOST"
 # Every alert the main page shows becomes a task through POKESIM_WATCH_ALERT_COMMAND. tools/alert_watch.sh
 # runs the same check every few minutes, and both share one state file, so an alert is handed over once.
+# With no command set, it only prints the alerts and marks none of them as seen.
 if ! "$HERE/alert_watch.sh"; then
   failed+=(alerts)
 fi

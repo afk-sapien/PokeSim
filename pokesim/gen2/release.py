@@ -85,17 +85,18 @@ def rated(snapshot, demand=None, stock=(), preferences=None, partners=(), owners
                              favor=favor))
 
 
-def release_rated(policy, snapshot, keep=(), preferences=None):
+def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset()):
     """``rated`` with a running policy's own inputs: plan demand and partners, breeding stock, trade
     preferences, linked adventures, League reward marks and the owner's release requests.
 
-    ``keep`` adds stock species and ``preferences`` stands in for the stored ones.
+    ``keep`` adds stock species, ``preferences`` stands in for the stored ones and ``marks`` adds
+    League reward marks, such as a gift's before it is delivered.
     """
     from pokecore.gen2.breeding import breeding_stock
     stock = set(breeding_stock(policy.data, [mon.species for mon in snapshot.party + snapshot.stored if not mon.egg]))
     stock.update(keep)
     owners = policy.release_owners() if hasattr(policy, 'release_owners') else None
-    marks = policy.league_marks() if hasattr(policy, 'league_marks') else frozenset()
+    marks = frozenset(policy.league_marks() if hasattr(policy, 'league_marks') else ()) | marks
     requested = policy.release_requests() if hasattr(policy, 'release_requests') else {}
     favor = policy.pc_favor() if hasattr(policy, 'pc_favor') else None
     names = {sid: row.get('name', '?') for sid, row in getattr(policy.data, 'species', {}).items()}
