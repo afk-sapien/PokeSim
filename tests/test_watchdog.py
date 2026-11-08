@@ -456,6 +456,21 @@ def test_the_manager_sends_watchdog_alerts_through_notifications(client, monkeyp
     assert client.patch('/api/v1/watchdog', json={'other': True}).status_code == 422
 
 
+def test_a_nearly_full_data_folder_is_announced_and_recovers(world, tmp_path, monkeypatch):
+    from pokesim.app import watchdog
+    world.manager.root = tmp_path
+    free = [3e9]
+    monkeypatch.setattr(watchdog.shutil, 'disk_usage', lambda path: SimpleNamespace(free=free[0]))
+    world.tick()
+    assert world.sent == [('Needs attention', 'The data folder has 3.0 GB free, under 10 GB. '
+                                              'Free some space before saves and backups fail.')]
+    assert world.watchdog.public()['problems'][0]['kind'] == 'disk'
+    free[0] = 40e9
+    world.tick(60)
+    assert world.sent[-1] == ('Recovered', 'The data folder has room again.')
+    assert Limits.from_environment({'POKESIM_WATCHDOG_DISK_FREE_GB': '2'}).disk_free_gb == 2
+
+
 def test_the_problems_file_lets_a_watch_outside_the_app_see_the_main_page_alerts(world, tmp_path):
     import json
     from pokesim.app.watchdog import PROBLEMS_FILE

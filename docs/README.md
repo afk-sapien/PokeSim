@@ -42,6 +42,7 @@ This index separates current instructions, future plans, and historical evidence
 
 - [Multi-user PokeSim](design/multi-user.md): proposal for accounts, roles, sharing, a control lease and trade offers between people.
 - [Planner systems](design/planner-systems.md): the shared planner systems S1 to S5 that replaced special-case fixes, as proposed and as built, with the parked mastery credit step.
+- [Goal system v2](design/goal-system.md): proposal for a goal tree with hunt templates, typed progress events, one worth oracle, shared supervision and a report button, with the PR order to build it.
 - [Distribution readiness](distribution-readiness.md): historical release-process review.
 
 - [Multi-adventure application plan](multi-adventure-app-plan.md) and

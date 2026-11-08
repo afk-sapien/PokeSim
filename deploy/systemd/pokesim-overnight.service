@@ -1,0 +1,11 @@
+[Unit]
+Description=PokeSim overnight watch (real-cartridge tests at the deployed commit and hosted app health)
+After=network-online.target
+OnFailure=pokesim-watch-failed@%n.service
+
+[Service]
+Type=oneshot
+# POKESIM_WATCH_HOST, POKESIM_WATCH_SITE, POKESIM_WATCH_ALERT_COMMAND and POKESIM_WATCH_NTFY.
+EnvironmentFile=%h/.config/pokesim-watch.env
+ExecStart=%h/.local/share/pokesim-overnight/pokesim/tools/overnight_watch.sh
+TimeoutStartSec=30min

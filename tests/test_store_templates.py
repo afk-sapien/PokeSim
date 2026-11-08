@@ -1,14 +1,16 @@
 """Keep the app store templates in step with compose.quickstart.yaml and the package version."""
 from pathlib import Path
 import re
-import tomllib
 import xml.etree.ElementTree as ElementTree
 
 import pytest
 
+from tools.release_version import installed_version
+
 ROOT = Path(__file__).resolve().parents[1]
 STORES = ROOT / 'deploy' / 'stores'
-VERSION = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version']
+# The published release the templates install. On a development version of main it is the last release.
+VERSION = installed_version(ROOT)
 QUICKSTART = (ROOT / 'compose.quickstart.yaml').read_text()
 # Store apps keep their settings for good, so they leave out the one-time admin pair and the
 # proxy list that only a Compose setup behind a proxy needs.

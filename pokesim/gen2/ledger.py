@@ -12,6 +12,7 @@ run sells valuables and spare TMs only when it has no ball and no money for one.
 from collections import Counter
 import math
 
+from ..planning import boss
 from ..planning.ledger import BOX, HP, MONEY, PARTY, PP, PRICELESS, Ledger, Need, Resources, Shortfall, Unit
 from .champion_shop import SUPPLIES
 from .menus import Release
@@ -19,6 +20,13 @@ from .release import headroom
 
 # A Pokémon under this share of its HP sends the run to a Pokémon Center.
 HEAL_LINE = 0.6
+# How the Gold, Silver and Crystal move table names the attacks the boss check weighs apart
+# (planning/boss.py): hits per use as the battle scores them, the self-KO moves, and level and set damage.
+EFFECTS = boss.Effects(
+    hits={'EFFECT_MULTI_HIT': 3, 'EFFECT_DOUBLE_HIT': 2, 'EFFECT_POISON_MULTI_HIT': 2},
+    self_ko=frozenset({'EFFECT_SELFDESTRUCT', 'EFFECT_EXPLOSION'}),
+    level=frozenset({'EFFECT_LEVEL_DAMAGE', 'EFFECT_PSYWAVE'}),
+    fixed={'EFFECT_STATIC_DAMAGE': 0})
 # Distinct entries each Gen 2 pocket holds.
 POCKET_SLOTS = {'items': 20, 'balls': 12}
 PARTY_SIZE = 6
@@ -91,19 +99,43 @@ def ledger(data, boxes=None):
     return Ledger(lambda snapshot, kinds: read(data, snapshot, kinds, boxes))
 
 
+def attack_strength(data, mon, move):
+    """How hard ``move`` hits for ``mon`` against no foe in particular, or 0 for a move with no power.
+
+    Power with the same type bonus and hit count the battle scores, the level for Seismic Toss and
+    Night Shade, and a tenth for a move that knocks out its user. The rule is shared with Red, Blue and
+    Yellow in planning/boss.py.
+    """
+    return boss.attack_strength(data.moves.get(move, {}), data.species.get(mon.species, {}).get('types', ()),
+                                mon.level, EFFECTS)
+
+
+def strong_pp(data, mon):
+    """Uses left of the attacks ``mon`` fights with: those within boss.STRONG_SHARE of its strongest."""
+    return boss.strong_uses([attack_strength(data, mon, move) for move in mon.moves], mon.pp)
+
+
+def fighters(data, snapshot):
+    """The party as the boss check reads it (planning/boss.py), eggs left out. A state with no
+    maximum PP read counts each move's base PP."""
+    return tuple(boss.fighter(mon.hp, mon.max_hp, [attack_strength(data, mon, move) for move in mon.moves], mon.pp,
+                              getattr(mon, 'max_pp', ()) or [data.moves.get(move, {}).get('pp', 0) for move in mon.moves])
+                 for mon in snapshot.party if not mon.egg)
+
+
 def battle_room(data, snapshot):
     """The HP and PP the party can spend before a Pokémon Center is due.
 
     HP is the fewest points any Pokémon has left above the heal line, and none for one with a status.
-    PP is the fewest attack uses left to any Pokémon that has an attack. A party with no attack at all
+    PP is the fewest uses left to any Pokémon that has an attack of the attacks it fights with
+    (strong_pp), so a spare weak attack does not hide spent strong ones. A party with no attack at all
     is never sent to heal for PP, so its PP room is one. Either at zero means the heal walk is due.
     """
     def power(move):
         return data.moves.get(move, {}).get('power', 0)
     mons = [mon for mon in snapshot.party if not mon.egg]
     hp = min((0 if mon.status else max(0, mon.hp - math.ceil(mon.max_hp * HEAL_LINE) + 1) for mon in mons), default=0)
-    pp = min((sum(pp for move, pp in zip(mon.moves, mon.pp) if power(move))
-              for mon in mons if any(power(move) for move in mon.moves)), default=1)
+    pp = min((strong_pp(data, mon) for mon in mons if any(power(move) for move in mon.moves)), default=1)
     return {HP: hp, PP: pp}
 
 

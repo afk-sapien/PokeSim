@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 # Nightly watch: runs Core's real-cartridge tests, runs PokeSim's suite with the
-# private saves CI lacks, checks that the hosted PokeSim app is up, and checks that
-# Gen 2 adventures go back to quality hunts once training runs out. Writes one log
-# per night and keeps the newest 14.
+# private saves CI lacks at the commit the hosted app runs, checks that the app is up,
+# and checks that Gen 2 adventures go back to quality hunts once training runs out.
+# Writes one log per night and keeps the newest 14.
 # Settings come from POKESIM_WATCH_* environment variables. HOST and SITE have no default.
+# The systemd units in deploy/systemd run it from the watch's own PokeSim clone, which it
+# moves to origin/main first. The whole script is one function, so bash has read all of it
+# before the clone changes under it.
 set -uo pipefail
+main() {
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CORE=${POKESIM_WATCH_CORE:-$HOME/.local/share/pokesim-overnight/pokesim-core}
 CORE_REPO=${POKESIM_WATCH_CORE_REPO:-https://github.com/afk-sapien/pokesim-core.git}
 POKESIM=${POKESIM_WATCH_POKESIM:-$HOME/.local/share/pokesim-overnight/pokesim}
+# A worktree of that clone at the commit the app runs, where the private-save tests run.
+DEPLOYED=${POKESIM_WATCH_DEPLOYED:-$HOME/.local/share/pokesim-overnight/pokesim-deployed}
 POKESIM_REPO=${POKESIM_WATCH_POKESIM_REPO:-https://github.com/afk-sapien/PokeSim.git}
 ROMS=${POKESIM_WATCH_ROMS:-$HOME/roms/pokemon}
 # Private PokeSim data: stuck scenarios and the other saves CI skips without.
@@ -18,7 +24,6 @@ SHORTCUTS=${POKESIM_CORE_SHORTCUT_STATES:-$HOME/roms/pokemon/shortcut-states}
 # The SSH host that runs the app and the site name its proxy answers to.
 HOST=${POKESIM_WATCH_HOST:?set POKESIM_WATCH_HOST to the SSH host running the app}
 SITE=${POKESIM_WATCH_SITE:?set POKESIM_WATCH_SITE to the app site name}
-PORT=${POKESIM_WATCH_PORT:-8950}
 CONTAINER=${POKESIM_WATCH_CONTAINER:-pokesim-app-pokesim-1}
 LOGS=${POKESIM_WATCH_LOGS:-$HOME/.local/state/pokesim-overnight}
 KEEP=${POKESIM_WATCH_KEEP:-14}
@@ -33,6 +38,20 @@ log=$LOGS/$(date +%F).log
 exec >>"$log" 2>&1
 echo "== $(date -Is) overnight watch"
 failed=()
+
+# The watch's clone moves to origin/main, and the tests run at the commit the app was built from.
+[ -d "$POKESIM/.git" ] || git clone -q "$POKESIM_REPO" "$POKESIM"
+if ! { git -C "$POKESIM" fetch -q origin && git -C "$POKESIM" reset -q --hard origin/main \
+    && git -C "$POKESIM" clean -qfdx -e .venv; }; then
+  echo "-- could not update the PokeSim clone"
+  failed+=(pokesim)
+fi
+revision=$(ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST" \
+  "docker inspect -f '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' $CONTAINER" 2>/dev/null)
+if ! git -C "$POKESIM" cat-file -e "${revision:-none}^{commit}" 2>/dev/null; then
+  echo "-- the app on $HOST names no known commit (${revision:-none}), so the tests run at origin/main"
+  revision=$(git -C "$POKESIM" rev-parse origin/main)
+fi
 
 # Both test steps hold the heavy lock and every test slot of tools/load_gate.sh,
 # so they never overlap a replay batch or an agent's tests.
@@ -76,21 +95,21 @@ else
   fi
 
   # PokeSim's whole suite with every private input, so a test CI skips for lack
-  # of private saves cannot hide a regression for more than a night. The clone
+  # of private saves cannot hide a regression for more than a night. The worktree
   # keeps its generated Gen II data between nights.
-  [ -d "$POKESIM/.git" ] || git clone -q "$POKESIM_REPO" "$POKESIM"
-  if git -C "$POKESIM" fetch -q origin && git -C "$POKESIM" reset -q --hard origin/main \
-      && git -C "$POKESIM" clean -qfdx -e .venv -e .release-local; then
-    echo "-- pokesim private-save tests at $(git -C "$POKESIM" log -1 --format='%h %s')"
+  [ -d "$DEPLOYED/.git" ] || [ -f "$DEPLOYED/.git" ] || git -C "$POKESIM" worktree add -q --detach "$DEPLOYED" "$revision"
+  if git -C "$DEPLOYED" checkout -q --detach "$revision" && git -C "$DEPLOYED" reset -q --hard \
+      && git -C "$DEPLOYED" clean -qfdx -e .venv -e .release-local; then
+    echo "-- pokesim private-save tests at the deployed $(git -C "$DEPLOYED" log -1 --format='%h %s')"
     # Without the scenarios the private tests skip quietly, so the watch fails instead.
     if [ ! -d "$DATA/scenarios" ]; then
       echo "-- no private scenarios: $DATA/scenarios is missing"
       failed+=(pokesim)
     else
-      out=$(cd "$POKESIM" && {
+      out=$(cd "$DEPLOYED" && {
         [ -d .release-local/gen2-data/gen2 ] \
           || nice -n 10 uv run -q --locked python tools/prepare_gen2_test_data.py .release-local/gen2-data
-      } && DATA_DIR=$DATA GEN2_DATA_DIR=$POKESIM/.release-local/gen2-data GEN2_CARTRIDGE_DIR=$ROMS \
+      } && DATA_DIR=$DATA GEN2_DATA_DIR=$DEPLOYED/.release-local/gen2-data GEN2_CARTRIDGE_DIR=$ROMS \
         ROM_PATH=$ROMS/red.gb BLUE_ROM_PATH=$ROMS/blue.gb YELLOW_ROM_PATH=$ROMS/yellow.gb \
         POKESIM_SCENARIO_TESTS=1 POKESIM_SCENARIOS=$DATA/scenarios \
         nice -n 10 uv run -q --locked --extra dev pytest -q -rf -p no:cacheprovider --ignore=tests/browser -n 10 2>&1)
@@ -100,7 +119,7 @@ else
       [ "$rc" -ne 0 ] && failed+=(pokesim)
     fi
   else
-    echo "-- could not update the PokeSim clone"
+    echo "-- could not check out $revision for the tests"
     failed+=(pokesim)
   fi
   for fd in "${slots[@]}"; do
@@ -111,18 +130,12 @@ fi
 exec 9>&-
 
 echo "-- app on $HOST"
-# The container must report healthy and the app must list adventures.
+# The container must report healthy and pass the smoke check inside it, which needs no login.
 if ! ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST" "
   set -e
   docker inspect -f '{{.State.Health.Status}} {{.Config.Image}}' $CONTAINER | tee /dev/stderr | grep -q '^healthy '
-  curl -fsS -m 20 -H 'Host: $SITE' -H 'X-Forwarded-Proto: https' localhost:$PORT/api/v1/adventures
-" | python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-adventures = data.get("adventures", data)
-running = sum((a.get("status") or a.get("state")) == "running" for a in adventures)
-print(len(adventures), "adventures,", running, "running")
-'; then
+  docker exec $CONTAINER pokesim smoke --data-dir /data
+"; then
   failed+=(app)
 fi
 
@@ -148,3 +161,6 @@ if [ ${#failed[@]} -gt 0 ]; then
   exit 1
 fi
 echo "== passed"
+}
+main "$@"
+exit
