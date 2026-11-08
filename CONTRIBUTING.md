@@ -45,6 +45,9 @@ Run focused tests while editing, then the full suite for changes to shared behav
 See [the validation guide](docs/testing.md) for real Chromium tests, copied-save
 comparisons, and embedded build identity.
 
+A failed push run on `main` reruns its failed jobs once by itself. A run that passes on that
+rerun is a flake. `python tools/flake_rate.py` with `GH_TOKEN` set counts them for the last 30 days.
+
 Policies decide once per emulator step, so code that runs on every step must not redo work
 that grows with the dex, the party, the PC, a map or the navigation graph. Cache such a
 result on a cheap change key, such as the snapshot fields it reads or a version counter
