@@ -1,0 +1,8 @@
+[Unit]
+Description=Post a failed PokeSim watch (%i) to ntfy
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/pokesim-watch.env
+# POKESIM_WATCH_NTFY is the full topic URL. Without it the failure stays in the journal only.
+ExecStart=/bin/sh -c '[ -n "$${POKESIM_WATCH_NTFY:-}" ] || exit 0; journalctl --user -u %i -n 15 --no-pager -o cat | curl -fsS -m 20 -H "Title: PokeSim watch failed: %i" -H "Priority: 4" -H "Tags: warning" --data-binary @- "$$POKESIM_WATCH_NTFY" >/dev/null'

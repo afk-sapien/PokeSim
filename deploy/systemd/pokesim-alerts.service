@@ -1,0 +1,10 @@
+[Unit]
+Description=PokeSim alert watch (hands new main-page alerts of the hosted app to POKESIM_WATCH_ALERT_COMMAND)
+After=network-online.target
+OnFailure=pokesim-watch-failed@%n.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/pokesim-watch.env
+ExecStart=%h/.local/share/pokesim-overnight/pokesim/tools/alert_watch.sh
+TimeoutStartSec=5min

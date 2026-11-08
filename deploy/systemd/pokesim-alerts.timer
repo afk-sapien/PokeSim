@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the hosted PokeSim app for new main-page alerts every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

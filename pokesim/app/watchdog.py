@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import threading
 import time
 import traceback
@@ -32,7 +33,8 @@ OWNER_FAILURES = ('Cancelled by the owner', 'Set aside for a trade you chose')
 
 @dataclass(frozen=True)
 class Limits:
-    """Seconds unless the name says otherwise. Each one reads POKESIM_WATCHDOG_<NAME> in minutes."""
+    """Seconds unless the name says otherwise. Each one reads POKESIM_WATCHDOG_<NAME> in minutes, except
+    the count and the gigabytes, which read as they are."""
     interval: float = 60
     grace: float = 300
     down: float = 120
@@ -43,6 +45,7 @@ class Limits:
     failure_repeats: int = 3
     error_quiet: float = 3600
     cooldown: float = 3600
+    disk_free_gb: float = 10
 
     @classmethod
     def from_environment(cls, environ=None):
@@ -60,7 +63,8 @@ class Limits:
             if number < 0 or (item.name == 'interval' and number <= 0):
                 log.warning('Ignoring POKESIM_WATCHDOG_%s, which must be positive', item.name.upper())
                 continue
-            values[item.name] = int(number) if item.name == 'failure_repeats' else number * 60
+            values[item.name] = (int(number) if item.name == 'failure_repeats' else
+                                 number if item.name == 'disk_free_gb' else number * 60)
         return cls(**values)
 
 
@@ -318,6 +322,7 @@ class Watchdog:
             self.progress.pop(aid, None)
         self._trades(names, now, found)
         self._errors(names, now, found)
+        self._disk(now, found)
         sent = self._reconcile(found, now)
         self._publish()
         return sent
@@ -471,6 +476,20 @@ class Watchdog:
             key = 'error:' + signature
             found[key] = Problem(key, 'error', f'{origin} an unexpected error: {signature}.{count}',
                                  min(moment for moment, _ in seen), recovered='', announce=True)
+
+    def _disk(self, now, found):
+        """Saves, journals and backups stop being written once the data folder fills up."""
+        root = getattr(self.manager, 'root', None)
+        if root is None or not self.limits.disk_free_gb:
+            return
+        try:
+            free = shutil.disk_usage(root).free / 1e9
+        except OSError:
+            return
+        if free < self.limits.disk_free_gb:
+            found['disk'] = Problem(
+                'disk', 'disk', f'The data folder has {free:.1f} GB free, under {self.limits.disk_free_gb:g} GB. '
+                'Free some space before saves and backups fail.', now, recovered='The data folder has room again.')
 
     # Alerts -------------------------------------------------------------------------------
     def _reconcile(self, found, now):
