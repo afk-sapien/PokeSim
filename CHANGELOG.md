@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Require green checks before a change lands on `main` or a `feature/` branch. CI and the Python install workflow each end in one gate job, `ci gate` and `install gate`, that passes only when every other job passed. The branch ruleset requires both, so `feature/` branches now take changes through a pull request. Pushes to `feature/` branches run both workflows, so each commit there has its own evidence, and a documentation-only pull request runs the install checks too. The release gate requires both gates.
+
 - Skip a Gold, Silver or Crystal event return or gift the PC would release. Gold caught the returning Sudowoodo and released it 11 seconds later, and took the Eevee gift only to release it. A due return or gift the PC would rate as a spare now waits for the next walking milestone, and the journal says so once. The loop guard counts a caught return or completed gift as progress only once it has stayed in the PC for a check.
 
 - Stop League reward gifts from looping through the PC. Since PC values, a reward copy counts as a spare, so a gift that went into a box was released at the next PC visit, which made room for the next gift. A Silver run spent hours receiving and releasing Lv 5 starters. A gift the PC would release, or a copy short of the best while the boxes are nearly full, is now settled as skipped, with no gift and no save. Shiny Gen II gifts are always sent. The check rates the gift as the League reward it is. Until it was counted delivered, it rated as a traded copy, the best of its species, so most gifts were still sent. A shiny Red, Blue or Yellow gift is now always sent too. The staged gift's mark goes straight to the rating, so the PC tab never sees it.
