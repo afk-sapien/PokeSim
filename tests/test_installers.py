@@ -9,12 +9,13 @@ import tomllib
 import pytest
 
 from tools.check_quickstart import compose_command, compose_environment
+from tools.release_version import installed_version
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_installers_select_the_current_release():
-    version = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version']
+    version = installed_version(ROOT)
     assert f'    version={version}\n' in (ROOT / 'install.sh').read_text()
     assert f"$version = '{version}'\n" in (ROOT / 'install.ps1').read_text()
 

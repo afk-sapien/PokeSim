@@ -23,7 +23,7 @@ def test_every_pin_on_this_branch_names_the_package_version():
 
 def test_a_lagging_quickstart_pin_is_reported(tree):
     path = tree / 'compose.quickstart.yaml'
-    version = release_version.package_version(tree)
+    version = release_version.installed_version(tree)
     path.write_text(path.read_text().replace(f'pokesim:{version}', 'pokesim:0.0.1'))
     assert release_version.version_problems(tree) == [f'compose.quickstart.yaml pins 0.0.1, not {version}']
 
@@ -49,6 +49,26 @@ def test_bump_moves_every_pin_and_nothing_else(tree):
     lock_after = (tree / 'uv.lock').read_text().splitlines()
     changed = [(a, b) for a, b in zip(lock_before, lock_after) if a != b]
     assert changed == [(f'version = "{old}"', 'version = "9.8.7"')]
+
+
+def test_a_development_version_moves_only_the_package_pins(tree):
+    release = release_version.installed_version(tree)
+    before = {name: (tree / name).read_text() for name, _ in release_version.PINS}
+    release_version.bump(tree, '9.8.7.dev0')
+    assert release_version.package_version(tree) == '9.8.7.dev0'
+    assert release_version.version_problems(tree) == []
+    package = {name for name, _ in release_version.PACKAGE_PINS}
+    for name, text in before.items():
+        assert ((tree / name).read_text() != text) == (name in package), name
+    assert f'pokesim:{release}' in (tree / 'compose.quickstart.yaml').read_text()
+
+
+def test_under_a_development_version_a_lagging_install_pin_is_reported(tree):
+    release = release_version.installed_version(tree)
+    release_version.bump(tree, '9.8.7.dev0')
+    path = tree / 'compose.quickstart.yaml'
+    path.write_text(path.read_text().replace(f'pokesim:{release}', 'pokesim:0.0.1'))
+    assert release_version.version_problems(tree) == [f'compose.quickstart.yaml pins 0.0.1, not {release}']
 
 
 def test_bump_refuses_a_bad_version_or_a_missing_pin(tree):
