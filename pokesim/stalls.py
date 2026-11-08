@@ -81,6 +81,8 @@ REPLAY_EVENTS = 2000
 # Gen II names the species, Gen I the nickname and then the species in brackets.
 _RECEIVED = re.compile(r'^Received (?:[^(]+ \()?(.+?)\)? (?:from|for) ')
 _RELEASED = re.compile(r'^Said goodbye to a spare (.+?)(?: Lv \d+)?$')
+# A return caught or a gift completed. "Has returned" and "available" only open the next visit.
+_RETURNED = re.compile(r'^(?:Caught the returning (.+)|Completed (?:the )?(.+?)(?: gift| exchange)?)$')
 
 
 def species_key(name):
@@ -101,7 +103,7 @@ class LoopGuard:
 
     def __init__(self, limit=LOOP_LIMIT, every=30, clock=time.time):
         self.limit, self.every, self.clock = limit, every, clock
-        self.reloads, self.since, self.scanned = {}, None, None
+        self.reloads, self.since, self.scanned, self.returned = {}, None, None, {}
         self.reason, self.checked = None, None
         self.lock = threading.Lock()
 
@@ -144,18 +146,41 @@ class LoopGuard:
 
     def _advance(self, store):
         """Move ``since`` to the newest real progress entry. Only entries after the last scan are read,
-        and after a reload one that repeats a recent entry is the replay, not progress."""
-        marks = ','.join('?' * len(REAL_PROGRESS))
+        and after a reload one that repeats a recent entry is the replay, not progress.
+
+        A caught return or completed gift counts once it has been kept for a check, so one the PC
+        releases straight away, as Sudowoodo was 11 seconds after its return, is not progress.
+        """
+        kinds = (*REAL_PROGRESS, 'release')
+        marks = ','.join('?' * len(kinds))
         if self.scanned is None:
-            self.since = self.scanned = store.db.execute(
-                f'SELECT MAX(id) FROM events WHERE type IN ({marks})', REAL_PROGRESS).fetchone()[0] or 0
+            # A release already in the journal is scanned past, but only real progress moves ``since``.
+            self.since, self.scanned = store.db.execute(
+                f"SELECT MAX(CASE WHEN type != 'release' THEN id END), MAX(id) FROM events WHERE type IN ({marks})",
+                kinds).fetchone()
+            self.since, self.scanned = self.since or 0, self.scanned or 0
             return
         fresh = store.db.execute(f'SELECT id, type, title FROM events WHERE id > ? AND type IN ({marks}) ORDER BY id',
-                                 (self.scanned, *REAL_PROGRESS)).fetchall()
+                                 (self.scanned, *kinds)).fetchall()
+        now = self.clock()
         for row_id, kind, title in fresh:
             self.scanned = row_id
+            if kind == 'release':
+                match = _RELEASED.match(title)
+                if match:
+                    self.returned.pop(species_key(match.group(1)), None)
+                continue
             if self.reloads and store.db.execute(
                     'SELECT 1 FROM events WHERE id BETWEEN ? AND ? AND type = ? AND title = ? LIMIT 1',
                     (row_id - REPLAY_EVENTS, row_id - 1, kind, title)).fetchone():
                 continue
+            if kind == 'event_return':
+                match = _RETURNED.match(title)
+                if match:
+                    self.returned[species_key(match.group(1) or match.group(2))] = (row_id, now)
+                continue
             self.since, self.reloads = row_id, {}
+        for key, (row_id, seen) in list(self.returned.items()):
+            if now - seen >= self.every:
+                del self.returned[key]
+                self.since, self.reloads = max(self.since, row_id), {}

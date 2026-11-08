@@ -240,3 +240,16 @@ def test_policy_is_idle_only_on_the_waiting_tile(version):
     assert not policy.idle(SimpleNamespace(map=here.map, x=12, y=8, in_battle=1))
     policy.goal = Goal('collection_hunt', 'Hunting', 'ROUTE_29', 12, 8)
     assert not policy.idle(here)
+
+
+def test_a_return_the_pc_would_release_is_not_kept(monkeypatch):
+    from pokesim.gen2.release import keeps_another
+    monkeypatch.setattr('pokecore.gen2.breeding.breeding_stock', lambda data, species: set())
+    policy = SimpleNamespace(data=SimpleNamespace(species={185: {'name': 'Sudowoodo'}}, game='gold'), demand={},
+                             collection={}, trade_preferences=lambda: {})
+    # Gold received the returning Sudowoodo while it held one, and released it 11 seconds later.
+    assert not keeps_another(policy, snapshot([mon(185, dvs=(3,) * 5)]), 185)
+    assert keeps_another(policy, snapshot([mon(16)]), 185)
+    # A plan that needs two copies keeps the second.
+    policy.demand = {185: 2}
+    assert keeps_another(policy, snapshot([mon(185, dvs=(3,) * 5)]), 185)
