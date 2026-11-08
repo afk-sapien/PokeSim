@@ -61,6 +61,11 @@ FAILURE_BACKOFF_MAX = 86400
 INELIGIBLE_SECONDS = 1800
 # The key failure_backoff gives a game whose every offer waits.
 WHOLE_GAME = '*'
+# How long two games leave a species pair alone after trading it, or after a receiver's PC would have
+# released the incoming Pokémon. Live, the same two species went back and forth between two games.
+PAIR_COOLDOWN_SECONDS = 6 * 3600
+# How many of the best automatic candidates are checked against the receivers' PCs on one pass.
+KEEP_CHECKS = 3
 
 
 class Waiting(ValueError):
@@ -107,6 +112,27 @@ def _nickname(raw):
         elif value >= 0x60:
             result.append('?')
     return ''.join(result).strip() or None
+
+
+def pair_key(left_id, right_id, give, take):
+    """Two games and the two species they would swap, the same either way round."""
+    return frozenset((left_id, right_id)), frozenset((give.get('dex'), take.get('dex')))
+
+
+def recent_pairs(history, now):
+    """The pair_key of every exchange completed within PAIR_COOLDOWN_SECONDS."""
+    pairs = set()
+    for row in history:
+        if row['phase'] != 'completed' or row['decision'] != 'COMMIT' or now - row['updated_at'] >= PAIR_COOLDOWN_SECONDS:
+            continue
+        participants = row['plan']['participants']
+        display = (row.get('result') or {}).get('display', {})
+        offers = row['plan'].get('display_offers', {})
+        first, second = participants[0], participants[-1]
+        sent = (display.get(first) or {}).get('sent') or offers.get(first) or {}
+        received = (display.get(first) or {}).get('received') or offers.get(second) or {}
+        pairs.add(pair_key(first, second, sent, received))
+    return pairs
 
 
 def visited(visits, aid, campaign, key):
@@ -180,6 +206,7 @@ class Coordinator:
         self.next_recovery_at = 0
         self.recovery_failures = {}
         self.ineligible = {}
+        self.refused_pairs = {}
         self.prepare_timeout = 900
         self.prepare_poll = 1
         self.session_timeout = 960
@@ -1035,6 +1062,7 @@ class Coordinator:
         visits = self.registry.completed_trade_visits()
         recent_species = Counter()
         recent_games = Counter()
+        pairs = recent_pairs(history, time.time())
         for row in sorted(history, key=lambda item: item['updated_at'], reverse=True):
             if row['phase'] != 'completed' or row['decision'] != 'COMMIT':
                 continue
@@ -1076,6 +1104,8 @@ class Coordinator:
         now = time.monotonic()
         self.ineligible = {side: until for side, until in self.ineligible.items() if until > now}
         reserved = reserved | set(self.ineligible)
+        self.refused_pairs = {pair: until for pair, until in self.refused_pairs.items() if until > now}
+        pairs |= set(self.refused_pairs)
         waiting = {aid for entry in self._manual_entries() if entry['state'] in MANUAL_WAITING
                    for aid in (entry['left_id'], entry['right_id'])}
         inventories = [self._auto_offers(aid, inv, reserved) for aid, inv in inventories
@@ -1101,6 +1131,9 @@ class Coordinator:
                         if (visited(visits, left_id, campaigns[left_id], take.get('trade_key')) and mine < 100
                                 or visited(visits, right_id, campaigns[right_id], give.get('trade_key')) and theirs < 100):
                             continue
+                        # Nor trade the same two species again soon, unless one completes a Pokédex entry.
+                        if mine < 100 and theirs < 100 and pair_key(left_id, right_id, give, take) in pairs:
+                            continue
                         repetition = sum(recent_species[aid, dex] for aid, dex in {
                             (left_id, give.get('dex')), (left_id, take.get('arrived_dex', take.get('dex'))),
                             (right_id, take.get('dex')), (right_id, give.get('arrived_dex', give.get('dex')))})
@@ -1110,12 +1143,14 @@ class Coordinator:
                                 -max(last.get(left_id, 0), last.get(right_id, 0)),
                                 -(give.get('level', 0) + take.get('level', 0)),
                                 give.get('trade_key') or '', take.get('trade_key') or '')
-                        candidates.append((rank, left_id, right_id, give['trade_key'], take['trade_key']))
+                        candidates.append((rank, left_id, right_id, give['trade_key'], take['trade_key'],
+                                           (give, theirs), (take, mine)))
         if candidates and self._manual_waiting_ids() - chosen:
             # A trade the owner chose arrived while automatic candidates were scored.
             return self.drain_manual()
+        candidates = self._kept_candidates(sorted(candidates, key=lambda item: item[0], reverse=True), now)
         if candidates:
-            _, left_id, right_id, left_key, right_key = max(candidates, key=lambda item: item[0])
+            _, left_id, right_id, left_key, right_key, *_ = candidates[0]
             try:
                 row = self.propose({'left_id': left_id, 'right_id': right_id,
                                     'left_key': left_key, 'right_key': right_key, 'request_id': identifier()})
@@ -1130,6 +1165,31 @@ class Coordinator:
             return self.execute(row['id'])
         self.last_message = 'Your adventures are playing. They will trade when a useful exchange is ready.'
         return None
+
+    def _kept_candidates(self, candidates, now):
+        """The candidates from the best down, after the best ones whose receiver would release what it gets.
+
+        Up to KEEP_CHECKS are asked, and when all of them are refused the pass trades nothing, so the
+        next pass asks about the next ones. A Pokémon that completes a Pokédex entry is always kept. A
+        refused species pair waits PAIR_COOLDOWN_SECONDS. A worker that cannot answer does not block its trade.
+        """
+        for index, (_, left_id, right_id, _, _, (give, theirs), (take, mine)) in enumerate(candidates[:KEEP_CHECKS]):
+            refused = next((aid for aid, mon, gain in ((left_id, take, mine), (right_id, give, theirs))
+                            if gain < 100 and not self._would_keep(aid, mon)), None)
+            if refused is None:
+                return candidates[index:]
+            self.refused_pairs[pair_key(left_id, right_id, give, take)] = now + PAIR_COOLDOWN_SECONDS
+            log.info('Automatic trade skipped: adventure %s would release the incoming %s', refused,
+                     (take if refused == left_id else give).get('name') or 'Pokémon')
+        return []
+
+    def _would_keep(self, aid, mon):
+        payload = {'dex': mon.get('arrived_dex', mon.get('dex')), 'level': mon.get('level', 5),
+                   'dvs': list(mon.get('dvs') or ()), 'stat_exp': list(mon.get('stat_exp') or ()), 'name': mon.get('name')}
+        try:
+            return bool(self._request(aid, 'would_keep', payload).get('keep', True))
+        except (RuntimeError, OSError, AttributeError):
+            return True
 
     def hand_picked_keys(self):
         """Pokémon in a hand-picked trade that has not finished, as (adventure, trade key) pairs.
