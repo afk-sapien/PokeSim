@@ -48,6 +48,10 @@ FAILED_TAG = re.compile(r'\(adventure ([0-9a-f]{32})\)')
 PC_FULL = 'Every PC box is full'
 # Gen I and Gen II preparation word the same refusal differently.
 NO_PARTY_ROOM = ('No safe unprotected reserve can leave the party', 'The party has no safe reserve to deposit')
+# A game that cannot reach the Cable Club in time is usually stuck, whichever Pokémon it offers.
+TRAVEL_TIMEOUTS = ('Cable Club preparation exceeded its travel deadline',
+                   'did not reach the Cable Club before the preparation deadline',
+                   'did not reach a safe Cable Club rendezvous in time')
 # A Pokémon whose automatic trades keep failing the same way waits before it is offered
 # again: 30 minutes after the second identical failure, doubling up to a day.
 FAILURE_BACKOFF_AFTER = 2
@@ -136,9 +140,9 @@ def failure_backoff(history, now=None):
             continue
         kind = _failure_kind(error)
         tagged = FAILED_TAG.search(error)
-        if (PC_FULL in error or any(text in error for text in NO_PARTY_ROOM)) and tagged:
-            # A full PC, or a party where every member must stay, refuses every Pokémon the
-            # game offers, so the whole game waits.
+        if (PC_FULL in error or any(text in error for text in NO_PARTY_ROOM + TRAVEL_TIMEOUTS)) and tagged:
+            # A full PC, a party where every member must stay, or a game that cannot travel to
+            # the Cable Club refuses every Pokémon the game offers, so the whole game waits.
             sides = sides + [(tagged.group(1), WHOLE_GAME)]
         for side in sides:
             if side in closed or not all(side):
@@ -373,9 +377,7 @@ class Coordinator:
             return 'An adventure could not reach the Cable Club from its current location.'
         if 'route to the Cable Club is blocked by an unresolved obstacle' in error:
             return 'An obstacle still blocks an adventure’s route to the Cable Club.'
-        if any(text in error for text in ('Cable Club preparation exceeded its travel deadline',
-                                          'did not reach the Cable Club before the preparation deadline',
-                                          'did not reach a safe Cable Club rendezvous in time')):
+        if any(text in error for text in TRAVEL_TIMEOUTS):
             return 'An adventure took too long to reach the Cable Club and prepare its Pokémon.'
         if 'Resume autonomous play before preparing a trade' in error:
             return 'An adventure was paused or under manual control, so it could not prepare its Pokémon.'

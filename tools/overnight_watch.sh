@@ -134,6 +134,13 @@ if ! ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST" "docker exec -i $CONTAINE
   failed+=(quality)
 fi
 
+echo "-- main-page alerts on $HOST"
+# Every alert the main page shows becomes a task through POKESIM_WATCH_ALERT_COMMAND. tools/alert_watch.sh
+# runs the same check every few minutes, and both share one state file, so an alert is handed over once.
+if ! "$HERE/alert_watch.sh"; then
+  failed+=(alerts)
+fi
+
 ls -1t "$LOGS"/*.log | tail -n +$((KEEP + 1)) | xargs -r rm --
 if [ ${#failed[@]} -gt 0 ]; then
   echo "== FAILED: ${failed[*]}"

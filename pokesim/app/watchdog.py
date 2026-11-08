@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field, fields
+import json
 import logging
 import os
 import re
@@ -22,6 +23,8 @@ import traceback
 log = logging.getLogger(__name__)
 
 SETTING = 'watchdog'
+# The current problems, kept in the data directory for a watch outside the app (tools/alert_watch.py).
+PROBLEMS_FILE = 'watchdog-problems.json'
 TRADE_WAITING = ('preparing', 'connecting')
 # Failures the owner caused are not problems.
 OWNER_FAILURES = ('Cancelled by the owner', 'Set aside for a trade you chose')
@@ -222,6 +225,7 @@ class Watchdog:
         self.deliveries = deque(maxlen=20)   # recent sends, so tests can wait for them
         self.handler = None
         self.previous_hook = None
+        self._published = None
 
     # Settings ---------------------------------------------------------------------------
     def enabled(self):
@@ -300,6 +304,7 @@ class Watchdog:
         if not self.enabled():
             with self.guard:
                 self.problems.clear()
+            self._publish()
             return []
         found = {}
         names = {}
@@ -313,7 +318,30 @@ class Watchdog:
             self.progress.pop(aid, None)
         self._trades(names, now, found)
         self._errors(names, now, found)
-        return self._reconcile(found, now)
+        sent = self._reconcile(found, now)
+        self._publish()
+        return sent
+
+    def _publish(self):
+        """Write the problems the main page shows, only when they change, so a watch can read them
+        without logging in."""
+        root = getattr(self.manager, 'root', None)
+        if root is None:
+            return
+        with self.guard:
+            rows = sorted(self.problems.values(), key=lambda row: row.since)
+            text = json.dumps([{'key': row.key, 'kind': row.kind, 'adventure_id': row.adventure_id,
+                                'message': row.message, 'since': row.since} for row in rows], sort_keys=True)
+        if text == self._published:
+            return
+        path = os.path.join(root, PROBLEMS_FILE)
+        try:
+            with open(path + '.tmp', 'w', encoding='utf-8') as handle:
+                handle.write(text)
+            os.replace(path + '.tmp', path)
+            self._published = text
+        except OSError:
+            log.warning('The watchdog could not write %s', PROBLEMS_FILE)
 
     def _child_status(self, aid, now):
         children = self.manager.supervisor.children

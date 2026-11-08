@@ -8,7 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from pokesim.app.coordinator import (FAILURE_BACKOFF_SECONDS, NO_PARTY_ROOM, PC_FULL, SET_ASIDE, WHOLE_GAME,
+from pokesim.app.coordinator import (FAILURE_BACKOFF_SECONDS, NO_PARTY_ROOM, PC_FULL, SET_ASIDE, TRAVEL_TIMEOUTS,
+                                     WHOLE_GAME,
                                      Coordinator, failure_backoff)
 from pokesim.app.registry import identifier
 from pokesim.interactions.cable_metadata import ABNORMAL
@@ -168,3 +169,15 @@ def test_a_party_that_cannot_make_room_backs_off_the_whole_game(refusal):
     backed = failure_backoff(rows, now)
     assert backed[(yellow, WHOLE_GAME)] == now + 2 * FAILURE_BACKOFF_SECONDS
     assert Coordinator._auto_offers(yellow, {'offers': [{'trade_key': identifier() + '-1'}]}, set(backed))[1]['offers'] == []
+
+
+@pytest.mark.parametrize('timeout', TRAVEL_TIMEOUTS)
+def test_a_game_that_cannot_reach_the_cable_club_backs_off_whatever_it_offers(timeout):
+    # Live, a stuck Yellow offered a different Pokémon to nearly every trade, and each one ran out its
+    # travel deadline, so per-Pokémon backoff never kept the game out.
+    now = 10_000
+    yellow = '7' * 32
+    error = f'{timeout} (adventure {yellow})'
+    rows = [row(now - 760 * index, error=error, left=yellow, left_key=f'{identifier()}-{index}') for index in range(3)]
+    backed = failure_backoff(rows, now)
+    assert backed[(yellow, WHOLE_GAME)] == now + 2 * FAILURE_BACKOFF_SECONDS

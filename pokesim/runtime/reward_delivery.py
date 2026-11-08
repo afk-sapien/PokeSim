@@ -67,6 +67,9 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
     preparation = emu.store.get('interaction_preparation') or {}
     if emu.paused or emu.manual_mode or emu.store.get('trade_hold') or preparation.get('phase') in {'travelling', 'storage', 'rendezvous', 'ready'}:
         return None
+    if (guard := getattr(emu, 'loop_guard', None)) and guard.looping(emu.store):
+        # A run caught in a loop gets no gifts until it makes real progress.
+        return None
     before = read_snapshot(emu.pb.memory, emu.frame)
     if not before.valid or not before.started or before.in_battle or before.textbox or before.start_menu:
         return None
@@ -87,12 +90,6 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
     kind, ordinal, species, seed = selected
     identifier = uuid.uuid4().hex
     state = emu._state_bytes()
-    emu.snapshot = before
-    emu._autosave()
-    source = emu.store.latest_state()
-    metadata = emu.store.checkpoint_metadata(source)
-    if not metadata:
-        raise ValueError('Custom rewards require a verified source checkpoint')
     old_slots = {(box, position): boxes.read_slot(emu.pb.memory, box, position)
                  for box, count in enumerate(before.box_counts, 1) for position in range(1, count + 1)}
     clone = emu._boot()
@@ -115,11 +112,24 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
         actual = boxes.read_slot(clone.memory, box, position)
         if (actual.struct, actual.nickname, actual.ot_name) != (gift.struct, gift.nickname, gift.ot_name):
             raise ValueError('The custom gift did not match the staged Pokémon')
+        held = {(mon['box'], mon['position']) for mon in before.storage_entries()}
+        slot = next((slot for mon in after.storage_entries() if (slot := (mon['box'], mon['position'])) not in held), None)
+        if kind == 'league_reward' and slot and rewards.wasted(emu.policy, after, slot):
+            # A copy the PC would release at once is never sent, so a League rerun cannot become a
+            # gift and release loop.
+            rewards.skip(emu.store, ordinal)
+            return None
         output = io.BytesIO()
         clone.save_state(output)
         raw = output.getvalue()
     finally:
         clone.stop(save=False)
+    emu.snapshot = before
+    emu._autosave()
+    source = emu.store.latest_state()
+    metadata = emu.store.checkpoint_metadata(source)
+    if not metadata:
+        raise ValueError('Custom rewards require a verified source checkpoint')
     directory = emu.store.dir / 'custom-rewards' / identifier
     directory.mkdir(parents=True)
     CheckpointStore.atomic_write(directory / 'result.state', raw)
