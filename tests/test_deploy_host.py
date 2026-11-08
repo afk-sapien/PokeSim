@@ -82,6 +82,46 @@ def test_an_older_schema_is_refused_even_as_a_rollback(tmp_path, repo):
         assert "data schema 1, older than the live data's 2" in result.stderr
 
 
+def soaked(tmp_path, repo, revision, sha, report, *args):
+    """Runs the script with green gates and a docker that fails, so a commit past every check stops at the build."""
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / 'ssh').write_text(f'#!/bin/sh\ncat >/dev/null\nprintf "%s\\n%s\\n" {revision} 1\n')
+    (bin_dir / 'gh').write_text('#!/bin/sh\necho success\n')
+    (bin_dir / 'docker').write_text('#!/bin/sh\necho "docker reached" >&2\nexit 1\n')
+    for tool in ('ssh', 'gh', 'docker'):
+        (bin_dir / tool).chmod(0o755)
+    reports = tmp_path / 'reports'
+    reports.mkdir(exist_ok=True)
+    if report is not None:
+        import json
+        (reports / f'{sha}.json').write_text(json.dumps(report))
+    env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}', 'DEPLOY_HOST': 'host',
+           'DEPLOY_DIR': '/srv/app', 'LIVE_SOAK_REPORTS': str(reports), 'MIN_FREE_GB': '0'}
+    return subprocess.run(['sh', str(SCRIPT), *args, sha], cwd=repo, env=env, capture_output=True, text=True)
+
+
+def test_a_commit_without_a_passing_live_soak_is_refused(tmp_path, repo):
+    repo, shas = repo
+    sha = shas['main']
+    for report in (None, {'commit': sha, 'passed': False, 'problems': ['Red: reloaded a.state 3 times']},
+                   {'commit': shas['base'], 'passed': True}):
+        result = soaked(tmp_path, repo, shas['base'], sha, report)
+        assert result.returncode == 1
+        assert f'{sha[:7]} has no passing live soak' in result.stderr
+        assert 'docker reached' not in result.stderr
+    # A rollback needs one too.
+    result = soaked(tmp_path, repo, shas['main'], shas['base'], None, '--rollback-to')
+    assert 'has no passing live soak' in result.stderr
+
+
+def test_a_commit_with_a_passing_live_soak_goes_on_to_the_build(tmp_path, repo):
+    repo, shas = repo
+    result = soaked(tmp_path, repo, shas['base'], shas['main'], {'commit': shas['main'], 'passed': True})
+    assert 'live soak' not in result.stderr
+    assert 'docker reached' in result.stderr
+
+
 def test_an_unknown_deployed_commit_is_refused(tmp_path, repo):
     repo, shas = repo
     result = deploy(tmp_path, repo, 'f' * 40, 1, shas['main'])

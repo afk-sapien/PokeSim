@@ -11,7 +11,8 @@
 # deploy never drops work the app already runs. Only --rollback-to deploys a commit outside that line.
 # Its data schema, the PRAGMA user_version of app.sqlite, must not be older than the live data's,
 # even for a rollback, because an older app refuses newer data. The image carries it as a label.
-# The commit must have green `ci gate` and `install gate` checks on GitHub. The script stops the app,
+# The commit must have green `ci gate` and `install gate` checks on GitHub, and a passing report from
+# tools/live_soak.py in LIVE_SOAK_REPORTS, by default data/live-soak/reports. The script stops the app,
 # takes a cold backup of the folder, tests it with gzip -t, starts the new image with up --wait and runs
 # the smoke check. If any step after the backup fails, it puts .env back and restarts the old image.
 # It keeps the 5 newest pre-*.tar.gz backups and the json files beside them, keeps the PokeSim images
@@ -89,6 +90,13 @@ for gate in 'ci gate' 'install gate'; do
     exit 1
   fi
 done
+
+# Only a commit that played a copy of the live adventures as well as the deployed one is deployed,
+# a rollback too. tools/live_soak.py run writes the report, here or in LIVE_SOAK_REPORTS.
+if ! python3 "$(dirname "$0")/live_soak.py" check "$SHA"; then
+  echo "deploy: $SHORT has no passing live soak, run tools/live_soak.py run --candidate $SHA, refusing" >&2
+  exit 1
+fi
 
 free_gb() { df -Pk "$1" | awk 'NR == 2 { print int($4 / 1048576) }'; }
 WORK=$(mktemp -d)

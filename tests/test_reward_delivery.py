@@ -310,3 +310,16 @@ def test_a_shiny_gen1_league_gift_is_always_sent():
     _, first, second = rewards._draw(shiny, 1)
     assert shiny_bytes(bytes((first, second)))
     assert not rewards.staged_shiny(next(seed for seed in seeds if seed != shiny))
+
+
+@pytest.mark.parametrize('counts', [(20,) * 12, (2,) + (0,) * 11])
+def test_the_real_gen1_pc_rating_wastes_a_weak_gift_and_keeps_the_best_copy(counts):
+    """The tests above stub pc_rated. This one rates with the policy the worker plays."""
+    from pokesim import rewards
+    from pokesim.policies.strategic import StrategicPolicy
+    from test_release_origins import best_and, snapshot as gen1_snapshot, stored
+    weak = stored(1, dvs=(2,) * 5)
+    s = gen1_snapshot(best_and(weak), box_counts=counts)
+    policy = StrategicPolicy(7)
+    assert rewards.wasted(policy, s, (0, 1), 'seed:1') is True
+    assert rewards.wasted(policy, s, (0, 0), 'seed:1') is False

@@ -56,6 +56,10 @@ VIEWER_ONLY = _env("VIEWER_ONLY", "0") == "1"
 LEGENDARY_RETURN_STEPS = int(_env("LEGENDARY_RETURN_STEPS", "1000000"))
 EVENT_RETURN_STEPS = int(_env('EVENT_RETURN_STEPS', '100000'))
 MEW_RETURN_STEPS = int(_env('MEW_RETURN_STEPS', '1000000'))
+# Headless and CLI runs keep gifts off unless asked. A managed adventure installs its own choice,
+# and the create route turns both on, so every worker sets these before it plays.
+LEAGUE_REWARDS = _env('LEAGUE_REWARDS', '0') == '1'
+MEW_EVENT = _env('MEW_EVENT', '0') == '1'
 FOSSIL_PREFERENCE = _env('FOSSIL_PREFERENCE', 'auto')
 DOJO_PREFERENCE = _env('DOJO_PREFERENCE', 'auto')
 EVENT_RETENTION_DAYS = int(_env("EVENT_RETENTION_DAYS", "0"))
