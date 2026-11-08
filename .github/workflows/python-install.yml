@@ -1,22 +1,20 @@
 name: Python install
 on:
-  # Branches are tested through their pull request, so a push runs only on main and tags. The release gate
-  # needs those push runs as evidence for the exact commit it publishes.
+  # Branches are tested through their pull request, so a push runs only on main, feature branches and
+  # tags. The release gate and the deploy script need those push runs as evidence for the exact commit.
+  # Every pull request runs it too, documentation only or not, because the ruleset requires its gate.
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
     tags: ['**']
   pull_request:
-    # Documentation-only pull requests do not change what installs. Pushes to main and tags always run everything.
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: python-install-${{ github.workflow }}-${{ github.ref }}
-  # Runs on main and on tags are the evidence the publish workflow requires, so they are never cancelled.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+  # Runs on main, feature branches and tags are the evidence the publish workflow and the deploy script
+  # require, so they are never cancelled.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/feature/') && !startsWith(github.ref, 'refs/tags/') }}
 jobs:
   native-tests:
     name: native tests (${{ matrix.os }}, ${{ matrix.shard }})
@@ -100,3 +98,17 @@ jobs:
       - run: uv build
       - name: Test installed workers with optional acceleration
         run: uv run --locked --extra acceleration python tools/check_python_install.py --acceleration
+  gate:
+    # The one check the branch ruleset requires, so a new or renamed job above cannot be skipped by accident.
+    name: install gate
+    if: always()
+    needs: [native-tests, install, acceleration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do [ "$result" = success ] || exit 1; done
