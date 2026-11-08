@@ -41,6 +41,8 @@ source archive and the image.
 
 `check_web.py` checks every packaged browser script and runs every `tests/*.test.cjs`
 file. `check_docs.py` checks local Markdown link destinations. CI runs the same checks.
+`main` and `feature/` branches take changes only through a pull request whose `ci gate`
+and `install gate` checks passed.
 Run focused tests while editing, then the full suite for changes to shared behavior.
 See [the validation guide](docs/testing.md) for real Chromium tests, copied-save
 comparisons, and embedded build identity.
