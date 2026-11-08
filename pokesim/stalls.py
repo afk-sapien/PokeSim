@@ -65,7 +65,7 @@ def advanced(previous, snapshot):
 
 
 # Events a gift and release loop cannot fake. A received gift, an item and a release are left out.
-REAL_PROGRESS = ('badge', 'catch', 'evolve', 'champion', 'trainer', 'level', 'map')
+REAL_PROGRESS = ('badge', 'catch', 'event_return', 'evolve', 'hatch', 'champion', 'trainer', 'level', 'map')
 # Repeats that count as a loop: the same Pokémon received and released, or the same save reloaded.
 LOOP_LIMIT = 6
 LOOP_EVENTS = 400

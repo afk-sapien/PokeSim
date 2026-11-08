@@ -99,10 +99,18 @@ def earn(store, count, *, enabled=True):
 
 
 def wasted(policy, snapshot, slot):
-    """Whether the gift staged at ``slot`` would only be released at the next PC visit: a spare by the
-    PC value rules (pcvalue.py). Sending it anyway turns every League win into a gift and a release."""
+    """Whether the gift staged at ``slot`` only costs a release: a spare by the PC value rules
+    (pcvalue.py), or any copy short of the best when the boxes, with it, are below the reserve that
+    starts a release visit. Such a gift either goes itself or pushes out the cheapest other copy, so
+    sending it turns every League win into a gift and a release."""
+    from .planning.ledger import box_wanted
     rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else ()
-    return any(row.entry.slot == slot and row.status == 'spare' for row in rated)
+    row = next((row for row in rated if row.entry.slot == slot), None)
+    if row is None:
+        return False
+    # Both generations hold 20 Pokémon per box.
+    short = box_wanted(sum(20 - count for count in snapshot.box_counts), False) > 0
+    return row.status == 'spare' or row.status != 'floor' and short
 
 
 def skip(store, ordinal):
