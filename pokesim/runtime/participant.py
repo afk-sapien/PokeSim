@@ -412,6 +412,26 @@ class Participant:
             raise ValueError(row['blocked'])
         return row
 
+    def would_keep(self, data):
+        """Whether the PC would keep an incoming trade rather than release it as the next spare.
+
+        Live, two games traded the same species back and forth: each copy scored a small gain at the
+        coordinator, and the receiver's PC let it go at the next visit. Rated here with the PC's own rules.
+        """
+        from ..pcvalue import Entry
+        dex, level = data.get('dex'), data.get('level', 5)
+        dvs, stat_exp = list(data.get('dvs') or ()), list(data.get('stat_exp') or ())
+        if (type(dex) is not int or not 1 <= dex <= 251 or type(level) is not int or not 1 <= level <= 100
+                or any(len(values) not in (0, 5) or any(type(value) is not int or value < 0 for value in values)
+                       for values in (dvs, stat_exp))):
+            raise ValueError('Invalid incoming Pokémon')
+        policy, snapshot = getattr(self.emu, 'policy', None), getattr(self.emu, 'snapshot', None)
+        if snapshot is None or not hasattr(policy, 'pc_rated'):
+            return {'keep': True}
+        incoming = Entry((-1, 0), (dex, 0), str(data.get('name') or '?')[:20], level, dvs=tuple(dvs),
+                         stat_exp=tuple(stat_exp), origin='traded')
+        return {'keep': policy.pc_rated(snapshot, extra=(incoming,))[-1].status != 'spare'}
+
     def collection_demand(self, data):
         requests = data.get('requests', {})
         if not isinstance(requests, dict) or len(requests) > 151:
@@ -689,7 +709,7 @@ def install(app, runtime, participant_type=Participant):
 
     @app.post('/internal/participant/{operation}')
     async def command(operation: str, request: Request):
-        if operation not in {'prepare', 'stage', 'apply', 'release', 'abort', 'collection_demand'}:
+        if operation not in {'prepare', 'stage', 'apply', 'release', 'abort', 'collection_demand', 'would_keep'}:
             raise HTTPException(404)
         from ..app.manager import json_body
         data = await json_body(request, limit=262144)
