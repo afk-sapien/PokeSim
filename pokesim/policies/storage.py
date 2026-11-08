@@ -59,10 +59,11 @@ class StorageController:
 
     @staticmethod
     def rated(snapshot, project, preferences, collection=None, partners=frozenset(), rewards=frozenset(),
-              requested=None, favor=None):
-        """Every Pokémon scored as release_target scores it, for the PC tab."""
+              requested=None, favor=None, extra=()):
+        """Every Pokémon scored as release_target scores it, for the PC tab. ``extra`` adds rows."""
         stock, roles, gifts, demand = StorageController.plan_inputs(project, collection)
-        return release_rated(snapshot, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor)
+        return release_rated(snapshot, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor,
+                             extra)
 
     @staticmethod
     def field_move_box(snapshot, goal_key):
