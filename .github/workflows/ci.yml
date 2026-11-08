@@ -1,9 +1,9 @@
 name: CI
 on:
-  # Branches are tested through their pull request, so a push runs only on main and tags. The release gate
-  # needs those push runs as evidence for the exact commit it publishes.
+  # Branches are tested through their pull request, so a push runs only on main, feature branches and
+  # tags. The release gate and the deploy script need those push runs as evidence for the exact commit.
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
     tags: ['**']
   pull_request:
   workflow_dispatch:
@@ -11,9 +11,9 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  # Only superseded branch and pull request runs are cancelled. Runs on main and on tags are the evidence
-  # that the publish workflow later requires for an exact commit, so they always finish.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+  # Only superseded branch and pull request runs are cancelled. Runs on main, feature branches and tags are
+  # the evidence the publish workflow and the deploy script require for an exact commit, so they always finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/feature/') && !startsWith(github.ref, 'refs/tags/') }}
 jobs:
   dependency-audit:
     runs-on: ubuntu-latest
@@ -193,3 +193,17 @@ jobs:
             -v /tmp/pokesim-app.tar:/image.tar:ro -v /tmp/trivy-cache:/root/.cache/trivy \
             aquasec/trivy:0.74.0 image --input /image.tar --scanners vuln \
             --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1
+  gate:
+    # The one check the branch ruleset requires, so a new or renamed job above cannot be skipped by accident.
+    name: ci gate
+    if: always()
+    needs: [dependency-audit, lint, tests, browser, container]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do [ "$result" = success ] || exit 1; done
