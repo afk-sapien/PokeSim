@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Rerun the failed jobs of a failed push run on `main` once, so one flaky job does not leave a commit without green checks. `tools/flake_rate.py` reports how many runs passed only on that rerun.
 - Name development builds from `main` as such. `main` is now 0.7.0.dev0, and `tools/release_version.py` accepts an `X.Y.Z.devN` version. It moves only the package version, so the installers and Compose files keep installing the published release.
 - Require green checks before a change lands on `main` or a `feature/` branch. CI and the Python install workflow each end in one gate job, `ci gate` and `install gate`, that passes only when every other job passed. The branch ruleset requires both, so `feature/` branches now take changes through a pull request. Pushes to `feature/` branches run both workflows, so each commit there has its own evidence, and a documentation-only pull request runs the install checks too. The release gate requires both gates.
 - Stop two linked games trading the same species back and forth. Each copy scored a small gain, and the receiver's PC released it at the next visit. Before an automatic trade, each receiver now rates the incoming Pokémon with its own PC rules, and a trade one of them would release is skipped. A Pokémon that completes a Pokédex entry is always sent. After a trade or a refusal, the same two games leave that species pair alone for 6 hours.
