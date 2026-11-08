@@ -467,6 +467,32 @@ def test_a_gift_flag_without_a_new_copy_opens_again_away_from_the_room(world):
     assert not world.event('EVENT_GOT_TYROGUE_FROM_KIYO')
 
 
+@pytest.mark.parametrize('flag, dex, title', [
+    ('EVENT_GOT_EEVEE', 133, 'Skipped the Eevee gift'),
+    ('EVENT_FOUGHT_SUDOWOODO', 185, 'Skipped the returning Sudowoodo')])
+def test_a_return_or_gift_the_pc_would_release_is_skipped_and_journaled_once(world, flag, dex, title):
+    # Live, Gold released the returning Sudowoodo 11 seconds after catching it, and Eevee every 20 hours.
+    from pokesim.gen2.returns import EVENTS, observe_events
+    snap = world.snapshot
+    snap.party, snap.stored = [SimpleNamespace(species=dex)], []
+    world.flag(flag)
+    world.walk(10)
+    observe_events(world.store, snap, world.memory, keeps=lambda species: False)
+    asked = []
+    for total in (60, 110):
+        world.walk(total)
+        events, changed = observe_events(world.store, snap, world.memory,
+                                         keeps=lambda species: asked.append(species) or False)
+        assert [event.title for event in events] == ([title] if total == 60 else [])
+        assert not changed and world.event(flag)
+    assert asked == [dex, dex] and any(ticket.get('skipped') for ticket in world.store.get(EVENTS)['tickets'].values())
+    # Once the PC would keep it, the next milestone opens it as before.
+    world.walk(160)
+    events, _ = observe_events(world.store, snap, world.memory, keeps=lambda species: True)
+    assert events[0].type == 'event_return' and events[0].title.endswith(('available', 'has returned!'))
+    assert all(ticket['state'] == 'available' for ticket in world.store.get(EVENTS)['tickets'].values())
+
+
 def test_kims_aerodactyl_trade_reopens_and_makes_aerodactyl_worth_trading_for(world):
     from pokesim.gen2.npc_trades import trades, worth_trading
     from pokesim.gen2.returns import observe_events, returned_events

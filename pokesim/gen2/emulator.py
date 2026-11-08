@@ -682,7 +682,9 @@ class Emulator:
             from .legendary import first_notice
             walking = self.steps.value
             notices, changed = returns.observe(self.store, snapshot, self.pb.memory, walking)
-            activity, reopened = returns.observe_events(self.store, snapshot, self.pb.memory, walking)
+            from .release import keeps_another
+            activity, reopened = returns.observe_events(self.store, snapshot, self.pb.memory, walking,
+                                                        lambda dex: keeps_another(self.policy, snapshot, dex))
             ready, closed = returns.claims(self.store)
             self.policy.returned = ready | returns.returned_events(self.store)
             for event in notices + activity:

@@ -84,7 +84,32 @@ def test_catching_a_returning_legendary_ends_the_loop(tmp_path):
         assert guard.looping(store)
         add(store, 'event_return', 'Caught the returning Sudowoodo')
         clock.now += 60
+        # It counts once it has stayed in the PC for a check.
+        assert guard.looping(store)
+        clock.now += 60
         assert guard.looping(store) is None
+    finally:
+        store.close()
+
+
+def test_a_return_released_straight_away_is_not_progress(tmp_path):
+    # Gold caught the returning Sudowoodo and released it 11 seconds later, and the Eevee gift every 20 hours.
+    store, clock = Store(tmp_path), Clock()
+    try:
+        guard = LoopGuard(clock=clock)
+        for _ in range(LOOP_LIMIT):
+            guard.reloaded('auto-v1-1.state')
+        assert guard.looping(store)
+        add(store, 'event_return', 'Caught the returning Sudowoodo')
+        add(store, 'event_return', 'Completed the Eevee gift')
+        add(store, 'event_return', 'Sudowoodo has returned!')
+        clock.now += 60
+        assert guard.looping(store)
+        add(store, 'release', 'Said goodbye to a spare Sudowoodo Lv 20')
+        add(store, 'release', 'Said goodbye to a spare Eevee')
+        for _ in range(3):
+            clock.now += 60
+            assert 'reloaded auto-v1-1.state' in guard.looping(store)
     finally:
         store.close()
 

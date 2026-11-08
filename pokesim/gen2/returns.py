@@ -190,8 +190,12 @@ def claims(store):
     return (ready if interval() else set()), closed
 
 
-def observe_events(store, snapshot, memory, walking=None):
-    """Reopen Sudowoodo, Snorlax, the one-time gifts and trades after walking, once the Champion has finished the story."""
+def observe_events(store, snapshot, memory, walking=None, keeps=None):
+    """Reopen Sudowoodo, Snorlax, the one-time gifts and trades after walking, once the Champion has finished the story.
+
+    ``keeps(dex)`` says whether the PC would keep one more copy. A return or gift it would release is
+    skipped until the next walking milestone and journaled once, so it is not received to be released.
+    """
     data = snapshot.data
     steps = walking if walking is not None else store.get(STEPS) or {}
     if not snapshot.valid or not snapshot.started or not snapshot.hall_of_fame_count or not steps.get('available', True):
@@ -221,8 +225,10 @@ def observe_events(store, snapshot, memory, walking=None):
         elif ticket['state'] == 'available' and snapshot.event(flags[1]):
             # The battle ended without a capture, so the encounter waits on the next visit.
             changed |= open_activity(memory, data, key, flags)
+        elif every and ticket['state'] == 'walking' and total >= ticket['next_at'] and skipped(ticket, events, name, dex, keeps):
+            ticket.update(next_at=total + every)
         elif every and ticket['state'] == 'walking' and total >= ticket['next_at']:
-            ticket.update(state='available', cycle=ticket['cycle'] + 1)
+            ticket.update(state='available', cycle=ticket['cycle'] + 1, skipped=False)
             changed |= open_activity(memory, data, key, flags)
             events.append(Event('event_return', f'{name} has returned!',
                                 'A walking milestone brought it back to where it first appeared.', priority=3))
@@ -234,7 +240,8 @@ def observe_events(store, snapshot, memory, walking=None):
             # Between returns the variable sprite belongs to Route 37's twins, as after the first battle.
             changed |= write_byte(memory, data, 'wVariableSprites', SPRITE_TWIN, WEIRD_TREE)
     for key, name, room, done, dexes in offers(data):
-        changed |= _offer(tickets, events, snapshot, memory, ok, (key, name, room, done, dexes), total, every)
+        changed |= _offer(tickets, events, snapshot, memory, ok, (key, name, room, done, dexes), total, every,
+                          keeps if key.startswith('gift_') else None)
     if ok and (sprite := weird_tree(snapshot)) is not None:
         changed |= write_byte(memory, data, 'wVariableSprites', sprite, WEIRD_TREE)
     if value != saved:
@@ -295,7 +302,20 @@ def population(snapshot, dexes):
     return sum(mon.species in dexes for mon in (*getattr(snapshot, 'party', ()), *getattr(snapshot, 'stored', ())))
 
 
-def _offer(tickets, events, snapshot, memory, ok, offer, total, every):
+def skipped(ticket, events, name, dex, keeps):
+    """Whether a due return or gift is skipped because the PC would release it. Journaled once per run of skips."""
+    if keeps is None or keeps(dex):
+        return False
+    if not ticket.get('skipped'):
+        ticket['skipped'] = True
+        events.append(Event('event_skip', f'Skipped the {name}' if name.endswith(('gift', 'exchange'))
+                            else f'Skipped the returning {name}',
+                            'The PC would release it as a spare, so it waits for the next walking milestone.',
+                            priority=1))
+    return True
+
+
+def _offer(tickets, events, snapshot, memory, ok, offer, total, every, keeps=None):
     """Walk one gift or trade through its walking, available and completed states."""
     key, name, room, bit, dexes = offer
     data = snapshot.data
@@ -324,7 +344,10 @@ def _offer(tickets, events, snapshot, memory, ok, offer, total, every):
         # The bit is set without a new copy, so an older checkpoint was loaded. Offer it again.
         return _set(memory, data, bit, False) if not here else False
     if every and ticket['state'] == 'walking' and total >= ticket['next_at'] and not here:
-        ticket.update(state='available', cycle=ticket['cycle'] + 1, baseline=population(snapshot, dexes))
+        if skipped(ticket, events, name, dexes[0], keeps):
+            ticket.update(next_at=total + every)
+            return False
+        ticket.update(state='available', cycle=ticket['cycle'] + 1, baseline=population(snapshot, dexes), skipped=False)
         events.append(Event('event_return', f'{name} available',
                             'A walking milestone unlocked another visit.', priority=3))
         return _set(memory, data, bit, False)
