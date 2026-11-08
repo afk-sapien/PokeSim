@@ -65,7 +65,7 @@ def deliver(emu):
             raise ValueError('The Gen II gift changed unrelated adventure state')
         shiny_gift = any(mon.shiny for mon in after.stored if (mon.box, mon.position) not in existing)
         slot = next((mon.box, mon.position) for mon in after.stored if (mon.box, mon.position) not in existing)
-        if kind == 'league_reward' and not shiny_gift and rewards.wasted(emu.policy, after, slot):
+        if kind == 'league_reward' and not shiny_gift and rewards.wasted(emu.policy, after, slot, seed, 2):
             # A copy the PC would release at once is never sent, so a League rerun cannot become a
             # gift and release loop.
             rewards.skip(emu.store, ordinal)
