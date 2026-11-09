@@ -32,7 +32,7 @@ from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext, stack_pointer
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
 from .screen import W_OPTIONS
-from .stalls import PROGRESS_EVENTS, LoopGuard, StallWatch, advanced
+from .stalls import PROGRESS_EVENTS, LoopGuard, StallWatch, advanced, boss_attempt
 from .strategy_data import MAPS
 
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
@@ -580,12 +580,29 @@ class Emulator:
         with self.store.observation_reads():
             self._observe_snapshot()
 
+    def _watch_boss(self, before, snap):
+        """Hold back the progress of a boss attempt, which a blackout drops (stalls.boss_attempt).
+
+        An attempt runs while the party is inside the League or on the map of the boss its goal challenges.
+        """
+        from .policies.strategic import BOSSES
+        stall = getattr(self, 'stall', None)
+        if stall is None or not snap.valid:
+            return
+        goal = getattr(self.policy, 'goal', None)
+        boss = (snap.map in LEAGUE - {MAPS['HALL_OF_FAME']}
+                or goal is not None and goal.key in BOSSES and goal.title.startswith('Challenge')
+                and any(target[0] == snap.map for target in goal.targets))
+        blackout = before is not None and before.valid and snap.all_fainted and not before.all_fainted
+        boss_attempt(stall, getattr(self, 'loop_guard', None), self.store, boss, blackout)
+
     def _observe_snapshot(self):
         snap = read_snapshot(self.pb.memory, self.frame)
         if snap.started:
             self.play_clock.seed(snap.playtime_seconds)
             self._enforce_options()
         came_from = self.prev_snapshot.map if self.prev_snapshot else None
+        Emulator._watch_boss(self, self.prev_snapshot, snap)
         if (self.prev_snapshot is not None and snap.valid and self.prev_snapshot.valid
                 and advanced(self.prev_snapshot, snap) and getattr(self, 'stall', None)):
             # A long hunt catches plenty that the Pokédex already has, and training earns experience
