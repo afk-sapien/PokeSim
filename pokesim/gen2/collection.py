@@ -645,6 +645,46 @@ def league_aces(rom_path, game):
                  if row['class'] in LEAGUE_CLASSES and row['party'])
 
 
+# The League room goals and the trainer class whose party waits in each.
+LEAGUE_ROOMS = {'league_will': 11, 'league_koga': 15, 'league_bruno': 13, 'league_karen': 14, 'league_lance': 16}
+
+
+def league_rooms(rom_path, game):
+    """The species of each Elite Four and Champion party on the cartridge by trainer class, or {}."""
+    from ..planning.cost import game_data
+    tables = game_data(rom_path, game)
+    rooms = {}
+    for row in (tables.trainers.values() if tables is not None else ()):
+        if row['class'] in LEAGUE_CLASSES and row['party']:
+            rooms.setdefault(row['class'], tuple(mon['species'] for mon in row['party']))
+    return rooms
+
+
+def room_lead(policy, snapshot):
+    """The party slot that leads into the League room the goal names (planning/boss.py room_lead), or
+    None off a League room goal or when the cartridge's parties could not be read."""
+    from ..planning import boss
+    from ..planning.partner import league_partner
+    data, party = policy.data, snapshot.party
+    room =getattr(data, 'league_rooms', {}).get(LEAGUE_ROOMS.get(getattr(policy.goal, 'key', None)))
+    alive = [slot for slot, mon in enumerate(party) if not mon.egg]
+    if not room or not alive:
+        return None
+    ace = max(alive, key=lambda slot: party[slot].level)
+    partner = league_partner(party, lambda mon: data.species[mon.species]['stats'][0], lambda mon: mon.stats[1],
+                             lambda mon: party_power(data, mon))
+    if partner is not None and (not party[partner].hp or party[partner].level < party[ace].level * boss.FIGHTER_SHARE):
+        partner = None
+    kinds = [tuple(data.species[species]['types']) for species in room if species in data.species]
+
+    def matchup(slot):
+        mon = party[slot]
+        attacks = {data.moves[move]['type'] for move in mon.moves if data.moves.get(move, {}).get('power')}
+        return boss.room_matchup(attacks, data.species[mon.species]['types'], kinds,
+                                 lambda attack, defender: data.matchups.get((attack, defender), 1.0))
+    return boss.room_lead(ace, partner, matchup)
+
+
 def first_league_over(policy):
     """Drop the first League's state once the Hall of Fame has an entry."""
     state = policy.collection

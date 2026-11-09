@@ -346,6 +346,29 @@ def league_partner(snapshot):
                                                   'stat_exp': p.stat_exp, 'moves': p.moves}))
 
 
+def room_lead(snapshot, ace):
+    """The party slot that leads into the next League room (planning/boss.py room_lead, shared with
+    Gen II): the partner when it meets the room's ace neutral or better, so ``ace``, the slot with the
+    best matchup, keeps its strong attacks for the Champion."""
+    from ..planning import boss
+    from ..strategy_data import MATCHUPS, MOVES
+    from .team import next_opponent
+    party = snapshot.party
+    partner = league_partner(snapshot)
+    if partner is not None and (not party[partner].hp
+                                or party[partner].level < max(mon.level for mon in party) * boss.FIGHTER_SHARE):
+        partner = None
+    _, name, _ = OPPONENTS[next_opponent(snapshot)]
+    kinds = [tuple(data['types']) for data in SPECIES.values() if data.get('name') == name][:1]
+
+    def matchup(slot):
+        mon = party[slot]
+        attacks = {MOVES[move]['type'] for move in mon.moves if MOVES.get(move, {}).get('power')}
+        return boss.room_matchup(attacks, SPECIES.get(mon.species, {}).get('types', ()), kinds,
+                                 lambda attack, defender: MATCHUPS.get((attack, defender), 1.0))
+    return boss.room_lead(ace, partner, matchup)
+
+
 def journey(snapshot, current):
     rows = [{"title": f"{trainer} · {key.title()} Badge", "done": bool(snapshot.badges & bit),
              "current": current in (key, "train_" + key)} for bit, key, trainer, *_ in GYMS]

@@ -127,16 +127,18 @@ class Gate:
         self.leg = None
         self.done = False
 
-    def decide(self, key, fighters, reachable: Callable[[], bool], where=None, center=False):
+    def decide(self, key, fighters, reachable: Callable[[], bool], where=None, center=False, supply=False):
         """READY, HEAL or UNREADY before the boss goal ``key``, or READY when ``key`` is None.
 
         ``reachable`` says whether a Pokémon Center is in reach, and is only asked when a trip would
         start, since it searches the map. ``center`` says the caller's map ``where`` is a Pokémon
-        Center, which starts a leg there. The answer is kept while ``key``, the party and ``where``
-        stay the same, so a step costs one comparison.
+        Center, which starts a leg there. ``supply`` says the bag can treat a short fighter where no
+        Center can be reached, as between League rooms (``treatment``). That answers HEAL too, with no
+        trip taken, since each item used leaves the bag smaller. The answer is kept while ``key``, the
+        party, ``where`` and ``supply`` stay the same, so a step costs one comparison.
         """
         fighters = tuple(fighters)
-        memo = (key, fighters, where, center, self.healing, self.trips)
+        memo = (key, fighters, where, center, supply, self.healing, self.trips)
         if self.memo is not None and self.memo[0] == memo:
             return self.memo[1]
         if key != self.key:
@@ -156,13 +158,15 @@ class Gate:
             answer = READY
         elif self.healing:
             answer = HEAL
+        elif supply:
+            answer = HEAL
         elif self.trips < TRIPS and reachable():
             self.trips += 1
             self.healing = True
             answer = HEAL
         else:
             answer = UNREADY
-        self.memo = ((key, fighters, where, center, self.healing, self.trips), answer)
+        self.memo = ((key, fighters, where, center, supply, self.healing, self.trips), answer)
         return answer
 
     def note(self):
@@ -176,6 +180,140 @@ class Gate:
         """True once after a boss heal trip ends with the party ready, when the journal says so."""
         done, self.done = self.done, False
         return done
+
+
+# The League runs its rooms back to back with no Pokémon Center between them, so the bag stands in for
+# the heal trip. The kit bought at the last mart before the first room holds one restore per room and
+# KIT_REVIVES Revives, and spends at most KIT_SHARE of the money past the reservations, so a loss, which
+# halves the purse, still leaves enough to buy one again. A Gold run met Lance with its ace at 95 of 199
+# HP and three unused Revives, after five rooms with no potion in the bag.
+ROOMS = 5
+KIT_REVIVES = 2
+KIT_SHARE = 0.5
+# A member under this share of the top level is a filler the items are not spent on. Gold took a level 7
+# Metapod and a level 5 Togepi to the League beside its level 63 ace.
+FIGHTER_SHARE = 0.6
+
+REVIVE, RESTORE, ETHER, ELIXIR = 'revive', 'restore', 'ether', 'elixir'
+
+
+def kit(restores, revives, spare, restore_price, revive_price):
+    """The restores and Revives to buy before the League, as a pair, with ``restores`` and ``revives``
+    already in the bag and ``spare`` money past the reservations. Restores come first.
+
+    The kit in the bag counts at its price toward the KIT_SHARE, so buying it a few at a time over
+    several trips stops at the same share as buying it all at once."""
+    held = min(restores, ROOMS) * restore_price + min(revives, KIT_REVIVES) * revive_price
+    budget = (max(0, spare) + held) * KIT_SHARE - held
+    buy = max(0, min(ROOMS - restores, int(budget // restore_price))) if restore_price else 0
+    budget -= buy * restore_price
+    extra = max(0, min(KIT_REVIVES - revives, int(budget // revive_price))) if revive_price else 0
+    return buy, extra
+
+
+@dataclass(frozen=True)
+class Member:
+    """One party Pokémon as the League items read it: its level, HP and each move's strength and PP."""
+    level: int
+    hp: int
+    max_hp: int
+    strengths: tuple
+    pp: tuple
+    max_pp: tuple
+
+    def row(self):
+        return fighter(self.hp, self.max_hp, list(self.strengths), list(self.pp), list(self.max_pp))
+
+
+@dataclass(frozen=True)
+class Medicine:
+    """An item in the bag: its kind, and the HP or PP it restores, 0 for all of it."""
+    item: int
+    kind: str
+    amount: int = 0
+
+
+def fighting(members):
+    """The slots the League items are spent on: members at FIGHTER_SHARE of the top level or more."""
+    top = max((member.level for member in members), default=0)
+    return [index for index, member in enumerate(members) if member.level >= top * FIGHTER_SHARE]
+
+
+def spent_move(member):
+    """The strong move slot an Ether restores: the one missing the most PP by its strength."""
+    slots = [index for index in strong(member.strengths) if index < len(member.pp) and index < len(member.max_pp)]
+    best = max(slots, key=lambda index: (member.strengths[index] * (member.max_pp[index] - member.pp[index]), -index),
+               default=None)
+    return best if best is not None and member.pp[best] < member.max_pp[best] else None
+
+
+def treatment(members, bag):
+    """The next item to use between League rooms, as (slot, Medicine, move slot or None), or None.
+
+    The bar is the boss check's own: a fighter under READY_HP of its HP or READY_PP of its strong
+    attacks' PP is short, the same bar a Pokémon Center trip heals for outside the League. A fainted
+    fighter is revived first. A short one takes the smallest restore that lifts it past the bar, or the
+    largest when none does, and an Elixir or an Ether for its spent strong moves.
+    """
+    def by_kind(*kinds):
+        return [medicine for medicine in bag if medicine.kind in kinds]
+    slots = fighting(members)
+    revives = sorted(by_kind(REVIVE), key=lambda medicine: (medicine.amount == 0, medicine.amount))
+    for slot in slots:
+        if members[slot].hp == 0 and revives:
+            return slot, revives[0], None
+    for slot in slots:
+        member = members[slot]
+        row = member.row()
+        if member.hp == 0:
+            continue
+        bar = member.max_hp * READY_HP
+        if member.hp < bar:
+            restores = sorted(by_kind(RESTORE), key=lambda medicine: (medicine.amount == 0, medicine.amount))
+            lifting = [medicine for medicine in restores if member.hp + (medicine.amount or member.max_hp) >= bar]
+            if lifting or restores:
+                return slot, (lifting or restores)[-1 if not lifting else 0], None
+        if row.strong_max and row.strong_pp < row.strong_max * READY_PP:
+            move = spent_move(member)
+            spent = sum(1 for index in strong(member.strengths)
+                        if index < len(member.pp) and index < len(member.max_pp)
+                        and member.pp[index] < member.max_pp[index] * READY_PP)
+            elixirs, ethers = by_kind(ELIXIR), by_kind(ETHER) if move is not None else []
+            choice = (elixirs if spent > 1 else ethers) or elixirs or ethers
+            if choice:
+                medicine = min(choice, key=lambda medicine: (medicine.amount == 0, medicine.amount))
+                return slot, medicine, move if medicine.kind == ETHER else None
+    return None
+
+
+def room_matchup(attacks, types, room, factor):
+    """How a Pokémon with attack types ``attacks`` and types ``types`` meets a room whose party has the
+    type pairs ``room``, as (offense, defense): the mean over the room of its best attack's type factor,
+    and of the strongest factor the foe's own types deal it. ``factor(attack, defender)`` is one entry
+    of the generation's type chart."""
+    def product(attack, kinds):
+        value = 1.0
+        for kind in set(kinds):
+            value *= factor(attack, kind)
+        return value
+    if not room:
+        return 1.0, 1.0
+    offense = sum(max((product(attack, kinds) for attack in attacks), default=0) for kinds in room) / len(room)
+    defense = sum(max(product(kind, types) for kind in set(kinds)) for kinds in room) / len(room)
+    return offense, defense
+
+
+def room_lead(ace, partner, matchup):
+    """The slot that leads into the next League room: the partner when its matchup is neutral or better
+    and it can fight, so the ace keeps its strong PP for the Champion, and otherwise the ace.
+
+    ``matchup`` gives (offense, defense) for a slot, as room_matchup does. Poliwhirl reached Lance at
+    full HP and PP beside a Typhlosion with 2 Flamethrowers left.
+    """
+    if partner is None or partner == ace:
+        return ace
+    offense, defense = matchup(partner)
+    return partner if offense >= 1 and defense <= 1 else ace
 
 
 def boss_name(title):
@@ -206,6 +344,7 @@ def unready_event(title, fighters, names=None):
     names = names or [f'Slot {index + 1}' for index in range(len(fighters))]
     detail = ', '.join(names[index] for index in slots)
     return {'type': 'plan', 'title': f'Went in unready: {title}',
-            'body': (f'No Pokémon Center was in reach, or this leg already took its heal trips. '
+            'body': (f'No Pokémon Center was in reach, or this leg already took its heal trips, '
+                     f'and the bag held nothing to treat it. '
                      f'Under half HP or strong PP: {detail}.'),
             'priority': 2, 'tags': 'warning'}

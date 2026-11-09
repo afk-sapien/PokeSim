@@ -230,14 +230,25 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
         return None
     desired = {ITEMS["POKE_BALL"]: 5, ITEMS["POTION"]: 3, ITEMS["SUPER_POTION"]: 3,
                ITEMS["ANTIDOTE"]: 2, ITEMS["PARLYZ_HEAL"]: 1}
-    if league:
-        desired[ITEMS["REVIVE"]] = 5
-        # Freeze never thaws, and Lance's Dragonair can stall forever against a frozen last partner.
-        desired[ITEMS["FULL_HEAL"]] = 3
     ball_count = sum(counts.get(i, 0) for i in BALLS)
     heal_count = sum(counts.get(i, 0) for i in HEALING)
-    order = sorted(stock, key=lambda item: (item != ITEMS["REVIVE"],
-                   item != ITEMS["HYPER_POTION"])) if league else stock
+    heal_target = 3
+    if league:
+        # The League kit is sized for its rooms with money kept for a second run (planning/boss.py kit),
+        # the same rule Gold, Silver and Crystal shop by.
+        # The Indigo Plateau mart sells no Hyper Potion, so its cheapest strong restore is the kit's.
+        from ..planning import boss
+        strong = sorted((ITEMS[name] for name in ("HYPER_POTION", "MAX_POTION", "FULL_RESTORE") if ITEMS[name] in stock),
+                        key=lambda item: PRICES[item])
+        revives = counts.get(ITEMS["REVIVE"], 0) + counts.get(ITEMS["MAX_REVIVE"], 0)
+        restores, extra = boss.kit(heal_count, revives, money - reserve,
+                                   PRICES[strong[0] if strong else ITEMS["HYPER_POTION"]], PRICES[ITEMS["REVIVE"]])
+        heal_target = heal_count + restores
+        desired[ITEMS["REVIVE"]] = counts.get(ITEMS["REVIVE"], 0) + extra
+        # Freeze never thaws, and Lance's Dragonair can stall forever against a frozen last partner.
+        desired[ITEMS["FULL_HEAL"]] = 3
+    order = sorted(stock, key=lambda item: (item not in strong, strong.index(item) if item in strong else 0,
+                                            item != ITEMS["REVIVE"])) if league else stock
     for item in order:
         target = desired.get(item, 0)
         if item in BALLS:
@@ -245,7 +256,7 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
             if hunt_reserve is not None and PRICES.get(item, 0) <= money - hunt_reserve:
                 target = max(target, HUNT_STOCK - ball_count + counts.get(item, 0))
         if item in HEALING:
-            target = max(0, (10 if league else 3) - heal_count + counts.get(item, 0))
+            target = max(0, heal_target - heal_count + counts.get(item, 0))
         if counts.get(item, 0) >= target or (len(items) >= (20 if league else 18) and item not in counts):
             continue
         if 0 < PRICES.get(item, 0) <= money - reserve:

@@ -126,14 +126,18 @@ def test_bill_pc_is_reached_from_below_the_computer():
     assert nav.route((MAPS['BILLS_HOUSE'], 3, 6), goal.targets, 0)
 
 
-def test_league_supplies_use_remaining_bag_space_and_prioritize_revives():
+def test_league_supplies_use_remaining_bag_space_and_buy_the_kit():
     from pokesim.policies.battle import shopping_item
     bag = tuple((item, 1) for item in range(200, 218))
     stock = [ITEMS['FULL_RESTORE'], ITEMS['HYPER_POTION'], ITEMS['REVIVE']]
-    assert shopping_item(bag, stock, 30000, league=True) == ITEMS['REVIVE']
-    assert shopping_item(bag, stock, 30000) is None
-    bag += ((ITEMS['REVIVE'], 5),)
+    # The kit's restores come first, in the cheapest strong restore, then its Revives.
     assert shopping_item(bag, stock, 30000, league=True) == ITEMS['HYPER_POTION']
+    assert shopping_item(bag, stock, 30000) is None
+    bag += ((ITEMS['HYPER_POTION'], 5),)
+    assert shopping_item(bag, stock, 30000, league=True) == ITEMS['REVIVE']
+    # Half the money stays for a second run: 4000 spare buys one Hyper Potion and no more.
+    assert shopping_item(bag[:-1], stock, 4300, league=True) == ITEMS['HYPER_POTION']
+    assert shopping_item(bag[:-1] + ((ITEMS['HYPER_POTION'], 1),), stock, 2800, league=True) is None
 
 
 def test_league_restores_depleted_attacks_before_the_next_battle():
@@ -141,7 +145,7 @@ def test_league_restores_depleted_attacks_before_the_next_battle():
     policy = StrategicPolicy(7)
     recorder = Recorder.on(policy)
     s = replace(ready(badges=255), map=MAPS['LANCES_ROOM'],
-                party=(mon(level=60, moves=(15, 75, 76, 22), pp=(30, 0, 7, 0)),),
+                party=(mon(level=60, moves=(15, 75, 76, 22), pp=(30, 0, 2, 0)),),
                 items=((ITEMS['ELIXER'], 1),))
     policy.goal = story_goal(s)
     assert policy._overworld(s, bytearray(65536))[0] == PRESS

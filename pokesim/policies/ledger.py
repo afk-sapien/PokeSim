@@ -172,6 +172,31 @@ def fighters(party):
                  for mon in party)
 
 
+# The bag between League rooms as planning/boss.py reads it, shared with Gold, Silver and Crystal: each
+# item's kind and the HP or PP it restores, 0 for all of it. A Revive's 1 stands for half.
+MEDICINE = {ITEMS[name]: entry for name, entry in (
+    ('POTION', (boss.RESTORE, 20)), ('SUPER_POTION', (boss.RESTORE, 50)), ('HYPER_POTION', (boss.RESTORE, 200)),
+    ('FRESH_WATER', (boss.RESTORE, 50)), ('SODA_POP', (boss.RESTORE, 60)), ('LEMONADE', (boss.RESTORE, 80)),
+    ('MAX_POTION', (boss.RESTORE, 0)), ('FULL_RESTORE', (boss.RESTORE, 0)), ('REVIVE', (boss.REVIVE, 1)),
+    ('MAX_REVIVE', (boss.REVIVE, 0)), ('ETHER', (boss.ETHER, 10)), ('MAX_ETHER', (boss.ETHER, 0)),
+    ('ELIXER', (boss.ELIXIR, 10)), ('MAX_ELIXER', (boss.ELIXIR, 0)))}
+
+
+def league_treatment(party, items):
+    """The next item to use between League rooms as (party slot, item, move slot or None), or None
+    (boss.treatment)."""
+    members = [boss.Member(mon.level, mon.hp, mon.max_hp, tuple(attack_strength(mon, move) for move in mon.moves),
+                           tuple(mon.pp), tuple(getattr(mon, 'max_pp', ()) or
+                                                (MOVES.get(move, {}).get('pp', 0) for move in mon.moves)))
+               for mon in party]
+    bag = tuple(boss.Medicine(item, *MEDICINE[item]) for item, count in items if count and item in MEDICINE)
+    found = boss.treatment(members, bag)
+    if found is None:
+        return None
+    slot, medicine, move = found
+    return slot, medicine.item, move
+
+
 def battle_ledger():
     """A ledger of the party's HP and PP alone, which the battle stance and the heal walk read."""
     return Ledger(lambda party, kinds: Resources(battle_room(party)))

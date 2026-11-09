@@ -123,6 +123,28 @@ def fighters(data, snapshot):
                  for mon in snapshot.party if not mon.egg)
 
 
+def league_bag(data, snapshot):
+    """The bag's medicine for the League rooms (MEDICINE)."""
+    inventory = dict(snapshot.items)
+    return tuple(boss.Medicine(data.items[name], kind, amount) for name, (kind, amount) in MEDICINE.items()
+                 if name in data.items and inventory.get(data.items[name]))
+
+
+def league_treatment(data, snapshot):
+    """The next item to use between League rooms as (party slot, item, move slot or None), or None
+    (boss.treatment)."""
+    slots = [slot for slot, mon in enumerate(snapshot.party) if not mon.egg]
+    members = [boss.Member(mon.level, mon.hp, mon.max_hp, tuple(attack_strength(data, mon, move) for move in mon.moves),
+                           tuple(mon.pp), tuple(getattr(mon, 'max_pp', ()) or
+                                                (data.moves.get(move, {}).get('pp', 0) for move in mon.moves)))
+               for mon in (snapshot.party[slot] for slot in slots)]
+    found = boss.treatment(members, league_bag(data, snapshot))
+    if found is None:
+        return None
+    index, medicine, move = found
+    return slots[index], medicine.item, move
+
+
 def battle_room(data, snapshot):
     """The HP and PP the party can spend before a Pokémon Center is due.
 
@@ -382,6 +404,14 @@ BALL_STOCK = 20
 POTIONS = ('FULL_RESTORE', 'MAX_POTION', 'HYPER_POTION')
 POTION_LOW, POTION_FULL = 8, 12
 REVIVE_LOW, REVIVE_FULL = 3, 5
+# The bag between League rooms as planning/boss.py reads it: each item's kind and the HP or PP it
+# restores, 0 for all of it. A Revive's 1 stands for half, which comes before a Max Revive.
+MEDICINE = {'POTION': (boss.RESTORE, 20), 'SUPER_POTION': (boss.RESTORE, 50), 'HYPER_POTION': (boss.RESTORE, 200),
+            'MAX_POTION': (boss.RESTORE, 0), 'FULL_RESTORE': (boss.RESTORE, 0), 'REVIVE': (boss.REVIVE, 1),
+            'MAX_REVIVE': (boss.REVIVE, 0), 'ETHER': (boss.ETHER, 10), 'MAX_ETHER': (boss.ETHER, 0),
+            'ELIXER': (boss.ELIXIR, 10), 'MAX_ELIXER': (boss.ELIXIR, 0)}
+# The goals of the League rooms, which buy the League kit (boss.kit) before the first.
+LEAGUE_GOALS = frozenset({'league_will', 'league_koga', 'league_bruno', 'league_karen', 'league_lance'})
 # An ordinary catch keeps the last few balls while money cannot buy the floor back. Species met only
 # once, such as Sudowoodo, Snorlax, the red Gyarados and the legendaries, always get a throw.
 LAST_BALLS = 3
@@ -487,6 +517,13 @@ def supplies(policy, snapshot):
                                                                    or snapshot.badges == 65535):
         inventory = dict(snapshot.items)
         count = sum(inventory.get(data.items[name], 0) for name in POTIONS)
+        if policy.goal is not None and policy.goal.key in LEAGUE_GOALS:
+            # Before the League the kit is sized for its rooms with money kept for a second run.
+            revives = sum(inventory.get(data.items[name], 0) for name in ('REVIVE', 'MAX_REVIVE'))
+            restores, extra = boss.kit(count, revives, snapshot.money - held_money(data, snapshot),
+                                       price(data, 'HYPER_POTION'), price(data, 'REVIVE'))
+            rows += [row for row in (('potions', ('HYPER_POTION',), restores), ('revives', ('REVIVE',), extra)) if row[2]]
+            return rows
         if count < POTION_LOW:
             rows.append(('potions', POTIONS, POTION_FULL - count))
         revives = inventory.get(data.items['REVIVE'], 0)

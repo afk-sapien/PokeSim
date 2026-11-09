@@ -19,7 +19,7 @@ from .naming import Naming
 from .kanto import journey as kanto_journey
 from .menus import (MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, TASKS, Attack, Buy, ChangeBox, DayCare, FieldMove, Flee, Fly, Release,
                     Forget, Give, Lead, Learn, PutAway, Radio, Remedy, Sell, Send, ShowPartner, Storage, Take, Teach, Throw,
-                    Toss, Use, choose,
+                    Toss, Use, UseOn, choose,
                     close_pc, menu_label, restore)
 
 STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) before reporting a blocked objective
@@ -1022,11 +1022,12 @@ class Policy:
     def boss_ready(self, snapshot, blocked):
         """The boss check before the goal under way (planning/boss.py): READY, HEAL or UNREADY.
 
-        HEAL needs a Pokémon Center the heal walk can reach. UNREADY goes in anyway, and the journal
-        says so once per leg. Each Pokémon Center the party steps into starts a leg with fresh trips.
+        HEAL needs a Pokémon Center the heal walk can reach, or, between League rooms, an item in the bag
+        that treats a short fighter (league_items). UNREADY goes in anyway, and the journal says so once
+        per leg. Each Pokémon Center the party steps into starts a leg with fresh trips.
         """
         from ..planning import boss
-        from .ledger import fighters
+        from .ledger import fighters, league_treatment
         gate = getattr(self, 'boss_gate', None)
         if gate is None:
             gate = self.boss_gate = boss.Gate()
@@ -1034,8 +1035,9 @@ class Policy:
         key = goal.key if goal is not None and goal.key in self.BOSSES else None
         party = fighters(self.data, snapshot)
         at_center = self.data.maps.get(snapshot.map, {}).get('constant', '').endswith('POKECENTER_1F')
+        supply = key is not None and self.in_league(snapshot) and league_treatment(self.data, snapshot) is not None
         verdict = gate.decide(key, party, lambda: not blocked and self.center(snapshot) is not None,
-                              where=snapshot.map, center=at_center)
+                              where=snapshot.map, center=at_center, supply=supply)
         surveying = getattr(self, 'ladder_survey', False)
         if verdict == boss.UNREADY and not surveying and gate.note():
             from .collection import pin_events
@@ -1411,7 +1413,7 @@ class Policy:
             if task is not None and self.allowed(task, snapshot):
                 self.menu = task
                 return Action(None, 0, 24)
-        if self.in_league(snapshot) and self.remedy(snapshot):
+        if self.in_league(snapshot) and (self.league_items(snapshot) or self.remedy(snapshot, cures=True)):
             return Action(None, 0, 24)
         if self.errand_allowed(snapshot, mem):
             prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
@@ -1600,14 +1602,31 @@ class Policy:
         self.nav.issued(snapshot, path[0])
         return Action(path[0], 16, 16)
 
-    def remedy(self, snapshot, *, active=None):
+    def league_items(self, snapshot):
+        """Use the next item between League rooms (planning/boss.py treatment): a Revive for a fainted
+        fighter, a restore up to the boss check's bar, or an Ether or Elixir for spent strong moves."""
+        from .ledger import league_treatment
+        found = league_treatment(self.data, snapshot)
+        if found is None:
+            return False
+        slot, item, move = found
+        count = dict(snapshot.items)[item]
+        task = UseOn(item, slot, count, move) if move is not None else Remedy(item, slot, count)
+        if not self.allowed(task, snapshot):
+            return False
+        self.menu = task
+        return True
+
+    def remedy(self, snapshot, *, active=None, cures=False):
+        """Use a remedy on a party member, or on the one in battle when ``active`` is set. With ``cures``
+        only status cures, which league_items leaves to it."""
         items = dict(snapshot.items)
         for slot, mon in enumerate(snapshot.party):
-            if mon.egg or active is not None and slot != active:
+            if mon.egg or active is not None and slot != active or cures and (mon.hp == 0 or not mon.status):
                 continue
             names = ()
             from .champion_shop import elixir
-            restore = elixir(self.data, snapshot, mon)
+            restore = None if cures else elixir(self.data, snapshot, mon)
             # A remedy the game refused recently is skipped like any other refused shortcut, or the
             # battle would rebuild it every decision and never press a button.
             if restore and self.allowed(task := Remedy(restore, slot, items[restore]), snapshot):
@@ -1615,7 +1634,7 @@ class Policy:
                 return True
             if mon.hp == 0:
                 names = ('MAX_REVIVE', 'REVIVE')
-            elif mon.hp < mon.max_hp * (0.55 if snapshot.in_battle else 0.8):
+            elif not cures and mon.hp < mon.max_hp * (0.55 if snapshot.in_battle else 0.8):
                 names = ('FULL_RESTORE', 'MAX_POTION', 'HYPER_POTION', 'SUPER_POTION', 'POTION')
             elif mon.status:
                 names = ('FULL_RESTORE', 'FULL_HEAL', 'ANTIDOTE' if mon.status & 8 else
@@ -2096,6 +2115,13 @@ class Policy:
                 or questing and sleeper and snapshot.party
                 and (snapshot.party[0].trainer_id, tuple(snapshot.party[0].dvs)) == sleeper):
             return None
+        # In the League the partner leads a room it meets neutral or better, so the ace keeps its strong
+        # attacks for the Champion. Poliwhirl reached Lance at full HP and PP beside a spent Typhlosion.
+        from .collection import room_lead
+        room = room_lead(self, snapshot)
+        if room is not None:
+            mon = snapshot.party[room]
+            return Lead(room, (mon.trainer_id, mon.dvs)) if room else None
         if trainee is not None:
             mon = snapshot.party[trainee]
             return Lead(trainee, (mon.trainer_id, mon.dvs)) if trainee else None
