@@ -147,13 +147,14 @@ def spare_entries(party, stored, version=''):
 def species_rarity(version=''):
     """A copy's rarity by its species id and DVs, as the version's own PC rates it (pcvalue.Inputs).
 
-    Red, Blue and Yellow rate by family (investment.families). The broker holds no Gold, Silver or
-    Crystal tables, so those rate by the DV total."""
+    Red, Blue and Yellow rate by family (investment.families), which raises RatingUnavailable when it
+    cannot, so pcvalue.rate offers nothing. The broker holds no Gold, Silver or Crystal tables, so
+    those rate by the DV total."""
     from ..rarity import generic
     if version in ('gold', 'silver', 'crystal'):
         return generic
     from ..investment import families
-    return families().rarity
+    return lambda species, dvs: families().rarity(species, dvs)
 
 
 def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory:

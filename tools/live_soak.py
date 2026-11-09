@@ -339,12 +339,17 @@ class Copies:
     visit is a run of poll intervals with a release in the journal. A copy released at the first visit after it
     arrived counts unless a rarer copy of its species that arrived after it is still held, as when a
     hunt's best copy is replaced by a better one.
+
+    ``first_wave`` counts the releases of the first visit after the start, or stays None when the run
+    released nothing. A change to the scores re-ranks every PC at that visit, so it shows the size of
+    that wave.
     """
 
     def __init__(self, rarity):
         self.rarity, self.held, self.dex, self.tails = rarity, None, {}, {}
         self.arrived, self.visits, self.polls, self.last_visit, self.visiting = {}, {}, 0, 0, None
         self.first_visit, self.pushed_out = [], []
+        self.first_wave, self.wave_over = None, False
 
     def tail(self, key):
         if key not in self.tails:
@@ -352,6 +357,11 @@ class Copies:
         return self.tails[key]
 
     def poll(self, game, dex_of, released):
+        """``released`` is the releases the journal shows since the last poll, or whether it shows one."""
+        if released and not self.wave_over:
+            self.first_wave = (self.first_wave or 0) + int(released)
+        elif self.first_wave is not None:
+            self.wave_over = True
         current = {}
         for mon in [*(game or {}).get('party', []), *((game or {}).get('storage') or {}).get('pokemon', [])]:
             dvs = mon.get('dvs')
@@ -506,7 +516,7 @@ def play_one(manager, aid, frames, progress):
             db.close()
             seen.update(row[0] for row in fresh)
             catches.poll(fresh, goal, best)
-            copies.poll(game, dex_of, released > releases)
+            copies.poll(game, dex_of, released - releases)
             releases = released
             help_reason = (status.get('help_request') or {}).get('reason')
             end = frame
@@ -532,7 +542,7 @@ def play_one(manager, aid, frames, progress):
                   receipts=[list(row) for row in receipts], catches=catches.finish(best),
                   held_start=held_start, held_end=held_end, reloads=reloads, errors=len(errors),
                   error_lines=errors[:5], help=help_reason, names=names,
-                  first_visit=copies.first_visit, pushed_out=copies.pushed_out,
+                  first_visit=copies.first_visit, pushed_out=copies.pushed_out, first_wave=copies.first_wave,
                   ledger=json.loads(ledger[0]) if ledger else None)
     progress(f'{adventure["name"]}: {result["frames"]} frames in {result["wall_seconds"]}s'
              + (f', failed: {result["failed"]}' if result['failed'] else ''))
@@ -669,7 +679,8 @@ def measure(result):
     improvements = sum(row['improved'] for row in result['catches'] if not row['gift'])
     progress = sum(kinds.get(kind, 0) for kind in REAL_PROGRESS) + improvements
     return {'game_hours': round(hours, 3), 'releases': round(releases / hours, 2), 'obtains': round(obtains / hours, 2),
-            'catches': caught, 'improvements': improvements, 'progress': round(progress / hours, 2),
+            # Reported only: the catches and releases of the whole soak window, as counts.
+            'catches': caught, 'window_releases': releases, 'improvements': improvements, 'progress': round(progress / hours, 2),
             'reloads': round(sum(result['reloads'].values()) / hours, 2),
             'most_reloaded': max(result['reloads'].items(), key=lambda item: item[1], default=(None, 0)),
             'bytes': round((result['journal_bytes'] + max(result['kv_bytes'], 0)) / hours),
@@ -677,7 +688,9 @@ def measure(result):
             'churned_species': churned_species(result), 'goals': goal_churn(result['catches']),
             # Older results and a rejudge without the copies held leave these out.
             'released_at_first_visit': len(result['first_visit']) if 'first_visit' in result else None,
-            'pushed_out_rarer': len(result['pushed_out']) if 'pushed_out' in result else None}
+            'pushed_out_rarer': len(result['pushed_out']) if 'pushed_out' in result else None,
+            # Reported only: the releases of the first PC visit, the wave a change to the scores brings.
+            'first_wave_releases': result.get('first_wave')}
 
 
 def invariants(candidate, baseline):
@@ -830,6 +843,17 @@ def rejudge(args):
     return write_report(args.work.resolve())
 
 
+def report_line(row):
+    """One adventure's printed row, ending with its catches and releases over the window and at its first PC visit."""
+    c = row['candidate']
+    wave =lambda measured: '-' if not measured or measured.get('first_wave_releases') is None else measured['first_wave_releases']  # noqa: E731
+    released = c.get('window_releases', '-')
+    return (f'{row["name"]:<28} {c["releases"]:7.1f} rel/h {c["obtains"]:7.1f} obt/h {c["progress"]:6.1f} prog/h '
+            f'{c["reloads"]:5.1f} rel/h {c["bytes"]:8d} B/h {c["improvements"]:3d} better '
+            f'{c["catches"]:4d} caught {released} released '
+            f'{wave(c)} first visit releases ({wave(row["deployed"])} deployed)')
+
+
 def write_report(work):
     run_info = json.loads((work / 'run.json').read_text(encoding='utf-8'))
     played = {role: json.loads((work / role / 'results.json').read_text(encoding='utf-8'))
@@ -857,10 +881,8 @@ def write_report(work):
     path.write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
     (work / 'gate-report.json').write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
     for row in rows:
-        c = row['candidate']
-        if c:
-            print(f'{row["name"]:<28} {c["releases"]:7.1f} rel/h {c["obtains"]:7.1f} obt/h {c["progress"]:6.1f} prog/h '
-                  f'{c["reloads"]:5.1f} rel/h {c["bytes"]:8d} B/h {c["catches"]:4d} caught {c["improvements"]:3d} better')
+        if row['candidate']:
+            print(report_line(row))
     for problem in problems:
         print(problem)
     print(f'{"passed" if not problems else "failed"} in {report["wall_seconds"]}s, attempt {attempt}, report in {path}')

@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 
 from pokecore.dvs import is_shiny
 
-from .rarity import generic
+from .rarity import RatingUnavailable, generic
 
 # Every weight in one place. A score is the sum of the parts a Pokémon earns.
 WEIGHTS = {
@@ -57,6 +57,8 @@ VISIT_BAND = 50
 # the rarest copy held.
 RARITY_STEP = 2
 LAST_COPY = 'last copy'
+# The reason on every row when the PC cannot rate (rate).
+UNRATED = 'Not rated'
 DEADLOCK = 'PC full: every stored Pokémon is Keep-locked, trained, a plan\'s or the best copy of its species.'
 
 
@@ -156,7 +158,21 @@ def _rank(rated):
 
 
 def rate(entries, inputs=Inputs()):
-    """Score every Pokémon and mark which ones may go. Returns Rated rows in the order given."""
+    """Score every Pokémon and mark which ones may go. Returns Rated rows in the order given.
+
+    When ``inputs.rarity`` raises RatingUnavailable, every row is a floor marked UNRATED, so only an
+    owner's request may release and no new copy is kept but a missing entry, a shiny or the only copy.
+    The only copy of a species keeps its reason, so a request still needs the last-copy confirm."""
+    try:
+        return _rate(entries, inputs)
+    except RatingUnavailable:
+        held = Counter(entry.group for entry in entries if not entry.egg)
+        reason = lambda entry: ('Egg' if entry.egg else 'Keep' if entry.locked else 'In the party' if entry.slot is None  # noqa: E731
+                                else 'Only copy' if held[entry.group] == 1 else UNRATED)
+        return [Rated(entry, 0, [], 'floor', reason(entry)) for entry in entries]
+
+
+def _rate(entries, inputs):
     groups = defaultdict(list)
     for entry in entries:
         if not entry.egg:
@@ -250,6 +266,8 @@ def verdict(rows, *, missing=False, needed=0, active_box=None):
         return Worth(True, 'New entry', row.rarity)
     if len(candidate.dvs) == 5 and is_shiny({'dvs': list(candidate.dvs)}):
         return Worth(True, 'Shiny', row.rarity)
+    if row.reason == UNRATED:
+        return Worth(False, UNRATED)
     same = [other for other in rows[:-1] if other.entry.group == candidate.group and not other.entry.egg]
     best = min((other.rarity for other in same if other.rarity is not None), default=None)
     if row.status == 'spare':

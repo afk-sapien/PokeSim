@@ -1,5 +1,7 @@
 import random
 
+import pytest
+
 from pokesim import pcvalue
 from pokesim.pcvalue import Entry, Inputs, LAST_COPY, ROLE_COPIES, queue, rate
 
@@ -161,6 +163,75 @@ def test_the_move_pool_adds_only_the_machines_the_bot_teaches():
     assert len(LIMITED) == 50 - len(RENEWABLE)
     # Voltorb learns no Electric move by level, so Electrode's Attack counts only with Thunderbolt.
     assert families().forms(internal(101))[0][1] == 0
+
+
+@pytest.fixture
+def cartridge(monkeypatch, tmp_path):
+    """Point ROM_PATH at a path, or unset it with None, and build the move pools again from it."""
+    from pokesim import config, investment
+
+    def point(path):
+        if path is None:
+            monkeypatch.delenv('ROM_PATH', raising=False)
+            path = tmp_path / 'absent' / 'pokered.gb'
+        else:
+            monkeypatch.setenv('ROM_PATH', str(path))
+        monkeypatch.setattr(config, 'ROM_PATH', path)
+        investment._pool.cache_clear()
+    yield point
+    investment._pool.cache_clear()
+
+
+def test_a_run_without_a_cartridge_counts_only_the_hms(cartridge):
+    from pokesim.investment import TAUGHT_HMS, dex_rarity, families, rating_problem, taught_machines
+    cartridge(None)
+    taught = taught_machines()
+    assert set().union(*taught.values()) == TAUGHT_HMS
+    assert families() is not None and rating_problem() is None
+    assert dex_rarity(16, (0, 4, 4, 4, 4)) is not None
+
+
+@pytest.mark.parametrize('failure', ['missing', 'unverified'])
+def test_a_configured_cartridge_that_cannot_be_read_rates_and_releases_nothing(cartridge, tmp_path, monkeypatch,
+                                                                               caplog, failure):
+    import hashlib
+    import logging
+    from pokesim import catches, investment, tm_shop
+    from pokesim.rarity import RatingUnavailable
+    rom = tmp_path / 'pokered.gb'
+    if failure == 'unverified':
+        rom.write_bytes(b'a tracked cartridge whose TM table does not verify')
+        monkeypatch.setattr(catches, 'TRACKED', catches.TRACKED | {hashlib.sha1(rom.read_bytes()).hexdigest()})
+
+        def unverified(data):
+            raise ValueError('The cartridge TM move table could not be verified')
+        monkeypatch.setattr(tm_shop, 'cartridge_data', unverified)
+    cartridge(rom)
+    with caplog.at_level(logging.ERROR, logger='pokesim.investment'):
+        with pytest.raises(RatingUnavailable):
+            investment.families()
+    errors = [record for record in caplog.records if record.levelno == logging.ERROR]
+    assert len(errors) == 1 and 'will not rate or release' in errors[0].getMessage()
+    assert investment.rating_problem() == ('The cartridge TM move table could not be verified.'
+                                           if failure == 'unverified' else
+                                           'The cartridge at ROM_PATH could not be read (No such file or directory).')
+    # No HMs-only pool stands in: nothing is scored, and the PC releases nothing and keeps no new spare.
+    copy = {'species': internal(16), 'dvs': (0, 4, 4, 4, 4)}
+    assert investment.potential_power(copy) is None and investment.rarity(copy) is None
+    table = Inputs(rarity=investment.dex_rarity)
+    held = [mon(16, (0, 0), dvs=(0, 4, 4, 4, 4)), mon(16, (0, 1), dvs=(0, 2, 2, 2, 2)), mon(17, (0, 2))]
+    rows = rate(held, table)
+    assert [row.reason for row in rows] == ['Not rated', 'Not rated', 'Only copy']
+    assert queue(rows) == [] and pcvalue.releases(rows, 3) == []
+    assert not pcvalue.worth(mon(16, (0, 3), dvs=(0, 12, 12, 12, 12)), held, table).keep
+    assert pcvalue.worth(mon(18, (0, 3)), held, table, missing=True).keep
+    # The owner may still release a copy, and the only copy still needs its name.
+    asked = rate([Entry(**{**vars(held[1]), 'requested': 'release'}), held[0],
+                  Entry(**{**vars(held[2]), 'requested': 'release'})], table)
+    assert [row.entry.slot for row in queue(asked)] == [(0, 1)]
+    assert investment.automatic_trade_protected({'species': internal(16), 'dvs': [0, 2, 2, 2, 2], 'level': 5}, [])
+    # The failure is found once, not read again on every rating.
+    assert len([record for record in caplog.records if record.levelno == logging.ERROR]) == 1
 
 
 def test_a_copy_scores_as_its_best_final_form():

@@ -153,6 +153,35 @@ def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
     assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
 
 
+def test_the_first_pc_visit_wave_is_reported_but_never_fails():
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    game = {'party': [], 'storage': {'pokemon': [{'dex': 16, 'dvs': list(PLAIN)}]}}
+    # Three releases over two polls make the first visit, and a later visit does not add to it.
+    for released in (0, 2, 1, 0, 0, 4, 0):
+        copies.poll(game, lambda mon: mon['dex'], released)
+    assert copies.first_wave == 3
+    quiet = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    quiet.poll(game, lambda mon: mon['dex'], 0)
+    assert quiet.first_wave is None
+    candidate, deployed = result(first_wave=3, first_visit=[], pushed_out=[]), result()
+    assert live_soak.measure(candidate)['first_wave_releases'] == 3
+    assert live_soak.measure(deployed)['first_wave_releases'] is None
+    assert live_soak.invariants(candidate, deployed) == []
+    problems, rows = live_soak.judge([candidate], [deployed])
+    assert problems == [] and rows[0]['candidate']['first_wave_releases'] == 3
+    assert live_soak.report_line(rows[0]).endswith(' 3 first visit releases (- deployed)')
+
+
+def test_the_window_catches_and_releases_are_reported_as_counts():
+    releases = [('release', release_title('Pidgey')), ('release', release_title('Rattata'))]
+    receipts = [('capture:1', 16, 0.0), ('capture:2', 19, 1.0), ('gift-event:1', 7, 2.0)]
+    candidate = result(releases, receipts)
+    measured = live_soak.measure(candidate)
+    assert (measured['catches'], measured['window_releases']) == (2, 2)
+    _, rows = live_soak.judge([candidate], [candidate])
+    assert ' 2 caught 2 released - first visit releases ' in live_soak.report_line(rows[0])
+
+
 def test_rates_hold_the_candidate_to_the_deployed_commit():
     deployed = result(gift_loop(1) + [('badge', 'Earned the Boulder Badge')] * 10)
     assert live_soak.invariants(deployed, deployed) == []

@@ -31,6 +31,10 @@ SELF_KO = frozenset({'EXPLODE_EFFECT', 'EFFECT_SELFDESTRUCT'})
 STAT_BONUS, HP_BONUS = 68, 105
 
 
+class RatingUnavailable(RuntimeError):
+    """The move pools cannot be built as the bot plays, so no copy is rated and none is released."""
+
+
 def physical(move_type):
     return move_type < PHYSICAL_BELOW
 

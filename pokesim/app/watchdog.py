@@ -378,6 +378,13 @@ class Watchdog:
         self.down_since.pop(aid, None)
         if status is None:
             return
+        rating = status.get('rating_problem')
+        if isinstance(rating, str) and rating:
+            # Checked before a pause returns, since a paused game still cannot rate its PC.
+            found[f'rating:{aid}'] = Problem(
+                f'rating:{aid}', 'rating',
+                f'{name} cannot rate its PC, so it releases nothing. {rating.rstrip(".")}. Restart it once the cartridge reads.',
+                now, aid, f'{name} rates its PC again.')
         summary = row.get('summary') or {}
         if reserved or status.get('paused') or status.get('manual_mode') or summary.get('trading'):
             # A pause, manual play or a trade holds the game still on purpose.

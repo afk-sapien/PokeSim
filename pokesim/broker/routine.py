@@ -6,6 +6,7 @@ from ..ram import DEX_NAMES
 from ..trade.preferences import name as setting_name
 from ..policies.collection import EVOS
 from ..pcvalue import RARITY_STEP
+from ..rarity import RatingUnavailable
 from .inventory import species_rarity
 
 EVOLVES = {sid: row['species'] for sid, rows in EVOS.items() for row in rows if row['method'] == 'trade'}
@@ -31,8 +32,11 @@ def benefit(inv, incoming):
     if incoming.level >= best_level - 5 and len(incoming.dvs) == 5:
         # Rarer by the step the PC keeps a new copy for (pcvalue.worth), by the version's own rarity.
         rarity = species_rarity(inv.version)
-        known = [rarity(p['species'], tuple(p['dvs'])) for p in copies if len(p.get('dvs', ())) == 5]
-        new = rarity(arrived, tuple(incoming.dvs))
+        try:
+            known = [rarity(p['species'], tuple(p['dvs'])) for p in copies if len(p.get('dvs', ())) == 5]
+            new = rarity(arrived, tuple(incoming.dvs))
+        except RatingUnavailable:
+            known, new = [None], None
         if (len(known) == len(copies) and None not in known and new is not None
                 and new * RARITY_STEP <= min(known)):
             return 5, f'{inv.instance.title()} gains a copy at least {RARITY_STEP} times as rare'
