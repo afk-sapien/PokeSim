@@ -3,6 +3,7 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 
 from .battle import replacement_slot
+from ..planning.partner import PARTNER_LEVEL, league_partner as shared_partner
 from ..planning.stance import HUNT, STORY, TRAIN
 from .navigation import CINNABAR_GYM_DOORS, cinnabar_gate_open
 from .team import readiness
@@ -312,7 +313,7 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
     if s.map not in league_maps:
         assessments = [readiness(s, bit) for bit in range(256, 261)]
         partner = league_partner(s)
-        if partner is not None and s.party[partner].level < 55 and any(a['score'] < 75 for a in assessments):
+        if partner is not None and s.party[partner].level < PARTNER_LEVEL and any(a['score'] < 75 for a in assessments):
             return training_goal('league_partner', 'Prepare a second League battler',
                                  'Build coverage for the League matchups that remain difficult', 'POKEMON_MANSION_1F')
         if max(p.level for p in s.party) < 65 and any(a['score'] < 60 for a in assessments):
@@ -334,17 +335,8 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
 
 
 def league_partner(snapshot):
-    """The sturdy partner to train beside the strongest, chosen the same way whatever the party order.
-
-    The partner is moved to the lead, so a choice that depended on position changed once it was
-    made: with Muk and Charizard both at level 54, Lapras and Muk traded the lead forever."""
-    party = snapshot.party
-    bulk = lambda i: (party[i].max_hp + party[i].attack, party[i].level, party[i].experience)
-    # Ties go to the later partner, so that an identical twin already leading stays the one to train.
-    strongest = max(range(len(party)), key=lambda i: (party[i].level, *bulk(i), i))
-    candidates = [i for i, p in enumerate(party) if i != strongest
-                  and SPECIES.get(p.species, {}).get("stats", [0])[0] >= 90]
-    return max(candidates, key=lambda i: (bulk(i), -i)) if candidates else None
+    """The sturdy partner to train beside the strongest (planning.partner, shared with Gen II)."""
+    return shared_partner(snapshot.party, lambda p: SPECIES.get(p.species, {}).get("stats", [0])[0], lambda p: p.attack)
 
 
 def journey(snapshot, current):

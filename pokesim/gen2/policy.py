@@ -575,6 +575,10 @@ class Policy:
         if partner:
             return partner
         if not snapshot.hall_of_fame_count:
+            from .collection import first_league
+            goal = first_league(self, snapshot, mem, Goal)
+            if goal:
+                return goal
             rooms = [('WILL', 'WILLS_ROOM', 'WillScript_Battle'), ('KOGA', 'KOGAS_ROOM', 'KogaScript_Battle'),
                      ('BRUNO', 'BRUNOS_ROOM', 'BrunoScript_Battle'), ('KAREN', 'KARENS_ROOM', 'KarenScript_Battle')]
             for name, room, script in rooms:
@@ -583,6 +587,9 @@ class Policy:
             if not snapshot.event('EVENT_BEAT_CHAMPION_LANCE'):
                 return self.person(snapshot, 'league_lance', 'Challenge Champion Lance', 'LANCES_ROOM', 'LancesRoomLanceScript')
             return Goal('hall_of_fame', 'Enter the Hall of Fame', 'HALL_OF_FAME', 4, 7)
+        if 'champion' not in self.completed:
+            from .collection import first_league_over
+            first_league_over(self)
         self.completed.setdefault('champion', snapshot.frame)
         return kanto_journey(self, snapshot, mem, Goal)
 

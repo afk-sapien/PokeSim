@@ -195,6 +195,8 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         return None
     if project.get('terminal'):
         project['species'] = project['target'] = mon.species
+    # The first League trains on the way there, before Mt. Silver opens.
+    spot = {'map_name': project['map']} if project.get('map') else {}
     evo = next((evo for evo in data.species[mon.species]['evolutions'] if evo['species'] == project['target']), None)
     if (evo and not project.get('terminal') and wrong_time(evo, current_time)
             and happiness_levels(mon.friendship) <= 1 and mon.held_item != data.items['EVERSTONE']):
@@ -221,7 +223,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     walk = hatch_walk(policy, snapshot)
     if mon.box is not None:
         if walk:
-            return walk_goal(policy, snapshot, Goal, lambda: f'Walk to hatch the egg before {mon.name} joins')
+            return walk_goal(policy, snapshot, Goal, lambda: f'Walk to hatch the egg before {mon.name} joins', **spot)
         goal = policy.storage_goal(snapshot)
         return Goal('collection_train_pc', f'Prepare {mon.name} for training', goal.map_name, goal.x, goal.y, goal.face)
     if project['item']:
@@ -238,7 +240,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         # it in front and switches it out on the first turn of a battle it cannot win, which still splits the
         # experience with it.
         target = 'level ' + str(project.get('level_goal', 100)) if project.get('terminal') else data.species[project['target']]['name']
-        return walk_goal(policy, snapshot, Goal, lambda: f'Train {mon.name} toward {target} in the lead')
+        return walk_goal(policy, snapshot, Goal, lambda: f'Train {mon.name} toward {target} in the lead', **spot)
     if mon.held_item != share:
         other = next((i for i, row in enumerate(snapshot.party) if row.held_item == share), None)
         if other is not None:
@@ -250,7 +252,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             if holder and sealed:
                 return None
             if holder and walk:
-                return walk_goal(policy, snapshot, Goal, lambda: 'Walk to hatch the egg before fetching Exp. Share')
+                return walk_goal(policy, snapshot, Goal, lambda: 'Walk to hatch the egg before fetching Exp. Share', **spot)
             if holder:
                 state['share_holder'] = identity(holder)
                 goal = policy.storage_goal(snapshot)
@@ -259,7 +261,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         return Goal('collection_equip', f'Give Exp. Share to {mon.name}', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     state.pop('share_holder', None)
     target = 'level ' + str(project.get('level_goal', 100)) if project.get('terminal') else data.species[project['target']]['name']
-    return walk_goal(policy, snapshot, Goal, lambda: f'Train {mon.name} toward {target}')
+    return walk_goal(policy, snapshot, Goal, lambda: f'Train {mon.name} toward {target}', **spot)
 
 
 def walk_goal(policy, snapshot, Goal, label, *, map_name='SILVER_CAVE_ROOM_1'):

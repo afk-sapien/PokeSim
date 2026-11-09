@@ -11,7 +11,8 @@ from .menus import ChangeBox, FieldMove, Storage, Teach, Use
 from .navigation import DIRS
 from pokecore.gen2.ram import Memory
 from ..planning.monitor import STOOD_DOWN
-from .standdown import (exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down, standing_down)
+from .standdown import (exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down, standing_down,
+                         train_key)
 
 
 def matching_time(value, current):
@@ -502,7 +503,11 @@ def call_off_league(policy):
     """
     state = policy.collection
     if state.get('league_loop') is None:
-        return False
+        if 'champion' in getattr(policy, 'completed', {'champion': 0}):
+            return False
+        # The first League is lost the same way, so the team trains before it goes back in.
+        state['first_league_entered'] = True
+        return True
     state['league_entered'] = True
     return True
 
@@ -532,6 +537,62 @@ def league_loop(policy, snapshot, Goal):
         state['phase'] = 'league'
         return league_funding(policy, snapshot, Goal, again=True)
     return None
+
+
+# The story trains for the first League here, the last map with wild Pokémon before it.
+FIRST_LEAGUE_MAP = 'VICTORY_ROAD'
+
+
+def first_league(policy, snapshot, mem, Goal):
+    """Train the party for the first League, or None once it may go in.
+
+    A level 56 Typhlosion with a bench at levels 2 to 30 lost at Lance for 12 hours. The run trains a
+    sturdy partner to PARTNER_LEVEL first, by the rule Red, Blue and Yellow use. After a loss it uses
+    the postgame check: the team trains, one party member ten levels at a time, until league_ready.
+    """
+    from pokecore.gen2.ram import experience_at
+    from ..planning.partner import PARTNER_LEVEL, league_partner
+    from . import training
+    data, state = policy.data, policy.collection
+    if policy.in_league(snapshot):
+        state['first_league_entered'] = True
+        return None
+    if state.pop('first_league_entered', None):
+        # Leaving the League without its Hall of Fame entry means the team blacked out.
+        state['league_lost'] = league_strength(snapshot)
+    party = snapshot.party
+    slot = league_partner(party, lambda mon: data.species[mon.species]['stats'][0], lambda mon: mon.stats[1])
+    trainees = []
+    if slot is not None and party[slot].level < PARTNER_LEVEL:
+        trainees = [(party[slot], PARTNER_LEVEL)]
+    elif not league_ready(policy, snapshot):
+        # The cheapest step first, as postgame training picks its trainee.
+        steps = sorted((experience_at(min(100, (mon.level // 10 + 1) * 10), data.species[mon.species]['growth'])
+                        - mon.experience, i) for i, mon in enumerate(party) if not mon.egg and mon.level < 100)
+        trainees = [(party[i], min(100, (party[i].level // 10 + 1) * 10)) for _, i in steps]
+    for mon, goal in trainees:
+        identity = training.identity(mon)
+        if standing_down(policy, train_key(identity)):
+            continue
+        project = state.get('training')
+        if not project or not project.get('league') or project['identity'] != identity:
+            state['training'] = {'identity': identity, 'target': mon.species, 'item': None, 'species': mon.species,
+                                 'terminal': True, 'level_goal': goal, 'league': True, 'map': FIRST_LEAGUE_MAP}
+        found = training.journey(policy, snapshot, mem, Goal, terminal=True)
+        if found is not None:
+            return found
+    if (state.get('training') or {}).get('league'):
+        state['training'] = None
+    return None
+
+
+def first_league_over(policy):
+    """Drop the first League's state once the Hall of Fame has an entry."""
+    state = policy.collection
+    state.pop('first_league_entered', None)
+    state.pop('league_lost', None)
+    if (state.get('training') or {}).get('league'):
+        state['training'] = None
 
 
 def choice_key(row):
