@@ -2,6 +2,7 @@
 # Build one commit into an image and deploy it to the managed app on a Docker host over SSH.
 # Usage: DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh <full commit sha>
 #        DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh --rollback-to <full commit sha>
+#        DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh --behind-main <full commit sha>
 #   DEPLOY_DIR    app folder on the host with compose.yaml and .env, required
 #   VERSION       image version, by default the version in pyproject.toml at that commit
 #   MIN_FREE_GB   free space the host and this machine must keep, by default 10
@@ -11,22 +12,31 @@
 # deploy never drops work the app already runs. Only --rollback-to deploys a commit outside that line.
 # Its data schema, the PRAGMA user_version of app.sqlite, must not be older than the live data's,
 # even for a rollback, because an older app refuses newer data. The image carries it as a label.
+# It lists the main commits the commit lacks, and refuses when one of them is over a day old, so a fix
+# on main cannot sit outside production. --behind-main deploys it anyway. A rollback skips this check.
 # The commit must have green `ci gate` and `install gate` checks on GitHub, and a passing report from
 # tools/live_soak.py in LIVE_SOAK_REPORTS, by default data/live-soak/reports. The script stops the app,
 # takes a cold backup of the folder, tests it with gzip -t, starts the new image with up --wait and runs
 # the smoke check. If any step after the backup fails, it puts .env back and restarts the old image.
-# It keeps the 5 newest pre-*.tar.gz backups and the json files beside them, keeps the PokeSim images
-# of those backups and the running one, and removes every other pokesim, pokesim-local and
-# ghcr.io/afk-sapien/pokesim tag. Other images are never touched.
+# Beside each backup, a json file names the image that wrote its data, the one running before the
+# deploy, since only that image or a newer one can open it.
+# It keeps the 5 newest pre-*.tar.gz backups and the json files beside them, keeps the images that wrote
+# those backups and the running one, and removes every other pokesim, pokesim-local and
+# ghcr.io/afk-sapien/pokesim tag. Other images are never touched. A backup from before the json files
+# keeps the image it is named after and the one the backup before it is named after.
 # While it runs, DEPLOY_DIR/deploy.lock names the commit, so the alert watch stays quiet. Each deploy
 # appends one line to DEPLOY_DIR/deploy.log.
 set -eu
 ROLLBACK=
-if [ "${1:-}" = --rollback-to ]; then
-  ROLLBACK=1
-  shift
-fi
-SHA=${1:?usage: DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh [--rollback-to] <full commit sha>}
+BEHIND_MAIN=
+while :; do
+  case ${1:-} in
+    --rollback-to) ROLLBACK=1; shift ;;
+    --behind-main) BEHIND_MAIN=1; shift ;;
+    *) break ;;
+  esac
+done
+SHA=${1:?usage: DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh [--rollback-to] [--behind-main] <full commit sha>}
 HOST=${DEPLOY_HOST:?set DEPLOY_HOST to the SSH alias of the Docker host}
 DIR=${DEPLOY_DIR:?set DEPLOY_DIR to the app folder on the host}
 MIN_FREE_GB=${MIN_FREE_GB:-10}
@@ -78,6 +88,19 @@ if [ -z "$ROLLBACK" ]; then
     echo "deploy: $SHORT does not contain the deployed commit $(echo "$DEPLOYED" | cut -c1-7), refusing" >&2
     echo "deploy: pass --rollback-to to deploy it anyway" >&2
     exit 1
+  fi
+
+  # Main commits the candidate lacks. One merged over a day ago blocks the deploy.
+  behind=$(git -C "$ROOT" log --no-merges --format='%ct %h %s' origin/main "^$SHA")
+  if [ -n "$behind" ]; then
+    echo "deploy: $SHORT lacks $(echo "$behind" | wc -l | tr -d ' ') commits from main:" >&2
+    echo "$behind" | cut -d' ' -f2- | sed 's/^/deploy:   /' >&2
+    oldest=$(echo "$behind" | cut -d' ' -f1 | sort -n | head -1)
+    if [ $(( $(date +%s) - oldest )) -gt 86400 ] && [ -z "$BEHIND_MAIN" ]; then
+      echo "deploy: one of them is over a day old, so merge main in first, refusing" >&2
+      echo "deploy: pass --behind-main to deploy $SHORT anyway" >&2
+      exit 1
+    fi
   fi
 fi
 
@@ -155,6 +178,9 @@ if ! gzip -t "$BACKUP"; then
   log "failed: backup $BACKUP does not pass gzip -t, the old image runs again"
   exit 1
 fi
+WRITER=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$OLD" || true)
+printf '{\n  "archive": "%s",\n  "writer_image": "%s",\n  "writer_revision": "%s",\n  "image": "%s",\n  "revision": "%s"\n}\n' \
+  "${BACKUP#backups/}" "$OLD" "$WRITER" "$TAG" "$SHA" > "${BACKUP%.tar.gz}.json"
 cp .env ".env.bak-$TS-pre-local-$SHORT"
 
 rollback() {
@@ -168,9 +194,17 @@ docker compose up -d --wait || rollback "the new image did not become healthy"
 docker exec "$(docker compose ps -q pokesim)" pokesim smoke --data-dir /data || rollback "the smoke check failed"
 log "deployed, backup $BACKUP"
 
-# Keep the 5 newest backups, the json files beside them and the images those backups name.
-ls -t backups/pre-*.tar.gz | tail -n +6 | while read -r old; do rm -f "$old"; done
-keep=$(ls backups/pre-*.tar.gz | sed -n 's/.*pre-[a-z]*-\([0-9a-f]\{7\}\)-.*/\1/p')
+# Keep the 5 newest backups, the json files beside them and the images that wrote them.
+ls -t backups/pre-*.tar.gz | tail -n +6 | while read -r old; do rm -f "$old" "${old%.tar.gz}.json"; done
+writers=$(for backup in backups/pre-*.tar.gz; do
+  [ -f "${backup%.tar.gz}.json" ] && sed -n 's/^ *"writer_image": "\(.*\)",$/\1/p' "${backup%.tar.gz}.json"
+done)
+# A backup with no json was written by the commit the backup before it brought in.
+keep=$(previous=; ls -tr backups/pre-*.tar.gz | while read -r backup; do
+  short=$(echo "$backup" | sed -n 's/.*pre-[a-z]*-\([0-9a-f]\{7\}\)-.*/\1/p')
+  [ -f "${backup%.tar.gz}.json" ] || printf '%s\n%s\n' "$short" "$previous"
+  previous=$short
+done)
 running=$(docker inspect --format '{{.Config.Image}}' "$(docker compose ps -q pokesim)")
 docker images --format '{{.Repository}}:{{.Tag}}' | while read -r image; do
   case ${image%%:*} in
@@ -178,6 +212,7 @@ docker images --format '{{.Repository}}:{{.Tag}}' | while read -r image; do
     *) continue ;;
   esac
   [ "$image" = "$running" ] && continue
+  echo "$writers" | grep -qxF "$image" && continue
   short=$(echo "${image##*:}" | sed -n 's/.*-\([0-9a-f]\{7\}\)$/\1/p')
   [ -n "$short" ] && echo "$keep" | grep -qx "$short" && continue
   docker rmi "$image" >/dev/null && echo "deploy: removed $image"

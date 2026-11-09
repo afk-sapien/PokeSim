@@ -11,9 +11,10 @@ Zone fee while the story still needs it.
 """
 import math
 
+from ..planning import boss
 from ..planning.ledger import BOX, HP, MONEY, PARTY, PP, Ledger, Need, Resources, Shortfall, Unit
 from ..planning.stance import budget_spent
-from ..strategy_data import ITEMS, MOVES, PRICES
+from ..strategy_data import ITEMS, MOVES, PRICES, SPECIES
 from ..tm_shop import PRICES as REPLACEMENT_PRICES
 from .battle import BALLS
 from .team import storage_headroom
@@ -146,6 +147,29 @@ def battle_room(party):
     if any(power(move) for move in lead.moves):
         room = min(room, sum(uses for move, uses in zip(lead.moves, lead.pp) if power(move)) - LEAD_PP + 1)
     return {HP: hp, PP: max(0, room)}
+
+
+# How the Red, Blue and Yellow move table names the attacks the boss check weighs apart
+# (planning/boss.py). The table names Seismic Toss, Night Shade and Psywave by move, since all
+# fixed damage shares one effect, and Sonic Boom and Dragon Rage deal a set amount.
+EFFECTS = boss.Effects(
+    hits={'TWO_TO_FIVE_ATTACKS_EFFECT': 3, 'ATTACK_TWICE_EFFECT': 2, 'TWINEEDLE_EFFECT': 2},
+    self_ko=frozenset({'EXPLODE_EFFECT'}),
+    level=frozenset({'SEISMIC_TOSS', 'NIGHT_SHADE', 'PSYWAVE'}),
+    fixed={'SONICBOOM': 20, 'DRAGON_RAGE': 40})
+
+
+def attack_strength(mon, move):
+    """How hard ``move`` hits for ``mon`` against no foe in particular, as Gold, Silver and Crystal weigh it."""
+    return boss.attack_strength(MOVES.get(move, {}), SPECIES.get(mon.species, {}).get('types', ()), mon.level, EFFECTS)
+
+
+def fighters(party):
+    """The party as the boss check reads it (planning/boss.py). A state with no maximum PP read counts
+    each move's base PP."""
+    return tuple(boss.fighter(mon.hp, mon.max_hp, [attack_strength(mon, move) for move in mon.moves], mon.pp,
+                              getattr(mon, 'max_pp', ()) or [MOVES.get(move, {}).get('pp', 0) for move in mon.moves])
+                 for mon in party)
 
 
 def battle_ledger():
