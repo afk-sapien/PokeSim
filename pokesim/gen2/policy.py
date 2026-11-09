@@ -123,6 +123,8 @@ class Policy:
         self.rescue = deque()
         # Why the wild shiny in this battle cannot be caught, read by the emulator for its notice.
         self.shiny_missed = None
+        # A missing entry was left uncaught because only the upgrade slot was free and nothing may go.
+        self.boxes_full = False
         # Run attempts the battle stance made: failed tries in this battle, whether one is under
         # way, and counts over the whole run that the replay audit reads.
         self.flee_tries, self.fleeing = 0, False
@@ -1743,6 +1745,14 @@ class Policy:
         from .ledger import spare_throw
         if catch and not partner and not shiny and not spare_throw(self.data, snapshot, snapshot.enemy_species):
             catch = False
+        if catch and not upgrade:
+            # The last free slot is kept for an upgrade. Any other catch takes it only when a release can
+            # follow, and a missing entry refused asks the owner for help (boxes_full).
+            from .release import reserve_allows
+            catch = reserve_allows(self, snapshot, catch_species, lambda: wild_dvs(mem.read('wEnemyMonDVs', 2)))
+            self.boxes_full = not catch and catch_species not in snapshot.owned
+        elif catch:
+            self.boxes_full = False
         # A shiny that cannot be caught is run from, as Red, Blue and Yellow do, never knocked out.
         # The Bug-Catching Contest uses Park Balls and has its own rules in contest.control.
         self.shiny_missed = (self.shiny_miss_reason(snapshot)

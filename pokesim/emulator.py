@@ -297,6 +297,12 @@ class Emulator:
         if loop := guard and guard.looping(self.store):
             return {'reason': f'The run is caught in a loop. {loop}', 'action': strategy.get('action', '')}
         if not stall or not stall.stalled(self.frame, time.time()):
+            # A missing entry left uncaught for want of a slot, with nothing in the PC that may go.
+            from .pcvalue import BOXES_FULL, boxes_full
+            from .policies.collection import catch_room
+            snap = getattr(self, 'snapshot', None)
+            if boxes_full(getattr(getattr(self, 'policy', None), 'boxes_full', False), catch_room(snap) if snap else None):
+                return {'reason': BOXES_FULL, 'action': strategy.get('action', '')}
             return None
         return {'reason': 'The policy has stopped making game progress', 'action': strategy.get('action', '')}
 
