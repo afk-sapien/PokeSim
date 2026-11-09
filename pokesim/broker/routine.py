@@ -5,6 +5,9 @@ from ..milestones import is_perfect
 from ..ram import DEX_NAMES
 from ..trade.preferences import name as setting_name
 from ..policies.collection import EVOS
+from ..pcvalue import RARITY_STEP
+from ..rarity import RatingUnavailable
+from .inventory import species_rarity
 
 EVOLVES = {sid: row['species'] for sid, rows in EVOS.items() for row in rows if row['method'] == 'trade'}
 
@@ -27,9 +30,16 @@ def benefit(inv, incoming):
     if incoming.level >= best_level + 5:
         return 10, f'{inv.instance.title()} gains a partner at least five levels stronger'
     if incoming.level >= best_level - 5 and len(incoming.dvs) == 5:
-        known = [sum(p['dvs']) for p in copies if len(p.get('dvs', ())) == 5]
-        if len(known) == len(copies) and sum(incoming.dvs) >= max(known) + 4:
-            return 5, f'{inv.instance.title()} improves total DVs by at least four'
+        # Rarer by the step the PC keeps a new copy for (pcvalue.worth), by the version's own rarity.
+        rarity = species_rarity(inv.version)
+        try:
+            known = [rarity(p['species'], tuple(p['dvs'])) for p in copies if len(p.get('dvs', ())) == 5]
+            new = rarity(arrived, tuple(incoming.dvs))
+        except RatingUnavailable:
+            known, new = [None], None
+        if (len(known) == len(copies) and None not in known and new is not None
+                and new * RARITY_STEP <= min(known)):
+            return 5, f'{inv.instance.title()} gains a copy at least {RARITY_STEP} times as rare'
     if incoming.level >= best_level and len(incoming.stat_exp) == 5:
         known = [sum(p['stat_exp']) for p in copies if len(p.get('stat_exp', ())) == 5]
         if len(known) == len(copies) and sum(incoming.stat_exp) >= max(known) + 20000:

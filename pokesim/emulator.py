@@ -255,6 +255,7 @@ class Emulator:
             self.command("press", button)
 
     def status(self) -> dict:
+        from .investment import rating_problem
         from .randomized import status as randomizer_status
         snap = self.snapshot
         strategy = self.policy.details()
@@ -270,6 +271,8 @@ class Emulator:
             "palette": None if self._color_cartridge() else getattr(self, 'palette', 'original'),
             "fair_wild_dvs": getattr(config, 'FAIR_WILD_DVS', False) is True,
             "manual_mode": self.manual_mode, "help_request": self.help_request(strategy),
+            # Why the PC cannot rate or release, for the library watchdog (investment.rating_problem).
+            "rating_problem": rating_problem(),
             "play_clock": self.play_clock.status(),
             "performance": {"frames": self.executed_frames, "sampled_at": time.monotonic()},
             "frame": self.frame, "uptime": int(time.time() - self.started_at),

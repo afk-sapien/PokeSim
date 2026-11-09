@@ -47,11 +47,13 @@ def test_quality_upgrades_remain_useful_after_dex_registration():
     assert 'five levels stronger' in deal['reason']
 
 
-def test_dv_upgrade_requires_known_totals_and_a_comparable_level():
+def test_dv_upgrade_requires_known_dvs_twice_as_rare_and_a_comparable_level():
     red = inv('red', {MAGIKARP}, stored=[(MAGIKARP, 20)])
-    red = replace(red, stored=tuple(replace(p, dvs=(5, 5, 5, 5, 5)) for p in red.stored))
-    incoming = replace(red.stored[0], dvs=(6, 6, 6, 6, 6))
-    assert routine.benefit(red, incoming)[0] == 5
+    red = replace(red, stored=tuple(replace(p, dvs=(0, 6, 6, 6, 6)) for p in red.stored))
+    # A DV total four higher is not enough when the copy is not twice as rare.
+    assert routine.benefit(red, replace(red.stored[0], dvs=(0, 6, 8, 8, 8)))[0] == 0
+    incoming = replace(red.stored[0], dvs=(0, 12, 12, 12, 12))
+    assert routine.benefit(red, incoming) == (5, 'Red gains a copy at least 2 times as rare')
     assert routine.benefit(red, replace(incoming, level=10))[0] == 0
     assert routine.benefit(replace(red, stored=tuple(replace(p, dvs=()) for p in red.stored)), incoming)[0] == 0
 

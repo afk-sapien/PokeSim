@@ -312,6 +312,180 @@ class Catches:
         return self.rows
 
 
+class RatingFailed(RuntimeError):
+    """The judge cannot rate copies with the weights the adventure uses, so the run fails."""
+
+
+class CartridgeRarity:
+    """A Gen I copy's rarity as the adventure's own process rates it. The weights count the TMs its
+    cartridge teaches, and this runner loads no cartridge and one Gen I variant, so a helper process
+    gets the adventure's cartridge at ROM_PATH and its variant, as runtime/settings.py gives a worker."""
+
+    def __init__(self, rom):
+        import pokesim
+        from pokesim.cartridges import identify
+        try:
+            cartridge = identify(Path(rom).read_bytes())
+        except OSError as error:
+            raise RatingFailed(f'its cartridge could not be read ({error.strerror or error})') from error
+        if cartridge is None:
+            raise RatingFailed('its cartridge is not one PokeSim knows')
+        # The helper imports the same pokesim as this runner, the tree of the commit under test.
+        tree = str(Path(pokesim.__file__).resolve().parents[1])
+        env = dict(os.environ, ROM_PATH=str(rom), POKESIM_GEN1_VARIANT='yellow' if cartridge.version == 'yellow' else 'red',
+                   PYTHONPATH=os.pathsep.join(filter(None, (tree, os.environ.get('PYTHONPATH')))))
+        self.process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'rate-copies'], env=env,
+                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        self.ask(None, None)
+
+    def ask(self, dex, dvs):
+        try:
+            self.process.stdin.write(json.dumps([dex, dvs]) + '\n')
+            self.process.stdin.flush()
+            line = self.process.stdout.readline()
+        except OSError:
+            line = ''
+        if not line:
+            raise RatingFailed('the rating helper exited')
+        answer = json.loads(line)
+        if 'error' in answer:
+            raise RatingFailed(answer['error'])
+        return answer['tail']
+
+    def __call__(self, dex, dvs):
+        return self.ask(dex, dvs)
+
+    def close(self):
+        if self.process.poll() is None:
+            self.process.stdin.close()
+            self.process.wait(timeout=30)
+
+
+def rate_copies(args):
+    """The helper behind CartridgeRarity: a [dex, dvs] line in, a {"tail"} or {"error"} line out. The first
+    line, [null, null], only checks that the cartridge's TMs were read."""
+    from pokesim.investment import cartridge_machines, dex_rarity, families, rom_configured
+    from pokesim.rarity import RatingUnavailable
+
+    def reply(answer):
+        print(json.dumps(answer), flush=True)
+    try:
+        if not rom_configured():
+            raise RatingUnavailable('No cartridge is configured')
+        families()
+        if not cartridge_machines()[0]:
+            raise RatingUnavailable('The cartridge gave no TMs')
+    except RatingUnavailable as error:
+        reply({'error': f'its cartridge cannot rate copies, {error}'})
+        return 1
+    for line in sys.stdin:
+        dex, dvs = json.loads(line)
+        reply({'tail': None if dex is None else dex_rarity(dex, dvs)})
+    return 0
+
+
+def _rarity(manager, adventure):
+    """A copy's rarity for its family from its Pokédex number and DVs, as the commit under test rates
+    it, or its DV tail when that commit has no rarity.py. Raises RatingFailed when a Gen I commit with
+    rarity.py cannot rate with its adventure's cartridge."""
+    try:
+        if adventure['version'] in ('gold', 'silver', 'crystal'):
+            from pokesim.gen2.data import GameData
+            from pokesim.gen2.release import rarity
+            return rarity(GameData.load(manager.assets.game_data_dir, adventure['version']))
+        from pokesim.investment import dex_rarity  # noqa: F401  (rate_copies uses it in the helper)
+        return CartridgeRarity(manager.assets.rom_path(adventure['rom_id']))
+    except ImportError:
+        from pokesim.investment import assessment
+
+        def tail(dex, dvs):
+            top = assessment({'dvs': dvs})['dv_top_percent']
+            return None if top is None else top / 100
+        return tail
+
+
+class Copies:
+    """Every held copy at each poll, to find a catch released at its first PC visit and a release that
+    takes a copy rarer than every newer copy, of any species, that pushed it out.
+
+    A copy is followed by its DVs, which evolution keeps, so its species is the latest one seen. A PC
+    visit is a run of poll intervals with a release in the journal. A copy released at the first visit after it
+    arrived counts unless a rarer copy of its species that arrived after it is still held, as when a
+    hunt's best copy is replaced by a better one.
+
+    ``first_wave`` counts the releases of the first visit after the start, or stays None when the run
+    released nothing. A change to the scores re-ranks every PC at that visit, so it shows the size of
+    that wave.
+    """
+
+    def __init__(self, rarity):
+        self.rarity, self.held, self.dex, self.tails = rarity, None, {}, {}
+        self.arrived, self.visits, self.polls, self.last_visit, self.visiting = {}, {}, 0, 0, None
+        self.first_visit, self.pushed_out = [], []
+        self.first_wave, self.wave_over = None, False
+
+    def tail(self, key):
+        if key not in self.tails:
+            self.tails[key] = self.rarity(self.dex.get(key), list(key))
+        return self.tails[key]
+
+    def poll(self, game, dex_of, released):
+        """``released`` is the releases the journal shows since the last poll, or whether it shows one."""
+        if released and not self.wave_over:
+            self.first_wave = (self.first_wave or 0) + int(released)
+        elif self.first_wave is not None:
+            self.wave_over = True
+        current = {}
+        for mon in [*(game or {}).get('party', []), *((game or {}).get('storage') or {}).get('pokemon', [])]:
+            dvs = mon.get('dvs')
+            if mon.get('egg') or not isinstance(dvs, (list, tuple)) or len(dvs) != 5:
+                continue
+            key = tuple(dvs)
+            current[key] = current.get(key, 0) + 1
+            if self.dex.get(key) != dex_of(mon):
+                self.dex[key] = dex_of(mon)
+                self.tails.pop(key, None)
+        self.polls += 1
+        if self.held is None:
+            self.held = current
+            return
+        for key in current:
+            if key not in self.held:
+                self.arrived.setdefault(key, self.polls)
+        if released:
+            if self.visiting is None:
+                # One visit can release over several polls, so it ends at the first poll without one.
+                self.visiting = set(self.held)
+            for key, count in self.held.items():
+                if current.get(key, 0) < count:
+                    self._judge(key, current)
+        elif self.visiting is not None:
+            for key in current:
+                if key in self.visiting:
+                    self.visits[key] = self.visits.get(key, 0) + 1
+            self.visiting, self.last_visit = None, self.polls - 1
+        self.held = current
+
+    def _judge(self, key, current):
+        from pokecore.dvs import is_shiny
+        tail, dex = self.tail(key), self.dex.get(key)
+        same = [other for other in current if other in self.arrived and other != key and self.dex.get(other) == dex
+                and self.tail(other) is not None]
+        row = {'dex': dex, 'dvs': list(key), 'tail': tail}
+        if key in self.arrived and not self.visits.get(key):
+            replaced = tail is not None and any(self.arrived[other] > self.arrived[key] and self.tail(other) < tail
+                                                for other in same)
+            if not replaced:
+                self.first_visit.append(row)
+        # Every copy that arrived since the last visit, of any species, filled the boxes this visit
+        # empties. A shiny is kept whatever its DVs, so it is no measure of the copy it pushed out.
+        newer = [self.tail(other) for other in current if other in self.arrived and other != key
+                 and self.arrived[other] > self.last_visit and self.tail(other) is not None
+                 and not is_shiny({'dvs': list(other)})]
+        if tail is not None and newer and tail < min(newer):
+            self.pushed_out.append({**row, 'by': min(newer)})
+
+
 def _names(manager, adventure):
     """Every spelling of each species name, by its key, for the version."""
     if adventure['version'] in ('gold', 'silver', 'crystal'):
@@ -370,6 +544,13 @@ def play_one(manager, aid, frames, progress):
     db.close()
     result = {'id': aid, 'name': adventure['name'], 'version': adventure['version'], 'failed': None}
     names, dex_of, catches = _names(manager, adventure), _dex_of(adventure['version']), Catches()
+    try:
+        rarity = _rarity(manager, adventure)
+    except RatingFailed as error:
+        result['failed'] = f'the judge cannot rate copies as the adventure does, {error}'
+        progress(f'{adventure["name"]}: failed: {result["failed"]}')
+        return result
+    copies, releases = Copies(rarity), 0
     began = time.monotonic()
     manager.registry.request_lifecycle(aid, 'start', identifier())
     manager.start_adventure(aid)
@@ -409,9 +590,17 @@ def play_one(manager, aid, frames, progress):
                 fresh = [row for row in db.execute('SELECT fingerprint, dex, recorded_at FROM capture_receipts '
                                                    'ORDER BY recorded_at') if row[0] not in seen]
                 goal = _goal(db)
+                released = db.execute("SELECT COUNT(*) FROM events WHERE id > ? AND type = 'release'",
+                                      (first_event,)).fetchone()[0]
             db.close()
             seen.update(row[0] for row in fresh)
             catches.poll(fresh, goal, best)
+            try:
+                copies.poll(game, dex_of, released - releases)
+            except RatingFailed as error:
+                result['failed'] = f'the judge cannot rate copies as the adventure does, {error}'
+                break
+            releases = released
             help_reason = (status.get('help_request') or {}).get('reason')
             end = frame
             held_end = len(game.get('party', [])) + len(((game.get('storage') or {}).get('pokemon')) or []) if game else held_end
@@ -421,6 +610,8 @@ def play_one(manager, aid, frames, progress):
     finally:
         manager.registry.request_lifecycle(aid, 'stop', identifier())
         manager.supervisor.stop(aid)
+        if isinstance(rarity, CartridgeRarity):
+            rarity.close()
     with _readonly(database) as db:
         events = db.execute('SELECT id, ts, type, title, LENGTH(title) + LENGTH(COALESCE(body, \'\')) FROM events '
                             'WHERE id > ? ORDER BY id', (first_event,)).fetchall()
@@ -436,6 +627,7 @@ def play_one(manager, aid, frames, progress):
                   receipts=[list(row) for row in receipts], catches=catches.finish(best),
                   held_start=held_start, held_end=held_end, reloads=reloads, errors=len(errors),
                   error_lines=errors[:5], help=help_reason, names=names,
+                  first_visit=copies.first_visit, pushed_out=copies.pushed_out, first_wave=copies.first_wave,
                   ledger=json.loads(ledger[0]) if ledger else None)
     progress(f'{adventure["name"]}: {result["frames"]} frames in {result["wall_seconds"]}s'
              + (f', failed: {result["failed"]}' if result['failed'] else ''))
@@ -572,12 +764,18 @@ def measure(result):
     improvements = sum(row['improved'] for row in result['catches'] if not row['gift'])
     progress = sum(kinds.get(kind, 0) for kind in REAL_PROGRESS) + improvements
     return {'game_hours': round(hours, 3), 'releases': round(releases / hours, 2), 'obtains': round(obtains / hours, 2),
-            'catches': caught, 'improvements': improvements, 'progress': round(progress / hours, 2),
+            # Reported only: the catches and releases of the whole soak window, as counts.
+            'catches': caught, 'window_releases': releases, 'improvements': improvements, 'progress': round(progress / hours, 2),
             'reloads': round(sum(result['reloads'].values()) / hours, 2),
             'most_reloaded': max(result['reloads'].items(), key=lambda item: item[1], default=(None, 0)),
             'bytes': round((result['journal_bytes'] + max(result['kv_bytes'], 0)) / hours),
             'repeated_titles': repeated_sequence([row[3] for row in result['events']]),
-            'churned_species': churned_species(result), 'goals': goal_churn(result['catches'])}
+            'churned_species': churned_species(result), 'goals': goal_churn(result['catches']),
+            # Older results and a rejudge without the copies held leave these out.
+            'released_at_first_visit': len(result['first_visit']) if 'first_visit' in result else None,
+            'pushed_out_rarer': len(result['pushed_out']) if 'pushed_out' in result else None,
+            # Reported only: the releases of the first PC visit, the wave a change to the scores brings.
+            'first_wave_releases': result.get('first_wave')}
 
 
 def invariants(candidate, baseline):
@@ -606,7 +804,17 @@ def invariants(candidate, baseline):
     for goal, row in c['goals'].items():
         if row['churn']:
             problems.append(f'{name}: {row["longest_flat"]} catches in a row under {goal} with no better copy or new entry')
+    if c['released_at_first_visit']:
+        problems.append(f'{name}: {c["released_at_first_visit"]} copies caught after the start were released at their '
+                        f'first PC visit, {_dexes(candidate["first_visit"])}')
+    if c['pushed_out_rarer']:
+        problems.append(f'{name}: {c["pushed_out_rarer"]} releases took a copy rarer than the newer one that pushed it '
+                        f'out, {_dexes(candidate["pushed_out"])}')
     return problems
+
+
+def _dexes(rows):
+    return ', '.join(f'#{dex}' for dex in sorted({row['dex'] for row in rows if row['dex']}))
 
 
 def gate_shape(result):
@@ -720,6 +928,17 @@ def rejudge(args):
     return write_report(args.work.resolve())
 
 
+def report_line(row):
+    """One adventure's printed row, ending with its catches and releases over the window and at its first PC visit."""
+    c = row['candidate']
+    wave =lambda measured: '-' if not measured or measured.get('first_wave_releases') is None else measured['first_wave_releases']  # noqa: E731
+    released = c.get('window_releases', '-')
+    return (f'{row["name"]:<28} {c["releases"]:7.1f} rel/h {c["obtains"]:7.1f} obt/h {c["progress"]:6.1f} prog/h '
+            f'{c["reloads"]:5.1f} rel/h {c["bytes"]:8d} B/h {c["improvements"]:3d} better '
+            f'{c["catches"]:4d} caught {released} released '
+            f'{wave(c)} first visit releases ({wave(row["deployed"])} deployed)')
+
+
 def write_report(work):
     run_info = json.loads((work / 'run.json').read_text(encoding='utf-8'))
     played = {role: json.loads((work / role / 'results.json').read_text(encoding='utf-8'))
@@ -747,10 +966,8 @@ def write_report(work):
     path.write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
     (work / 'gate-report.json').write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
     for row in rows:
-        c = row['candidate']
-        if c:
-            print(f'{row["name"]:<28} {c["releases"]:7.1f} rel/h {c["obtains"]:7.1f} obt/h {c["progress"]:6.1f} prog/h '
-                  f'{c["reloads"]:5.1f} rel/h {c["bytes"]:8d} B/h {c["catches"]:4d} caught {c["improvements"]:3d} better')
+        if row['candidate']:
+            print(report_line(row))
     for problem in problems:
         print(problem)
     print(f'{"passed" if not problems else "failed"} in {report["wall_seconds"]}s, attempt {attempt}, report in {path}')
@@ -808,6 +1025,8 @@ def main(argv=None):
     inner.add_argument('--frames', type=int, default=FRAMES)
     inner.add_argument('--parallel', type=int, default=PARALLEL)
     inner.set_defaults(action=runner)
+    rating = commands.add_parser('rate-copies', help=argparse.SUPPRESS)
+    rating.set_defaults(action=rate_copies)
     judging = commands.add_parser('rejudge', help='judge a finished run folder again and rewrite its report')
     judging.add_argument('work', type=Path)
     judging.set_defaults(action=rejudge)

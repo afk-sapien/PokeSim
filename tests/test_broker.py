@@ -385,9 +385,9 @@ def test_a_species_a_peer_asked_for_is_offered_while_another_copy_stays():
     from pokesim.broker.routine import offers
     JYNX = 124
     # Red's Cerulean exchange brings Jynx again and again; Yellow has no Jynx of its own.
-    # The trained veteran is the best copy by PC value, so the fresh copy is a spare and is offered.
+    # The trained veteran stays, and the fresh copy has commoner DVs, so it is a spare and is offered.
     payload = status({JYNX, MAGIKARP}, stored=[(JYNX, 100), (JYNX, 5), (MAGIKARP, 5)])
-    for row, dvs, stat_exp in zip(payload['storage']['pokemon'], ((12, 12, 12, 12, 12), (13, 12, 12, 12, 12), (1, 1, 1, 1, 1)),
+    for row, dvs, stat_exp in zip(payload['storage']['pokemon'], ((0, 12, 12, 12, 12), (0, 10, 12, 12, 12), (1, 1, 1, 1, 1)),
                                   ((60000,) * 5, (0,) * 5, (0,) * 5)):
         row.update(dvs=dvs, stat_exp=stat_exp, moves=[1])
     red = inventory.normalise('red', 'http://red', payload)

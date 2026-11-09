@@ -418,7 +418,7 @@ class Participant:
         Live, two games traded the same species back and forth: each copy scored a small gain at the
         coordinator, and the receiver's PC let it go at the next visit. Rated here with the PC's own rules.
         """
-        from ..pcvalue import Entry
+        from ..pcvalue import Entry, catch_visit, requested, verdict
         dex, level = data.get('dex'), data.get('level', 5)
         dvs, stat_exp = list(data.get('dvs') or ()), list(data.get('stat_exp') or ())
         if (type(dex) is not int or not 1 <= dex <= 251 or type(level) is not int or not 1 <= level <= 100
@@ -430,7 +430,13 @@ class Participant:
             return {'keep': True}
         incoming = Entry((-1, 0), (dex, 0), str(data.get('name') or '?')[:20], level, dvs=tuple(dvs),
                          stat_exp=tuple(stat_exp), origin='traded')
-        return {'keep': policy.pc_rated(snapshot, extra=(incoming,))[-1].status != 'spare'}
+        owned = getattr(snapshot, 'owned', None)
+        rows = policy.pc_rated(snapshot, extra=(incoming,))
+        # The PC visit the trade brings must not release it or a rarer copy (pcvalue.pushes_out).
+        counts = getattr(snapshot, 'box_counts', None)
+        needed = catch_visit(sum(20 - count for count in counts), len(requested(rows))) if counts else 0
+        return {'keep': verdict(rows, missing=owned is not None and dex not in owned, needed=needed,
+                                active_box=getattr(snapshot, 'active_box', None)).keep}
 
     def collection_demand(self, data):
         requests = data.get('requests', {})
