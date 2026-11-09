@@ -120,6 +120,34 @@ def test_a_stint_that_gained_keeps_its_site(data):
     assert not standing_down(policy, site_key(data.map_ids['VICTORY_ROAD']))
 
 
+def test_a_stint_split_by_a_break_is_one_stint(data):
+    """A heal between two halves of one stint keeps the first half's experience, so the second half never
+    counts as a stint without experience."""
+    from pokesim.gen2 import training
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.standdown import site_key, standing_down
+    policy = policy_for(data)
+    trainee = mon(30)
+    project = {'map': 'VICTORY_ROAD', 'site': 'VICTORY_ROAD', 'identity': training.identity(trainee)}
+    policy.collection['training'] = project
+    train, heal = Goal('collection_train', 'Train', 'VICTORY_ROAD', 1, 1), Goal('heal', 'Heal', None, 1, 1)
+    policy.goal = train
+    training.observe(policy, at_mr_pokemons_house(data, trainee))
+    policy.decisions += 1
+    training.observe(policy, at_mr_pokemons_house(data, mon(30, experience=1500)))
+    policy.goal = heal
+    for _ in range(50):
+        policy.decisions += 1
+        training.observe(policy, at_mr_pokemons_house(data, mon(30, experience=1500)))
+    policy.goal = train
+    for _ in range(20000):
+        if policy.collection['training'] is None:
+            break
+        policy.decisions += 1
+        training.observe(policy, at_mr_pokemons_house(data, mon(30, experience=1500)))
+    assert not standing_down(policy, site_key(data.map_ids['VICTORY_ROAD']))
+
+
 def test_a_reload_for_lack_of_progress_fails_the_site_of_a_stint_without_experience(data):
     """A walk with no route ends in a reload, and that reload counts as a failed attempt at the site."""
     from pokesim.gen2.policy import Goal
