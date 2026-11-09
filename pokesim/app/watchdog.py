@@ -17,9 +17,12 @@ import logging
 import os
 import re
 import shutil
+import sqlite3
 import threading
 import time
 import traceback
+
+from . import progress_sweep
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +48,7 @@ class Limits:
     failure_repeats: int = 3
     error_quiet: float = 3600
     cooldown: float = 3600
+    sweep: float = 300
     disk_free_gb: float = 10
 
     @classmethod
@@ -222,6 +226,8 @@ class Watchdog:
         self.alerted_at = {}
         self.down_since = {}
         self.progress = {}
+        self.readings = {}   # adventure id -> (read at, progress_sweep.Reading or None)
+        self.held = {}       # adventure id -> the last check that found it stopped, down or held still
         self.phases = {}
         self.guard = threading.Lock()
         self.stopped = threading.Event()
@@ -320,6 +326,9 @@ class Watchdog:
             self.down_since.pop(aid, None)
         for aid in set(self.progress) - set(names):
             self.progress.pop(aid, None)
+        for table in (self.readings, self.held):
+            for aid in set(table) - set(names):
+                table.pop(aid, None)
         self._trades(names, now, found)
         self._errors(names, now, found)
         self._disk(now, found)
@@ -364,6 +373,7 @@ class Watchdog:
             # The owner stopped it. Nothing about it is a problem until they start it again.
             self.down_since.pop(aid, None)
             self.progress.pop(aid, None)
+            self.held[aid] = now
             return
         reserved = self.manager.coordinator.reserved(aid)
         status, alive = self._child_status(aid, now)
@@ -374,6 +384,7 @@ class Watchdog:
                     f'down:{aid}', 'down', f'{name} stopped unexpectedly and has not been running for {duration(now - since)}.',
                     since, aid, f'{name} is running again.')
             self.progress.pop(aid, None)
+            self.held[aid] = now
             return
         self.down_since.pop(aid, None)
         if status is None:
@@ -389,7 +400,9 @@ class Watchdog:
         if reserved or status.get('paused') or status.get('manual_mode') or summary.get('trading'):
             # A pause, manual play or a trade holds the game still on purpose.
             self.progress.pop(aid, None)
+            self.held[aid] = now
             return
+        self._stalled(row, now, found)
         game = status.get('game') or {}
         place = game.get('map_name') or 'the same place'
         stuck = status.get('stuck_seconds')
@@ -432,6 +445,35 @@ class Watchdog:
             current.since = now
             return False
         return now - current.since >= self.limits.no_progress
+
+    def _stalled(self, row, now, found):
+        """Read the adventure's progress table and journal every few minutes (progress_sweep.py). Time
+        spent stopped, down or held still never counts toward a stall."""
+        root = getattr(self.manager, 'root', None)
+        if root is None:
+            return
+        aid, name = row['id'], row['name']
+        cached = self.readings.get(aid)
+        if cached is None or now - cached[0] >= self.limits.sweep:
+            path = os.path.join(root, 'adventures', aid, 'pokesim.sqlite')
+            try:
+                reading = progress_sweep.read(path, progress_sweep.generation(row.get('version')))
+            except sqlite3.Error:
+                reading = cached[1] if cached else None
+            self.readings[aid] = cached = (now, reading)
+        reading = cached[1]
+        if reading is None:
+            return
+        since = max(reading.last, self.held.get(aid, 0))
+        if now - since < reading.limit:
+            return
+        if reading.postgame:
+            missing = 'a League win, a Pokédex change or a level up'
+        else:
+            missing = f'a badge, a new area, a new Pokédex entry or a League win, at {reading.badges} badges'
+        found[f'stalled:{aid}'] = Problem(
+            f'stalled:{aid}', 'stalled', f'{name} has gone {duration(now - since)} without {missing}.',
+            since, aid, f'{name} is making real progress again.')
 
     def _trades(self, names, now, found):
         registry = self.manager.registry
