@@ -160,8 +160,8 @@ def observe(store, snapshot, memory, walking=None):
             elif ticket['state'] == 'available' and dex == 251 and celebi_spent(snapshot, data):
                 # Static and roaming misses go through Recovery. Celebi's quest needs the GS Ball again.
                 changed |= encounter(memory, data, dex, present=True)
-            elif ticket['state'] == 'caught':
-                # An older checkpoint cannot reopen a claim that was already caught.
+            elif ticket['state'] in ('caught', 'declined'):
+                # An older checkpoint cannot reopen a claim that was already caught or declined.
                 changed |= encounter(memory, data, dex, present=False)
     if value != saved:
         store.set(KEY, value)
@@ -183,10 +183,19 @@ def consume(db, dex):
             db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
 
 
+def decline(store, dex):
+    """Close an open return the PC would not keep, until the next walking milestone."""
+    value = store.get(KEY) or {}
+    ticket = value.get('tickets', {}).get(str(dex))
+    if ticket and ticket['state'] == 'available':
+        ticket['state'] = 'declined'
+        store.set(KEY, value)
+
+
 def claims(store):
     tickets = (store.get(KEY) or {}).get('tickets', {})
     ready = {int(dex) for dex, ticket in tickets.items() if ticket['state'] == 'available'}
-    closed = {int(dex) for dex, ticket in tickets.items() if ticket['state'] == 'caught'}
+    closed = {int(dex) for dex, ticket in tickets.items() if ticket['state'] in ('caught', 'declined')}
     return (ready if interval() else set()), closed
 
 

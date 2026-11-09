@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from pokesim import config
+from pokesim import config, legendary_returns
 from pokesim.catches import CatchTracker, SUPPORTED, status as catch_status
 from pokesim.legendary import LegendaryRecovery
 from pokesim.legendary_returns import (
@@ -166,6 +166,54 @@ def test_owned_legendary_return_is_planned_and_finished_by_receipt(monkeypatch):
     c.closed_legendaries = {150}
     c.observe(replace(s, frame=120))
     assert c.project is None
+
+
+def test_refused_legendary_return_closes_until_the_next_milestone(tracking, monkeypatch):
+    store, steps = tracking
+    s, memory = failed(owned=frozenset({150}), map=MAPS['PALLET_TOWN'])
+    walk(steps, 100)
+    observe(store, s, memory)
+    c = Collection()
+    c.completed_champion = True
+    c.elapsed = 2000
+    c.returned_legendaries, c.closed_legendaries = claims(store)
+    monkeypatch.setattr(c, 'sources', lambda: {sid(150): [{'map': MAPS['CERULEAN_CAVE_B1F'],
+                    'method': 'static', 'fragment': 'MEWTWO', 'flag': 'EVENT_BEAT_MEWTWO'}]})
+    offered = []
+    monkeypatch.setattr(c.director, 'select', lambda options, projects: offered.append(projects) or next(
+        (p for p in projects.values() if p.get('legendary_return')), None))
+    nav = Mock()
+    nav.distance_lookup.return_value = lambda _: 20
+    nav.visits = []
+    plan = state(owned=frozenset({150}))
+    c.choose(plan, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
+    assert c.project['legendary_return']
+    # The PC already holds a better Mewtwo, so the battle refuses the catch.
+    monkeypatch.setattr('pokesim.policies.collection.improves', lambda *args: False)
+    battle = replace(plan, map=MAPS['CERULEAN_CAVE_B1F'], in_battle=1, enemy_species=sid(150))
+    assert c.repeat_target(sid(150), battle.map, battle, (1, 1)) is None
+    for number in c.declined_returns:
+        legendary_returns.decline(store, number)
+    assert claims(store) == (set(), {150})
+    c.returned_legendaries, c.closed_legendaries = claims(store)
+    c.observe(replace(plan, frame=120))
+    assert c.project is None
+    offered.clear()
+    c.choose(replace(plan, frame=240), nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
+    assert not any(p.get('legendary_return') for projects in offered for p in projects.values())
+    assert not (c.project or {}).get('legendary_return')
+    # The declined encounter is hidden again, and the #217 retry timers leave it hidden however long the wait.
+    assert observe(store, s, memory) == ([], True)
+    hidden = bytes(memory)
+    recovery = LegendaryRecovery({'pending': {'150': 0}, 'attempts': {'150': 1}})
+    ready, closed = claims(store)
+    for frame in range(0, 120 * 5000, 120):
+        assert recovery.observe(replace(s, frame=frame), memory, repeat=ready, blocked=closed) == ([], False)
+    assert bytes(memory) == hidden
+    assert observe(store, s, memory) == ([], False)
+    walk(steps, 100)
+    assert len(observe(store, s, memory)[0]) == 1
+    assert claims(store) == ({150}, set())
 
 
 @pytest.mark.parametrize('dex', [144, 145, 146, 150])

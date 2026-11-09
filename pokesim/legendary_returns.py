@@ -81,10 +81,19 @@ def consume(db, dex):
         db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
 
 
+def decline(store, dex):
+    """Close an open return the PC would not keep, until the next walking milestone."""
+    value = store.get(KEY) or {}
+    ticket = value.get('tickets', {}).get(str(dex))
+    if ticket and ticket['state'] == 'available':
+        ticket['state'] = 'declined'
+        store.set(KEY, value)
+
+
 def claims(store):
     tickets = (store.get(KEY) or {}).get('tickets', {})
     ready = {int(dex) for dex, ticket in tickets.items() if ticket['state'] == 'available'}
-    closed = {int(dex) for dex, ticket in tickets.items() if ticket['state'] == 'caught'}
+    closed = {int(dex) for dex, ticket in tickets.items() if ticket['state'] in ('caught', 'declined')}
     return (ready if interval() else set()), closed
 
 
@@ -139,8 +148,8 @@ def observe(store, snapshot, memory):
                 name = next(row['name'].title() for row in SPECIES.values() if row['dex'] == dex)
                 events.append(Event('legendary_return', f'{name} has returned!',
                                     'A new expedition is available at its original home.', priority=4))
-            elif ticket.get('state') == 'caught':
-                # An older checkpoint cannot reopen a claim that was already caught.
+            elif ticket.get('state') in ('caught', 'declined'):
+                # An older checkpoint cannot reopen a claim that was already caught or declined.
                 changed |= encounter_flags(memory, room, obj, flag, hidden=True)
     if updated:
         store.set(KEY, value)
