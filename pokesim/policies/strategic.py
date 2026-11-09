@@ -18,13 +18,13 @@ from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner,
 from .move_development import hm_upgrade, move_name
 from .progression import (GAME_STARTERS, STARTERS, YELLOW, Goal, boss_key, boss_room, boss_training, fighter_level,
                           healing_goal, journey, league_partner, milestones, story_goal)
-from ..planning.losses import Losses
+from ..planning.losses import Losses, boss_trainer
 from . import training
 from .menus import select, tap
 from .shopping import ShoppingController
 from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
-from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, improves, legendary_project, snorlax_project
+from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, improves, legendary_project, reserve_allows, snorlax_project
 from ..planning import values
 from ..planning import arbiter
 from ..planning import boss
@@ -312,6 +312,8 @@ class StrategicPolicy(Policy):
         self.release_spare = None
         # Its (species, PC value text) for the journal, and whether the PC is full with nothing that may go.
         self.release_note, self.pc_deadlock = None, False
+        # A missing entry was left uncaught because only the upgrade slot was free and nothing may go.
+        self.boxes_full = False
         # The note of the release last started, which the journal quotes once it lands.
         self.released_note = None
         self.pending_trade_key = None
@@ -719,10 +721,11 @@ class StrategicPolicy(Policy):
             missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
             targeted = self.collection.repeat_target(s.enemy_species, s.map, s, enemy_dvs(mem),
                                                      self.catch_rating(s)) == s.enemy_species
-            if not s.can_catch or not (s.enemy_shiny or missing or targeted
+            if not s.can_catch or not ((s.enemy_shiny or missing) and self._reserve(s, s.enemy_species, mem)() or targeted
                                        or useful_capture(s, s.enemy_species, s.enemy_level, keeps=self._keeps(s, s.enemy_species, mem))):
                 self.reason = ('Leave the encounter because the party and active box are full' if not s.can_catch
-                               else 'Leave an unnecessary duplicate already covered by the collection')
+                               else 'Leave the encounter because the last free slot is kept for a better copy'
+                               if s.enemy_shiny or missing else 'Leave an unnecessary duplicate already covered by the collection')
                 if scr.top_x != 13:
                     return tap('right')
                 return self._select(scr, 1)
@@ -762,7 +765,8 @@ class StrategicPolicy(Policy):
                                             training_index=self.collection.trainee(s, self.collection.project)
                                             if self.collection.project and self.collection.project['method'] == 'train' else None,
                                             kind=getattr(self.goal, 'kind', STORY), flee_tries=self.flee_tries,
-                                            keeps=self._keeps(s, enemy.species, mem))
+                                            keeps=self._keeps(s, enemy.species, mem),
+                                            reserve=self._reserve(s, enemy.species, mem))
                 self.intent_since = s.frame
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
@@ -858,12 +862,14 @@ class StrategicPolicy(Policy):
         """Remember the best fighter level that lost to the boss the goal names, which raises its bar.
 
         A loss is a black out or a battle that cannot end in the boss's gym, or anywhere in the League.
-        A reload into a battle leaves no boss goal yet, so then the room alone names the boss."""
-        key = getattr(self.goal, 'key', None)
-        if key not in BOSSES:
-            key = next((k for k in BOSSES if boss_room(k, s.map)), None)
+        A reload into a battle leaves no boss goal yet, so then the room alone names the boss. A loss
+        to the rival or Giovanni elsewhere counts against the goal under way, which waits on the win."""
+        goal = getattr(self.goal, 'key', None)
+        key = goal if goal in BOSSES else next((k for k in BOSSES if boss_room(k, s.map)), None)
         if key is not None and boss_room(key, s.map):
             self.losses.note(boss_key(key), fighter_level(s.party))
+        elif goal is not None and boss_trainer(s, 1) is not None:
+            self.losses.note(goal, fighter_level(s.party), s.enemy_level)
 
     def _boss_check(self, s, goal, in_league):
         """The boss check before ``goal`` (planning/boss.py), shared with Gold, Silver and Crystal.
@@ -1439,6 +1445,15 @@ class StrategicPolicy(Policy):
     def _keeps(self, snapshot, species, mem):
         """Whether the PC would keep the wild ``species`` in battle, asked only when a catch rule needs it."""
         return lambda: improves(snapshot, species, enemy_dvs(mem), self.catch_rating(snapshot))
+
+    def _reserve(self, snapshot, species, mem):
+        """Whether a catch with its own rule may take the upgrade slot (collection.reserve_allows), asked
+        only when a catch rule needs it. A missing entry refused asks the owner for help (boxes_full)."""
+        def allows():
+            allowed = reserve_allows(snapshot, species, enemy_dvs(mem), self.catch_rating(snapshot))
+            self.boxes_full = not allowed and SPECIES.get(species, {}).get('dex') not in snapshot.owned
+            return allowed
+        return allows
 
     def release_pending(self, snapshot):
         """Whether an owner's release request waits for the next PC visit. A request whose Pokémon has

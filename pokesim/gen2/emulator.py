@@ -18,7 +18,7 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
-from ..stalls import LoopGuard, StallWatch, stalled_state
+from ..stalls import LoopGuard, StallWatch, boss_attempt, stalled_state
 from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
@@ -758,6 +758,7 @@ class Emulator:
                     self._event(Event('level', f'{mon.nick} grew to level {mon.level}',
                                       priority=4 if mon.level in (50, 100) else 2, notable=mon.level % 10 == 0), snapshot)
         now = time.time()
+        self._watch_boss(before, snapshot)
         self._watch_progress(snapshot, now)
         self._note_progress(snapshot, now)
         screen = hash((snapshot.tiles, snapshot.map, snapshot.x, snapshot.y, snapshot.in_battle))
@@ -803,6 +804,21 @@ class Emulator:
                 self.battle_frame = self.frame
             opponents.add(opponent)
         self.battle_opponents = opponents
+
+    def _watch_boss(self, before, snapshot):
+        """Hold back the progress of a boss attempt, which a blackout drops (stalls.boss_attempt).
+
+        An attempt runs while the party is inside the League or in the room of the boss its goal names.
+        """
+        policy, stall = self.policy, getattr(self, 'stall', None)
+        if stall is None or not hasattr(policy, 'in_league'):
+            return
+        goal = getattr(policy, 'goal', None)
+        boss = bool(snapshot.valid and snapshot.started) and (
+            policy.in_league(snapshot) and policy.constant(snapshot) != 'HALL_OF_FAME'
+            or goal is not None and goal.key in policy.BOSSES and self.data.map_ids.get(goal.map_name) == snapshot.map)
+        blackout = before is not None and snapshot.all_fainted and not before.all_fainted
+        boss_attempt(stall, getattr(self, 'loop_guard', None), self.store, boss, blackout)
 
     def _note_progress(self, snapshot, now):
         # Wandering to new tiles is not progress, and a reload rewinds to an older save, so only a
@@ -926,8 +942,9 @@ class Emulator:
                               f'{self.policy.recoveries} recoveries so far.', priority=HIGH), self.snapshot)
         restored = None
         from .standdown import carry_over, stalled_objectives
-        if why == CANNOT_END and self.snapshot is not None:
-            # A boss battle that cannot end is lost, though not everyone fainted.
+        if self.snapshot is not None and (why == CANNOT_END or getattr(self.snapshot, 'in_battle', 0) == 2):
+            # A boss battle the reload leaves is lost, though not everyone fainted, so the team trains
+            # before it goes back in. note_boss_loss ignores trainers outside a boss room and the League.
             note = getattr(self.policy, 'note_boss_loss', None)
             if note is not None:
                 note(self.snapshot)
@@ -1228,7 +1245,9 @@ class Emulator:
 
     def status(self):
         from .. import rewards
+        from ..pcvalue import BOXES_FULL, boxes_full
         from ..randomized import status as randomizer_status
+        from .release import room
         achievement = self.last_achievement
         if achievement:
             # The live page says how long ago it was, the same as Red, Blue and Yellow.
@@ -1251,7 +1270,9 @@ class Emulator:
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,
                 'help_request': {'reason': f'The run is caught in a loop. {loop}' if loop else 'The policy has stopped making game progress',
-                                 'action': self.policy.mode} if stalled else None,
+                                 'action': self.policy.mode} if stalled else
+                                {'reason': BOXES_FULL, 'action': self.policy.mode} if live and boxes_full(
+                                    getattr(self.policy, 'boxes_full', False), room(self.snapshot) if self.snapshot else None) else None,
                 'progress': {'state': 'stalled' if stalled else 'waiting' if waiting else 'recovering' if recovering
                              else 'making_progress',
                              'last_achievement': achievement, 'quiet_game_minutes': round(quiet_minutes, 1)},

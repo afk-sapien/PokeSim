@@ -302,9 +302,11 @@ def useful_capture(snapshot, species, level, required_move=None, keeps=None):
 
 
 def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False, capture_species=None, repeat_species=None, training_index=None,
-                  kind=STORY, flee_tries=0, keeps=None):
+                  kind=STORY, flee_tries=0, keeps=None, reserve=None):
     """The next battle decision. ``kind`` is the goal kind the battle stance follows (planning/stance.py),
-    ``flee_tries`` counts the failed runs in this battle and ``keeps`` is as in useful_capture."""
+    ``flee_tries`` counts the failed runs in this battle and ``keeps`` is as in useful_capture.
+    ``reserve`` says whether a catch with its own rule may take the upgrade slot
+    (collection.reserve_allows). An owned species asks ``keeps``, which holds the slot already."""
     if (snapshot.in_battle == 1
             and MAPS['POKEMON_TOWER_1F'] <= snapshot.map <= MAPS['POKEMON_TOWER_7F']
             and not dict(snapshot.items).get(ITEMS['SILPH_SCOPE'])):
@@ -325,6 +327,9 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     collection_target = (collect_missing or legendary) and missing_species and allowed_capture
     repeat_target = enemy.species == repeat_species and not missing_species
     collection_target |= repeat_target or shiny
+    if ((collection_target and not repeat_target or useful and (missing_species or required))
+            and reserve is not None and not reserve()):
+        collection_target = useful = False
     from .ledger import LEGENDARY_THROWS, battle_ledger, catch_spent, legendary_retreat
     capture_limit = float('inf') if shiny else LEGENDARY_THROWS if legendary else 5 if repeat_target else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)

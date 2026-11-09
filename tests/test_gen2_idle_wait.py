@@ -125,6 +125,7 @@ def test_sealed_storage_trains_only_the_party_and_never_walks_to_the_pc(data, mo
                                map=data.map_ids['ROUTE_29'], x=1, y=1)
     policy.collection.update(training=None, prerequisites=[])
     monkeypatch.setattr(training, 'projects', lambda *args, **kwargs: [])
+    monkeypatch.setattr(training, 'site', lambda policy, snapshot, project, mon: training.SITE)
     mem = SimpleNamespace(byte=lambda name: 1)
     policy.no_room = lambda snapshot: True
     # The Poliwhirl closest to level 100 is boxed, and the Exp. Share it holds cannot come out either.
