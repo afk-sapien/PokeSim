@@ -1,6 +1,6 @@
 # Planner systems: replacing special cases
 
-Status: historical record. S1 to S5 shipped between 0.5.x and 0.6.0, and S3 step 9 (mastery credit) is parked after options B and 3 missed their bars. The proposal below was first read from main at `efc9491`. Its As built notes record what shipped.
+Status: historical record. S1 to S5 shipped between 0.5.x and 0.6.0, and S3 step 9 (mastery credit) is parked after options B and 3 missed their bars. The proposal below was first read from main at `efc9491`. Its As built notes record what shipped. The next step is proposed in [Goal system v2](goal-system.md).
 
 Most stuck loops of the last month were fixed with a special case: sell a repel, skip a wait when the boxes are full, close two gate tiles, cap one hunt. Each fix works, but the next loop needs another one. This document lists those fixes, groups them by the mechanism that is missing, and proposes five systems that replace them.
 
@@ -155,6 +155,7 @@ As built (#176 to #180), the interface differs in a few places:
 - Navigation keeps one condition per gate (`GUARD_GATES`), read through `StoryWorld`. The Route 23 Earth Badge guard now blocks only x below 14, as the game does.
 - Gen I collection sources declare `source_requires` instead of goals declaring `requires()`. The Safari fee is a `Need(money=800)` on the ledger.
 - Gen II has no hand-written gate lists, since its navigation reads map events from pokecore, so it has no generated table. Its clock wait asks `gen2/ledger.catch_room`, which needs a box slot once the party is full, or a spare the ledger can release.
+- Boss readiness is one precondition for both generations, in `planning/boss.py`. Before a gym leader, an Elite Four member, the Champion, the Gen I League rival or Red, every Pokémon needs half its HP and half the PP of its strong attacks (within `STRONG_SHARE` of its strongest), each weighted by its strength. Its enabler is the heal walk, offered only when a Pokémon Center is in reach (the Gen II `center` search, the Gen I nurse distance), for at most `TRIPS` trips per approach. Otherwise the party goes in and the journal writes "Went in unready" once. Each generation reads its party into `Fighter` rows through its own move table (`fighters` in `gen2/ledger.py` and `policies/ledger.py`), and `tests/test_boss_ready.py` checks that both decide the same on equivalent states. Gen II rival battles are scripted, with no goal key, so they are not covered.
 
 ### S3. Utility arbiter (cause B)
 

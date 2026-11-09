@@ -45,8 +45,10 @@ def main(argv):
             problems = [row for row in problems if row['key'] != problem['key']]
     if not command:
         return 0
+    # While the app is down its alerts cannot be read, so the ones already handed over stay seen.
+    keep = seen if any(row['kind'] == 'app_down' for row in problems) else set()
     state.parent.mkdir(parents=True, exist_ok=True)
-    state.write_text(json.dumps(sorted(row['key'] for row in problems)), encoding='utf-8')
+    state.write_text(json.dumps(sorted(keep | {row['key'] for row in problems})), encoding='utf-8')
     return 1 if failed else 0
 
 

@@ -25,6 +25,8 @@ from .storage import StorageController
 from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, legendary_project, snorlax_project
 from ..planning import values
 from ..planning import arbiter
+from ..planning import boss
+from .ledger import fighters
 from ..planning.arbiter import Candidate, Tier
 from ..planning.monitor import STOOD_DOWN
 from ..planning.stance import FLEE_TRIES, STORY, TRAIN
@@ -93,6 +95,10 @@ def individual(mon):
 # The frames of a short errand such as a Pokémon Center visit, a shop trip, a pickup or a passage that
 # unblocks the goal behind it. An errand cutting into another one under way pays these frames again.
 ERRAND_FRAMES = 3000
+# Goals that end in a gym leader, Elite Four or Champion battle, which the boss check guards when the
+# goal challenges the trainer (planning/boss.py). The Champion is the rival.
+BOSSES = frozenset({'boulder', 'cascade', 'thunder', 'rainbow', 'soul', 'marsh', 'volcano', 'earth',
+                    'league_lorelei', 'league_bruno', 'league_agatha', 'league_lance', 'league_rival'})
 # The kind of a goal, by key prefix, in the order they are tried. Each kind's candidate is built once,
 # here, and the arbiter weighs it against the others. The first match wins.
 GOAL_KINDS = (('heal', 'heal'), ('party_collection', 'collection'), ('party_league', 'collection'),
@@ -284,6 +290,10 @@ class StrategicPolicy(Policy):
         # Failed stance runs in this battle, and whether one is under way.
         self.flee_tries, self.fleeing = 0, False
         self.heal_latch = False
+        # The boss check before a leader, the Elite Four or the Champion (planning/boss.py), and whether
+        # it sends the party to heal first.
+        self.boss_gate = boss.Gate()
+        self.boss_heal = False
         self.shop = ShoppingController()
         # The PC menu ranks releases with the same call as the planner, so the two never disagree.
         self.pc = StorageController(ranker=self._release_target)
@@ -576,6 +586,7 @@ class StrategicPolicy(Policy):
                                             f'{s.next_free_box + 1}', CENTERS, 'up', True),
                                        choice.errand_candidate('party_box', 'party'))
         if kind == 'overworld' and not s.in_battle:
+            self._boss_check(s, self.pick, s.map in league_rooms)
             self._update_heal_latch(s)
         if self.heal_latch and s.map not in league_rooms:
             # The heal under way is the goal of every step, not only the overworld ones. Otherwise each
@@ -814,6 +825,32 @@ class StrategicPolicy(Policy):
         if all(p.hp == p.max_hp and not p.status for p in s.party) and not needs_healing(s.party):
             self.heal_latch = False
             self.escape_attempted = False
+        if getattr(self, 'boss_heal', False):
+            self.heal_latch = True
+
+    def _boss_check(self, s, goal, in_league):
+        """The boss check before ``goal`` (planning/boss.py), shared with Gold, Silver and Crystal.
+
+        A party with a Pokémon under half its HP or its strong attacks' PP heals first when a nurse can
+        be reached. Otherwise it goes in as it stands, and the journal says so once per approach.
+        """
+        gate = getattr(self, 'boss_gate', None)
+        if gate is None:
+            gate = self.boss_gate = boss.Gate()
+        key = goal.key if goal is not None and goal.key in BOSSES and goal.title.startswith('Challenge') else None
+        party = fighters(s.party)
+
+        def reachable():
+            if in_league:
+                return False
+            targets = healing_goal(s).targets
+            return self.nav.distance_lookup((s.map, s.x, s.y), s.frame)(targets) is not None
+        verdict = gate.decide(key, party, reachable, where=s.map)
+        self.boss_heal = verdict == boss.HEAL
+        if verdict == boss.UNREADY and gate.note():
+            names = [mon.nick or f'#{mon.species}' for mon in s.party]
+            self.collection.activity_events.append(boss.unready_event(goal.title, party, names))
+        return verdict
 
     def _overworld(self, s, mem):
         self.menu_context = None

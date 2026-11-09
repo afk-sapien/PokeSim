@@ -207,6 +207,7 @@ Stuck or needs attention, and lists current problems above the adventure cards.
 | A trade waits in preparing or connecting | 10 minutes |
 | Trades fail for the same reason | 3 times in 2 hours |
 | PokeSim or a worker logs an unexpected error | Once per error per hour |
+| The data folder has under 10 GB free | At once |
 
 New Pokédex entries, badges, events, League wins and maps not visited recently count as
 progress. Walking around does not. A help request from Gold, Silver or Crystal appears in
@@ -220,7 +221,38 @@ Turn the watchdog off with `POKESIM_WATCHDOG=0`, or with
 `PATCH /api/v1/watchdog` and `{"enabled": false}`, which is saved and wins over the
 environment. Change a limit with `POKESIM_WATCHDOG_<NAME>` in minutes, using the names
 `DOWN`, `STUCK`, `NO_PROGRESS`, `TRADE_WAITING`, `FAILURE_WINDOW`, `ERROR_QUIET`,
-`COOLDOWN`, `GRACE` and `INTERVAL`. `POKESIM_WATCHDOG_FAILURE_REPEATS` is a count.
+`COOLDOWN`, `GRACE` and `INTERVAL`. `POKESIM_WATCHDOG_FAILURE_REPEATS` is a count, and
+`POKESIM_WATCHDOG_DISK_FREE_GB` is in gigabytes, with 0 turning the disk check off.
+
+### Watching a hosted app from another machine
+
+The watchdog writes its current problems to `watchdog-problems.json` in the data
+folder. `tools/alert_watch.sh` reads that file over SSH every 5 minutes and runs
+`POKESIM_WATCH_ALERT_COMMAND` once per new problem. A host it cannot reach, a stopped
+container or a file it cannot read becomes one "app down" alert. `tools/overnight_watch.sh`
+runs nightly. It runs the real-cartridge tests at the commit the app was built from and
+the smoke check inside the container. Install both as systemd user units with
+`sh tools/install_watch.sh`, after writing `~/.config/pokesim-watch.env` with
+`POKESIM_WATCH_HOST`, `POKESIM_WATCH_APP_DIR` (the app folder on that host),
+`POKESIM_WATCH_SITE`, `POKESIM_WATCH_ALERT_COMMAND` and `POKESIM_WATCH_NTFY`, an ntfy topic URL that hears about a failed watch. The units run
+from the watch's own clone, never a working checkout. Add `--enable` to start the timers.
+
+### Deploying a commit to a hosted app
+
+`DEPLOY_HOST=<ssh alias> DEPLOY_DIR=<app folder> sh tools/deploy_host.sh <full commit sha>` builds that commit,
+takes a cold backup and starts the new image. It refuses a commit without green `ci gate`
+and `install gate` checks, or a host short of space. It also refuses a commit that does
+not contain the one the host runs, read from the running image's revision label, so a
+deploy never drops work. Use `--rollback-to <full commit sha>` to deploy an older commit
+on purpose. It always refuses a commit whose data schema is older than the live
+`app.sqlite`, because that app would not start on the data. It lists the `main` commits
+the candidate lacks and refuses when one of them is over a day old, so merge `main` in
+first, or pass `--behind-main` to deploy it anyway. If the new image is not healthy or
+fails the smoke check, it restores `.env` and restarts the old image. Each backup has a
+json file beside it that names the image that wrote its data, the one running before the
+deploy. Restore a backup with that image or a newer one. It keeps the 5 newest backups and
+the images that wrote them. While it runs, `deploy.lock` in the app folder keeps
+the alert watch quiet for up to 15 minutes. Each deploy adds a line to `deploy.log`.
 
 ## Update and roll back
 
