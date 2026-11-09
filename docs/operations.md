@@ -247,7 +247,9 @@ deploy never drops work. Use `--rollback-to <full commit sha>` to deploy an olde
 on purpose. It always refuses a commit whose data schema is older than the live
 `app.sqlite`, because that app would not start on the data. It lists the `main` commits
 the candidate lacks and refuses when one of them is over a day old, so merge `main` in
-first, or pass `--behind-main` to deploy it anyway. If the new image is not healthy or
+first, or pass `--behind-main` to deploy it anyway. Merge a PR that syncs `main` into a
+feature branch with a merge commit, never a squash, since a squash drops the ancestry this
+check reads and every `main` commit then looks missing. If the new image is not healthy or
 fails the smoke check, it restores `.env` and restarts the old image. Each backup has a
 json file beside it that names the image that wrote its data, the one running before the
 deploy. Restore a backup with that image or a newer one. It keeps the 5 newest backups and
