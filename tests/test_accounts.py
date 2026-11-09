@@ -182,6 +182,23 @@ def test_a_password_check_that_cannot_run_is_never_a_wrong_password(library, peo
     assert library.login('alice')
 
 
+def test_only_a_few_password_checks_run_at_once(library, people, monkeypatch):
+    """Each check takes 64 MiB, so a burst of logins waits its turn and one that waits too long is told
+    the server is busy, never that its password was wrong."""
+    from pokesim.app import auth as module
+    auth = library.manager.auth
+    monkeypatch.setattr(module, 'CHECK_WAIT', 0.05)
+    held = [auth.checks.acquire(timeout=1) for _ in range(module.CHECKS_AT_ONCE)]
+    assert all(held) and not auth.checks.acquire(timeout=0)
+    client = library.browser()
+    busy = client.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD})
+    assert busy.status_code == 503, busy.text
+    auth.checks.release()
+    assert client.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 200
+    for _ in held[1:]:
+        auth.checks.release()
+
+
 def test_login_refuses_wrong_passwords_and_then_slows_down(library, people):
     client = library.browser()
     for _ in range(5):

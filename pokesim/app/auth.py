@@ -62,6 +62,12 @@ class PasswordCheckFailed(RuntimeError):
     """Argon2 could not run, for want of memory or threads. It says nothing about the password."""
 
 
+# Each check takes 64 MiB, so at most this many run at once, about 256 MiB however many logins come in.
+CHECKS_AT_ONCE = 4
+# A check that waits longer than this for its turn fails as busy.
+CHECK_WAIT = 10.0
+
+
 def validate_password(value):
     if not isinstance(value, str) or not value:
         raise ValueError('Choose a password')
@@ -169,6 +175,7 @@ class AuthStore:
         self.limiter = Limiter()
         self.cache = {}
         self._decoy = None
+        self.checks = threading.BoundedSemaphore(CHECKS_AT_ONCE)
 
     def close(self):
         with self.lock:
@@ -372,7 +379,16 @@ class AuthStore:
     def _matches(self, stored, password, tries=3):
         """Whether ``password`` matches ``stored``. Argon2 raises a bare VerificationError when it cannot
         get its memory or threads, so a busy machine once refused a right password as a wrong one. That
-        failure is tried again, and then raised as PasswordCheckFailed rather than read as a mismatch."""
+        failure is tried again, and then raised as PasswordCheckFailed rather than read as a mismatch.
+        At most CHECKS_AT_ONCE checks run together, and one that waits past CHECK_WAIT fails the same way."""
+        if not self.checks.acquire(timeout=CHECK_WAIT):
+            raise PasswordCheckFailed('Too many password checks at once')
+        try:
+            return self._verify(stored, password, tries)
+        finally:
+            self.checks.release()
+
+    def _verify(self, stored, password, tries):
         for attempt in range(tries):
             try:
                 return self.hasher.verify(stored, password)
