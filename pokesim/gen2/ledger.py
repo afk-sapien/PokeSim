@@ -517,8 +517,11 @@ def supplies(policy, snapshot):
                                                                    or snapshot.badges == 65535):
         inventory = dict(snapshot.items)
         count = sum(inventory.get(data.items[name], 0) for name in POTIONS)
-        if policy.goal is not None and policy.goal.key in LEAGUE_GOALS:
-            # Before the League the kit is sized for its rooms with money kept for a second run.
+        if (policy.goal is not None and policy.goal.key in LEAGUE_GOALS
+                or snapshot.badges & 0xFF == 0xFF and not snapshot.hall_of_fame_count):
+            # Before the League the kit is sized for its rooms with money kept for a second run. That
+            # holds between tries too: a Gold run back from a loss to Lance under a training goal
+            # filled the bag with Full Restores, kept 1133 money and reached Lance with nothing left.
             revives = sum(inventory.get(data.items[name], 0) for name in ('REVIVE', 'MAX_REVIVE'))
             restores, extra = boss.kit(count, revives, snapshot.money - held_money(data, snapshot),
                                        price(data, 'HYPER_POTION'), price(data, 'REVIVE'))

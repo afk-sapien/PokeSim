@@ -666,7 +666,7 @@ def room_lead(policy, snapshot):
     from ..planning import boss
     from ..planning.partner import league_partner
     data, party = policy.data, snapshot.party
-    room =getattr(data, 'league_rooms', {}).get(LEAGUE_ROOMS.get(getattr(policy.goal, 'key', None)))
+    room = getattr(data, 'league_rooms', {}).get(LEAGUE_ROOMS.get(getattr(policy.goal, 'key', None)))
     alive = [slot for slot, mon in enumerate(party) if not mon.egg]
     if not room or not alive:
         return None

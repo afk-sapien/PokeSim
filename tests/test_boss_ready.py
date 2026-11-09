@@ -355,6 +355,10 @@ def test_gen2_buys_the_league_kit_before_the_first_room(gen2):
     assert ledger.supplies(policy, lobby) == [('potions', ('HYPER_POTION',), 5)]
     stocked = league_snapshot(gen2, lobby.party, items=((gen2.items['HYPER_POTION'], 5),), money=14856)
     assert ledger.supplies(policy, stocked) == [('revives', ('REVIVE',), 2)]
+    # Back from a loss to Lance, a training goal shops by the same kit: half of 7133 buys two.
+    training = league_policy(gen2, 'collection_train')
+    back = league_snapshot(gen2, lobby.party, money=7133, room='INDIGO_PLATEAU_POKECENTER_1F')
+    assert ledger.supplies(training, back) == [('potions', ('HYPER_POTION',), 2)]
 
 
 def test_gen2_uses_league_items_between_rooms(gen2):
