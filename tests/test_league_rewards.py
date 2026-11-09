@@ -13,6 +13,21 @@ from test_events import snap
 from test_strategy import flags
 
 
+def test_gifts_are_off_for_headless_runs_and_on_for_a_new_managed_adventure(tmp_path):
+    """config names both gift switches, so a headless run is off on purpose, and a managed worker
+    installs the adventure's own choice, which the create route turns on."""
+    import inspect
+    from pokesim import config
+    from pokesim.app import manager
+    from pokesim.runtime.settings import SimulationSettings
+    assert hasattr(config, 'LEAGUE_REWARDS') and hasattr(config, 'MEW_EVENT')
+    defaults = {field.name: field.default for field in SimulationSettings.__dataclass_fields__.values()}
+    assert defaults['league_rewards'] is False and defaults['mew_event'] is False
+    source = inspect.getsource(manager)
+    assert "'league_rewards': data.get('league_rewards', True)" in source
+    assert "'mew_event': data.get('mew_event', True)" in source
+
+
 @pytest.mark.parametrize('owned,events,groups', [
     ({1}, (), set()),
     ({133}, (), {'eevee'}),

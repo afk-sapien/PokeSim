@@ -1262,13 +1262,13 @@ class Emulator:
                 if getattr(self, 'isolated_ram', False) and getattr(self.policy, 'tm_plan', None):
                     from .runtime.tm_purchase import purchase
                     purchase(self)
-                if getattr(self, 'isolated_ram', False) and now >= getattr(self, '_next_reward', 0):
-                    from .runtime.reward_delivery import deliver
-                    self._next_reward = now + 60
-                    delivered = deliver(self, league_rewards=getattr(config, 'LEAGUE_REWARDS', False),
-                                        mew_event=getattr(config, 'MEW_EVENT', False))
-                    # A battle or menu should not postpone a pending gift for another minute.
-                    self._next_reward = now + (60 if delivered else 1)
+                if getattr(self, 'isolated_ram', False):
+                    from .runtime.reward_delivery import deliver, reward_due, schedule
+                    if reward_due(self):
+                        schedule(self, True)
+                        delivered = deliver(self, league_rewards=config.LEAGUE_REWARDS,
+                                            mew_event=config.MEW_EVENT)
+                        schedule(self, delivered)
                 self.last_activity = time.monotonic()
                 self.consecutive_errors = 0
             except Exception:  # noqa: BLE001
