@@ -119,17 +119,23 @@ def rarity(data):
 
 
 def rated(snapshot, demand=None, stock=(), preferences=None, partners=(), owners=None, rewards=frozenset(),
-          requested=None, names=None, focus=frozenset(), favor=None, extra=(), rarity=None):
+          requested=None, names=None, focus=frozenset(), favor=None, extra=(), rarity=None, team=frozenset()):
     """Every Pokémon scored with pcvalue.rate, in party then box order. ``demand`` maps a species to the
     linked adventures missing it, which keeps that many copies and counts as trade demand. ``favor`` is
-    the Favor shiny or Favor DVs setting, ``extra`` rows are rated after the PC and ``rarity`` is as in
-    pcvalue.Inputs, by the DV total when not given."""
+    the Favor shiny or Favor DVs setting, ``extra`` rows are rated after the PC and ``rarity`` and
+    ``team`` are as in pcvalue.Inputs, rarity by the DV total when not given."""
     from collections import Counter
     from ..pcvalue import Inputs, rate
     from ..rarity import generic
     rows = entries(snapshot, names or {}, preferences, partners, stock, owners, rewards, requested) + list(extra)
     return rate(rows, Inputs(demand=dict(demand or {}), focus=frozenset(focus), wishes=Counter(demand or {}),
-                             favor=favor, rarity=rarity or generic))
+                             favor=favor, rarity=rarity or generic, team=frozenset(team)))
+
+
+def team_keys(party):
+    """The (dex, DVs) of each party member with known DVs, for pcvalue.Inputs.team."""
+    return frozenset((mon.species, tuple(mon.dvs)) for mon in party
+                     if not getattr(mon, 'egg', False) and len(getattr(mon, 'dvs', ())) == 5)
 
 
 def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset(), extra=()):
@@ -149,7 +155,15 @@ def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset()
     names = {sid: row.get('name', '?') for sid, row in getattr(policy.data, 'species', {}).items()}
     return rated(snapshot, policy.demand, stock, policy.trade_preferences() if preferences is None else preferences,
                  plan_partners(policy.collection), owners, marks, requested, names, favor=favor, extra=extra,
-                 rarity=rarity(policy.data))
+                 rarity=rarity(policy.data), team=getattr(getattr(policy, 'visit_team', None), 'keys', frozenset()))
+
+
+def may_release(policy, snapshot, box, position):
+    """Whether the one release rule (pcvalue.may_go) lets the boxed Pokémon at ``box``, ``position`` go.
+    Every Gen II release asks it before its first press, however its spare was chosen."""
+    from ..pcvalue import may_go
+    rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
+    return any(row.entry.slot == (box, position) and may_go(row) for row in rated)
 
 
 def keeps_another(policy, snapshot, dex, level=5, dvs=None):
@@ -161,9 +175,11 @@ def keeps_another(policy, snapshot, dex, level=5, dvs=None):
     being the first. With ``dvs`` it is kept by the same rule as a Gen I catch (collection.improves).
     Crystal's caught data marks a gift, which Gold and Silver cannot tell from a catch. It is rated
     as the next release rates the PC, and not kept when the PC visit it brings would release it or a
-    rarer copy for it (pcvalue.pushes_out).
+    rarer copy for it (pcvalue.pushes_out). This is the Gen II catch rule for an owned species
+    (pcvalue.keeps_new), the one every catch of an owned species asks with the wild DVs.
     """
-    from ..pcvalue import Entry, catch_visit, requested, verdict
+    from .. import pcvalue
+    from ..pcvalue import Entry
     names = getattr(policy.data, 'species', {})
     origin = 'gift' if getattr(policy.data, 'game', '') == 'crystal' else 'caught'
     if dex in LEGENDARY_DEX:
@@ -173,9 +189,9 @@ def keeps_another(policy, snapshot, dex, level=5, dvs=None):
     owned = getattr(snapshot, 'owned', None)
     rows = (policy.pc_rated(snapshot, extra=(phantom,)) if hasattr(policy, 'pc_rated')
             else release_rated(policy, snapshot, extra=(phantom,)))
-    needed = catch_visit(headroom(snapshot), len(requested(rows))) if hasattr(snapshot, 'box_counts') else 0
-    return verdict(rows, missing=owned is not None and dex not in owned, needed=needed,
-                   active_box=getattr(snapshot, 'active_box', None)).keep
+    return pcvalue.keeps_new(rows, missing=owned is not None and dex not in owned,
+                             headroom=headroom(snapshot) if hasattr(snapshot, 'box_counts') else None,
+                             active_box=getattr(snapshot, 'active_box', None))
 
 
 def pending(policy, snapshot):

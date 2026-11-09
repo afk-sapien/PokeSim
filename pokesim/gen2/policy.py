@@ -98,6 +98,9 @@ class Policy:
         self.collection = {'target': None}
         # Owned one-time encounters that a walking return brought back for another capture.
         self.returned = set()
+        # The party seen at this PC visit, so a member deposited at it is no spare (pcvalue.VisitTeam).
+        from ..pcvalue import VisitTeam
+        self.visit_team = VisitTeam()
         self.shop_offers = set()
         self.demand = {}
         self.naming = Naming(seed)
@@ -216,6 +219,12 @@ class Policy:
             if hasattr(menu, 'key') and self.blocked.get(menu.key(), -1) > snapshot.frame:
                 # The game refused this shortcut recently, so it is not tried again yet.
                 return self.refused(f'The game keeps refusing the {name} shortcut')
+            from .release import may_release
+            if isinstance(menu, Release) and not may_release(self, snapshot, menu.box, menu.position):
+                # The one release rule refuses it, as a team member or a Keep, so it waits as a refused shortcut.
+                self.blocked[self.task_key(menu)] = snapshot.frame + self.RETRY_FRAMES
+                self.menu = None
+                return self.refused('A release chose a Pokémon the PC values keep')
         self.menu_steps += 1
         limit = self.MENU_STEP_LIMITS.get(name, self.MENU_STEP_LIMIT)
         if self.menu_steps > limit:
@@ -289,17 +298,19 @@ class Policy:
     def describe(self):
         return f'strategic ({self.mode})'
 
-    def goals(self, snapshot):
-        """The goals a manager can set as the next activity, and why the list is empty."""
+    def goals(self, snapshot, query=None, every=False):
+        """The goals a manager can set as the next activity, and why the list is empty. ``query`` is as
+        in pin.grouped. The list keeps the picker's limit unless ``every`` asks for all of it."""
+        from ..planning.pin import LIMIT
         from .collection import goal_list
         if snapshot is None or self.memory is None:
             return [], 'Not available now'
-        return goal_list(self, snapshot, Memory(self.memory, self.data), Goal)
+        return goal_list(self, snapshot, Memory(self.memory, self.data), Goal, query, None if every else LIMIT)
 
     def pin_goal(self, snapshot, key):
-        """Set ``key`` as the next activity. A ValueError says why it cannot be."""
+        """Set ``key``, a listed goal's key, as the next activity. A ValueError says why it cannot be."""
         from ..planning.pin import UNAVAILABLE, Pin
-        goals, reason = self.goals(snapshot)
+        goals, reason = self.goals(snapshot, every=True)
         match = next((goal for goal in goals if goal['key'] == key), None)
         if match is None:
             raise ValueError(reason or UNAVAILABLE.capitalize())
@@ -737,10 +748,11 @@ class Policy:
 
     def rating_key(self, snapshot):
         """Everything the PC values read: the Pokémon, the plans, the trade settings, the linked
-        adventures, the League rewards, the owner's release requests and the Favor setting."""
+        adventures, the League rewards, the owner's release requests, the Favor setting and the team
+        seen at this PC visit."""
         from .release import plan_partners
         preferences = self.trade_preferences()
-        return (snapshot.party, snapshot.stored, snapshot.active_box, tuple(sorted(self.demand.items())),
+        return (snapshot.party, snapshot.stored, snapshot.active_box, tuple(sorted(self.demand.items())), self.visit_team.keys,
                 tuple(sorted(map(str, plan_partners(self.collection)))), self.release_owners(),
                 tuple(sorted((key, (value or {}).get('state')) for key, value in preferences.items())),
                 frozenset(self.league_marks()) if hasattr(self, 'league_marks') else frozenset(),
@@ -1220,6 +1232,8 @@ class Policy:
     def _step(self, snapshot, memory, sp=None):
         self.memory, self.sp = memory, sp
         self.decisions += 1
+        from .release import team_keys
+        self.visit_team.observe(snapshot.map, team_keys(snapshot.party))
         from .postgame import observe
         observe(self, snapshot)
         from .collection import observe_search
@@ -1631,23 +1645,32 @@ class Policy:
         requested |= (catch_species in self.collection.get('prerequisites', ())
                       and not any(mon.species == catch_species and not mon.egg
                                   for mon in snapshot.party + snapshot.stored))
+        own_rule = False
         if snapshot.in_battle == 1:
             # A wild carrier is caught only for the trade item it holds, never as one more copy.
             from .collection import item_hunts
             carried = item_hunts(self, snapshot).get(catch_species)
-            requested |= bool(carried) and mem.byte('wEnemyMonItem') == carried
+            own_rule = bool(carried) and mem.byte('wEnemyMonItem') == carried
         if catch_species == 201:
             # Each Unown letter counts separately in the Unown Pokédex, so catch every missing letter.
             from .collection import unown_letter, unown_missing
-            requested |= unown_letter(mem.read('wEnemyMonDVs', 2)) in unown_missing(self, snapshot)
+            own_rule |= unown_letter(mem.read('wEnemyMonDVs', 2)) in unown_missing(self, snapshot)
         # A wild shiny is always caught, an owned species too. Trainers' Pokémon never count.
         shiny = self.wild_shiny(snapshot)
-        # A postgame better-DV hunt catches a copy only when the PC would keep it (postgame.hunt_catch).
-        from .postgame import hunt_catch, quality_species
-        upgrade = (snapshot.in_battle == 1 and catch_species == quality_species(self)
-                   and hunt_catch(self, snapshot, catch_species, mem.read('wEnemyMonDVs', 2)))
-        catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or requested or shiny
-                                              or upgrade or catch_species in self.returned)
+        # A peer's request, a postgame better-DV hunt and a returned Pokémon catch an owned species only
+        # when the PC would keep the copy (release.keeps_another, the one catch rule). A missing entry,
+        # a field-move partner, a shiny, a missing Unown letter and an item carrier keep their own rules.
+        from .postgame import quality_species, wild_dvs
+        from .release import keeps_another
+        upgrade = (snapshot.in_battle == 1 and catch_species in snapshot.owned and not (partner or shiny or own_rule)
+                   and bool(requested or catch_species == quality_species(self) or catch_species in self.returned)
+                   and keeps_another(self, snapshot, catch_species, dvs=wild_dvs(mem.read('wEnemyMonDVs', 2))))
+        if (snapshot.in_battle == 1 and catch_species in self.returned and catch_species in {243, 244, 245, 249, 250, 251}
+                and catch_species in snapshot.owned and not (upgrade or partner or shiny or own_rule)):
+            # Close the return so neither the plan nor the retry timers bring back a refused legendary.
+            self.declined = getattr(self, 'declined', set()) | {catch_species}
+            self.returned = self.returned - {catch_species}
+        catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or own_rule or shiny or upgrade)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))
         from .ledger import spare_throw

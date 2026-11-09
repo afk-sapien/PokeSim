@@ -98,6 +98,60 @@ def test_lugia_returns_only_away_from_its_chamber_and_stays_closed_after_capture
     assert claims(world.store) == ({249}, set()) and world.store.get(KEY)['cycle'] == 2
 
 
+def test_a_refused_lugia_return_closes_until_the_next_milestone(world, monkeypatch):
+    from pokesim.gen2 import release
+    from pokesim.gen2.legendary import Recovery
+    from pokesim.gen2.policy import Goal, Policy
+    from pokesim.gen2.quests import legends
+    from pokesim.gen2.returns import claims, decline, observe
+    data, snap = world.data, world.snapshot
+    for flag in ('EVENT_FOUGHT_LUGIA', 'EVENT_WHIRL_ISLAND_LUGIA_CHAMBER_LUGIA'):
+        world.flag(flag)
+    snap.owned, snap.map = {249}, data.map_ids['OLIVINE_CITY']
+    world.walk(100)
+    observe(world.store, snap, world.memory)
+    ready, closed = claims(world.store)
+    policy = Policy(data)
+    policy.battle_task = lambda task, snapshot, mem: SimpleNamespace(button=task.key())
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda *args: None
+    policy.remedy = lambda *args, **kwargs: False
+    policy.returned = set(ready)
+    # The PC already holds a better Lugia, so the battle refuses the catch.
+    monkeypatch.setattr(release, 'keeps_another', lambda *args, **kwargs: False)
+    battle = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=data.map_ids['WHIRL_ISLAND_LUGIA_CHAMBER'],
+        in_battle=1, enemy_species=249, owned={249}, can_catch=True, badges=65535, money=10000,
+        pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
+    mem = SimpleNamespace(byte=lambda name: 0, read=lambda name, size: b'\xff' * size)
+    assert policy.battle(battle, mem).button != ('Throw', data.items['ULTRA_BALL'])
+    assert policy.declined == {249} and 249 not in policy.returned
+    for dex in policy.declined:
+        decline(world.store, dex)
+    ready, closed = claims(world.store)
+    assert (ready, closed) == (set(), {249})
+    flags = {'EVENT_GOT_MASTER_BALL_FROM_ELM', 'EVENT_RELEASED_THE_BEASTS', 'EVENT_FOUGHT_HO_OH', 'EVENT_FOUGHT_SUICUNE'}
+    wing = data.items['RAINBOW_WING' if data.game == 'silver' else 'SILVER_WING']
+    plan = SimpleNamespace(owned={243, 244, 245, 249, 250, 251}, can_catch=True, items=((wing, 1),),
+                           event=lambda name: name in flags, roamers=(), map=data.map_ids['NEW_BARK_TOWN'],
+                           party=[], stored=[], pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
+    planner = SimpleNamespace(data=data, collection={}, returned={249},
+                              person=lambda snapshot, key, *args: SimpleNamespace(key=key))
+    assert legends(planner, plan, Goal).key == 'legend_lugia'
+    planner.returned = ready
+    assert legends(planner, plan, Goal) is None
+    # The declined encounter is hidden again, and the #217 retry timers leave it hidden however long the wait.
+    observe(world.store, snap, world.memory)
+    assert world.event('EVENT_FOUGHT_LUGIA') and world.event('EVENT_WHIRL_ISLAND_LUGIA_CHAMBER_LUGIA')
+    recovery = Recovery({'pending': {'249': 0}, 'attempts': {'249': 1}})
+    for frame in range(0, 120 * 2000, 120):
+        snap.frame = frame
+        assert recovery.observe(snap, world.memory, repeat=ready, blocked=closed) == []
+    assert world.event('EVENT_FOUGHT_LUGIA')
+    world.walk(200)
+    observe(world.store, snap, world.memory)
+    assert claims(world.store) == ({249}, set())
+
+
 def test_caught_roaming_beasts_restart_at_their_native_routes(world):
     from pokesim.gen2.returns import ROAMERS, claims, observe
     data, snap = world.data, world.snapshot

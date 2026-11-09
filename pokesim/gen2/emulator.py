@@ -425,10 +425,11 @@ class Emulator:
             raise response['error']
         return response['result']
 
-    def goals(self):
-        """The goals a manager can set as the next activity. Runs on the game thread."""
+    def goals(self, query=None):
+        """The goals a manager can set as the next activity, named like ``query`` if given. Runs on the
+        game thread."""
         from ..planning.pin import listing
-        goals, reason = self.policy.goals(self.snapshot)
+        goals, reason = self.policy.goals(self.snapshot, query)
         return listing(goals, self.policy.pin, reason)
 
     def pin_goal(self, key):
@@ -687,6 +688,11 @@ class Emulator:
             from .release import keeps_another
             activity, reopened = returns.observe_events(self.store, snapshot, self.pb.memory, walking,
                                                         lambda dex: keeps_another(self.policy, snapshot, dex))
+            declined = getattr(self.policy, 'declined', None)
+            if isinstance(declined, set):
+                for dex in declined:
+                    returns.decline(self.store, dex)
+                self.policy.declined = set()
             ready, closed = returns.claims(self.store)
             self.policy.returned = ready | returns.returned_events(self.store)
             for event in notices + activity:

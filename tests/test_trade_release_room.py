@@ -106,7 +106,20 @@ def preparation(spare=None, boxes=(20,) * 14):
     return Preparation(emu, state), events, saved
 
 
-def test_preparation_releases_one_safe_spare_when_every_box_is_full():
+def test_preparation_lets_go_only_a_spare_the_release_rule_allows(monkeypatch):
+    # The Link prep runner presses its Release outside Policy.menu_step, so it asks the rule itself.
+    spare = mon(SNORLAX, box=11, position=1, dvs=(5, 6, 7, 8, 6), level=50, nick='ZZZ')
+    asked = []
+    monkeypatch.setattr('pokesim.gen2.release.may_release',
+                        lambda policy, snapshot, box, position: asked.append((box, position)))
+    prep, _, _ = preparation(spare)
+    with pytest.raises(ValueError, match=FULL):
+        prep.make_room(full([spare], active_box=11))
+    assert asked == [(11, 1)]
+
+
+def test_preparation_releases_one_safe_spare_when_every_box_is_full(monkeypatch):
+    monkeypatch.setattr('pokesim.gen2.release.may_release', lambda *args: True)
     spare = mon(SNORLAX, box=11, position=1, dvs=(5, 6, 7, 8, 6), level=50, nick='ZZZ')
     snapshot = full([spare], active_box=3)
     prep, events, saved = preparation(spare)

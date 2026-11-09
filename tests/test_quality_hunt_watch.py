@@ -124,3 +124,68 @@ def test_main_writes_the_state(tmp_path, monkeypatch, capsys):
     assert tool.main(['tool', 'judge', str(state)]) == 0
     assert json.loads(state.read_text())['a']['hours'] == 100.0
     assert 'no quality hunt yet' in capsys.readouterr().out
+
+
+def test_empty_or_broken_input_fails_plainly(tmp_path, monkeypatch, capsys):
+    import io
+    state = tmp_path / 'quality-hunts.json'
+    monkeypatch.setattr('sys.stdin', io.StringIO(''))
+    assert tool.main(['tool', 'judge', str(state)]) == 1
+    assert capsys.readouterr().out == 'FAILED: no input, the collect step printed nothing\n'
+    monkeypatch.setattr('sys.stdin', io.StringIO('<html>401</html>'))
+    assert tool.main(['tool', 'judge', str(state)]) == 1
+    assert capsys.readouterr().out.startswith('FAILED: the collect step printed something other than JSON')
+    assert not state.exists()
+
+
+def adventure(root, aid, version, state='running', frames=0, policy=None):
+    import sqlite3
+    folder = root / 'adventures' / aid
+    folder.mkdir(parents=True)
+    (folder / 'adventure.json').write_text(json.dumps(
+        {'id': aid, 'name': aid.title(), 'version': version, 'state': state, 'rom_id': 'r'}))
+    db = sqlite3.connect(folder / 'pokesim.sqlite')
+    db.execute('CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT)')
+    db.execute('CREATE TABLE capture_receipts (dex INTEGER, recorded_at REAL)')
+    db.execute("INSERT INTO kv VALUES ('policy_state', ?)", (json.dumps(policy or {'decisions': 7}),))
+    db.execute("INSERT INTO kv VALUES ('play_clock', ?)", (json.dumps({'frames': frames}),))
+    db.execute('INSERT INTO capture_receipts VALUES (16, 5.0)')
+    db.commit()
+    db.close()
+
+
+def test_collect_reads_files_only_so_every_auth_mode_works(tmp_path, monkeypatch, capsys):
+    """The overnight watch broke when the app moved to AUTH=accounts, since collect read its pages. It
+    now reads the data folder alone, so it must work with every network connection refused."""
+    import socket
+
+    def refuse(*args, **kwargs):
+        raise AssertionError('collect must not open a connection')
+
+    monkeypatch.setattr(socket.socket, 'connect', refuse)
+    monkeypatch.setattr(socket, 'create_connection', refuse)
+    monkeypatch.setenv('AUTH', 'accounts')
+    monkeypatch.setenv('DATA_DIR', str(tmp_path))
+    adventure(tmp_path, 'gold', 'gold', frames=2 * 3600 * 60 + 59)
+    adventure(tmp_path, 'red', 'red')
+    adventure(tmp_path, 'paused', 'crystal', state='stopped')
+    party = [mon(152, 30, 900, name='Chikorita'), mon(16, 100, 400, name='Pidgey')]
+    storage = {'pokemon': [mon(19, 12, 300, box=1, name='Rattata')], 'can_catch': True, 'box_counts': [1]}
+    read = []
+    monkeypatch.setattr(tool, 'saved_game', lambda root, meta: read.append(meta['id']) or
+                        {'party': party, 'storage': storage})
+    tool.collect()
+    rows = json.loads(capsys.readouterr().out)
+    assert read == ['gold']
+    assert [(row['id'], row['state']) for row in rows] == [('gold', 'running'), ('paused', 'stopped')]
+    gold = rows[0]
+    assert gold['hours'] == 2.0 and gold['decisions'] == 7 and gold['can_catch']
+    assert gold['trainees'] == [['Chikorita', 30], ['Rattata', 12]]
+    assert gold['captures'] == [[16, 5.0]]
+
+
+def test_the_overnight_watch_reads_the_app_without_its_site():
+    for name in ('overnight_watch.sh', 'alert_watch.sh'):
+        script = (ROOT / 'tools' / name).read_text(encoding='utf-8')
+        assert 'curl' not in script and 'wget' not in script and 'POKESIM_WATCH_SITE' not in script
+    assert 'urllib' not in (ROOT / 'tools' / 'quality_hunt_watch.py').read_text(encoding='utf-8')

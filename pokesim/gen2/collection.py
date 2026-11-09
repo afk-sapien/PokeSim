@@ -1078,14 +1078,24 @@ def survey(policy, snapshot, mem, Goal):
     return offers, labels, hold
 
 
-def goal_list(policy, snapshot, mem, Goal):
-    """The goals a manager can set as the next activity, best first, and why the list is empty."""
+def goal_list(policy, snapshot, mem, Goal, query=None, limit=pin.LIMIT):
+    """The goals a manager can set as the next activity, best first, and why the list is empty.
+
+    Offers with one label serve one want, so each label is listed once under its best offer's key.
+    ``query`` and ``limit`` are as in pin.grouped.
+    """
     if 'red' not in policy.completed:
         return [], 'Finish the story first'
     offers, labels, hold = survey(policy, snapshot, mem, Goal)
-    goals = [pin.entry(offer.key, labels.get(offer.key, offer.key), offer.tier) for offer in offers]
+    rows = []
+    for offer in offers:
+        label = labels.get(offer.key, offer.key)
+        rows.append((offer.key, label, label, offer.tier))
+    goals = pin.grouped(rows, query, limit)
     if goals:
         return goals, None
+    if query and rows:
+        return [], 'No goal matches that name'
     if hold is not None:
         return [], f'{hold.label} finishes first'
     return [], 'Nothing to do until the game changes'

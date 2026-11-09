@@ -48,6 +48,9 @@ SEED = 7
 # Catches under one goal in a row with no improvement that count as churn. Live, Yellow caught 1518
 # and released 1498 in a day with no new best copy and no new entry.
 CHURN_CATCHES = 10
+# How many times rarer than the rarest copy held a new copy must be to improve the PC, as
+# pcvalue.RARITY_STEP. Kept here so the judge runs on commits without it.
+RARITY_STEP = 2
 # Gifts the seeded rungs are owed.
 BACKLOG = 30
 RUNGS = ('red', 'yellow', 'crystal')
@@ -282,33 +285,57 @@ def _held(game, dex_of):
 class Catches:
     """Each catch from capture_receipts, with the goal it ran under and whether it improved the PC.
 
-    A catch improves the PC when it becomes the best kept copy of its species by DV tail, or is the
-    first one kept, which covers a new Pokédex entry. The worker reports a catch a moment after it
-    writes the receipt, so a catch seen at one poll is judged at the next, against the poll before it.
+    A catch improves the PC when it is the first copy of its species, a new Pokédex entry, or when its
+    own copy is RARITY_STEP times rarer than the rarest copy held when it arrived, as the catch rule
+    keeps it. A catch whose copy was not rated falls back to the best kept DV tail, judged against the
+    poll before. The worker reports a catch a moment after it writes the receipt, so a catch seen at
+    one poll is judged at the next.
     """
 
     def __init__(self):
         self.rows, self.waiting, self.goal, self.credited = [], [], 'none', {}
         self.older = self.latest = None
+        self.arrivals, self.polls = {}, 0
 
-    def poll(self, receipts, goal, best):
+    def poll(self, receipts, goal, best, arrivals=None):
+        """``arrivals`` is Copies.poll's new copies of this poll by species, each its rarity and the rarest
+        copy held before it. A catch takes one that arrived at its receipt's poll or the next."""
         if self.latest is None:
             # Catches before the first poll are judged against the PC as first seen.
             self.latest = best
+        self.polls += 1
+        for dex, copies in (arrivals or {}).items():
+            self.arrivals.setdefault(dex, []).extend((self.polls, *copy) for copy in copies)
         older = self.older if self.older is not None else self.latest
         for fingerprint, dex, recorded_at in self.waiting:
-            # One better copy is credited to one catch, though the next catch is judged against the same poll.
-            bar = min(older.get(dex, float('inf')), self.credited.get(dex, float('inf')))
-            improved = dex in best and best[dex] < bar - 1e-9
-            if improved:
-                self.credited[dex] = best[dex]
+            _, rarity, best_held = (self.arrivals.get(dex) or [(None, None, None)]).pop(0)
+            if rarity is not None:
+                improved = best_held is None or rarity * RARITY_STEP <= best_held + 1e-12
+                tail, bar = rarity, best_held
+            else:
+                # One better copy is credited to one catch, though the next catch is judged against the same poll.
+                bar = min(older.get(dex, float('inf')), self.credited.get(dex, float('inf')))
+                improved = dex in best and best[dex] < bar - 1e-9
+                if improved:
+                    self.credited[dex] = best[dex]
+                tail = best.get(dex)
             self.rows.append({'at': recorded_at, 'dex': dex, 'goal': self.goal, 'improved': improved,
-                              'gift': fingerprint.startswith('gift-event:')})
+                              'gift': fingerprint.startswith('gift-event:'),
+                              'tail': tail if improved else None, 'bar': bar if improved else None,
+                              'rarity': rarity, 'best_held': best_held})
+        # A copy no catch took by the poll after it arrived came some other way, as a trade or a gift.
+        self.arrivals = {dex: [copy for copy in copies if copy[0] == self.polls]
+                         for dex, copies in self.arrivals.items()}
         self.waiting, self.goal = list(receipts), goal
         self.older, self.latest = self.latest, best
 
-    def finish(self, best):
+    def finish(self, best, rarest=None):
+        """``rarest`` is Copies.rarest at the end, to judge a rated catch by the same rater."""
         self.poll([], self.goal, best)
+        for row in self.rows:
+            # Kept while the PC still holds its copy or a rarer one at the end.
+            held = best if row['rarity'] is None else (rarest or {})
+            row['kept'] = bool(row['improved'] and row['dex'] in held and held[row['dex']] <= row['tail'] + 1e-9)
         return self.rows
 
 
@@ -416,13 +443,32 @@ class Copies:
     ``first_wave`` counts the releases of the first visit after the start, or stays None when the run
     released nothing. A change to the scores re-ranks every PC at that visit, so it shows the size of
     that wave.
+
+    A release may only take a spare stored copy, in both gens. ``best_copy`` holds each release of a
+    species' rarest copy by the judge's own rater while others stay, ``only_copy`` each that leaves no
+    copy of its species in the party or the PC, ``locked`` each of a copy the trade preferences lock
+    (Keep) and ``from_party`` each of a copy in the party at the poll before, at any poll of the
+    visit or since the player entered its map, as a team member, trainee or League partner deposited
+    there is. A Gen II spare withdrawn only to take its item off is no team member (_errands).
     """
 
     def __init__(self, rarity):
         self.rarity, self.held, self.dex, self.tails = rarity, None, {}, {}
         self.arrived, self.visits, self.polls, self.last_visit, self.visiting = {}, {}, 0, 0, None
         self.first_visit, self.pushed_out = [], []
+        self.best_copy, self.only_copy, self.locked, self.from_party = [], [], [], []
+        self.party, self.locks, self.where, self.carrying, self.errands = set(), set(), None, set(), set()
         self.first_wave, self.wave_over = None, False
+
+    def rarest(self):
+        """The rarest copy held of each species at the last poll."""
+        found = {}
+        for key in self.held or {}:
+            tail = self.tail(key)
+            if tail is not None:
+                dex = self.dex.get(key)
+                found[dex] = min(found.get(dex, tail), tail)
+        return found
 
     def tail(self, key):
         if key not in self.tails:
@@ -435,23 +481,38 @@ class Copies:
             self.first_wave = (self.first_wave or 0) + int(released)
         elif self.first_wave is not None:
             self.wave_over = True
-        current = {}
-        for mon in [*(game or {}).get('party', []), *((game or {}).get('storage') or {}).get('pokemon', [])]:
+        current, party, locks, carrying, bare = {}, set(), set(), set(), set()
+        members = len((game or {}).get('party', []))
+        for index, mon in enumerate([*(game or {}).get('party', []), *((game or {}).get('storage') or {}).get('pokemon', [])]):
             dvs = mon.get('dvs')
             if mon.get('egg') or not isinstance(dvs, (list, tuple)) or len(dvs) != 5:
                 continue
             key = tuple(dvs)
             current[key] = current.get(key, 0) + 1
+            if index < members:
+                party.add(key)
+            if 'held_item' in mon and not mon['held_item']:
+                bare.add(key)
+            elif 'held_item' in mon and index >= members:
+                carrying.add(key)
+            if mon.get('trade_locked'):
+                locks.add(key)
             if self.dex.get(key) != dex_of(mon):
                 self.dex[key] = dex_of(mon)
                 self.tails.pop(key, None)
         self.polls += 1
         if self.held is None:
-            self.held = current
-            return
+            self.held, self.party, self.locks, self.where = current, party, locks, (game or {}).get('map')
+            self.carrying, self.errands = set(carrying), set()
+            return {}
+        arrivals = {}
         for key in current:
             if key not in self.held:
                 self.arrived.setdefault(key, self.polls)
+                # Its rarity and the rarest copy of its species held before it, for Catches.
+                held = [self.tail(other) for other in self.held if self.dex.get(other) == self.dex.get(key)]
+                held = [value for value in held if value is not None]
+                arrivals.setdefault(self.dex.get(key), []).append((self.tail(key), min(held, default=None)))
         if released:
             if self.visiting is None:
                 # One visit can release over several polls, so it ends at the first poll without one.
@@ -464,7 +525,23 @@ class Copies:
                 if key in self.visiting:
                     self.visits[key] = self.visits.get(key, 0) + 1
             self.visiting, self.last_visit = None, self.polls - 1
-        self.held = current
+        # A visit keeps every party member seen on its map or at its polls, as pcvalue.VisitTeam does, so a
+        # deposit there is still a team member at its releases.
+        where = (game or {}).get('map')
+        same = self.visiting is not None or where is not None and where == self.where
+        self._errands(carrying, bare, party, same)
+        self.party, self.where = ((self.party | party) if same else party) - self.errands, where
+        self.held, self.locks = current, locks
+        return arrivals
+
+    def _errands(self, carrying, bare, party, same):
+        """A Gen II spare boxed with an item at this visit that loses the item in the party made one trip for
+        the item route (gen2.ledger.unequip_step), so it is no team member at its release. One withdrawn
+        for a role keeps its item, so it is still a member."""
+        if not same:
+            self.carrying, self.errands = set(), set()
+        self.carrying |= carrying - (self.party if same else set())
+        self.errands |= {key for key in bare & self.carrying if key in self.party | party}
 
     def _judge(self, key, current):
         from pokecore.dvs import is_shiny
@@ -472,6 +549,18 @@ class Copies:
         same = [other for other in current if other in self.arrived and other != key and self.dex.get(other) == dex
                 and self.tail(other) is not None]
         row = {'dex': dex, 'dvs': list(key), 'tail': tail}
+        others = [other for other in current if other != key and self.dex.get(other) == dex]
+        if not current.get(key) and not others:
+            self.only_copy.append(row)
+        # Each Unown letter is its own entry, so the rarest Unown of all is no measure of one letter's best.
+        kept = [self.tail(other) for other in others]
+        kept = [value for value in kept if value is not None]
+        if tail is not None and kept and not current.get(key) and dex != 201 and tail < min(kept):
+            self.best_copy.append({**row, 'kept': min(kept)})
+        if key in self.locks:
+            self.locked.append(row)
+        if key in self.party:
+            self.from_party.append(row)
         if key in self.arrived and not self.visits.get(key):
             replaced = tail is not None and any(self.arrived[other] > self.arrived[key] and self.tail(other) < tail
                                                 for other in same)
@@ -594,12 +683,12 @@ def play_one(manager, aid, frames, progress):
                                       (first_event,)).fetchone()[0]
             db.close()
             seen.update(row[0] for row in fresh)
-            catches.poll(fresh, goal, best)
             try:
-                copies.poll(game, dex_of, released - releases)
+                arrivals = copies.poll(game, dex_of, released - releases)
             except RatingFailed as error:
                 result['failed'] = f'the judge cannot rate copies as the adventure does, {error}'
                 break
+            catches.poll(fresh, goal, best, arrivals)
             releases = released
             help_reason = (status.get('help_request') or {}).get('reason')
             end = frame
@@ -624,10 +713,12 @@ def play_one(manager, aid, frames, progress):
     result.update(frames=(end or 0) - (start or 0), wall_seconds=round(time.monotonic() - began, 1),
                   events=[[row[0], row[1], row[2], row[3]] for row in events],
                   journal_bytes=sum(row[4] for row in events), kv_bytes=kv_after - kv_before,
-                  receipts=[list(row) for row in receipts], catches=catches.finish(best),
+                  receipts=[list(row) for row in receipts], catches=catches.finish(best, copies.rarest()),
                   held_start=held_start, held_end=held_end, reloads=reloads, errors=len(errors),
                   error_lines=errors[:5], help=help_reason, names=names,
                   first_visit=copies.first_visit, pushed_out=copies.pushed_out, first_wave=copies.first_wave,
+                  best_copy=copies.best_copy, only_copy=copies.only_copy, locked_release=copies.locked,
+                  party_release=copies.from_party,
                   ledger=json.loads(ledger[0]) if ledger else None)
     progress(f'{adventure["name"]}: {result["frames"]} frames in {result["wall_seconds"]}s'
              + (f', failed: {result["failed"]}' if result['failed'] else ''))
@@ -749,6 +840,15 @@ def goal_churn(catches, limit=CHURN_CATCHES):
     return goals
 
 
+def catch_rarity(row):
+    def one_in(tail):
+        return round(1 / tail) if tail else None
+    rarity, held = row.get('rarity'), row.get('best_held')
+    return {'dex': row['dex'], 'goal': row['goal'], 'kept': bool(row.get('kept')), 'one_in': one_in(rarity),
+            'best_held_one_in': one_in(held),
+            'times_rarer': round(held / rarity, 2) if rarity and held else None}
+
+
 def measure(result):
     """The numbers the invariants compare, per game hour where a rate makes sense."""
     hours = max(result.get('frames') or 0, 1) / FRAMES_PER_HOUR
@@ -762,8 +862,16 @@ def measure(result):
     inferred = (result['held_end'] or 0) - (result['held_start'] or 0) + releases
     obtains = max(journaled, len(result['receipts']), inferred)
     improvements = sum(row['improved'] for row in result['catches'] if not row['gift'])
+    # A catch kept as its species' best copy is the PC improving, so the obtains limit counts the rest.
+    # Phantoms, catches that beat nothing and gifts still count.
+    kept_better = sum(bool(row.get('kept')) for row in result['catches'] if not row['gift'])
     progress = sum(kinds.get(kind, 0) for kind in REAL_PROGRESS) + improvements
-    return {'game_hours': round(hours, 3), 'releases': round(releases / hours, 2), 'obtains': round(obtains / hours, 2),
+    return {'game_hours': round(hours, 3), 'releases': round(releases / hours, 2),
+            'obtains': round(max(obtains - kept_better, 0) / hours, 2),
+            # Reported only: every obtain, and the kept improving catches the limit leaves out.
+            'all_obtains': round(obtains / hours, 2), 'kept_better': kept_better,
+            # Reported only: each catch's rarity and the rarest copy of its species held before it, as 1 in N.
+            'catch_rarity': [catch_rarity(row) for row in result['catches'] if not row['gift']],
             # Reported only: the catches and releases of the whole soak window, as counts.
             'catches': caught, 'window_releases': releases, 'improvements': improvements, 'progress': round(progress / hours, 2),
             'reloads': round(sum(result['reloads'].values()) / hours, 2),
@@ -774,6 +882,8 @@ def measure(result):
             # Older results and a rejudge without the copies held leave these out.
             'released_at_first_visit': len(result['first_visit']) if 'first_visit' in result else None,
             'pushed_out_rarer': len(result['pushed_out']) if 'pushed_out' in result else None,
+            'phantom_catches': len(phantom_catches(result)) if 'first_visit' in result else None,
+            **{key: len(result[key]) if key in result else None for key in RELEASE_CHECKS},
             # Reported only: the releases of the first PC visit, the wave a change to the scores brings.
             'first_wave_releases': result.get('first_wave')}
 
@@ -810,7 +920,33 @@ def invariants(candidate, baseline):
     if c['pushed_out_rarer']:
         problems.append(f'{name}: {c["pushed_out_rarer"]} releases took a copy rarer than the newer one that pushed it '
                         f'out, {_dexes(candidate["pushed_out"])}')
+    if c['phantom_catches']:
+        problems.append(f'{name}: {c["phantom_catches"]} phantom catches, caught with no better copy or new entry and '
+                        f'released at their next PC visit, {_dexes(phantom_catches(candidate))}')
+    for key, text in RELEASE_CHECKS.items():
+        if c[key]:
+            problems.append(f'{name}: {c[key]} releases took {text}, {_dexes(candidate[key])}')
     return problems
+
+
+# Releases that may never happen in either gen, by result key: a release takes only a spare stored copy.
+RELEASE_CHECKS = {'best_copy': "a species' best copy", 'only_copy': "a species' only copy",
+                  'locked_release': 'a copy the trade preferences lock',
+                  'party_release': 'a party member, the trainee, a League partner or a team member'}
+
+
+def phantom_catches(result):
+    """Each catch that did not improve the PC, gifts aside, paired with a copy of its species released
+    at its first PC visit, as Red's Tentacool and Yellow's Nidorina were."""
+    released = {}
+    for row in result.get('first_visit') or ():
+        released[row['dex']] = released.get(row['dex'], 0) + 1
+    pairs = []
+    for row in result['catches']:
+        if not row['improved'] and not row['gift'] and released.get(row['dex']):
+            released[row['dex']] -= 1
+            pairs.append(row)
+    return pairs
 
 
 def _dexes(rows):
@@ -863,6 +999,25 @@ def build_tree(sha, folder):
     return folder
 
 
+# uv output that says a download failed, not the lock or the build.
+NETWORK_ERROR = re.compile(r'Failed to (?:fetch|download)|HTTP status (?:server|client) error|error sending request'
+                           r'|Could not connect|dns error|operation timed out', re.I)
+
+
+def sync_environment(tree, env, log=print):
+    """Build a commit's environment with uv. A download that fails on the network is tried once more
+    offline, from uv's cache, since the lock pins every wheel's hash."""
+    command = ['uv', 'sync', '--locked', '--no-dev', '--project', str(tree), '-q']
+    done = subprocess.run(command, env=env, cwd=tree, capture_output=True, text=True)
+    if done.returncode and NETWORK_ERROR.search(done.stderr or ''):
+        log(f'uv sync for {tree} failed on the network, retrying offline from the cache: '
+            f'{NETWORK_ERROR.search(done.stderr).group(0)}')
+        done = subprocess.run(command, env=dict(env, UV_OFFLINE='1'), cwd=tree, capture_output=True, text=True)
+    if done.returncode:
+        sys.stderr.write(done.stderr or '')
+        raise subprocess.CalledProcessError(done.returncode, command, done.stdout, done.stderr)
+
+
 def full_sha(sha):
     return subprocess.run(['git', '-C', str(ROOT), 'rev-parse', '--verify', f'{sha}^{{commit}}'], check=True,
                           capture_output=True, text=True).stdout.strip()
@@ -899,8 +1054,7 @@ def run(args):
         reference = folder / 'app' / 'assets' / 'reference' / reference_revision(folder / 'tree')
         role_env = dict(env, UV_PROJECT_ENVIRONMENT=str(folder / 'env'), POKESIM_REVISION=roles[role],
                         GAME_DATA_DIR=str(reference))
-        subprocess.run(['uv', 'sync', '--locked', '--no-dev', '--project', str(folder / 'tree'), '-q'],
-                       env=role_env, cwd=folder / 'tree', check=True)
+        sync_environment(folder / 'tree', role_env, lambda line: print(line, flush=True))
         command = ['nice', '-n', str(args.nice), 'uv', 'run', '--locked', '--no-dev', '--no-sync', '--project',
                    str(folder / 'tree'), 'python', str(Path(__file__).resolve()), 'runner', str(inputs), str(folder),
                    str(args.roms), '--frames', str(args.frames), '--parallel', str(args.parallel)]
@@ -935,7 +1089,7 @@ def report_line(row):
     released = c.get('window_releases', '-')
     return (f'{row["name"]:<28} {c["releases"]:7.1f} rel/h {c["obtains"]:7.1f} obt/h {c["progress"]:6.1f} prog/h '
             f'{c["reloads"]:5.1f} rel/h {c["bytes"]:8d} B/h {c["improvements"]:3d} better '
-            f'{c["catches"]:4d} caught {released} released '
+            f'{c["catches"]:4d} caught {c.get("kept_better", "-")} kept better {released} released '
             f'{wave(c)} first visit releases ({wave(row["deployed"])} deployed)')
 
 

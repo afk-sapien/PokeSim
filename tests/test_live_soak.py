@@ -101,8 +101,47 @@ def test_a_catch_improves_once_the_poll_after_it_shows_a_better_copy():
     assert fresh.finish({25: 40.0})[0]['improved'] is True
 
 
+def test_each_catch_reports_its_rarity_and_the_rarest_copy_held_before_it():
+    # Soak red caught two Seel in one poll, and only the first was judged to improve.
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    catches = live_soak.Catches()
+    for receipts, held in (([], [PLAIN]), ([('a', 86, 1.0), ('b', 86, 1.1)], [PLAIN, RARER, COMMON]), ([], [PLAIN, RARER, COMMON])):
+        game = {'party': [], 'storage': {'pokemon': [{'dex': 86, 'dvs': list(dvs)} for dvs in held]}}
+        arrivals = copies.poll(game, lambda mon: mon['dex'], 0)
+        catches.poll(receipts, 'seel', {86: min(TAILS[dvs] for dvs in held)}, arrivals)
+    rows = catches.finish({86: 0.05}, copies.rarest())
+    assert [(row['improved'], row['rarity'], row['best_held']) for row in rows] == [(True, 0.05, 0.6), (False, 0.9, 0.6)]
+    assert [live_soak.catch_rarity(row) for row in rows] == [
+        {'dex': 86, 'goal': 'seel', 'kept': True, 'one_in': 20, 'best_held_one_in': 2, 'times_rarer': 12.0},
+        {'dex': 86, 'goal': 'seel', 'kept': False, 'one_in': 1, 'best_held_one_in': 2, 'times_rarer': 0.67}]
+
+
+def test_each_catch_is_judged_by_its_own_rarity_against_the_copies_held_when_it_arrived():
+    # Soak red's second Seel: a 1 in 2 new entry, then a 1 in 4 copy at the next PC visit. The old judge
+    # credited the better tail to the first catch and scored the second one not kept.
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    catches = live_soak.Catches()
+    for receipts, held in (([], []), ([('a', 86, 1.0)], [HALF]), ([('b', 86, 2.0)], [HALF, QUARTER]),
+                           ([], [HALF, QUARTER])):
+        game = {'party': [], 'storage': {'pokemon': [{'dex': 86, 'dvs': list(dvs)} for dvs in held]}}
+        arrivals = copies.poll(game, lambda mon: mon['dex'], 0)
+        catches.poll(receipts, 'seel', {86: min(TAILS[dvs] for dvs in held)} if held else {}, arrivals)
+    rows = catches.finish({86: 0.25}, copies.rarest())
+    assert [(row['improved'], row['kept'], row['rarity'], row['best_held']) for row in rows] == [
+        (True, True, 0.5, None), (True, True, 0.25, 0.5)]
+    assert [live_soak.catch_rarity(row)['times_rarer'] for row in rows] == [None, 2.0]
+    # A copy less than twice as rare is no improvement, as the catch rule would not keep it.
+    close = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    judged = live_soak.Catches()
+    for receipts, held in (([], [HALF]), ([('c', 86, 3.0)], [HALF, CLOSE]), ([], [HALF, CLOSE])):
+        game = {'party': [], 'storage': {'pokemon': [{'dex': 86, 'dvs': list(dvs)} for dvs in held]}}
+        judged.poll(receipts, 'seel', {86: min(TAILS[dvs] for dvs in held)}, close.poll(game, lambda mon: mon['dex'], 0))
+    assert [row['improved'] for row in judged.finish({86: 0.3}, close.rarest())] == [False]
+
+
 COMMON, PLAIN, RARE, RARER = (0, 2, 2, 2, 2), (0, 4, 4, 4, 4), (0, 8, 8, 8, 8), (0, 12, 12, 12, 12)
-TAILS = {COMMON: 0.9, PLAIN: 0.6, RARE: 0.2, RARER: 0.05}
+HALF, CLOSE, QUARTER = (0, 6, 6, 6, 6), (0, 7, 7, 7, 7), (0, 10, 10, 10, 10)
+TAILS = {COMMON: 0.9, PLAIN: 0.6, RARE: 0.2, RARER: 0.05, HALF: 0.5, CLOSE: 0.3, QUARTER: 0.25}
 
 
 def visits(*polls):
@@ -151,6 +190,127 @@ def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
         copies.poll({'party': [], 'storage': {'pokemon': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in held]}},
                     lambda mon: mon['dex'], released)
     assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
+
+
+def watch(*polls):
+    """Copies.poll over ``polls`` of (party, stored, released, map), each copy a (dex, DVs, locked) row, or
+    (dex, DVs, locked, held item) for a Gen II one."""
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+
+    def rows(group):
+        return [{'dex': dex, 'dvs': list(dvs), 'trade_locked': locked, **{'held_item': item for item in held}}
+                for dex, dvs, locked, *held in group]
+    for party, stored, released, where in polls:
+        copies.poll({'map': where, 'party': rows(party), 'storage': {'pokemon': rows(stored)}},
+                    lambda mon: mon['dex'], released)
+    return copies
+
+
+def release_problems(copies, version='red'):
+    return live_soak.invariants(result(version=version, first_visit=[], pushed_out=[], best_copy=copies.best_copy,
+                                       only_copy=copies.only_copy, locked_release=copies.locked,
+                                       party_release=copies.from_party), None)
+
+
+def test_a_catch_that_did_not_improve_the_pc_and_left_at_its_next_visit_is_a_phantom():
+    # Red's Lv 30 Tentacool and Yellow's Nidorina were caught over a better copy and released at once.
+    gone = [{'dex': 72, 'dvs': [2, 8, 2, 9, 10], 'tail': 0.9}]
+    problems = live_soak.invariants(result(catches=[catch(72)], first_visit=gone, pushed_out=[]), None)
+    assert any('1 phantom catches, caught with no better copy or new entry and released at their next PC visit, #72'
+               in problem for problem in problems)
+    for kept in (catch(72, improved=True), catch(72, gift=True), catch(30)):
+        assert live_soak.measure(result(catches=[kept], first_visit=gone, pushed_out=[]))['phantom_catches'] == 0
+    assert live_soak.measure(result(catches=[catch(72)]))['phantom_catches'] is None
+
+
+def test_a_release_of_a_species_best_copy_fails():
+    copies = watch(([], [(16, RARE, False), (16, PLAIN, False)], False, 1), ([], [(16, PLAIN, False)], True, 1))
+    assert copies.best_copy == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'kept': 0.6}]
+    assert any("1 releases took a species' best copy, #16" in problem for problem in release_problems(copies))
+    fine = watch(([], [(16, RARE, False), (16, PLAIN, False)], False, 1), ([], [(16, RARE, False)], True, 1))
+    assert not fine.best_copy and not fine.only_copy and not release_problems(fine)
+
+
+@pytest.mark.parametrize('version', ['red', 'crystal'])
+def test_a_release_of_a_species_only_copy_fails_in_both_gens(version):
+    # Soak crystal released its Charizard, Blastoise and Feraligatr with no catch at all.
+    held = [(6, COMMON, False), (9, PLAIN, False), (160, RARE, False), (16, RARER, False)]
+    copies = watch(([], held, False, 1), ([], held[3:], True, 1))
+    assert [row['dex'] for row in copies.only_copy] == [6, 9, 160]
+    assert any("3 releases took a species' only copy, #6, #9, #160" in problem
+               for problem in release_problems(copies, version))
+    # A copy whose species stays in the party is no only copy.
+    kept = watch(([(16, PLAIN, False)], [(16, COMMON, False)], False, 1), ([(16, PLAIN, False)], [], True, 1))
+    assert not kept.only_copy and not kept.best_copy
+
+
+def test_a_release_of_a_locked_copy_fails():
+    copies = watch(([], [(16, RARE, False), (16, COMMON, True)], False, 1), ([], [(16, RARE, False)], True, 1))
+    assert [row['dvs'] for row in copies.locked] == [list(COMMON)]
+    assert any('1 releases took a copy the trade preferences lock, #16' in problem for problem in release_problems(copies))
+
+
+def test_a_release_of_a_team_member_deposited_at_the_visit_fails():
+    # Soak red deposited its Lv 43 Weezing and released it at the same visit.
+    weezing, spare = (14, 7, 1, 3, 8), (13, 5, 1, 8, 13)
+    TAILS.update({weezing: 0.7, spare: 0.1})
+    try:
+        copies = watch(([(110, weezing, False)], [(110, spare, False)], False, 7),
+                       ([], [(110, spare, False), (110, weezing, False)], False, 7),
+                       ([], [(110, spare, False)], True, 7))
+        assert [row['dvs'] for row in copies.from_party] == [list(weezing)]
+        assert any('1 releases took a party member, the trainee, a League partner or a team member, #110' in problem
+                   for problem in release_problems(copies))
+        # A copy deposited at an earlier visit, on another map, is a spare by now.
+        later = watch(([(110, weezing, False)], [(110, spare, False)], False, 7),
+                      ([], [(110, spare, False), (110, weezing, False)], False, 8),
+                      ([], [(110, spare, False)], True, 8))
+        assert not later.from_party and not release_problems(later)
+    finally:
+        TAILS.pop(weezing), TAILS.pop(spare)
+
+
+def test_a_spare_withdrawn_only_to_take_its_item_off_is_no_team_member():
+    # Soak crystal withdrew its boxed Kabutops, Kingler and three more to take their items off, then released them.
+    kabutops, best = (1, 2, 3, 4, 5), (14, 7, 1, 3, 8)
+    TAILS.update({kabutops: 0.7, best: 0.1})
+    try:
+        copies = watch(([], [(141, best, False, 0), (141, kabutops, False, 83)], False, 7),
+                       ([(141, kabutops, False, 83)], [(141, best, False, 0)], False, 7),
+                       ([(141, kabutops, False, 0)], [(141, best, False, 0)], False, 7),
+                       ([], [(141, best, False, 0)], True, 7))
+        assert not copies.from_party and not release_problems(copies)
+        # A partner withdrawn for a role keeps its item, so its release is still a team member's.
+        partner = watch(([], [(141, best, False, 0), (141, kabutops, False, 83)], False, 7),
+                        ([(141, kabutops, False, 83)], [(141, best, False, 0)], False, 7),
+                        ([], [(141, best, False, 0), (141, kabutops, False, 83)], False, 7),
+                        ([], [(141, best, False, 0)], True, 7))
+        assert partner.from_party and any('team member' in problem for problem in release_problems(partner))
+    finally:
+        TAILS.pop(kabutops), TAILS.pop(best)
+
+
+def test_kept_improving_catches_do_not_count_toward_the_obtains_limit():
+    catches = live_soak.Catches()
+    catches.poll([], 'fish', {54: 50.0})
+    catches.poll([('a', 54, 1.0), ('b', 79, 1.5)], 'fish', {54: 50.0})
+    rows = catches.finish({54: 10.0, 79: 30.0})
+    assert [(row['dex'], row['improved'], row['kept']) for row in rows] == [(54, True, True), (79, True, True)]
+    # A better copy that was later released is not kept.
+    gone = live_soak.Catches()
+    gone.poll([], 'fish', {54: 50.0})
+    gone.poll([('a', 54, 1.0)], 'fish', {54: 50.0})
+    gone.poll([], 'fish', {54: 10.0})
+    assert gone.finish({54: 50.0})[0]['kept'] is False
+    receipts = [(f'catch:{index}', 54, float(index)) for index in range(12)]
+    kept = [dict(catch(54, improved=True), kept=True)] * 8 + [catch(54)] * 4
+    measured = live_soak.measure(result(receipts=receipts, catches=kept))
+    assert (measured['obtains'], measured['all_obtains'], measured['kept_better']) == (4, 12, 8)
+    assert not any('obtains' in problem for problem in live_soak.invariants(result(receipts=receipts, catches=kept),
+                                                                            result(receipts=receipts[:4])))
+    # Catches that beat nothing still count.
+    flat = live_soak.invariants(result(receipts=receipts, catches=[catch(54)] * 12), result(receipts=receipts[:4]))
+    assert any('12.0 obtains a game hour, 4.0 on the deployed commit' in problem for problem in flat)
 
 
 def test_the_judge_rates_a_gen1_copy_with_the_tms_of_its_adventures_cartridge(monkeypatch):
@@ -237,7 +397,7 @@ def test_the_window_catches_and_releases_are_reported_as_counts():
     measured = live_soak.measure(candidate)
     assert (measured['catches'], measured['window_releases']) == (2, 2)
     _, rows = live_soak.judge([candidate], [candidate])
-    assert ' 2 caught 2 released - first visit releases ' in live_soak.report_line(rows[0])
+    assert ' 2 caught 0 kept better 2 released - first visit releases ' in live_soak.report_line(rows[0])
 
 
 def test_rates_hold_the_candidate_to_the_deployed_commit():
@@ -319,3 +479,30 @@ def test_a_commit_older_than_the_data_schema_is_refused(tmp_path, schema, refuse
     (tmp_path / 'pokesim' / 'app').mkdir(parents=True)
     (tmp_path / 'pokesim' / 'app' / 'registry.py').write_text(f'SCHEMA = {schema}\n')
     assert (live_soak.schema_of(tmp_path) < 2) is refused
+
+
+GITHUB_504 = ('error: Failed to fetch: `https://github.com/example/pokecore-0.11.0-py3-none-any.whl`\n'
+              '  Caused by: HTTP status server error (504 Gateway Timeout)\n')
+
+
+@pytest.mark.parametrize('first,offline,tries', [
+    (GITHUB_504, 0, 2),  # a network failure is tried once more offline, from the cache
+    ('error: The lockfile needs to be updated\n', None, 1),  # any other failure is not
+])
+def test_an_environment_build_retries_offline_only_after_a_network_error(monkeypatch, tmp_path, first, offline, tries):
+    calls, lines = [], []
+
+    def run(command, env, **kwargs):
+        calls.append(env.get('UV_OFFLINE'))
+        code = 1 if len(calls) == 1 else offline
+        return SimpleNamespace(returncode=code, stdout='', stderr=first if code else '')
+    monkeypatch.setattr(live_soak.subprocess, 'run', run)
+    if offline is None:
+        with pytest.raises(live_soak.subprocess.CalledProcessError):
+            live_soak.sync_environment(tmp_path, {}, lines.append)
+    else:
+        live_soak.sync_environment(tmp_path, {}, lines.append)
+    assert calls == [None, '1'][:tries]
+    assert bool(lines) is (tries == 2)
+    if lines:
+        assert 'retrying offline' in lines[0] and 'Failed to fetch' in lines[0]

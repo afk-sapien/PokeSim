@@ -68,6 +68,8 @@ checkouts that might not load this file automatically.
 - Run every long local job in the background under `timeout`, and look at it when it runs past twice its usual time. A full gate takes about 3 minutes, so run it under `timeout 30m`. A job at 0% CPU for that long is stuck, so report it.
 - For a behavior change, the gate replaces long full-sim batches. Run full-sim batches only when the change targets late-game play the 30 game minutes from each rung cannot reach.
 - Store a new gate baseline with `--write-baseline` on main after a merge that changes play on purpose, so the next gate compares against it.
+- The hosted app is for viewing and playing. Tests, soaks and temporary sims, such as fresh games for a stall hunt, run locally, never on the hosted app.
+- A temporary sim runs as one long-lived local app with its own data root, outside the checkout and the live soak root, in a capped user slice: `systemd-run --user --unit <name> -p Nice=19 -p CPUQuota=400% -p MemoryMax=8G`, with `AUTH=none` on 127.0.0.1, auto trading off for each adventure and no notification integration. Soaks and pytest stay the one heavy job and win the CPU.
 
 ## Gen 1 vs Gen 2 parity
 

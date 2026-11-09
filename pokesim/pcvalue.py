@@ -90,12 +90,14 @@ class Entry:
 class Inputs:
     """What the adventure wants. ``demand`` maps a dex number to the copies a plan needs and ``wishes``
     to the linked adventures that want it in trade. ``rarity`` gives a copy's rarity from its dex number
-    and DVs (rarity.py), or None when it cannot be told."""
+    and DVs (rarity.py), or None when it cannot be told. ``team`` holds the (dex, DVs) of the party as
+    the PC visit began, so a team member deposited at this visit is no spare."""
     demand: dict = field(default_factory=dict)
     focus: frozenset = frozenset()
     wishes: Counter = field(default_factory=Counter)
     favor: str | None = None   # 'shiny' or 'dvs'
     rarity: object = generic
+    team: frozenset = frozenset()
 
 
 @dataclass
@@ -216,6 +218,9 @@ def _rate(entries, inputs):
                 row.status, row.reason = 'floor', 'Keep'
             elif row.entry.slot is None:
                 row.status, row.reason = 'floor', 'In the party'
+            elif len(row.entry.dvs) == 5 and (row.entry.dex, row.entry.dvs) in inputs.team:
+                # Deposited from the party at this visit, as Soak Red's level 43 Weezing was before its release.
+                row.status, row.reason = 'floor', 'Team member'
             rows[row.entry] = row
     for entry in entries:
         if entry.egg:
@@ -256,6 +261,37 @@ def catch_visit(headroom, requests=0):
     from .planning.ledger import box_wanted
     after = headroom - 1
     return max(box_wanted(after, True), requests, 1) if box_wanted(after, False) else 0
+
+
+class VisitTeam:
+    """The (dex, DVs) of every party member seen since the player entered the current map, for
+    Inputs.team. A PC visit happens on one map, so a member deposited there is no spare until a later
+    visit, however the menus open and close between the deposit and the release."""
+
+    def __init__(self):
+        self.where, self.keys, self.errands = None, frozenset(), frozenset()
+
+    def observe(self, where, keys):
+        same = where == self.where
+        self.errands = self.errands if same else frozenset()
+        self.keys = (frozenset(keys) - self.errands) | (self.keys if same else frozenset())
+        self.where = where
+        return self.keys
+
+    def errand(self, key):
+        """A boxed spare withdrawn at this visit only for one PC step, as the Gen II item route takes its
+        item off, is no team member unless it already was one. A trainee, a League partner or any other
+        Pokémon withdrawn for a role is never an errand, so it stays a team member."""
+        self.errands |= {key}
+
+
+def keeps_new(rows, *, missing=False, headroom=None, active_box=None):
+    """The one rule for a new copy of an owned species, the last of ``rows``: whether the PC keeps it
+    at the visit it brings (verdict). Every catch of an owned species in both gens and an incoming
+    trade ask it. ``headroom`` is the free box slots before it, or None when the snapshot does not
+    show them. Rarity has no level term, so a higher level copy is no better."""
+    needed = 0 if headroom is None else catch_visit(headroom, len(requested(rows)))
+    return verdict(rows, missing=missing, needed=needed, active_box=active_box).keep
 
 
 def verdict(rows, *, missing=False, needed=0, active_box=None):
@@ -304,7 +340,7 @@ def pushes_out(rows, needed, active_box=None):
     return False
 
 
-REFUSED = ('Keep', 'In the party', 'Egg')
+REFUSED = ('Keep', 'In the party', 'Team member', 'Egg')
 ORDER = {'spare': 1, 'kept': 2}
 
 

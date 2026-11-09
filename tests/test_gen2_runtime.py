@@ -734,7 +734,7 @@ def test_ditto_capture_intent_survives_transform_into_an_owned_species(real_data
     snapshot = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
         in_battle=1, enemy_species=157, owned={132, 157}, can_catch=True, badges=65535, money=10000,
         pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
-    mem = SimpleNamespace(byte=lambda name: 8 if name == 'wEnemySubStatus5' else 1)
+    mem = SimpleNamespace(byte=lambda name: 8 if name == 'wEnemySubStatus5' else 1, read=lambda name, size: bytes(size))
     assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
 
 

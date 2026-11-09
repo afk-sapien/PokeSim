@@ -231,9 +231,10 @@ class Emulator:
             raise response['error']
         return response.get('result')
 
-    def goals(self):
-        """The goals a manager can set as the next activity. Runs on the game thread."""
-        goals, reason = self.policy.goals(self.snapshot)
+    def goals(self, query=None):
+        """The goals a manager can set as the next activity, named like ``query`` if given. Runs on the
+        game thread."""
+        goals, reason = self.policy.goals(self.snapshot, query)
         return pin.listing(goals, self.policy.pin, reason)
 
     def pin_goal(self, key):
@@ -388,11 +389,22 @@ class Emulator:
         if self.snapshot.started:
             self.play_clock.seed(self.snapshot.playtime_seconds)
 
+    def _decline_returns(self):
+        """Close the returned legendaries the battle refused to catch."""
+        from .legendary_returns import decline
+        collection = getattr(self.policy, 'collection', None)
+        declined = getattr(collection, 'declined_returns', None)
+        if isinstance(declined, set):
+            for number in declined:
+                decline(self.store, number)
+            collection.declined_returns = set()
+
     def _reset_transient(self, *, clear_observation=False):
         """Discard queued input and recovery timers without erasing durable progress."""
         self.policy.on_restore()
         if hasattr(self.policy, 'collection') and hasattr(self, 'store'):
             from .legendary_returns import claims
+            self._decline_returns()
             ready, closed = claims(self.store)
             self.policy.collection.returned_legendaries = ready
             self.policy.collection.closed_legendaries = closed
@@ -635,6 +647,7 @@ class Emulator:
                 self.policy.collection.returned_events = step_events.available(self.store)
             if restored_legendary:
                 snap = read_snapshot(self.pb.memory, self.frame)
+            self._decline_returns()
             ready, closed = claims(self.store)
             if hasattr(self.policy, 'collection'):
                 self.policy.collection.returned_legendaries = ready
