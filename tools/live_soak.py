@@ -433,7 +433,8 @@ def _rarity(manager, adventure):
 
 class Copies:
     """Every held copy at each poll, to find a catch released at its first PC visit and a release that
-    takes a copy rarer than every newer copy, of any species, that pushed it out.
+    takes a copy rarer than every newer copy, of any species, that pushed it out. When the commit sends
+    PC scores, the release is judged by them instead, as the release order is.
 
     A copy is followed by its DVs, which evolution keeps, so its species is the latest one seen. A PC
     visit is a run of poll intervals with a release in the journal. A copy released at the first visit after it
@@ -453,7 +454,7 @@ class Copies:
     """
 
     def __init__(self, rarity):
-        self.rarity, self.held, self.dex, self.tails = rarity, None, {}, {}
+        self.rarity, self.held, self.dex, self.tails, self.scores = rarity, None, {}, {}, {}
         self.arrived, self.visits, self.polls, self.last_visit, self.visiting = {}, {}, 0, 0, None
         self.first_visit, self.pushed_out = [], []
         self.best_copy, self.only_copy, self.locked, self.from_party = [], [], [], []
@@ -475,8 +476,10 @@ class Copies:
             self.tails[key] = self.rarity(self.dex.get(key), list(key))
         return self.tails[key]
 
-    def poll(self, game, dex_of, released):
-        """``released`` is the releases the journal shows since the last poll, or whether it shows one."""
+    def poll(self, game, dex_of, released, scores=None):
+        """``released`` is the releases the journal shows since the last poll, or whether it shows one.
+        ``scores`` gives boxed copies' PC scores by DVs (_pc_scores). A released copy keeps its last one."""
+        self.scores.update(scores or {})
         if released and not self.wave_over:
             self.first_wave = (self.first_wave or 0) + int(released)
         elif self.first_wave is not None:
@@ -574,12 +577,38 @@ class Copies:
         for other in current:
             if self.tail(other) is not None:
                 rarest[self.dex.get(other)] = min(rarest.get(self.dex.get(other), 1.0), self.tail(other))
-        newer = [self.tail(other) for other in current if other in self.arrived and other != key
+        newer = [other for other in current if other in self.arrived and other != key
                  and self.arrived[other] > self.last_visit and self.tail(other) is not None
                  and not is_shiny({'dvs': list(other)}) and other not in self.party | self.locks
                  and self.tail(other) > rarest[self.dex.get(other)]]
-        if tail is not None and newer and tail < min(newer):
-            self.pushed_out.append({**row, 'by': min(newer)})
+        if tail is None or not newer:
+            return
+        if key in self.scores and all(other in self.scores for other in newer):
+            # The release order is by PC score, so a trade's, a partner's or trade demand's points may
+            # keep a commoner copy. Only a release that outscores a copy kept fails.
+            kept = min(newer, key=self.scores.get)
+            if self.scores[key] > self.scores[kept]:
+                self.pushed_out.append({**row, 'by': self.tail(kept), 'score': self.scores[key],
+                                        'by_score': self.scores[kept]})
+        elif tail < min(self.tail(other) for other in newer):
+            self.pushed_out.append({**row, 'by': min(self.tail(other) for other in newer)})
+
+
+def _pc_scores(child, game, boxed):
+    """The boxed copies' DVs and their PC scores (pcvalue.annotate), read from the PC view only when the
+    boxes change. An empty map when the commit sends none. A copy without a score is judged by its tail."""
+    stored = sorted(tuple(mon['dvs']) for mon in ((game or {}).get('storage') or {}).get('pokemon') or []
+                    if isinstance(mon.get('dvs'), (list, tuple)) and len(mon['dvs']) == 5)
+    if not stored or stored == boxed:
+        return boxed, {}
+    try:
+        payload = child.request('GET', '/api/pokedex/status?view=pc')
+    except RuntimeError:
+        return boxed, {}
+    scores = {tuple(mon['dvs']): mon['pc_value']['score'] for mon in ((payload or {}).get('storage') or {}).get('pokemon') or []
+              if isinstance(mon.get('dvs'), (list, tuple)) and len(mon['dvs']) == 5
+              and isinstance(mon.get('pc_value'), dict) and 'score' in mon['pc_value']}
+    return stored, scores
 
 
 def _names(manager, adventure):
@@ -654,7 +683,7 @@ def play_one(manager, aid, frames, progress):
     held_start = held_end = None
     help_reason = None
     seen = set(receipts_before)
-    best = {}
+    best, boxed = {}, None
     try:
         while True:
             if time.monotonic() - began > ADVENTURE_TIMEOUT:
@@ -690,8 +719,9 @@ def play_one(manager, aid, frames, progress):
                                       (first_event,)).fetchone()[0]
             db.close()
             seen.update(row[0] for row in fresh)
+            boxed, scores = _pc_scores(manager.supervisor.child(aid), game, boxed)
             try:
-                arrivals = copies.poll(game, dex_of, released - releases)
+                arrivals = copies.poll(game, dex_of, released - releases, scores)
             except RatingFailed as error:
                 result['failed'] = f'the judge cannot rate copies as the adventure does, {error}'
                 break
