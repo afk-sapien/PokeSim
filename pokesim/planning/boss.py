@@ -3,8 +3,9 @@
 Before a gym leader, an Elite Four member, the Champion, a rival or Red, every Pokémon should have at
 least half its HP and at least half the PP of the attacks it fights with, each weighted by how hard
 it hits. Those are the attacks within STRONG_SHARE of its strongest one. A party short of that heals
-first when a Pokémon Center is in reach and the approach has a boss heal trip left. Otherwise it goes
-in unready, and the journal says so once.
+first when a Pokémon Center is in reach and the leg has a boss heal trip left. Otherwise it goes in
+unready, and the journal says so once per leg. A leg runs from the last Pokémon Center visited to the
+boss, so trips spent in Victory Road leave the Indigo Plateau Center its own.
 
 Each generation reads its party into ``Fighter`` rows with ``fighter`` and its own move table, and
 asks one ``Gate`` per policy. The rule keeps no game knowledge of its own.
@@ -24,9 +25,11 @@ STRONG_SHARE = 0.5
 # A move that knocks out its user is the last choice in battle, so it counts for this share.
 SELF_KO_SHARE = 0.1
 STAB = 1.5
-# Boss heal trips one approach may take. Each trip heals at the Center nearest the party, so the next
-# walk is shorter. After the last one the party goes in unready, so a long cave between the Center
-# and the boss cannot loop.
+# Boss heal trips one leg may take. Each trip heals at the Center nearest the party, so the next walk
+# is shorter. After the last one the party goes in unready, so a long cave between the Center and the
+# boss cannot loop. A trip back to the same Center stays in its leg, and only a different Center
+# starts a new one. When the budget covered the whole approach, Red spent its three trips in Victory
+# Road and met Lorelei unready, though the Indigo Plateau Center is on the way.
 TRIPS = 3
 
 READY, HEAL, UNREADY = 'ready', 'heal', 'unready'
@@ -104,11 +107,14 @@ def restored(fighters):
 
 
 class Gate:
-    """The boss check of one policy: TRIPS boss heal trips per approach, and one journal note per
-    unready one.
+    """The boss check of one policy: TRIPS boss heal trips per leg, and one journal note per unready
+    leg.
 
-    An approach is the time one boss goal stays the goal. It starts again when the goal changes, and
-    when the party is restored outside a boss trip, by a blackout or an ordinary heal.
+    A leg runs from the last Pokémon Center visited to the boss while one boss goal stays the goal.
+    Stepping into a different Center starts a new leg with a fresh budget, and a trip that ends there
+    is its first. A trip back to the leg's own Center stays in the leg, so a cave the party cannot
+    cross still stops after TRIPS. The budget also starts again when the goal changes, and when the
+    party is restored outside a boss trip, by a blackout or an ordinary heal.
     """
 
     def __init__(self):
@@ -118,26 +124,34 @@ class Gate:
         self.noted = False
         self.was_restored = False
         self.memo = None
+        self.leg = None
+        self.done = False
 
-    def decide(self, key, fighters, reachable: Callable[[], bool], where=None):
+    def decide(self, key, fighters, reachable: Callable[[], bool], where=None, center=False):
         """READY, HEAL or UNREADY before the boss goal ``key``, or READY when ``key`` is None.
 
         ``reachable`` says whether a Pokémon Center is in reach, and is only asked when a trip would
-        start, since it searches the map. The answer is kept while ``key``, the party and ``where``
-        (the caller's map) stay the same, so a step costs one comparison.
+        start, since it searches the map. ``center`` says the caller's map ``where`` is a Pokémon
+        Center, which starts a leg there. The answer is kept while ``key``, the party and ``where``
+        stay the same, so a step costs one comparison.
         """
         fighters = tuple(fighters)
-        memo = (key, fighters, where, self.healing, self.trips)
+        memo = (key, fighters, where, center, self.healing, self.trips)
         if self.memo is not None and self.memo[0] == memo:
             return self.memo[1]
         if key != self.key:
             self.key, self.trips, self.healing, self.noted = key, 0, False, False
+        if center and where != self.leg:
+            # A new Center starts a new leg. A boss trip that ends here counts as its first.
+            self.leg, self.trips, self.noted = where, int(self.healing), False
         now = restored(fighters)
         if now and not self.was_restored and not self.healing:
             self.trips = 0
             self.noted = False
         self.was_restored = now
         if key is None or not unready(fighters):
+            if self.healing and key is not None:
+                self.done = True
             self.healing = False
             answer = READY
         elif self.healing:
@@ -148,15 +162,42 @@ class Gate:
             answer = HEAL
         else:
             answer = UNREADY
-        self.memo = ((key, fighters, where, self.healing, self.trips), answer)
+        self.memo = ((key, fighters, where, center, self.healing, self.trips), answer)
         return answer
 
     def note(self):
-        """True once per unready approach, when the journal should say the party went in unready."""
+        """True once per unready leg, when the journal should say the party went in unready."""
         if self.noted:
             return False
         self.noted = True
         return True
+
+    def healed(self):
+        """True once after a boss heal trip ends with the party ready, when the journal says so."""
+        done, self.done = self.done, False
+        return done
+
+
+def boss_name(title):
+    """The boss a goal title names, without its leading verb: Lorelei for "Challenge Lorelei"."""
+    for verb in ('Challenge ', 'Battle '):
+        if title.startswith(verb):
+            return title[len(verb):]
+    return title
+
+
+def healed_event(title):
+    """The journal row, low and kept off the feed, for a boss heal trip that left the party ready."""
+    return {'type': 'plan', 'title': f'Healed before {boss_name(title)}',
+            'body': 'The party was under half HP or strong PP, so it healed at a Pokémon Center first.',
+            'priority': 1, 'notable': False, 'tags': 'hospital'}
+
+
+def pp_heal_event(place):
+    """The journal row, low and kept off the feed, for a heal its strong attacks' spent PP called for."""
+    return {'type': 'plan', 'title': f'PP heal at {place}',
+            'body': 'Strong attacks ran low on PP, so the party restored them at the nurse.',
+            'priority': 1, 'notable': False, 'tags': 'hospital'}
 
 
 def unready_event(title, fighters, names=None):
@@ -165,6 +206,6 @@ def unready_event(title, fighters, names=None):
     names = names or [f'Slot {index + 1}' for index in range(len(fighters))]
     detail = ', '.join(names[index] for index in slots)
     return {'type': 'plan', 'title': f'Went in unready: {title}',
-            'body': (f'No Pokémon Center was in reach, or this approach already took its heal trips. '
+            'body': (f'No Pokémon Center was in reach, or this leg already took its heal trips. '
                      f'Under half HP or strong PP: {detail}.'),
             'priority': 2, 'tags': 'warning'}

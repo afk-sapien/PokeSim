@@ -999,7 +999,7 @@ class Policy:
         """The boss check before the goal under way (planning/boss.py): READY, HEAL or UNREADY.
 
         HEAL needs a Pokémon Center the heal walk can reach. UNREADY goes in anyway, and the journal
-        says so once per approach.
+        says so once per leg. Each Pokémon Center the party steps into starts a leg with fresh trips.
         """
         from ..planning import boss
         from .ledger import fighters
@@ -1009,23 +1009,38 @@ class Policy:
         goal = self.goal
         key = goal.key if goal is not None and goal.key in self.BOSSES else None
         party = fighters(self.data, snapshot)
-        verdict = gate.decide(key, party, lambda: not blocked and self.center(snapshot) is not None, where=snapshot.map)
-        if verdict == boss.UNREADY and not getattr(self, 'ladder_survey', False) and gate.note():
+        at_center = self.data.maps.get(snapshot.map, {}).get('constant', '').endswith('POKECENTER_1F')
+        verdict = gate.decide(key, party, lambda: not blocked and self.center(snapshot) is not None,
+                              where=snapshot.map, center=at_center)
+        surveying = getattr(self, 'ladder_survey', False)
+        if verdict == boss.UNREADY and not surveying and gate.note():
             from .collection import pin_events
             names = [mon.name for mon in snapshot.party if not mon.egg]
             pin_events(self).append(boss.unready_event(goal.label, party, names))
+        if not surveying and gate.healed():
+            from .collection import pin_events
+            pin_events(self).append(boss.healed_event(goal.label))
         return verdict
 
     def healing(self, snapshot):
         from ..planning import boss
-        from .ledger import walk_spent
+        from ..planning.ledger import PP
+        from .ledger import battle_room, walk_spent
         if self.heal_blocked(snapshot):
             if any(not mon.egg for mon in getattr(snapshot, 'party', ())):
                 # No walk out from here, so a boss ahead is met as the party stands.
                 self.boss_ready(snapshot, True)
             return None
         healthy = [mon for mon in snapshot.party if not mon.egg]
-        if not healthy or not walk_spent(self.data, snapshot) and self.boss_ready(snapshot, False) != boss.HEAL:
+        spent = bool(healthy) and walk_spent(self.data, snapshot)
+        surveying = getattr(self, 'ladder_survey', False)
+        if not healthy or not spent and self.boss_ready(snapshot, False) != boss.HEAL:
+            if not surveying:
+                if getattr(self, 'pp_heal', False) and self.healing_map == snapshot.map:
+                    # A heal its spent PP called for says so in the journal once the nurse is done.
+                    from .collection import pin_events
+                    pin_events(self).append(boss.pp_heal_event(self.data.maps[snapshot.map]['name']))
+                self.pp_heal = False
             self.healing_map = None
             return None
         center = self.center(snapshot)
@@ -1033,6 +1048,8 @@ class Policy:
             self.healing_map = None
             return None
         mid, nurse = center
+        if self.healing_map is None and not surveying:
+            self.pp_heal = spent and battle_room(self.data, snapshot)[PP] == 0
         self.healing_map = mid
         return Goal('heal', 'Restore the team at a Pokémon Center', self.data.maps[mid]['constant'],
                     nurse['x'], nurse['y'] + 2, 'up')
