@@ -1,0 +1,80 @@
+"""Read how long ago an adventure last made real progress, from its own progress table and journal.
+
+A stand-in until the goal system checks its own liveness. The watchdog asks once every few minutes
+and raises a "stalled" problem once a game goes too long without real progress for its stage.
+
+Story progress is a badge, a new area, a new Pokédex entry or a League win. A game in the story
+stalls after twice the slowest gap the original Red, Blue, Yellow, Gold, Silver and Crystal games
+took in the same stage, and never in under three hours. Postgame progress is a League win, any
+Pokédex change (seen, owned, level 100 species and perfect finds) or a level up, which is how a
+trainee shows its training. A postgame game stalls after a day without one. Experience alone,
+repeat catches and other journal entries never count.
+"""
+from __future__ import annotations
+
+from contextlib import closing
+from dataclasses import dataclass
+from pathlib import Path
+import sqlite3
+
+FLOOR = 3 * 3600
+POSTGAME = 24 * 3600
+# Seconds, by (generation, badges, League won at least once). The slowest gap between two progress
+# moments in that stage in the original games' progress tables and journals, 2026-11-09.
+SLOWEST = {
+    (1, 0, False): 271, (1, 1, False): 319, (1, 2, False): 913, (1, 3, False): 460, (1, 4, False): 486,
+    (1, 5, False): 420, (1, 6, False): 2081, (1, 7, False): 148, (1, 8, False): 15684,
+    (2, 0, False): 27, (2, 1, False): 37, (2, 2, False): 37, (2, 3, False): 88, (2, 4, False): 67,
+    (2, 5, False): 399, (2, 6, False): 141, (2, 7, False): 1334, (2, 8, False): 465,
+    (2, 8, True): 56, (2, 9, True): 16, (2, 10, True): 17, (2, 11, True): 87, (2, 12, True): 61,
+    (2, 13, True): 26, (2, 14, True): 35, (2, 15, True): 30,
+}
+GEN2 = ('gold', 'silver', 'crystal')
+# Enough rows to cover a day of postgame Pokédex changes in the busiest original game.
+ROWS = 5000
+
+
+@dataclass(frozen=True)
+class Reading:
+    last: float      # when the game last made real progress
+    limit: float     # seconds without progress before it counts as stalled
+    postgame: bool
+    badges: int
+
+
+def generation(version):
+    return 2 if version in GEN2 else 1
+
+
+def limit(gen, badges, league):
+    if league and (gen == 1 or badges >= 16):
+        return POSTGAME
+    return max(FLOOR, 2 * SLOWEST.get((gen, badges, bool(league)), 0))
+
+
+def _changed(rows, columns):
+    """The time of the newest row whose columns differ from the row before it, or of the oldest row."""
+    for newer, older in zip(rows, rows[1:]):
+        if any(newer[i] != older[i] for i in columns):
+            return newer[0]
+    return rows[-1][0]
+
+
+def read(path, gen):
+    """The reading for one adventure's pokesim.sqlite, or None before its first progress row."""
+    path = Path(path)
+    if not path.is_file():
+        return None
+    with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=0.5)) as db:
+        rows = db.execute('SELECT ts, badges, owned, seen, league, level100, perfect FROM progress '
+                          'ORDER BY rowid DESC LIMIT ?', (ROWS,)).fetchall()
+        if not rows:
+            return None
+        badges, league = rows[0][1], rows[0][4]
+        seconds = limit(gen, badges, league)
+        postgame = seconds == POSTGAME
+        # Columns: 1 badges, 2 owned, 3 seen, 4 league, 5 level 100 species, 6 perfect finds.
+        last = _changed(rows, (2, 3, 4, 5, 6) if postgame else (1, 2, 4))
+        kind = 'level' if postgame else 'map'
+        event = db.execute('SELECT ts FROM events WHERE type=? ORDER BY id DESC LIMIT 1', (kind,)).fetchone()
+    return Reading(max(last, event[0] if event else 0), seconds, postgame, badges)
