@@ -942,6 +942,11 @@ class Emulator:
                               f'{self.policy.recoveries} recoveries so far.', priority=HIGH), self.snapshot)
         restored = None
         from .standdown import carry_over, stalled_objectives
+        if why == CANNOT_END and self.snapshot is not None:
+            # A boss battle that cannot end is lost, though not everyone fainted.
+            note = getattr(self.policy, 'note_boss_loss', None)
+            if note is not None:
+                note(self.snapshot)
         stalled = stalled_objectives(self.policy)
         wins = getattr(self.snapshot, 'hall_of_fame_count', 0)
         if target:

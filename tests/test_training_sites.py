@@ -40,9 +40,9 @@ def rows(data, name):
 
 def test_named_training_maps_have_wild_tables(data):
     from pokesim.gen2.collection import PATROL_MAP
-    from pokesim.gen2.policy import FALKNER_SITE
+    from pokesim.gen2.policy import Policy
     from pokesim.gen2.training import SITE
-    for name in (SITE, FALKNER_SITE, PATROL_MAP):
+    for name in (SITE, PATROL_MAP, *Policy.BOSS_TRAINING.values()):
         assert rows(data, name), name
 
 

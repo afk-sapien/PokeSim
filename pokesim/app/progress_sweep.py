@@ -38,6 +38,12 @@ SLOWEST = {
 GEN2 = ('gold', 'silver', 'crystal')
 # Enough rows to cover a day of postgame Pokédex changes in the busiest original game.
 ROWS = 5000
+# Two stall entries at one place within an hour mean the game's own recovery is not working there,
+# as when Gold reloaded twice at Violet Gym 34 minutes apart and the three hour floor stayed quiet.
+REPEATS = 2
+REPEAT_WINDOW = 3600
+# Full boxes block every catch, so a day without one is a hunt that cannot finish.
+CATCH_QUIET = 24 * 3600
 
 
 @dataclass(frozen=True)
@@ -46,6 +52,18 @@ class Reading:
     limit: float     # seconds without progress before it counts as stalled
     postgame: bool
     badges: int
+    stalls: tuple = ()     # (time, place) of the newest stall entries, newest first
+    caught: float = 0      # when the game last caught a Pokémon
+
+
+def repeated(stalls, now):
+    """(place, first time, count) when REPEATS stall entries at one place fall in the last REPEAT_WINDOW."""
+    recent = {}
+    for ts, place in stalls:
+        if now - ts <= REPEAT_WINDOW:
+            recent.setdefault(place, []).append(ts)
+    found = [(place, min(times), len(times)) for place, times in recent.items() if len(times) >= REPEATS]
+    return max(found, key=lambda row: row[2], default=None)
 
 
 def generation(version):
@@ -83,7 +101,10 @@ def read(path, gen):
         last = _changed(rows, (2, 3, 4, 5, 6) if postgame else (1, 2, 4))
         kind = 'level' if postgame else 'map'
         event = db.execute('SELECT ts FROM events WHERE type=? ORDER BY id DESC LIMIT 1', (kind,)).fetchone()
-    return Reading(max(last, event[0] if event else 0), seconds, postgame, badges)
+        stalls = db.execute("SELECT ts, map FROM events WHERE type='stall' ORDER BY id DESC LIMIT 10").fetchall()
+        caught = db.execute("SELECT MAX(ts) FROM events WHERE type='catch'").fetchone()[0]
+    return Reading(max(last, event[0] if event else 0), seconds, postgame, badges,
+                   tuple((ts, place or 'the same place') for ts, place in stalls), caught or 0)
 
 
 def library(root, now=None):
