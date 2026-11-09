@@ -614,9 +614,25 @@ def test_gen1_hm_reserve_keeps_one_user_of_every_field_move(gen1, moves, slot):
         assert any(move in member.moves for member in party)
 
 
-def test_gen1_party_of_unique_field_move_users_cannot_make_room(gen1):
+@pytest.mark.parametrize(('moves', 'locked', 'slot'), [
+    ((19, 57, 148, 70, 15), (), 5),       # Cut goes first, the game withdraws a Cut partner when it needs one.
+    ((15, 19, 57, 70, 148), (1,), 4),     # Strength before Surf.
+    ((15, 19, 57, 70, 148), (1, 4), 3),   # Surf as the last of the moves the PC brings back.
+])
+def test_gen1_party_of_unique_field_move_users_stores_a_recoverable_one(gen1, moves, locked, slot):
     candidate = stored(0, trainer_id=101)
-    controller, _, snap = gen1.start(candidate, party=hm_party(15, 19, 57, 70, 148))
+    controller, recorder, snap = gen1.start(candidate, party=hm_party(*moves))
+    for index in locked:
+        gen1.emu.store.set_trade_preference(identity(asdict(snap.party[index])), {'state': 'locked'})
+    assert step(controller, snap, storage_menu(1)) == PRESS
+    assert recorder.last.kind == 'deposit_pokemon' and recorder.last.slot == slot
+
+
+def test_gen1_party_of_unique_fly_and_flash_users_cannot_make_room(gen1):
+    candidate = stored(0, trainer_id=101)
+    controller, _, snap = gen1.start(candidate, party=hm_party(19, 148, 33, 33, 33))
+    for member in snap.party[3:]:
+        gen1.emu.store.set_trade_preference(identity(asdict(member)), {'state': 'locked'})
     assert controller.step(PolicyContext(snap, 0, 0, storage_menu(1)))[0].button is None
     assert 'No safe unprotected reserve' in gen1.emu.store.get(preparation.KEY)['error']
 

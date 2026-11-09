@@ -24,6 +24,9 @@ ACTIVE = {'travelling', 'storage', 'rendezvous'}
 CENTER = 89
 RENDEZVOUS = (CENTER, 11, 3)
 PC = (CENTER, 13, 4)
+FIELD_MOVES = (15, 19, 57, 70, 148)
+# Field moves the game brings back from the PC, cheapest to lose first: Cut, Strength, Surf.
+RECOVERABLE = (15, 70, 57)
 
 
 SEALED = 'The party and every PC box are full and no spare duplicate can be released, so no boxed Pokémon can join the party for a trade'
@@ -448,13 +451,21 @@ class Preparation:
         preferences = self._preferences()
         protected = {'locked', 'offered', 'withdrawn'}
         strongest = max(range(len(snap.party)), key=lambda i: snap.party[i].level)
-        safe = [i for i, mon in enumerate(snap.party)
+        free = [i for i, mon in enumerate(snap.party)
                 if i != strongest and keys[i] and keys.count(keys[i]) == 1
                 and not stays_in_party(snap, mon)
-                and preferences.get(keys[i], {}).get('state') not in protected
-                and not any(move in (15, 19, 57, 70, 148)
-                            and not any(move in other.moves for j, other in enumerate(snap.party) if j != i)
-                            for move in mon.moves)]
+                and preferences.get(keys[i], {}).get('state') not in protected]
+        only = {i: {move for move in snap.party[i].moves if move in FIELD_MOVES
+                    and not any(move in other.moves for j, other in enumerate(snap.party) if j != i)}
+                for i in free}
+        safe = [i for i in free if not only[i]]
+        rank = {}
+        if not safe and not self.state.get('manual'):
+            # A party of the strongest battler, Yellow's Pikachu and sole field-move holders had no one
+            # to store, so every trade into it failed. The game withdraws a Cut, Strength or Surf partner
+            # from the PC when it needs one, so a holder of only those may wait there. Fly and Flash stay.
+            safe = [i for i in free if only[i] <= set(RECOVERABLE)]
+            rank = {i: max(RECOVERABLE.index(move) for move in only[i]) for i in safe}
         if not safe and self.state.get('manual'):
             # A manual trade may send any reserve to the PC. It only has to be identifiable.
             safe = [i for i in range(len(snap.party)) if keys[i] and keys.count(keys[i]) == 1]
@@ -464,7 +475,8 @@ class Preparation:
                 raise ValueError('The reserve needed for this trade moved or became protected')
             return slots[0]
         preferred = reserve_to_deposit(snap)
-        candidate = preferred if preferred in safe else min(safe, key=lambda i: snap.party[i].level, default=None)
+        candidate = preferred if preferred in safe else min(
+            safe, key=lambda i: (rank.get(i, 0), snap.party[i].level), default=None)
         if candidate is None:
             raise ValueError('No safe unprotected reserve can leave the party for this trade')
         self.deposit_key = keys[candidate]
