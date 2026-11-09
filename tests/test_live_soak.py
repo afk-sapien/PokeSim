@@ -319,3 +319,30 @@ def test_a_commit_older_than_the_data_schema_is_refused(tmp_path, schema, refuse
     (tmp_path / 'pokesim' / 'app').mkdir(parents=True)
     (tmp_path / 'pokesim' / 'app' / 'registry.py').write_text(f'SCHEMA = {schema}\n')
     assert (live_soak.schema_of(tmp_path) < 2) is refused
+
+
+GITHUB_504 = ('error: Failed to fetch: `https://github.com/example/pokecore-0.11.0-py3-none-any.whl`\n'
+              '  Caused by: HTTP status server error (504 Gateway Timeout)\n')
+
+
+@pytest.mark.parametrize('first,offline,tries', [
+    (GITHUB_504, 0, 2),  # a network failure is tried once more offline, from the cache
+    ('error: The lockfile needs to be updated\n', None, 1),  # any other failure is not
+])
+def test_an_environment_build_retries_offline_only_after_a_network_error(monkeypatch, tmp_path, first, offline, tries):
+    calls, lines = [], []
+
+    def run(command, env, **kwargs):
+        calls.append(env.get('UV_OFFLINE'))
+        code = 1 if len(calls) == 1 else offline
+        return SimpleNamespace(returncode=code, stdout='', stderr=first if code else '')
+    monkeypatch.setattr(live_soak.subprocess, 'run', run)
+    if offline is None:
+        with pytest.raises(live_soak.subprocess.CalledProcessError):
+            live_soak.sync_environment(tmp_path, {}, lines.append)
+    else:
+        live_soak.sync_environment(tmp_path, {}, lines.append)
+    assert calls == [None, '1'][:tries]
+    assert bool(lines) is (tries == 2)
+    if lines:
+        assert 'retrying offline' in lines[0] and 'Failed to fetch' in lines[0]
