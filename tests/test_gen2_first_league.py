@@ -133,6 +133,19 @@ def test_the_partner_level_comes_from_the_cartridge_league_aces():
         assert collection.partner_target(SimpleNamespace(league_aces=aces)) == PARTNER
 
 
+def test_a_randomized_run_reads_its_own_league_aces(monkeypatch):
+    import os
+    from pokesim import randomized
+    for game in ('gold', 'crystal'):
+        rom = os.path.join(os.path.dirname(os.environ.get('ROM_PATH', '')), f'{game}.gbc')
+        if not os.path.exists(rom):
+            pytest.skip(f'Set ROM_PATH beside a {game} cartridge')
+        # A trainer shuffle swaps species but keeps levels, so the aces come from the run's own tables.
+        monkeypatch.setenv(randomized.ENV, f'PSR1-{game.upper()}-WST-4242')
+        assert randomized.current(rom) is not None
+        assert sorted(collection.league_aces(rom, game)) == [42, 44, 46, 47, 50]
+
+
 def test_a_first_league_attempt_restarted_again_and_again_is_called_off(run):
     assert collection.call_off_league(run) and run.collection['first_league_entered']
     run.collection.clear()
