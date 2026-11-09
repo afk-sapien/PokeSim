@@ -3,8 +3,10 @@
 A copy is scored as the battle power of its family's fully evolved form at Lv 100 with full stat
 experience, so a Gastly is scored as the Gengar it becomes. A family that branches takes the branch
 its DVs suit best. The score sums the five stats. Attack counts fully when the final form's best
-attacks are physical, not at all when they are special and half when they are mixed. Level, stat
-experience and moves known are not in it, since training and moves can be added to any copy later.
+physical attack beats its best special one by a quarter, not at all when the special one does, and
+half otherwise. The attacks are the family's level-up moves plus the TMs and HMs the bot teaches that
+the form can learn. Level, stat experience and moves known are not in it, since training and moves
+can be added to any copy later.
 
 Rarity is the chance a uniformly random set of the four stored DVs, with HP derived from them,
 scores at least as well. It is counted exactly over all 65536 sets and cached per family shape.
@@ -20,7 +22,8 @@ COMBOS = 65536
 PHYSICAL_BELOW = 20
 # Same-type attack bonus when ranking a form's best attacks.
 STAB = 1.5
-BEST_ATTACKS = 2
+# The best attack of one side must beat the other side's by this factor to decide the Attack weight.
+DOMINANCE = 1.25
 # Explosion and Self-Destruct faint the user, so they never count among a form's best attacks
 # (Gen I and Gen II effect names).
 SELF_KO = frozenset({'EXPLODE_EFFECT', 'EFFECT_SELFDESTRUCT'})
@@ -32,18 +35,33 @@ def physical(move_type):
     return move_type < PHYSICAL_BELOW
 
 
-def attack_weight(types, moves):
-    """1 when the best attacks are physical, 0 when special and 0.5 when mixed.
+def best_attacks(types, moves):
+    """The best physical and special attack values, each power times accuracy with the same-type
+    bonus, as ((P, move), (S, move)). A side the form has no attack for is (0, None)."""
+    best = {True: (0, None), False: (0, None)}
+    for move in moves:
+        power, accuracy, kind = move[:3]
+        if power > 1:
+            value = power * accuracy / 100 * (STAB if kind in types else 1)
+            side = physical(kind)
+            if value > best[side][0]:
+                best[side] = (value, move)
+    return best[True], best[False]
 
-    ``moves`` holds (power, accuracy, type) for every damaging move the family learns by level on the
-    way to this form, self-KO moves left out by the caller. The best two count, by power and accuracy with the same-type bonus. A form that learns
-    fewer than two is filled out with its own types."""
-    ranked = sorted(((power * accuracy / 100 * (STAB if kind in types else 1), physical(kind))
-                     for power, accuracy, kind in moves if power > 1), reverse=True)
-    sides = [side for _, side in ranked[:BEST_ATTACKS]]
-    sides += [physical(kind) for kind in types][:BEST_ATTACKS - len(sides)]
-    share = sum(sides) / len(sides) if sides else 1
-    return 1 if share == 1 else 0 if share == 0 else 0.5
+
+def attack_weight(types, moves):
+    """1 when the best physical attack is at least DOMINANCE times the best special one, 0 when the
+    special one is at least DOMINANCE times the physical one, and 0.5 otherwise, ties included.
+
+    ``moves`` holds (power, accuracy, type) for every damaging move in the form's pool, self-KO
+    moves left out by the caller. A form with no damaging move is judged by its own types."""
+    (strong, _), (special, _) = best_attacks(types, moves)
+    if not strong and not special:
+        strong = sum(map(physical, types))
+        special = len(types) - strong
+    if strong >= DOMINANCE * special:
+        return 1
+    return 0 if special >= DOMINANCE * strong else 0.5
 
 
 def form(stats, types, moves):
@@ -111,19 +129,24 @@ class Families:
     """Final forms per species from one game's tables.
 
     ``species`` maps a key to (stats, types, move ids, next keys), stats being HP, Attack, Defense,
-    Speed and Special, and ``moves`` maps a move id to (power, accuracy, type)."""
+    Speed and Special, and ``moves`` maps a move id to (power, accuracy, type). ``machines`` maps a
+    key to the move ids of the TMs and HMs the bot teaches that the species can learn, which join a
+    final form's pool."""
 
-    def __init__(self, species, moves):
-        self.species, self.moves = species, moves
+    def __init__(self, species, moves, machines=None):
+        self.species, self.moves, self.machines = species, moves, machines or {}
         self.parent = {}
         for key, (_, _, _, after) in species.items():
             for child in after:
                 self.parent.setdefault(child, key)
         self._forms = {}
 
+    def path_ids(self, path):
+        """The move ids in a final form's pool, level-up moves on the way and its taught TMs and HMs."""
+        return sorted({move for key in path for move in self.species[key][2]} | set(self.machines.get(path[-1], ())))
+
     def path_moves(self, path):
-        seen = {move for key in path for move in self.species[key][2]}
-        return [self.moves[move] for move in sorted(seen) if move in self.moves]
+        return [self.moves[move] for move in self.path_ids(path) if move in self.moves]
 
     def finals(self, key, path):
         after = [child for child in self.species[key][3] if child in self.species and child not in path]

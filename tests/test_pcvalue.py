@@ -134,6 +134,35 @@ def test_a_special_attacker_scores_without_attack():
     assert rows[1].reason == 'Best copy' and rows[0].status == 'spare'
 
 
+def test_the_attack_weight_follows_the_side_that_wins_by_a_quarter():
+    from pokesim.rarity import attack_weight
+    # Gengar: Dream Eater 100 against a same-type Lick of 30, Ghost being physical.
+    assert attack_weight((8, 3), [(20, 100, 8), (100, 100, 24)]) == 0
+    assert attack_weight((3,), [(100, 100, 0), (80, 100, 20)]) == 1
+    assert attack_weight((3,), [(99, 100, 0), (80, 100, 20)]) == 0.5
+    assert attack_weight((3,), [(80, 100, 0), (80, 100, 20)]) == 0.5
+    assert attack_weight((3,), [(80, 100, 0), (100, 100, 20)]) == 0
+    # A form with no damaging move is judged by its types.
+    assert attack_weight((0, 0), []) == 1 and attack_weight((24, 24), []) == 0
+
+
+def test_the_move_pool_adds_only_the_machines_the_bot_teaches():
+    import os
+    import pytest
+    import pokesim.policies  # noqa: F401  (tm_shop imports through the policies package)
+    from pokesim.investment import families, taught_machines
+    from pokesim.strategy_data import MOVES
+    from pokesim.tm_shop import LIMITED, RENEWABLE
+    if not os.path.isfile(os.environ.get('ROM_PATH', '')):
+        pytest.skip('Set ROM_PATH to a Red or Blue cartridge')
+    taught = {MOVES[move]['name'] for moves in taught_machines().values() for move in moves}
+    # One-time TMs and Cut, Surf and Strength, never a renewable mart TM such as Hyper Beam.
+    assert {'THUNDERBOLT', 'SURF', 'STRENGTH'} <= taught and 'HYPER_BEAM' not in taught
+    assert len(LIMITED) == 50 - len(RENEWABLE)
+    # Voltorb learns no Electric move by level, so Electrode's Attack counts only with Thunderbolt.
+    assert families().forms(internal(101))[0][1] == 0
+
+
 def test_a_copy_scores_as_its_best_final_form():
     from pokesim.investment import potential_power
     dvs = (9, 12, 7, 14, 3)

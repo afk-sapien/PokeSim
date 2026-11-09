@@ -103,13 +103,13 @@ def improves(s, species, dvs, rated=None):
     brings would not release, nor a rarer copy for it. A held copy without DV data, as in a compact
     snapshot, is not counted. ``rated`` rates the PC with extra rows as the next release does
     (the policy's pc_rated). Without it the PC is rated without trade settings or plans."""
-    from ..pcvalue import Entry, catch_visit, verdict
+    from ..pcvalue import Entry, catch_visit, requested, verdict
     from .team import release_rated, storage_headroom
     number = dex(species)
     candidate = Entry((-1, 0), (number, 0), SPECIES.get(species, {}).get('name', '?'), 5,
                       dvs=tuple(dvs or ()), record={'species': species, 'dvs': dvs})
     rows = rated(extra=(candidate,)) if rated else release_rated(s, extra=(candidate,))
-    needed = catch_visit(storage_headroom(s)) if hasattr(s, 'box_counts') else 0
+    needed = catch_visit(storage_headroom(s), len(requested(rows))) if hasattr(s, 'box_counts') else 0
     return verdict(rows, missing=number not in s.owned, needed=needed,
                    active_box=getattr(s, 'active_box', None)).keep
 

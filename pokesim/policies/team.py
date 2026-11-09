@@ -195,10 +195,12 @@ def held_identities(s):
 
 def _release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards, requested, roles, favor):
     from ..planning.ledger import box_wanted
-    from ..pcvalue import deadlocked, releases
+    from ..pcvalue import deadlocked, releases, requested as asked
     every = release_rated(s, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor)
     rated = [row for row in every if row.entry.slot not in reserved]
-    chosen = releases(rated, max(box_wanted(storage_headroom(s), True), 1), getattr(s, 'active_box', None))
+    # The visit takes every owner request, as in Gold, Silver and Crystal (gen2/ledger.py).
+    chosen = releases(rated, max(box_wanted(storage_headroom(s), True), len(asked(rated)), 1),
+                      getattr(s, 'active_box', None))
     row = chosen[0] if chosen else None
     return (row.entry.slot if row else None,
             ((row.entry.record['species'], row.describe()) if row else None,

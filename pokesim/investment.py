@@ -1,4 +1,5 @@
 """Collection investment decisions, separate from shared DV probability math."""
+import hashlib
 from functools import lru_cache
 
 from pokecore.dvs import dv_probabilities
@@ -25,7 +26,43 @@ def families():
                for key, entry in SPECIES.items() if entry.get('dex')}
     moves = {key: (move['power'], move['accuracy'], move['type']) for key, move in MOVES.items()
              if move.get('effect') not in SELF_KO}
-    return Families(species, moves)
+    return Families(species, moves, taught_machines())
+
+
+# HM01 Cut, HM03 Surf and HM04 Strength, the HMs the bot teaches (progression.py, move_development.py).
+TAUGHT_HMS = frozenset({15, 57, 70})
+
+
+def cartridge_machines():
+    """(TM item to move id, TM items per internal species id) from the cartridge at ROM_PATH, or empty
+    when it is missing, untracked or another version than the game data."""
+    from . import config
+    from .game_data import current_variant
+    from .yellow import YELLOW_SHA1
+    try:
+        rom = config.ROM_PATH.read_bytes()
+    except OSError:
+        return {}, {}
+    if (hashlib.sha1(rom).hexdigest() == YELLOW_SHA1) != (current_variant() == 'yellow'):
+        return {}, {}
+    from .tm_shop import cartridge_data
+    try:
+        return cartridge_data(rom)
+    except ValueError:
+        return {}, {}
+
+
+def taught_machines():
+    """The move ids of the TMs and HMs the bot teaches, per internal species id that can learn them.
+
+    The bot teaches only the one-time TMs the Champion counter sells (tm_shop.LIMITED), bought or found,
+    and TAUGHT_HMS. TM compatibility comes from the cartridge, so without one only the HMs count."""
+    from . import policies  # noqa: F401  (tm_shop imports through the policies package)
+    from .tm_shop import LIMITED
+    tm_moves, compatible = cartridge_machines()
+    return {key: {tm_moves[item] for item in compatible.get(key, ()) if item in LIMITED and item in tm_moves}
+            | TAUGHT_HMS.intersection(entry.get('hms', ()))
+            for key, entry in SPECIES.items() if entry.get('dex')}
 
 
 @lru_cache(maxsize=1)

@@ -236,7 +236,7 @@ def worth(candidate, held, inputs=Inputs(), *, missing=False, needed=0, active_b
 def catch_visit(headroom, requests=0):
     """The ``needed`` the release path passes to ``releases`` once one more Pokémon is boxed, or 0
     while the boxes still keep their reserve. ``headroom`` is the free box slots before it and
-    ``requests`` the owner's release requests, which Gold, Silver and Crystal count too."""
+    ``requests`` the owner's release requests, which the visit takes too."""
     from .planning.ledger import box_wanted
     after = headroom - 1
     return max(box_wanted(after, True), requests, 1) if box_wanted(after, False) else 0

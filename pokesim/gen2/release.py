@@ -73,6 +73,24 @@ def gift(mon):
     return (getattr(mon, 'caught', 0) & 0x7F) in (GIFT_LANDMARK, EVENT_LANDMARK)
 
 
+# HM01 Cut, HM02 Fly, HM03 Surf, HM04 Strength, HM06 Whirlpool and HM07 Waterfall, the HMs the
+# policy teaches for the field (policy.py).
+TAUGHT_HMS = frozenset({15, 19, 57, 70, 250, 127})
+
+
+def taught_machines(data):
+    """The move ids of the TMs and HMs the bot teaches, per Pokédex number that can learn them.
+
+    The bot teaches only the one-time TMs the Goldenrod Champion clerks sell (champion_shop.limited_tms),
+    bought or found, and TAUGHT_HMS. Iron Tail, which it teaches a Normal lead, is one of those TMs."""
+    from .champion_shop import limited_tms
+    try:
+        taught = set(limited_tms(data).values()) | TAUGHT_HMS
+    except (AttributeError, KeyError):
+        taught = set(TAUGHT_HMS)
+    return {dex: taught.intersection(row.get('machines') or ()) for dex, row in getattr(data, 'species', {}).items()}
+
+
 def families(data):
     """The game's final forms per Pokédex number, for rarity.py, kept on ``data``. Special is the mean of
     Special Attack and Special Defense, which share one DV, so a family scores as it does in Gen I."""
@@ -89,7 +107,7 @@ def families(data):
                                 [evolution['species'] for evolution in row.get('evolutions', [])])
         moves = {key: (move['power'], move['accuracy'], move['type'])
                  for key, move in getattr(data, 'moves', {}).items() if move.get('effect') not in SELF_KO}
-        cached = Families(species, moves)
+        cached = Families(species, moves, taught_machines(data))
         data._families = cached
     return cached
 
