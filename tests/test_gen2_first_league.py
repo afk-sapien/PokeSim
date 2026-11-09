@@ -1,4 +1,4 @@
-"""The first Gen II League trains the bench first, and a loss to a boss is never progress.
+"""The first Gen II League trains one partner beside the ace first, and a loss to a boss is never progress.
 
 A live run reached the League with a level 56 Typhlosion and a bench at levels 2 to 30, ran out of
 PP at Lance and lost for 12 hours. Each run earned experience, levels and trainer wins before the
@@ -62,6 +62,13 @@ def test_a_lone_starter_trains_its_bench_before_the_first_league(run):
     kind, project = collection.first_league(run, at('VICTORY_ROAD', party), None, None)
     assert kind == 'train' and project['identity'] == training.identity(party[2])
     assert project['level_goal'] == PARTNER and project['map'] == collection.FIRST_LEAGUE_MAP
+    # The bench beside the ace and partner never trains for the League, and the partner trains on
+    # however many calls it takes.
+    for _ in range(3):
+        assert collection.first_league(run, at('VICTORY_ROAD', party), None, None)[1]['identity'] == project['identity']
+    # Reaching level 40 meets the gate, which wins over the partner's walk to level 41.
+    met = (party[0], party[1], mon(LAPRAS, collection.LEAGUE_LEVEL, (SURF,), dvs=(6,)), party[3])
+    assert collection.first_league(run, at('VICTORY_ROAD', met), None, None) is None
     # A partner at the partner level lets the team go in, and the League project is dropped.
     trained = (party[0], party[1], mon(LAPRAS, PARTNER, (SURF,), dvs=(6,)), party[3])
     assert collection.league_ready(run, at('INDIGO_PLATEAU_POKECENTER_1F', trained))
@@ -78,24 +85,27 @@ def test_a_lone_starter_with_no_sturdy_bench_trains_its_strongest_other_member(r
     assert kind == 'train' and project['identity'] == training.identity(party[2]) and project['level_goal'] == PARTNER
 
 
-def test_a_first_league_loss_trains_the_team_before_another_entry(run):
+def test_a_first_league_loss_trains_only_the_partner_before_another_entry(run):
     party = (mon(TYPHLOSION, 56, (FLAMETHROWER, EMBER), dvs=(9,)), mon(LAPRAS, PARTNER, (SURF,), dvs=(6,)),
              mon(PIDGEY, 5, dvs=(5,)))
     assert collection.first_league(run, at('INDIGO_PLATEAU_POKECENTER_1F', party), None, None) is None
     assert collection.first_league(run, at('WILLS_ROOM', party), None, None) is None
     assert run.collection['first_league_entered']
-    # Blacking out puts the team back outside without a Hall of Fame entry.
+    # Blacking out puts the team back outside without a Hall of Fame entry. The level 5 Pidgey on the
+    # bench never trains for the League. The partner trains one level past the one it lost at.
     for _ in range(3):
         kind, project = collection.first_league(run, at('INDIGO_PLATEAU_POKECENTER_1F', party), None, None)
-        assert kind == 'train' and project['league'] and run.collection['league_lost'] == 97
-    # The cheapest step is the level 5 Pidgey to level 10.
-    assert project['identity'] == training.identity(party[2]) and project['level_goal'] == 10
-    # A level 50 Rattata from the PC makes the team strong enough, but nobody has gained a level yet.
+        assert kind == 'train' and project['league']
+        assert project['identity'] == training.identity(party[1]) and project['level_goal'] == PARTNER + 1
+    # A level 50 Rattata from the PC is not growth. Lapras is still the partner, so it keeps training.
     swapped = party[:2] + (mon(RATTATA, 50, dvs=(8,)),)
     assert collection.league_ready(run, at('INDIGO_PLATEAU_POKECENTER_1F', swapped))
-    assert collection.first_league(run, at('INDIGO_PLATEAU_POKECENTER_1F', swapped), None, None)[0] == 'train'
-    grown = (mon(TYPHLOSION, 57, (FLAMETHROWER, EMBER), dvs=(9,)),) + swapped[1:]
+    kind, project = collection.first_league(run, at('INDIGO_PLATEAU_POKECENTER_1F', swapped), None, None)
+    assert kind == 'train' and project['identity'] == training.identity(party[1])
+    # The partner's level gained is growth, so the team goes back in and the League project is dropped.
+    grown = (party[0], mon(LAPRAS, PARTNER + 1, (SURF,), dvs=(6,)), swapped[2])
     assert collection.first_league(run, at('INDIGO_PLATEAU_POKECENTER_1F', grown), None, None) is None
+    assert run.collection['training'] is None
     collection.first_league_over(run)
     assert not {'league_lost', 'league_lost_levels', 'first_league_entered'} & set(run.collection)
 

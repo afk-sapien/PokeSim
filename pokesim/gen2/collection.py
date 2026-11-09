@@ -549,13 +549,13 @@ FIRST_LEAGUE_MAP = 'VICTORY_ROAD'
 def first_league(policy, snapshot, mem, Goal):
     """Train the party for the first League, or None once it may go in.
 
-    A level 56 Typhlosion with a bench at levels 2 to 30 lost at Lance for 12 hours. While the party
-    is not league_ready, the run trains a partner to the partner level first, by the rule Red, Blue and
-    Yellow use, then one party member ten levels at a time. After a loss the team goes back in only once
-    a member has gained a level. When nothing can train, the run patrols and asks the owner for help
-    (league_help) instead of losing again.
+    A level 56 Typhlosion with a bench at levels 2 to 30 lost at Lance for 12 hours. The League needs
+    the strongest Pokémon and one partner, by the rule Red, Blue and Yellow use. While the party is not
+    league_ready, or has not grown since a loss, only the partner trains: to the partner level, then a
+    level past the one it lost at. The rest of the bench never trains for the League. Once the party is
+    ready and has grown, it goes in before any other training. When the partner cannot train, the run
+    patrols and asks the owner for help (league_help) instead of losing again.
     """
-    from pokecore.gen2.ram import experience_at
     from ..planning.partner import league_partner
     from . import training
     data, state = policy.data, policy.collection
@@ -566,39 +566,30 @@ def first_league(policy, snapshot, mem, Goal):
     party = snapshot.party
     if state.pop('first_league_entered', None):
         # Leaving the League without its Hall of Fame entry means the team blacked out.
-        state['league_lost'] = league_strength(snapshot)
         state['league_lost_levels'] = [[training.identity(mon), mon.level] for mon in party if not mon.egg]
-    ready, grown = league_ready(policy, snapshot), grown_since_loss(state, party)
-    trainees = []
-    if not ready or not grown:
-        # The cheapest step first, as postgame training picks its trainee.
-        steps = sorted((experience_at(min(100, (mon.level // 10 + 1) * 10), data.species[mon.species]['growth'])
-                        - mon.experience, i) for i, mon in enumerate(party) if not mon.egg and mon.level < 100)
-        trainees = [(party[i], min(100, (party[i].level // 10 + 1) * 10)) for _, i in steps]
-    target = partner_target(data)
+    if league_ready(policy, snapshot) and grown_since_loss(state, party):
+        if (state.get('training') or {}).get('league'):
+            state['training'] = None
+        state.pop('league_blocked', None)
+        return None
     slot = league_partner(party, lambda mon: data.species[mon.species]['stats'][0], lambda mon: mon.stats[1],
                           lambda mon: party_power(data, mon))
-    # Gen II has no League matchup score yet, so the partner trains while the party is not league_ready.
-    # Once it has one, this switches to Red, Blue and Yellow's rule: train while any matchup is under 75.
-    if not ready and slot is not None and party[slot].level < target:
-        trainees.insert(0, (party[slot], target))
-    for mon, goal in trainees:
+    mon = party[slot] if slot is not None else None
+    if mon is not None and mon.level < 100 and not standing_down(policy, train_key(training.identity(mon))):
+        goal = min(100, max(partner_target(data), mon.level + 1))
         identity = training.identity(mon)
-        if standing_down(policy, train_key(identity)):
-            continue
         project = state.get('training')
         if not project or not project.get('league') or project['identity'] != identity:
             state['training'] = {'identity': identity, 'target': mon.species, 'item': None, 'species': mon.species,
                                  'terminal': True, 'level_goal': goal, 'league': True, 'map': FIRST_LEAGUE_MAP}
+        else:
+            project['level_goal'] = goal
         found = training.journey(policy, snapshot, mem, Goal, terminal=True)
         if found is not None:
             state.pop('league_blocked', None)
             return found
     if (state.get('training') or {}).get('league'):
         state['training'] = None
-    if ready and grown:
-        state.pop('league_blocked', None)
-        return None
     # Nothing can train, so another run would lose the same way. The patrol waits without a reload.
     state['league_blocked'] = True
     return patrol(policy, snapshot, Goal, LEAGUE_BLOCKED)
