@@ -58,6 +58,10 @@ def validate_username(value):
     return value.strip()
 
 
+class PasswordCheckFailed(RuntimeError):
+    """Argon2 could not run, for want of memory or threads. It says nothing about the password."""
+
+
 def validate_password(value):
     if not isinstance(value, str) or not value:
         raise ValueError('Choose a password')
@@ -354,14 +358,9 @@ class AuthStore:
         if stored is None:
             if self._decoy is None:
                 self._decoy = self.hasher.hash(secrets.token_urlsafe(16))
-            try:
-                self.hasher.verify(self._decoy, password)
-            except (VerificationError, InvalidHashError):
-                pass
+            self._matches(self._decoy, password)
             return None
-        try:
-            self.hasher.verify(stored, password)
-        except (VerifyMismatchError, VerificationError, InvalidHashError):
+        if not self._matches(stored, password):
             return None
         if row['disabled']:
             return None
@@ -369,6 +368,20 @@ class AuthStore:
             with self.lock, self.db:
                 self.db.execute('UPDATE users SET password_hash=? WHERE id=?', (self.hasher.hash(password), row['id']))
         return self.public_user(row)
+
+    def _matches(self, stored, password, tries=3):
+        """Whether ``password`` matches ``stored``. Argon2 raises a bare VerificationError when it cannot
+        get its memory or threads, so a busy machine once refused a right password as a wrong one. That
+        failure is tried again, and then raised as PasswordCheckFailed rather than read as a mismatch."""
+        for attempt in range(tries):
+            try:
+                return self.hasher.verify(stored, password)
+            except (VerifyMismatchError, InvalidHashError):
+                return False
+            except VerificationError as error:
+                if attempt == tries - 1:
+                    raise PasswordCheckFailed(str(error)) from error
+                time.sleep(0.05 * (attempt + 1))
 
     def touch_login(self, uid):
         with self.lock, self.db:

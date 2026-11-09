@@ -147,6 +147,41 @@ def test_setup_gives_older_adventures_to_the_first_admin(library):
     assert library.manager.registry.adventure(older['id'])['owner_id'] == made.json()['user']['id']
 
 
+def test_a_password_check_that_cannot_run_is_never_a_wrong_password(library, people, monkeypatch):
+    """The overnight suite once refused alice's right password: under load Argon2 could not get its
+    64 MiB and raised a bare VerificationError, which read as a mismatch. It is tried again, and a check
+    that keeps failing answers 503 without counting as a failed guess."""
+    from argon2.exceptions import VerificationError
+    auth = library.manager.auth
+    failures = []
+
+    class Busy:
+        def __init__(self, real):
+            self.real = real
+
+        def __getattr__(self, name):
+            return getattr(self.real, name)
+
+        def verify(self, stored, password):
+            if failures:
+                failures.pop()
+                raise VerificationError('Memory allocation error')
+            return self.real.verify(stored, password)
+
+    monkeypatch.setattr(auth, 'hasher', Busy(auth.hasher))
+    monkeypatch.setattr('pokesim.app.auth.time.sleep', lambda seconds: None)
+    failures[:] = [1, 1]
+    assert library.login('alice').get('/api/v1/adventures').status_code == 200
+    failures[:] = [1, 1, 1]
+    client = library.browser()
+    refused = client.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD})
+    assert refused.status_code == 503, refused.text
+    failures[:] = [1, 1, 1]
+    assert client.post('/api/v1/auth/login', json={'username': 'nobody', 'password': PASSWORD}).status_code == 503
+    assert client.post('/api/v1/auth/login', json={'username': 'alice', 'password': 'wrong'}).status_code == 401
+    assert library.login('alice')
+
+
 def test_login_refuses_wrong_passwords_and_then_slows_down(library, people):
     client = library.browser()
     for _ in range(5):
