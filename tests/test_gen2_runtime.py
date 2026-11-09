@@ -2717,7 +2717,7 @@ def test_a_stall_reload_inside_a_boss_battle_counts_as_a_loss_and_the_team_train
     # The reload builds a new policy from the store, and its next goal trains before Falkner.
     reloaded = Policy(real_data)
     store.attach(reloaded, 2)
-    outside = SimpleNamespace(map=real_data.map_ids['VIOLET_CITY'], frame=1000, badges=0, party=party,
+    outside = SimpleNamespace(map=real_data.map_ids['VIOLET_CITY'], x=1, y=8, frame=1000, badges=0, party=party,
                               event=lambda name: True)
     goal = reloaded.boss_training(outside, policy.goal)
     assert goal.key == 'collection_train' and goal.map_name == 'ROUTE_31'
@@ -2751,7 +2751,7 @@ def test_a_stall_reload_in_the_burned_tower_rival_battle_counts_against_the_goal
     Emulator._unstick(emu, 100000, 'battle never ended')
     assert policy.losses.levels() == {'burned_tower': 28} and policy.losses.aces() == {'burned_tower': 22}
     # Next the team trains on Route 37, before Morty, the next gym, until the best fighter is Lv 30.
-    outside = SimpleNamespace(map=real_data.map_ids['ECRUTEAK_CITY'], frame=1000, badges=7, party=party,
+    outside = SimpleNamespace(map=real_data.map_ids['ECRUTEAK_CITY'], x=23, y=28, frame=1000, badges=7, party=party,
                               event=lambda name: True)
     training = policy.boss_training(outside, goal)
     assert training.key == 'collection_train' and training.map_name == 'ROUTE_37'
