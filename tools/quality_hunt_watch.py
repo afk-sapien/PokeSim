@@ -1,11 +1,13 @@
 """Check that a Gold, Silver or Crystal adventure goes back to better-DV hunts once its training runs out.
 
-    ssh HOST "docker exec -i CONTAINER python - collect SITE" < tools/quality_hunt_watch.py \\
+    ssh HOST "docker exec -i CONTAINER python - collect" < tools/quality_hunt_watch.py \\
         | python3 tools/quality_hunt_watch.py judge STATE_JSON
 
 ``collect`` runs inside the app container and only reads. For each running Gen II adventure it prints
 the trainees left, the play clock, the policy's decision count, its better-DV hunt counts and the
-current hunt from the saved policy, and the capture receipts. ``judge`` runs on the watch host. Once an
+current hunt from the saved policy, and the capture receipts. It reads the data folder alone, never
+the app's pages, so it works under every AUTH mode without a login. ``judge`` runs on the watch host.
+Empty input from a failed collect is a plain failure, not a traceback. Once an
 adventure has no trainee left, a better-DV hunt must start within its next 6 game hours. The state
 file keeps the game hour, wall time, decision count and hunt counts at which each adventure was first
 seen without a trainee, so the check carries across nights.
@@ -50,23 +52,50 @@ def trainees(mons, standing_down, sealed, min_upgrade):
     return sorted(left, key=lambda row: -row[1])
 
 
-def collect(site):
-    """One row per Gen II adventure, read from its saved policy and the app's own pages."""
+def saved_game(root, meta):
+    """The party and boxes of an adventure's newest autosave, read in a headless emulator of its own.
+
+    The save and its manifest are copied first, so the live adventure pruning its autosaves cannot
+    pull them away mid-read. An older save stands in when the newest one goes before it is copied.
+    """
+    import shutil
+    import tempfile
+
+    from pokesim.game_data import directory
+    from pokesim.gen2.headless import HeadlessRun
+
+    folder = root / 'adventures' / meta['id'] / 'states'
+    rom = root / 'assets' / 'roms' / meta['rom_id'] / 'rom.gb'
+    # Newest first by the creation time in the name, as CheckpointStore.autosaves breaks its ties.
+    saves = sorted((path for path in folder.glob('auto-v1-*.state') if path.stem[8:].isdecimal()),
+                   key=lambda path: int(path.stem[8:]), reverse=True)
+    for state in saves[:3]:
+        with tempfile.TemporaryDirectory() as scratch:
+            try:
+                copy = Path(shutil.copy(state, scratch))
+                shutil.copy(state.with_suffix('.json'), scratch)
+            except FileNotFoundError:
+                continue
+            run = HeadlessRun(rom, copy, data_root=directory())
+            try:
+                return run.read().to_dict(egg_view=True)
+            finally:
+                run.stop()
+    raise FileNotFoundError(f'no autosave in {folder}')
+
+
+def collect():
+    """One row per Gen II adventure, read from its saved policy, its newest autosave and its database.
+
+    Nothing goes through the app's web pages, so the check needs no login whatever AUTH is set to.
+    """
     import os
     import sqlite3
-    import urllib.request
 
     from pokesim.gen2.standdown import BACKOFF, train_key
     from pokesim.planning.monitor import Monitor
 
-    root, port = Path(os.environ.get('DATA_DIR', '/data')), os.environ.get('PORT', '8000')
-
-    def page(aid, path):
-        request = urllib.request.Request(f'http://localhost:{port}/games/{aid}{path}',
-                                         headers={'Host': site, 'X-Forwarded-Proto': 'https'})
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response)
-
+    root = Path(os.environ.get('DATA_DIR', '/data'))
     rows = []
     for path in sorted(root.glob('adventures/*/adventure.json')):
         meta = json.loads(path.read_text(encoding='utf-8'))
@@ -79,20 +108,23 @@ def collect(site):
         db = sqlite3.connect(f'file:{path.parent / "pokesim.sqlite"}?mode=ro', uri=True)
         try:
             saved = json.loads(db.execute("SELECT v FROM kv WHERE k='policy_state'").fetchone()[0])
+            clock = db.execute("SELECT v FROM kv WHERE k='play_clock'").fetchone()
             captures = db.execute('SELECT dex, recorded_at FROM capture_receipts').fetchall()
         finally:
             db.close()
-        state, pc = page(meta['id'], '/api/state'), page(meta['id'], '/api/pokedex/status?view=pc')
+        game = saved_game(root, meta)
         collection, decisions = saved.get('collection') or {}, saved.get('decisions') or 0
         monitor = Monitor(collection, backoff=BACKOFF)
-        storage = pc.get('storage') or {}
-        party = pc.get('party') or []
+        storage = game.get('storage') or {}
+        party = game.get('party') or []
         # The same test as the policy's no_room, less the release visit it may still find.
         sealed = (len(party) >= 6 and not storage.get('can_catch')
                   and all(count >= 20 for count in storage.get('box_counts') or [20]))
         postgame = collection.get('postgame') or {}
         activity = postgame.get('activity') or {}
-        row.update(hours=(state.get('play_clock') or {}).get('seconds', 0) / 3600, wall=time.time(),
+        # The app clock as PlayClock keeps it, in frames at 60 a second.
+        frames = json.loads(clock[0]).get('frames', 0) if clock else 0
+        row.update(hours=frames // 60 / 3600, wall=time.time(),
                    decisions=decisions, can_catch=bool(storage.get('can_catch')),
                    trainees=trainees(party + (storage.get('pokemon') or []),
                                      lambda identity: monitor.standing_down(train_key(identity), decisions),
@@ -173,14 +205,24 @@ def judge(rows, saved):
 
 def main(argv):
     if argv[1:2] == ['collect']:
-        collect(argv[2])
+        collect()
         return 0
     if argv[1:2] != ['judge']:
         print(__doc__)
         return 2
     path = Path(argv[2])
     saved = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
-    lines, failed, kept = judge(json.load(sys.stdin), saved)
+    text = sys.stdin.read()
+    if not text.strip():
+        # collect failed or the host could not be reached. Its own error is printed above this line.
+        print('FAILED: no input, the collect step printed nothing')
+        return 1
+    try:
+        rows = json.loads(text)
+    except json.JSONDecodeError as error:
+        print(f'FAILED: the collect step printed something other than JSON ({error.msg} at {error.pos})')
+        return 1
+    lines, failed, kept = judge(rows, saved)
     print('\n'.join(lines))
     path.write_text(json.dumps(kept, indent=1, sort_keys=True), encoding='utf-8')
     return 1 if failed else 0
