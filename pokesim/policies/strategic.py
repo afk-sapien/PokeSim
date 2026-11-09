@@ -454,7 +454,7 @@ class StrategicPolicy(Policy):
         pos = (s.map, s.x, s.y)
         self.decisions += 1
         # A team member deposited at this PC visit stays until a later one (pcvalue.VisitTeam).
-        self.pc.team = self.visit_team.observe(s.map, team_keys(s.party), team_keys(s.stored_details))
+        self.pc.team = self.visit_team.observe(s.map, team_keys(s.party))
         # PC transfers briefly combine a new partner with the old slot's level.
         # Accept training gains in battle or after returning to the overworld.
         # A release visit to the PC is storage work, so its frames do not count against the project.

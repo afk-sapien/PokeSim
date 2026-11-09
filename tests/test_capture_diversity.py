@@ -116,10 +116,24 @@ def test_a_spare_withdrawn_only_to_take_its_item_off_is_no_team_member():
     # Soak crystal withdrew boxed Kabutops and Kingler to take their items off, then released them as Team members.
     lead, kabutops = (157, (15, 12, 10, 9, 8)), (141, (3, 4, 5, 6, 7))
     visit = pcvalue.VisitTeam()
-    assert visit.observe(7, {lead}, {kabutops}) == {lead}
-    assert visit.observe(7, {lead, kabutops}, set()) == {lead}
-    assert visit.observe(7, {lead}, {kabutops}) == {lead}
-    # A member deposited at this visit still counts, though it is boxed now.
-    assert visit.observe(7, set(), {lead, kabutops}) == {lead}
-    # At the next visit a Pokémon first seen in the party is a member again.
-    assert visit.observe(8, {kabutops}, set()) == {kabutops}
+    assert visit.observe(7, {lead}) == {lead}
+    visit.errand(kabutops)
+    assert visit.observe(7, {lead, kabutops}) == {lead}
+    # A member deposited at this visit still counts, and an errand never makes it a spare.
+    visit.errand(lead)
+    assert visit.observe(7, set()) == {lead}
+    # At the next visit a Pokémon in the party is a member again.
+    assert visit.observe(8, {kabutops}) == {kabutops}
+
+
+def test_a_boxed_league_partner_withdrawn_at_a_visit_is_never_released_at_it():
+    # A readiness step withdraws a boxed partner. It was seen in a box first, and it is still a team member.
+    partner = mon(species=sid(141), level=40, dvs=(3, 4, 5, 6, 7))
+    visit = pcvalue.VisitTeam()
+    assert visit.observe(7, team_keys(())) == frozenset()
+    keys = visit.observe(7, team_keys((partner,)))
+    keys = visit.observe(7, team_keys(()))
+    rare = [stored(i, species=sid(141), level=5, dvs=(15, 15, 15, 14 - i, 15)) for i in range(4)]
+    state = snapshot([*rare, stored(4, species=sid(141), level=40, dvs=partner.dvs)])
+    assert (0, 4) not in [row.entry.slot for row in queue(release_rated(state, team=keys))]
+    assert release_target(state, reserved={(0, 0), (0, 1), (0, 2), (0, 3)}, team=keys) is None

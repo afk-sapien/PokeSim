@@ -101,6 +101,21 @@ def test_a_catch_improves_once_the_poll_after_it_shows_a_better_copy():
     assert fresh.finish({25: 40.0})[0]['improved'] is True
 
 
+def test_each_catch_reports_its_rarity_and_the_rarest_copy_held_before_it():
+    # Soak red caught two Seel in one poll, and only the first was judged to improve.
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    catches = live_soak.Catches()
+    for receipts, held in (([], [PLAIN]), ([('a', 86, 1.0), ('b', 86, 1.1)], [PLAIN, RARER, COMMON]), ([], [PLAIN, RARER, COMMON])):
+        game = {'party': [], 'storage': {'pokemon': [{'dex': 86, 'dvs': list(dvs)} for dvs in held]}}
+        arrivals = copies.poll(game, lambda mon: mon['dex'], 0)
+        catches.poll(receipts, 'seel', {86: min(TAILS[dvs] for dvs in held)}, arrivals)
+    rows = catches.finish({86: 0.05})
+    assert [(row['improved'], row['rarity'], row['best_held']) for row in rows] == [(True, 0.05, 0.6), (False, 0.9, 0.6)]
+    assert [live_soak.catch_rarity(row) for row in rows] == [
+        {'dex': 86, 'goal': 'seel', 'kept': True, 'one_in': 20, 'best_held_one_in': 2, 'times_rarer': 12.0},
+        {'dex': 86, 'goal': 'seel', 'kept': False, 'one_in': 1, 'best_held_one_in': 2, 'times_rarer': 0.67}]
+
+
 COMMON, PLAIN, RARE, RARER = (0, 2, 2, 2, 2), (0, 4, 4, 4, 4), (0, 8, 8, 8, 8), (0, 12, 12, 12, 12)
 TAILS = {COMMON: 0.9, PLAIN: 0.6, RARE: 0.2, RARER: 0.05}
 
@@ -154,11 +169,13 @@ def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
 
 
 def watch(*polls):
-    """Copies.poll over ``polls`` of (party, stored, released, map), each copy a (dex, DVs, locked) row."""
+    """Copies.poll over ``polls`` of (party, stored, released, map), each copy a (dex, DVs, locked) row, or
+    (dex, DVs, locked, held item) for a Gen II one."""
     copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
 
     def rows(group):
-        return [{'dex': dex, 'dvs': list(dvs), 'trade_locked': locked} for dex, dvs, locked in group]
+        return [{'dex': dex, 'dvs': list(dvs), 'trade_locked': locked, **{'held_item': item for item in held}}
+                for dex, dvs, locked, *held in group]
     for party, stored, released, where in polls:
         copies.poll({'map': where, 'party': rows(party), 'storage': {'pokemon': rows(stored)}},
                     lambda mon: mon['dex'], released)
@@ -234,11 +251,17 @@ def test_a_spare_withdrawn_only_to_take_its_item_off_is_no_team_member():
     kabutops, best = (1, 2, 3, 4, 5), (14, 7, 1, 3, 8)
     TAILS.update({kabutops: 0.7, best: 0.1})
     try:
-        copies = watch(([], [(141, best, False), (141, kabutops, False)], False, 7),
-                       ([(141, kabutops, False)], [(141, best, False)], False, 7),
-                       ([], [(141, best, False), (141, kabutops, False)], False, 7),
-                       ([], [(141, best, False)], True, 7))
+        copies = watch(([], [(141, best, False, 0), (141, kabutops, False, 83)], False, 7),
+                       ([(141, kabutops, False, 83)], [(141, best, False, 0)], False, 7),
+                       ([(141, kabutops, False, 0)], [(141, best, False, 0)], False, 7),
+                       ([], [(141, best, False, 0)], True, 7))
         assert not copies.from_party and not release_problems(copies)
+        # A partner withdrawn for a role keeps its item, so its release is still a team member's.
+        partner = watch(([], [(141, best, False, 0), (141, kabutops, False, 83)], False, 7),
+                        ([(141, kabutops, False, 83)], [(141, best, False, 0)], False, 7),
+                        ([], [(141, best, False, 0), (141, kabutops, False, 83)], False, 7),
+                        ([], [(141, best, False, 0)], True, 7))
+        assert partner.from_party and any('team member' in problem for problem in release_problems(partner))
     finally:
         TAILS.pop(kabutops), TAILS.pop(best)
 

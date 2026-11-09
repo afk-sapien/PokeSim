@@ -169,7 +169,10 @@ def test_every_gen2_release_meets_the_release_rule_before_it_presses():
 
 
 def test_unequip_walks_the_spare_through_the_party_and_back():
+    from pokesim.pcvalue import VisitTeam
     policy = Policy()
+    policy.visit_team = VisitTeam()
+    policy.visit_team.observe(7, set())
     berry = mon(3, box=2, held_item=BERRY)
     identity = ledger.member(berry)
     policy.collection['unequip'] = identity
@@ -177,6 +180,8 @@ def test_unequip_walks_the_spare_through_the_party_and_back():
     assert policy.menu == ChangeBox(2)
     assert ledger.unequip_step(policy, snapshot([berry], PARTY, active_box=2)) == 'a'
     assert policy.menu == Storage('WITHDRAW', 3, 5)
+    # Its party stint is an errand, so the visit does not count it as a team member at its release.
+    assert policy.visit_team.observe(7, {(16, berry.dvs)}) == frozenset()
     party = mon(None, box=None, held_item=BERRY)
     assert ledger.unequip_step(policy, snapshot([], PARTY + [party], active_box=2)) == 'a'
     assert policy.menu == Take(5, identity[1:])

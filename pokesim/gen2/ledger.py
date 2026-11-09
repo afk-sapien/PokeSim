@@ -262,6 +262,9 @@ def unequip_step(policy, snapshot):
             state.pop('unequip', None)
             return None
         task = Storage('WITHDRAW', mon.position, len(snapshot.party))
+        if hasattr(policy, 'visit_team'):
+            # It joins the party only to give up its item, so the visit does not make it a team member.
+            policy.visit_team.errand((mon.species, tuple(mon.dvs)))
     elif mon.box is None and mon.held_item:
         task = Take(snapshot.party.index(mon), wanted[1:])
     elif mon.box is None:

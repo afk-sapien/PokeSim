@@ -1221,7 +1221,7 @@ class Policy:
         self.memory, self.sp = memory, sp
         self.decisions += 1
         from .release import team_keys
-        self.visit_team.observe(snapshot.map, team_keys(snapshot.party), team_keys(getattr(snapshot, 'stored', ())))
+        self.visit_team.observe(snapshot.map, team_keys(snapshot.party))
         from .postgame import observe
         observe(self, snapshot)
         from .collection import observe_search
