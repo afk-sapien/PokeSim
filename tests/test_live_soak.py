@@ -153,6 +153,64 @@ def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
     assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
 
 
+def test_the_judge_rates_a_gen1_copy_with_the_tms_of_its_adventures_cartridge(monkeypatch):
+    from pokesim import config, investment
+    from pokesim.cartridges import identify
+    if not config.ROM_PATH.is_file() or getattr(identify(config.ROM_PATH.read_bytes()), 'version', None) not in ('red', 'blue'):
+        pytest.skip('needs a clean Red or Blue cartridge at ROM_PATH')
+    # The runner process loads no cartridge, and HMs-only weights rate this Nidoran F three times too rare.
+    dvs = [15, 0, 15, 15, 15]
+    investment._pool.cache_clear()
+    real = investment.dex_rarity(29, dvs)
+    monkeypatch.setattr(investment, 'cartridge_machines', lambda: ({}, {}))
+    investment._pool.cache_clear()
+    hms_only = investment.dex_rarity(29, dvs)
+    monkeypatch.undo()
+    investment._pool.cache_clear()
+    assert hms_only < real / 2
+    rarity = live_soak.CartridgeRarity(config.ROM_PATH)
+    try:
+        assert rarity(29, dvs) == pytest.approx(real)
+    finally:
+        rarity.close()
+
+
+def test_the_judge_fails_the_run_when_it_cannot_rate_with_the_cartridge(tmp_path):
+    junk = tmp_path / 'junk.gb'
+    junk.write_bytes(b'not a cartridge')
+    with pytest.raises(live_soak.RatingFailed, match='not one PokeSim knows'):
+        live_soak.CartridgeRarity(junk)
+    with pytest.raises(live_soak.RatingFailed, match='could not be read'):
+        live_soak.CartridgeRarity(tmp_path / 'missing.gb')
+    # A known cartridge whose TMs the helper cannot read fails too, never rating with the HMs only.
+    rarity = live_soak.CartridgeRarity.__new__(live_soak.CartridgeRarity)
+    rarity.process = SimpleNamespace(stdin=SimpleNamespace(write=lambda text: None, flush=lambda: None),
+                                     stdout=SimpleNamespace(readline=lambda: json.dumps(
+                                         {'error': 'its cartridge cannot rate copies, The cartridge gave no TMs'}) + '\n'))
+    with pytest.raises(live_soak.RatingFailed, match='gave no TMs'):
+        rarity(29, [15, 0, 15, 15, 15])
+
+
+def test_a_judge_that_cannot_rate_fails_the_adventure(monkeypatch):
+    def refuse(manager, adventure):
+        raise live_soak.RatingFailed('its cartridge is not one PokeSim knows')
+    monkeypatch.setattr(live_soak, '_rarity', refuse)
+    monkeypatch.setattr(live_soak, '_names', lambda manager, adventure: {})
+    monkeypatch.setattr(live_soak, '_readonly', lambda path: _events_db())
+    monkeypatch.setattr(live_soak, '_kv_bytes', lambda db: 0)
+    adventure = {'name': 'Red', 'version': 'red', 'settings': {}}
+    registry = SimpleNamespace(adventure=lambda aid: adventure, update=lambda aid, **changes: None, root=live_soak.ROOT)
+    outcome = live_soak.play_one(SimpleNamespace(registry=registry), 'red', HOUR, lambda line: None)
+    assert outcome['failed'] == 'the judge cannot rate copies as the adventure does, its cartridge is not one PokeSim knows'
+    assert live_soak.invariants(result(failed=outcome['failed']), None)
+
+
+def _events_db():
+    db = sqlite3.connect(':memory:')
+    db.execute('CREATE TABLE events (id INTEGER)')
+    return db
+
+
 def test_the_first_pc_visit_wave_is_reported_but_never_fails():
     copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
     game = {'party': [], 'storage': {'pokemon': [{'dex': 16, 'dvs': list(PLAIN)}]}}

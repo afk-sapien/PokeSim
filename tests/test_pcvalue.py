@@ -196,7 +196,8 @@ def test_a_configured_cartridge_that_cannot_be_read_rates_and_releases_nothing(c
                                                                                caplog, failure):
     import hashlib
     import logging
-    from pokesim import catches, investment, tm_shop
+    from pokesim import catches, investment, policies  # noqa: F401  (tm_shop imports through the policies package)
+    from pokesim import tm_shop
     from pokesim.rarity import RatingUnavailable
     rom = tmp_path / 'pokered.gb'
     if failure == 'unverified':

@@ -312,16 +312,89 @@ class Catches:
         return self.rows
 
 
+class RatingFailed(RuntimeError):
+    """The judge cannot rate copies with the weights the adventure uses, so the run fails."""
+
+
+class CartridgeRarity:
+    """A Gen I copy's rarity as the adventure's own process rates it. The weights count the TMs its
+    cartridge teaches, and this runner loads no cartridge and one Gen I variant, so a helper process
+    gets the adventure's cartridge at ROM_PATH and its variant, as runtime/settings.py gives a worker."""
+
+    def __init__(self, rom):
+        import pokesim
+        from pokesim.cartridges import identify
+        try:
+            cartridge = identify(Path(rom).read_bytes())
+        except OSError as error:
+            raise RatingFailed(f'its cartridge could not be read ({error.strerror or error})') from error
+        if cartridge is None:
+            raise RatingFailed('its cartridge is not one PokeSim knows')
+        # The helper imports the same pokesim as this runner, the tree of the commit under test.
+        tree = str(Path(pokesim.__file__).resolve().parents[1])
+        env = dict(os.environ, ROM_PATH=str(rom), POKESIM_GEN1_VARIANT='yellow' if cartridge.version == 'yellow' else 'red',
+                   PYTHONPATH=os.pathsep.join(filter(None, (tree, os.environ.get('PYTHONPATH')))))
+        self.process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'rate-copies'], env=env,
+                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        self.ask(None, None)
+
+    def ask(self, dex, dvs):
+        try:
+            self.process.stdin.write(json.dumps([dex, dvs]) + '\n')
+            self.process.stdin.flush()
+            line = self.process.stdout.readline()
+        except OSError:
+            line = ''
+        if not line:
+            raise RatingFailed('the rating helper exited')
+        answer = json.loads(line)
+        if 'error' in answer:
+            raise RatingFailed(answer['error'])
+        return answer['tail']
+
+    def __call__(self, dex, dvs):
+        return self.ask(dex, dvs)
+
+    def close(self):
+        if self.process.poll() is None:
+            self.process.stdin.close()
+            self.process.wait(timeout=30)
+
+
+def rate_copies(args):
+    """The helper behind CartridgeRarity: a [dex, dvs] line in, a {"tail"} or {"error"} line out. The first
+    line, [null, null], only checks that the cartridge's TMs were read."""
+    from pokesim.investment import cartridge_machines, dex_rarity, families, rom_configured
+    from pokesim.rarity import RatingUnavailable
+
+    def reply(answer):
+        print(json.dumps(answer), flush=True)
+    try:
+        if not rom_configured():
+            raise RatingUnavailable('No cartridge is configured')
+        families()
+        if not cartridge_machines()[0]:
+            raise RatingUnavailable('The cartridge gave no TMs')
+    except RatingUnavailable as error:
+        reply({'error': f'its cartridge cannot rate copies, {error}'})
+        return 1
+    for line in sys.stdin:
+        dex, dvs = json.loads(line)
+        reply({'tail': None if dex is None else dex_rarity(dex, dvs)})
+    return 0
+
+
 def _rarity(manager, adventure):
     """A copy's rarity for its family from its Pokédex number and DVs, as the commit under test rates
-    it, or its DV tail when that commit has no rarity.py."""
+    it, or its DV tail when that commit has no rarity.py. Raises RatingFailed when a Gen I commit with
+    rarity.py cannot rate with its adventure's cartridge."""
     try:
         if adventure['version'] in ('gold', 'silver', 'crystal'):
             from pokesim.gen2.data import GameData
             from pokesim.gen2.release import rarity
             return rarity(GameData.load(manager.assets.game_data_dir, adventure['version']))
-        from pokesim.investment import dex_rarity
-        return dex_rarity
+        from pokesim.investment import dex_rarity  # noqa: F401  (rate_copies uses it in the helper)
+        return CartridgeRarity(manager.assets.rom_path(adventure['rom_id']))
     except ImportError:
         from pokesim.investment import assessment
 
@@ -471,7 +544,13 @@ def play_one(manager, aid, frames, progress):
     db.close()
     result = {'id': aid, 'name': adventure['name'], 'version': adventure['version'], 'failed': None}
     names, dex_of, catches = _names(manager, adventure), _dex_of(adventure['version']), Catches()
-    copies, releases = Copies(_rarity(manager, adventure)), 0
+    try:
+        rarity = _rarity(manager, adventure)
+    except RatingFailed as error:
+        result['failed'] = f'the judge cannot rate copies as the adventure does, {error}'
+        progress(f'{adventure["name"]}: failed: {result["failed"]}')
+        return result
+    copies, releases = Copies(rarity), 0
     began = time.monotonic()
     manager.registry.request_lifecycle(aid, 'start', identifier())
     manager.start_adventure(aid)
@@ -516,7 +595,11 @@ def play_one(manager, aid, frames, progress):
             db.close()
             seen.update(row[0] for row in fresh)
             catches.poll(fresh, goal, best)
-            copies.poll(game, dex_of, released - releases)
+            try:
+                copies.poll(game, dex_of, released - releases)
+            except RatingFailed as error:
+                result['failed'] = f'the judge cannot rate copies as the adventure does, {error}'
+                break
             releases = released
             help_reason = (status.get('help_request') or {}).get('reason')
             end = frame
@@ -527,6 +610,8 @@ def play_one(manager, aid, frames, progress):
     finally:
         manager.registry.request_lifecycle(aid, 'stop', identifier())
         manager.supervisor.stop(aid)
+        if isinstance(rarity, CartridgeRarity):
+            rarity.close()
     with _readonly(database) as db:
         events = db.execute('SELECT id, ts, type, title, LENGTH(title) + LENGTH(COALESCE(body, \'\')) FROM events '
                             'WHERE id > ? ORDER BY id', (first_event,)).fetchall()
@@ -940,6 +1025,8 @@ def main(argv=None):
     inner.add_argument('--frames', type=int, default=FRAMES)
     inner.add_argument('--parallel', type=int, default=PARALLEL)
     inner.set_defaults(action=runner)
+    rating = commands.add_parser('rate-copies', help=argparse.SUPPRESS)
+    rating.set_defaults(action=rate_copies)
     judging = commands.add_parser('rejudge', help='judge a finished run folder again and rewrite its report')
     judging.add_argument('work', type=Path)
     judging.set_defaults(action=rejudge)
