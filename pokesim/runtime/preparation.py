@@ -68,6 +68,9 @@ def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False, prote
         if previous.get('trade_key') != trade_key:
             raise ValueError('The preparation ID already names another Pokémon')
         return previous
+    if previous and previous.get('restore'):
+        # A new trade outranks putting the last partner back. The game still withdraws it when a route needs it.
+        previous = None
     if emu.store.get('trade_hold') or previous and previous.get('phase') in ACTIVE:
         raise ValueError('Another interaction has reserved this adventure')
     if emu.paused or emu.manual_mode:
@@ -105,6 +108,38 @@ def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False, prote
     return state
 
 
+def begin_restore(emu, prepared):
+    """After a released trade, swap the received Pokémon for the field-move holder the trade stored.
+
+    Without it the next Cut, Strength or Surf on a route withdrew the holder into a party where no one
+    else may go. Returns the new state, or None when there is nothing to restore or the received
+    Pokémon is locked in the party.
+    """
+    holder = prepared.get('stored_holder')
+    if not holder or prepared.get('manual') or emu.paused or emu.manual_mode:
+        return None
+    snapshot = read_snapshot(emu.pb.memory, emu.frame)
+    if not snapshot.valid:
+        return None
+    before = set(prepared.get('party_keys') or ())
+    received = [key for key in (identity(mon) for mon in live_status(snapshot.to_dict())['party'])
+                if key and key not in before]
+    preferences = emu.store.trade_preferences()
+    if len(received) != 1 or preferences.get(received[0], {}).get('state') == 'locked':
+        return None
+    try:
+        selection(snapshot, preferences, holder)
+    except ValueError:
+        return None
+    state = {'id': prepared['id'], 'trade_key': holder, 'selected_key': holder, 'received_key': received[0],
+             'restore': True, 'phase': 'storage' if snapshot.map in CENTERS else 'travelling', 'started_at': time.time(), 'deadline': time.time() + 1800,
+             'elapsed_frames': 0, 'max_frames': 108000, 'party_slot': None, 'protect': [], 'wished': []}
+    emu.store.set(KEY, state)
+    emu.preparation = Preparation(emu, state)
+    emu.input_epoch += 1
+    return state
+
+
 def overworld_ready(snapshot, kind):
     return (snapshot.valid and snapshot.started and not snapshot.in_battle
             and snapshot.map not in LEAGUE and not snapshot.textbox
@@ -113,6 +148,10 @@ def overworld_ready(snapshot, kind):
 
 def restore(emu):
     state = emu.store.get(KEY)
+    if state and state.get('restore'):
+        # The trade is done. The game withdraws the holder when a route needs its move.
+        emu.store.set(KEY, None)
+        return
     if state and state.get('phase') in ACTIVE and not emu.store.get('trade_hold'):
         emu.paused = True
         emu.preparation = None
@@ -148,7 +187,7 @@ class Preparation:
         self.signature = None
         self.operation = None
         self.target_box = None
-        self.deposit_key = None
+        self.deposit_key = state.get('received_key')
         self.invalid_since = None
         self.selection_wait_since = None
         self.walk_wait_since = None
@@ -167,6 +206,8 @@ class Preparation:
         phase = self.state['phase']
         if self.state.get('waiting_for'):
             reason = self.state['waiting_reason']
+        elif self.state.get('restore'):
+            reason = 'Put the field-move partner back in the party after the trade'
         else:
             reason = {
                 'travelling': 'Reach a Pokémon Center for the agreed exchange',
@@ -183,8 +224,12 @@ class Preparation:
             self._save()
 
     def _fail(self, error):
-        self.state.update(phase='failed', error=str(error))
-        self._save()
+        if self.state.get('restore'):
+            # The trade was already released, so a failed restore leaves the holder in the PC and nothing to report.
+            self.emu.store.set(KEY, None)
+        else:
+            self.state.update(phase='failed', error=str(error))
+            self._save()
         self.emu.preparation = None
         self.emu.input_epoch += 1
         self.emu.policy.on_restore()
@@ -304,6 +349,14 @@ class Preparation:
             # A party member picked for a manual trade travels with the party to the nearest Center.
             self._phase('travelling')
             return list(self.traveller.step(ctx))
+        if location == 'party' and self.state.get('restore'):
+            if kind != 'overworld' or snap.textbox or snap.start_menu:
+                return [Action('b', 6, 18)]
+            self.emu.store.set(KEY, None)
+            self.emu.preparation = None
+            self.emu.input_epoch += 1
+            self.emu.policy.on_restore()
+            return [Action(None, 0, 12)]
         if location == 'party':
             self._phase('rendezvous')
             if kind != 'overworld' or snap.textbox or snap.start_menu:
@@ -316,6 +369,7 @@ class Preparation:
             if ctx.mem[0xD12B] != 0:
                 raise ValueError('The game is already in an incompatible link state')
             self.state['party_slot'] = index
+            self.state['party_keys'] = [identity(member) for member in live_status(snap.to_dict())['party']]
             self.emu._trade('prepare', self.state['id'])
             self.state['phase'] = 'ready'
             self._save()
@@ -469,6 +523,10 @@ class Preparation:
         if not safe and self.state.get('manual'):
             # A manual trade may send any reserve to the PC. It only has to be identifiable.
             safe = [i for i in range(len(snap.party)) if keys[i] and keys.count(keys[i]) == 1]
+        if self.state.get('restore'):
+            # Only the received Pokémon goes back to the PC. It never belonged to the party it joins.
+            safe = [i for i in range(len(snap.party)) if keys[i] and keys.count(keys[i]) == 1
+                    and preferences.get(keys[i], {}).get('state') != 'locked']
         if self.deposit_key is not None:
             slots = [i for i in safe if keys[i] == self.deposit_key]
             if len(slots) != 1:
@@ -480,4 +538,8 @@ class Preparation:
         if candidate is None:
             raise ValueError('No safe unprotected reserve can leave the party for this trade')
         self.deposit_key = keys[candidate]
+        if rank:
+            # The holder returns to the party in the same PC visit once the trade is released.
+            self.state['stored_holder'] = keys[candidate]
+            self._save()
         return candidate

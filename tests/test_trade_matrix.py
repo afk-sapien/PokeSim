@@ -637,6 +637,94 @@ def test_gen1_party_of_unique_fly_and_flash_users_cannot_make_room(gen1):
     assert 'No safe unprotected reserve' in gen1.emu.store.get(preparation.KEY)['error']
 
 
+def boxed(member, position):
+    return stored(position, species=member.species, level=member.level, nick=member.nick,
+                  moves=member.moves, dvs=member.dvs, trainer_id=member.trainer_id)
+
+
+def joined(entry):
+    return mon(species=entry.species, level=entry.level, nick=entry.nick, moves=entry.moves,
+               dvs=entry.dvs, trainer_id=entry.trainer_id)
+
+
+def keys(members):
+    return sorted(identity(asdict(member)) for member in members)
+
+
+def test_gen1_five_trades_in_a_row_keep_a_locked_party_of_field_move_holders(gen1, monkeypatch):
+    party = list(hm_party(19, 57, 148, 70, 15))
+    box = [stored(n, trainer_id=101 + n) for n in range(5)]
+    emu, current = gen1.emu, {}
+    emu._trade = Mock()
+    monkeypatch.setattr(preparation, 'read_snapshot', lambda *args: current['snap'])
+    for index in (2, 4):
+        emu.store.set_trade_preference(identity(asdict(party[index])), {'state': 'locked'})
+    rendezvous = preparation.CENTERS[89]['rendezvous']
+
+    def view(**changes):
+        entries = [replace(entry, position=i) for i, entry in enumerate(box)]
+        current['snap'] = replace(snapshot(entries, party=tuple(party)), **{
+            'map': 89, 'x': 13, 'y': 4, 'active_box': 0, 'box_counts': (len(entries),) + (0,) * 11,
+            'boxed_pokemon': tuple((e.species, e.level) for e in entries), **changes})
+        return current['snap']
+
+    def transfer(controller, kind):
+        recorder = Recorder(controller.shortcut)
+        assert step(controller, view(textbox=True), storage_menu()) == PRESS
+        assert recorder.last.kind == kind
+        recorder.finish()
+        if kind == 'deposit_pokemon':
+            box.append(boxed(party.pop(recorder.last.slot), len(box)))
+        else:
+            party.append(joined(box.pop(recorder.last.position)))
+        return party[-1] if kind == 'withdraw_pokemon' else box[-1]
+
+    start_party = keys(party)
+    for n in range(5):
+        candidate = box[0]
+        before = keys(box)
+        view()
+        preparation.begin(emu, identity(asdict(candidate)), f'transaction-{n}')
+        held = transfer(emu.preparation, 'deposit_pokemon')
+        assert 15 in held.moves                       # The sole Cut holder waits in the PC.
+        offered = transfer(emu.preparation, 'withdraw_pokemon')
+        x, y = rendezvous[1:]
+        assert emu.preparation.step(PolicyContext(view(x=x, y=y), 0, 0, bytearray(65536))) == []
+        prepared = emu.store.get(preparation.KEY)
+        assert prepared['phase'] == 'ready' and prepared['stored_holder'] == identity(asdict(held))
+
+        # The cable link swaps the offer for the partner's Pokémon, then release clears the reservation.
+        party[party.index(offered)] = mon(trainer_id=300 + n, level=30, dvs=(5,) * 5, moves=(33,))
+        emu.store.set(preparation.KEY, None)
+        view()
+        assert preparation.begin_restore(emu, prepared)['received_key'] == identity(asdict(party[-1]))
+        received = transfer(emu.preparation, 'deposit_pokemon')
+        assert received.trainer_id == 300 + n
+        assert transfer(emu.preparation, 'withdraw_pokemon') == joined(held)
+        emu.preparation.step(PolicyContext(view(), 0, 0, bytearray(65536)))
+        assert emu.preparation is None and emu.store.get(preparation.KEY) is None
+
+        assert keys(party) == start_party
+        assert keys(box) == sorted(set(before) - {identity(asdict(candidate))} | {identity(asdict(received))})
+        assert any(15 in member.moves for member in party)
+
+
+def test_gen1_restore_keeps_a_locked_received_pokemon_and_a_restart_drops_it(gen1, monkeypatch):
+    party = hm_party(19, 57, 148, 70, 33)
+    emu, received = gen1.emu, party[-1]
+    holder = boxed(mon(trainer_id=250, dvs=(3,) * 5, moves=(33, 15)), 0)
+    state = {'id': 'transaction-1', 'stored_holder': identity(asdict(joined(holder))),
+             'party_keys': [identity(asdict(member)) for member in party[:-1]]}
+    monkeypatch.setattr(preparation, 'read_snapshot',
+                        lambda *args: replace(snapshot([holder], party=party), map=89, x=13, y=4))
+    emu.store.set_trade_preference(identity(asdict(received)), {'state': 'locked'})
+    assert preparation.begin_restore(emu, state) is None
+    emu.store.set_trade_preference(identity(asdict(received)), {'state': 'offered'})
+    assert preparation.begin_restore(emu, state)['restore']
+    preparation.restore(emu)
+    assert emu.store.get(preparation.KEY) is None and not emu.paused
+
+
 # Gen II preparation: PC boxes, making room and the HM reserve.
 
 def gen2_member(*moves, box=None, position=0, species=143, level=30):
