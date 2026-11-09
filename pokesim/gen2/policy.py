@@ -1613,9 +1613,10 @@ class Policy:
             requested |= unown_letter(mem.read('wEnemyMonDVs', 2)) in unown_missing(self, snapshot)
         # A wild shiny is always caught, an owned species too. Trainers' Pokémon never count.
         shiny = self.wild_shiny(snapshot)
-        # A postgame better-DV hunt catches every copy it meets, and the boxes keep the best one.
-        from .postgame import quality_species
-        upgrade = snapshot.in_battle == 1 and catch_species == quality_species(self)
+        # A postgame better-DV hunt catches a copy only when the PC would keep it (postgame.hunt_catch).
+        from .postgame import hunt_catch, quality_species
+        upgrade = (snapshot.in_battle == 1 and catch_species == quality_species(self)
+                   and hunt_catch(self, snapshot, catch_species, mem.read('wEnemyMonDVs', 2)))
         catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or requested or shiny
                                               or upgrade or catch_species in self.returned)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in

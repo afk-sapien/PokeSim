@@ -1,37 +1,36 @@
 """One value score for every Pokémon in the PC, and one rule for making room, in all six games.
 
 Each stored Pokémon gets a score built from what it is worth to the adventure: a plan role, shiny,
-perfect and rare DVs, the level and training put into it, the post-game focus, other adventures
-wanting it in trade, and where it came from. Where it came from is only one input. It never keeps a
-Pokémon by itself.
+how rare its DVs are for its family (rarity.py), the post-game focus, other adventures wanting it in
+trade, and where it came from. Where it came from is only one input. It never keeps a Pokémon by
+itself. Level is not in it, since any copy can be trained.
 
-When room is needed, the lowest-value Pokémon goes first. A few never go: Keep-locked Pokémon, eggs,
-party members, the best copy of each species (each Unown letter), so the Pokédex never loses an
-entry, and the copies a running plan relies on. Each species keeps its best copy, or the copies a
-plan or the focus needs. The rest are spares, released lowest score first, and only when room is
-needed. Copies the demand needs come after every spare. So the PC can only fill with nothing to
-release when every slot is locked, a plan's or the last copy of its species.
+When room is needed, the lowest-value Pokémon goes first, so among plain spares the most common DVs
+go first. A few never go: Keep-locked Pokémon, eggs, party members, trained copies, the best and the
+rarest copy of each species (each Unown letter), so the Pokédex never loses an entry, and the copies
+a running plan relies on. Each species keeps those, or the copies a plan or the focus needs. The rest
+are spares, released lowest score first, and only when room is needed. Copies the demand needs come
+after every spare. So the PC can only fill with nothing to release when every slot is locked.
+
+``worth`` asks whether a new copy should be kept at all, for a catch or a gift, by the same rows.
 
 The generation adapters (release.py in each generation) turn their snapshot into ``Entry`` rows, so
 this module knows nothing about either cartridge.
 """
+import math
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-from pokecore.dvs import is_perfect, is_shiny
+from pokecore.dvs import is_shiny
 
-from .investment import rare_find
+from .rarity import generic
 
 # Every weight in one place. A score is the sum of the parts a Pokémon earns.
 WEIGHTS = {
     'role': 400,        # a plan relies on it: breeding parent or stock, trainee, team member, offered trade
-    'shiny': 300,       # shiny DVs, so it only goes once every plain spare is gone
-    'perfect': 250,     # all five DVs at 15
-    'rare': 120,        # DVs in the rarest half percent for its species (investment.rare_find)
-    'dvs': 60,          # natural potential, scaled by the DV total out of 75
-    'level': 100,       # the level, scaled to 100 at Lv 100
-    'training': 100,    # stat experience, full at TRAINED_STAT_EXP across the five stats
+    'shiny': 900,       # shiny DVs, above the rarest plain DVs, so it only goes once every plain spare is gone
+    'rarity': 50,       # each halving of the share of copies that score as well (rarity.py), 800 at the rarest
     'focus': 150,       # a copy the post-game focus or standing target is working on
     'demand': 50,       # each linked adventure that wishes for the species in trade
     'demand_cap': 100,  # the most trade demand can add
@@ -47,13 +46,18 @@ WEIGHTS = {
 ROLE_COPIES = 2
 # Copies of a species the post-game focus or a standing target keeps.
 FOCUS_COPIES = 2
-# Stat experience summed over the five stats that counts as fully trained.
+# Stat experience summed over the five stats that counts as fully trained. A trained copy is never
+# released automatically.
 TRAINED_STAT_EXP = 100000
 # Release values this close count as equal when choosing a PC visit, so it stays in one box. Each box
-# change saves the game, about 4000 frames, and a plain spare is worth under 200.
+# change saves the game, about 4000 frames. It equals one RARITY_STEP of rarity points, so a copy
+# twice as rare never shares a band with the one it replaced.
 VISIT_BAND = 50
+# A new copy of a species already held is kept only when it is at least this many times rarer than
+# the rarest copy held.
+RARITY_STEP = 2
 LAST_COPY = 'last copy'
-DEADLOCK = 'PC full: every stored Pokémon is Keep-locked, a plan\'s or the only copy of its species.'
+DEADLOCK = 'PC full: every stored Pokémon is Keep-locked, trained, a plan\'s or the best copy of its species.'
 
 
 @dataclass(frozen=True)
@@ -83,11 +87,13 @@ class Entry:
 @dataclass(frozen=True)
 class Inputs:
     """What the adventure wants. ``demand`` maps a dex number to the copies a plan needs and ``wishes``
-    to the linked adventures that want it in trade."""
+    to the linked adventures that want it in trade. ``rarity`` gives a copy's rarity from its dex number
+    and DVs (rarity.py), or None when it cannot be told."""
     demand: dict = field(default_factory=dict)
     focus: frozenset = frozenset()
     wishes: Counter = field(default_factory=Counter)
     favor: str | None = None   # 'shiny' or 'dvs'
+    rarity: object = generic
 
 
 @dataclass
@@ -98,12 +104,25 @@ class Rated:
     # floor (never released automatically), kept (needed copy, after every spare) or spare
     status: str = 'spare'
     reason: str = ''
+    rarity: float | None = None
 
     def describe(self):
-        """The breakdown the PC tab and the journal show, such as "Score 500: Trained Lv 100 +200, Shiny +300"."""
+        """The breakdown the PC tab and the journal show, such as "Score 1238: Rarity 1 in 512 +450, Shiny +900"."""
         parts = ', '.join(f'{label} +{points}' for label, points in self.parts if points)
         head = f'{self.reason}. ' if self.reason else ''
         return f'{head}Score {self.score}' + (f': {parts}' if parts else '')
+
+
+def rarity_of(entry, inputs=Inputs()):
+    """The share of copies of the family that score at least as well as ``entry``, or None."""
+    if len(entry.dvs) != 5 or entry.egg:
+        return None
+    return inputs.rarity(entry.dex, entry.dvs)
+
+
+def rarity_points(tail):
+    """WEIGHTS['rarity'] for each halving of ``tail``."""
+    return round(WEIGHTS['rarity'] * math.log2(1 / tail)) if tail else 0
 
 
 def parts(entry, inputs=Inputs(), role=False):
@@ -118,15 +137,9 @@ def parts(entry, inputs=Inputs(), role=False):
         rows.append(('Plan role', weight['role']))
     if known and is_shiny(record):
         rows.append(('Shiny', weight['shiny'] * shiny_x))
-    if known and is_perfect(record):
-        rows.append(('Perfect DVs', weight['perfect'] * dvs_x))
-    elif known and rare_find(record):
-        rows.append(('Rare DVs', weight['rare'] * dvs_x))
-    if known:
-        rows.append((f'DVs {sum(entry.dvs)}/75', round(weight['dvs'] * dvs_x * sum(entry.dvs) / 75)))
-    level = round(weight['level'] * min(entry.level, 100) / 100)
-    training = round(weight['training'] * min(1, sum(entry.stat_exp) / TRAINED_STAT_EXP))
-    rows.append((f'{"Trained " if training else ""}Lv {entry.level}', level + training))
+    tail = rarity_of(entry, inputs)
+    if tail:
+        rows.append((f'Rarity 1 in {round(1 / tail)}', rarity_points(tail) * dvs_x))
     wished = min(weight['demand'] * inputs.wishes.get(entry.dex, 0), weight['demand_cap'])
     if wished:
         rows.append(('Wanted in trade', wished))
@@ -137,8 +150,9 @@ def parts(entry, inputs=Inputs(), role=False):
 
 
 def _rank(rated):
+    # Level only breaks a tie, as between copies whose DVs are not known.
     entry = rated.entry
-    return (rated.score, sum(entry.dvs), entry.experience)
+    return (rated.score, -(rated.rarity or 1), sum(entry.dvs), entry.experience, entry.level)
 
 
 def rate(entries, inputs=Inputs()):
@@ -151,12 +165,17 @@ def rate(entries, inputs=Inputs()):
     for group, copies in groups.items():
         # Breeding stock and offered partners hold a role for their best ROLE_COPIES only.
         plain = {entry: sum(points for _, points in parts(entry, inputs)) for entry in copies}
-        stock = sorted((entry for entry in copies if entry.stock and not entry.role), key=plain.get, reverse=True)
+        stock = sorted((entry for entry in copies if entry.stock and not entry.role), reverse=True,
+                       key=lambda entry: (plain[entry], sum(entry.dvs), entry.experience, entry.level))
         roles = {entry for entry in copies if entry.role} | set(stock[:ROLE_COPIES])
-        rated = [Rated(entry, 0, parts(entry, inputs, entry in roles)) for entry in copies]
+        rated = [Rated(entry, 0, parts(entry, inputs, entry in roles), rarity=rarity_of(entry, inputs))
+                 for entry in copies]
         for row in rated:
             row.score = sum(points for _, points in row.parts)
         rated.sort(key=_rank, reverse=True)
+        # The rarest copy stays too when another part, such as a gift's, puts a commoner copy first.
+        known = [row for row in rated if row.rarity is not None]
+        rarest = min(known, key=lambda row: row.rarity) if known else None
         need = max(1, inputs.demand.get(group[0], 0), FOCUS_COPIES if group[0] in inputs.focus else 1)
         if group[0] in inputs.focus:
             # Only the copies the focus keeps. A plainer copy stays a spare, so a hunt for a better
@@ -170,6 +189,11 @@ def rate(entries, inputs=Inputs()):
             elif row.entry in roles and not row.entry.trade:
                 # A plan's trainee, partner or stock within ROLE_COPIES. Only an owner's request takes it.
                 row.status, row.reason = 'floor', 'Plan role'
+            elif row is rarest and (rated[0].rarity is None or row.rarity < rated[0].rarity):
+                row.status, row.reason = 'floor', 'Rarest copy'
+            elif sum(row.entry.stat_exp) >= TRAINED_STAT_EXP:
+                # Training is hours of play a new catch cannot make up, so only an owner's request takes it.
+                row.status, row.reason = 'floor', 'Trained'
             elif index < need or row.entry in roles:
                 row.status = 'kept'
             if row.entry.locked:
@@ -181,6 +205,85 @@ def rate(entries, inputs=Inputs()):
         if entry.egg:
             rows[entry] = Rated(entry, 0, [], 'floor', 'Egg')
     return [rows[entry] for entry in entries]
+
+
+@dataclass(frozen=True)
+class Worth:
+    """Whether a new copy is worth keeping, why, its rarity and the rarest held copy's."""
+    keep: bool
+    reason: str
+    rarity: float | None = None
+    best: float | None = None
+
+
+# Floors a new copy earns only by being better than what is held.
+BETTER = ('Best copy', 'Rarest copy')
+
+
+def worth(candidate, held, inputs=Inputs(), *, missing=False, needed=0, active_box=None):
+    """Whether the PC would keep ``candidate``, an Entry not yet held, beside the ``held`` rows.
+
+    A copy for a missing Pokédex entry and a shiny are always kept. Otherwise it is rated with the
+    held rows and kept when it is not a spare: a plan or the demand needs it, or it is at least
+    RARITY_STEP times rarer than the rarest copy of its species held. Its DVs can be unknown, as for
+    a gift before it is received. Then it is kept only when the plan needs it or none is held.
+    ``needed`` and ``active_box`` are what the release path would pass to ``releases`` once it is
+    boxed (catch_visit), and a copy is not kept when that visit would take it or a rarer copy.
+    """
+    return verdict(rate([*held, candidate], inputs), missing=missing, needed=needed, active_box=active_box)
+
+
+def catch_visit(headroom, requests=0):
+    """The ``needed`` the release path passes to ``releases`` once one more Pokémon is boxed, or 0
+    while the boxes still keep their reserve. ``headroom`` is the free box slots before it and
+    ``requests`` the owner's release requests, which Gold, Silver and Crystal count too."""
+    from .planning.ledger import box_wanted
+    after = headroom - 1
+    return max(box_wanted(after, True), requests, 1) if box_wanted(after, False) else 0
+
+
+def verdict(rows, *, missing=False, needed=0, active_box=None):
+    """``worth`` for rows already rated with the new copy last."""
+    row = rows[-1]
+    candidate = row.entry
+    if missing:
+        return Worth(True, 'New entry', row.rarity)
+    if len(candidate.dvs) == 5 and is_shiny({'dvs': list(candidate.dvs)}):
+        return Worth(True, 'Shiny', row.rarity)
+    same = [other for other in rows[:-1] if other.entry.group == candidate.group and not other.entry.egg]
+    best = min((other.rarity for other in same if other.rarity is not None), default=None)
+    if row.status == 'spare':
+        return Worth(False, 'Spare', row.rarity, best)
+    if row.reason in BETTER:
+        # A held copy without DV data, as in a compact snapshot, is not counted.
+        if best is None:
+            found = Worth(row.rarity is not None, 'Rarer' if row.rarity is not None else 'DVs not known', row.rarity)
+        elif row.rarity is None:
+            return Worth(False, 'DVs not known', None, best)
+        else:
+            rarer = row.rarity * RARITY_STEP <= best
+            found = Worth(rarer, 'Rarer' if rarer else 'Not rare enough', row.rarity, best)
+    else:
+        found = Worth(True, row.reason or 'Needed', row.rarity, best)
+    if found.keep and pushes_out(rows, needed, active_box):
+        return Worth(False, 'Pushes out a rarer copy', row.rarity, best)
+    return found
+
+
+def pushes_out(rows, needed, active_box=None):
+    """Whether the visit ``releases`` would make with the new copy last in ``rows`` takes that copy
+    or one rarer than it, of any species. The owner's requests go whatever is caught, so they do
+    not count."""
+    if needed <= 0:
+        return False
+    new = rows[-1]
+    for row in releases(rows, needed, active_box):
+        if row is new:
+            return True
+        if (not row.entry.requested and row.rarity is not None and new.rarity is not None
+                and row.rarity < new.rarity):
+            return True
+    return False
 
 
 REFUSED = ('Keep', 'In the party', 'Egg')

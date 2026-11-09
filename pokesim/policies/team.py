@@ -67,9 +67,10 @@ def release_rated(s, preferences=None, roles=(), stock=(), partners=frozenset(),
     missing it, which keeps that many copies and counts as trade demand. ``favor`` is the Favor shiny or
     Favor DVs setting, ``extra`` adds rows such as an incoming trade, and the rest are as in ``entries``."""
     from collections import Counter
+    from ..investment import dex_rarity
     from ..pcvalue import Inputs, rate
     return rate([*entries(s, preferences, roles, stock, partners, gifts, rewards, requested), *extra],
-                Inputs(demand=dict(demand or {}), wishes=Counter(demand or {}), favor=favor))
+                Inputs(demand=dict(demand or {}), wishes=Counter(demand or {}), favor=favor, rarity=dex_rarity))
 
 
 def spare_copies(s, stock=()):

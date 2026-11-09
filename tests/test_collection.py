@@ -626,3 +626,18 @@ def test_story_comes_before_side_projects_until_the_champion():
         chosen.append(after.project)
     assert all(new_entry(project) for project in chosen)
     assert {project['method'] for project in chosen} & {'grass', 'evolve'}
+
+
+def test_a_dv_hunt_catches_only_a_copy_twice_as_rare_as_the_one_held():
+    from pokesim.investment import dex_rarity
+    from pokesim.policies.collection import improves
+    from test_duplicates import snapshot, stored
+    held, rarer, rarest = (0, 8, 8, 8, 8), (0, 0, 0, 13, 15), (0, 0, 1, 11, 15)
+    assert 1.5 <= dex_rarity(1, held) / dex_rarity(1, rarer) < 2 <= dex_rarity(1, held) / dex_rarity(1, rarest)
+    s = snapshot([stored(0, dvs=held)])
+    assert not improves(s, 0x99, rarer)
+    assert improves(s, 0x99, rarest)
+    # A missing entry and a shiny are always caught, however common their DVs.
+    assert improves(replace(s, owned=frozenset()), 0x99, (0, 2, 2, 2, 2))
+    assert improves(s, 0x99, (0, 2, 10, 10, 10))
+    assert not improves(s, 0x99, (0, 2, 2, 2, 2))

@@ -101,6 +101,58 @@ def test_a_catch_improves_once_the_poll_after_it_shows_a_better_copy():
     assert fresh.finish({25: 40.0})[0]['improved'] is True
 
 
+COMMON, PLAIN, RARE, RARER = (0, 2, 2, 2, 2), (0, 4, 4, 4, 4), (0, 8, 8, 8, 8), (0, 12, 12, 12, 12)
+TAILS = {COMMON: 0.9, PLAIN: 0.6, RARE: 0.2, RARER: 0.05}
+
+
+def visits(*polls):
+    """Copies.poll over ``polls`` of (Pidgey DVs held, whether the journal shows a release since the last poll)."""
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    for held, released in polls:
+        copies.poll({'party': [], 'storage': {'pokemon': [{'dex': 16, 'dvs': list(dvs)} for dvs in held]}},
+                    lambda mon: mon['dex'], released)
+    return copies
+
+
+def test_a_catch_released_at_its_first_pc_visit_fails():
+    copies = visits(([PLAIN], False), ([PLAIN, COMMON], False), ([PLAIN], True), ([PLAIN], False))
+    assert [row['dvs'] for row in copies.first_visit] == [list(COMMON)] and not copies.pushed_out
+    # A copy that stayed through one visit may go at the next.
+    later = visits(([PLAIN], False), ([PLAIN, COMMON, RARE], False), ([COMMON, RARE], True), ([COMMON, RARE], False),
+                   ([RARE], True))
+    assert not later.first_visit
+    problems = live_soak.invariants(result(first_visit=copies.first_visit, pushed_out=[]), None)
+    assert any('1 copies caught after the start were released at their first PC visit, #16' in problem
+               for problem in problems)
+
+
+def test_a_hunt_best_replaced_by_a_rarer_copy_may_go_at_once():
+    copies = visits(([PLAIN], False), ([PLAIN, RARE], False), ([PLAIN, RARE, RARER], False), ([PLAIN, RARER], True))
+    assert not copies.first_visit and not copies.pushed_out
+
+
+def test_a_release_that_takes_a_copy_rarer_than_the_newcomer_fails():
+    copies = visits(([RARE, PLAIN], False), ([RARE, PLAIN, COMMON], False), ([PLAIN, COMMON], True))
+    assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
+    problems = live_soak.invariants(result(first_visit=[], pushed_out=copies.pushed_out), None)
+    assert any('1 releases took a copy rarer than the newer one that pushed it out, #16' in problem
+               for problem in problems)
+    # The common copy going instead is the rule working.
+    fine = visits(([RARE, PLAIN], False), ([RARE, PLAIN, RARER], False), ([RARE, RARER], True))
+    assert not fine.pushed_out and not fine.first_visit
+    # Results without the copies held, as from an older run, are not judged.
+    assert live_soak.measure(result())['released_at_first_visit'] is None
+
+
+def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    for held, released in (([(16, RARE), (19, PLAIN)], False), ([(16, RARE), (19, PLAIN), (19, COMMON)], False),
+                           ([(19, PLAIN), (19, COMMON)], True)):
+        copies.poll({'party': [], 'storage': {'pokemon': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in held]}},
+                    lambda mon: mon['dex'], released)
+    assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
+
+
 def test_rates_hold_the_candidate_to_the_deployed_commit():
     deployed = result(gift_loop(1) + [('badge', 'Earned the Boulder Badge')] * 10)
     assert live_soak.invariants(deployed, deployed) == []

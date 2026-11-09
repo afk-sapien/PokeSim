@@ -3,8 +3,10 @@ from functools import lru_cache
 
 from pokecore.dvs import dv_probabilities
 
+from .game_data import load
 from .pokemon import experience_at_level, stored_strength
-from .strategy_data import SPECIES
+from .rarity import SELF_KO, Families
+from .strategy_data import MOVES, SPECIES
 
 GOOD_TAIL = 0.05
 RARE_TAIL = 0.005
@@ -12,18 +14,38 @@ MIN_UPGRADE = 0.02
 SEARCH_BUDGET = 3
 
 
-@lru_cache(maxsize=8192)
-def _potential(species, dvs):
-    return stored_strength({'species': species, 'level': 100, 'dvs': dvs,
-                            'stat_exp': (65535,) * 5})['power']
+@lru_cache(maxsize=1)
+def families():
+    """Gen I final forms per internal species id, for rarity.py. Loaded once, as SPECIES is."""
+    rows = load('collection.json')['evolutions']
+    after = {int(key): [row['species'] for row in evolutions] for key, evolutions in rows.items()}
+    species = {key: (entry['stats'], entry['types'],
+                     [*entry.get('initial_moves', []), *(move for _, move in entry.get('learnset', []))],
+                     after.get(key, []))
+               for key, entry in SPECIES.items() if entry.get('dex')}
+    moves = {key: (move['power'], move['accuracy'], move['type']) for key, move in MOVES.items()
+             if move.get('effect') not in SELF_KO}
+    return Families(species, moves)
+
+
+@lru_cache(maxsize=1)
+def _internal():
+    return {entry['dex']: key for key, entry in SPECIES.items() if entry.get('dex')}
 
 
 def potential_power(mon):
-    dvs = mon.get('dvs')
-    if (not isinstance(dvs, (list, tuple)) or len(dvs) != 5
-            or any(type(v) is not int or not 0 <= v <= 15 for v in dvs)):
-        return None
-    return _potential(mon.get('species'), tuple(dvs))
+    """The copy's battle power as its family's final form, at Lv 100 with full stat experience."""
+    return families().score(mon.get('species'), mon.get('dvs'))
+
+
+def rarity(mon):
+    """The chance a random copy of the family scores at least as well (rarity.py), or None."""
+    return families().tail(mon.get('species'), mon.get('dvs'))
+
+
+def dex_rarity(dex, dvs):
+    """``rarity`` by Pokédex number, the shape pcvalue.Inputs takes."""
+    return families().rarity(_internal().get(dex), dvs)
 
 
 def assessment(mon):
@@ -49,8 +71,9 @@ def _current(species, level, dvs, training):
 
 
 def rare_find(mon):
-    odds = dv_probabilities(mon.get('dvs'))
-    return bool(odds and odds['at_least_probability'] <= RARE_TAIL)
+    """Whether the copy is in the rarest RARE_TAIL of its family, as the PC rates it (rarity)."""
+    tail = rarity(mon)
+    return tail is not None and tail <= RARE_TAIL
 
 
 def veteran(copies):

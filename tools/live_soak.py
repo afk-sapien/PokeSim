@@ -312,6 +312,97 @@ class Catches:
         return self.rows
 
 
+def _rarity(manager, adventure):
+    """A copy's rarity for its family from its Pokédex number and DVs, as the commit under test rates
+    it, or its DV tail when that commit has no rarity.py."""
+    try:
+        if adventure['version'] in ('gold', 'silver', 'crystal'):
+            from pokesim.gen2.data import GameData
+            from pokesim.gen2.release import rarity
+            return rarity(GameData.load(manager.assets.game_data_dir, adventure['version']))
+        from pokesim.investment import dex_rarity
+        return dex_rarity
+    except ImportError:
+        from pokesim.investment import assessment
+
+        def tail(dex, dvs):
+            top = assessment({'dvs': dvs})['dv_top_percent']
+            return None if top is None else top / 100
+        return tail
+
+
+class Copies:
+    """Every held copy at each poll, to find a catch released at its first PC visit and a release that
+    takes a copy rarer than every newer copy, of any species, that pushed it out.
+
+    A copy is followed by its DVs, which evolution keeps, so its species is the latest one seen. A PC
+    visit is a run of poll intervals with a release in the journal. A copy released at the first visit after it
+    arrived counts unless a rarer copy of its species that arrived after it is still held, as when a
+    hunt's best copy is replaced by a better one.
+    """
+
+    def __init__(self, rarity):
+        self.rarity, self.held, self.dex, self.tails = rarity, None, {}, {}
+        self.arrived, self.visits, self.polls, self.last_visit, self.visiting = {}, {}, 0, 0, None
+        self.first_visit, self.pushed_out = [], []
+
+    def tail(self, key):
+        if key not in self.tails:
+            self.tails[key] = self.rarity(self.dex.get(key), list(key))
+        return self.tails[key]
+
+    def poll(self, game, dex_of, released):
+        current = {}
+        for mon in [*(game or {}).get('party', []), *((game or {}).get('storage') or {}).get('pokemon', [])]:
+            dvs = mon.get('dvs')
+            if mon.get('egg') or not isinstance(dvs, (list, tuple)) or len(dvs) != 5:
+                continue
+            key = tuple(dvs)
+            current[key] = current.get(key, 0) + 1
+            if self.dex.get(key) != dex_of(mon):
+                self.dex[key] = dex_of(mon)
+                self.tails.pop(key, None)
+        self.polls += 1
+        if self.held is None:
+            self.held = current
+            return
+        for key in current:
+            if key not in self.held:
+                self.arrived.setdefault(key, self.polls)
+        if released:
+            if self.visiting is None:
+                # One visit can release over several polls, so it ends at the first poll without one.
+                self.visiting = set(self.held)
+            for key, count in self.held.items():
+                if current.get(key, 0) < count:
+                    self._judge(key, current)
+        elif self.visiting is not None:
+            for key in current:
+                if key in self.visiting:
+                    self.visits[key] = self.visits.get(key, 0) + 1
+            self.visiting, self.last_visit = None, self.polls - 1
+        self.held = current
+
+    def _judge(self, key, current):
+        from pokecore.dvs import is_shiny
+        tail, dex = self.tail(key), self.dex.get(key)
+        same = [other for other in current if other in self.arrived and other != key and self.dex.get(other) == dex
+                and self.tail(other) is not None]
+        row = {'dex': dex, 'dvs': list(key), 'tail': tail}
+        if key in self.arrived and not self.visits.get(key):
+            replaced = tail is not None and any(self.arrived[other] > self.arrived[key] and self.tail(other) < tail
+                                                for other in same)
+            if not replaced:
+                self.first_visit.append(row)
+        # Every copy that arrived since the last visit, of any species, filled the boxes this visit
+        # empties. A shiny is kept whatever its DVs, so it is no measure of the copy it pushed out.
+        newer = [self.tail(other) for other in current if other in self.arrived and other != key
+                 and self.arrived[other] > self.last_visit and self.tail(other) is not None
+                 and not is_shiny({'dvs': list(other)})]
+        if tail is not None and newer and tail < min(newer):
+            self.pushed_out.append({**row, 'by': min(newer)})
+
+
 def _names(manager, adventure):
     """Every spelling of each species name, by its key, for the version."""
     if adventure['version'] in ('gold', 'silver', 'crystal'):
@@ -370,6 +461,7 @@ def play_one(manager, aid, frames, progress):
     db.close()
     result = {'id': aid, 'name': adventure['name'], 'version': adventure['version'], 'failed': None}
     names, dex_of, catches = _names(manager, adventure), _dex_of(adventure['version']), Catches()
+    copies, releases = Copies(_rarity(manager, adventure)), 0
     began = time.monotonic()
     manager.registry.request_lifecycle(aid, 'start', identifier())
     manager.start_adventure(aid)
@@ -409,9 +501,13 @@ def play_one(manager, aid, frames, progress):
                 fresh = [row for row in db.execute('SELECT fingerprint, dex, recorded_at FROM capture_receipts '
                                                    'ORDER BY recorded_at') if row[0] not in seen]
                 goal = _goal(db)
+                released = db.execute("SELECT COUNT(*) FROM events WHERE id > ? AND type = 'release'",
+                                      (first_event,)).fetchone()[0]
             db.close()
             seen.update(row[0] for row in fresh)
             catches.poll(fresh, goal, best)
+            copies.poll(game, dex_of, released > releases)
+            releases = released
             help_reason = (status.get('help_request') or {}).get('reason')
             end = frame
             held_end = len(game.get('party', [])) + len(((game.get('storage') or {}).get('pokemon')) or []) if game else held_end
@@ -436,6 +532,7 @@ def play_one(manager, aid, frames, progress):
                   receipts=[list(row) for row in receipts], catches=catches.finish(best),
                   held_start=held_start, held_end=held_end, reloads=reloads, errors=len(errors),
                   error_lines=errors[:5], help=help_reason, names=names,
+                  first_visit=copies.first_visit, pushed_out=copies.pushed_out,
                   ledger=json.loads(ledger[0]) if ledger else None)
     progress(f'{adventure["name"]}: {result["frames"]} frames in {result["wall_seconds"]}s'
              + (f', failed: {result["failed"]}' if result['failed'] else ''))
@@ -577,7 +674,10 @@ def measure(result):
             'most_reloaded': max(result['reloads'].items(), key=lambda item: item[1], default=(None, 0)),
             'bytes': round((result['journal_bytes'] + max(result['kv_bytes'], 0)) / hours),
             'repeated_titles': repeated_sequence([row[3] for row in result['events']]),
-            'churned_species': churned_species(result), 'goals': goal_churn(result['catches'])}
+            'churned_species': churned_species(result), 'goals': goal_churn(result['catches']),
+            # Older results and a rejudge without the copies held leave these out.
+            'released_at_first_visit': len(result['first_visit']) if 'first_visit' in result else None,
+            'pushed_out_rarer': len(result['pushed_out']) if 'pushed_out' in result else None}
 
 
 def invariants(candidate, baseline):
@@ -606,7 +706,17 @@ def invariants(candidate, baseline):
     for goal, row in c['goals'].items():
         if row['churn']:
             problems.append(f'{name}: {row["longest_flat"]} catches in a row under {goal} with no better copy or new entry')
+    if c['released_at_first_visit']:
+        problems.append(f'{name}: {c["released_at_first_visit"]} copies caught after the start were released at their '
+                        f'first PC visit, {_dexes(candidate["first_visit"])}')
+    if c['pushed_out_rarer']:
+        problems.append(f'{name}: {c["pushed_out_rarer"]} releases took a copy rarer than the newer one that pushed it '
+                        f'out, {_dexes(candidate["pushed_out"])}')
     return problems
+
+
+def _dexes(rows):
+    return ', '.join(f'#{dex}' for dex in sorted({row['dex'] for row in rows if row['dex']}))
 
 
 def gate_shape(result):

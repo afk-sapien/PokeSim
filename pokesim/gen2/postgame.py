@@ -18,10 +18,10 @@ still always caught. An ongoing battle finishes before switching activities.
 Collection work always comes first: the plan is rebuilt every step and only reaches this module when
 no Pokédex, trade, breeding or clock-gated work is left.
 """
-from pokecore.dvs import dv_probabilities
 from pokecore.gen2.ram import calculated_stats, experience_at
 
 from ..investment import GOOD_TAIL, MIN_UPGRADE, SEARCH_BUDGET
+from ..pcvalue import RARITY_STEP
 from ..planning import arbiter, values
 from ..planning.arbiter import Candidate, Tier
 from ..planning.values import QUALITY, quality_catch
@@ -55,10 +55,18 @@ def potential(data, mon):
     return sum(calculated_stats(data.species[mon.species]['stats'], 100, mon.dvs, (65535,) * 5))
 
 
-def tail(mon):
-    """The chance a random wild copy has at least this DV total, or 1 when the DVs are unreadable."""
-    odds = dv_probabilities(list(mon.dvs))
-    return odds['at_least_probability'] if odds else 1.0
+def tail(data, mon):
+    """The copy's rarity as the PC values it (release.rarity), or 1 when the DVs are unreadable."""
+    from .release import rarity
+    odds = rarity(data)(mon.species, tuple(mon.dvs))
+    return 1.0 if odds is None else odds
+
+
+def wild_dvs(raw):
+    """The five DVs of a wild Pokémon from its two DV bytes, HP derived from the other four."""
+    attack, defense, speed, special = raw[0] >> 4, raw[0] & 15, raw[1] >> 4, raw[1] & 15
+    hp = (attack & 1) << 3 | (defense & 1) << 2 | (speed & 1) << 1 | special & 1
+    return (hp, attack, defense, speed, special)
 
 
 def catch_value(odds):
@@ -103,8 +111,8 @@ def effort(policy, species, activity=None):
     return decisions, catches
 
 
-def best_tail(snapshot, species):
-    return min((tail(mon) for mon in held(snapshot) if mon.species == species), default=1.0)
+def best_tail(data, snapshot, species):
+    return min((tail(data, mon) for mon in held(snapshot) if mon.species == species), default=1.0)
 
 
 def perfect(mon):
@@ -133,11 +141,20 @@ def searching(policy):
 
 
 def quality_species(policy):
-    """The species a better-DV hunt catches every copy of, or None."""
+    """The species a better-DV hunt catches, or None."""
     activity = (policy.collection.get('postgame') or {}).get('activity')
     if policy.collection.get('target'):
         return None
     return activity['species'] if activity and activity['kind'] == 'quality' and not activity.get('suspended') else None
+
+
+def hunt_catch(policy, snapshot, species, raw):
+    """Whether a better-DV hunt catches the wild ``species`` with DV bytes ``raw``: only a copy of its
+    species the PC would keep (release.keeps_another), so the next PC visit never releases it."""
+    if species != quality_species(policy):
+        return False
+    from .release import keeps_another
+    return keeps_another(policy, snapshot, species, dvs=wild_dvs(raw))
 
 
 def shiny_session(policy, snapshot):
@@ -282,19 +299,21 @@ def done(policy, snapshot, activity, current_time):
         new = {repr(row) for row in activity['seen']}
         species = activity['species']
         # Older saves did not record the tail the hunt set out to beat, so they beat today's best.
-        start = activity.setdefault('tail', best_tail(snapshot, species))
+        start = activity.setdefault('tail', best_tail(policy.data, snapshot, species))
         better = False
         for mon in held(snapshot):
             if mon.species == species and repr(ident(mon)) not in new:
                 activity['seen'].append(ident(mon))
                 activity['caught'] += 1
-                better = better or tail(mon) < start
+                # Better as the PC counts it: at least RARITY_STEP times rarer (pcvalue.worth).
+                better = better or tail(policy.data, mon) * RARITY_STEP <= start
         # The hunt ends at its first better copy, which makes the next one rarer, so the arbiter weighs
         # it afresh. It also ends once the next catch is worth less per decision than WORTH, as at a hunt
         # running dry. That ends it before the stand-down budget, which is left for stuck hunts.
         activity['better'] = activity.get('better') or better
         return (activity['better'] or standing_down(policy, hunt_key(species))
-                or not worth_hunting(best_tail(snapshot, species), [activity['row']], effort(policy, species, activity)))
+                or not worth_hunting(best_tail(policy.data, snapshot, species), [activity['row']],
+                                     effort(policy, species, activity)))
     shinies = sum(mon.shiny for mon in held(snapshot))
     return shinies > activity['shinies'] or standing_down(policy, stall_key(policy))
 
@@ -374,8 +393,7 @@ def candidate(policy, snapshot, activity):
     kind = activity['kind']
     if kind == 'quality':
         species = activity['species']
-        mon = max((mon for mon in held(snapshot) if mon.species == species), key=lambda mon: potential(policy.data, mon))
-        odds = tail(mon)
+        odds = best_tail(policy.data, snapshot, species)
         needed = 1 / max(odds, 1e-6)
         decisions, catches = effort(policy, species)
         per_catch = (search_expected(activity['row'].get('chance', 10)) + decisions) / (1 + catches)
@@ -441,11 +459,11 @@ def quality(policy, snapshot, current_time):
     rows = huntable(policy, snapshot, current_time)
     best = {}
     for mon in held(snapshot):
-        if mon.species in rows and (mon.species not in best or potential(policy.data, mon) > potential(policy.data, best[mon.species])):
-            best[mon.species] = mon
+        if mon.species in rows:
+            best[mon.species] = min(best.get(mon.species, 1.0), tail(policy.data, mon))
     candidates = []
-    for species, mon in best.items():
-        odds, spent = tail(mon), effort(policy, species)
+    for species, odds in best.items():
+        spent = effort(policy, species)
         if (not worth_hunting(odds, rows[species], spent) or searches.get(str(species), 0) >= SEARCH_BUDGET
                 or standing_down(policy, hunt_key(species)) or wanted(policy, snapshot, species)):
             continue
@@ -460,7 +478,7 @@ def quality(policy, snapshot, current_time):
             expected = search_expected(row.get('chance', 10), len(route) if route is not None else 0)
             return {'kind': 'quality', 'species': species, 'row': dict(row, started=policy.decisions),
                     'started': policy.decisions, 'seen': seen, 'caught': 0, 'expected': expected,
-                    'tail': best_tail(snapshot, species)}
+                    'tail': best_tail(policy.data, snapshot, species)}
     return None
 
 
@@ -523,7 +541,7 @@ def trainee(policy, snapshot):
         top = max((potential(data, mon) for mon in copies if mon.level >= 100), default=None)
         if top is not None and not perfect(best) and potential(data, best) <= top * (1 + MIN_UPGRADE):
             continue
-        if (best.level < HUNT_FIRST_BELOW and species in rows and worth_hunting(tail(best), rows[species], effort(policy, species))
+        if (best.level < HUNT_FIRST_BELOW and species in rows and worth_hunting(tail(data, best), rows[species], effort(policy, species))
                 and searches.get(str(species), 0) < SEARCH_BUDGET):
             continue
         goal = min(100, (best.level // 10 + 1) * 10)
