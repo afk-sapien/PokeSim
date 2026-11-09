@@ -1645,6 +1645,11 @@ class Policy:
         upgrade = (snapshot.in_battle == 1 and catch_species in snapshot.owned and not (partner or shiny or own_rule)
                    and bool(requested or catch_species == quality_species(self) or catch_species in self.returned)
                    and keeps_another(self, snapshot, catch_species, dvs=wild_dvs(mem.read('wEnemyMonDVs', 2))))
+        if (snapshot.in_battle == 1 and catch_species in self.returned and catch_species in {243, 244, 245, 249, 250, 251}
+                and catch_species in snapshot.owned and not (upgrade or partner or shiny or own_rule)):
+            # Close the return so neither the plan nor the retry timers bring back a refused legendary.
+            self.declined = getattr(self, 'declined', set()) | {catch_species}
+            self.returned = self.returned - {catch_species}
         catch = (snapshot.in_battle == 1 and (catch_species not in snapshot.owned or partner or own_rule or shiny or upgrade)
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))

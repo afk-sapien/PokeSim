@@ -388,11 +388,22 @@ class Emulator:
         if self.snapshot.started:
             self.play_clock.seed(self.snapshot.playtime_seconds)
 
+    def _decline_returns(self):
+        """Close the returned legendaries the battle refused to catch."""
+        from .legendary_returns import decline
+        collection = getattr(self.policy, 'collection', None)
+        declined = getattr(collection, 'declined_returns', None)
+        if isinstance(declined, set):
+            for number in declined:
+                decline(self.store, number)
+            collection.declined_returns = set()
+
     def _reset_transient(self, *, clear_observation=False):
         """Discard queued input and recovery timers without erasing durable progress."""
         self.policy.on_restore()
         if hasattr(self.policy, 'collection') and hasattr(self, 'store'):
             from .legendary_returns import claims
+            self._decline_returns()
             ready, closed = claims(self.store)
             self.policy.collection.returned_legendaries = ready
             self.policy.collection.closed_legendaries = closed
@@ -618,6 +629,7 @@ class Emulator:
                 self.policy.collection.returned_events = step_events.available(self.store)
             if restored_legendary:
                 snap = read_snapshot(self.pb.memory, self.frame)
+            self._decline_returns()
             ready, closed = claims(self.store)
             if hasattr(self.policy, 'collection'):
                 self.policy.collection.returned_legendaries = ready
