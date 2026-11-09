@@ -2598,9 +2598,12 @@ def test_scripted_uncatchable_shiny_does_not_retry_forbidden_escape(real_data, b
     assert policy.shiny_missed == 'no balls'
 
 
-def test_first_gym_waits_for_a_level_twelve_partner(real_data):
+def test_first_gym_waits_for_a_level_twelve_partner(real_data, monkeypatch):
+    from pokesim.gen2 import training
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
+    route = real_data.map_ids['ROUTE_31']
+    monkeypatch.setattr(training, 'walk_points', lambda policy, snapshot, mid: [(10, 10, 0)] if mid == route else [])
     mon = SimpleNamespace(level=9, egg=False)
     snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0,
                                party=(mon,), event=lambda name: True)

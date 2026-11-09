@@ -4,11 +4,80 @@ from pokecore.gen2.ram import calculated_stats, experience_at
 from ..planning.ledger import FIELD_MOVES
 from ..planning.stance import TRAIN
 from .ledger import fits, tidy_goal
-from .standdown import TRAINING_DECISIONS, exhausted, spend, stand_down, standing_down, train_key
+from .standdown import TRAINING_DECISIONS, exhausted, site_key, spend, stand_down, standing_down, train_key
+
+# Mt. Silver provides renewable experience for the trained champion and its partner.
+SITE = 'SILVER_CAVE_ROOM_1'
+# Maps beside the project's own that a training project may fall back on.
+SITES = 8
 
 
 def identity(mon):
     return [mon.trainer_id, list(mon.dvs)]
+
+
+def wild_levels(data):
+    """The top wild level of each map whose cartridge wild table has walking encounters (grass or cave floor)."""
+    top = {}
+    for row in data.encounters:
+        if row['method'] == 'grass':
+            top[row['map']] = max(top.get(row['map'], 0), row['level'])
+    return top
+
+
+def walk_points(policy, snapshot, mid):
+    """The encounter tiles of map ``mid`` the player can reach from here.
+
+    Empty when the map's cartridge wild table has no walking encounters. A cave counts every floor tile,
+    and the floor outside its walls is out of reach: a first League trip once aimed at Victory Road's top
+    left corner, found no route and stood in Mr. Pokémon's House for hours.
+    """
+    from .collection import encounter_points
+    if mid not in wild_levels(policy.data):
+        return []
+    points = encounter_points(policy, snapshot, mid, 'grass')
+    if not points:
+        return []
+    regions = policy.nav.regions
+    cut, surf = bool(snapshot.badges & 2), bool(snapshot.badges & 8)
+    if snapshot.map == mid:
+        wanted = regions.memberships(mid, (snapshot.x, snapshot.y), cut, surf, arrive=True)
+    else:
+        route = regions.route(snapshot, mid, [point[:2] for point in points], cut=cut, surf=surf)
+        if not route:
+            return []
+        wanted = {route[-1][1][1]}
+    return [point for point in points if wanted & regions.memberships(mid, point[:2], cut, surf)]
+
+
+def site_goal(project):
+    """The goal a training site is judged for: the first League, or training at large."""
+    return 'league' if project.get('league') else 'train'
+
+
+def site(policy, snapshot, project, mon):
+    """The map a training project walks, or None when no map can still train ``mon``.
+
+    The project's own map comes first, then every other map with walking encounters in the cartridge's
+    wild table, the highest wild level the party's best member still outlevels first. Every wild battle
+    a Gen II party wins pays experience, so a map can train any trainee under level 100. A map is left out
+    once a whole stint there gave this goal no experience (observe), or when none of its encounter tiles
+    can be reached from here.
+    """
+    if mon.level >= 100:
+        return None
+    data = policy.data
+    top = wild_levels(data)
+    goal = site_goal(project)
+    usable = lambda mid: mid in top and not standing_down(policy, site_key(goal, mid))
+    first = data.map_ids[project.get('map') or SITE]
+    # On the map itself, the walk waits there while its collision loads (walk_goal).
+    if usable(first) and (snapshot.map == first or walk_points(policy, snapshot, first)):
+        return data.maps[first]['constant']
+    best = max((row.level for row in snapshot.party if not row.egg), default=0)
+    others = sorted((mid for mid in top if mid != first), key=lambda mid: (top[mid] > best, -top[mid]))
+    return next((data.maps[mid]['constant'] for mid in others[:SITES]
+                 if usable(mid) and walk_points(policy, snapshot, mid)), None)
 
 
 def shareless(data, snapshot):
@@ -195,8 +264,14 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         return None
     if project.get('terminal'):
         project['species'] = project['target'] = mon.species
-    # The first League trains on the way there, before Mt. Silver opens.
-    spot = {'map_name': project['map']} if project.get('map') else {}
+    # The first League trains on the way there, before Mt. Silver opens. Every walk heads for a map the
+    # cartridge has wild Pokémon on, and a project with nowhere left to train ends.
+    place = None if project['item'] else site(policy, snapshot, project, mon)
+    if place is None and not project['item']:
+        state['training'] = None
+        return None
+    project['site'] = place
+    spot = {'map_name': place} if place else {}
     evo = next((evo for evo in data.species[mon.species]['evolutions'] if evo['species'] == project['target']), None)
     if (evo and not project.get('terminal') and wrong_time(evo, current_time)
             and happiness_levels(mon.friendship) <= 1 and mon.held_item != data.items['EVERSTONE']):
@@ -264,16 +339,16 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     return walk_goal(policy, snapshot, Goal, lambda: f'Train {mon.name} toward {target}', **spot)
 
 
-def walk_goal(policy, snapshot, Goal, label, *, map_name='SILVER_CAVE_ROOM_1'):
+def walk_goal(policy, snapshot, Goal, label, *, map_name=SITE):
     """Walk encounter tiles, which trains the party and counts carried eggs down.
 
-    ``label`` names the walk once the grass is known.
+    ``label`` names the walk once the grass is known. None when no encounter tile of the map can be reached.
     """
     data = policy.data
-    # Mt. Silver provides renewable experience for the trained champion and its partner.
     mid = data.map_ids[map_name]
-    from .collection import encounter_points
-    points = encounter_points(policy, snapshot, mid, 'grass')
+    points = walk_points(policy, snapshot, mid)
+    if not points and snapshot.map != mid:
+        return None
     if not points:
         return Goal('collection_train', 'Wait for the training map to finish loading',
                     data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
@@ -409,4 +484,13 @@ def observe(policy, snapshot):
     if events:
         project['gained'] = True
     if spend(policy, train_key(project['identity']), TRAINING_DECISIONS, events, progressed=project.get('gained', False)):
+        # A whole stint without experience means the site cannot train this goal, so the next trainee
+        # does not take the same walk. The stand-down counts as one failed attempt there.
+        site_failed(policy, project)
         policy.collection['training'] = None
+
+
+def site_failed(policy, project):
+    """Stand down the site of a training stint that gained no experience at all."""
+    if project.get('site') and not project.get('gained'):
+        stand_down(policy, site_key(site_goal(project), policy.data.map_ids[project['site']]))
