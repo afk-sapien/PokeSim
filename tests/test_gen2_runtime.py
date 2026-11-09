@@ -2685,6 +2685,43 @@ def test_a_boss_loss_outlives_the_reload_in_the_store(real_data, tmp_path):
     store.close()
 
 
+def test_a_stall_reload_inside_a_boss_battle_counts_as_a_loss_and_the_team_trains(real_data, tmp_path):
+    # Gold at Azalea Gym ran out of attacks with no one fainted, so the guard reloaded a battle that
+    # only ran long. Without a loss noted the reload went straight back into the same fight.
+    from pokesim.gen2.emulator import Emulator
+    from pokesim.gen2.policy import Policy
+    from pokesim.store import Store
+    store = Store(tmp_path)
+    policy = Policy(real_data)
+    store.attach(policy, 2)
+    policy.goal = SimpleNamespace(key='zephyr', map_name='VIOLET_GYM')
+    party = (SimpleNamespace(level=15, egg=False, hp=10, moves=(TACKLE,)),)
+    battle = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], map_name='Violet Gym', valid=True, started=True,
+                             in_battle=2, party=party, frame=1000, badges=0, event=lambda name: True)
+    loaded = []
+    saves = SimpleNamespace(autosaves=lambda: [Path('auto-v1-1.state')], state_path=lambda name: None,
+                            checkpoint_metadata=lambda path: {'frame': 1, 'settled': True})
+    emu = SimpleNamespace(unstick_streak=0, snapshot=battle, store=saves, frame=100000, reloads=0, last_reload=0,
+                          policy=policy, _behind_barrier=lambda metadata: False, _load_state_file=loaded.append,
+                          _tick=lambda frames: None, _reset_watch=lambda: None, _event=lambda event, snapshot: None)
+    Emulator._unstick(emu, 100000, 'battle never ended')
+    assert loaded and policy.boss_bar('zephyr') == 17
+    # The reload builds a new policy from the store, and its next goal trains before Falkner.
+    reloaded = Policy(real_data)
+    store.attach(reloaded, 2)
+    outside = SimpleNamespace(map=real_data.map_ids['VIOLET_CITY'], frame=1000, badges=0, party=party,
+                              event=lambda name: True)
+    goal = reloaded.boss_training(outside, policy.goal)
+    assert goal.key == 'collection_train' and goal.map_name == 'ROUTE_31'
+    # A stall in a battle with a trainer outside the boss's room is no loss.
+    other = Policy(real_data)
+    other.goal = policy.goal
+    emu.policy, emu.snapshot = other, SimpleNamespace(**{**vars(battle), 'map': real_data.map_ids['ROUTE_32']})
+    Emulator._unstick(emu, 100000, 'battle never ended')
+    assert other.boss_bar('zephyr') == 14
+    store.close()
+
+
 def _shiny_lead():
     return SimpleNamespace(species=155, nick='CYNDAQUIL', name='CYNDAQUIL', level=40, hp=120, max_hp=120, status=0,
                            egg=False, moves=(33, 0, 0, 0), pp=(35, 0, 0, 0), stats=(120, 60, 60, 60, 60, 60),

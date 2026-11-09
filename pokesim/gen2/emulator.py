@@ -926,8 +926,9 @@ class Emulator:
                               f'{self.policy.recoveries} recoveries so far.', priority=HIGH), self.snapshot)
         restored = None
         from .standdown import carry_over, stalled_objectives
-        if why == CANNOT_END and self.snapshot is not None:
-            # A boss battle that cannot end is lost, though not everyone fainted.
+        if self.snapshot is not None and (why == CANNOT_END or getattr(self.snapshot, 'in_battle', 0) == 2):
+            # A boss battle the reload leaves is lost, though not everyone fainted, so the team trains
+            # before it goes back in. note_boss_loss ignores trainers outside a boss room and the League.
             note = getattr(self.policy, 'note_boss_loss', None)
             if note is not None:
                 note(self.snapshot)
