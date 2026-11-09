@@ -149,6 +149,7 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
         with:
           version: '0.12.18'
+          enable-cache: false
       - if: matrix.arch == 'amd64'
         uses: ./.github/actions/uv-sync
         with:
