@@ -643,6 +643,7 @@ class Participant:
         # Only an unreleased commit is ever promoted from this snapshot, and it dwarfs
         # the rest of the record, so a released exchange has no reason to carry it.
         record.pop('source_metadata', None)
+        prepared = self.store.get('interaction_preparation') or {}
         with self.store.lock, self.store.db:
             from ..trade_statistics import managed
             managed(self.store.db, record)
@@ -657,6 +658,9 @@ class Participant:
             repair_party_nicknames(pb.memory)
         self.emu.policy.on_restore()
         self.emu.stuck_since = time.time()
+        if getattr(self.emu, 'generation', 1) == 1 and prepared.get('id') == record['id']:
+            from .preparation import begin_restore
+            begin_restore(self.emu, prepared)
         return record
 
     def abort(self, data):
