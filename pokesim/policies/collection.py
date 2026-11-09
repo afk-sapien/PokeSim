@@ -108,18 +108,40 @@ def improves(s, species, dvs, rated=None):
     ball at one asks it: an incidental catch, the Safari Zone, a DV hunt, a repeat project and a
     returned legendary. A missing entry, a shiny and a field-move carrier keep their own rules, and a
     missing entry is a keep here anyway."""
+    from .. import pcvalue
+    from .team import storage_headroom
+    boxes = hasattr(s, 'box_counts')
+    return pcvalue.keeps_new(_with_new(s, species, dvs, rated), missing=dex(species) not in s.owned,
+                             headroom=storage_headroom(s) if boxes else None,
+                             active_box=getattr(s, 'active_box', None), room=catch_room(s) if boxes else None)
+
+
+def catch_room(s):
+    """Free slots a catch may fill, across the party and every box (pcvalue.reserve_allows)."""
+    from .team import storage_headroom
+    return storage_headroom(s) + max(6 - len(s.party), 0)
+
+
+def reserve_allows(s, species, dvs, rated=None):
+    """Whether a catch with its own rule, as a missing entry, a field-move carrier or a shiny is, may
+    take a slot from the reserve (pcvalue.reserve_allows). ``rated`` is as in improves."""
+    from .. import pcvalue
+    if not hasattr(s, 'box_counts') or catch_room(s) > pcvalue.UPGRADE_RESERVE:
+        return True
+    return pcvalue.reserve_allows(_with_new(s, species, dvs, rated), catch_room(s), missing=True)
+
+
+def _with_new(s, species, dvs, rated=None):
+    """The PC rated as the next release rates it, with a wild ``species`` holding ``dvs`` last."""
     from ..events import LEGENDARY_DEX
     from .. import pcvalue
-    from .team import release_rated, storage_headroom
+    from .team import release_rated
     number = dex(species)
     # A caught legendary is rated as one, as release_rated rates it once held.
     candidate = pcvalue.Entry((-1, 0), (number, 0), SPECIES.get(species, {}).get('name', '?'), 5,
                               dvs=tuple(dvs or ()), origin='legendary' if number in LEGENDARY_DEX else 'caught',
                               record={'species': species, 'dvs': dvs})
-    rows = rated(extra=(candidate,)) if rated else release_rated(s, extra=(candidate,))
-    return pcvalue.keeps_new(rows, missing=number not in s.owned,
-                             headroom=storage_headroom(s) if hasattr(s, 'box_counts') else None,
-                             active_box=getattr(s, 'active_box', None))
+    return rated(extra=(candidate,)) if rated else release_rated(s, extra=(candidate,))
 
 
 def can_train(mon):

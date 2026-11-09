@@ -209,6 +209,29 @@ def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
     assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
 
 
+def test_a_newcomer_no_release_may_take_does_not_count_against_a_release():
+    # Soak Yellow c3b193c1: a gift Mew, the only copy of a new entry, arrived and Grimer [14, 1, 7, 5, 2]
+    # went at the next visit. The journal keeps no DVs for the Mew, so these give its soak tail.
+    grimer, mew, best, plain = (14, 1, 7, 5, 2), (9, 1, 0, 2, 15), (0, 2, 2, 2, 2), (0, 3, 3, 3, 3)
+    tails = {(88, grimer): 0.7048187255859375, (88, best): 0.3, (151, mew): 0.7691802978515625, (151, plain): 0.9}
+
+    def judged(*polls):
+        copies = live_soak.Copies(lambda dex, dvs: tails[dex, tuple(dvs)])
+        for held, party, released in polls:
+            copies.poll({'party': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in party],
+                         'storage': {'pokemon': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in held]}},
+                        lambda mon: mon['dex'], released)
+        return copies.pushed_out
+    start = [(88, best), (88, grimer)]
+    assert not judged((start, [], False), ([*start, (151, mew)], [], False), ([(88, best), (151, mew)], [], True))
+    # A party member cannot go either, but a second, commoner Mew boxed beside it could.
+    assert not judged((start, [], False), (start, [(151, plain), (151, mew)], False),
+                      ([(88, best)], [(151, plain), (151, mew)], True))
+    assert judged((start, [], False), ([*start, (151, mew), (151, plain)], [], False),
+                  ([(88, best), (151, mew), (151, plain)], [], True)) == [
+        {'dex': 88, 'dvs': list(grimer), 'tail': 0.7048187255859375, 'by': 0.9}]
+
+
 def watch(*polls):
     """Copies.poll over ``polls`` of (party, stored, released, map), each copy a (dex, DVs, locked) row, or
     (dex, DVs, locked, held item) for a Gen II one."""

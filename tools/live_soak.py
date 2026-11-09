@@ -567,10 +567,17 @@ class Copies:
             if not replaced:
                 self.first_visit.append(row)
         # Every copy that arrived since the last visit, of any species, filled the boxes this visit
-        # empties. A shiny is kept whatever its DVs, so it is no measure of the copy it pushed out.
+        # empties. A shiny is kept whatever its DVs, so it is no measure of the copy it pushed out. Nor
+        # is a copy no release may take: the rarest or only copy of its species, as Soak Yellow's gift
+        # Mew was when a rarer Grimer went, a party member or a Keep.
+        rarest = {}
+        for other in current:
+            if self.tail(other) is not None:
+                rarest[self.dex.get(other)] = min(rarest.get(self.dex.get(other), 1.0), self.tail(other))
         newer = [self.tail(other) for other in current if other in self.arrived and other != key
                  and self.arrived[other] > self.last_visit and self.tail(other) is not None
-                 and not is_shiny({'dvs': list(other)})]
+                 and not is_shiny({'dvs': list(other)}) and other not in self.party | self.locks
+                 and self.tail(other) > rarest[self.dex.get(other)]]
         if tail is not None and newer and tail < min(newer):
             self.pushed_out.append({**row, 'by': min(newer)})
 

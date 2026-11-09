@@ -322,3 +322,38 @@ def test_a_catch_visit_comes_only_once_the_reserve_is_spent():
     assert pcvalue.catch_visit(1) == BOX_REFILL
     assert pcvalue.catch_visit(BOX_RESERVE + 1, requests=3) == 0
     assert pcvalue.catch_visit(1, requests=BOX_REFILL + 2) == BOX_REFILL + 2
+
+
+# A PC like Silver's: every boxed Pokémon the only copy of its species, so nothing may go.
+ONLY_COPIES = [mon(16, (0, 0), dvs=HELD), *(mon(dex, (0, dex)) for dex in range(20, 38))]
+
+
+def test_the_last_slot_takes_an_upgrade_even_when_every_boxed_copy_is_the_only_one():
+    reserve = pcvalue.UPGRADE_RESERVE
+    rows = rate([*ONLY_COPIES, mon(16, (-1, 0), dvs=RAREST)], TABLE)
+    assert pcvalue.deadlocked(rate(ONLY_COPIES, TABLE), 0) and pcvalue.upgrade(rows)
+    assert pcvalue.keeps_new(rows, headroom=reserve, room=reserve)
+    # The copy it replaces is the one spare, so the visit after the catch releases it first.
+    assert [row.entry for row in pcvalue.releases(rows, 1)] == [ONLY_COPIES[0]]
+    # A copy not rare enough is no upgrade, and a trained copy it would replace cannot go.
+    assert not pcvalue.keeps_new(rate([*ONLY_COPIES, mon(16, (-1, 0), dvs=RARER)], TABLE), room=reserve)
+    trained = Entry(**{**vars(ONLY_COPIES[0]), 'stat_exp': (30000,) * 5})
+    assert not pcvalue.keeps_new(rate([trained, *ONLY_COPIES[1:], mon(16, (-1, 0), dvs=RAREST)], TABLE), room=reserve)
+
+
+def test_only_an_upgrade_may_take_the_reserved_slot():
+    # A copy a plan's demand keeps is no upgrade, so it waits for room.
+    needed = Inputs(demand={16: 2}, rarity=TABLE.rarity)
+    rows = rate([*ONLY_COPIES, mon(16, (-1, 0), dvs=(0, 2, 2, 2, 2))], needed)
+    assert pcvalue.keeps_new(rows) and pcvalue.keeps_new(rows, room=pcvalue.UPGRADE_RESERVE + 1)
+    assert not pcvalue.keeps_new(rows, room=pcvalue.UPGRADE_RESERVE)
+
+
+def test_a_missing_entry_takes_the_reserved_slot_only_when_a_release_can_follow():
+    reserve = pcvalue.UPGRADE_RESERVE
+    rows = rate([*ONLY_COPIES, mon(99, (-1, 0))], TABLE)
+    assert not pcvalue.reserve_allows(rows, reserve, missing=True)
+    assert pcvalue.reserve_allows(rows, reserve + 1, missing=True)
+    assert pcvalue.boxes_full(True, reserve) and not pcvalue.boxes_full(True, reserve + 1)
+    spare = rate([*ONLY_COPIES, mon(16, (0, 40), dvs=(0, 2, 2, 2, 2)), mon(99, (-1, 0))], TABLE)
+    assert pcvalue.reserve_allows(spare, reserve, missing=True)
