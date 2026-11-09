@@ -1,0 +1,23 @@
+name: uv sync
+description: Sync the locked environment from the restored uv cache first, and online only when the cache misses.
+# The pyboy-rs and pokecore wheels are GitHub release assets. uv revalidates every one of those URLs on each
+# sync, so a release-asset outage failed CI even with every wheel cached. The offline sync uses the cache
+# setup-uv restored. Later uv run steps skip the sync, since they would revalidate the same URLs again.
+inputs:
+  args:
+    description: Arguments after uv sync --locked
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ARGS: ${{ inputs.args }}
+      run: |
+        if ! UV_OFFLINE=1 uv sync --locked $ARGS; then
+          echo "::notice::The uv cache missed, so the sync goes online"
+          UV_HTTP_RETRIES=10 uv sync --locked $ARGS
+        fi
+        echo UV_NO_SYNC=1 >> "$GITHUB_ENV"
+        echo UV_HTTP_RETRIES=10 >> "$GITHUB_ENV"

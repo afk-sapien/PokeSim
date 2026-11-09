@@ -150,7 +150,9 @@ jobs:
         with:
           version: '0.12.18'
       - if: matrix.arch == 'amd64'
-        run: uv sync --locked --extra dev
+        uses: ./.github/actions/uv-sync
+        with:
+          args: --extra dev
       - if: matrix.arch == 'amd64'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

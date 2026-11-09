@@ -27,7 +27,10 @@ jobs:
         with:
           version: '0.12.18'
       - name: Export the pinned runtime dependencies
-        run: uv export --locked --no-dev --no-emit-project --no-emit-package pokecore --no-emit-package pyboy-rs --format requirements-txt --output-file runtime-requirements.txt
+        # Offline first, so a release-asset outage cannot fail the export. See .github/actions/uv-sync.
+        run: |
+          set -- --locked --no-dev --no-emit-project --no-emit-package pokecore --no-emit-package pyboy-rs --format requirements-txt --output-file runtime-requirements.txt
+          UV_OFFLINE=1 uv export "$@" || UV_HTTP_RETRIES=10 uv export "$@"
       - name: Check runtime dependency advisories
         run: uvx pip-audit==2.10.1 --require-hashes --disable-pip -r runtime-requirements.txt
   lint:
@@ -56,7 +59,9 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
-      - run: uv sync --locked --extra dev
+      - uses: ./.github/actions/uv-sync
+        with:
+          args: --extra dev
       # Stylelint is a development tool only. tests/test_stylelint.py runs it once it is installed.
       - name: Lint stylesheets
         if: matrix.python == '3.14'
@@ -117,10 +122,11 @@ jobs:
           ref: a1a22aaf84d1675bcdbaeb194592379d586d838e
           path: .reference/pokered
           persist-credentials: false
+      - uses: ./.github/actions/uv-sync
+        with:
+          args: --extra dev --extra browser-test
       - name: Install browser test runtime
-        run: |
-          uv sync --locked --extra dev --extra browser-test
-          uv run --locked --extra browser-test python -m playwright install --with-deps chromium
+        run: uv run --locked --extra browser-test python -m playwright install --with-deps chromium
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
       - name: Exercise real browser flows
         env:
