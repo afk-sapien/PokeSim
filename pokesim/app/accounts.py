@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
 
 from ..web.pages import template
-from .auth import KNOWN_SECONDS, SESSION_SECONDS, private_address
+from .auth import KNOWN_SECONDS, SESSION_SECONDS, PasswordCheckFailed, private_address
 from .policy import can
 from .providers import default_gateways, env_flag
 
@@ -130,6 +130,14 @@ def install(app, manager):
         return HTMLResponse(template('auth.html').substitute(
             page=page, token=html.escape(token, quote=True), app_version=html.escape(version_label())))
 
+    async def checked(username, password):
+        """The user for this password, or None. A check that could not run is a 503, never a wrong password."""
+        try:
+            return await run_in_threadpool(auth.verify_password, username, password)
+        except PasswordCheckFailed as error:
+            log.warning('password check could not run: %s', error)
+            raise HTTPException(503, 'The server is busy and could not check the password. Try again.') from error
+
     @app.post('/api/v1/auth/login')
     async def login(request: Request):
         data = await body(request)
@@ -145,7 +153,7 @@ def install(app, manager):
         everyone = ('user:' + username,)
         known = await run_in_threadpool(known_browser, request, username)
         limited(*mine, *(() if known else everyone))
-        user = await run_in_threadpool(auth.verify_password, username, data.get('password'))
+        user = await checked(username, data.get('password'))
         if user is None:
             auth.limiter.fail(*mine)
             auth.limiter.fail(*everyone, longest=USER_LOCKOUT)
@@ -222,7 +230,7 @@ def install(app, manager):
         limited(*keys)
         if user.get('placeholder') or not user.get('has_password'):
             raise HTTPException(409, 'This account logs in through another provider')
-        if await run_in_threadpool(auth.verify_password, user['username'], data.get('current_password')) is None:
+        if await checked(user['username'], data.get('current_password')) is None:
             auth.limiter.fail(*keys)
             raise HTTPException(401, 'Your current password is wrong')
         await run_in_threadpool(auth.set_password, user['id'], data.get('password'),

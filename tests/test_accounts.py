@@ -147,6 +147,58 @@ def test_setup_gives_older_adventures_to_the_first_admin(library):
     assert library.manager.registry.adventure(older['id'])['owner_id'] == made.json()['user']['id']
 
 
+def test_a_password_check_that_cannot_run_is_never_a_wrong_password(library, people, monkeypatch):
+    """The overnight suite once refused alice's right password: under load Argon2 could not get its
+    64 MiB and raised a bare VerificationError, which read as a mismatch. It is tried again, and a check
+    that keeps failing answers 503 without counting as a failed guess."""
+    from argon2.exceptions import VerificationError
+    auth = library.manager.auth
+    failures = []
+
+    class Busy:
+        def __init__(self, real):
+            self.real = real
+
+        def __getattr__(self, name):
+            return getattr(self.real, name)
+
+        def verify(self, stored, password):
+            if failures:
+                failures.pop()
+                raise VerificationError('Memory allocation error')
+            return self.real.verify(stored, password)
+
+    monkeypatch.setattr(auth, 'hasher', Busy(auth.hasher))
+    monkeypatch.setattr('pokesim.app.auth.time.sleep', lambda seconds: None)
+    failures[:] = [1, 1]
+    assert library.login('alice').get('/api/v1/adventures').status_code == 200
+    failures[:] = [1, 1, 1]
+    client = library.browser()
+    refused = client.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD})
+    assert refused.status_code == 503, refused.text
+    failures[:] = [1, 1, 1]
+    assert client.post('/api/v1/auth/login', json={'username': 'nobody', 'password': PASSWORD}).status_code == 503
+    assert client.post('/api/v1/auth/login', json={'username': 'alice', 'password': 'wrong'}).status_code == 401
+    assert library.login('alice')
+
+
+def test_only_a_few_password_checks_run_at_once(library, people, monkeypatch):
+    """Each check takes 64 MiB, so a burst of logins waits its turn and one that waits too long is told
+    the server is busy, never that its password was wrong."""
+    from pokesim.app import auth as module
+    auth = library.manager.auth
+    monkeypatch.setattr(module, 'CHECK_WAIT', 0.05)
+    held = [auth.checks.acquire(timeout=1) for _ in range(module.CHECKS_AT_ONCE)]
+    assert all(held) and not auth.checks.acquire(timeout=0)
+    client = library.browser()
+    busy = client.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD})
+    assert busy.status_code == 503, busy.text
+    auth.checks.release()
+    assert client.post('/api/v1/auth/login', json={'username': 'alice', 'password': PASSWORD}).status_code == 200
+    for _ in held[1:]:
+        auth.checks.release()
+
+
 def test_login_refuses_wrong_passwords_and_then_slows_down(library, people):
     client = library.browser()
     for _ in range(5):

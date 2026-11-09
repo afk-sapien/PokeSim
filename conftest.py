@@ -6,6 +6,20 @@ together always cover exactly the full suite, and a shard that selects nothing i
 """
 import os
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def cheapest_password_hashes(monkeypatch):
+    """Hash test passwords with argon2's cheapest parameters. The app's 64 MiB per check, run by
+    many test workers at once, could fail for want of memory and read as a wrong password."""
+    try:
+        from argon2 import PasswordHasher, profiles
+        from pokesim.app import auth
+    except ImportError:
+        return
+    monkeypatch.setattr(auth, 'PasswordHasher', lambda: PasswordHasher.from_parameters(profiles.CHEAPEST))
+
 
 def pytest_collection_modifyitems(config, items):
     spec = os.environ.get('POKESIM_TEST_SHARD')
