@@ -1161,24 +1161,27 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
                     break
         if candidates:
             _, _, x, y, face = min(candidates, key=lambda row: row[:4])
-        else:
-            route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
-            if route:
-                region = route[-1][1][1]
-                x, y, face = next((point for point in points
-                                   if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
-            else:
-                if postgame:
-                    return unavailable(policy, snapshot, Goal)
-                # No reachable tile yields it, so the next pick looks elsewhere until the stand-down ends.
-                stand_down(policy, hunt_key(target['species']))
-                state['target'] = None
-                return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
-    else:
+    if mid != snapshot.map or not candidates:
+        # Only a tile in a region the route reaches will do. A cave's floor outside its walls counts as an
+        # encounter tile too, and aiming there walks nowhere.
         route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
-        region = route[-1][1][1] if route else None
-        x, y, face = next((point for point in points
-                           if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
+        if route:
+            regions = {route[-1][1][1]}
+        elif route is None:
+            regions = set()
+        else:
+            # Already in a region that has the tiles.
+            regions = policy.nav.regions.memberships(snapshot.map, (snapshot.x, snapshot.y), True, True, arrive=True)
+        point = next((point for point in points
+                      if regions & policy.nav.regions.memberships(mid, point[:2], True, True)), None)
+        if point is None:
+            if postgame:
+                return unavailable(policy, snapshot, Goal)
+            # No reachable tile yields it, so the next pick looks elsewhere until the stand-down ends.
+            stand_down(policy, hunt_key(target['species']))
+            state['target'] = None
+            return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
+        x, y, face = point
     if label is None:
         name = data.species[target['species']]['name']
         item = item_hunts(policy, snapshot).get(target['species'])

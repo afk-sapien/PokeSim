@@ -567,10 +567,17 @@ class Copies:
             if not replaced:
                 self.first_visit.append(row)
         # Every copy that arrived since the last visit, of any species, filled the boxes this visit
-        # empties. A shiny is kept whatever its DVs, so it is no measure of the copy it pushed out.
+        # empties. A shiny is kept whatever its DVs, so it is no measure of the copy it pushed out. Nor
+        # is a copy no release may take: the rarest or only copy of its species, as Soak Yellow's gift
+        # Mew was when a rarer Grimer went, a party member or a Keep.
+        rarest = {}
+        for other in current:
+            if self.tail(other) is not None:
+                rarest[self.dex.get(other)] = min(rarest.get(self.dex.get(other), 1.0), self.tail(other))
         newer = [self.tail(other) for other in current if other in self.arrived and other != key
                  and self.arrived[other] > self.last_visit and self.tail(other) is not None
-                 and not is_shiny({'dvs': list(other)})]
+                 and not is_shiny({'dvs': list(other)}) and other not in self.party | self.locks
+                 and self.tail(other) > rarest[self.dex.get(other)]]
         if tail is not None and newer and tail < min(newer):
             self.pushed_out.append({**row, 'by': min(newer)})
 
@@ -916,17 +923,21 @@ def invariants(candidate, baseline):
     for goal, row in c['goals'].items():
         if row['churn']:
             problems.append(f'{name}: {row["longest_flat"]} catches in a row under {goal} with no better copy or new entry')
-    if c['released_at_first_visit']:
+    def worse(key):
+        # A count the deployed commit matched on the same copy is no regression, so it never blocks a deploy.
+        return c[key] and (b is None or b[key] is None or c[key] > b[key])
+
+    if worse('released_at_first_visit'):
         problems.append(f'{name}: {c["released_at_first_visit"]} copies caught after the start were released at their '
                         f'first PC visit, {_dexes(candidate["first_visit"])}')
-    if c['pushed_out_rarer']:
+    if worse('pushed_out_rarer'):
         problems.append(f'{name}: {c["pushed_out_rarer"]} releases took a copy rarer than the newer one that pushed it '
                         f'out, {_dexes(candidate["pushed_out"])}')
-    if c['phantom_catches']:
+    if worse('phantom_catches'):
         problems.append(f'{name}: {c["phantom_catches"]} phantom catches, caught with no better copy or new entry and '
                         f'released at their next PC visit, {_dexes(phantom_catches(candidate))}')
     for key, text in RELEASE_CHECKS.items():
-        if c[key]:
+        if worse(key):
             problems.append(f'{name}: {c[key]} releases took {text}, {_dexes(candidate[key])}')
     return problems
 

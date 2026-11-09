@@ -183,6 +183,23 @@ def test_a_release_that_takes_a_copy_rarer_than_the_newcomer_fails():
     assert live_soak.measure(result())['released_at_first_visit'] is None
 
 
+def test_a_release_count_the_deployed_commit_matched_passes():
+    copies = visits(([RARE, PLAIN], False), ([RARE, PLAIN, COMMON], False), ([PLAIN, COMMON], True))
+    rarer = [*copies.pushed_out, *copies.pushed_out]
+
+    def checks(mine, theirs):
+        problems = live_soak.invariants(result(first_visit=[], pushed_out=mine, best_copy=[], only_copy=[]),
+                                        result(first_visit=[], pushed_out=theirs, best_copy=[], only_copy=[]))
+        return [problem for problem in problems if 'rarer than the newer one' in problem]
+
+    # At or below the deployed count on the same copy, the check passes. Above it, or alone, it fails.
+    assert checks(copies.pushed_out, rarer) == [] and checks(copies.pushed_out, copies.pushed_out) == []
+    assert checks(rarer, copies.pushed_out)
+    assert checks(copies.pushed_out, [])
+    problems = live_soak.invariants(result(first_visit=[], pushed_out=copies.pushed_out), None)
+    assert any('rarer than the newer one' in problem for problem in problems)
+
+
 def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
     copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
     for held, released in (([(16, RARE), (19, PLAIN)], False), ([(16, RARE), (19, PLAIN), (19, COMMON)], False),
@@ -190,6 +207,29 @@ def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
         copies.poll({'party': [], 'storage': {'pokemon': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in held]}},
                     lambda mon: mon['dex'], released)
     assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
+
+
+def test_a_newcomer_no_release_may_take_does_not_count_against_a_release():
+    # Soak Yellow c3b193c1: a gift Mew, the only copy of a new entry, arrived and Grimer [14, 1, 7, 5, 2]
+    # went at the next visit. The journal keeps no DVs for the Mew, so these give its soak tail.
+    grimer, mew, best, plain = (14, 1, 7, 5, 2), (9, 1, 0, 2, 15), (0, 2, 2, 2, 2), (0, 3, 3, 3, 3)
+    tails = {(88, grimer): 0.7048187255859375, (88, best): 0.3, (151, mew): 0.7691802978515625, (151, plain): 0.9}
+
+    def judged(*polls):
+        copies = live_soak.Copies(lambda dex, dvs: tails[dex, tuple(dvs)])
+        for held, party, released in polls:
+            copies.poll({'party': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in party],
+                         'storage': {'pokemon': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in held]}},
+                        lambda mon: mon['dex'], released)
+        return copies.pushed_out
+    start = [(88, best), (88, grimer)]
+    assert not judged((start, [], False), ([*start, (151, mew)], [], False), ([(88, best), (151, mew)], [], True))
+    # A party member cannot go either, but a second, commoner Mew boxed beside it could.
+    assert not judged((start, [], False), (start, [(151, plain), (151, mew)], False),
+                      ([(88, best)], [(151, plain), (151, mew)], True))
+    assert judged((start, [], False), ([*start, (151, mew), (151, plain)], [], False),
+                  ([(88, best), (151, mew), (151, plain)], [], True)) == [
+        {'dex': 88, 'dvs': list(grimer), 'tail': 0.7048187255859375, 'by': 0.9}]
 
 
 def watch(*polls):

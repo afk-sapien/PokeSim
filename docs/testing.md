@@ -219,6 +219,8 @@ same copy, per game hour:
 - journal and settings growth at most twice the deployed growth
 - no species received and released 3 times, and no run of titles repeated 5 times, without progress
 - no goal with 10 catches in a row that keep no better copy, by DV rank, and no new Pokédex entry
+- release counts, such as a rarer copy pushed out by a newer one, at most the deployed count on the
+  same copy, and none when the deployed run failed
 
 The report goes to `data/live-soak/reports/<commit>.json`, and `tools/deploy_host.sh` refuses a
 commit, a rollback included, that has no passing report there. `rejudge` scores a finished run again.
