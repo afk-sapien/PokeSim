@@ -924,6 +924,25 @@ def build_tree(sha, folder):
     return folder
 
 
+# uv output that says a download failed, not the lock or the build.
+NETWORK_ERROR = re.compile(r'Failed to (?:fetch|download)|HTTP status (?:server|client) error|error sending request'
+                           r'|Could not connect|dns error|operation timed out', re.I)
+
+
+def sync_environment(tree, env, log=print):
+    """Build a commit's environment with uv. A download that fails on the network is tried once more
+    offline, from uv's cache, since the lock pins every wheel's hash."""
+    command = ['uv', 'sync', '--locked', '--no-dev', '--project', str(tree), '-q']
+    done = subprocess.run(command, env=env, cwd=tree, capture_output=True, text=True)
+    if done.returncode and NETWORK_ERROR.search(done.stderr or ''):
+        log(f'uv sync for {tree} failed on the network, retrying offline from the cache: '
+            f'{NETWORK_ERROR.search(done.stderr).group(0)}')
+        done = subprocess.run(command, env=dict(env, UV_OFFLINE='1'), cwd=tree, capture_output=True, text=True)
+    if done.returncode:
+        sys.stderr.write(done.stderr or '')
+        raise subprocess.CalledProcessError(done.returncode, command, done.stdout, done.stderr)
+
+
 def full_sha(sha):
     return subprocess.run(['git', '-C', str(ROOT), 'rev-parse', '--verify', f'{sha}^{{commit}}'], check=True,
                           capture_output=True, text=True).stdout.strip()
@@ -960,8 +979,7 @@ def run(args):
         reference = folder / 'app' / 'assets' / 'reference' / reference_revision(folder / 'tree')
         role_env = dict(env, UV_PROJECT_ENVIRONMENT=str(folder / 'env'), POKESIM_REVISION=roles[role],
                         GAME_DATA_DIR=str(reference))
-        subprocess.run(['uv', 'sync', '--locked', '--no-dev', '--project', str(folder / 'tree'), '-q'],
-                       env=role_env, cwd=folder / 'tree', check=True)
+        sync_environment(folder / 'tree', role_env, lambda line: print(line, flush=True))
         command = ['nice', '-n', str(args.nice), 'uv', 'run', '--locked', '--no-dev', '--no-sync', '--project',
                    str(folder / 'tree'), 'python', str(Path(__file__).resolve()), 'runner', str(inputs), str(folder),
                    str(args.roms), '--frames', str(args.frames), '--parallel', str(args.parallel)]

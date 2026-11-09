@@ -361,10 +361,10 @@ class StrategicPolicy(Policy):
     def pin(self):
         return self.collection.pin
 
-    def goals(self, snapshot):
+    def goals(self, snapshot, query=None):
         if snapshot is None or not snapshot.valid:
             return [], 'Not available now'
-        return self.collection.goal_list(snapshot, self.nav, self.rng)
+        return self.collection.goal_list(snapshot, self.nav, self.rng, query)
 
     def pin_goal(self, snapshot, key):
         if snapshot is None or not snapshot.valid:

@@ -58,8 +58,9 @@ class Policy:
     def details(self) -> dict:
         return {}
 
-    def goals(self, snapshot) -> tuple[list[dict], str | None]:
-        """The goals a manager can set as the next activity, and why the list is empty."""
+    def goals(self, snapshot, query=None) -> tuple[list[dict], str | None]:
+        """The goals a manager can set as the next activity, those named like ``query`` when it is given,
+        and why the list is empty."""
         return [], 'This policy has no goal list'
 
     def pin_goal(self, snapshot, key):

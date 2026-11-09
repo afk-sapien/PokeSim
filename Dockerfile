@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
 FROM python:3.14-slim-trixie AS build
 COPY --from=uv /uv /usr/local/bin/uv
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never UV_HTTP_RETRIES=10
 WORKDIR /app
 COPY pyproject.toml setup.py uv.lock README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY pokesim ./pokesim

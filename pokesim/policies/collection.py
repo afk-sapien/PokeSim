@@ -298,6 +298,35 @@ def dex(sid):
     return SPECIES.get(sid, {}).get('dex', 0)
 
 
+def picker_group(project, title, owned):
+    """The group and label a manager picks ``project`` under: one thing they want, whatever the place.
+
+    Every route, water and Safari zone a species is found in serves one want, so they share a group. The
+    planner keeps its own key for each place and the picker runs the best ranked of them.
+    """
+    method, sid = project['method'], project.get('species')
+    if method == 'train':
+        level = project['target_level']
+        return ('train', project['parent'], level), f'Train {name(project["parent"])} to {level}'
+    if sid is None or method not in CATCH_MODES + ('gift', 'trade', 'fossil', 'prize', 'evolve'):
+        return ('title', title), title
+    who = name(sid)
+    if legendary_project(project):
+        return ('get', sid), f'Get {who}'
+    if method == 'evolve':
+        if project.get('upgrade_evolution'):
+            return ('evolve_better', sid), f'Better {who} (evolve {name(project["parent"])})'
+        return ('evolve', sid), f'Evolve {name(project["parent"])} into {who}'
+    if project.get('dv_hunt'):
+        return ('better', sid), f'Better {who} (DV hunt)'
+    if dex(sid) not in owned:
+        verb = 'Catch' if method in CATCH_MODES else 'Trade for' if method == 'trade' else 'Get'
+        return ('missing', sid), f'{verb} {who} (missing entry)'
+    if project.get('needed_capture'):
+        return ('needed', sid), f'Catch another {who} (partner needed)'
+    return ('another', sid), f'Get another {who}'
+
+
 def storage_exchange_possible(s):
     """Taking a Pokemon out needs a free party slot, or somewhere to deposit a reserve first."""
     return len(s.party) < 6 or not s.box_full or s.next_free_box is not None
@@ -1285,10 +1314,13 @@ class Collection:
                                for project in candidates], projects)
         return options, projects, travel, labels
 
-    def goal_list(self, s, nav, rng):
-        """The projects a manager can set as the next activity, best first, and why the list is empty.
+    def goal_list(self, s, nav, rng, query=None, limit=pin.LIMIT):
+        """The goals a manager can set as the next activity, best first, and why the list is empty.
 
-        The plan is drawn on a copy of ``rng``, so listing the goals never changes what the run does.
+        Each goal is one group of projects (picker_group) under its best ranked project's key, so a
+        species is listed once for all the places it is found. ``query`` and ``limit`` are as in
+        pin.grouped. The plan is drawn on a copy of ``rng``, so listing the goals never changes what the
+        run does.
         """
         if not self.completed_champion:
             return [], 'The story comes first until the Champion is beaten'
@@ -1299,14 +1331,22 @@ class Collection:
         offered = self.offers(s, nav, copy)
         if isinstance(offered, Goal):
             return [], offered.reason
-        options, _, _, labels = offered
-        goals = [pin.entry(option.key, labels.get(option.key, option.key), option.tier)
-                 for option in arbiter.rank(options)]
-        return goals, None if goals else 'Nothing to do until the game changes'
+        options, projects, _, labels = offered
+        rows = []
+        for option in arbiter.rank(options):
+            title = labels.get(option.key, option.key)
+            group, label = picker_group(projects.get(option.key) or {'method': None}, title, s.owned)
+            rows.append((option.key, group, label, option.tier))
+        goals = pin.grouped(rows, query, limit)
+        if goals:
+            return goals, None
+        if query and rows:
+            return [], 'No goal matches that name'
+        return [], 'Nothing to do until the game changes'
 
     def set_pin(self, s, nav, rng, key):
-        """Set ``key`` as the next activity. A ValueError says why it cannot be."""
-        goals, reason = self.goal_list(s, nav, rng)
+        """Set ``key``, a listed goal's key, as the next activity. A ValueError says why it cannot be."""
+        goals, reason = self.goal_list(s, nav, rng, limit=None)
         match = next((goal for goal in goals if goal['key'] == key), None)
         if match is None:
             if key in self.director.monitor._table(STOOD_DOWN) and self.director.waiting(key, self.elapsed):

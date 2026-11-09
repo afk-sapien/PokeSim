@@ -3,8 +3,11 @@
 (() => {
   const $ = selector => document.querySelector(selector)
   const FAILED = 'That action could not be sent. Please try again.'
+  // The server lists the best 30 goals. The select never holds more than this, whatever it sends.
+  const MOST = 40
   let owner = false
   let busy = false
+  let typing
   // The pin key the picker last drew for. Undefined until the first draw, so that draw loads the list.
   let shown
 
@@ -36,6 +39,7 @@
     line.hidden = !active
     $('#next-activity-cancel').hidden = !active
     $('#next-activity-goal').hidden = active
+    $('#next-activity-search').hidden = active
     $('#next-activity-set').hidden = active
     const key = pin ? pin.key : null
     if (owner && key !== shown) {
@@ -47,11 +51,14 @@
   async function load() {
     const select = $('#next-activity-goal')
     if (!select || !owner) return
+    // A name in the search box finds goals past the best few, such as one species to hunt.
+    const query = ($('#next-activity-search')?.value || '').trim()
+    const url = query ? `/api/goals?q=${encodeURIComponent(query)}` : '/api/goals'
     try {
-      const response = await PokeSim.fetch('/api/goals', {cache: 'no-store'})
+      const response = await PokeSim.fetch(url, {cache: 'no-store'})
       if (!response.ok) throw new Error(FAILED)
       const body = await response.json()
-      const goals = Array.isArray(body.goals) ? body.goals : []
+      const goals = (Array.isArray(body.goals) ? body.goals : []).slice(0, MOST)
       // The list is read again on focus, so a choice still on it stays chosen.
       const chosen = select.value
       select.innerHTML = ''
@@ -95,6 +102,12 @@
 
   $('#next-activity-set')?.addEventListener('click', pick)
   $('#next-activity-goal')?.addEventListener('focus', load)
+  // The list is read again a moment after typing stops, not on every key.
+  const search = () => {
+    clearTimeout(typing)
+    typing = setTimeout(load, 300)
+  }
+  $('#next-activity-search')?.addEventListener('input', search)
   $('#next-activity-cancel')?.addEventListener('click', cancel)
-  globalThis.NextActivity = {status, render, update, load, pick, cancel}
+  globalThis.NextActivity = {status, render, update, load, pick, cancel, MOST}
 })()

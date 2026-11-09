@@ -288,17 +288,19 @@ class Policy:
     def describe(self):
         return f'strategic ({self.mode})'
 
-    def goals(self, snapshot):
-        """The goals a manager can set as the next activity, and why the list is empty."""
+    def goals(self, snapshot, query=None, every=False):
+        """The goals a manager can set as the next activity, and why the list is empty. ``query`` is as
+        in pin.grouped. The list keeps the picker's limit unless ``every`` asks for all of it."""
+        from ..planning.pin import LIMIT
         from .collection import goal_list
         if snapshot is None or self.memory is None:
             return [], 'Not available now'
-        return goal_list(self, snapshot, Memory(self.memory, self.data), Goal)
+        return goal_list(self, snapshot, Memory(self.memory, self.data), Goal, query, None if every else LIMIT)
 
     def pin_goal(self, snapshot, key):
-        """Set ``key`` as the next activity. A ValueError says why it cannot be."""
+        """Set ``key``, a listed goal's key, as the next activity. A ValueError says why it cannot be."""
         from ..planning.pin import UNAVAILABLE, Pin
-        goals, reason = self.goals(snapshot)
+        goals, reason = self.goals(snapshot, every=True)
         match = next((goal for goal in goals if goal['key'] == key), None)
         if match is None:
             raise ValueError(reason or UNAVAILABLE.capitalize())

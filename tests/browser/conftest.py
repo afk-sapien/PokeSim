@@ -233,7 +233,7 @@ class SyntheticEmulator:
     def call(self, function, timeout=30):
         return function()
 
-    def goals(self):
+    def goals(self, query=None):
         return pin.listing([], None, 'The planner has nothing to offer yet')
 
     def board(self):
