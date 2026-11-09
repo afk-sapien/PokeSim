@@ -109,15 +109,39 @@ def test_each_catch_reports_its_rarity_and_the_rarest_copy_held_before_it():
         game = {'party': [], 'storage': {'pokemon': [{'dex': 86, 'dvs': list(dvs)} for dvs in held]}}
         arrivals = copies.poll(game, lambda mon: mon['dex'], 0)
         catches.poll(receipts, 'seel', {86: min(TAILS[dvs] for dvs in held)}, arrivals)
-    rows = catches.finish({86: 0.05})
+    rows = catches.finish({86: 0.05}, copies.rarest())
     assert [(row['improved'], row['rarity'], row['best_held']) for row in rows] == [(True, 0.05, 0.6), (False, 0.9, 0.6)]
     assert [live_soak.catch_rarity(row) for row in rows] == [
         {'dex': 86, 'goal': 'seel', 'kept': True, 'one_in': 20, 'best_held_one_in': 2, 'times_rarer': 12.0},
         {'dex': 86, 'goal': 'seel', 'kept': False, 'one_in': 1, 'best_held_one_in': 2, 'times_rarer': 0.67}]
 
 
+def test_each_catch_is_judged_by_its_own_rarity_against_the_copies_held_when_it_arrived():
+    # Soak red's second Seel: a 1 in 2 new entry, then a 1 in 4 copy at the next PC visit. The old judge
+    # credited the better tail to the first catch and scored the second one not kept.
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    catches = live_soak.Catches()
+    for receipts, held in (([], []), ([('a', 86, 1.0)], [HALF]), ([('b', 86, 2.0)], [HALF, QUARTER]),
+                           ([], [HALF, QUARTER])):
+        game = {'party': [], 'storage': {'pokemon': [{'dex': 86, 'dvs': list(dvs)} for dvs in held]}}
+        arrivals = copies.poll(game, lambda mon: mon['dex'], 0)
+        catches.poll(receipts, 'seel', {86: min(TAILS[dvs] for dvs in held)} if held else {}, arrivals)
+    rows = catches.finish({86: 0.25}, copies.rarest())
+    assert [(row['improved'], row['kept'], row['rarity'], row['best_held']) for row in rows] == [
+        (True, True, 0.5, None), (True, True, 0.25, 0.5)]
+    assert [live_soak.catch_rarity(row)['times_rarer'] for row in rows] == [None, 2.0]
+    # A copy less than twice as rare is no improvement, as the catch rule would not keep it.
+    close = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    judged = live_soak.Catches()
+    for receipts, held in (([], [HALF]), ([('c', 86, 3.0)], [HALF, CLOSE]), ([], [HALF, CLOSE])):
+        game = {'party': [], 'storage': {'pokemon': [{'dex': 86, 'dvs': list(dvs)} for dvs in held]}}
+        judged.poll(receipts, 'seel', {86: min(TAILS[dvs] for dvs in held)}, close.poll(game, lambda mon: mon['dex'], 0))
+    assert [row['improved'] for row in judged.finish({86: 0.3}, close.rarest())] == [False]
+
+
 COMMON, PLAIN, RARE, RARER = (0, 2, 2, 2, 2), (0, 4, 4, 4, 4), (0, 8, 8, 8, 8), (0, 12, 12, 12, 12)
-TAILS = {COMMON: 0.9, PLAIN: 0.6, RARE: 0.2, RARER: 0.05}
+HALF, CLOSE, QUARTER = (0, 6, 6, 6, 6), (0, 7, 7, 7, 7), (0, 10, 10, 10, 10)
+TAILS = {COMMON: 0.9, PLAIN: 0.6, RARE: 0.2, RARER: 0.05, HALF: 0.5, CLOSE: 0.3, QUARTER: 0.25}
 
 
 def visits(*polls):
