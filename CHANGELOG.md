@@ -54,6 +54,7 @@
 - Let a Gold, Silver or Crystal party of field-move holders make room for a trade the same way. When no one else may go, the trade stores the only holder of Whirlpool, then Surf, then Waterfall, the moves the game withdraws a PC partner for. The only holder of Cut, Strength, Fly or Flash stays.
 - Give each leg of a boss approach its own heal trips, in all six games. Red spent its three trips in Victory Road and went into Lorelei unready in 10 of about 25 League entries over 2 hours, though the Indigo Plateau Center is on the way. A leg now runs from the last Pokémon Center the party stepped into, so a new Center brings three fresh trips, while trips back to the same Center still stop at three. The journal now writes quiet "Healed before" and "PP heal at" rows that stay off the feed.
 - Keep CI green through a GitHub release-asset outage. The pyboy-rs and pokecore wheels are release assets, and uv checked every one of those links on each sync, so a run failed even with every wheel in its cache. CI now keeps a uv cache per job, keyed on the pyboy-rs and pokecore versions and the lock file, and syncs and exports offline from it first, and goes online with 10 retries only when the cache misses. Later steps skip the sync. The Docker build retries those downloads 10 times.
+- Let the live soak survive a failed download. When building a commit's environment fails on the network, as on a GitHub 504, it now tries once more offline from uv's cache and says so in its log. The lock still checks every wheel's hash.
 
 ## 0.6.2
 
