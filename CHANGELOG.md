@@ -51,6 +51,7 @@
 
 - Let a Red, Blue or Yellow party of field-move holders make room for a trade. A postgame Yellow party held its strongest Pokémon, Pikachu and four Pokémon that were each the only one with Cut, Strength, Surf or Fly, so every trade that needed a boxed Pokémon failed with "No safe unprotected reserve". When no one else may go, the trade now stores the only holder of Cut, then Strength, then Surf, since the game withdraws a partner with that move from the PC when it needs one. The only holder of Fly or Flash still stays. Once the trade is released, the same PC visit deposits the received Pokémon and puts the stored holder back in the party, unless the received Pokémon is locked in the party.
 - Let a Gold, Silver or Crystal party of field-move holders make room for a trade the same way. When no one else may go, the trade stores the only holder of Whirlpool, then Surf, then Waterfall, the moves the game withdraws a PC partner for. The only holder of Cut, Strength, Fly or Flash stays.
+- Give each leg of a boss approach its own heal trips, in all six games. Red spent its three trips in Victory Road and went into Lorelei unready in 10 of about 25 League entries over 2 hours, though the Indigo Plateau Center is on the way. A leg now runs from the last Pokémon Center the party stepped into, so a new Center brings three fresh trips, while trips back to the same Center still stop at three. The journal now writes quiet "Healed before" and "PP heal at" rows that stay off the feed.
 
 ## 0.6.2
 

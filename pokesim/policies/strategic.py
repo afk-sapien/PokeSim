@@ -26,7 +26,8 @@ from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TR
 from ..planning import values
 from ..planning import arbiter
 from ..planning import boss
-from .ledger import fighters
+from .ledger import battle_room, fighters
+from ..planning.ledger import PP
 from ..planning.arbiter import Candidate, Tier
 from ..planning.monitor import STOOD_DOWN
 from ..planning.stance import FLEE_TRIES, STORY, TRAIN
@@ -99,6 +100,8 @@ ERRAND_FRAMES = 3000
 # goal challenges the trainer (planning/boss.py). The Champion is the rival.
 BOSSES = frozenset({'boulder', 'cascade', 'thunder', 'rainbow', 'soul', 'marsh', 'volcano', 'earth',
                     'league_lorelei', 'league_bruno', 'league_agatha', 'league_lance', 'league_rival'})
+# The Pokémon Center maps, the Indigo Plateau lobby among them. Stepping into one starts a boss heal leg.
+CENTER_MAPS = frozenset(center[0] for center in CENTERS)
 # The kind of a goal, by key prefix, in the order they are tried. Each kind's candidate is built once,
 # here, and the arbiter weighs it against the others. The first match wins.
 GOAL_KINDS = (('heal', 'heal'), ('party_collection', 'collection'), ('party_league', 'collection'),
@@ -290,6 +293,8 @@ class StrategicPolicy(Policy):
         # Failed stance runs in this battle, and whether one is under way.
         self.flee_tries, self.fleeing = 0, False
         self.heal_latch = False
+        # Whether the heal under way is one the party's spent PP called for.
+        self.pp_heal = False
         # The boss check before a leader, the Elite Four or the Champion (planning/boss.py), and whether
         # it sends the party to heal first.
         self.boss_gate = boss.Gate()
@@ -821,8 +826,14 @@ class StrategicPolicy(Policy):
 
     def _update_heal_latch(self, s):
         if needs_healing(s.party):
+            if not self.heal_latch:
+                # A heal its spent PP called for says so in the journal once the nurse is done.
+                self.pp_heal = battle_room(s.party)[PP] == 0
             self.heal_latch = True
         if all(p.hp == p.max_hp and not p.status for p in s.party) and not needs_healing(s.party):
+            if self.heal_latch and getattr(self, 'pp_heal', False):
+                self.collection.activity_events.append(boss.pp_heal_event(s.map_name))
+            self.pp_heal = False
             self.heal_latch = False
             self.escape_attempted = False
         if getattr(self, 'boss_heal', False):
@@ -832,7 +843,8 @@ class StrategicPolicy(Policy):
         """The boss check before ``goal`` (planning/boss.py), shared with Gold, Silver and Crystal.
 
         A party with a Pokémon under half its HP or its strong attacks' PP heals first when a nurse can
-        be reached. Otherwise it goes in as it stands, and the journal says so once per approach.
+        be reached. Otherwise it goes in as it stands, and the journal says so once per leg. Each
+        Pokémon Center the party steps into starts a leg with fresh trips.
         """
         gate = getattr(self, 'boss_gate', None)
         if gate is None:
@@ -845,11 +857,13 @@ class StrategicPolicy(Policy):
                 return False
             targets = healing_goal(s).targets
             return self.nav.distance_lookup((s.map, s.x, s.y), s.frame)(targets) is not None
-        verdict = gate.decide(key, party, reachable, where=s.map)
+        verdict = gate.decide(key, party, reachable, where=s.map, center=s.map in CENTER_MAPS)
         self.boss_heal = verdict == boss.HEAL
         if verdict == boss.UNREADY and gate.note():
             names = [mon.nick or f'#{mon.species}' for mon in s.party]
             self.collection.activity_events.append(boss.unready_event(goal.title, party, names))
+        if gate.healed():
+            self.collection.activity_events.append(boss.healed_event(goal.title))
         return verdict
 
     def _overworld(self, s, mem):
