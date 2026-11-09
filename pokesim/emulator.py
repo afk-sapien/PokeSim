@@ -231,9 +231,10 @@ class Emulator:
             raise response['error']
         return response.get('result')
 
-    def goals(self):
-        """The goals a manager can set as the next activity. Runs on the game thread."""
-        goals, reason = self.policy.goals(self.snapshot)
+    def goals(self, query=None):
+        """The goals a manager can set as the next activity, named like ``query`` if given. Runs on the
+        game thread."""
+        goals, reason = self.policy.goals(self.snapshot, query)
         return pin.listing(goals, self.policy.pin, reason)
 
     def pin_goal(self, key):
