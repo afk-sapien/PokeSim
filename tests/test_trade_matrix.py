@@ -773,8 +773,9 @@ def test_every_game_can_change_to_its_last_pc_box(version):
 @pytest.mark.parametrize(('moves', 'expected'), [
     ((15, 15, 19, 57, 70), [1, 2]),
     ((250, 127, 250, 127, 33), [1, 2, 3, 4, 5]),
-    ((15, 19, 57, 70, 148), []),
-    ((127, 19, 57, 70, 148), []),
+    ((15, 19, 57, 70, 148), [3]),
+    ((127, 19, 57, 70, 148), [1, 3]),
+    ((15, 19, 70, 148, 0), [5]),
 ])
 def test_gen2_hm_reserve_keeps_one_user_of_every_field_move(moves, expected):
     from pokesim.gen2.preparation import reserves
