@@ -1743,14 +1743,16 @@ def create_app(manager, shutdown=lambda: None):
         line[2] += pressing
         if taking:
             line[3].add(user_id)
-        joined = time.monotonic()
+        # The wait is timed on the lease clock, which is the monotonic clock outside tests.
+        clock = manager.leases.clock
+        joined = clock()
         try:
             async with line[0]:
                 # A request that waited behind a stalled worker, or whose page went away, would only
                 # change the game late, so it is dropped instead.
                 if await request.is_disconnected():
                     raise HTTPException(409, 'The page that sent this press closed')
-                if time.monotonic() - joined > (PRESS_WAIT_SECONDS if pressing else CONTROL_WAIT_SECONDS):
+                if clock() - joined > (PRESS_WAIT_SECONDS if pressing else CONTROL_WAIT_SECONDS):
                     raise HTTPException(409, 'That press waited too long and was dropped. Press again.' if pressing else
                                         'The game took too long to get to this. Look again and retry.')
                 yield

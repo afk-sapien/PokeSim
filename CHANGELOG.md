@@ -39,6 +39,7 @@
 - Fix four problems from an eighteenth review. A new Library that `pokesim import` made before the first start now asks for a login like any new Library. Disabling or demoting the Library's owner hands it to the admin who did it, or else the oldest admin, so `pokesim` commands keep working. An adventure given to someone else has its trading switches back at their defaults, so it takes no offers and trades with no one else's adventures until its new owner turns that on. The copy kept before an upgrade appears under its name only once it is whole.
 
 - Tell both sides in their inboxes when an offer ends because an adventure changed hands or was deleted, or its sender lost their share or was deleted. Inbox items about a deleted adventure no longer link to it.
+- Fix Take Control showing control as granted when the game refused it faster than the page could look.
 
 ## Unreleased
 
