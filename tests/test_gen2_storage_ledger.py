@@ -145,7 +145,7 @@ def release_sites():
     import pokesim.gen2
     sites = {}
     for path in sorted(Path(pokesim.gen2.__file__).parent.glob('*.py')):
-        for function in ast.walk(ast.parse(path.read_text())):
+        for function in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
             if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 calls = [node for node in ast.walk(function) if isinstance(node, ast.Call)]
                 if any(getattr(call.func, 'id', None) == 'Release' for call in calls):
