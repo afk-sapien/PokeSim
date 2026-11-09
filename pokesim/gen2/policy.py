@@ -27,6 +27,9 @@ STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) b
 SUBSTATUS_TRANSFORMED = 8
 # Moves with no power of their own that use another move, which may be an attack.
 BORROWED_MOVES = frozenset({'EFFECT_TRANSFORM', 'EFFECT_MIMIC', 'EFFECT_METRONOME', 'EFFECT_MIRROR_MOVE', 'EFFECT_SLEEP_TALK'})
+# Moves that win back HP, so a foe's attacks may never knock out the Pokémon that knows one.
+HEALING_MOVES = frozenset({'EFFECT_HEAL', 'EFFECT_MORNING_SUN', 'EFFECT_SYNTHESIS', 'EFFECT_MOONLIGHT',
+                           'EFFECT_LEECH_SEED'})
 
 
 def transformed(mem, mon):
@@ -92,6 +95,9 @@ class Policy:
         self.storage_pick = None
         self.completed = {}
         self.collection = {'target': None}
+        # The best fighter level that lost to each boss. Store.attach keeps it in the adventure's store.
+        from ..planning.losses import Losses
+        self.losses = Losses()
         # Owned one-time encounters that a walking return brought back for another capture.
         self.returned = set()
         # The party seen at this PC visit, so a member deposited at it is no spare (pcvalue.VisitTeam).
@@ -338,6 +344,10 @@ class Policy:
                 'reason': self.goal.label if self.goal else 'Start the adventure'}
 
     def journey(self, snapshot, mem):
+        goal = self.story(snapshot, mem)
+        return self.boss_training(snapshot, goal) or goal
+
+    def story(self, snapshot, mem):
         # A saved postgame outing waits while an evolution, trade or other collection task takes
         # priority. Its battle rules resume only when the director chooses its hunting goal again.
         activity = (self.collection.get('postgame') or {}).get('activity')
@@ -375,10 +385,6 @@ class Policy:
             return Goal('deliver_egg', 'Bring the mystery egg to Elm', 'ELMS_LAB', 5, 3, 'up')
         self.completed.setdefault('deliver_egg', snapshot.frame)
         if not snapshot.badges & 1:
-            if max((mon.level for mon in snapshot.party if not mon.egg), default=0) < 12:
-                from .training import walk_goal
-                return walk_goal(self, snapshot, Goal, lambda: 'Train the team to level 12 before Falkner',
-                                 map_name='ROUTE_31')
             return Goal('zephyr', 'Challenge Falkner', 'VIOLET_GYM', 5, 2, 'up')
         self.completed.setdefault('zephyr', snapshot.frame)
         if not snapshot.event('EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE'):
@@ -995,6 +1001,77 @@ class Policy:
                         'league_will', 'league_koga', 'league_bruno', 'league_karen', 'league_lance',
                         'surge', 'sabrina', 'erika', 'janine', 'misty', 'brock', 'blaine', 'blue', 'red'})
 
+    # The training before a boss goal, by goal key: the level the best fighter trains to first, the
+    # level of the boss's ace and the map the team trains on. The Elite Four and Lance share the key
+    # 'league', since their rooms run back to back. A loss raises the bar (planning/losses.py).
+    BOSS_FLOORS = {'zephyr': 14}
+    BOSS_ACES = {'zephyr': 9, 'hive': 16, 'plain': 19, 'fog': 25, 'storm': 30, 'mineral': 35, 'glacier': 31,
+                 'clair': 40, 'league': 50, 'surge': 46, 'sabrina': 48, 'erika': 46, 'janine': 39,
+                 'misty': 47, 'brock': 44, 'blaine': 50, 'blue': 58, 'red': 81}
+    BOSS_TRAINING = {'zephyr': 'ROUTE_31', 'hive': 'ROUTE_33', 'plain': 'ROUTE_34', 'fog': 'ROUTE_37',
+                     'storm': 'ROUTE_39', 'mineral': 'ROUTE_39', 'glacier': 'ROUTE_44', 'clair': 'ROUTE_45',
+                     'league': 'VICTORY_ROAD', 'surge': 'ROUTE_6', 'sabrina': 'ROUTE_8', 'erika': 'ROUTE_7',
+                     'janine': 'ROUTE_15', 'misty': 'ROUTE_24', 'brock': 'ROUTE_2', 'blaine': 'ROUTE_21',
+                     'blue': 'ROUTE_2', 'red': 'SILVER_CAVE_ROOM_1'}
+    BOSS_NAMES = {'zephyr': 'Falkner', 'hive': 'Bugsy', 'plain': 'Whitney', 'fog': 'Morty', 'storm': 'Chuck',
+                  'mineral': 'Jasmine', 'glacier': 'Pryce', 'clair': 'Clair', 'league': 'the Elite Four',
+                  'surge': 'Lt. Surge', 'sabrina': 'Sabrina', 'erika': 'Erika', 'janine': 'Janine',
+                  'misty': 'Misty', 'brock': 'Brock', 'blaine': 'Blaine', 'blue': 'Blue', 'red': 'Red'}
+    BOSS_ROOMS = {'VIOLET_GYM': 'zephyr', 'AZALEA_GYM': 'hive', 'GOLDENROD_GYM': 'plain', 'ECRUTEAK_GYM': 'fog',
+                  'CIANWOOD_GYM': 'storm', 'OLIVINE_GYM': 'mineral', 'MAHOGANY_GYM': 'glacier',
+                  'BLACKTHORN_GYM_1F': 'clair', 'BLACKTHORN_GYM_2F': 'clair', 'VERMILION_GYM': 'surge',
+                  'SAFFRON_GYM': 'sabrina', 'CELADON_GYM': 'erika', 'FUCHSIA_GYM': 'janine',
+                  'CERULEAN_GYM': 'misty', 'PEWTER_GYM': 'brock', 'SEAFOAM_GYM': 'blaine',
+                  'VIRIDIAN_GYM': 'blue', 'SILVER_CAVE_ROOM_3': 'red',
+                  'WILLS_ROOM': 'league_will', 'KOGAS_ROOM': 'league_koga', 'BRUNOS_ROOM': 'league_bruno',
+                  'KARENS_ROOM': 'league_karen', 'LANCES_ROOM': 'league_lance'}
+
+    @staticmethod
+    def boss_key(key):
+        return 'league' if key.startswith('league_') else key
+
+    def move_power(self, move):
+        entry = self.data.moves.get(move) or {}
+        return entry.get('power') or entry.get('effect') in BORROWED_MOVES
+
+    def fighter_level(self, party):
+        """The level of the best party Pokémon that can deal damage, the one a boss bar measures."""
+        from ..planning.losses import best_level
+        return best_level(party, self.move_power)
+
+    def boss_bar(self, key):
+        """The level the best fighter trains to before the boss goal ``key``."""
+        key = self.boss_key(key)
+        return self.losses.bar(key, self.BOSS_FLOORS.get(key, 0), self.BOSS_ACES[key])
+
+    def boss_training(self, snapshot, goal):
+        """A walk that trains toward the bar before the boss ``goal`` names, or None once the team is ready.
+
+        Inside the League nothing turns back, so its rooms carry on."""
+        if goal is None or goal.key not in self.BOSSES or self.in_league(snapshot):
+            return None
+        bar = self.boss_bar(goal.key)
+        if self.fighter_level(snapshot.party) >= bar:
+            return None
+        key = self.boss_key(goal.key)
+        from .training import walk_goal
+        return walk_goal(self, snapshot, Goal, lambda: f'Train the team to level {bar} before {self.BOSS_NAMES[key]}',
+                         map_name=self.BOSS_TRAINING[key])
+
+    def note_boss_loss(self, snapshot):
+        """Remember the best fighter level that lost to the boss the goal names, which raises its bar.
+
+        A loss is a black out or a battle that cannot end in the boss's room, or anywhere in the League.
+        A reload into a battle leaves no goal yet, so then the room alone names the boss."""
+        key, here = getattr(self.goal, 'key', None), self.constant(snapshot)
+        if key not in self.BOSSES:
+            key = self.BOSS_ROOMS.get(here)
+            if key is None:
+                return
+        elif here != self.goal.map_name and not self.in_league(snapshot):
+            return
+        self.losses.note(self.boss_key(key), self.fighter_level(snapshot.party))
+
     def heal_blocked(self, snapshot):
         """Whether healing stands down here: the League, the transmitter room, Ice Path, the Goldenrod
         warehouse, or Burned Tower before the beasts run."""
@@ -1230,6 +1307,8 @@ class Policy:
         observe_training(self, snapshot)
         self.backing_out = False
         self.shiny_missed = None
+        if getattr(snapshot, 'all_fainted', False):
+            self.note_boss_loss(snapshot)
         if not snapshot.in_battle:
             self.flee_tries, self.fleeing = 0, False
         if self.rescue:
@@ -1940,6 +2019,8 @@ class Policy:
         borrows another, like Transform or Metronome, may still bring an attack. A level 100 Ditto
         last in line at Koga was reloaded away before it could Transform, and once Transformed it
         was reloaded again for spending the copied attack, though Struggle was a few turns away.
+        With no move that wins back HP the foe knocks everyone out in the end, so the battle ends in
+        a loss. A Metapod with only Harden left at Falkner was reloaded back into the same battle.
         """
         if snapshot.in_battle != 2:
             return False
@@ -1950,6 +2031,9 @@ class Policy:
             return False
         standing = [mon for mon in snapshot.party if mon.hp and not mon.egg]
         if not standing or any(not any(mon.pp) or elixir(self.data, snapshot, mon) for mon in standing):
+            return False
+        if not any(pp and self.data.moves.get(move, {}).get('effect') in HEALING_MOVES
+                   for mon in standing for move, pp in zip(mon.moves, mon.pp)):
             return False
         return not any(pp and (self.move_score(move, mon, snapshot) > 0
                                or self.data.moves.get(move, {}).get('effect') in BORROWED_MOVES)
