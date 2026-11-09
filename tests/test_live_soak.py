@@ -183,6 +183,23 @@ def test_a_release_that_takes_a_copy_rarer_than_the_newcomer_fails():
     assert live_soak.measure(result())['released_at_first_visit'] is None
 
 
+def test_a_release_count_the_deployed_commit_matched_passes():
+    copies = visits(([RARE, PLAIN], False), ([RARE, PLAIN, COMMON], False), ([PLAIN, COMMON], True))
+    rarer = [*copies.pushed_out, *copies.pushed_out]
+
+    def checks(mine, theirs):
+        problems = live_soak.invariants(result(first_visit=[], pushed_out=mine, best_copy=[], only_copy=[]),
+                                        result(first_visit=[], pushed_out=theirs, best_copy=[], only_copy=[]))
+        return [problem for problem in problems if 'rarer than the newer one' in problem]
+
+    # At or below the deployed count on the same copy, the check passes. Above it, or alone, it fails.
+    assert checks(copies.pushed_out, rarer) == [] and checks(copies.pushed_out, copies.pushed_out) == []
+    assert checks(rarer, copies.pushed_out)
+    assert checks(copies.pushed_out, [])
+    problems = live_soak.invariants(result(first_visit=[], pushed_out=copies.pushed_out), None)
+    assert any('rarer than the newer one' in problem for problem in problems)
+
+
 def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
     copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
     for held, released in (([(16, RARE), (19, PLAIN)], False), ([(16, RARE), (19, PLAIN), (19, COMMON)], False),
