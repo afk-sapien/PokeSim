@@ -314,10 +314,25 @@ def test_protected_preferred_reserve_uses_another_safe_partner(participant, stat
     assert recorder.last.slot == 2
 
 
-def test_storage_reserve_never_drops_strongest_or_unique_field_move(participant):
+def unique_field_move_party():
+    return tuple(replace(p, moves=(move,)) for p, move in zip(storage_party(), (33, 15, 19, 57, 70, 148)))
+
+
+def test_storage_reserve_stores_a_sole_cut_holder_when_no_one_else_may_go(participant):
     emu, snap, candidate = participant
-    party = tuple(replace(p, moves=(move,)) for p, move in
-                  zip(storage_party(), (33, 15, 19, 57, 70, 148)))
+    party = unique_field_move_party()
+    preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
+    controller = emu.preparation
+    Recorder(controller.shortcut)
+    assert storage_step(controller, replace(snap, party=party, textbox=True), storage_menu(1)) == 'a'
+    assert controller.deposit_key == identity(asdict(party[1]))
+
+
+def test_storage_reserve_never_drops_strongest_or_unique_fly_or_flash(participant):
+    emu, snap, candidate = participant
+    party = unique_field_move_party()
+    for member in (party[1], party[3], party[4]):
+        emu.store.set_trade_preference(identity(asdict(member)), {'state': 'locked'})
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     assert storage_step(emu.preparation, replace(snap, party=party), storage_menu(1)) is None
     assert 'No safe unprotected reserve' in emu.store.get(preparation.KEY)['error']
