@@ -3,10 +3,10 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 
 from .battle import replacement_slot
-from ..planning.partner import PARTNER_LEVEL, league_partner as shared_partner
+from ..planning.partner import league_partner as shared_partner, partner_level
 from ..planning.stance import HUNT, STORY, TRAIN
 from .navigation import CINNABAR_GYM_DOORS, cinnabar_gate_open
-from .team import readiness
+from .team import OPPONENTS, readiness
 
 from ..game_data import current_variant
 from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, event_set, object_hidden
@@ -334,9 +334,16 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
                        "Use Surf through Route 23 and Strength on Victory Road’s boulder switches. Heal and stock up at Indigo Plateau before entering. Inside the League, continue north after each battle.")
 
 
+# The League partner trains to one level under the lowest Elite Four or Champion ace, 55 in Red and Blue.
+PARTNER_LEVEL = partner_level(level for bit, (_, _, level) in OPPONENTS.items() if bit >= 256)
+
+
 def league_partner(snapshot):
-    """The sturdy partner to train beside the strongest (planning.partner, shared with Gen II)."""
-    return shared_partner(snapshot.party, lambda p: SPECIES.get(p.species, {}).get("stats", [0])[0], lambda p: p.attack)
+    """The partner to train beside the strongest (planning.partner, shared with Gen II)."""
+    from ..battle_power import battle_power
+    return shared_partner(snapshot.party, lambda p: SPECIES.get(p.species, {}).get("stats", [0])[0], lambda p: p.attack,
+                          lambda p: battle_power({'species': p.species, 'level': p.level, 'dvs': p.dvs,
+                                                  'stat_exp': p.stat_exp, 'moves': p.moves}))
 
 
 def journey(snapshot, current):

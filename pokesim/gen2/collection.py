@@ -449,10 +449,13 @@ def league_ready(policy, snapshot):
     Nothing restores PP inside the League. A level 100 Vaporeon beside Pokémon too weak to face the
     Elite Four ran out of attacks at Lance and the battle never ended. So the Pokémon at League
     level need at least one attack for each opponent, counted at full PP since the run heals first.
+    One strong Pokémon alone never passes, since it loses once its attacks run out.
     """
     moves = policy.data.moves
     lost = getattr(policy, 'collection', {}).get('league_lost')
     if lost is not None and league_strength(snapshot) < min(lost + LEAGUE_REGROWTH, league_ceiling(snapshot)):
+        return False
+    if sum(1 for mon in snapshot.party if not mon.egg and mon.level >= LEAGUE_LEVEL) < 2:
         return False
     return sum(moves.get(move, {}).get('pp', 0) for mon in snapshot.party
                if not mon.egg and mon.level >= LEAGUE_LEVEL
@@ -546,30 +549,39 @@ FIRST_LEAGUE_MAP = 'VICTORY_ROAD'
 def first_league(policy, snapshot, mem, Goal):
     """Train the party for the first League, or None once it may go in.
 
-    A level 56 Typhlosion with a bench at levels 2 to 30 lost at Lance for 12 hours. The run trains a
-    sturdy partner to PARTNER_LEVEL first, by the rule Red, Blue and Yellow use. After a loss it uses
-    the postgame check: the team trains, one party member ten levels at a time, until league_ready.
+    A level 56 Typhlosion with a bench at levels 2 to 30 lost at Lance for 12 hours. While the party
+    is not league_ready, the run trains a partner to the partner level first, by the rule Red, Blue and
+    Yellow use, then one party member ten levels at a time. After a loss the team goes back in only once
+    a member has gained a level. When nothing can train, the run patrols and asks the owner for help
+    (league_help) instead of losing again.
     """
     from pokecore.gen2.ram import experience_at
-    from ..planning.partner import PARTNER_LEVEL, league_partner
+    from ..planning.partner import league_partner
     from . import training
     data, state = policy.data, policy.collection
     if policy.in_league(snapshot):
         state['first_league_entered'] = True
+        state.pop('league_blocked', None)
         return None
+    party = snapshot.party
     if state.pop('first_league_entered', None):
         # Leaving the League without its Hall of Fame entry means the team blacked out.
         state['league_lost'] = league_strength(snapshot)
-    party = snapshot.party
-    slot = league_partner(party, lambda mon: data.species[mon.species]['stats'][0], lambda mon: mon.stats[1])
+        state['league_lost_levels'] = [[training.identity(mon), mon.level] for mon in party if not mon.egg]
+    ready, grown = league_ready(policy, snapshot), grown_since_loss(state, party)
     trainees = []
-    if slot is not None and party[slot].level < PARTNER_LEVEL:
-        trainees = [(party[slot], PARTNER_LEVEL)]
-    elif not league_ready(policy, snapshot):
+    if not ready or not grown:
         # The cheapest step first, as postgame training picks its trainee.
         steps = sorted((experience_at(min(100, (mon.level // 10 + 1) * 10), data.species[mon.species]['growth'])
                         - mon.experience, i) for i, mon in enumerate(party) if not mon.egg and mon.level < 100)
         trainees = [(party[i], min(100, (party[i].level // 10 + 1) * 10)) for _, i in steps]
+    target = partner_target(data)
+    slot = league_partner(party, lambda mon: data.species[mon.species]['stats'][0], lambda mon: mon.stats[1],
+                          lambda mon: party_power(data, mon))
+    # Gen II has no League matchup score yet, so the partner trains while the party is not league_ready.
+    # Once it has one, this switches to Red, Blue and Yellow's rule: train while any matchup is under 75.
+    if not ready and slot is not None and party[slot].level < target:
+        trainees.insert(0, (party[slot], target))
     for mon, goal in trainees:
         identity = training.identity(mon)
         if standing_down(policy, train_key(identity)):
@@ -580,17 +592,73 @@ def first_league(policy, snapshot, mem, Goal):
                                  'terminal': True, 'level_goal': goal, 'league': True, 'map': FIRST_LEAGUE_MAP}
         found = training.journey(policy, snapshot, mem, Goal, terminal=True)
         if found is not None:
+            state.pop('league_blocked', None)
             return found
     if (state.get('training') or {}).get('league'):
         state['training'] = None
-    return None
+    if ready and grown:
+        state.pop('league_blocked', None)
+        return None
+    # Nothing can train, so another run would lose the same way. The patrol waits without a reload.
+    state['league_blocked'] = True
+    return patrol(policy, snapshot, Goal, LEAGUE_BLOCKED)
+
+
+# The help request on the main page when no team member can train for the League.
+LEAGUE_BLOCKED = 'Cannot get ready for the League'
+
+
+def league_help(policy):
+    """The reason to ask the owner for help while the first League is out of reach, or None."""
+    return LEAGUE_BLOCKED if (getattr(policy, 'collection', None) or {}).get('league_blocked') else None
+
+
+def grown_since_loss(state, party):
+    """Whether a team member has gained a level since the last first League loss, or no run was lost."""
+    from .training import identity
+    lost = state.get('league_lost_levels')
+    if lost is None:
+        return True
+    levels = {repr(key): level for key, level in lost}
+    return any(mon.level > levels.get(repr(identity(mon)), 101) for mon in party if not mon.egg)
+
+
+def partner_target(data):
+    """The level the League partner trains to, from the cartridge's own League aces (planning.partner).
+
+    The level the League check counts when the cartridge could not be read.
+    """
+    from ..planning.partner import partner_level
+    aces = getattr(data, 'league_aces', ())
+    return partner_level(aces) if aces else LEAGUE_LEVEL
+
+
+def party_power(data, mon):
+    """A party member's Battle Power, or None when it cannot be rated."""
+    from pokecore.gen2.battle_power import battle_power
+    return battle_power({'species': mon.species, 'level': mon.level, 'dvs': mon.dvs, 'stat_exp': mon.stat_exp,
+                         'moves': list(mon.moves), 'friendship': mon.friendship}, data)
+
+
+# pret trainer classes of the Elite Four and the Champion: Will, Bruno, Karen, Koga and Lance.
+LEAGUE_CLASSES = frozenset((11, 13, 14, 15, 16))
+
+
+def league_aces(rom_path, game):
+    """The top level of each Elite Four and Champion party on the cartridge, or () when it cannot be read."""
+    from ..planning.cost import game_data
+    tables = game_data(rom_path, game)
+    if tables is None:
+        return ()
+    return tuple(max(mon['level'] for mon in row['party']) for row in tables.trainers.values()
+                 if row['class'] in LEAGUE_CLASSES and row['party'])
 
 
 def first_league_over(policy):
     """Drop the first League's state once the Hall of Fame has an entry."""
     state = policy.collection
-    state.pop('first_league_entered', None)
-    state.pop('league_lost', None)
+    for key in ('first_league_entered', 'league_lost', 'league_lost_levels', 'league_blocked'):
+        state.pop(key, None)
     if (state.get('training') or {}).get('league'):
         state['training'] = None
 

@@ -163,7 +163,8 @@ def test_full_boxes_with_nothing_to_release_wait_for_no_catch_and_free_the_leagu
     from pokesim.planning import values
     policy = expedition(data)
     policy.completed = {'champion': 1}
-    full = snapshot([lead()], owned=set(range(1, 252)) - {131})
+    # Two at League level, since one strong Pokémon alone never goes to the League.
+    full = snapshot([lead(), lead()], owned=set(range(1, 252)) - {131})
     assert clock_wait(policy, full, clock(), 'day') == 'Lapras waits for Friday'
     wait = waiting(policy, full, clock(), 'day')
     assert wait.passive and wait.value == values.NEW_ENTRY

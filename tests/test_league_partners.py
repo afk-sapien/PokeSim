@@ -144,7 +144,9 @@ def test_the_second_league_battler_does_not_depend_on_party_order():
     # An identical twin already in the lead stays the one to train.
     twins = (lapras, charizard, mon(species=19, level=30, max_hp=127, attack=60))
     assert league_partner(snap(party=twins)) == 0
-    assert league_partner(snap(party=(charizard, mon(level=20)))) is None
+    # With no sturdy member the strongest other one trains, and a lone Pokémon has no partner.
+    assert league_partner(snap(party=(charizard, mon(level=20)))) == 1
+    assert league_partner(snap(party=(charizard,))) is None
 
 
 def test_different_families_with_identical_dvs_keep_separate_wins(tmp_path):

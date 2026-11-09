@@ -209,6 +209,8 @@ class Emulator:
         self.data = GameData.load(directory(), self.profile.game)
         from ..planning.cost import gen2_cartridge_rows
         self.data.encounters = gen2_cartridge_rows(self.rom, self.profile.game, self.data.encounters)
+        from .collection import league_aces
+        self.data.league_aces = league_aces(self.rom, self.profile.game)
         self.isolated_ram = isolated_ram
         self.preparation = None
         self.options_applied = False
@@ -1246,6 +1248,9 @@ class Emulator:
         stalled = stalled_state(live, waiting, self.stall.stalled(self.frame, time.time())
                                 or self.unstick_streak >= STALL_RELOADS, loop)
         recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
+        from .collection import league_help
+        # A team that cannot train for the League patrols on purpose, so it asks for help without a stall.
+        league = live and league_help(self.policy)
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
                 'stopped': self.frozen,
                 'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,
@@ -1256,7 +1261,8 @@ class Emulator:
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,
                 'help_request': {'reason': f'The run is caught in a loop. {loop}' if loop else 'The policy has stopped making game progress',
-                                 'action': self.policy.mode} if stalled else None,
+                                 'action': self.policy.mode} if stalled
+                else {'reason': league, 'action': self.policy.mode} if league else None,
                 'progress': {'state': 'stalled' if stalled else 'waiting' if waiting else 'recovering' if recovering
                              else 'making_progress',
                              'last_achievement': achievement, 'quiet_game_minutes': round(quiet_minutes, 1)},

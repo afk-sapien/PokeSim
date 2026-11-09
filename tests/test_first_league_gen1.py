@@ -21,6 +21,17 @@ def test_a_lone_starter_trains_its_bench_before_the_league():
     assert story_goal(s).key == 'train_league_partner'
 
 
+def test_a_lone_starter_with_no_sturdy_bench_trains_its_strongest_other_member():
+    # No bench member has base HP 90, so the partner is the one with the most Battle Power.
+    charizard = mon(species=180, level=56, max_hp=170, hp=170, attack=110, moves=(53, 0, 0, 0), pp=(15, 0, 0, 0))
+    strong = mon(level=30, max_hp=80, hp=80, moves=(22, 75, 0, 0), dvs=(15, 15, 15, 15, 15), stat_exp=(9000,) * 5)
+    weak = mon(level=32, max_hp=90, hp=90, moves=(45, 0, 0, 0), dvs=(0, 0, 0, 0, 0), stat_exp=(0,) * 5)
+    party = (charizard, weak, mon(level=5), strong)
+    s = snap(map=MAPS['ROUTE_22_GATE'], x=8, y=6, badges=255, party=party, event_flags=flags('EVENT_GOT_POKEDEX', *WINS))
+    assert party[league_partner(s)] is strong
+    assert story_goal(s).key == 'train_league_partner'
+
+
 def test_repeated_league_blackouts_trip_the_stall_while_experience_keeps_rising():
     stall = StallWatch(game_minutes=120, real_minutes=0)
     emu = SimpleNamespace(stall=stall, loop_guard=None, store=None, policy=SimpleNamespace(goal=None))
