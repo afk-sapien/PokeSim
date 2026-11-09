@@ -102,16 +102,24 @@ def improves(s, species, dvs, rated=None):
     shiny, or a copy at least RARITY_STEP times rarer than every copy held, which the PC visit it
     brings would not release, nor a rarer copy for it. A held copy without DV data, as in a compact
     snapshot, is not counted. ``rated`` rates the PC with extra rows as the next release does
-    (the policy's pc_rated). Without it the PC is rated without trade settings or plans."""
-    from ..pcvalue import Entry, catch_visit, requested, verdict
+    (the policy's pc_rated). Without it the PC is rated without trade settings or plans.
+
+    This is the Gen I catch rule for an owned species (pcvalue.keeps_new). Every path that throws a
+    ball at one asks it: an incidental catch, the Safari Zone, a DV hunt, a repeat project and a
+    returned legendary. A missing entry, a shiny and a field-move carrier keep their own rules, and a
+    missing entry is a keep here anyway."""
+    from ..events import LEGENDARY_DEX
+    from .. import pcvalue
     from .team import release_rated, storage_headroom
     number = dex(species)
-    candidate = Entry((-1, 0), (number, 0), SPECIES.get(species, {}).get('name', '?'), 5,
-                      dvs=tuple(dvs or ()), record={'species': species, 'dvs': dvs})
+    # A caught legendary is rated as one, as release_rated rates it once held.
+    candidate = pcvalue.Entry((-1, 0), (number, 0), SPECIES.get(species, {}).get('name', '?'), 5,
+                              dvs=tuple(dvs or ()), origin='legendary' if number in LEGENDARY_DEX else 'caught',
+                              record={'species': species, 'dvs': dvs})
     rows = rated(extra=(candidate,)) if rated else release_rated(s, extra=(candidate,))
-    needed = catch_visit(storage_headroom(s), len(requested(rows))) if hasattr(s, 'box_counts') else 0
-    return verdict(rows, missing=number not in s.owned, needed=needed,
-                   active_box=getattr(s, 'active_box', None)).keep
+    return pcvalue.keeps_new(rows, missing=number not in s.owned,
+                             headroom=storage_headroom(s) if hasattr(s, 'box_counts') else None,
+                             active_box=getattr(s, 'active_box', None))
 
 
 def can_train(mon):
@@ -288,6 +296,35 @@ def name(sid):
 
 def dex(sid):
     return SPECIES.get(sid, {}).get('dex', 0)
+
+
+def picker_group(project, title, owned):
+    """The group and label a manager picks ``project`` under: one thing they want, whatever the place.
+
+    Every route, water and Safari zone a species is found in serves one want, so they share a group. The
+    planner keeps its own key for each place and the picker runs the best ranked of them.
+    """
+    method, sid = project['method'], project.get('species')
+    if method == 'train':
+        level = project['target_level']
+        return ('train', project['parent'], level), f'Train {name(project["parent"])} to {level}'
+    if sid is None or method not in CATCH_MODES + ('gift', 'trade', 'fossil', 'prize', 'evolve'):
+        return ('title', title), title
+    who = name(sid)
+    if legendary_project(project):
+        return ('get', sid), f'Get {who}'
+    if method == 'evolve':
+        if project.get('upgrade_evolution'):
+            return ('evolve_better', sid), f'Better {who} (evolve {name(project["parent"])})'
+        return ('evolve', sid), f'Evolve {name(project["parent"])} into {who}'
+    if project.get('dv_hunt'):
+        return ('better', sid), f'Better {who} (DV hunt)'
+    if dex(sid) not in owned:
+        verb = 'Catch' if method in CATCH_MODES else 'Trade for' if method == 'trade' else 'Get'
+        return ('missing', sid), f'{verb} {who} (missing entry)'
+    if project.get('needed_capture'):
+        return ('needed', sid), f'Catch another {who} (partner needed)'
+    return ('another', sid), f'Get another {who}'
 
 
 def storage_exchange_possible(s):
@@ -486,20 +523,25 @@ class Collection:
     def repeat_target(self, species, map_id=None, snapshot=None, dvs=None, rated=None):
         """The species a wild battle should catch as a repeat, or None.
 
-        A DV hunt takes any species on its map, but given the wild ``dvs`` and the ``snapshot`` it
-        only takes a catch the PC would keep (improves, with ``rated`` as there). Otherwise Yellow's
-        Tauros hunt caught every owned Nidoran, Cubone and Exeggcute in the Safari Zone and released
-        them at the next PC.
+        A returned legendary, a DV hunt's species on its map and a repeat project's species are
+        targets. Given the wild ``dvs`` and the ``snapshot``, a target is only taken as a catch the PC
+        would keep (improves, with ``rated`` as there). Otherwise Yellow's Tauros hunt caught every
+        owned Nidoran, Cubone and Exeggcute in the Safari Zone and released them at the next PC.
         """
-        if dex(species) in getattr(self, 'returned_legendaries', ()):
-            return species
         project = self.project or {}
-        if (project.get('dv_hunt') and snapshot is not None and dvs is not None
-                and not improves(snapshot, species, dvs, rated)):
+        if dex(species) in getattr(self, 'returned_legendaries', ()):
+            target = species
+        elif project.get('dv_hunt') and map_id == project.get('map'):
+            target = species
+        else:
+            target = project.get('species') if project.get('repeat') else None
+        if target == species and snapshot is not None and dvs is not None and not improves(snapshot, species, dvs, rated):
+            if dex(species) in getattr(self, 'returned_legendaries', ()) and snapshot.in_battle:
+                # Close the return so neither the plan nor the retry timers bring back a refused legendary.
+                self.declined_returns = getattr(self, 'declined_returns', set()) | {dex(species)}
+                self.returned_legendaries = set(self.returned_legendaries) - {dex(species)}
             return None
-        if project.get('dv_hunt') and map_id == project.get('map'):
-            return species
-        return project.get('species') if project.get('repeat') else None
+        return target
 
     def state_dict(self):
         return {**{k:getattr(self,k) for k in ('project','remaining','elapsed','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','next_marathon','marathon_records','activity_events')},
@@ -1272,10 +1314,13 @@ class Collection:
                                for project in candidates], projects)
         return options, projects, travel, labels
 
-    def goal_list(self, s, nav, rng):
-        """The projects a manager can set as the next activity, best first, and why the list is empty.
+    def goal_list(self, s, nav, rng, query=None, limit=pin.LIMIT):
+        """The goals a manager can set as the next activity, best first, and why the list is empty.
 
-        The plan is drawn on a copy of ``rng``, so listing the goals never changes what the run does.
+        Each goal is one group of projects (picker_group) under its best ranked project's key, so a
+        species is listed once for all the places it is found. ``query`` and ``limit`` are as in
+        pin.grouped. The plan is drawn on a copy of ``rng``, so listing the goals never changes what the
+        run does.
         """
         if not self.completed_champion:
             return [], 'The story comes first until the Champion is beaten'
@@ -1286,14 +1331,22 @@ class Collection:
         offered = self.offers(s, nav, copy)
         if isinstance(offered, Goal):
             return [], offered.reason
-        options, _, _, labels = offered
-        goals = [pin.entry(option.key, labels.get(option.key, option.key), option.tier)
-                 for option in arbiter.rank(options)]
-        return goals, None if goals else 'Nothing to do until the game changes'
+        options, projects, _, labels = offered
+        rows = []
+        for option in arbiter.rank(options):
+            title = labels.get(option.key, option.key)
+            group, label = picker_group(projects.get(option.key) or {'method': None}, title, s.owned)
+            rows.append((option.key, group, label, option.tier))
+        goals = pin.grouped(rows, query, limit)
+        if goals:
+            return goals, None
+        if query and rows:
+            return [], 'No goal matches that name'
+        return [], 'Nothing to do until the game changes'
 
     def set_pin(self, s, nav, rng, key):
-        """Set ``key`` as the next activity. A ValueError says why it cannot be."""
-        goals, reason = self.goal_list(s, nav, rng)
+        """Set ``key``, a listed goal's key, as the next activity. A ValueError says why it cannot be."""
+        goals, reason = self.goal_list(s, nav, rng, limit=None)
         match = next((goal for goal in goals if goal['key'] == key), None)
         if match is None:
             if key in self.director.monitor._table(STOOD_DOWN) and self.director.waiting(key, self.elapsed):

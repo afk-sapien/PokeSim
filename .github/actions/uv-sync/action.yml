@@ -1,0 +1,41 @@
+name: uv sync
+description: Sync the locked environment from this job's uv cache first, and online only when the cache misses.
+# The pyboy-rs and pokecore wheels are GitHub release assets. uv revalidates every one of those URLs on each
+# sync, so a release-asset outage failed CI even with every wheel cached. Each job keeps its own cache, since
+# setup-uv gives every job on a runner the same key and the first job to finish, often one that installs
+# nothing, owns it. A changed uv.lock restores the last cache for the same pyboy-rs and pokecore versions.
+# Later uv run steps skip the sync, since they would revalidate the same URLs again.
+inputs:
+  args:
+    description: Arguments after uv sync --locked
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - id: cache
+      shell: bash
+      env:
+        ARGS: ${{ inputs.args }}
+      run: |
+        pyboy=$(grep -om1 'pyboy_rs-[0-9][0-9.]*[0-9]' uv.lock)
+        pokecore=$(grep -om1 'pokecore-[0-9][0-9.]*[0-9]' uv.lock)
+        python=$(python -c 'import sys; print("py%d.%d" % sys.version_info[:2])')
+        extras=$(printf '%s' "$ARGS" | tr -cs 'a-z0-9' '-')
+        echo "dir=$(uv cache dir)" >> "$GITHUB_OUTPUT"
+        echo "prefix=uv-$RUNNER_OS-$RUNNER_ARCH-$python-$extras-$pyboy-$pokecore-" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: ${{ steps.cache.outputs.dir }}
+        key: ${{ steps.cache.outputs.prefix }}${{ hashFiles('uv.lock') }}
+        restore-keys: ${{ steps.cache.outputs.prefix }}
+    - shell: bash
+      env:
+        ARGS: ${{ inputs.args }}
+      run: |
+        if ! UV_OFFLINE=1 uv sync --locked $ARGS; then
+          echo "::notice::The uv cache missed, so the sync goes online"
+          UV_HTTP_RETRIES=10 uv sync --locked $ARGS
+        fi
+        echo UV_NO_SYNC=1 >> "$GITHUB_ENV"
+        echo UV_HTTP_RETRIES=10 >> "$GITHUB_ENV"

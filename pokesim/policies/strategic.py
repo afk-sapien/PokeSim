@@ -22,17 +22,19 @@ from .menus import select, tap
 from .shopping import ShoppingController
 from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
-from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, legendary_project, snorlax_project
+from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, improves, legendary_project, snorlax_project
 from ..planning import values
 from ..planning import arbiter
 from ..planning import boss
-from .ledger import fighters
+from .ledger import battle_room, fighters
+from ..planning.ledger import PP
 from ..planning.arbiter import Candidate, Tier
 from ..planning.monitor import STOOD_DOWN
 from ..planning.stance import FLEE_TRIES, STORY, TRAIN
 from .awareness import ActionWatch
 from .team import (development_candidate, held_identities, potential, readiness, release_note, requested_slots,
-                   reserve_to_deposit, storage_headroom)
+                   reserve_to_deposit, storage_headroom, team_keys)
+from ..pcvalue import VisitTeam
 from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
@@ -99,6 +101,8 @@ ERRAND_FRAMES = 3000
 # goal challenges the trainer (planning/boss.py). The Champion is the rival.
 BOSSES = frozenset({'boulder', 'cascade', 'thunder', 'rainbow', 'soul', 'marsh', 'volcano', 'earth',
                     'league_lorelei', 'league_bruno', 'league_agatha', 'league_lance', 'league_rival'})
+# The Pokémon Center maps, the Indigo Plateau lobby among them. Stepping into one starts a boss heal leg.
+CENTER_MAPS = frozenset(center[0] for center in CENTERS)
 # The kind of a goal, by key prefix, in the order they are tried. Each kind's candidate is built once,
 # here, and the arbiter weighs it against the others. The first match wins.
 GOAL_KINDS = (('heal', 'heal'), ('party_collection', 'collection'), ('party_league', 'collection'),
@@ -290,6 +294,8 @@ class StrategicPolicy(Policy):
         # Failed stance runs in this battle, and whether one is under way.
         self.flee_tries, self.fleeing = 0, False
         self.heal_latch = False
+        # Whether the heal under way is one the party's spent PP called for.
+        self.pp_heal = False
         # The boss check before a leader, the Elite Four or the Champion (planning/boss.py), and whether
         # it sends the party to heal first.
         self.boss_gate = boss.Gate()
@@ -297,6 +303,7 @@ class StrategicPolicy(Policy):
         self.shop = ShoppingController()
         # The PC menu ranks releases with the same call as the planner, so the two never disagree.
         self.pc = StorageController(ranker=self._release_target)
+        self.visit_team = VisitTeam()
         # The spare the run lets go next as (box, position). Trading never offers it.
         self.release_spare = None
         # Its (species, PC value text) for the journal, and whether the PC is full with nothing that may go.
@@ -354,10 +361,10 @@ class StrategicPolicy(Policy):
     def pin(self):
         return self.collection.pin
 
-    def goals(self, snapshot):
+    def goals(self, snapshot, query=None):
         if snapshot is None or not snapshot.valid:
             return [], 'Not available now'
-        return self.collection.goal_list(snapshot, self.nav, self.rng)
+        return self.collection.goal_list(snapshot, self.nav, self.rng, query)
 
     def pin_goal(self, snapshot, key):
         if snapshot is None or not snapshot.valid:
@@ -446,6 +453,8 @@ class StrategicPolicy(Policy):
         frame = s.frame
         pos = (s.map, s.x, s.y)
         self.decisions += 1
+        # A team member deposited at this PC visit stays until a later one (pcvalue.VisitTeam).
+        self.pc.team = self.visit_team.observe(s.map, team_keys(s.party))
         # PC transfers briefly combine a new partner with the old slot's level.
         # Accept training gains in battle or after returning to the overworld.
         # A release visit to the PC is storage work, so its frames do not count against the project.
@@ -703,7 +712,8 @@ class StrategicPolicy(Policy):
             missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
             targeted = self.collection.repeat_target(s.enemy_species, s.map, s, enemy_dvs(mem),
                                                      self.catch_rating(s)) == s.enemy_species
-            if not s.can_catch or not (s.enemy_shiny or missing or targeted or useful_capture(s, s.enemy_species, s.enemy_level)):
+            if not s.can_catch or not (s.enemy_shiny or missing or targeted
+                                       or useful_capture(s, s.enemy_species, s.enemy_level, keeps=self._keeps(s, s.enemy_species, mem))):
                 self.reason = ('Leave the encounter because the party and active box are full' if not s.can_catch
                                else 'Leave an unnecessary duplicate already covered by the collection')
                 if scr.top_x != 13:
@@ -744,7 +754,8 @@ class StrategicPolicy(Policy):
                                                                                          self.catch_rating(s)),
                                             training_index=self.collection.trainee(s, self.collection.project)
                                             if self.collection.project and self.collection.project['method'] == 'train' else None,
-                                            kind=getattr(self.goal, 'kind', STORY), flee_tries=self.flee_tries)
+                                            kind=getattr(self.goal, 'kind', STORY), flee_tries=self.flee_tries,
+                                            keeps=self._keeps(s, enemy.species, mem))
                 self.intent_since = s.frame
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
@@ -823,8 +834,14 @@ class StrategicPolicy(Policy):
 
     def _update_heal_latch(self, s):
         if needs_healing(s.party):
+            if not self.heal_latch:
+                # A heal its spent PP called for says so in the journal once the nurse is done.
+                self.pp_heal = battle_room(s.party)[PP] == 0
             self.heal_latch = True
         if all(p.hp == p.max_hp and not p.status for p in s.party) and not needs_healing(s.party):
+            if self.heal_latch and getattr(self, 'pp_heal', False):
+                self.collection.activity_events.append(boss.pp_heal_event(s.map_name))
+            self.pp_heal = False
             self.heal_latch = False
             self.escape_attempted = False
         if getattr(self, 'boss_heal', False):
@@ -834,7 +851,8 @@ class StrategicPolicy(Policy):
         """The boss check before ``goal`` (planning/boss.py), shared with Gold, Silver and Crystal.
 
         A party with a Pokémon under half its HP or its strong attacks' PP heals first when a nurse can
-        be reached. Otherwise it goes in as it stands, and the journal says so once per approach.
+        be reached. Otherwise it goes in as it stands, and the journal says so once per leg. Each
+        Pokémon Center the party steps into starts a leg with fresh trips.
         """
         gate = getattr(self, 'boss_gate', None)
         if gate is None:
@@ -847,11 +865,13 @@ class StrategicPolicy(Policy):
                 return False
             targets = healing_goal(s).targets
             return self.nav.distance_lookup((s.map, s.x, s.y), s.frame)(targets) is not None
-        verdict = gate.decide(key, party, reachable, where=s.map)
+        verdict = gate.decide(key, party, reachable, where=s.map, center=s.map in CENTER_MAPS)
         self.boss_heal = verdict == boss.HEAL
         if verdict == boss.UNREADY and gate.note():
             names = [mon.nick or f'#{mon.species}' for mon in s.party]
             self.collection.activity_events.append(boss.unready_event(goal.title, party, names))
+        if gate.healed():
+            self.collection.activity_events.append(boss.healed_event(goal.title))
         return verdict
 
     def _overworld(self, s, mem):
@@ -1390,7 +1410,7 @@ class StrategicPolicy(Policy):
                                   if key[0] == 'release' and until > snapshot.frame) | guarded(snapshot, self.sp)
         self.pc.partners = frozenset(self.trade_partners()) if hasattr(self, 'trade_partners') else frozenset()
         target = self.pc.release_target(snapshot, self.collection.project, self._preferences(), self.collection,
-                                        self.pc.avoid, self.pc.partners, *self.release_inputs())
+                                        self.pc.avoid, self.pc.partners, *self.release_inputs(), team=self.pc.team)
         # The journal quotes the chosen Pokémon's PC value, and says once when nothing may go.
         self.release_note, self.pc_deadlock = release_note()
         return target
@@ -1401,11 +1421,15 @@ class StrategicPolicy(Policy):
         partners = frozenset(self.trade_partners()) if hasattr(self, 'trade_partners') else frozenset()
         rewards, requested, favor = self.release_inputs()
         return self.pc.rated(snapshot, self.collection.project, self._preferences(), self.collection, partners,
-                             frozenset(rewards) | marks, requested, favor, extra)
+                             frozenset(rewards) | marks, requested, favor, extra, self.pc.team)
 
     def catch_rating(self, snapshot):
         """The PC rated with a wild catch's extra rows as the next release rates it (collection.improves)."""
         return lambda extra: self.pc_rated(snapshot, extra=extra)
+
+    def _keeps(self, snapshot, species, mem):
+        """Whether the PC would keep the wild ``species`` in battle, asked only when a catch rule needs it."""
+        return lambda: improves(snapshot, species, enemy_dvs(mem), self.catch_rating(snapshot))
 
     def release_pending(self, snapshot):
         """Whether an owner's release request waits for the next PC visit. A request whose Pokémon has

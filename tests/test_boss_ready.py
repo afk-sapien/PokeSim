@@ -96,6 +96,75 @@ def test_an_approach_takes_at_most_its_trips_then_goes_in():
     assert gate.decide('lance', fighters(hp=60), lambda: True) == boss.HEAL
 
 
+def trip(gate, key, cave, center):
+    """One boss heal trip from ``cave`` to the Center ``center``, and the verdict once it is done."""
+    assert gate.decide(key, fighters(hp=60), lambda: True, where=cave) == boss.HEAL
+    assert gate.decide(key, fighters(hp=60), lambda: pytest.fail('searched'), where=center, center=True) == boss.HEAL
+    return gate.decide(key, fighters(), lambda: True, where=center, center=True)
+
+
+def test_victory_road_trips_used_up_still_heal_at_the_indigo_center():
+    from pokesim.policies.progression import MAPS
+    road, viridian, lobby = MAPS['VICTORY_ROAD_2F'], MAPS['VIRIDIAN_POKECENTER'], MAPS['INDIGO_PLATEAU_LOBBY']
+    gate = boss.Gate()
+    for _ in range(boss.TRIPS):
+        assert trip(gate, 'league_lorelei', road, viridian) == boss.READY
+    assert gate.decide('league_lorelei', fighters(hp=60), lambda: True, where=road) == boss.UNREADY
+    assert gate.note()
+    # The Indigo Plateau lobby is a Center the walk to Lorelei crosses, so it starts a new leg.
+    assert gate.decide('league_lorelei', fighters(hp=60), lambda: True, where=lobby, center=True) == boss.HEAL
+    assert gate.decide('league_lorelei', fighters(), lambda: True, where=lobby, center=True) == boss.READY
+    assert gate.trips == 1
+
+
+def test_the_trip_cap_still_stops_a_heal_loop_within_one_leg():
+    gate = boss.Gate()
+    for _ in range(boss.TRIPS):
+        assert trip(gate, 'league_lorelei', 'cave', 'center') == boss.READY
+    assert gate.trips == boss.TRIPS
+    # Back at the same Center the leg goes on, so the cave cannot send the party there again.
+    assert gate.decide('league_lorelei', fighters(hp=60), lambda: True, where='cave') == boss.UNREADY
+    assert gate.decide('league_lorelei', fighters(hp=60), lambda: True, where='center', center=True) == boss.UNREADY
+    assert gate.decide('league_lorelei', fighters(hp=59), lambda: True, where='cave') == boss.UNREADY
+    assert gate.note() and not gate.note()
+
+
+def test_a_finished_boss_heal_trip_writes_one_quiet_journal_row():
+    from pokesim.policies.strategic import StrategicPolicy
+    from test_events import snap
+    policy = StrategicPolicy(7)
+    policy.nav.distance_lookup = lambda pos, frame: (lambda targets: 12)
+    goal = SimpleNamespace(key='league_lorelei', title='Challenge Lorelei')
+    assert policy._boss_check(snap(party=(gen1_mon(60, MAX_PP),)), goal, False) == boss.HEAL
+    assert policy._boss_check(snap(party=(gen1_mon(180, MAX_PP),)), goal, False) == boss.READY
+    policy._boss_check(snap(party=(gen1_mon(180, MAX_PP),), x=6), goal, False)
+    rows = [row for row in policy.collection.activity_events if row['title'].startswith('Healed before')]
+    assert len(rows) == 1 and rows[0]['title'] == 'Healed before Lorelei'
+    assert rows[0]['type'] == 'plan' and rows[0]['priority'] == 1 and rows[0]['notable'] is False
+    from pokesim.events import Event
+    assert not Event(**rows[0]).notable
+
+
+def test_gen1_logs_a_pp_heal_once_the_nurse_restores_spent_attacks():
+    from pokesim.policies.progression import MAPS
+    from pokesim.policies.strategic import StrategicPolicy
+    from test_events import snap
+    policy = StrategicPolicy(7)
+    spent = (replace(gen1_mon(180, (0, 0, 0, 0)), max_pp=MAX_PP),)
+    policy._update_heal_latch(snap(party=spent))
+    assert policy.heal_latch and policy.pp_heal
+    center = MAPS['CERULEAN_POKECENTER']
+    policy._update_heal_latch(snap(party=(gen1_mon(180, MAX_PP),), map=center))
+    rows = [row for row in policy.collection.activity_events if row['title'].startswith('PP heal')]
+    assert len(rows) == 1 and rows[0]['title'] == f'PP heal at {snap(map=center).map_name}'
+    assert rows[0]['priority'] == 1 and rows[0]['notable'] is False
+    assert not policy.heal_latch and not policy.pp_heal
+    # A heal for HP alone writes no PP row.
+    policy._update_heal_latch(snap(party=(gen1_mon(30, MAX_PP),)))
+    policy._update_heal_latch(snap(party=(gen1_mon(180, MAX_PP),), map=center))
+    assert len([row for row in policy.collection.activity_events if row['title'].startswith('PP heal')]) == 1
+
+
 def test_no_center_in_reach_goes_in_unready_and_says_so_once():
     gate = boss.Gate()
     party = fighters(hp=60)
@@ -163,3 +232,44 @@ def test_gen2_writes_the_unready_journal_row_when_no_center_is_in_reach(gen2, mo
     assert policy.healing(gen2_snapshot(gen2, 59)) is None
     rows = [row for row in pin_events(policy) if row['title'].startswith('Went in unready')]
     assert len(rows) == 1 and rows[0]['title'] == 'Went in unready: Battle Red'
+
+
+def test_gen2_starts_a_leg_at_the_indigo_plateau_center(gen2, monkeypatch):
+    from pokesim.gen2.collection import pin_events
+    mid = gen2.map_ids['INDIGO_PLATEAU_POKECENTER_1F']
+    nurse = next(obj for obj in gen2.maps[mid]['objects'] if obj['sprite'] == 'SPRITE_NURSE')
+    policy = gen2_policy(gen2, monkeypatch, (mid, nurse))
+    policy.goal = SimpleNamespace(key='league_will', label='Challenge Will')
+    # The trips of this approach are spent in Victory Road.
+    policy.boss_gate = boss.Gate()
+    policy.boss_gate.key, policy.boss_gate.trips = 'league_will', boss.TRIPS
+    road = replace_map(gen2_snapshot(gen2, 60), gen2.map_ids['VICTORY_ROAD'])
+    assert policy.healing(road) is None
+    lobby = replace_map(gen2_snapshot(gen2, 60), mid)
+    assert policy.healing(lobby).map_name == 'INDIGO_PLATEAU_POKECENTER_1F'
+    assert policy.healing(replace_map(gen2_snapshot(gen2, 180), mid)) is None
+    rows = [row['title'] for row in pin_events(policy)]
+    assert 'Healed before Will' in rows
+
+
+def replace_map(snapshot, mid):
+    snapshot.map = mid
+    return snapshot
+
+
+def test_gen2_logs_a_pp_heal_at_the_center(gen2, monkeypatch):
+    from pokesim.gen2.collection import pin_events
+    from pokesim.gen2.policy import Policy
+    mid = gen2.map_ids['SILVER_CAVE_POKECENTER_1F']
+    nurse = next(obj for obj in gen2.maps[mid]['objects'] if obj['sprite'] == 'SPRITE_NURSE')
+    policy = Policy(gen2, seed=1, starter='cyndaquil')
+    policy.goal = SimpleNamespace(key='walk', label='Walk on')
+    monkeypatch.setattr(policy, 'center', lambda snapshot: (mid, nurse))
+    spent = gen2_snapshot(gen2, 180)
+    spent.party = (gen2_mon(180, (0, 0, 30, 20)),)
+    assert policy.healing(spent).map_name == 'SILVER_CAVE_POKECENTER_1F'
+    assert policy.pp_heal
+    assert policy.healing(replace_map(gen2_snapshot(gen2, 180), mid)) is None
+    rows = [row for row in pin_events(policy) if row['title'].startswith('PP heal')]
+    assert len(rows) == 1 and rows[0]['title'] == f"PP heal at {gen2.maps[mid]['name']}"
+    assert rows[0]['priority'] == 1 and rows[0]['notable'] is False

@@ -416,12 +416,21 @@ class Copies:
     ``first_wave`` counts the releases of the first visit after the start, or stays None when the run
     released nothing. A change to the scores re-ranks every PC at that visit, so it shows the size of
     that wave.
+
+    A release may only take a spare stored copy, in both gens. ``best_copy`` holds each release of a
+    species' rarest copy by the judge's own rater while others stay, ``only_copy`` each that leaves no
+    copy of its species in the party or the PC, ``locked`` each of a copy the trade preferences lock
+    (Keep) and ``from_party`` each of a copy in the party at the poll before, at any poll of the
+    visit or since the player entered its map, as a team member, trainee or League partner deposited
+    there is.
     """
 
     def __init__(self, rarity):
         self.rarity, self.held, self.dex, self.tails = rarity, None, {}, {}
         self.arrived, self.visits, self.polls, self.last_visit, self.visiting = {}, {}, 0, 0, None
         self.first_visit, self.pushed_out = [], []
+        self.best_copy, self.only_copy, self.locked, self.from_party = [], [], [], []
+        self.party, self.locks, self.where = set(), set(), None
         self.first_wave, self.wave_over = None, False
 
     def tail(self, key):
@@ -435,19 +444,24 @@ class Copies:
             self.first_wave = (self.first_wave or 0) + int(released)
         elif self.first_wave is not None:
             self.wave_over = True
-        current = {}
-        for mon in [*(game or {}).get('party', []), *((game or {}).get('storage') or {}).get('pokemon', [])]:
+        current, party, locks = {}, set(), set()
+        members = len((game or {}).get('party', []))
+        for index, mon in enumerate([*(game or {}).get('party', []), *((game or {}).get('storage') or {}).get('pokemon', [])]):
             dvs = mon.get('dvs')
             if mon.get('egg') or not isinstance(dvs, (list, tuple)) or len(dvs) != 5:
                 continue
             key = tuple(dvs)
             current[key] = current.get(key, 0) + 1
+            if index < members:
+                party.add(key)
+            if mon.get('trade_locked'):
+                locks.add(key)
             if self.dex.get(key) != dex_of(mon):
                 self.dex[key] = dex_of(mon)
                 self.tails.pop(key, None)
         self.polls += 1
         if self.held is None:
-            self.held = current
+            self.held, self.party, self.locks, self.where = current, party, locks, (game or {}).get('map')
             return
         for key in current:
             if key not in self.held:
@@ -464,7 +478,12 @@ class Copies:
                 if key in self.visiting:
                     self.visits[key] = self.visits.get(key, 0) + 1
             self.visiting, self.last_visit = None, self.polls - 1
-        self.held = current
+        # A visit keeps every party member seen on its map or at its polls, as pcvalue.VisitTeam does, so a
+        # deposit there is still a team member at its releases.
+        where = (game or {}).get('map')
+        same = self.visiting is not None or where is not None and where == self.where
+        self.party, self.where = (self.party | party if same else party), where
+        self.held, self.locks = current, locks
 
     def _judge(self, key, current):
         from pokecore.dvs import is_shiny
@@ -472,6 +491,18 @@ class Copies:
         same = [other for other in current if other in self.arrived and other != key and self.dex.get(other) == dex
                 and self.tail(other) is not None]
         row = {'dex': dex, 'dvs': list(key), 'tail': tail}
+        others = [other for other in current if other != key and self.dex.get(other) == dex]
+        if not current.get(key) and not others:
+            self.only_copy.append(row)
+        # Each Unown letter is its own entry, so the rarest Unown of all is no measure of one letter's best.
+        kept = [self.tail(other) for other in others]
+        kept = [value for value in kept if value is not None]
+        if tail is not None and kept and not current.get(key) and dex != 201 and tail < min(kept):
+            self.best_copy.append({**row, 'kept': min(kept)})
+        if key in self.locks:
+            self.locked.append(row)
+        if key in self.party:
+            self.from_party.append(row)
         if key in self.arrived and not self.visits.get(key):
             replaced = tail is not None and any(self.arrived[other] > self.arrived[key] and self.tail(other) < tail
                                                 for other in same)
@@ -628,6 +659,8 @@ def play_one(manager, aid, frames, progress):
                   held_start=held_start, held_end=held_end, reloads=reloads, errors=len(errors),
                   error_lines=errors[:5], help=help_reason, names=names,
                   first_visit=copies.first_visit, pushed_out=copies.pushed_out, first_wave=copies.first_wave,
+                  best_copy=copies.best_copy, only_copy=copies.only_copy, locked_release=copies.locked,
+                  party_release=copies.from_party,
                   ledger=json.loads(ledger[0]) if ledger else None)
     progress(f'{adventure["name"]}: {result["frames"]} frames in {result["wall_seconds"]}s'
              + (f', failed: {result["failed"]}' if result['failed'] else ''))
@@ -774,6 +807,8 @@ def measure(result):
             # Older results and a rejudge without the copies held leave these out.
             'released_at_first_visit': len(result['first_visit']) if 'first_visit' in result else None,
             'pushed_out_rarer': len(result['pushed_out']) if 'pushed_out' in result else None,
+            'phantom_catches': len(phantom_catches(result)) if 'first_visit' in result else None,
+            **{key: len(result[key]) if key in result else None for key in RELEASE_CHECKS},
             # Reported only: the releases of the first PC visit, the wave a change to the scores brings.
             'first_wave_releases': result.get('first_wave')}
 
@@ -810,7 +845,33 @@ def invariants(candidate, baseline):
     if c['pushed_out_rarer']:
         problems.append(f'{name}: {c["pushed_out_rarer"]} releases took a copy rarer than the newer one that pushed it '
                         f'out, {_dexes(candidate["pushed_out"])}')
+    if c['phantom_catches']:
+        problems.append(f'{name}: {c["phantom_catches"]} phantom catches, caught with no better copy or new entry and '
+                        f'released at their next PC visit, {_dexes(phantom_catches(candidate))}')
+    for key, text in RELEASE_CHECKS.items():
+        if c[key]:
+            problems.append(f'{name}: {c[key]} releases took {text}, {_dexes(candidate[key])}')
     return problems
+
+
+# Releases that may never happen in either gen, by result key: a release takes only a spare stored copy.
+RELEASE_CHECKS = {'best_copy': "a species' best copy", 'only_copy': "a species' only copy",
+                  'locked_release': 'a copy the trade preferences lock',
+                  'party_release': 'a party member, the trainee, a League partner or a team member'}
+
+
+def phantom_catches(result):
+    """Each catch that did not improve the PC, gifts aside, paired with a copy of its species released
+    at its first PC visit, as Red's Tentacool and Yellow's Nidorina were."""
+    released = {}
+    for row in result.get('first_visit') or ():
+        released[row['dex']] = released.get(row['dex'], 0) + 1
+    pairs = []
+    for row in result['catches']:
+        if not row['improved'] and not row['gift'] and released.get(row['dex']):
+            released[row['dex']] -= 1
+            pairs.append(row)
+    return pairs
 
 
 def _dexes(rows):
@@ -863,6 +924,25 @@ def build_tree(sha, folder):
     return folder
 
 
+# uv output that says a download failed, not the lock or the build.
+NETWORK_ERROR = re.compile(r'Failed to (?:fetch|download)|HTTP status (?:server|client) error|error sending request'
+                           r'|Could not connect|dns error|operation timed out', re.I)
+
+
+def sync_environment(tree, env, log=print):
+    """Build a commit's environment with uv. A download that fails on the network is tried once more
+    offline, from uv's cache, since the lock pins every wheel's hash."""
+    command = ['uv', 'sync', '--locked', '--no-dev', '--project', str(tree), '-q']
+    done = subprocess.run(command, env=env, cwd=tree, capture_output=True, text=True)
+    if done.returncode and NETWORK_ERROR.search(done.stderr or ''):
+        log(f'uv sync for {tree} failed on the network, retrying offline from the cache: '
+            f'{NETWORK_ERROR.search(done.stderr).group(0)}')
+        done = subprocess.run(command, env=dict(env, UV_OFFLINE='1'), cwd=tree, capture_output=True, text=True)
+    if done.returncode:
+        sys.stderr.write(done.stderr or '')
+        raise subprocess.CalledProcessError(done.returncode, command, done.stdout, done.stderr)
+
+
 def full_sha(sha):
     return subprocess.run(['git', '-C', str(ROOT), 'rev-parse', '--verify', f'{sha}^{{commit}}'], check=True,
                           capture_output=True, text=True).stdout.strip()
@@ -899,8 +979,7 @@ def run(args):
         reference = folder / 'app' / 'assets' / 'reference' / reference_revision(folder / 'tree')
         role_env = dict(env, UV_PROJECT_ENVIRONMENT=str(folder / 'env'), POKESIM_REVISION=roles[role],
                         GAME_DATA_DIR=str(reference))
-        subprocess.run(['uv', 'sync', '--locked', '--no-dev', '--project', str(folder / 'tree'), '-q'],
-                       env=role_env, cwd=folder / 'tree', check=True)
+        sync_environment(folder / 'tree', role_env, lambda line: print(line, flush=True))
         command = ['nice', '-n', str(args.nice), 'uv', 'run', '--locked', '--no-dev', '--no-sync', '--project',
                    str(folder / 'tree'), 'python', str(Path(__file__).resolve()), 'runner', str(inputs), str(folder),
                    str(args.roms), '--frames', str(args.frames), '--parallel', str(args.parallel)]

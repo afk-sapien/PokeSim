@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass
 # Why a key cannot be pinned when the planner knows no better reason.
 UNAVAILABLE = 'not available now'
 STUCK = 'stuck'
+# The most goals the picker shows. The rest are found by searching for their name.
+LIMIT = 30
 
 
 @dataclass
@@ -27,6 +29,27 @@ class Pin:
 def entry(key, label, tier):
     """One row of the goal list a manager picks from."""
     return {'key': key, 'label': label, 'tier': getattr(tier, 'name', str(tier)).lower()}
+
+
+def grouped(rows, query=None, limit=LIMIT):
+    """The picker's rows from the planner's ranked options, best first.
+
+    ``rows`` holds ``(key, group, label, tier)`` for each option, best first. Options that serve one thing
+    a manager wants, such as every place a species can be caught, share a group. Each group is listed once,
+    under its best option's key and label, so pinning it runs that option. A label already listed is not
+    listed again. ``query`` keeps the groups whose label holds it, and ``limit`` keeps the best of them.
+    """
+    seen, labels, goals = set(), set(), []
+    needle = (query or '').strip().casefold()
+    for key, group, label, tier in rows:
+        if group in seen or label in labels:
+            continue
+        seen.add(group)
+        labels.add(label)
+        if needle and needle not in label.casefold():
+            continue
+        goals.append(entry(key, label, tier))
+    return goals if limit is None else goals[:limit]
 
 
 def listing(goals, pin, reason=None):

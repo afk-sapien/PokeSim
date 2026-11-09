@@ -221,10 +221,10 @@ def test_choose_next_row_is_labelled_and_even(page, live_game, width):
     assert page.locator('#next-activity-species-list option').evaluate_all('options => options.map(o => o.value)') == ['Pikachu', 'Farfetch’d']
     expect(row.get_by_role('combobox', name='Stop when')).to_be_visible()
     assert page.locator('#next-activity-kind').count() == 0
-    for label in ('Goal', 'Pokémon', 'Stop when'):
+    for label in ('Find', 'Goal', 'Pokémon', 'Stop when'):
         expect(row.locator('.plan-pick-field .micro', has_text=label)).to_be_visible()
     # Every control in the row has one height and one face, buttons included.
     looks = page.locator('#next-activity select:visible, #next-activity input:visible, #next-activity button:visible').evaluate_all(
         'controls => controls.map(c => [Math.round(c.getBoundingClientRect().height), getComputedStyle(c).fontFamily, getComputedStyle(c).fontSize])')
-    assert len(looks) == 4 and len({tuple(look) for look in looks}) == 1, looks
+    assert len(looks) == 5 and len({tuple(look) for look in looks}) == 1, looks
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

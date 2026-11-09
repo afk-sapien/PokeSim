@@ -153,6 +153,82 @@ def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
     assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
 
 
+def watch(*polls):
+    """Copies.poll over ``polls`` of (party, stored, released, map), each copy a (dex, DVs, locked) row."""
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+
+    def rows(group):
+        return [{'dex': dex, 'dvs': list(dvs), 'trade_locked': locked} for dex, dvs, locked in group]
+    for party, stored, released, where in polls:
+        copies.poll({'map': where, 'party': rows(party), 'storage': {'pokemon': rows(stored)}},
+                    lambda mon: mon['dex'], released)
+    return copies
+
+
+def release_problems(copies, version='red'):
+    return live_soak.invariants(result(version=version, first_visit=[], pushed_out=[], best_copy=copies.best_copy,
+                                       only_copy=copies.only_copy, locked_release=copies.locked,
+                                       party_release=copies.from_party), None)
+
+
+def test_a_catch_that_did_not_improve_the_pc_and_left_at_its_next_visit_is_a_phantom():
+    # Red's Lv 30 Tentacool and Yellow's Nidorina were caught over a better copy and released at once.
+    gone = [{'dex': 72, 'dvs': [2, 8, 2, 9, 10], 'tail': 0.9}]
+    problems = live_soak.invariants(result(catches=[catch(72)], first_visit=gone, pushed_out=[]), None)
+    assert any('1 phantom catches, caught with no better copy or new entry and released at their next PC visit, #72'
+               in problem for problem in problems)
+    for kept in (catch(72, improved=True), catch(72, gift=True), catch(30)):
+        assert live_soak.measure(result(catches=[kept], first_visit=gone, pushed_out=[]))['phantom_catches'] == 0
+    assert live_soak.measure(result(catches=[catch(72)]))['phantom_catches'] is None
+
+
+def test_a_release_of_a_species_best_copy_fails():
+    copies = watch(([], [(16, RARE, False), (16, PLAIN, False)], False, 1), ([], [(16, PLAIN, False)], True, 1))
+    assert copies.best_copy == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'kept': 0.6}]
+    assert any("1 releases took a species' best copy, #16" in problem for problem in release_problems(copies))
+    fine = watch(([], [(16, RARE, False), (16, PLAIN, False)], False, 1), ([], [(16, RARE, False)], True, 1))
+    assert not fine.best_copy and not fine.only_copy and not release_problems(fine)
+
+
+@pytest.mark.parametrize('version', ['red', 'crystal'])
+def test_a_release_of_a_species_only_copy_fails_in_both_gens(version):
+    # Soak crystal released its Charizard, Blastoise and Feraligatr with no catch at all.
+    held = [(6, COMMON, False), (9, PLAIN, False), (160, RARE, False), (16, RARER, False)]
+    copies = watch(([], held, False, 1), ([], held[3:], True, 1))
+    assert [row['dex'] for row in copies.only_copy] == [6, 9, 160]
+    assert any("3 releases took a species' only copy, #6, #9, #160" in problem
+               for problem in release_problems(copies, version))
+    # A copy whose species stays in the party is no only copy.
+    kept = watch(([(16, PLAIN, False)], [(16, COMMON, False)], False, 1), ([(16, PLAIN, False)], [], True, 1))
+    assert not kept.only_copy and not kept.best_copy
+
+
+def test_a_release_of_a_locked_copy_fails():
+    copies = watch(([], [(16, RARE, False), (16, COMMON, True)], False, 1), ([], [(16, RARE, False)], True, 1))
+    assert [row['dvs'] for row in copies.locked] == [list(COMMON)]
+    assert any('1 releases took a copy the trade preferences lock, #16' in problem for problem in release_problems(copies))
+
+
+def test_a_release_of_a_team_member_deposited_at_the_visit_fails():
+    # Soak red deposited its Lv 43 Weezing and released it at the same visit.
+    weezing, spare = (14, 7, 1, 3, 8), (13, 5, 1, 8, 13)
+    TAILS.update({weezing: 0.7, spare: 0.1})
+    try:
+        copies = watch(([(110, weezing, False)], [(110, spare, False)], False, 7),
+                       ([], [(110, spare, False), (110, weezing, False)], False, 7),
+                       ([], [(110, spare, False)], True, 7))
+        assert [row['dvs'] for row in copies.from_party] == [list(weezing)]
+        assert any('1 releases took a party member, the trainee, a League partner or a team member, #110' in problem
+                   for problem in release_problems(copies))
+        # A copy deposited at an earlier visit, on another map, is a spare by now.
+        later = watch(([(110, weezing, False)], [(110, spare, False)], False, 7),
+                      ([], [(110, spare, False), (110, weezing, False)], False, 8),
+                      ([], [(110, spare, False)], True, 8))
+        assert not later.from_party and not release_problems(later)
+    finally:
+        TAILS.pop(weezing), TAILS.pop(spare)
+
+
 def test_the_judge_rates_a_gen1_copy_with_the_tms_of_its_adventures_cartridge(monkeypatch):
     from pokesim import config, investment
     from pokesim.cartridges import identify
@@ -319,3 +395,30 @@ def test_a_commit_older_than_the_data_schema_is_refused(tmp_path, schema, refuse
     (tmp_path / 'pokesim' / 'app').mkdir(parents=True)
     (tmp_path / 'pokesim' / 'app' / 'registry.py').write_text(f'SCHEMA = {schema}\n')
     assert (live_soak.schema_of(tmp_path) < 2) is refused
+
+
+GITHUB_504 = ('error: Failed to fetch: `https://github.com/example/pokecore-0.11.0-py3-none-any.whl`\n'
+              '  Caused by: HTTP status server error (504 Gateway Timeout)\n')
+
+
+@pytest.mark.parametrize('first,offline,tries', [
+    (GITHUB_504, 0, 2),  # a network failure is tried once more offline, from the cache
+    ('error: The lockfile needs to be updated\n', None, 1),  # any other failure is not
+])
+def test_an_environment_build_retries_offline_only_after_a_network_error(monkeypatch, tmp_path, first, offline, tries):
+    calls, lines = [], []
+
+    def run(command, env, **kwargs):
+        calls.append(env.get('UV_OFFLINE'))
+        code = 1 if len(calls) == 1 else offline
+        return SimpleNamespace(returncode=code, stdout='', stderr=first if code else '')
+    monkeypatch.setattr(live_soak.subprocess, 'run', run)
+    if offline is None:
+        with pytest.raises(live_soak.subprocess.CalledProcessError):
+            live_soak.sync_environment(tmp_path, {}, lines.append)
+    else:
+        live_soak.sync_environment(tmp_path, {}, lines.append)
+    assert calls == [None, '1'][:tries]
+    assert bool(lines) is (tries == 2)
+    if lines:
+        assert 'retrying offline' in lines[0] and 'Failed to fetch' in lines[0]
