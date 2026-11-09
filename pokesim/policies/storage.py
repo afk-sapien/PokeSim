@@ -19,6 +19,9 @@ class StorageController:
     avoid: frozenset = frozenset()
     # Trainer ids of linked adventures (trade/partners.py), refreshed with ``avoid``.
     partners: frozenset = frozenset()
+    # The (dex, DVs) of the party seen at this PC visit (pcvalue.VisitTeam), so a member deposited at
+    # this visit is never released at it. The planner refreshes it every step.
+    team: frozenset = frozenset()
     # The planner's own release ranking (snapshot -> (box, position) or None), so the menu takes the
     # Pokémon it chose with every input: League rewards, owner requests and the Favor setting.
     ranker: object = field(default=None, compare=False, repr=False)
@@ -26,13 +29,14 @@ class StorageController:
     def _release(self, snapshot, project, preferences, collection):
         if self.ranker is not None:
             return self.ranker(snapshot)
-        return self.release_target(snapshot, project, preferences, collection, self.avoid, self.partners)
+        return self.release_target(snapshot, project, preferences, collection, self.avoid, self.partners,
+                                   team=self.team)
 
     @staticmethod
     def release_target(snapshot, project, preferences, collection=None, avoid=(), partners=frozenset(),
-                       rewards=frozenset(), requested=None, favor=None):
+                       rewards=frozenset(), requested=None, favor=None, team=frozenset()):
         """The Pokémon to let go as (box, position), lowest value first (pcvalue.py). ``avoid`` holds
-        slots whose release just failed.
+        slots whose release just failed and ``team`` is as on the controller.
 
         The running project's family, a League rotation parent and a trade's give are stock, which holds
         a plan role for its best copies. Peer demand keeps the copies it asks for. ``partners`` are the
@@ -40,7 +44,8 @@ class StorageController:
         requests.
         """
         stock, roles, gifts, demand = StorageController.plan_inputs(project, collection)
-        return release_target(snapshot, stock, avoid, partners, gifts, preferences, demand, rewards, requested, roles, favor)
+        return release_target(snapshot, stock, avoid, partners, gifts, preferences, demand, rewards, requested, roles, favor,
+                              team)
 
     @staticmethod
     def plan_inputs(project, collection=None):
@@ -59,11 +64,11 @@ class StorageController:
 
     @staticmethod
     def rated(snapshot, project, preferences, collection=None, partners=frozenset(), rewards=frozenset(),
-              requested=None, favor=None, extra=()):
+              requested=None, favor=None, extra=(), team=frozenset()):
         """Every Pokémon scored as release_target scores it, for the PC tab. ``extra`` adds rows."""
         stock, roles, gifts, demand = StorageController.plan_inputs(project, collection)
         return release_rated(snapshot, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor,
-                             extra)
+                             extra, team)
 
     @staticmethod
     def field_move_box(snapshot, goal_key):

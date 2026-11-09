@@ -273,31 +273,27 @@ FLEE_REASONS = {
 }
 
 
-def useful_capture(snapshot, species, level, required_move=None):
-    """Judge incidental captures against the party and every storage box."""
+def useful_capture(snapshot, species, level, required_move=None, keeps=None):
+    """Whether an incidental capture is worth a ball.
+
+    A field-move carrier and a missing entry keep their own rules. An owned species is caught only
+    when ``keeps``, the PC's catch rule (collection.improves), says the PC would keep the wild copy.
+    Its rarity has no level term, so a higher level or a new type is no reason, and without ``keeps``
+    an owned species is not caught. A missing entry is a keep under that rule anyway.
+    """
     known = SPECIES.get(species, {})
     if required_move and required_move in known.get('hms', []):
         return True
-    held = [(p.species, p.level) for p in snapshot.party]
-    held.extend((sid, value) for box, sid, value, nick in snapshot.stored_pokemon)
-    # Compact snapshots may expose only the active box.
-    held.extend(snapshot.boxed_pokemon)
-    team_level = max((p.level for p in snapshot.party), default=1)
     if known.get('dex') not in snapshot.owned:
+        team_level = max((p.level for p in snapshot.party), default=1)
         return len(snapshot.party) < 3 or level >= team_level * 0.4
-    copies = [value for sid, value in held if sid == species]
-    if copies:
-        # An actual level upgrade is useful, repeated equal copies are not.
-        best = max(copies)
-        return level >= best + max(5, (best + 9) // 10) and level >= team_level * 0.5
-    covered = {typ for sid, value in held for typ in SPECIES.get(sid, {}).get('types', ())}
-    return bool(set(known.get('types', ())) - covered) and level >= team_level * 0.5
+    return keeps is not None and bool(keeps())
 
 
 def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, catch_attempts=0, required_move=None, collect_missing=False, capture_species=None, repeat_species=None, training_index=None,
-                  kind=STORY, flee_tries=0):
-    """The next battle decision. ``kind`` is the goal kind the battle stance follows (planning/stance.py)
-    and ``flee_tries`` counts the failed runs in this battle."""
+                  kind=STORY, flee_tries=0, keeps=None):
+    """The next battle decision. ``kind`` is the goal kind the battle stance follows (planning/stance.py),
+    ``flee_tries`` counts the failed runs in this battle and ``keeps`` is as in useful_capture."""
     if (snapshot.in_battle == 1
             and MAPS['POKEMON_TOWER_1F'] <= snapshot.map <= MAPS['POKEMON_TOWER_7F']
             and not dict(snapshot.items).get(ITEMS['SILPH_SCOPE'])):
@@ -309,7 +305,7 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     known = SPECIES.get(enemy.species, {})
     missing_species = known.get("dex") not in snapshot.owned
     required = required_move in known.get('hms', []) if required_move else False
-    useful = useful_capture(snapshot, enemy.species, enemy.level, required_move)
+    useful = useful_capture(snapshot, enemy.species, enemy.level, required_move, keeps)
     safe = me.hp > incoming * 1.5 and not me.status
     balls = [(i, item) for item in BALLS for i, (bag_item, qty) in enumerate(snapshot.items) if bag_item == item and qty > 0]
     legendary = known.get('dex') in (144,145,146,150)
