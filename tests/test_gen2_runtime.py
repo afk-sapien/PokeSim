@@ -2621,7 +2621,7 @@ def test_first_gym_waits_for_a_level_fourteen_partner(real_data, route_31_walk):
     assert policy.journey(snapshot, None).key == 'collection_train'
 
 
-TACKLE, HARDEN = 33, 106
+TACKLE, GROWL, HARDEN = 33, 45, 106
 
 
 def test_a_pokemon_with_no_damaging_move_is_no_fighter_for_falkner(real_data, route_31_walk):
@@ -2691,6 +2691,79 @@ def test_a_boss_loss_outlives_the_reload_in_the_store(real_data, tmp_path):
         SimpleNamespace(level=47, egg=False, hp=0, moves=(TACKLE,)),)))
     assert reloaded.boss_bar('league_will') == reloaded.boss_bar('league_lance') == 49
     store.close()
+
+
+def test_a_stall_reload_inside_a_boss_battle_counts_as_a_loss_and_the_team_trains(real_data, tmp_path):
+    # Gold at Azalea Gym ran out of attacks with no one fainted, so the guard reloaded a battle that
+    # only ran long. Without a loss noted the reload went straight back into the same fight.
+    from pokesim.gen2.emulator import Emulator
+    from pokesim.gen2.policy import Policy
+    from pokesim.store import Store
+    store = Store(tmp_path)
+    policy = Policy(real_data)
+    store.attach(policy, 2)
+    policy.goal = SimpleNamespace(key='zephyr', map_name='VIOLET_GYM')
+    party = (SimpleNamespace(level=15, egg=False, hp=10, moves=(TACKLE,)),)
+    battle = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], map_name='Violet Gym', valid=True, started=True,
+                             in_battle=2, party=party, frame=1000, badges=0, event=lambda name: True)
+    loaded = []
+    saves = SimpleNamespace(autosaves=lambda: [Path('auto-v1-1.state')], state_path=lambda name: None,
+                            checkpoint_metadata=lambda path: {'frame': 1, 'settled': True})
+    emu = SimpleNamespace(unstick_streak=0, snapshot=battle, store=saves, frame=100000, reloads=0, last_reload=0,
+                          policy=policy, _behind_barrier=lambda metadata: False, _load_state_file=loaded.append,
+                          _tick=lambda frames: None, _reset_watch=lambda: None, _event=lambda event, snapshot: None)
+    Emulator._unstick(emu, 100000, 'battle never ended')
+    assert loaded and policy.boss_bar('zephyr') == 17
+    # The reload builds a new policy from the store, and its next goal trains before Falkner.
+    reloaded = Policy(real_data)
+    store.attach(reloaded, 2)
+    outside = SimpleNamespace(map=real_data.map_ids['VIOLET_CITY'], x=1, y=8, frame=1000, badges=0, party=party,
+                              event=lambda name: True)
+    goal = reloaded.boss_training(outside, policy.goal)
+    assert goal.key == 'collection_train' and goal.map_name == 'ROUTE_31'
+    # A stall in a battle with a trainer outside the boss's room is no loss.
+    other = Policy(real_data)
+    other.goal = policy.goal
+    emu.policy, emu.snapshot = other, SimpleNamespace(**{**vars(battle), 'map': real_data.map_ids['ROUTE_32']})
+    Emulator._unstick(emu, 100000, 'battle never ended')
+    assert other.boss_bar('zephyr') == 14
+    store.close()
+
+
+def test_a_stall_reload_in_the_burned_tower_rival_battle_counts_against_the_goal_under_way(real_data):
+    # Crystal at Burned Tower: Quilava fainted and a Togepi with only Growl and Charm was left against
+    # the rival. The tower is no gym, so the trainer, not the room, names the boss.
+    from pokesim.gen2.emulator import Emulator
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    goal = Goal('burned_tower', 'Explore the Burned Tower', 'BURNED_TOWER_1F', 11, 9)
+    policy.goal = goal
+    party = (SimpleNamespace(level=28, egg=False, hp=0, moves=(TACKLE,)),
+             SimpleNamespace(level=5, egg=False, hp=20, moves=(GROWL,)))
+    rival = SimpleNamespace(map=real_data.map_ids['BURNED_TOWER_1F'], map_name='Burned Tower', valid=True,
+                            started=True, in_battle=2, trainer_class=9, enemy_level=22, party=party, frame=1000,
+                            badges=7, event=lambda name: True)
+    saves = SimpleNamespace(autosaves=lambda: [Path('auto-v1-1.state')], state_path=lambda name: None,
+                            checkpoint_metadata=lambda path: {'frame': 1, 'settled': True})
+    emu = SimpleNamespace(unstick_streak=0, snapshot=rival, store=saves, frame=100000, reloads=0, last_reload=0,
+                          policy=policy, _behind_barrier=lambda metadata: False, _load_state_file=lambda path: None,
+                          _tick=lambda frames: None, _reset_watch=lambda: None, _event=lambda event, snapshot: None)
+    Emulator._unstick(emu, 100000, 'battle never ended')
+    assert policy.losses.levels() == {'burned_tower': 28} and policy.losses.aces() == {'burned_tower': 22}
+    # Next the team trains on Route 37, before Morty, the next gym, until the best fighter is Lv 30.
+    outside = SimpleNamespace(map=real_data.map_ids['ECRUTEAK_CITY'], x=23, y=28, frame=1000, badges=7, party=party,
+                              event=lambda name: True)
+    training = policy.boss_training(outside, goal)
+    assert training.key == 'collection_train' and training.map_name == 'ROUTE_37'
+    party[0].level = 30
+    assert policy.boss_training(outside, goal) is None
+    # A stall against a Youngster on the way is no loss.
+    other = Policy(real_data)
+    other.goal = goal
+    emu.policy, emu.snapshot = other, SimpleNamespace(**{**vars(rival), 'map': real_data.map_ids['ROUTE_37'],
+                                                         'trainer_class': 22})
+    Emulator._unstick(emu, 100000, 'battle never ended')
+    assert other.losses.levels() == {}
 
 
 def _shiny_lead():

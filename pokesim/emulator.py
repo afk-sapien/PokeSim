@@ -836,9 +836,11 @@ class Emulator:
         """Go back to an autosave from before the trouble started (or power-cycle if there is none)."""
         Emulator._drop_pin(self, pin.STUCK)
         note = getattr(getattr(self, 'policy', None), 'note_boss_loss', None)
-        if why == "battle cannot end" and note is not None and getattr(self, 'snapshot', None) is not None:
-            # A boss battle that cannot end is lost, though not everyone fainted.
-            note(self.snapshot)
+        snapshot = getattr(self, 'snapshot', None)
+        if note is not None and snapshot is not None and (why == "battle cannot end" or getattr(snapshot, 'in_battle', 0) == 2):
+            # A boss battle the reload leaves is lost, though not everyone fainted, so the team trains
+            # before it goes back in. note_boss_loss ignores trainers outside a boss gym.
+            note(snapshot)
         self.unstick_streak = getattr(self, 'unstick_streak', 0)
         if self.unstick_streak >= MAX_RELOADS and Emulator._give_up(self, why):
             return

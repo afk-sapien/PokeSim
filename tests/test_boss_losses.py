@@ -57,6 +57,68 @@ def test_a_gen1_loss_to_misty_trains_on_her_route_and_outlives_the_reload(tmp_pa
     store.close()
 
 
+def test_a_gen1_stall_reload_inside_a_boss_battle_counts_as_a_loss_and_the_team_trains(tmp_path):
+    # A battle with Misty that only ran long reloaded with no one fainted. Without a loss noted the
+    # reload went straight back into the same fight.
+    from pokesim.emulator import Emulator
+    from pokesim.checkpoints import CheckpointStore
+    saves = CheckpointStore(tmp_path / 'saves')
+    saves.write_checkpoint(b'before', {'policy_state': {}, 'run_memory': {}})
+    store = Store(tmp_path)
+    policy = StrategicPolicy(1)
+    store.attach(policy, 1)
+    policy.goal = SimpleNamespace(key='cascade')
+    restored = []
+    game = SimpleNamespace(store=SimpleNamespace(autosaves=saves.autosaves, state_path=saves.state_path), reloads=0,
+                           policy=policy, snapshot=snap(map=MAPS['CERULEAN_GYM'], badges=1, in_battle=2,
+                                                        party=(mon(level=24, hp=30),)),
+                           _restore_first_valid=lambda paths: restored.append(paths[0].name), _tick=lambda n: None)
+    Emulator._unstick(game, 0, 'battle never ended')
+    assert restored and policy.losses.levels() == {'cascade': 24}
+    # The reload builds a new policy from the store, and its next goal trains before Misty.
+    reloaded = StrategicPolicy(1)
+    store.attach(reloaded, 1)
+    s = snap(map=MAPS['CERULEAN_CITY'], badges=1, party=(mon(level=24),))
+    assert boss_training(s, SimpleNamespace(key='cascade'), reloaded.losses).key == 'train_cascade'
+    # A stall in a battle with a trainer outside the gym is no loss.
+    other = StrategicPolicy(1)
+    other.goal = SimpleNamespace(key='cascade')
+    game.policy, game.snapshot = other, snap(map=MAPS['ROUTE_24'], badges=1, in_battle=2, party=(mon(level=24),))
+    Emulator._unstick(game, 0, 'battle never ended')
+    assert other.losses.levels() == {}
+    store.close()
+
+
+def test_a_gen1_stall_reload_in_a_rival_battle_counts_against_the_goal_under_way(tmp_path):
+    # The rival fights on the S.S. Anne, no gym, so the trainer, not the room, names the boss.
+    from pokesim.emulator import Emulator
+    from pokesim.checkpoints import CheckpointStore
+    saves = CheckpointStore(tmp_path / 'saves')
+    saves.write_checkpoint(b'before', {'policy_state': {}, 'run_memory': {}})
+    policy = StrategicPolicy(1)
+    goal = SimpleNamespace(key='cut', title='Visit the ship’s captain')
+    policy.goal = goal
+    rival = snap(map=MAPS['SS_ANNE_2F'], badges=3, in_battle=2, opponent=200 + 42, enemy_level=20,
+                 party=(mon(level=18, hp=30),))
+    game = SimpleNamespace(store=SimpleNamespace(autosaves=saves.autosaves, state_path=saves.state_path), reloads=0,
+                           policy=policy, snapshot=rival, _restore_first_valid=lambda paths: None, _tick=lambda n: None)
+    Emulator._unstick(game, 0, 'battle never ended')
+    assert policy.losses.levels() == {'cut': 18} and policy.losses.aces() == {'cut': 20}
+    # The next goal trains on the route before Lt. Surge, the next gym, until the best fighter is Lv 20.
+    s = snap(map=MAPS['VERMILION_CITY'], badges=3, party=(mon(level=19),))
+    training = boss_training(s, goal, policy.losses)
+    assert training.key == 'train_cut' and 'level 20' in training.reason
+    assert MAPS['ROUTE_11'] in {target[0] for target in training.targets}
+    assert boss_training(snap(map=MAPS['VERMILION_CITY'], badges=3, party=(mon(level=20),)), goal, policy.losses) is None
+    # A stall against a Youngster on the way is no loss.
+    other = StrategicPolicy(1)
+    other.goal = goal
+    game.policy, game.snapshot = other, snap(map=MAPS['ROUTE_6'], badges=3, in_battle=2, opponent=200 + 1,
+                                             enemy_level=20, party=(mon(level=18, hp=30),))
+    Emulator._unstick(game, 0, 'battle never ended')
+    assert other.losses.levels() == {}
+
+
 def test_a_gen1_loss_right_after_a_reload_into_the_battle_counts_by_the_room():
     # A reload into the battle leaves no boss goal yet, so the gym names the boss.
     policy = StrategicPolicy(1)

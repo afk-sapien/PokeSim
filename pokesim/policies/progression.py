@@ -178,13 +178,29 @@ def boss_training(s, goal, losses):
         return None
     key = boss_key(goal.key)
     gym = next((g for g in GYMS if g[1] == key), None)
-    if gym is None and key != "league" or boss_room("league", s.map):
+    if boss_room("league", s.map):
         return None
+    if gym is None and key != "league":
+        return story_training(s, goal, losses)
     ace, route, name = (gym[5], gym[6], gym[2]) if gym else (LEAGUE_ACE, LEAGUE_TRAINING, "the Pokémon League")
     bar = losses.bar(key, 0, ace)
     if fighter_level(s.party) >= bar:
         return None
     return training_goal(key, f"Prepare for {name}", f"Train the best fighter to level {bar} after a loss to {name}", route)
+
+
+def story_training(s, goal, losses):
+    """Training before a story goal the rival or Giovanni beat the team on, or None once it is ready.
+
+    The team trains where it would before the next gym it has not won."""
+    if goal.key not in losses.levels():
+        return None
+    bar = losses.bar(goal.key, 0)
+    if fighter_level(s.party) >= bar:
+        return None
+    route = next((g[6] for g in GYMS if not s.badges & g[0]), LEAGUE_TRAINING)
+    return training_goal(goal.key, "Train before another try",
+                         f"Train the best fighter to level {bar} after a loss on the way to: {goal.title}", route)
 
 
 def gym_goal(s, bit):
