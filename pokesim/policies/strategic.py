@@ -28,7 +28,7 @@ from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TR
 from ..planning import values
 from ..planning import arbiter
 from ..planning import boss
-from .ledger import battle_room, fighters
+from .ledger import battle_room, fighters, league_treatment
 from ..planning.ledger import PP
 from ..planning.arbiter import Candidate, Tier
 from ..planning.monitor import STOOD_DOWN
@@ -889,7 +889,9 @@ class StrategicPolicy(Policy):
                 return False
             targets = healing_goal(s).targets
             return self.nav.distance_lookup((s.map, s.x, s.y), s.frame)(targets) is not None
-        verdict = gate.decide(key, party, reachable, where=s.map, center=s.map in CENTER_MAPS)
+        # Between League rooms an item in the bag that treats a short fighter heals in place of a trip.
+        supply = key is not None and in_league and league_treatment(s.party, s.items) is not None
+        verdict = gate.decide(key, party, reachable, where=s.map, center=s.map in CENTER_MAPS, supply=supply)
         self.boss_heal = verdict == boss.HEAL
         if verdict == boss.UNREADY and gate.note():
             names = [mon.nick or f'#{mon.species}' for mon in s.party]
@@ -929,31 +931,20 @@ class StrategicPolicy(Policy):
                                       ((s.map, 13, 4),), 'up', True), swap)
         goal = choice.goal
         if in_league:
-            for target in sorted(range(len(s.party)), key=lambda i: s.party[i].level, reverse=True):
-                mon = s.party[target]
-                if mon.level < 35:
-                    continue
-                for item, qty in s.items:
-                    if qty and mon.hp == 0 and item in (ITEMS["REVIVE"], ITEMS["MAX_REVIVE"]):
-                        actions = self._use_item(s, item, target)
-                        if actions:
-                            return actions
-                if mon.hp > 0:
-                    depleted = any(move and not pp and MOVES.get(move, {}).get("power")
-                                   for move, pp in zip(mon.moves, mon.pp))
-                    if depleted:
-                        for item, qty in s.items:
-                            if qty and item in (ITEMS["ELIXER"], ITEMS["MAX_ELIXER"]):
-                                actions = self._use_item(s, item, target)
-                                if actions:
-                                    return actions
-                    choices = [(min(mon.max_hp - mon.hp, amount), item) for item, amount in HEALING.items()
-                               if any(mid == item and qty for mid, qty in s.items)
-                               and (mon.hp < mon.max_hp * 0.8 or mon.status & CURES.get(item, 0))]
-                    if choices:
-                        actions = self._use_item(s, max(choices)[1], target)
-                        if actions:
-                            return actions
+            # Between rooms the bag heals toward the boss check's bar (planning/boss.py treatment), the same
+            # rule Gold, Silver and Crystal use, and a cure clears a status.
+            found = league_treatment(s.party, s.items)
+            if found is not None:
+                target, item, move = found
+                actions = self._use_item(s, item, target, move=move)
+                if actions:
+                    return actions
+            for target, mon in enumerate(s.party):
+                cures = sorted((item for item, qty in s.items if qty and mon.hp and mon.status & CURES.get(item, 0)),
+                               key=lambda item: item in HEALING)
+                actions = cures and self._use_item(s, cures[0], target)
+                if actions:
+                    return actions
         # A bag this full cannot take a new kind of item, Poké Balls included, so spend the vitamins and
         # Rare Candies that fill it, whether or not a collection project is under way.
         if len(s.items) >= 18:
@@ -1664,15 +1655,17 @@ class StrategicPolicy(Policy):
         return self._start_shortcut(s, LearnMove(forget), ('learn', forget),
                                     "Keep useful coverage and protect HM moves")
 
-    def _use_item(self, snapshot, item, target=0, purpose=None):
+    def _use_item(self, snapshot, item, target=0, purpose=None, move=None):
+        """Use ``item`` on party slot ``target``, and on its move slot ``move`` for an Ether. A PP Up
+        with no ``move`` picks its own slot."""
         if not any(mid == item and qty for mid, qty in snapshot.items):
             return None
         kind = item_kind(item)
         party_target = kind.target in ('party', 'move')
         if party_target and target >= len(snapshot.party):
             return None
-        move = forget = None
-        if kind.target == 'move':
+        forget = None
+        if kind.target == 'move' and move is None:
             from ..champion_shop import pp_slot
             move = pp_slot(snapshot.party[target])
             if move is None:
