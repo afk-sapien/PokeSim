@@ -140,6 +140,19 @@ def test_story_levels_do_not_count_and_a_new_area_does(sweep):
     assert sweep.at(last + 3 * HOUR + 120) == []
 
 
+def test_a_library_outside_the_app_reads_the_same_way(tmp_path):
+    red = Adventure(tmp_path, 'a' * 32)
+    for row in RED_STORY:
+        red.row(row)
+    (tmp_path / 'adventures' / ('a' * 32) / 'adventure.json').write_text('{"name": "Red", "version": "red"}')
+    Adventure(tmp_path, 'b' * 32)
+    (tmp_path / 'adventures' / ('b' * 32) / 'adventure.json').write_text('{"name": "Gold", "version": "gold"}')
+    now = RED_STORY[-1][0] + 2 * 15684 + 360
+    assert progress_sweep.library(tmp_path, now) == [
+        f'{"a" * 32} Red: STALLED, 8.8 h without progress, limit 8.7 h, 8 badges',
+        f'{"b" * 32} Gold: no progress yet']
+
+
 def test_time_held_still_never_counts(sweep):
     sweep.adventure.row(SILVER)
     start = SILVER[0]

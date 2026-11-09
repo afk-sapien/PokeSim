@@ -9,13 +9,19 @@ took in the same stage, and never in under three hours. Postgame progress is a L
 Pokédex change (seen, owned, level 100 species and perfect finds) or a level up, which is how a
 trainee shows its training. A postgame game stalls after a day without one. Experience alone,
 repeat catches and other journal entries never count.
+
+`python -m pokesim.app.progress_sweep <data root>` prints the same reading for every adventure of
+a library, as for local sims run outside the hosted app.
 """
 from __future__ import annotations
 
 from contextlib import closing
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import sqlite3
+import sys
+import time
 
 FLOOR = 3 * 3600
 POSTGAME = 24 * 3600
@@ -78,3 +84,31 @@ def read(path, gen):
         kind = 'level' if postgame else 'map'
         event = db.execute('SELECT ts FROM events WHERE type=? ORDER BY id DESC LIMIT 1', (kind,)).fetchone()
     return Reading(max(last, event[0] if event else 0), seconds, postgame, badges)
+
+
+def library(root, now=None):
+    """One line per adventure under a library data root, for a check outside the app.
+
+    It reads files only, so unlike the watchdog it counts time a game was stopped or paused."""
+    now = time.time() if now is None else now
+    lines = []
+    for folder in sorted((Path(root) / 'adventures').iterdir()):
+        try:
+            adventure = json.loads((folder / 'adventure.json').read_text(encoding='utf-8'))
+            reading = read(folder / 'pokesim.sqlite', generation(adventure.get('version')))
+        except (OSError, ValueError, sqlite3.Error) as error:
+            lines.append(f'{folder.name} unreadable: {error}')
+            continue
+        if reading is None:
+            lines.append(f'{folder.name} {adventure.get("name")}: no progress yet')
+            continue
+        quiet = now - reading.last
+        state = 'STALLED' if quiet > reading.limit else 'ok'
+        lines.append(f'{folder.name} {adventure.get("name")}: {state}, {quiet / 3600:.1f} h without progress, '
+                     f'limit {reading.limit / 3600:.1f} h, {reading.badges} badges'
+                     + (', postgame' if reading.postgame else ''))
+    return lines
+
+
+if __name__ == '__main__':
+    print('\n'.join(library(sys.argv[1])))
