@@ -62,6 +62,19 @@ def test_the_seed_follows_the_save_the_goal_and_its_occurrence():
     assert run.pb.vblank() == again.pb.vblank()
 
 
+def test_two_seeds_on_one_save_meet_different_rolls():
+    # Seed 7 keeps the key of runs made before the seed joined it.
+    assert GoalSeeds('auto-v1-1.state', 7).seed('collection_hunt', 0) == \
+        GoalSeeds('auto-v1-1.state').seed('collection_hunt', 0)
+    assert GoalSeeds('auto-v1-1.state', 7).seed('collection_hunt', 0) != \
+        GoalSeeds('auto-v1-1.state', 11).seed('collection_hunt', 0)
+    first, second = fake_run(5), fake_run(5)
+    GoalSeeds('auto-v1-1.state', 7).start(first, 'collection_hunt')
+    GoalSeeds('auto-v1-1.state', 11).start(second, 'collection_hunt')
+    assert first.policy.rng.random() != second.policy.rng.random()
+    assert [first.pb.vblank() for _ in range(20)] != [second.pb.vblank() for _ in range(20)]
+
+
 def rolls(open_run, lead, reseed):
     """The game's random bytes each frame after a goal start, ``lead`` frames after loading."""
     run = open_run()
