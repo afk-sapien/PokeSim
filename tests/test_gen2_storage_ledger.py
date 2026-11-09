@@ -129,8 +129,50 @@ def test_only_spares_the_pc_allows_are_offered():
     assert ledger.storage_unit(policy, snapshot([BEST, berry], PARTY)) is None
 
 
+# Every Release built in pokesim/gen2, by how it meets the one release rule (release.may_release).
+# 'menu': it becomes policy.menu, and Policy.menu_step asks the rule before the first press.
+# 'checked': its function asks may_release itself, for a runner that presses outside menu_step.
+# 'probe': a key for policy.allowed that never runs.
+RELEASE_SITES = {('ledger.py', 'unequip_step'): 'menu', ('ledger.py', 'release_step'): 'menu',
+                 ('ledger.py', 'storage_unit'): 'probe', ('policy.py', 'trade_spare'): 'probe',
+                 ('preparation.py', 'make_room'): 'checked', ('teams.py', 'arrive'): 'menu',
+                 ('training.py', 'arrive'): 'menu'}
+
+
+def release_sites():
+    import ast
+    from pathlib import Path
+    import pokesim.gen2
+    sites = {}
+    for path in sorted(Path(pokesim.gen2.__file__).parent.glob('*.py')):
+        for function in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
+            if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                calls = [node for node in ast.walk(function) if isinstance(node, ast.Call)]
+                if any(getattr(call.func, 'id', None) == 'Release' for call in calls):
+                    sites[path.name, function.name] = function
+    return sites
+
+
+def test_every_gen2_release_meets_the_release_rule_before_it_presses():
+    # A new path that builds a Release fails here until it is listed with how it meets the rule.
+    import ast
+    sites = release_sites()
+    assert set(sites) == set(RELEASE_SITES)
+    for site, kind in RELEASE_SITES.items():
+        names = {getattr(node, 'id', getattr(node, 'attr', None)) for node in ast.walk(sites[site])}
+        if kind == 'menu':
+            assert 'menu' in names, site
+        elif kind == 'checked':
+            assert 'may_release' in names, site
+        else:
+            assert 'allowed' in names, site
+
+
 def test_unequip_walks_the_spare_through_the_party_and_back():
+    from pokesim.pcvalue import VisitTeam
     policy = Policy()
+    policy.visit_team = VisitTeam()
+    policy.visit_team.observe(7, set())
     berry = mon(3, box=2, held_item=BERRY)
     identity = ledger.member(berry)
     policy.collection['unequip'] = identity
@@ -138,6 +180,8 @@ def test_unequip_walks_the_spare_through_the_party_and_back():
     assert policy.menu == ChangeBox(2)
     assert ledger.unequip_step(policy, snapshot([berry], PARTY, active_box=2)) == 'a'
     assert policy.menu == Storage('WITHDRAW', 3, 5)
+    # Its party stint is an errand, so the visit does not count it as a team member at its release.
+    assert policy.visit_team.observe(7, {(16, berry.dvs)}) == frozenset()
     party = mon(None, box=None, held_item=BERRY)
     assert ledger.unequip_step(policy, snapshot([], PARTY + [party], active_box=2)) == 'a'
     assert policy.menu == Take(5, identity[1:])

@@ -101,6 +101,21 @@ def test_a_catch_improves_once_the_poll_after_it_shows_a_better_copy():
     assert fresh.finish({25: 40.0})[0]['improved'] is True
 
 
+def test_each_catch_reports_its_rarity_and_the_rarest_copy_held_before_it():
+    # Soak red caught two Seel in one poll, and only the first was judged to improve.
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    catches = live_soak.Catches()
+    for receipts, held in (([], [PLAIN]), ([('a', 86, 1.0), ('b', 86, 1.1)], [PLAIN, RARER, COMMON]), ([], [PLAIN, RARER, COMMON])):
+        game = {'party': [], 'storage': {'pokemon': [{'dex': 86, 'dvs': list(dvs)} for dvs in held]}}
+        arrivals = copies.poll(game, lambda mon: mon['dex'], 0)
+        catches.poll(receipts, 'seel', {86: min(TAILS[dvs] for dvs in held)}, arrivals)
+    rows = catches.finish({86: 0.05})
+    assert [(row['improved'], row['rarity'], row['best_held']) for row in rows] == [(True, 0.05, 0.6), (False, 0.9, 0.6)]
+    assert [live_soak.catch_rarity(row) for row in rows] == [
+        {'dex': 86, 'goal': 'seel', 'kept': True, 'one_in': 20, 'best_held_one_in': 2, 'times_rarer': 12.0},
+        {'dex': 86, 'goal': 'seel', 'kept': False, 'one_in': 1, 'best_held_one_in': 2, 'times_rarer': 0.67}]
+
+
 COMMON, PLAIN, RARE, RARER = (0, 2, 2, 2, 2), (0, 4, 4, 4, 4), (0, 8, 8, 8, 8), (0, 12, 12, 12, 12)
 TAILS = {COMMON: 0.9, PLAIN: 0.6, RARE: 0.2, RARER: 0.05}
 
@@ -154,11 +169,13 @@ def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
 
 
 def watch(*polls):
-    """Copies.poll over ``polls`` of (party, stored, released, map), each copy a (dex, DVs, locked) row."""
+    """Copies.poll over ``polls`` of (party, stored, released, map), each copy a (dex, DVs, locked) row, or
+    (dex, DVs, locked, held item) for a Gen II one."""
     copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
 
     def rows(group):
-        return [{'dex': dex, 'dvs': list(dvs), 'trade_locked': locked} for dex, dvs, locked in group]
+        return [{'dex': dex, 'dvs': list(dvs), 'trade_locked': locked, **{'held_item': item for item in held}}
+                for dex, dvs, locked, *held in group]
     for party, stored, released, where in polls:
         copies.poll({'map': where, 'party': rows(party), 'storage': {'pokemon': rows(stored)}},
                     lambda mon: mon['dex'], released)
@@ -227,6 +244,49 @@ def test_a_release_of_a_team_member_deposited_at_the_visit_fails():
         assert not later.from_party and not release_problems(later)
     finally:
         TAILS.pop(weezing), TAILS.pop(spare)
+
+
+def test_a_spare_withdrawn_only_to_take_its_item_off_is_no_team_member():
+    # Soak crystal withdrew its boxed Kabutops, Kingler and three more to take their items off, then released them.
+    kabutops, best = (1, 2, 3, 4, 5), (14, 7, 1, 3, 8)
+    TAILS.update({kabutops: 0.7, best: 0.1})
+    try:
+        copies = watch(([], [(141, best, False, 0), (141, kabutops, False, 83)], False, 7),
+                       ([(141, kabutops, False, 83)], [(141, best, False, 0)], False, 7),
+                       ([(141, kabutops, False, 0)], [(141, best, False, 0)], False, 7),
+                       ([], [(141, best, False, 0)], True, 7))
+        assert not copies.from_party and not release_problems(copies)
+        # A partner withdrawn for a role keeps its item, so its release is still a team member's.
+        partner = watch(([], [(141, best, False, 0), (141, kabutops, False, 83)], False, 7),
+                        ([(141, kabutops, False, 83)], [(141, best, False, 0)], False, 7),
+                        ([], [(141, best, False, 0), (141, kabutops, False, 83)], False, 7),
+                        ([], [(141, best, False, 0)], True, 7))
+        assert partner.from_party and any('team member' in problem for problem in release_problems(partner))
+    finally:
+        TAILS.pop(kabutops), TAILS.pop(best)
+
+
+def test_kept_improving_catches_do_not_count_toward_the_obtains_limit():
+    catches = live_soak.Catches()
+    catches.poll([], 'fish', {54: 50.0})
+    catches.poll([('a', 54, 1.0), ('b', 79, 1.5)], 'fish', {54: 50.0})
+    rows = catches.finish({54: 10.0, 79: 30.0})
+    assert [(row['dex'], row['improved'], row['kept']) for row in rows] == [(54, True, True), (79, True, True)]
+    # A better copy that was later released is not kept.
+    gone = live_soak.Catches()
+    gone.poll([], 'fish', {54: 50.0})
+    gone.poll([('a', 54, 1.0)], 'fish', {54: 50.0})
+    gone.poll([], 'fish', {54: 10.0})
+    assert gone.finish({54: 50.0})[0]['kept'] is False
+    receipts = [(f'catch:{index}', 54, float(index)) for index in range(12)]
+    kept = [dict(catch(54, improved=True), kept=True)] * 8 + [catch(54)] * 4
+    measured = live_soak.measure(result(receipts=receipts, catches=kept))
+    assert (measured['obtains'], measured['all_obtains'], measured['kept_better']) == (4, 12, 8)
+    assert not any('obtains' in problem for problem in live_soak.invariants(result(receipts=receipts, catches=kept),
+                                                                            result(receipts=receipts[:4])))
+    # Catches that beat nothing still count.
+    flat = live_soak.invariants(result(receipts=receipts, catches=[catch(54)] * 12), result(receipts=receipts[:4]))
+    assert any('12.0 obtains a game hour, 4.0 on the deployed commit' in problem for problem in flat)
 
 
 def test_the_judge_rates_a_gen1_copy_with_the_tms_of_its_adventures_cartridge(monkeypatch):
@@ -313,7 +373,7 @@ def test_the_window_catches_and_releases_are_reported_as_counts():
     measured = live_soak.measure(candidate)
     assert (measured['catches'], measured['window_releases']) == (2, 2)
     _, rows = live_soak.judge([candidate], [candidate])
-    assert ' 2 caught 2 released - first visit releases ' in live_soak.report_line(rows[0])
+    assert ' 2 caught 0 kept better 2 released - first visit releases ' in live_soak.report_line(rows[0])
 
 
 def test_rates_hold_the_candidate_to_the_deployed_commit():
