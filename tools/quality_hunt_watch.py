@@ -58,10 +58,17 @@ def saved_game(root, meta):
     The save and its manifest are copied first, so the live adventure pruning its autosaves cannot
     pull them away mid-read. An older save stands in when the newest one goes before it is copied.
     """
+    import os
     import shutil
     import tempfile
 
-    from pokesim.game_data import directory
+    from pokesim.game_data import SOURCE_REVISION, directory
+
+    # The app keeps its game data among its assets and hands that folder to each adventure's
+    # emulator, so the watch does the same before the emulator module loads it.
+    reference = root / 'assets' / 'reference' / SOURCE_REVISION
+    if reference.is_dir():
+        os.environ['GAME_DATA_DIR'] = str(reference)
     from pokesim.gen2.headless import HeadlessRun
 
     folder = root / 'adventures' / meta['id'] / 'states'
