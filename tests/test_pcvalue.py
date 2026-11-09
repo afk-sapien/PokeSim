@@ -299,6 +299,37 @@ def test_a_release_never_takes_a_copy_rarer_than_the_catch_that_pushed_it_out():
     assert caught > 20 and pushed > 20
 
 
+@pytest.mark.parametrize('rare, common', [
+    ((88, (14, 1, 7, 5, 2), 0.7048), (19, (5, 5, 5, 5, 5), 0.7895)),
+    ((69, (5, 0, 7, 4, 11), 0.6410), (1, (6, 6, 6, 6, 6), 0.7146)),
+])
+def test_the_most_common_spare_goes_first_across_species_and_boxes(rare, common):
+    # The soak pairs: Grimer against a copy at 0.789, and Bellsprout against a spare Bulbasaur at 0.715.
+    # Both sit in one old visit band, so the open box used to send the rarer copy.
+    tails = {dvs: tail for _, dvs, tail in (rare, common)}
+    inputs = Inputs(rarity=lambda dex, dvs: tails.get(tuple(dvs), 0.05))
+    rows = [mon(rare[0], (0, 0), level=50, dvs=(15,) * 5), mon(rare[0], (0, 1), dvs=rare[1]),
+            mon(common[0], (1, 0), level=50, dvs=(15,) * 5), mon(common[0], (1, 1), dvs=common[1])]
+    rated = rate(rows, inputs)
+    for active in (0, 1, None):
+        assert [row.entry.dvs for row in pcvalue.releases(rated, 1, active)] == [common[1]]
+    # Only copies exactly as common choose by box.
+    tails[rare[1]] = common[2]
+    tied = rate(rows, inputs)
+    assert [row.entry.slot for row in pcvalue.releases(tied, 1, 0)] == [(0, 1)]
+    assert [row.entry.slot for row in pcvalue.releases(tied, 1, 1)] == [(1, 1)]
+
+
+def test_a_traded_common_copy_outlasts_a_rarer_own_spare():
+    # A stranger's trade cannot be traded back, so its points keep it over a copy rare enough to score less.
+    tails = {(1, 1, 1, 1, 1): 0.9, (2, 2, 2, 2, 2): 0.5}
+    inputs = Inputs(rarity=lambda dex, dvs: tails.get(tuple(dvs), 0.05))
+    traded = mon(19, (0, 1), dvs=(1, 1, 1, 1, 1), origin='traded')
+    own = mon(16, (1, 1), dvs=(2, 2, 2, 2, 2))
+    rated = rate([mon(16, (1, 0), dvs=(15,) * 5), own, mon(19, (0, 0), dvs=(15,) * 5), traded], inputs)
+    assert [row.entry for row in pcvalue.releases(rated, 1, 0)] == [own]
+
+
 def test_a_catch_is_refused_when_its_visit_would_release_it_or_a_rarer_copy():
     rare, common = (0, 14, 14, 14, 14), (0, 2, 2, 2, 2)
     better = mon(19, (9, 0), 5, dvs=(0, 12, 12, 12, 12))

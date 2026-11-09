@@ -209,6 +209,36 @@ def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
     assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
 
 
+def test_a_release_is_judged_by_pc_score_when_the_commit_sends_one():
+    # A traded common Rattata outlasts a rarer own Pidgey by design. Its trade points outscore the Pidgey.
+    def judged(scores):
+        copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+        for held, released in (([(16, RARE), (19, PLAIN)], False), ([(16, RARE), (19, PLAIN), (19, COMMON)], False),
+                               ([(19, PLAIN), (19, COMMON)], True)):
+            copies.poll({'party': [], 'storage': {'pokemon': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in held]}},
+                        lambda mon: mon['dex'], released, scores)
+        return copies.pushed_out
+    assert not judged({RARE: 50, PLAIN: 37, COMMON: 68})
+    assert judged({RARE: 116, PLAIN: 37, COMMON: 8}) == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9,
+                                                          'score': 116, 'by_score': 8}]
+    # Without scores, as from an older commit, the tails judge.
+    assert judged(None) == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
+
+
+def test_pc_scores_are_read_only_when_the_boxes_change():
+    class Child:
+        asked = 0
+
+        def request(self, method, path):
+            assert path == '/api/pokedex/status?view=pc'
+            self.asked += 1
+            return {'storage': {'pokemon': [{'dvs': list(RARE), 'pc_value': {'score': 116}}, {'dvs': list(COMMON)}]}}
+    child, game = Child(), {'storage': {'pokemon': [{'dvs': list(RARE)}, {'dvs': list(COMMON)}]}}
+    boxed, scores = live_soak._pc_scores(child, game, None)
+    assert scores == {RARE: 116} and child.asked == 1
+    assert live_soak._pc_scores(child, game, boxed) == (boxed, {}) and child.asked == 1
+
+
 def test_a_newcomer_no_release_may_take_does_not_count_against_a_release():
     # Soak Yellow c3b193c1: a gift Mew, the only copy of a new entry, arrived and Grimer [14, 1, 7, 5, 2]
     # went at the next visit. The journal keeps no DVs for the Mew, so these give its soak tail.

@@ -49,10 +49,6 @@ FOCUS_COPIES = 2
 # Stat experience summed over the five stats that counts as fully trained. A trained copy is never
 # released automatically.
 TRAINED_STAT_EXP = 100000
-# Release values this close count as equal when choosing a PC visit, so it stays in one box. Each box
-# change saves the game, about 4000 frames. It equals one RARITY_STEP of rarity points, so a copy
-# twice as rare never shares a band with the one it replaced.
-VISIT_BAND = 50
 # A new copy of a species already held is kept only when it is at least this many times rarer than
 # the rarest copy held.
 RARITY_STEP = 2
@@ -404,14 +400,15 @@ def requested(rated):
 def releases(rated, needed, active_box=None):
     """The ``needed`` lowest-value releases, ordered for one PC visit.
 
-    Values within VISIT_BAND count as equal, and among equal values the open box goes first, then the
-    box holding the most of them, since every box change saves the game. The visit takes the owner's
-    requests first, then the open box, then the box holding the most of the chosen ones.
+    The lowest score goes first, of any species and in any box, since a release cannot be undone and
+    a box change only costs frames. Only copies with the same score choose by box: the open box first,
+    then the box holding the most of them. The visit takes the owner's requests first, then
+    the open box, then the box holding the most of the chosen ones.
     """
     candidates = list(filter(may_go, rated))
-    band = lambda row: (not row.entry.requested, ORDER.get(row.status, 0), row.score // VISIT_BAND)  # noqa: E731
-    per_band = Counter((band(row), row.entry.slot[0]) for row in candidates)
-    order = lambda row: (band(row), row.entry.slot[0] != active_box, -per_band[band(row), row.entry.slot[0]],  # noqa: E731
+    tier = lambda row: (not row.entry.requested, ORDER.get(row.status, 0), row.score)  # noqa: E731
+    per_tier = Counter((tier(row), row.entry.slot[0]) for row in candidates)
+    order = lambda row: (tier(row), row.entry.slot[0] != active_box, -per_tier[tier(row), row.entry.slot[0]],  # noqa: E731
                          _rank(row), row.entry.slot)
     chosen = sorted(candidates, key=order)[:max(needed, 0)]
     per_box = Counter(row.entry.slot[0] for row in chosen)
