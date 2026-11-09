@@ -10,7 +10,7 @@ from pokesim import config
 from pokesim.emulator import Emulator
 from pokesim.gen2 import collection as ladder_module
 from pokesim.gen2.collection import ERRAND_FRAMES, Ladder, settle_pin
-from pokesim.planning import values
+from pokesim.planning import arbiter, pin, values
 from pokesim.planning.arbiter import Tier
 from pokesim.planning.pin import Pin
 from pokesim.play_clock import PlayClock
@@ -18,10 +18,13 @@ from pokesim.policies.collection import Collection
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
 from pokesim.policies.strategic import StrategicPolicy
-from pokesim.strategy_data import MAPS
+from pokesim.strategy_data import EVENTS, ITEMS, MAPS, SPECIES
 from pokesim.web.app import create_app
 from test_collection import state
 from test_events import snap
+from test_strategy import flags, mon
+
+SPECIES_ID = {row['dex']: sid for sid, row in SPECIES.items()}
 
 
 def postgame():
@@ -77,6 +80,74 @@ def test_gen1_a_pin_that_drops_out_of_the_list_is_journaled():
     assert c.pin is None
     [event] = c.take_activity_events()
     assert event.title == 'Gave up on Find Mew: not available now'
+
+
+def full_postgame():
+    """A long post-game Red: every badge and rod, half the Pokédex, two copies of each in the PC."""
+    species = SPECIES_ID
+    party = tuple(mon(species=species[number], level=60, hp=200, max_hp=200, moves=moves, pp=(15,) * 4)
+                  for number, moves in ((9, (57, 70, 15, 148)), (18, (19, 33, 0, 0)), (65, (94, 0, 0, 0)),
+                                        (6, (53, 0, 0, 0)), (130, (57, 0, 0, 0)), (143, (34, 0, 0, 0))))
+    owned = frozenset(range(1, 120))
+    stored = tuple((i // 20, species[number], 30 + number % 30, '') for i, number in enumerate(sorted(owned) * 2))
+    items = tuple((ITEMS[item], 50) for item in ('POKE_BALL', 'ULTRA_BALL', 'OLD_ROD', 'GOOD_ROD', 'SUPER_ROD'))
+    beaten = [flag for flag in EVENTS if 'BEAT' in flag or flag.startswith('EVENT_GOT')]
+    s = state(map=MAPS['CELADON_CITY'], party=party, owned=owned, seen=owned, badges=0xFF, money=500000,
+              items=items, stored_pokemon=stored, event_flags=flags('EVENT_GOT_POKEDEX', *beaten))
+    c = Collection()
+    c.completed_champion = True
+    nav = Navigator()
+    nav.update_story(s)
+    return c, s, nav
+
+
+def test_gen1_a_full_postgame_lists_each_want_once_and_at_most_the_limit():
+    c, s, nav = full_postgame()
+    options = c.offers(s, nav, random.Random(3))[0]
+    goals, reason = c.goal_list(s, nav, random.Random(3))
+    every, _ = c.goal_list(s, nav, random.Random(3), limit=None)
+    # The planner keeps one option per place, many more than the picker shows.
+    assert len(options) > 3 * len(every) > 3 * pin.LIMIT
+    assert reason is None and len(goals) == pin.LIMIT
+    assert goals == every[:pin.LIMIT]
+    labels = [goal['label'] for goal in every]
+    assert len(set(labels)) == len(labels)
+    assert not any(label.startswith('Find ') for label in labels)
+    assert sum(label.startswith('Better Pidgey') for label in labels) == 1
+
+
+def test_gen1_a_search_finds_a_goal_past_the_limit_and_it_can_be_set():
+    c, s, nav = full_postgame()
+    every, _ = c.goal_list(s, nav, random.Random(3), limit=None)
+    beyond = every[-1]
+    name = beyond['label'].split(' (')[0].split()[-1]
+    found, reason = c.goal_list(s, nav, random.Random(3), query=name.lower())
+    assert reason is None and beyond in found and all(name.lower() in goal['label'].lower() for goal in found)
+    assert c.set_pin(s, nav, random.Random(3), beyond['key']).label == beyond['label']
+    assert c.goal_list(s, nav, random.Random(3), query='no such pokemon') == ([], 'No goal matches that name')
+
+
+def test_gen1_setting_a_group_runs_its_best_ranked_place():
+    c, s, nav = full_postgame()
+    options, projects, _, _ = c.offers(s, nav, random.Random(3))
+    ranked = [option.key for option in arbiter.rank(options)]
+    pidgey = [key for key in ranked if projects[key].get('species') == SPECIES_ID[16] and projects[key].get('dv_hunt')]
+    assert len(pidgey) > 1
+    goals, _ = c.goal_list(s, nav, random.Random(3), limit=None)
+    [listed] = [goal for goal in goals if goal['label'] == 'Better Pidgey (DV hunt)']
+    assert listed['key'] == pidgey[0]
+    c.set_pin(s, nav, random.Random(3), listed['key'])
+    c.choose(s, nav, random.Random(3), PLAN)
+    assert c.project_key == pidgey[0] and c.pin.started
+
+
+def test_the_picker_groups_rows_once_each_in_rank_order():
+    rows = [('a:1', 'pidgey', 'Better Pidgey', Tier.PROGRESS), ('b', 'mew', 'Get Mew', Tier.PROGRESS),
+            ('a:2', 'pidgey', 'Better Pidgey', Tier.FILLER), ('c', 'other', 'Get Mew', Tier.FILLER)]
+    assert pin.grouped(rows) == [{'key': 'a:1', 'label': 'Better Pidgey', 'tier': 'progress'},
+                                 {'key': 'b', 'label': 'Get Mew', 'tier': 'progress'}]
+    assert pin.grouped(rows, query=' MEW ') == [{'key': 'b', 'label': 'Get Mew', 'tier': 'progress'}]
+    assert len(pin.grouped([(str(i), i, f'Goal {i}', Tier.FILLER) for i in range(100)])) == pin.LIMIT
 
 
 def pinned_emulator():
@@ -189,13 +260,36 @@ def test_gen2_a_survey_lists_the_rungs_and_changes_nothing(monkeypatch):
     assert owner.pin_events == [] and not hasattr(owner, 'ladder_offers')
 
 
+def test_gen2_lists_each_label_once_at_most_the_limit_and_pins_past_it(monkeypatch):
+    from pokesim.gen2.policy import Policy
+    offers = [SimpleNamespace(key=f'hunt:{i}', tier=Tier.PROGRESS) for i in range(60)]
+    # Two rungs can offer the same want. The better ranked one is listed.
+    labels = {offer.key: f'Catch Goal {i // 2}' for i, offer in enumerate(offers)}
+    monkeypatch.setattr(ladder_module, 'survey', lambda *args: (offers, labels, None))
+    owner = gen2_policy(pin=None)
+    goals, reason = ladder_module.goal_list(owner, None, None, None)
+    every, _ = ladder_module.goal_list(owner, None, None, None, limit=None)
+    assert reason is None and len(goals) == pin.LIMIT and len(every) == 30 == len({g['label'] for g in every})
+    assert every[1] == {'key': 'hunt:2', 'label': 'Catch Goal 1', 'tier': 'progress'}
+    assert ladder_module.goal_list(owner, None, None, None, query='goal 29') == (
+        [{'key': 'hunt:58', 'label': 'Catch Goal 29', 'tier': 'progress'}], None)
+    assert ladder_module.goal_list(owner, None, None, None, query='mew') == ([], 'No goal matches that name')
+    many = [SimpleNamespace(key=f'hunt:{i}', tier=Tier.PROGRESS) for i in range(45)]
+    monkeypatch.setattr(ladder_module, 'survey', lambda *args: (many, {o.key: o.key for o in many}, None))
+    picker = SimpleNamespace(pin=None, ladder_pick=None,
+                             goals=lambda snapshot, every=False: ladder_module.goal_list(
+                                 owner, None, None, None, limit=None if every else pin.LIMIT))
+    assert len(picker.goals(None)[0]) == pin.LIMIT
+    assert Policy.pin_goal(picker, None, 'hunt:44').key == 'hunt:44'
+
+
 def test_gen2_refuses_before_red_and_an_unknown_key_with_a_reason():
     from pokesim.gen2.policy import Policy
     assert ladder_module.goal_list(SimpleNamespace(completed={}), None, None, None) == ([], 'Finish the story first')
-    owner = SimpleNamespace(pin=None, goals=lambda snapshot: ([], 'Finish the story first'))
+    owner = SimpleNamespace(pin=None, goals=lambda snapshot, every=False: ([], 'Finish the story first'))
     with pytest.raises(ValueError, match='Finish the story first'):
         Policy.pin_goal(owner, None, 'hunt:hunt')
-    owner.goals = lambda snapshot: ([{'key': 'hunt:hunt', 'label': 'Label hunt', 'tier': 'progress'}], None)
+    owner.goals = lambda snapshot, every=False: ([{'key': 'hunt:hunt', 'label': 'Label hunt', 'tier': 'progress'}], None)
     with pytest.raises(ValueError, match='Not available now'):
         Policy.pin_goal(owner, None, 'league:league')
     assert owner.pin is None
@@ -245,11 +339,13 @@ class Game:
 
     def __init__(self):
         self.pin = None
+        self.query = None
 
     def call(self, function, timeout=None):
         return function()
 
-    def goals(self):
+    def goals(self, query=None):
+        self.query = query
         goals = [{'key': 'hunt', 'label': 'Find Clefairy', 'tier': 'progress'}]
         return {'goals': goals, 'pin': self.pin}
 
@@ -288,6 +384,9 @@ def test_web_lists_goals_and_pins_and_unpins(web):
     assert client.get('/api/goals').json()['pin']['key'] == 'hunt'
     assert client.post('/api/control', json={'action': 'unpin_goal'}).json() == {'ok': True}
     assert client.get('/api/state').json()['strategy']['pin'] is None
+    assert game.query is None
+    client.get('/api/goals', params={'q': '  Clefairy '})
+    assert game.query == 'Clefairy'
 
 
 def test_web_refuses_an_unknown_or_missing_key_with_a_reason(web):

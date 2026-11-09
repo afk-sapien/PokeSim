@@ -549,12 +549,14 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return [p.name for p in sorted(store.states.glob("*.state"), key=lambda p: p.stat().st_mtime, reverse=True)]
 
     @app.get('/api/goals')
-    def goals():
-        """The planner's own goal list, best first, and the next activity a manager set."""
+    def goals(q: str = ''):
+        """The planner's own goal list, best first, and the next activity a manager set. ``q`` finds the
+        goals named like it, beyond the best few the list shows."""
         if view_only():
             raise HTTPException(403, 'This instance is view-only')
+        query = q.strip()[:40] or None
         try:
-            return emu.call(emu.goals, timeout=10)
+            return emu.call(lambda: emu.goals(query), timeout=10)
         except (RuntimeError, TimeoutError) as error:
             raise HTTPException(409, str(error)) from error
 

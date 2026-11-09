@@ -22,24 +22,40 @@ function load(replies = {}) {
     return elements.get(selector)
   }
   const sent = []
+  const timers = []
   const reply = (status, body) => ({ok: status < 400, status, json: async () => body})
   const context = vm.createContext({
     document: {querySelector: element},
     Option: function (label, value) { this.label = label; this.value = value },
-    JSON, Array, Boolean, Error,
+    JSON, Array, Boolean, Error, encodeURIComponent,
+    setTimeout: callback => timers.push(callback),
+    clearTimeout: () => {},
     PokeSim: {
       fetch: async (url, init = {}) => {
         const body = init.body ? JSON.parse(init.body) : null
         sent.push({url, body})
-        if (url === '/api/goals') return reply(200, replies.goals || {goals: GOALS, pin: null})
+        if (url.startsWith('/api/goals')) return reply(200, replies.goals || {goals: GOALS, pin: null})
         return replies[body.action] ? reply(...replies[body.action]) : reply(200, {ok: true})
       },
     },
   })
   vm.runInContext(source, context)
   const settle = () => new Promise(resolve => setImmediate(resolve))
-  return {NextActivity: context.NextActivity, element, sent, settle}
+  return {NextActivity: context.NextActivity, element, sent, settle, timers}
 }
+
+test('the search box asks for goals by name, and the select never holds more than the most', async () => {
+  const many = Array.from({length: 100}, (_, i) => ({key: `goal:${i}`, label: `Goal ${i}`, tier: 'filler'}))
+  const {NextActivity, element, sent, settle, timers} = load({goals: {goals: many, pin: null}})
+  NextActivity.update({strategy: {pin: null}})
+  await settle()
+  assert.equal(element('#next-activity-goal').options.length, NextActivity.MOST + 1)
+  element('#next-activity-search').value = ' Mr Mime '
+  element('#next-activity-search').listeners.input()
+  timers.at(-1)()
+  await settle()
+  assert.equal(sent.at(-1).url, '/api/goals?q=Mr%20Mime')
+})
 
 test('the status line names the pinned goal', () => {
   const {NextActivity} = load()
