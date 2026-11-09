@@ -303,12 +303,16 @@ class Catches:
             if improved:
                 self.credited[dex] = best[dex]
             self.rows.append({'at': recorded_at, 'dex': dex, 'goal': self.goal, 'improved': improved,
-                              'gift': fingerprint.startswith('gift-event:')})
+                              'gift': fingerprint.startswith('gift-event:'),
+                              'tail': best[dex] if improved else None, 'bar': bar if improved else None})
         self.waiting, self.goal = list(receipts), goal
         self.older, self.latest = self.latest, best
 
     def finish(self, best):
         self.poll([], self.goal, best)
+        for row in self.rows:
+            # Kept while the PC still holds its copy or a rarer one at the end.
+            row['kept'] = bool(row['improved'] and row['dex'] in best and best[row['dex']] <= row['tail'] + 1e-9)
         return self.rows
 
 
@@ -422,7 +426,7 @@ class Copies:
     copy of its species in the party or the PC, ``locked`` each of a copy the trade preferences lock
     (Keep) and ``from_party`` each of a copy in the party at the poll before, at any poll of the
     visit or since the player entered its map, as a team member, trainee or League partner deposited
-    there is.
+    there is. A copy seen in a box on that map before it joined the party is no team member.
     """
 
     def __init__(self, rarity):
@@ -430,7 +434,7 @@ class Copies:
         self.arrived, self.visits, self.polls, self.last_visit, self.visiting = {}, {}, 0, 0, None
         self.first_visit, self.pushed_out = [], []
         self.best_copy, self.only_copy, self.locked, self.from_party = [], [], [], []
-        self.party, self.locks, self.where = set(), set(), None
+        self.party, self.locks, self.where, self.boxed = set(), set(), None, set()
         self.first_wave, self.wave_over = None, False
 
     def tail(self, key):
@@ -462,6 +466,7 @@ class Copies:
         self.polls += 1
         if self.held is None:
             self.held, self.party, self.locks, self.where = current, party, locks, (game or {}).get('map')
+            self.boxed = set(current) - party
             return
         for key in current:
             if key not in self.held:
@@ -482,7 +487,11 @@ class Copies:
         # deposit there is still a team member at its releases.
         where = (game or {}).get('map')
         same = self.visiting is not None or where is not None and where == self.where
-        self.party, self.where = (self.party | party if same else party), where
+        # A copy seen in a box on the map before it joined the party is no team member, as a Crystal spare
+        # withdrawn only to take its item off is not.
+        boxed = set(current) - party - (self.party if same else set())
+        self.boxed = (self.boxed | boxed) if same else boxed
+        self.party, self.where = ((self.party | party) - self.boxed if same else party - self.boxed), where
         self.held, self.locks = current, locks
 
     def _judge(self, key, current):
@@ -795,8 +804,14 @@ def measure(result):
     inferred = (result['held_end'] or 0) - (result['held_start'] or 0) + releases
     obtains = max(journaled, len(result['receipts']), inferred)
     improvements = sum(row['improved'] for row in result['catches'] if not row['gift'])
+    # A catch kept as its species' best copy is the PC improving, so the obtains limit counts the rest.
+    # Phantoms, catches that beat nothing and gifts still count.
+    kept_better = sum(bool(row.get('kept')) for row in result['catches'] if not row['gift'])
     progress = sum(kinds.get(kind, 0) for kind in REAL_PROGRESS) + improvements
-    return {'game_hours': round(hours, 3), 'releases': round(releases / hours, 2), 'obtains': round(obtains / hours, 2),
+    return {'game_hours': round(hours, 3), 'releases': round(releases / hours, 2),
+            'obtains': round(max(obtains - kept_better, 0) / hours, 2),
+            # Reported only: every obtain, and the kept improving catches the limit leaves out.
+            'all_obtains': round(obtains / hours, 2), 'kept_better': kept_better,
             # Reported only: the catches and releases of the whole soak window, as counts.
             'catches': caught, 'window_releases': releases, 'improvements': improvements, 'progress': round(progress / hours, 2),
             'reloads': round(sum(result['reloads'].values()) / hours, 2),
@@ -1014,7 +1029,7 @@ def report_line(row):
     released = c.get('window_releases', '-')
     return (f'{row["name"]:<28} {c["releases"]:7.1f} rel/h {c["obtains"]:7.1f} obt/h {c["progress"]:6.1f} prog/h '
             f'{c["reloads"]:5.1f} rel/h {c["bytes"]:8d} B/h {c["improvements"]:3d} better '
-            f'{c["catches"]:4d} caught {released} released '
+            f'{c["catches"]:4d} caught {c.get("kept_better", "-")} kept better {released} released '
             f'{wave(c)} first visit releases ({wave(row["deployed"])} deployed)')
 
 

@@ -110,3 +110,16 @@ def test_a_team_member_deposited_at_this_visit_is_never_released_at_it():
     assert rated[0, 4].status == 'floor' and rated[0, 4].reason == 'Team member'
     # A later visit, on another map, may let it go as a spare.
     assert visit.observe(8, team_keys(())) == frozenset()
+
+
+def test_a_spare_withdrawn_only_to_take_its_item_off_is_no_team_member():
+    # Soak crystal withdrew boxed Kabutops and Kingler to take their items off, then released them as Team members.
+    lead, kabutops = (157, (15, 12, 10, 9, 8)), (141, (3, 4, 5, 6, 7))
+    visit = pcvalue.VisitTeam()
+    assert visit.observe(7, {lead}, {kabutops}) == {lead}
+    assert visit.observe(7, {lead, kabutops}, set()) == {lead}
+    assert visit.observe(7, {lead}, {kabutops}) == {lead}
+    # A member deposited at this visit still counts, though it is boxed now.
+    assert visit.observe(7, set(), {lead, kabutops}) == {lead}
+    # At the next visit a Pokémon first seen in the party is a member again.
+    assert visit.observe(8, {kabutops}, set()) == {kabutops}

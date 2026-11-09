@@ -158,6 +158,14 @@ def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset()
                  rarity=rarity(policy.data), team=getattr(getattr(policy, 'visit_team', None), 'keys', frozenset()))
 
 
+def may_release(policy, snapshot, box, position):
+    """Whether the one release rule (pcvalue.may_go) lets the boxed Pokémon at ``box``, ``position`` go.
+    Every Gen II release asks it before its first press, however its spare was chosen."""
+    from ..pcvalue import may_go
+    rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
+    return any(row.entry.slot == (box, position) and may_go(row) for row in rated)
+
+
 def keeps_another(policy, snapshot, dex, level=5, dvs=None):
     """Whether the PC would keep one more copy of ``dex`` (pcvalue.worth), with ``dvs`` when known.
 

@@ -275,6 +275,20 @@ def test_menu_tasks_give_up_after_their_step_limit(real_data, name, limit):
     assert len(ran) == cap
 
 
+def test_a_release_the_pc_values_keep_is_refused_before_its_first_press(real_data, monkeypatch):
+    # Crystal released five spares the visit had seen in its party, so every Release asks the release rule first.
+    from pokesim.gen2 import release
+    from pokesim.gen2.menus import Release
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data, seed=1, starter='cyndaquil')
+    asked = []
+    monkeypatch.setattr(release, 'may_release', lambda policy, snapshot, box, position: asked.append((box, position)))
+    policy.menu = Release(2, 7, [141, 4321, [3, 4, 5, 6, 7]])
+    policy.menu_step(SimpleNamespace(frame=100), None)
+    assert asked == [(2, 7)] and policy.menu is None
+    assert policy.blocked[policy.task_key(Release(2, 7))] == 100 + policy.RETRY_FRAMES
+
+
 def test_every_menu_task_has_a_step_limit():
     import inspect
     from pokesim.gen2 import menus

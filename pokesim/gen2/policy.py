@@ -215,6 +215,12 @@ class Policy:
             if hasattr(menu, 'key') and self.blocked.get(menu.key(), -1) > snapshot.frame:
                 # The game refused this shortcut recently, so it is not tried again yet.
                 return self.refused(f'The game keeps refusing the {name} shortcut')
+            from .release import may_release
+            if isinstance(menu, Release) and not may_release(self, snapshot, menu.box, menu.position):
+                # The one release rule refuses it, as a team member or a Keep, so it waits as a refused shortcut.
+                self.blocked[self.task_key(menu)] = snapshot.frame + self.RETRY_FRAMES
+                self.menu = None
+                return self.refused('A release chose a Pokémon the PC values keep')
         self.menu_steps += 1
         limit = self.MENU_STEP_LIMITS.get(name, self.MENU_STEP_LIMIT)
         if self.menu_steps > limit:
@@ -1215,7 +1221,7 @@ class Policy:
         self.memory, self.sp = memory, sp
         self.decisions += 1
         from .release import team_keys
-        self.visit_team.observe(snapshot.map, team_keys(snapshot.party))
+        self.visit_team.observe(snapshot.map, team_keys(snapshot.party), team_keys(getattr(snapshot, 'stored', ())))
         from .postgame import observe
         observe(self, snapshot)
         from .collection import observe_search

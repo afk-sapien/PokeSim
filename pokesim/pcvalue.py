@@ -269,10 +269,15 @@ class VisitTeam:
     visit, however the menus open and close between the deposit and the release."""
 
     def __init__(self):
-        self.where, self.keys = None, frozenset()
+        self.where, self.keys, self.boxed = None, frozenset(), frozenset()
 
-    def observe(self, where, keys):
-        self.keys = frozenset(keys) | (self.keys if where == self.where else frozenset())
+    def observe(self, where, keys, stored=()):
+        """``stored`` are the boxed (dex, DVs). One seen in a box at this visit before it joined the party is
+        no team member, as a Crystal spare withdrawn only to take its item off was before its release."""
+        same = where == self.where
+        boxed = frozenset(stored) - (self.keys if same else frozenset())
+        self.boxed = (self.boxed | boxed) if same else boxed
+        self.keys = (frozenset(keys) - self.boxed) | (self.keys if same else frozenset())
         self.where = where
         return self.keys
 

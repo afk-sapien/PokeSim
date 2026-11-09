@@ -229,6 +229,43 @@ def test_a_release_of_a_team_member_deposited_at_the_visit_fails():
         TAILS.pop(weezing), TAILS.pop(spare)
 
 
+def test_a_spare_withdrawn_only_to_take_its_item_off_is_no_team_member():
+    # Soak crystal withdrew its boxed Kabutops, Kingler and three more to take their items off, then released them.
+    kabutops, best = (1, 2, 3, 4, 5), (14, 7, 1, 3, 8)
+    TAILS.update({kabutops: 0.7, best: 0.1})
+    try:
+        copies = watch(([], [(141, best, False), (141, kabutops, False)], False, 7),
+                       ([(141, kabutops, False)], [(141, best, False)], False, 7),
+                       ([], [(141, best, False), (141, kabutops, False)], False, 7),
+                       ([], [(141, best, False)], True, 7))
+        assert not copies.from_party and not release_problems(copies)
+    finally:
+        TAILS.pop(kabutops), TAILS.pop(best)
+
+
+def test_kept_improving_catches_do_not_count_toward_the_obtains_limit():
+    catches = live_soak.Catches()
+    catches.poll([], 'fish', {54: 50.0})
+    catches.poll([('a', 54, 1.0), ('b', 79, 1.5)], 'fish', {54: 50.0})
+    rows = catches.finish({54: 10.0, 79: 30.0})
+    assert [(row['dex'], row['improved'], row['kept']) for row in rows] == [(54, True, True), (79, True, True)]
+    # A better copy that was later released is not kept.
+    gone = live_soak.Catches()
+    gone.poll([], 'fish', {54: 50.0})
+    gone.poll([('a', 54, 1.0)], 'fish', {54: 50.0})
+    gone.poll([], 'fish', {54: 10.0})
+    assert gone.finish({54: 50.0})[0]['kept'] is False
+    receipts = [(f'catch:{index}', 54, float(index)) for index in range(12)]
+    kept = [dict(catch(54, improved=True), kept=True)] * 8 + [catch(54)] * 4
+    measured = live_soak.measure(result(receipts=receipts, catches=kept))
+    assert (measured['obtains'], measured['all_obtains'], measured['kept_better']) == (4, 12, 8)
+    assert not any('obtains' in problem for problem in live_soak.invariants(result(receipts=receipts, catches=kept),
+                                                                            result(receipts=receipts[:4])))
+    # Catches that beat nothing still count.
+    flat = live_soak.invariants(result(receipts=receipts, catches=[catch(54)] * 12), result(receipts=receipts[:4]))
+    assert any('12.0 obtains a game hour, 4.0 on the deployed commit' in problem for problem in flat)
+
+
 def test_the_judge_rates_a_gen1_copy_with_the_tms_of_its_adventures_cartridge(monkeypatch):
     from pokesim import config, investment
     from pokesim.cartridges import identify
@@ -313,7 +350,7 @@ def test_the_window_catches_and_releases_are_reported_as_counts():
     measured = live_soak.measure(candidate)
     assert (measured['catches'], measured['window_releases']) == (2, 2)
     _, rows = live_soak.judge([candidate], [candidate])
-    assert ' 2 caught 2 released - first visit releases ' in live_soak.report_line(rows[0])
+    assert ' 2 caught 0 kept better 2 released - first visit releases ' in live_soak.report_line(rows[0])
 
 
 def test_rates_hold_the_candidate_to_the_deployed_commit():
