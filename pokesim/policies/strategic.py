@@ -18,7 +18,7 @@ from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner,
 from .move_development import hm_upgrade, move_name
 from .progression import (GAME_STARTERS, STARTERS, YELLOW, Goal, boss_key, boss_room, boss_training, fighter_level,
                           healing_goal, journey, league_partner, milestones, story_goal)
-from ..planning.losses import Losses
+from ..planning.losses import Losses, boss_trainer
 from . import training
 from .menus import select, tap
 from .shopping import ShoppingController
@@ -862,12 +862,14 @@ class StrategicPolicy(Policy):
         """Remember the best fighter level that lost to the boss the goal names, which raises its bar.
 
         A loss is a black out or a battle that cannot end in the boss's gym, or anywhere in the League.
-        A reload into a battle leaves no boss goal yet, so then the room alone names the boss."""
-        key = getattr(self.goal, 'key', None)
-        if key not in BOSSES:
-            key = next((k for k in BOSSES if boss_room(k, s.map)), None)
+        A reload into a battle leaves no boss goal yet, so then the room alone names the boss. A loss
+        to the rival or Giovanni elsewhere counts against the goal under way, which waits on the win."""
+        goal = getattr(self.goal, 'key', None)
+        key = goal if goal in BOSSES else next((k for k in BOSSES if boss_room(k, s.map)), None)
         if key is not None and boss_room(key, s.map):
             self.losses.note(boss_key(key), fighter_level(s.party))
+        elif goal is not None and boss_trainer(s, 1) is not None:
+            self.losses.note(goal, fighter_level(s.party), s.enemy_level)
 
     def _boss_check(self, s, goal, in_league):
         """The boss check before ``goal`` (planning/boss.py), shared with Gold, Silver and Crystal.

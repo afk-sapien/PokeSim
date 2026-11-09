@@ -1050,8 +1050,10 @@ class Policy:
         """A walk that trains toward the bar before the boss ``goal`` names, or None once the team is ready.
 
         Inside the League nothing turns back, so its rooms carry on."""
-        if goal is None or goal.key not in self.BOSSES or self.in_league(snapshot):
+        if goal is None or self.in_league(snapshot):
             return None
+        if goal.key not in self.BOSSES:
+            return self.story_training(snapshot, goal)
         bar = self.boss_bar(goal.key)
         if self.fighter_level(snapshot.party) >= bar:
             return None
@@ -1060,19 +1062,39 @@ class Policy:
         return walk_goal(self, snapshot, Goal, lambda: f'Train the team to level {bar} before {self.BOSS_NAMES[key]}',
                          map_name=self.BOSS_TRAINING[key])
 
+    # The badge each boss goal earns, in the order the story takes them. A story loss trains where
+    # the team would before the first one not yet won, or the League before the first Hall of Fame.
+    BOSS_BADGES = (('zephyr', 1), ('hive', 2), ('plain', 4), ('fog', 8), ('storm', 32), ('mineral', 16),
+                   ('glacier', 64), ('clair', 128), ('league', 0), ('surge', 1024), ('sabrina', 8192),
+                   ('erika', 2048), ('janine', 4096), ('misty', 512), ('brock', 256), ('blaine', 16384),
+                   ('blue', 32768))
+
+    def story_training(self, snapshot, goal):
+        """A walk that trains before a story goal the rival or a Rocket executive beat the team on, or None."""
+        if goal.key not in self.losses.levels():
+            return None
+        bar = self.losses.bar(goal.key, 0)
+        if self.fighter_level(snapshot.party) >= bar:
+            return None
+        key = next((key for key, badge in self.BOSS_BADGES
+                    if not (snapshot.badges & badge if badge else getattr(snapshot, 'hall_of_fame_count', 0))), 'red')
+        from .training import walk_goal
+        return walk_goal(self, snapshot, Goal, lambda: f'Train the team to level {bar} before another try at: {goal.label}',
+                         map_name=self.BOSS_TRAINING[key])
+
     def note_boss_loss(self, snapshot):
         """Remember the best fighter level that lost to the boss the goal names, which raises its bar.
 
         A loss is a black out or a battle that cannot end in the boss's room, or anywhere in the League.
-        A reload into a battle leaves no goal yet, so then the room alone names the boss."""
-        key, here = getattr(self.goal, 'key', None), self.constant(snapshot)
-        if key not in self.BOSSES:
-            key = self.BOSS_ROOMS.get(here)
-            if key is None:
-                return
-        elif here != self.goal.map_name and not self.in_league(snapshot):
-            return
-        self.losses.note(self.boss_key(key), self.fighter_level(snapshot.party))
+        A reload into a battle leaves no goal yet, so then the room alone names the boss. A loss to the
+        rival or a Rocket executive elsewhere counts against the goal under way, which waits on the win."""
+        from ..planning.losses import boss_trainer
+        goal, here = getattr(self.goal, 'key', None), self.constant(snapshot)
+        key = goal if goal in self.BOSSES else self.BOSS_ROOMS.get(here)
+        if key is not None and (key != goal or here == self.goal.map_name or self.in_league(snapshot)):
+            self.losses.note(self.boss_key(key), self.fighter_level(snapshot.party))
+        elif goal is not None and boss_trainer(snapshot, 2) is not None:
+            self.losses.note(goal, self.fighter_level(snapshot.party), snapshot.enemy_level)
 
     def heal_blocked(self, snapshot):
         """Whether healing stands down here: the League, the transmitter room, Ice Path, the Goldenrod
