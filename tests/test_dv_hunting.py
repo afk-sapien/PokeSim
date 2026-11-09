@@ -13,11 +13,12 @@ from test_collection import sid
 from test_duplicates import snapshot, stored
 
 
-def test_a_lv_100_copy_outranks_a_lv_3_copy_with_high_dvs():
+def test_a_lv_3_copy_with_rare_dvs_outranks_an_untrained_lv_100_copy():
+    # Level is not in the value, since any copy can be trained, so the common Lv 100 copy goes.
     low = stored(0, level=3, dvs=(13, 15, 13, 15, 15))
     high = stored(1, level=100, dvs=(0,) * 5)
-    assert release_target(snapshot([low, high])) == (0, 0)
-    assert release_target(snapshot([low, high]), reserved={(0, 0)}) is None
+    assert release_target(snapshot([low, high])) == (0, 1)
+    assert release_target(snapshot([low, high]), reserved={(0, 1)}) is None
 
 
 def test_training_chooses_best_dvs_within_species_even_at_lower_level():

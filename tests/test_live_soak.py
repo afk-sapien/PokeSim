@@ -101,6 +101,145 @@ def test_a_catch_improves_once_the_poll_after_it_shows_a_better_copy():
     assert fresh.finish({25: 40.0})[0]['improved'] is True
 
 
+COMMON, PLAIN, RARE, RARER = (0, 2, 2, 2, 2), (0, 4, 4, 4, 4), (0, 8, 8, 8, 8), (0, 12, 12, 12, 12)
+TAILS = {COMMON: 0.9, PLAIN: 0.6, RARE: 0.2, RARER: 0.05}
+
+
+def visits(*polls):
+    """Copies.poll over ``polls`` of (Pidgey DVs held, whether the journal shows a release since the last poll)."""
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    for held, released in polls:
+        copies.poll({'party': [], 'storage': {'pokemon': [{'dex': 16, 'dvs': list(dvs)} for dvs in held]}},
+                    lambda mon: mon['dex'], released)
+    return copies
+
+
+def test_a_catch_released_at_its_first_pc_visit_fails():
+    copies = visits(([PLAIN], False), ([PLAIN, COMMON], False), ([PLAIN], True), ([PLAIN], False))
+    assert [row['dvs'] for row in copies.first_visit] == [list(COMMON)] and not copies.pushed_out
+    # A copy that stayed through one visit may go at the next.
+    later = visits(([PLAIN], False), ([PLAIN, COMMON, RARE], False), ([COMMON, RARE], True), ([COMMON, RARE], False),
+                   ([RARE], True))
+    assert not later.first_visit
+    problems = live_soak.invariants(result(first_visit=copies.first_visit, pushed_out=[]), None)
+    assert any('1 copies caught after the start were released at their first PC visit, #16' in problem
+               for problem in problems)
+
+
+def test_a_hunt_best_replaced_by_a_rarer_copy_may_go_at_once():
+    copies = visits(([PLAIN], False), ([PLAIN, RARE], False), ([PLAIN, RARE, RARER], False), ([PLAIN, RARER], True))
+    assert not copies.first_visit and not copies.pushed_out
+
+
+def test_a_release_that_takes_a_copy_rarer_than_the_newcomer_fails():
+    copies = visits(([RARE, PLAIN], False), ([RARE, PLAIN, COMMON], False), ([PLAIN, COMMON], True))
+    assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
+    problems = live_soak.invariants(result(first_visit=[], pushed_out=copies.pushed_out), None)
+    assert any('1 releases took a copy rarer than the newer one that pushed it out, #16' in problem
+               for problem in problems)
+    # The common copy going instead is the rule working.
+    fine = visits(([RARE, PLAIN], False), ([RARE, PLAIN, RARER], False), ([RARE, RARER], True))
+    assert not fine.pushed_out and not fine.first_visit
+    # Results without the copies held, as from an older run, are not judged.
+    assert live_soak.measure(result())['released_at_first_visit'] is None
+
+
+def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    for held, released in (([(16, RARE), (19, PLAIN)], False), ([(16, RARE), (19, PLAIN), (19, COMMON)], False),
+                           ([(19, PLAIN), (19, COMMON)], True)):
+        copies.poll({'party': [], 'storage': {'pokemon': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in held]}},
+                    lambda mon: mon['dex'], released)
+    assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
+
+
+def test_the_judge_rates_a_gen1_copy_with_the_tms_of_its_adventures_cartridge(monkeypatch):
+    from pokesim import config, investment
+    from pokesim.cartridges import identify
+    if not config.ROM_PATH.is_file() or getattr(identify(config.ROM_PATH.read_bytes()), 'version', None) not in ('red', 'blue'):
+        pytest.skip('needs a clean Red or Blue cartridge at ROM_PATH')
+    # The runner process loads no cartridge, and HMs-only weights rate this Nidoran F three times too rare.
+    dvs = [15, 0, 15, 15, 15]
+    investment._pool.cache_clear()
+    real = investment.dex_rarity(29, dvs)
+    monkeypatch.setattr(investment, 'cartridge_machines', lambda: ({}, {}))
+    investment._pool.cache_clear()
+    hms_only = investment.dex_rarity(29, dvs)
+    monkeypatch.undo()
+    investment._pool.cache_clear()
+    assert hms_only < real / 2
+    rarity = live_soak.CartridgeRarity(config.ROM_PATH)
+    try:
+        assert rarity(29, dvs) == pytest.approx(real)
+    finally:
+        rarity.close()
+
+
+def test_the_judge_fails_the_run_when_it_cannot_rate_with_the_cartridge(tmp_path):
+    junk = tmp_path / 'junk.gb'
+    junk.write_bytes(b'not a cartridge')
+    with pytest.raises(live_soak.RatingFailed, match='not one PokeSim knows'):
+        live_soak.CartridgeRarity(junk)
+    with pytest.raises(live_soak.RatingFailed, match='could not be read'):
+        live_soak.CartridgeRarity(tmp_path / 'missing.gb')
+    # A known cartridge whose TMs the helper cannot read fails too, never rating with the HMs only.
+    rarity = live_soak.CartridgeRarity.__new__(live_soak.CartridgeRarity)
+    rarity.process = SimpleNamespace(stdin=SimpleNamespace(write=lambda text: None, flush=lambda: None),
+                                     stdout=SimpleNamespace(readline=lambda: json.dumps(
+                                         {'error': 'its cartridge cannot rate copies, The cartridge gave no TMs'}) + '\n'))
+    with pytest.raises(live_soak.RatingFailed, match='gave no TMs'):
+        rarity(29, [15, 0, 15, 15, 15])
+
+
+def test_a_judge_that_cannot_rate_fails_the_adventure(monkeypatch):
+    def refuse(manager, adventure):
+        raise live_soak.RatingFailed('its cartridge is not one PokeSim knows')
+    monkeypatch.setattr(live_soak, '_rarity', refuse)
+    monkeypatch.setattr(live_soak, '_names', lambda manager, adventure: {})
+    monkeypatch.setattr(live_soak, '_readonly', lambda path: _events_db())
+    monkeypatch.setattr(live_soak, '_kv_bytes', lambda db: 0)
+    adventure = {'name': 'Red', 'version': 'red', 'settings': {}}
+    registry = SimpleNamespace(adventure=lambda aid: adventure, update=lambda aid, **changes: None, root=live_soak.ROOT)
+    outcome = live_soak.play_one(SimpleNamespace(registry=registry), 'red', HOUR, lambda line: None)
+    assert outcome['failed'] == 'the judge cannot rate copies as the adventure does, its cartridge is not one PokeSim knows'
+    assert live_soak.invariants(result(failed=outcome['failed']), None)
+
+
+def _events_db():
+    db = sqlite3.connect(':memory:')
+    db.execute('CREATE TABLE events (id INTEGER)')
+    return db
+
+
+def test_the_first_pc_visit_wave_is_reported_but_never_fails():
+    copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    game = {'party': [], 'storage': {'pokemon': [{'dex': 16, 'dvs': list(PLAIN)}]}}
+    # Three releases over two polls make the first visit, and a later visit does not add to it.
+    for released in (0, 2, 1, 0, 0, 4, 0):
+        copies.poll(game, lambda mon: mon['dex'], released)
+    assert copies.first_wave == 3
+    quiet = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+    quiet.poll(game, lambda mon: mon['dex'], 0)
+    assert quiet.first_wave is None
+    candidate, deployed = result(first_wave=3, first_visit=[], pushed_out=[]), result()
+    assert live_soak.measure(candidate)['first_wave_releases'] == 3
+    assert live_soak.measure(deployed)['first_wave_releases'] is None
+    assert live_soak.invariants(candidate, deployed) == []
+    problems, rows = live_soak.judge([candidate], [deployed])
+    assert problems == [] and rows[0]['candidate']['first_wave_releases'] == 3
+    assert live_soak.report_line(rows[0]).endswith(' 3 first visit releases (- deployed)')
+
+
+def test_the_window_catches_and_releases_are_reported_as_counts():
+    releases = [('release', release_title('Pidgey')), ('release', release_title('Rattata'))]
+    receipts = [('capture:1', 16, 0.0), ('capture:2', 19, 1.0), ('gift-event:1', 7, 2.0)]
+    candidate = result(releases, receipts)
+    measured = live_soak.measure(candidate)
+    assert (measured['catches'], measured['window_releases']) == (2, 2)
+    _, rows = live_soak.judge([candidate], [candidate])
+    assert ' 2 caught 2 released - first visit releases ' in live_soak.report_line(rows[0])
+
+
 def test_rates_hold_the_candidate_to_the_deployed_commit():
     deployed = result(gift_loop(1) + [('badge', 'Earned the Boulder Badge')] * 10)
     assert live_soak.invariants(deployed, deployed) == []

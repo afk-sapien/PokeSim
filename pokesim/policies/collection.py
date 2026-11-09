@@ -7,7 +7,7 @@ from ..duplicates import quality
 from pokecore.identity import same
 from .move_development import evolution_wait, move_name
 from ..pokemon import experience_at_level
-from ..investment import automatic_trade_protected,training_investment, potential_power, assessment, SEARCH_BUDGET
+from ..investment import automatic_trade_protected, training_investment, potential_power, rarity, SEARCH_BUDGET
 from functools import lru_cache
 from ..game_data import current_variant, load
 
@@ -97,14 +97,21 @@ def shadow_kind(project):
     return kind
 
 
-def improves(s, species, dvs):
-    """True when a wild ``species`` with ``dvs`` has a rarer DV total than every copy held. A held copy
-    without DV data, as in a compact snapshot, is not counted."""
-    tail = assessment({'dvs': dvs})['dv_top_percent']
-    held = [assessment(mon)['dv_top_percent'] for mon in [asdict(p) for p in s.party] + s.storage_entries()
-            if mon['species'] == species]
-    held = [value for value in held if value is not None]
-    return tail is None or not held or tail < min(held)
+def improves(s, species, dvs, rated=None):
+    """True when the PC would keep a wild ``species`` with ``dvs`` (pcvalue.verdict): a new entry, a
+    shiny, or a copy at least RARITY_STEP times rarer than every copy held, which the PC visit it
+    brings would not release, nor a rarer copy for it. A held copy without DV data, as in a compact
+    snapshot, is not counted. ``rated`` rates the PC with extra rows as the next release does
+    (the policy's pc_rated). Without it the PC is rated without trade settings or plans."""
+    from ..pcvalue import Entry, catch_visit, requested, verdict
+    from .team import release_rated, storage_headroom
+    number = dex(species)
+    candidate = Entry((-1, 0), (number, 0), SPECIES.get(species, {}).get('name', '?'), 5,
+                      dvs=tuple(dvs or ()), record={'species': species, 'dvs': dvs})
+    rows = rated(extra=(candidate,)) if rated else release_rated(s, extra=(candidate,))
+    needed = catch_visit(storage_headroom(s), len(requested(rows))) if hasattr(s, 'box_counts') else 0
+    return verdict(rows, missing=number not in s.owned, needed=needed,
+                   active_box=getattr(s, 'active_box', None)).keep
 
 
 def can_train(mon):
@@ -476,17 +483,19 @@ class Collection:
         self.peer_demand = dict(requests)
         self.demand_until = time.monotonic() + 180
 
-    def repeat_target(self, species, map_id=None, snapshot=None, dvs=None):
+    def repeat_target(self, species, map_id=None, snapshot=None, dvs=None, rated=None):
         """The species a wild battle should catch as a repeat, or None.
 
         A DV hunt takes any species on its map, but given the wild ``dvs`` and the ``snapshot`` it
-        only takes a catch that beats every copy held. Otherwise Yellow's Tauros hunt caught every
-        owned Nidoran, Cubone and Exeggcute in the Safari Zone and released them at the next PC.
+        only takes a catch the PC would keep (improves, with ``rated`` as there). Otherwise Yellow's
+        Tauros hunt caught every owned Nidoran, Cubone and Exeggcute in the Safari Zone and released
+        them at the next PC.
         """
         if dex(species) in getattr(self, 'returned_legendaries', ()):
             return species
         project = self.project or {}
-        if project.get('dv_hunt') and snapshot is not None and dvs is not None and not improves(snapshot, species, dvs):
+        if (project.get('dv_hunt') and snapshot is not None and dvs is not None
+                and not improves(snapshot, species, dvs, rated)):
             return None
         if project.get('dv_hunt') and map_id == project.get('map'):
             return species
@@ -1055,11 +1064,12 @@ class Collection:
                     candidates.append({**project,'key':key})
         sources = self.sources()
         held_individuals = [asdict(mon) for mon in s.party] + s.storage_entries()
+        # A quality hunt is valued by the species' best copy as the PC rates it (investment.rarity).
         best_tails = {}
         for mon in held_individuals:
-            tail = assessment(mon)['dv_top_percent']
+            tail = rarity(mon)
             if tail is not None:
-                best_tails[mon['species']] = min(best_tails.get(mon['species'], 100), tail)
+                best_tails[mon['species']] = min(best_tails.get(mon['species'], 100), tail * 100)
         searched = set()
         world = CollectionWorld(s, nav)
         from .ledger import ledger

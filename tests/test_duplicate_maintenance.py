@@ -11,7 +11,7 @@ from test_trade_save import MACHOKE, Memory, entry, populate
 
 def inventory():
     copies = [dict(species=MACHOKE, level=30 + i, box=0, position=i,
-                   moves=[2, 0, 0, 0], stat_exp=[0] * 5, dvs=[i] * 5,
+                   moves=[2, 0, 0, 0], stat_exp=[0] * 5, dvs=[0] + [2 * max(i - 1, 0)] * 4,
                    trainer_id=5, experience=1000) for i in range(9)]
     return SimpleNamespace(party=[], storage_entries=lambda: copies), copies
 

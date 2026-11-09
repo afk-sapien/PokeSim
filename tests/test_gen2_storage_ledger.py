@@ -273,7 +273,7 @@ def test_a_copy_from_an_unknown_trainer_is_worth_more_than_one_from_a_linked_adv
     from pokesim.pcvalue import WEIGHTS
     traded = mon(1, trainer_id=13132)
     # A plainer spare is the one this visit takes, so the traded copy is worth its score.
-    view = roomy(snapshot([BEST, traded, mon(2, dvs=(1,) * 5)], PARTY))
+    view = roomy(snapshot([BEST, traded, mon(2, dvs=(0, 2, 2, 2, 2))], PARTY))
     linked = rows(Owned(frozenset({13132})), view)[(1, 'release')]
     assert linked == ledger.PLAIN + worth(Owned(frozenset({13132})), view, 1)
     assert rows(Owned(frozenset()), view)[(1, 'release')] == linked + WEIGHTS['traded']

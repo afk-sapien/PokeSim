@@ -46,9 +46,10 @@ def order(s, **inputs):
 
 
 def test_the_player_and_partner_copies_go_before_a_strangers():
-    own = stored(1, dvs=(3,) * 5)
-    partner = stored(2, dvs=(2,) * 5, trainer_id=SILVER)
-    stranger = stored(3, dvs=(1,) * 5, trainer_id=STRANGER)
+    # DVs with HP 0, rarer as the other four rise.
+    own = stored(1, dvs=(0, 6, 6, 6, 6))
+    partner = stored(2, dvs=(0, 4, 4, 4, 4), trainer_id=SILVER)
+    stranger = stored(3, dvs=(0, 2, 2, 2, 2), trainer_id=STRANGER)
     s = snapshot(best_and(own, partner, stranger))
     assert order(s, partners=frozenset({SILVER})) == [(0, 2), (0, 1), (0, 3)]
     assert order(s) == [(0, 1), (0, 3), (0, 2)]
@@ -64,8 +65,8 @@ def test_an_unknown_player_leaves_the_trainer_out_of_the_rules():
 
 @pytest.mark.parametrize('dex', [144, 145, 146, 150, 151])
 def test_a_legendary_copy_goes_after_every_plain_spare(dex):
-    copies = [stored(position, dex, dvs=(position + 1,) * 5) for position in range(3)]
-    pidgey = [stored(3, dvs=(14,) * 5), stored(4, dvs=(15,) * 5)]
+    copies = [stored(position, dex, dvs=(0,) + (2 * position + 2,) * 4) for position in range(3)]
+    pidgey = [stored(3, dvs=(0, 4, 4, 4, 4)), stored(4, dvs=(15,) * 5)]
     s = snapshot(copies + pidgey)
     assert order(s) == [(0, 3), (0, 0), (0, 1)]
     assert ('Legendary', 200) in next(row for row in release_rated(s) if row.entry.slot == (0, 0)).parts
@@ -103,8 +104,9 @@ def test_shiny_and_rare_dv_copies_go_after_a_plain_spare():
     shiny = stored(1, dvs=(0, 2, 10, 10, 10))
     rare = stored(2, dvs=(13, 15, 15, 14, 15))
     perfect = stored(0, level=60, dvs=(15,) * 5)
-    assert order(snapshot([perfect, shiny, rare])) == [(0, 2), (0, 1)]
-    assert order(snapshot([perfect, shiny, rare, stored(3)])) == [(0, 3), (0, 2), (0, 1)]
+    # The shiny is the best copy by value and the perfect one the rarest, so both stay.
+    assert order(snapshot([perfect, shiny, rare])) == [(0, 2)]
+    assert order(snapshot([perfect, shiny, rare, stored(3)])) == [(0, 3), (0, 2)]
 
 
 def test_the_received_trainer_id_comes_from_the_struct_in_both_generations():

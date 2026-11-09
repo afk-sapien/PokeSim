@@ -38,11 +38,13 @@ def test_invalid_dvs_do_not_claim_rarity():
         assert assessment(partner(dvs=dvs))['dv_top_percent'] is None
 
 
-def test_the_trained_veteran_stays_until_the_rare_newcomer_catches_up():
+def test_the_trained_veteran_and_the_rare_newcomer_both_stay():
     newcomer = stored(0, level=5, dvs=RARE)
     veteran = stored(1, level=100, dvs=POOR, stat_exp=(65535,) * 5)
-    assert release_target(snapshot([newcomer, veteran])) == (0, 0)
-    assert release_target(snapshot([replace(newcomer, level=100, stat_exp=(65535,) * 5), veteran])) == (0, 1)
+    assert release_target(snapshot([newcomer, veteran])) is None
+    # A plain copy goes first, however high its level.
+    plain = stored(2, level=90, dvs=(0, 2, 2, 2, 2))
+    assert release_target(snapshot([newcomer, veteran, plain])) == (0, 2)
 
 
 def test_a_rare_find_goes_only_after_a_plain_spare():
