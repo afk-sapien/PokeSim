@@ -5,7 +5,7 @@ import pytest
 
 from pokesim.app.coordinator import Coordinator
 from pokesim.gen2 import champion_shop, menus, trading, training
-from pokesim.gen2.preparation import reserves
+from pokesim.gen2.preparation import cost, reserves
 from pokesim.planning.ledger import FIELD_MOVES, LEARN_KEPT
 
 CUT, FLY, SURF, STRENGTH, FLASH, WHIRLPOOL, WATERFALL = 15, 19, 57, 70, 148, 250, 127
@@ -41,10 +41,38 @@ def test_a_reserve_whose_field_moves_another_member_knows_can_be_deposited():
     assert reserves(hm_party(member(173, SURF, 34, 205))) == [5]
 
 
-def test_a_party_of_only_field_move_users_offers_no_boxed_pokemon(tmp_path, monkeypatch):
+def test_a_party_of_only_field_move_users_stores_its_whirlpool_and_waterfall_holder():
+    # The game withdraws a Whirlpool or Waterfall partner from the PC when it next needs one.
+    party = hm_party(member(173, FLASH, 34, 205))
+    assert reserves(party) == [4]
+    assert not trading.crowded(SimpleNamespace(party=party))
+
+
+@pytest.mark.parametrize(('fourth', 'fifth', 'stored'), [
+    (SURF, WHIRLPOOL, 5),
+    (WATERFALL, SURF, 5),
+    (WHIRLPOOL, WATERFALL, 4),
+])
+def test_a_sole_whirlpool_holder_goes_before_surf_and_surf_before_waterfall(fourth, fifth, stored):
+    party = (member(22, 51, 35, 230), member(84, 65, FLY, 156), member(51, CUT, 35, STRENGTH),
+             member(173, FLASH, 34, 205), member(56, fourth, 34, 205), member(56, fifth, 34, 205))
+    assert reserves(party) == [4, 5]
+    assert min(reserves(party), key=lambda i: cost(party, i)) == stored
+
+
+def test_a_holder_of_cut_strength_fly_or_flash_stays_even_with_a_recoverable_move():
+    party = (member(22, 51, 35, 230), member(84, 65, FLY, 156), member(51, CUT, 35, 33),
+             member(173, SURF, 34, STRENGTH), member(56, FLASH, WATERFALL, 156), member(56, WHIRLPOOL, 34, 205))
+    assert reserves(party) == [5]
+    assert reserves(party[:5]) == []
+
+
+def test_a_party_with_no_reserve_offers_no_boxed_pokemon(tmp_path, monkeypatch):
     from pokesim.store import Store
+    # No full party of sole holders is left without a reserve, since five slots after the lead outnumber
+    # the four moves that always stay. The guard is checked on its own.
+    monkeypatch.setattr(trading, 'reserves', lambda party: [])
     snapshot = SimpleNamespace(party=hm_party(member(173, FLASH, 34, 205)), stored=(), items=(), box_counts=(5,) * 14)
-    assert reserves(snapshot.party) == []
     assert trading.crowded(snapshot)
     monkeypatch.setattr(trading, 'live_status', lambda *args: {'party': [], 'storage': {'pokemon': [
         {'species': 1, 'dex': 1, 'box': 1, 'position': 1, 'trainer_id': 9, 'dvs': (9,) * 5}]}})
