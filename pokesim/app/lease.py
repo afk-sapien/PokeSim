@@ -131,6 +131,9 @@ class Leases:
         self.desired = {}
         self.converging = set()
         self.again = set()
+        # The desired state this thread recorded last, so a page waits on the change it made even
+        # once a refusal took it back out of `desired`.
+        self.made = threading.local()
         # Told whenever a send gets its answer or a send thread ends.
         self.settled = threading.Condition(self.lock)
         self.stop = threading.Event()
@@ -246,17 +249,15 @@ class Leases:
                    'handover': self.handover, 'refuse': self.refuse, 'take': self.take}.get(action)
         if handler is None:
             raise ValueError('Unknown lease action')
-        with self.lock:
-            before = self.desired.get(aid)
+        self.made.desired = None
         if action in {'handover', 'refuse'}:
             handler(aid, actor, adventure, target)
         else:
             handler(aid, actor, adventure)
-        with self.lock:
-            desired = self.desired.get(aid)
+        desired = self.made.desired
         # The page waits for the worker, so a refused grant reaches it. A release worked even if
         # the next in line was refused.
-        if desired is not None and desired is not before:
+        if desired is not None:
             if self.answer(aid, desired) == 'refused' and desired.undone and action in {'request', 'handover', 'take'}:
                 raise LeaseRefused(desired.detail or 'The adventure refused control')
         return self.status(aid, actor, adventure)
@@ -392,7 +393,8 @@ class Leases:
         Call it in the turn. `undo` puts back the state before, should the worker refuse, and
         `applied` runs once the worker ran it."""
         with self.lock:
-            desired = self.desired[aid] = Desired(action, self.advance(aid), undo=undo, applied=applied)
+            desired = self.desired[aid] = self.made.desired = Desired(
+                action, self.advance(aid), undo=undo, applied=applied)
             self.kick(aid)
             return desired
 

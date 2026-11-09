@@ -492,7 +492,6 @@ def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(g
     """A held arrow key sends a press every 140 ms. A slow worker must not use up the request
     threads that every page and sign in share, and the presses must reach it in order."""
     import anyio.to_thread
-    monkeypatch.setattr('pokesim.app.manager.PRESS_WAIT_SECONDS', 60)
     app, arrived = game.library.app, []
     lease(game.bob, game.red, 'request')
     buttons = ['down', 'a', 'up', 'b', 'left', 'right', 'start', 'select']
@@ -528,13 +527,12 @@ def test_a_held_key_against_a_slow_worker_holds_no_threads_and_keeps_its_order(g
     assert arrived == buttons
 
 
-def line_against_a_stalled_worker(game, requests, between=None, wait=60):
+def line_against_a_stalled_worker(game, requests, between=None):
     """Send control requests to a worker that answers none until the last one is in line. Returns
-    the status codes and the actions or buttons in the order the worker heard them. A press is
-    dropped after `wait` seconds in line, which is long by default so a slow runner drops none.
-    The library sends Resume and Pause itself, and those are heard too."""
+    the status codes and the actions or buttons in the order the worker heard them. The line times
+    its wait on the test clock, so a request is dropped only once `between` moves it on, however
+    slow the runner. The library sends Resume and Pause itself, and those are heard too."""
     app, arrived, leases = game.library.app, [], game.library.manager.leases
-    usual, manager_module.PRESS_WAIT_SECONDS = manager_module.PRESS_WAIT_SECONDS, wait
     worker = leases.worker
 
     def heard(aid, action, generation):
@@ -579,8 +577,14 @@ def line_against_a_stalled_worker(game, requests, between=None, wait=60):
     try:
         return asyncio.run(run()), arrived
     finally:
-        manager_module.PRESS_WAIT_SECONDS = usual
         del leases.worker
+
+
+def later(game, seconds):
+    """A `between` that moves the test clock on while the requests wait in line."""
+    async def wait():
+        game.clock.now += seconds
+    return wait
 
 
 def presses(client, *buttons):
@@ -599,7 +603,7 @@ def test_a_full_press_line_turns_the_next_press_away(game):
 def test_a_press_that_waited_too_long_is_dropped(game):
     lease(game.bob, game.red, 'request')
     codes, arrived = line_against_a_stalled_worker(game, presses(game.bob, 'down', 'a'),
-                                                   between=lambda: asyncio.sleep(0.5), wait=0.2)
+                                                   between=later(game, manager_module.PRESS_WAIT_SECONDS + 1))
     assert codes == [200, 409] and arrived == ['down']
 
 
@@ -741,11 +745,11 @@ def test_control_actions_never_fill_the_press_line(game, monkeypatch):
     assert codes == [200] * 10 and arrived == ['resume', 'resume', *buttons]
 
 
-def test_a_control_action_that_waited_too_long_is_dropped(game, monkeypatch):
-    monkeypatch.setattr(manager_module, 'CONTROL_WAIT_SECONDS', 0.2, raising=False)
+def test_a_control_action_that_waited_too_long_is_dropped(game):
     lease(game.bob, game.red, 'request')
     codes, arrived = line_against_a_stalled_worker(
-        game, [*presses(game.bob, 'down'), (game.alice, {'action': 'resume'})], between=lambda: asyncio.sleep(0.5))
+        game, [*presses(game.bob, 'down'), (game.alice, {'action': 'resume'})],
+        between=later(game, manager_module.CONTROL_WAIT_SECONDS + 1))
     assert codes == [200, 409] and arrived == ['down']
     assert game.library.manager.leases.holder(game.red) == game.ids.bob
 
@@ -1007,6 +1011,21 @@ def test_a_grant_the_worker_refuses_is_undone(game):
     assert status['you_hold'] and [entry['id'] for entry in status['queue']] == [game.ids.carol]
     assert press(game.bob, game.red).status_code == 200
     assert press(game.carol, game.red).status_code == 409
+
+
+def test_a_grant_refused_before_the_page_looks_still_reaches_it(game, monkeypatch):
+    leases = game.library.manager.leases
+    request = leases.request
+
+    def refused_at_once(*args):
+        # The worker's refusal lands, and takes the grant back, before the page waits for it.
+        request(*args)
+        settle(leases)
+    monkeypatch.setattr(leases, 'request', refused_at_once)
+    game.worker.refuse = 'An exchange is holding this adventure'
+    refused = lease(game.bob, game.red, 'request')
+    assert refused.status_code == 409 and refused.json()['detail'] == 'An exchange is holding this adventure'
+    assert leases.holder(game.red) is None and game.red not in leases.desired
 
 
 def test_a_resume_the_worker_refuses_gives_control_back(game):
