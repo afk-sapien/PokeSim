@@ -44,6 +44,11 @@ class Event:
             self.notable = self.priority >= NOTABLE_PRIORITY
 
 
+def release_title(name):
+    """The journal title of a release in both generations. The loop guard and the live soak read it back."""
+    return f"Said goodbye to a spare {name}"
+
+
 @dataclass
 class RunMemory:
     """Persisted per-run state the detector needs across restarts."""
@@ -171,7 +176,7 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
             population = sum(p.species == species and p.nick == nick for p in cur.party)
             population += sum(row[1] == species and row[3] == nick for row in cur.stored_pokemon)
             for _ in range(count):
-                events.append(Event("release", f"Said goodbye to a spare {name}",
+                events.append(Event("release", release_title(name),
                                     f"Storage was nearly full, so a duplicate {name} was let go on {cur.map_name}.",
                                     priority=MINIMAL, tags="wave",
                                     still=lambda s, sp=species, label=nick, n=population:

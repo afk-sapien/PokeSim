@@ -570,6 +570,18 @@ def _gate_line(result, base):
     return f'{name:<30} {result["waste"]:5.1f}% wasted ({change}), {result["errors"]} errors{stall}'
 
 
+def attempt(folder, commit):
+    """Which try at the gate this is for ``commit``: one more than the reports already under ``folder``.
+    A pass on the third try reads differently from a pass on the first."""
+    earlier = 0
+    for path in Path(folder).glob('*/gate-report.json'):
+        try:
+            earlier += json.loads(path.read_text(encoding='utf-8')).get('commit') == commit
+        except (OSError, ValueError):
+            continue
+    return earlier + 1
+
+
 def gate(args):
     if os.environ.get(GATE_HELD) != '1':
         # Take the heavy lock of the shared load gate, so no test or other batch runs beside the gate.
@@ -617,12 +629,15 @@ def gate(args):
     with ThreadPoolExecutor(args.jobs) as pool:
         results = list(pool.map(play, jobs))
     problems = compare(results, baseline, args.waste_points)
-    report = {'commit': _commit(), 'frames': args.frames, 'wall_seconds': round(time.monotonic() - began, 1),
+    commit = _commit()
+    report = {'commit': commit, 'attempt': attempt(args.root / 'gate', commit), 'frames': args.frames,
+              'wall_seconds': round(time.monotonic() - began, 1),
               'baseline': str(baseline_path) if stored else None, 'problems': problems, 'results': results}
     out.mkdir(parents=True, exist_ok=True)
     (out / 'gate-report.json').write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
     stalls = [result for result in results if result.get('stall')]
-    print(f'{len(results)} rungs in {report["wall_seconds"]}s, {len(stalls)} stalls, report in {out}')
+    print(f'{len(results)} rungs in {report["wall_seconds"]}s, {len(stalls)} stalls, attempt {report["attempt"]}, '
+          f'report in {out}')
     if args.write_baseline:
         failed = [result for result in results if result.get('failed')]
         if failed:
@@ -631,7 +646,8 @@ def gate(args):
         rungs = {f'{result["ladder"]}/{result["rung"]}': {
             'stall': result['stall'] and result['stall']['reason'], 'errors': result['errors'],
             'waste': result['waste']} for result in results}
-        baseline_path.write_text(json.dumps({'commit': report['commit'], 'frames': args.frames, 'rungs': rungs},
+        baseline_path.write_text(json.dumps({'commit': report['commit'], 'attempt': report['attempt'],
+                                             'taken': time.strftime('%Y-%m-%d'), 'frames': args.frames, 'rungs': rungs},
                                             indent=1) + '\n', encoding='utf-8')
         print(f'wrote {baseline_path}')
         return 0

@@ -1,7 +1,10 @@
 """A run that repeats a gift and a release, or one reload, asks for help and stops the repeat."""
 import time
 
-from pokesim.events import Event
+from pokesim.events import Event, release_title
+from pokesim.gen2.rewards import gift_title as gen2_gift_title
+from pokesim.ram import SPECIES_NAMES
+from pokesim.runtime.reward_delivery import gift_title
 from pokesim.stalls import LOOP_LIMIT, LoopGuard
 from pokesim.store import Store
 
@@ -24,12 +27,11 @@ def test_the_same_gift_and_release_repeated_trips_the_guard_until_real_progress(
     try:
         guard = LoopGuard(clock=clock)
         for _ in range(LOOP_LIMIT - 1):
-            add(store, 'obtain', 'Received Chikorita from a custom PokeSim gift')
-            add(store, 'release', 'Said goodbye to a spare Chikorita')
+            add(store, 'obtain', gen2_gift_title('Chikorita'))
+            add(store, 'release', release_title('Chikorita'))
         assert guard.looping(store) is None
-        # Gen I words its gift with the nickname first and the species in capitals.
-        add(store, 'obtain', 'Received CHIKO (CHIKORITA) for League reward #9')
-        add(store, 'release', 'Said goodbye to a spare Chikorita')
+        add(store, 'obtain', gen2_gift_title('Chikorita'))
+        add(store, 'release', release_title('Chikorita'))
         clock.now += 60
         assert 'received and released Chikorita 6 times' in guard.looping(store)
         add(store, 'badge', 'Earned the Zephyr Badge')
@@ -119,12 +121,43 @@ def test_gen1_gifts_and_releases_pair_by_species_across_spellings(tmp_path):
     store = Store(tmp_path)
     try:
         for index in range(LOOP_LIMIT):
-            add(store, 'obtain', f'Received SOUPJUDGE (SQUIRTLE) for League reward #{index}')
-            add(store, 'release', 'Said goodbye to a spare Squirtle')
-            add(store, 'obtain', f'Received MIMIC (MR.MIME) for League reward #{index}')
-            add(store, 'release', 'Said goodbye to a spare Mr. Mime Lv 5')
+            add(store, 'obtain', gift_title('SOUPJUDGE', 177, index))
+            add(store, 'release', release_title(SPECIES_NAMES[177]))
+            add(store, 'obtain', gift_title('MIMIC', 42, index))
+            add(store, 'release', release_title(SPECIES_NAMES[42]) + ' Lv 5')
         reason = LoopGuard().looping(store)
         assert 'received and released Squirtle 6 times' in reason or 'Mr. Mime 6 times' in reason
+    finally:
+        store.close()
+
+
+def test_every_gen1_gift_title_pairs_with_its_release_title():
+    """The producers spell MR_MIME and NIDORAN_F one way in a gift and Mr. Mime and Nidoran♀ in a release."""
+    from pokesim.stalls import _RECEIVED, _RELEASED, species_key
+    from pokesim.strategy_data import SPECIES
+    for species in SPECIES:
+        if species not in SPECIES_NAMES:
+            continue
+        gift = species_key(_RECEIVED.match(gift_title('NICK', species, 1)).group(1))
+        release = species_key(_RELEASED.match(release_title(SPECIES_NAMES[species])).group(1))
+        assert gift == release, SPECIES[species]['name']
+
+
+def test_reload_counts_survive_a_worker_restart(tmp_path):
+    store, clock = Store(tmp_path), Clock()
+    try:
+        guard = LoopGuard(clock=clock)
+        for _ in range(LOOP_LIMIT - 1):
+            guard.reloaded('auto-v1-1.state')
+        assert guard.looping(store) is None
+        # A new worker builds a new guard. The counts it kept come back with the adventure.
+        fresh = LoopGuard(clock=clock)
+        fresh.reloaded('auto-v1-1.state')
+        assert 'reloaded auto-v1-1.state 6 times' in fresh.looping(store)
+        add(store, 'badge', 'Earned the Boulder Badge')
+        clock.now += 60
+        assert fresh.looping(store) is None
+        assert LoopGuard(clock=clock).looping(store) is None
     finally:
         store.close()
 

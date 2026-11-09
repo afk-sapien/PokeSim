@@ -12,6 +12,27 @@ from .. import rewards
 
 PENDING = 'custom-reward-pending-v1'
 BARRIER = 'custom-reward-barrier-v1'
+# Gifts are paced in emulated frames so a fast or uncapped run sees the same gift rate per game hour.
+SPACING_FRAMES = 3600
+RETRY_FRAMES = 60
+
+
+def gift_title(nick, species, ordinal):
+    """The journal title of a Gen I League gift. The loop guard and the live soak read it back."""
+    from ..strategy_data import SPECIES
+    return f"Received {nick} ({SPECIES[species]['name']}) for League reward #{ordinal}"
+
+
+def reward_due(emu):
+    """A reload can move the frame counter back, which makes the next check due at once."""
+    last = getattr(emu, '_reward_frame', None)
+    return last is None or emu.frame < last or emu.frame - last >= getattr(emu, '_reward_wait', 0)
+
+
+def schedule(emu, delivered):
+    """A battle or menu should not postpone a pending gift for a whole spacing interval."""
+    emu._reward_frame = emu.frame
+    emu._reward_wait = SPACING_FRAMES if delivered else RETRY_FRAMES
 
 
 def _put(db, key, value):
@@ -149,7 +170,7 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
                 raise ValueError('Custom reward ownership changed before commitment')
             current['delivered'] = ordinal
             rewards.save(emu.store.db, current)
-            title = f"Received {gift.nick} ({SPECIES[species]['name']}) for League reward #{ordinal}"
+            title = gift_title(gift.nick, species, ordinal)
         else:
             if kind == 'mew_return' and not mew_returns.ready_db(emu.store.db, rewards.championship_count(rewards.ledger(emu.store.db))):
                 raise ValueError('The Mew walking opportunity is no longer available')

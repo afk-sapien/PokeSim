@@ -192,6 +192,37 @@ uv run --locked python tools/stuck_scenarios.py --root data/ladder/red run
 A randomized ladder's rungs replay on the cartridge its `ladder.json` names only with `RANDOMIZER`
 and `ROM_PATH` set to that share code and cartridge.
 
+`stage_ladder.py gate` writes a `gate-report.json` that records its attempt, the number of gate
+runs for that commit so far, so a pass on the fifth try reads as one.
+
+## Live soak before a deploy
+
+`tools/live_soak.py` plays a candidate commit and the deployed commit side by side on copies of the
+live adventures, with the real Manager and workers, for two game hours each. `prepare` turns a cold
+backup of the app data into inputs: the running adventures, plus one post-game rung for each game
+with a full PC and 30 League gifts waiting. Notifications, trades and stopped adventures are dropped
+from the copy, and the inputs are hashed before and after each run, so a run never changes them.
+
+```sh
+uv run --locked python tools/live_soak.py prepare backup.tar.gz --roms roms --ladders data/ladder --out data/live-soak/inputs/today
+uv run --locked python tools/live_soak.py run --candidate HEAD --deployed DEPLOYED_SHA --roms roms
+uv run --locked python tools/live_soak.py check HEAD
+```
+
+`run` builds each commit from its own archive, refuses a commit whose data schema is older than the
+copied data, and takes the heavy load lock. Each adventure is held to the deployed commit on the
+same copy, per game hour:
+
+- releases and obtains at most twice the deployed rate, or the deployed rate plus 5
+- at least half the deployed rate of real progress, such as badges, Pokédex entries and goals
+- reloads at most the deployed count plus 2, and no save reloaded 3 times
+- journal and settings growth at most twice the deployed growth
+- no species received and released 3 times, and no run of titles repeated 5 times, without progress
+- no goal with 10 catches in a row that keep no better copy, by DV rank, and no new Pokédex entry
+
+The report goes to `data/live-soak/reports/<commit>.json`, and `tools/deploy_host.sh` refuses a
+commit, a rollback included, that has no passing report there. `rejudge` scores a finished run again.
+
 ## Build identity and packages
 
 `/api/state` and `/desktop/status` include `build.version`, `build.revision`, and

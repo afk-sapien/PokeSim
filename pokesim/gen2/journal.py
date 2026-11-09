@@ -1,7 +1,7 @@
 """Gen II journal entries that Red, Blue and Yellow also write: sightings, faints, trainers and milestones."""
 from __future__ import annotations
 
-from ..events import HIGH, LOW, MINIMAL, MONEY_MILESTONES, NORMAL, PLAYTIME_MILESTONE_HOURS, URGENT
+from ..events import HIGH, LOW, MINIMAL, MONEY_MILESTONES, NORMAL, PLAYTIME_MILESTONE_HOURS, URGENT, release_title
 
 # The legendary birds, Mewtwo and Mew, then Raikou, Entei, Suicune, Lugia, Ho-Oh and Celebi.
 LEGENDARY_DEX = frozenset({144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251})
@@ -146,6 +146,6 @@ class Releases:
         mon, self.member, self.mon = self.mon, None, None
         name = _species(data, mon.species)
         quote = f' PC value: {self.value}.' if self.value else ''
-        return [event('release', f'Said goodbye to a spare {name}',
+        return [event('release', release_title(name),
                       f'Storage was nearly full, so a duplicate {name} Lv {mon.level} was let go on {snapshot.map_name}.{quote}',
                       priority=MINIMAL, notable=False)]
