@@ -9,6 +9,7 @@ from .team import readiness
 
 from ..game_data import current_variant
 from ..planning.losses import best_level
+from ..planning.readiness import league_unready, unready
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set, object_hidden
 
 
@@ -206,7 +207,7 @@ def story_training(s, goal, losses):
 def gym_goal(s, bit):
     _, key, trainer, gym, obj, level, route = next(g for g in GYMS if g[0] == bit)
     assessment = readiness(s, bit)
-    if assessment['score'] < 75 and fighter_level(s.party) < level + 10 and s.map != MAPS[gym]:
+    if unready(assessment['score'], fighter_level(s.party), level) and s.map != MAPS[gym]:
         return training_goal(key, f"Prepare for {trainer}",
                              f"Build usable damage and survival against {trainer}, then reassess the team", route)
     if key == "volcano":
@@ -369,7 +370,7 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
         if partner is not None and s.party[partner].level < 55 and any(a['score'] < 75 for a in assessments):
             return training_goal('league_partner', 'Prepare a second League battler',
                                  'Build coverage for the League matchups that remain difficult', 'POKEMON_MANSION_1F')
-        if fighter_level(s.party) < 65 and any(a['score'] < 60 for a in assessments):
+        if league_unready([a['score'] for a in assessments], fighter_level(s.party), LEAGUE_ACE):
             return training_goal('league', 'Prepare for the Pokémon League',
                                  'Improve damage and survival across the final matchups', 'ROUTE_23')
         if s.map != MAPS['INDIGO_PLATEAU_LOBBY']:

@@ -54,6 +54,14 @@ def best_level(party, power):
     return max((mon.level for mon in party if fighter(mon, power)), default=0)
 
 
+def ace_slot(party, power):
+    """The party slot of the best fighter, the first at the top level, or None when none can deal damage.
+
+    Both generations teach a field move to another member when one can learn it. A Gen II League ace
+    once carried Cut and Strength in two of its four slots into the Elite Four."""
+    return max((i for i, mon in enumerate(party) if fighter(mon, power)), key=lambda i: (getattr(party[i], 'level', 0), -i), default=None)
+
+
 class Losses:
     """The best fighter level that lost to each boss, by goal key, kept in ``store`` when one is given."""
 
