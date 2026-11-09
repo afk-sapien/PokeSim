@@ -1,8 +1,10 @@
 """Notice a run that keeps playing without achieving anything."""
 from __future__ import annotations
 
+import json
 import logging
 import re
+import sqlite3
 import threading
 import time
 
@@ -78,6 +80,8 @@ LOOP_EVENTS = 400
 # How far back a progress entry is compared after a reload. A reload rewinds the run, and the replay
 # journals the same maps, trainers and levels again, which is not progress.
 REPLAY_EVENTS = 2000
+# Reload counts are kept in the adventure, so a worker restart does not forget a save it keeps reloading.
+RELOADS_KEY = 'loop-guard-reloads-v1'
 # Gen II names the species, Gen I the nickname and then the species in brackets.
 _RECEIVED = re.compile(r'^Received (?:[^(]+ \()?(.+?)\)? (?:from|for) ')
 _RELEASED = re.compile(r'^Said goodbye to a spare (.+?)(?: Lv \d+)?$')
@@ -86,8 +90,9 @@ _RETURNED = re.compile(r'^(?:Caught the returning (.+)|Completed (?:the )?(.+?)(
 
 
 def species_key(name):
-    """One key per species for both spellings: Gen I gifts say SQUIRTLE or MR.MIME, releases Squirtle or Mr. Mime."""
-    return re.sub(r"[\s.'’]", '', name.casefold())
+    """One key per species for both spellings: Gen I gifts say SQUIRTLE, MR_MIME or NIDORAN_F, releases
+    Squirtle, Mr. Mime or Nidoran♀."""
+    return re.sub(r"[\s.'’_]", '', name.casefold().replace('♀', 'f').replace('♂', 'm'))
 
 
 class LoopGuard:
@@ -104,7 +109,7 @@ class LoopGuard:
     def __init__(self, limit=LOOP_LIMIT, every=30, clock=time.time):
         self.limit, self.every, self.clock = limit, every, clock
         self.reloads, self.since, self.scanned, self.returned = {}, None, None, {}
-        self.reason, self.checked = None, None
+        self.reason, self.checked, self.saved = None, None, {}
         self.lock = threading.Lock()
 
     def reloaded(self, name):
@@ -121,6 +126,7 @@ class LoopGuard:
             self.checked = now
             with store.lock:
                 self._advance(store)
+                self._save(store)
                 rows = store.db.execute("SELECT type, title FROM events WHERE id > ? AND type IN ('obtain', 'release') "
                                         'ORDER BY id DESC LIMIT ?', (self.since or 0, LOOP_EVENTS)).fetchall()
             received, released, names = {}, {}, {}
@@ -144,6 +150,17 @@ class LoopGuard:
             self.reason = reason
             return reason
 
+    def _save(self, store):
+        if self.reloads == self.saved:
+            return
+        try:
+            with store.db:
+                store.db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (RELOADS_KEY, json.dumps(self.reloads)))
+        except sqlite3.Error:
+            log.warning('Could not keep the loop guard reload counts', exc_info=True)
+            return
+        self.saved = dict(self.reloads)
+
     def _advance(self, store):
         """Move ``since`` to the newest real progress entry. Only entries after the last scan are read,
         and after a reload one that repeats a recent entry is the replay, not progress.
@@ -154,6 +171,11 @@ class LoopGuard:
         kinds = (*REAL_PROGRESS, 'release')
         marks = ','.join('?' * len(kinds))
         if self.scanned is None:
+            row = store.db.execute('SELECT v FROM kv WHERE k = ?', (RELOADS_KEY,)).fetchone()
+            saved = json.loads(row[0]) if row and row[0] else {}
+            self.saved = dict(saved)
+            for name, count in saved.items():
+                self.reloads[name] = self.reloads.get(name, 0) + int(count)
             # A release already in the journal is scanned past, but only real progress moves ``since``.
             self.since, self.scanned = store.db.execute(
                 f"SELECT MAX(CASE WHEN type != 'release' THEN id END), MAX(id) FROM events WHERE type IN ({marks})",

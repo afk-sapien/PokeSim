@@ -5,12 +5,14 @@ import pytest
 from pokesim.emulator import Emulator
 from pokesim.play_clock import PlayClock
 from pokesim.policies.base import Action
+from pokesim.runtime.reward_delivery import RETRY_FRAMES, SPACING_FRAMES, reward_due, schedule
 from test_events import snap
 
 
-@pytest.mark.parametrize('delivered, interval', [(None, 1), ({'phase': 'complete'}, 60)])
+@pytest.mark.parametrize('delivered, interval', [(None, RETRY_FRAMES), ({'phase': 'complete'}, SPACING_FRAMES)])
 def test_reward_retries_soon_but_success_keeps_gifts_spaced(monkeypatch, delivered, interval):
     emu = Emulator.__new__(Emulator)
+    emu.frame = 100
     emu.input_epoch = 0
     emu.commands = queue.Queue()
     emu.manual = queue.Queue()
@@ -28,7 +30,26 @@ def test_reward_retries_soon_but_success_keeps_gifts_spaced(monkeypatch, deliver
     emu._tick = lambda _: emu.commands.put(('stop', None))
     emu._run()
     delivery.assert_called_once()
-    assert emu._next_reward == 100 + interval
+    assert (emu._reward_frame, emu._reward_wait) == (100, interval)
+
+
+def test_gift_pacing_counts_frames_not_wall_seconds(monkeypatch):
+    """An uncapped run must not starve gifts, and a reload that rewinds frames must not stall them."""
+    emu = Emulator.__new__(Emulator)
+    emu.frame = 1000
+    assert reward_due(emu)
+    schedule(emu, {'phase': 'complete'})
+    monkeypatch.setattr('pokesim.emulator.time.time', lambda: 10 ** 9)
+    emu.frame = 1000 + SPACING_FRAMES - 1
+    assert not reward_due(emu)
+    emu.frame += 1
+    assert reward_due(emu)
+    schedule(emu, None)
+    emu.frame += RETRY_FRAMES
+    assert reward_due(emu)
+    schedule(emu, {'phase': 'complete'})
+    emu.frame = 10
+    assert reward_due(emu)
 
 
 def test_manual_input_runs_while_paused_without_policy_input():

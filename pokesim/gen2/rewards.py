@@ -16,6 +16,11 @@ from .steps import RETURNS, consume, ready
 MYTHICAL = 'gen2-mythical-gift-v1'
 
 
+def gift_title(name):
+    """The journal title of a Gen II gift. The loop guard and the live soak read it back."""
+    return f'Received {name} from a custom PokeSim gift'
+
+
 def gift(memory, data, species, seed, box, position):
     """Core's box gift, nicknamed from the configured nickname pool.
 
@@ -109,7 +114,7 @@ def deliver(emu):
         for key, value in ((PENDING, record), (BARRIER, identifier)):
             db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (key, json.dumps(value)))
         entry = db.execute('INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (?,?,?,?,?,?,?,?)',
-                           (time.time(), 'obtain', f'Received {emu.data.species[species]["name"]} from a custom PokeSim gift',
+                           (time.time(), 'obtain', gift_title(emu.data.species[species]['name']),
                             'An optional custom gift joined the PC. This is separate from Cable Club trading.',
                             1, 4, before.map_name, ''))
         from .tracking import record_gift
