@@ -446,10 +446,6 @@ class GameData:
         self.matchups = {(a, b): factor for a, b, factor in raw.get('matchups', [])}
         self.encounters = raw.get('encounters', [])
         self.fly_points = raw.get('fly_points', [])
-        # The top level of each Elite Four and Champion party, which the emulator reads from the cartridge.
-        self.league_aces = ()
-        # The species of each Elite Four and Champion party by trainer class, read the same way.
-        self.league_rooms = {}
         self.type_names = {value: pretty(name.removesuffix('_TYPE')) for name, value in self.types.items()}
 
     def item_name(self, constant):

@@ -11,8 +11,7 @@ from .menus import ChangeBox, FieldMove, Storage, Teach, Use
 from .navigation import DIRS
 from pokecore.gen2.ram import Memory
 from ..planning.monitor import STOOD_DOWN
-from .standdown import (exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down, standing_down,
-                         train_key)
+from .standdown import (exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down, standing_down)
 
 
 def matching_time(value, current):
@@ -449,13 +448,10 @@ def league_ready(policy, snapshot):
     Nothing restores PP inside the League. A level 100 Vaporeon beside Pokémon too weak to face the
     Elite Four ran out of attacks at Lance and the battle never ended. So the Pokémon at League
     level need at least one attack for each opponent, counted at full PP since the run heals first.
-    One strong Pokémon alone never passes, since it loses once its attacks run out.
     """
     moves = policy.data.moves
     lost = getattr(policy, 'collection', {}).get('league_lost')
     if lost is not None and league_strength(snapshot) < min(lost + LEAGUE_REGROWTH, league_ceiling(snapshot)):
-        return False
-    if sum(1 for mon in snapshot.party if not mon.egg and mon.level >= LEAGUE_LEVEL) < 2:
         return False
     return sum(moves.get(move, {}).get('pp', 0) for mon in snapshot.party
                if not mon.egg and mon.level >= LEAGUE_LEVEL
@@ -506,11 +502,7 @@ def call_off_league(policy):
     """
     state = policy.collection
     if state.get('league_loop') is None:
-        if 'champion' in getattr(policy, 'completed', {'champion': 0}):
-            return False
-        # The first League is lost the same way, so the team trains before it goes back in.
-        state['first_league_entered'] = True
-        return True
+        return False
     state['league_entered'] = True
     return True
 
@@ -540,158 +532,6 @@ def league_loop(policy, snapshot, Goal):
         state['phase'] = 'league'
         return league_funding(policy, snapshot, Goal, again=True)
     return None
-
-
-# The story trains for the first League here, the last map with wild Pokémon before it.
-FIRST_LEAGUE_MAP = 'VICTORY_ROAD'
-
-
-def first_league(policy, snapshot, mem, Goal):
-    """Train the party for the first League, or None once it may go in.
-
-    A level 56 Typhlosion with a bench at levels 2 to 30 lost at Lance for 12 hours. The League needs
-    the strongest Pokémon and one partner, by the rule Red, Blue and Yellow use. While the party is not
-    league_ready, or has not grown since a loss, only the partner trains: to the partner level, then a
-    level past the one it lost at. The rest of the bench never trains for the League. Once the party is
-    ready and has grown, it goes in before any other training. When the partner cannot train, the run
-    patrols and asks the owner for help (league_help) instead of losing again.
-    """
-    from ..planning.partner import league_partner
-    from . import training
-    data, state = policy.data, policy.collection
-    if policy.in_league(snapshot):
-        state['first_league_entered'] = True
-        state.pop('league_blocked', None)
-        return None
-    party = snapshot.party
-    if state.pop('first_league_entered', None):
-        # Leaving the League without its Hall of Fame entry means the team blacked out.
-        state['league_lost_levels'] = [[training.identity(mon), mon.level] for mon in party if not mon.egg]
-    if league_ready(policy, snapshot) and grown_since_loss(state, party):
-        if (state.get('training') or {}).get('league'):
-            state['training'] = None
-        state.pop('league_blocked', None)
-        return None
-    slot = league_partner(party, lambda mon: data.species[mon.species]['stats'][0], lambda mon: mon.stats[1],
-                          lambda mon: party_power(data, mon))
-    mon = party[slot] if slot is not None else None
-    if mon is not None and mon.level < 100 and not standing_down(policy, train_key(training.identity(mon))):
-        goal = min(100, max(partner_target(data), mon.level + 1))
-        identity = training.identity(mon)
-        project = state.get('training')
-        if not project or not project.get('league') or project['identity'] != identity:
-            state['training'] = {'identity': identity, 'target': mon.species, 'item': None, 'species': mon.species,
-                                 'terminal': True, 'level_goal': goal, 'league': True, 'map': FIRST_LEAGUE_MAP}
-        else:
-            project['level_goal'] = goal
-        found = training.journey(policy, snapshot, mem, Goal, terminal=True)
-        if found is not None:
-            state.pop('league_blocked', None)
-            return found
-    if (state.get('training') or {}).get('league'):
-        state['training'] = None
-    # Nothing can train, so another run would lose the same way. The patrol waits without a reload.
-    state['league_blocked'] = True
-    return patrol(policy, snapshot, Goal, LEAGUE_BLOCKED)
-
-
-# The help request on the main page when no team member can train for the League.
-LEAGUE_BLOCKED = 'Cannot get ready for the League'
-
-
-def league_help(policy):
-    """The reason to ask the owner for help while the first League is out of reach, or None."""
-    return LEAGUE_BLOCKED if (getattr(policy, 'collection', None) or {}).get('league_blocked') else None
-
-
-def grown_since_loss(state, party):
-    """Whether a team member has gained a level since the last first League loss, or no run was lost."""
-    from .training import identity
-    lost = state.get('league_lost_levels')
-    if lost is None:
-        return True
-    levels = {repr(key): level for key, level in lost}
-    return any(mon.level > levels.get(repr(identity(mon)), 101) for mon in party if not mon.egg)
-
-
-def partner_target(data):
-    """The level the League partner trains to, from the cartridge's own League aces (planning.partner).
-
-    The level the League check counts when the cartridge could not be read.
-    """
-    from ..planning.partner import partner_level
-    aces = getattr(data, 'league_aces', ())
-    return partner_level(aces) if aces else LEAGUE_LEVEL
-
-
-def party_power(data, mon):
-    """A party member's Battle Power, or None when it cannot be rated."""
-    from pokecore.gen2.battle_power import battle_power
-    return battle_power({'species': mon.species, 'level': mon.level, 'dvs': mon.dvs, 'stat_exp': mon.stat_exp,
-                         'moves': list(mon.moves), 'friendship': mon.friendship}, data)
-
-
-# pret trainer classes of the Elite Four and the Champion: Will, Bruno, Karen, Koga and Lance.
-LEAGUE_CLASSES = frozenset((11, 13, 14, 15, 16))
-
-
-def league_aces(rom_path, game):
-    """The top level of each Elite Four and Champion party on the cartridge, or () when it cannot be read."""
-    from ..planning.cost import game_data
-    tables = game_data(rom_path, game)
-    if tables is None:
-        return ()
-    return tuple(max(mon['level'] for mon in row['party']) for row in tables.trainers.values()
-                 if row['class'] in LEAGUE_CLASSES and row['party'])
-
-
-# The League room goals and the trainer class whose party waits in each.
-LEAGUE_ROOMS = {'league_will': 11, 'league_koga': 15, 'league_bruno': 13, 'league_karen': 14, 'league_lance': 16}
-
-
-def league_rooms(rom_path, game):
-    """The species of each Elite Four and Champion party on the cartridge by trainer class, or {}."""
-    from ..planning.cost import game_data
-    tables = game_data(rom_path, game)
-    rooms = {}
-    for row in (tables.trainers.values() if tables is not None else ()):
-        if row['class'] in LEAGUE_CLASSES and row['party']:
-            rooms.setdefault(row['class'], tuple(mon['species'] for mon in row['party']))
-    return rooms
-
-
-def room_lead(policy, snapshot):
-    """The party slot that leads into the League room the goal names (planning/boss.py room_lead), or
-    None off a League room goal or when the cartridge's parties could not be read."""
-    from ..planning import boss
-    from ..planning.partner import league_partner
-    data, party = policy.data, snapshot.party
-    room = getattr(data, 'league_rooms', {}).get(LEAGUE_ROOMS.get(getattr(policy.goal, 'key', None)))
-    alive = [slot for slot, mon in enumerate(party) if not mon.egg]
-    if not room or not alive:
-        return None
-    ace = max(alive, key=lambda slot: party[slot].level)
-    partner = league_partner(party, lambda mon: data.species[mon.species]['stats'][0], lambda mon: mon.stats[1],
-                             lambda mon: party_power(data, mon))
-    if partner is not None and (not party[partner].hp or party[partner].level < party[ace].level * boss.FIGHTER_SHARE):
-        partner = None
-    kinds = [tuple(data.species[species]['types']) for species in room if species in data.species]
-
-    def matchup(slot):
-        mon = party[slot]
-        attacks = {data.moves[move]['type'] for move in mon.moves if data.moves.get(move, {}).get('power')}
-        return boss.room_matchup(attacks, data.species[mon.species]['types'], kinds,
-                                 lambda attack, defender: data.matchups.get((attack, defender), 1.0))
-    return boss.room_lead(ace, partner, matchup)
-
-
-def first_league_over(policy):
-    """Drop the first League's state once the Hall of Fame has an entry."""
-    state = policy.collection
-    for key in ('first_league_entered', 'league_lost', 'league_lost_levels', 'league_blocked'):
-        state.pop(key, None)
-    if (state.get('training') or {}).get('league'):
-        state['training'] = None
 
 
 def choice_key(row):
@@ -1321,27 +1161,24 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
                     break
         if candidates:
             _, _, x, y, face = min(candidates, key=lambda row: row[:4])
-    if mid != snapshot.map or not candidates:
-        # Only a tile in a region the route reaches will do. A cave's floor outside its walls counts as an
-        # encounter tile too, and aiming there walks nowhere.
-        route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
-        if route:
-            regions = {route[-1][1][1]}
-        elif route is None:
-            regions = set()
         else:
-            # Already in a region that has the tiles.
-            regions = policy.nav.regions.memberships(snapshot.map, (snapshot.x, snapshot.y), True, True, arrive=True)
-        point = next((point for point in points
-                      if regions & policy.nav.regions.memberships(mid, point[:2], True, True)), None)
-        if point is None:
-            if postgame:
-                return unavailable(policy, snapshot, Goal)
-            # No reachable tile yields it, so the next pick looks elsewhere until the stand-down ends.
-            stand_down(policy, hunt_key(target['species']))
-            state['target'] = None
-            return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
-        x, y, face = point
+            route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
+            if route:
+                region = route[-1][1][1]
+                x, y, face = next((point for point in points
+                                   if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
+            else:
+                if postgame:
+                    return unavailable(policy, snapshot, Goal)
+                # No reachable tile yields it, so the next pick looks elsewhere until the stand-down ends.
+                stand_down(policy, hunt_key(target['species']))
+                state['target'] = None
+                return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
+    else:
+        route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
+        region = route[-1][1][1] if route else None
+        x, y, face = next((point for point in points
+                           if region in policy.nav.regions.memberships(mid, point[:2], True, True)), points[0])
     if label is None:
         name = data.species[target['species']]['name']
         item = item_hunts(policy, snapshot).get(target['species'])

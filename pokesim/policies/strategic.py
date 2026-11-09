@@ -16,8 +16,9 @@ from .naming import NamingController
 from .pickups import Pickups, ground_item
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
 from .move_development import hm_upgrade, move_name
-from .progression import (GAME_STARTERS, STARTERS, YELLOW, Goal, healing_goal, journey, league_partner, milestones,
-                          room_lead, story_goal)
+from .progression import (GAME_STARTERS, STARTERS, YELLOW, Goal, boss_key, boss_room, boss_training, fighter_level,
+                          healing_goal, journey, league_partner, milestones, story_goal)
+from ..planning.losses import Losses
 from . import training
 from .menus import select, tap
 from .shopping import ShoppingController
@@ -234,6 +235,8 @@ class StrategicPolicy(Policy):
         self.interactions = {}
         self.interaction_count = 0
         self.collection = Collection()
+        # The best fighter level that lost to each boss. Store.attach keeps it in the adventure's store.
+        self.losses = Losses()
         self.collection.trade_preferences = lambda: self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
         choices = random.Random(f'{seed}:adventure-choices') if seed is not None else random.Random()
         self.fossil = choices.choice(('HELIX_FOSSIL', 'DOME_FOSSIL'))
@@ -469,6 +472,8 @@ class StrategicPolicy(Policy):
                                                  and not needs_healing(s.party)
                                                  and (bool(s.in_battle) or kind == 'overworld' and pos in self.goal.targets)))
         self.pickups.observe(s, self.collection.elapsed)
+        if s.in_battle and s.party and not any(p.hp for p in s.party):
+            self.note_boss_loss(s)
         if self.collection.completed_champion and s.map == MAPS['HALL_OF_FAME']:
             self.goal = Goal('collect_ceremony','Celebrate the Champion victory','Finish the ceremony and continue the saved adventure')
             self.mode = 'Hall of Fame ceremony'
@@ -539,6 +544,7 @@ class StrategicPolicy(Policy):
                         'Choose a collecting, evolution, training, or exploration objective')
         else:
             base = story_goal(s, self.starter, self.fossil) if s.started else self.goal
+            base = boss_training(s, base, self.losses) or base
         choice = Choice(base, goal_candidate(base, self.collection))
         if self.collection.project and s.map not in LEAGUE:
             project_goal = self.collection.goal(s)
@@ -848,6 +854,17 @@ class StrategicPolicy(Policy):
         if getattr(self, 'boss_heal', False):
             self.heal_latch = True
 
+    def note_boss_loss(self, s):
+        """Remember the best fighter level that lost to the boss the goal names, which raises its bar.
+
+        A loss is a black out or a battle that cannot end in the boss's gym, or anywhere in the League.
+        A reload into a battle leaves no boss goal yet, so then the room alone names the boss."""
+        key = getattr(self.goal, 'key', None)
+        if key not in BOSSES:
+            key = next((k for k in BOSSES if boss_room(k, s.map)), None)
+        if key is not None and boss_room(key, s.map):
+            self.losses.note(boss_key(key), fighter_level(s.party))
+
     def _boss_check(self, s, goal, in_league):
         """The boss check before ``goal`` (planning/boss.py), shared with Gold, Silver and Crystal.
 
@@ -1101,8 +1118,6 @@ class StrategicPolicy(Policy):
             return self._recover(s)
         if (WORLD.get(s.map, {}).get('name', '').endswith('Gym') or in_league) and not goal.key.startswith(('heal', 'restock', 'collect_', 'train_', 'catch_', 'party_', 'teach_')):
             target = self.readiness.get('lead', 0)
-            if in_league:
-                target = room_lead(s, target)
             if target and target < len(s.party) and s.party[target].hp:
                 actions = self._reorder(s, target, 'Lead with the best available matchup')
                 if actions:

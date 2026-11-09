@@ -286,36 +286,6 @@ def treatment(members, bag):
     return None
 
 
-def room_matchup(attacks, types, room, factor):
-    """How a Pokémon with attack types ``attacks`` and types ``types`` meets a room whose party has the
-    type pairs ``room``, as (offense, defense): the mean over the room of its best attack's type factor,
-    and of the strongest factor the foe's own types deal it. ``factor(attack, defender)`` is one entry
-    of the generation's type chart."""
-    def product(attack, kinds):
-        value = 1.0
-        for kind in set(kinds):
-            value *= factor(attack, kind)
-        return value
-    if not room:
-        return 1.0, 1.0
-    offense = sum(max((product(attack, kinds) for attack in attacks), default=0) for kinds in room) / len(room)
-    defense = sum(max(product(kind, types) for kind in set(kinds)) for kinds in room) / len(room)
-    return offense, defense
-
-
-def room_lead(ace, partner, matchup):
-    """The slot that leads into the next League room: the partner when its matchup is neutral or better
-    and it can fight, so the ace keeps its strong PP for the Champion, and otherwise the ace.
-
-    ``matchup`` gives (offense, defense) for a slot, as room_matchup does. Poliwhirl reached Lance at
-    full HP and PP beside a Typhlosion with 2 Flamethrowers left.
-    """
-    if partner is None or partner == ace:
-        return ace
-    offense, defense = matchup(partner)
-    return partner if offense >= 1 and defense <= 1 else ace
-
-
 def boss_name(title):
     """The boss a goal title names, without its leading verb: Lorelei for "Challenge Lorelei"."""
     for verb in ('Challenge ', 'Battle '):

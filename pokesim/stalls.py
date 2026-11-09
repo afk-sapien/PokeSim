@@ -25,28 +25,9 @@ class StallWatch:
         self.frame = self.since = self.alerted = None
         # True until the next autosave, which is then the save to keep from before any stall.
         self.fresh = True
-        # The clocks from before a boss attempt under way, which a loss to the boss puts back.
-        self.held = None
 
     def progress(self, frame, now):
         self.frame, self.since, self.alerted, self.fresh = frame, now, None, True
-
-    def attempt(self):
-        """Start holding the clocks for a boss attempt. True when this starts a new attempt."""
-        if self.held is not None:
-            return False
-        self.held = (self.frame, self.since, self.alerted)
-        return True
-
-    def settle(self):
-        """End a boss attempt that did not black out, so the progress it made stands."""
-        self.held = None
-
-    def lost(self):
-        """Put back the clocks from before a boss attempt that blacked out, so its progress does not count."""
-        if self.held is not None:
-            self.frame, self.since, self.alerted = self.held
-            self.held = None
 
     def quiet(self, frame, now):
         """Game minutes and real minutes since the last progress, starting the clocks on first use."""
@@ -84,25 +65,6 @@ def advanced(previous, snapshot):
     return held(snapshot) > held(previous) or (len(snapshot.party) == len(previous.party)
                                                and experience(snapshot) > experience(previous))
 
-
-def boss_attempt(stall, guard, store, boss, blackout):
-    """Hold back the progress of a boss attempt until it ends, and drop it when the attempt blacks out.
-
-    A team too weak for the Elite Four lost to Lance for 12 hours, and each run earned experience,
-    levels and trainer wins on the way, so the stall alert never fired. A loss to a boss is never
-    progress. ``boss`` says an attempt is under way, ``blackout`` that the party just fainted.
-    """
-    if blackout and stall.held is not None:
-        stall.lost()
-        if guard is not None:
-            guard.lost(store)
-    elif boss:
-        if stall.attempt() and guard is not None:
-            guard.hold(store)
-    elif stall.held is not None:
-        stall.settle()
-        if guard is not None:
-            guard.settle()
 
 
 def stalled_state(live, waiting, stuck, loop):
@@ -148,39 +110,12 @@ class LoopGuard:
         self.limit, self.every, self.clock = limit, every, clock
         self.reloads, self.since, self.scanned, self.returned = {}, None, None, {}
         self.reason, self.checked, self.saved = None, None, {}
-        # The last real progress and the reload counts from before a boss attempt under way.
-        self.held = None
         self.lock = threading.Lock()
 
     def reloaded(self, name):
         with self.lock:
             self.reloads[name] = self.reloads.get(name, 0) + 1
             self.checked = None
-
-    def hold(self, store):
-        """Note where real progress stood as a boss attempt starts (stalls.boss_attempt)."""
-        with self.lock:
-            with store.lock:
-                self._advance(store)
-            self.held = (self.since, dict(self.reloads))
-
-    def settle(self):
-        """Keep the progress of a boss attempt that ended without a blackout."""
-        with self.lock:
-            self.held = None
-
-    def lost(self, store):
-        """Drop the progress of a boss attempt that blacked out. Its entries are scanned past, and
-        ``since`` and the reload counts go back to where they stood when it started."""
-        with self.lock:
-            if self.held is None:
-                return
-            with store.lock:
-                self._advance(store)
-            self.since, reloads = self.held
-            for name, count in reloads.items():
-                self.reloads[name] = max(self.reloads.get(name, 0), count)
-            self.held, self.checked = None, None
 
     def looping(self, store):
         """Why the run is in a loop, or None. Reads the journal at most once every ``every`` seconds."""

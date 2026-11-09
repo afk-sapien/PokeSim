@@ -2598,22 +2598,91 @@ def test_scripted_uncatchable_shiny_does_not_retry_forbidden_escape(real_data, b
     assert policy.shiny_missed == 'no balls'
 
 
-def test_first_gym_waits_for_a_level_twelve_partner(real_data, monkeypatch):
-    from pokesim.gen2 import training
+def test_first_gym_waits_for_a_level_fourteen_partner(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
-    route = real_data.map_ids['ROUTE_31']
-    monkeypatch.setattr(training, 'walk_points', lambda policy, snapshot, mid: [(10, 10, 0)] if mid == route else [])
-    mon = SimpleNamespace(level=9, egg=False)
+    mon = SimpleNamespace(level=9, egg=False, moves=(TACKLE,))
     snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0,
                                party=(mon,), event=lambda name: True)
     goal = policy.journey(snapshot, None)
     assert goal.key == 'collection_train'
     assert goal.map_name == 'ROUTE_31'
-    mon.level = 12
+    mon.level = 14
     assert policy.journey(snapshot, None).key == 'zephyr'
     mon.egg = True
     assert policy.journey(snapshot, None).key == 'collection_train'
+
+
+TACKLE, HARDEN = 33, 106
+
+
+def test_a_pokemon_with_no_damaging_move_is_no_fighter_for_falkner(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    # The Gold party: Chikorita 13 plus a Metapod that knows only Harden is not ready for Falkner.
+    # The Metapod is no fighter at any level, and an egg never is, so only Chikorita counts.
+    chikorita = SimpleNamespace(level=13, egg=False, moves=(TACKLE, 0, 0, 0))
+    metapod = SimpleNamespace(level=20, egg=False, moves=(HARDEN, 0, 0, 0))
+    egg = SimpleNamespace(level=20, egg=True, moves=(TACKLE, 0, 0, 0))
+    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0,
+                               party=(chikorita, metapod, egg), event=lambda name: True)
+    assert policy.fighter_level(snapshot.party) == 13
+    assert policy.journey(snapshot, None).key == 'collection_train'
+    chikorita.level = 14
+    assert policy.journey(snapshot, None).key == 'zephyr'
+
+
+def test_a_loss_to_falkner_raises_the_level_the_team_trains_to(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    # Like the Gold save at Violet Gym: a Chikorita, a bench at Lv 3 to 5 and a Metapod with only
+    # Harden, which went in at Lv 12 and lost. Here Chikorita meets the floor and still loses.
+    party = tuple(SimpleNamespace(level=level, egg=False, hp=0, moves=(TACKLE,)) for level in (14, 5, 4, 3, 3))
+    party += (SimpleNamespace(level=7, egg=False, hp=0, moves=(HARDEN,)),)
+    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0, party=party,
+                               event=lambda name: True)
+    policy.goal = policy.journey(snapshot, None)
+    assert policy.goal.key == 'zephyr'
+    policy.note_boss_loss(snapshot)
+    goal = policy.journey(snapshot, None)
+    assert goal.key == 'collection_train' and goal.map_name == 'ROUTE_31'
+    assert policy.boss_bar('zephyr') == 16
+    # Each loss raises the bar again, up to ten levels over Falkner's Lv 9 Pidgeotto.
+    for level in (16, 18, 20):
+        party[0].level = level
+        policy.note_boss_loss(snapshot)
+    assert policy.boss_bar('zephyr') == 19
+    assert policy.journey(snapshot, None).key == 'zephyr'
+    # A blackout on the way to the gym is no loss to Falkner.
+    other = Policy(real_data)
+    other.goal = policy.goal
+    other.note_boss_loss(SimpleNamespace(map=real_data.map_ids['ROUTE_32'], party=party))
+    assert other.boss_bar('zephyr') == 14
+    # A reload into the battle leaves no goal yet, and a loss there still counts against Falkner.
+    other.goal = None
+    other.note_boss_loss(snapshot)
+    assert other.boss_bar('zephyr') == 19
+
+
+def test_a_boss_loss_outlives_the_reload_in_the_store(real_data, tmp_path):
+    from pokesim.gen2.policy import Policy
+    from pokesim.store import Store
+    store = Store(tmp_path)
+    policy = Policy(real_data)
+    store.attach(policy, 2)
+    party = (SimpleNamespace(level=15, egg=False, hp=0, moves=(TACKLE,)),)
+    policy.goal = SimpleNamespace(key='zephyr', map_name='VIOLET_GYM')
+    policy.note_boss_loss(SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], party=party))
+    # The reload builds a new policy, which reads the loss back from the adventure's store.
+    reloaded = Policy(real_data)
+    store.attach(reloaded, 2)
+    assert reloaded.boss_bar('zephyr') == 17
+    # The Elite Four and Lance share one bar, and a loss inside the League counts in any room.
+    reloaded.goal = SimpleNamespace(key='league_karen', map_name='KARENS_ROOM')
+    reloaded.note_boss_loss(SimpleNamespace(map=real_data.map_ids['LANCES_ROOM'], party=(
+        SimpleNamespace(level=47, egg=False, hp=0, moves=(TACKLE,)),)))
+    assert reloaded.boss_bar('league_will') == reloaded.boss_bar('league_lance') == 49
+    store.close()
 
 
 def _shiny_lead():

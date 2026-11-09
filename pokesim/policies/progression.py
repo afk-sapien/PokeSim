@@ -3,13 +3,18 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 
 from .battle import replacement_slot
-from ..planning.partner import league_partner as shared_partner, partner_level
 from ..planning.stance import HUNT, STORY, TRAIN
 from .navigation import CINNABAR_GYM_DOORS, cinnabar_gate_open
-from .team import OPPONENTS, readiness
+from .team import readiness
 
 from ..game_data import current_variant
-from ..strategy_data import ITEMS, MAPS, SPECIES, WORLD, event_set, object_hidden
+from ..planning.losses import best_level
+from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set, object_hidden
+
+
+def fighter_level(party):
+    """The level of the best party Pokémon that can deal damage, the one each level cap measures."""
+    return best_level(party, lambda move: MOVES.get(move, {}).get('power'))
 
 
 @dataclass(frozen=True)
@@ -98,7 +103,7 @@ def story_goal(snapshot, starter="bulbasaur", fossil="HELIX_FOSSIL"):
             return at("pokedex", "Deliver Oak’s parcel", "Obtain the Pokédex and open the northward route", "OAKS_LAB", 5, 3, "up")
         return at("parcel", "Collect Oak’s parcel", "The Viridian clerk has a delivery for Oak", "VIRIDIAN_MART", 2, 5, "left")
     if not snapshot.badges & 1:
-        if readiness(snapshot, 1)['score'] < 75 and max(p.level for p in snapshot.party) < 22:
+        if readiness(snapshot, 1)['score'] < 75 and fighter_level(snapshot.party) < 22:
             grass = []
             for name in ("ROUTE_2", "VIRIDIAN_FOREST"):
                 m = MAPS[name]
@@ -150,10 +155,42 @@ def training_goal(key, title, reason, map_name):
     return Goal("train_" + key, title, reason, targets, kind=TRAIN)
 
 
+# The League rooms share one loss bar, measured against the Champion's ace, and train on Route 23.
+LEAGUE_ACE, LEAGUE_TRAINING = 65, "ROUTE_23"
+
+
+def boss_key(key):
+    return "league" if key.startswith("league_") else key
+
+
+def boss_room(key, map_id):
+    """Whether ``map_id`` is where the boss goal ``key`` battles: its gym, or any League room."""
+    if boss_key(key) == "league":
+        return map_id in {MAPS[n] for n in ("LORELEIS_ROOM", "BRUNOS_ROOM", "AGATHAS_ROOM", "LANCES_ROOM", "CHAMPIONS_ROOM")}
+    return any(g[1] == key and MAPS[g[3]] == map_id for g in GYMS)
+
+
+def boss_training(s, goal, losses):
+    """Training toward the bar a loss to the boss ``goal`` names raised (planning/losses.py), or None.
+
+    Inside the League nothing turns back, so its rooms carry on."""
+    if goal is None or losses is None:
+        return None
+    key = boss_key(goal.key)
+    gym = next((g for g in GYMS if g[1] == key), None)
+    if gym is None and key != "league" or boss_room("league", s.map):
+        return None
+    ace, route, name = (gym[5], gym[6], gym[2]) if gym else (LEAGUE_ACE, LEAGUE_TRAINING, "the Pokémon League")
+    bar = losses.bar(key, 0, ace)
+    if fighter_level(s.party) >= bar:
+        return None
+    return training_goal(key, f"Prepare for {name}", f"Train the best fighter to level {bar} after a loss to {name}", route)
+
+
 def gym_goal(s, bit):
     _, key, trainer, gym, obj, level, route = next(g for g in GYMS if g[0] == bit)
     assessment = readiness(s, bit)
-    if assessment['score'] < 75 and max(p.level for p in s.party) < level + 10 and s.map != MAPS[gym]:
+    if assessment['score'] < 75 and fighter_level(s.party) < level + 10 and s.map != MAPS[gym]:
         return training_goal(key, f"Prepare for {trainer}",
                              f"Build usable damage and survival against {trainer}, then reassess the team", route)
     if key == "volcano":
@@ -313,10 +350,10 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
     if s.map not in league_maps:
         assessments = [readiness(s, bit) for bit in range(256, 261)]
         partner = league_partner(s)
-        if partner is not None and s.party[partner].level < PARTNER_LEVEL and any(a['score'] < 75 for a in assessments):
+        if partner is not None and s.party[partner].level < 55 and any(a['score'] < 75 for a in assessments):
             return training_goal('league_partner', 'Prepare a second League battler',
                                  'Build coverage for the League matchups that remain difficult', 'POKEMON_MANSION_1F')
-        if max(p.level for p in s.party) < 65 and any(a['score'] < 60 for a in assessments):
+        if fighter_level(s.party) < 65 and any(a['score'] < 60 for a in assessments):
             return training_goal('league', 'Prepare for the Pokémon League',
                                  'Improve damage and survival across the final matchups', 'ROUTE_23')
         if s.map != MAPS['INDIGO_PLATEAU_LOBBY']:
@@ -334,39 +371,18 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
                        "Use Surf through Route 23 and Strength on Victory Road’s boulder switches. Heal and stock up at Indigo Plateau before entering. Inside the League, continue north after each battle.")
 
 
-# The League partner trains to one level under the lowest Elite Four or Champion ace, 55 in Red and Blue.
-PARTNER_LEVEL = partner_level(level for bit, (_, _, level) in OPPONENTS.items() if bit >= 256)
-
-
 def league_partner(snapshot):
-    """The partner to train beside the strongest (planning.partner, shared with Gen II)."""
-    from ..battle_power import battle_power
-    return shared_partner(snapshot.party, lambda p: SPECIES.get(p.species, {}).get("stats", [0])[0], lambda p: p.attack,
-                          lambda p: battle_power({'species': p.species, 'level': p.level, 'dvs': p.dvs,
-                                                  'stat_exp': p.stat_exp, 'moves': p.moves}))
+    """The sturdy partner to train beside the strongest, chosen the same way whatever the party order.
 
-
-def room_lead(snapshot, ace):
-    """The party slot that leads into the next League room (planning/boss.py room_lead, shared with
-    Gen II): the partner when it meets the room's ace neutral or better, so ``ace``, the slot with the
-    best matchup, keeps its strong attacks for the Champion."""
-    from ..planning import boss
-    from ..strategy_data import MATCHUPS, MOVES
-    from .team import next_opponent
+    The partner is moved to the lead, so a choice that depended on position changed once it was
+    made: with Muk and Charizard both at level 54, Lapras and Muk traded the lead forever."""
     party = snapshot.party
-    partner = league_partner(snapshot)
-    if partner is not None and (not party[partner].hp
-                                or party[partner].level < max(mon.level for mon in party) * boss.FIGHTER_SHARE):
-        partner = None
-    _, name, _ = OPPONENTS[next_opponent(snapshot)]
-    kinds = [tuple(data['types']) for data in SPECIES.values() if data.get('name') == name][:1]
-
-    def matchup(slot):
-        mon = party[slot]
-        attacks = {MOVES[move]['type'] for move in mon.moves if MOVES.get(move, {}).get('power')}
-        return boss.room_matchup(attacks, SPECIES.get(mon.species, {}).get('types', ()), kinds,
-                                 lambda attack, defender: MATCHUPS.get((attack, defender), 1.0))
-    return boss.room_lead(ace, partner, matchup)
+    bulk = lambda i: (party[i].max_hp + party[i].attack, party[i].level, party[i].experience)
+    # Ties go to the later partner, so that an identical twin already leading stays the one to train.
+    strongest = max(range(len(party)), key=lambda i: (party[i].level, *bulk(i), i))
+    candidates = [i for i, p in enumerate(party) if i != strongest
+                  and SPECIES.get(p.species, {}).get("stats", [0])[0] >= 90]
+    return max(candidates, key=lambda i: (bulk(i), -i)) if candidates else None
 
 
 def journey(snapshot, current):

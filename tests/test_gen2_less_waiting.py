@@ -15,13 +15,6 @@ def data(request):
     return GameData.load(directory, request.param)
 
 
-@pytest.fixture(autouse=True)
-def site(monkeypatch):
-    """These fakes carry no navigation, so every training site is taken as reachable (test_gen2_training_sites checks it)."""
-    from pokesim.gen2 import training
-    monkeypatch.setattr(training, 'site', lambda policy, snapshot, project, mon: project.get('map') or training.SITE)
-
-
 def mon(species, *, box=0, position=0, level=30, dvs=(10, 10, 10, 10, 10), **extra):
     fields = dict(species=species, name=str(species), gender='Male', egg=False, box=box, position=position, trainer_id=4321,
                   dvs=dvs, moves=(33, 0, 0, 0), pp=(35, 0, 0, 0), level=level, friendship=70, held_item=0,
@@ -170,8 +163,7 @@ def test_full_boxes_with_nothing_to_release_wait_for_no_catch_and_free_the_leagu
     from pokesim.planning import values
     policy = expedition(data)
     policy.completed = {'champion': 1}
-    # Two at League level, since one strong Pokémon alone never goes to the League.
-    full = snapshot([lead(), lead()], owned=set(range(1, 252)) - {131})
+    full = snapshot([lead()], owned=set(range(1, 252)) - {131})
     assert clock_wait(policy, full, clock(), 'day') == 'Lapras waits for Friday'
     wait = waiting(policy, full, clock(), 'day')
     assert wait.passive and wait.value == values.NEW_ENTRY
@@ -202,7 +194,7 @@ def test_a_time_of_day_encounter_names_the_species_and_the_time(data):
 def walk_anywhere(monkeypatch):
     from pokesim.gen2 import training
     from pokesim.gen2.policy import Goal
-    monkeypatch.setattr(training, 'walk_goal', lambda policy, snapshot, Goal_, label, **spot: Goal(
+    monkeypatch.setattr(training, 'walk_goal', lambda policy, snapshot, Goal_, label: Goal(
         'collection_train', label(), 'SILVER_CAVE_ROOM_1', 9, 31))
 
 

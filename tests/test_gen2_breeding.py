@@ -15,15 +15,6 @@ def real_data(request):
     return GameData.load(directory, request.param)
 
 
-@pytest.fixture(autouse=True)
-def site(monkeypatch):
-    """These fakes carry no navigation, so every training site is taken as reachable (test_gen2_training_sites checks it)."""
-    from pokesim.gen2 import collection, training
-    monkeypatch.setattr(training, 'site', lambda policy, snapshot, project, mon: project.get('map') or training.SITE)
-    monkeypatch.setattr(training, 'walk_points', lambda policy, snapshot, mid: collection.encounter_points(
-        policy, snapshot, mid, 'grass'))
-
-
 def mon(species, gender='Male', *, box=0, dvs=(10, 10, 10, 10, 10), level=30, **extra):
     fields = dict(species=species, name=str(species), gender=gender, egg=False, box=box, position=0, trainer_id=4321, dvs=dvs,
                   moves=(33, 0, 0, 0), level=level, friendship=70, held_item=0, experience=30000, stat_exp=(0,) * 5)
