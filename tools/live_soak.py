@@ -48,6 +48,9 @@ SEED = 7
 # Catches under one goal in a row with no improvement that count as churn. Live, Yellow caught 1518
 # and released 1498 in a day with no new best copy and no new entry.
 CHURN_CATCHES = 10
+# How many times rarer than the rarest copy held a new copy must be to improve the PC, as
+# pcvalue.RARITY_STEP. Kept here so the judge runs on commits without it.
+RARITY_STEP = 2
 # Gifts the seeded rungs are owed.
 BACKLOG = 30
 RUNGS = ('red', 'yellow', 'crystal')
@@ -282,9 +285,11 @@ def _held(game, dex_of):
 class Catches:
     """Each catch from capture_receipts, with the goal it ran under and whether it improved the PC.
 
-    A catch improves the PC when it becomes the best kept copy of its species by DV tail, or is the
-    first one kept, which covers a new Pokédex entry. The worker reports a catch a moment after it
-    writes the receipt, so a catch seen at one poll is judged at the next, against the poll before it.
+    A catch improves the PC when it is the first copy of its species, a new Pokédex entry, or when its
+    own copy is RARITY_STEP times rarer than the rarest copy held when it arrived, as the catch rule
+    keeps it. A catch whose copy was not rated falls back to the best kept DV tail, judged against the
+    poll before. The worker reports a catch a moment after it writes the receipt, so a catch seen at
+    one poll is judged at the next.
     """
 
     def __init__(self):
@@ -303,15 +308,20 @@ class Catches:
             self.arrivals.setdefault(dex, []).extend((self.polls, *copy) for copy in copies)
         older = self.older if self.older is not None else self.latest
         for fingerprint, dex, recorded_at in self.waiting:
-            # One better copy is credited to one catch, though the next catch is judged against the same poll.
-            bar = min(older.get(dex, float('inf')), self.credited.get(dex, float('inf')))
-            improved = dex in best and best[dex] < bar - 1e-9
-            if improved:
-                self.credited[dex] = best[dex]
             _, rarity, best_held = (self.arrivals.get(dex) or [(None, None, None)]).pop(0)
+            if rarity is not None:
+                improved = best_held is None or rarity * RARITY_STEP <= best_held + 1e-12
+                tail, bar = rarity, best_held
+            else:
+                # One better copy is credited to one catch, though the next catch is judged against the same poll.
+                bar = min(older.get(dex, float('inf')), self.credited.get(dex, float('inf')))
+                improved = dex in best and best[dex] < bar - 1e-9
+                if improved:
+                    self.credited[dex] = best[dex]
+                tail = best.get(dex)
             self.rows.append({'at': recorded_at, 'dex': dex, 'goal': self.goal, 'improved': improved,
                               'gift': fingerprint.startswith('gift-event:'),
-                              'tail': best[dex] if improved else None, 'bar': bar if improved else None,
+                              'tail': tail if improved else None, 'bar': bar if improved else None,
                               'rarity': rarity, 'best_held': best_held})
         # A copy no catch took by the poll after it arrived came some other way, as a trade or a gift.
         self.arrivals = {dex: [copy for copy in copies if copy[0] == self.polls]
@@ -319,11 +329,13 @@ class Catches:
         self.waiting, self.goal = list(receipts), goal
         self.older, self.latest = self.latest, best
 
-    def finish(self, best):
+    def finish(self, best, rarest=None):
+        """``rarest`` is Copies.rarest at the end, to judge a rated catch by the same rater."""
         self.poll([], self.goal, best)
         for row in self.rows:
             # Kept while the PC still holds its copy or a rarer one at the end.
-            row['kept'] = bool(row['improved'] and row['dex'] in best and best[row['dex']] <= row['tail'] + 1e-9)
+            held = best if row['rarity'] is None else (rarest or {})
+            row['kept'] = bool(row['improved'] and row['dex'] in held and held[row['dex']] <= row['tail'] + 1e-9)
         return self.rows
 
 
@@ -447,6 +459,16 @@ class Copies:
         self.best_copy, self.only_copy, self.locked, self.from_party = [], [], [], []
         self.party, self.locks, self.where, self.carrying, self.errands = set(), set(), None, set(), set()
         self.first_wave, self.wave_over = None, False
+
+    def rarest(self):
+        """The rarest copy held of each species at the last poll."""
+        found = {}
+        for key in self.held or {}:
+            tail = self.tail(key)
+            if tail is not None:
+                dex = self.dex.get(key)
+                found[dex] = min(found.get(dex, tail), tail)
+        return found
 
     def tail(self, key):
         if key not in self.tails:
@@ -691,7 +713,7 @@ def play_one(manager, aid, frames, progress):
     result.update(frames=(end or 0) - (start or 0), wall_seconds=round(time.monotonic() - began, 1),
                   events=[[row[0], row[1], row[2], row[3]] for row in events],
                   journal_bytes=sum(row[4] for row in events), kv_bytes=kv_after - kv_before,
-                  receipts=[list(row) for row in receipts], catches=catches.finish(best),
+                  receipts=[list(row) for row in receipts], catches=catches.finish(best, copies.rarest()),
                   held_start=held_start, held_end=held_end, reloads=reloads, errors=len(errors),
                   error_lines=errors[:5], help=help_reason, names=names,
                   first_visit=copies.first_visit, pushed_out=copies.pushed_out, first_wave=copies.first_wave,
