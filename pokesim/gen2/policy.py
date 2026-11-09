@@ -43,6 +43,10 @@ def transformed(mem, mon):
                    pp=tuple(value & 63 for value in mem.read('wBattleMonPP', 4)), stats=stats)
 
 
+# The grass the team trains in before Falkner.
+FALKNER_SITE = 'ROUTE_31'
+
+
 @dataclass(frozen=True)
 class Action:
     button: str | None = None
@@ -375,11 +379,12 @@ class Policy:
             return Goal('deliver_egg', 'Bring the mystery egg to Elm', 'ELMS_LAB', 5, 3, 'up')
         self.completed.setdefault('deliver_egg', snapshot.frame)
         if not snapshot.badges & 1:
+            walk = None
             if max((mon.level for mon in snapshot.party if not mon.egg), default=0) < 12:
                 from .training import walk_goal
-                return walk_goal(self, snapshot, Goal, lambda: 'Train the team to level 12 before Falkner',
-                                 map_name='ROUTE_31')
-            return Goal('zephyr', 'Challenge Falkner', 'VIOLET_GYM', 5, 2, 'up')
+                walk = walk_goal(self, snapshot, Goal, lambda: 'Train the team to level 12 before Falkner',
+                                 map_name=FALKNER_SITE)
+            return walk or Goal('zephyr', 'Challenge Falkner', 'VIOLET_GYM', 5, 2, 'up')
         self.completed.setdefault('zephyr', snapshot.frame)
         if not snapshot.event('EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE'):
             from .quests import room_for_gift

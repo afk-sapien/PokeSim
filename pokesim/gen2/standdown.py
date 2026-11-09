@@ -63,6 +63,11 @@ def train_key(identity):
     return 'train:' + json.dumps(identity)
 
 
+def site_key(mid):
+    """A training site that gave a whole stint without experience."""
+    return f'site:{int(mid)}'
+
+
 def rung_key(name):
     """A collection rung the stuck watchdog gave up on, once every reload replayed the same trouble."""
     return f'rung:{name}'
@@ -116,6 +121,9 @@ def stalled_objectives(policy):
     training = state.get('training')
     if training and goal is not None and goal.key.startswith('collection_train'):
         keys.add(train_key(training['identity']))
+        if training.get('site') and not training.get('gained'):
+            # A reload for lack of progress ends the stint, and a stint with no experience fails its site.
+            keys.add(site_key(policy.data.map_ids[training['site']]))
     from .postgame import stall_key
     search = stall_key(policy) if not target else None
     if search:
