@@ -62,15 +62,23 @@ def storage_headroom(s):
 
 
 def release_rated(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts=frozenset(),
-                  rewards=frozenset(), requested=None, demand=None, favor=None, extra=()):
+                  rewards=frozenset(), requested=None, demand=None, favor=None, extra=(), team=frozenset()):
     """Every Pokémon scored with pcvalue.rate. ``demand`` maps a Pokédex number to the linked adventures
     missing it, which keeps that many copies and counts as trade demand. ``favor`` is the Favor shiny or
-    Favor DVs setting, ``extra`` adds rows such as an incoming trade, and the rest are as in ``entries``."""
+    Favor DVs setting, ``extra`` adds rows such as an incoming trade, ``team`` is pcvalue.Inputs.team
+    and the rest are as in ``entries``."""
     from collections import Counter
     from ..investment import dex_rarity
     from ..pcvalue import Inputs, rate
     return rate([*entries(s, preferences, roles, stock, partners, gifts, rewards, requested), *extra],
-                Inputs(demand=dict(demand or {}), wishes=Counter(demand or {}), favor=favor, rarity=dex_rarity))
+                Inputs(demand=dict(demand or {}), wishes=Counter(demand or {}), favor=favor, rarity=dex_rarity,
+                       team=frozenset(team)))
+
+
+def team_keys(party):
+    """The (dex, DVs) of each party member with known DVs, for pcvalue.Inputs.team."""
+    return frozenset((SPECIES.get(mon.species, {}).get('dex', 0), tuple(mon.dvs)) for mon in party
+                     if len(getattr(mon, 'dvs', ())) == 5)
 
 
 def spare_copies(s, stock=()):
@@ -89,8 +97,9 @@ _RELEASE = [None, None, None]
 
 
 def release_target(s, stock=(), reserved=(), partners=frozenset(), gifts=frozenset(), preferences=None,
-                   demand=None, rewards=frozenset(), requested=None, roles=(), favor=None):
-    """The next Pokémon to release as (box, position), or None (pcvalue.py).
+                   demand=None, rewards=frozenset(), requested=None, roles=(), favor=None, team=frozenset()):
+    """The next Pokémon to release as (box, position), or None (pcvalue.py). Only a stored spare may go:
+    the party, a plan's trainee or partner and a ``team`` member deposited at this visit are floors.
 
     The lowest-value Pokémon that may go is chosen among the ones a refill needs, ordered for one PC
     visit: the open box first, then the box holding the most of them. This ranks every stored copy and
@@ -105,14 +114,14 @@ def release_target(s, stock=(), reserved=(), partners=frozenset(), gifts=frozens
            getattr(s, 'player_id', None),
            getattr(s, 'active_box', None), tuple(getattr(s, 'box_counts', ()) or ()),
            tuple(sorted((key, (value or {}).get('state')) for key, value in (preferences or {}).items())),
-           freeze(demand), frozenset(rewards), freeze(requested), frozenset(roles), favor)
+           freeze(demand), frozenset(rewards), freeze(requested), frozenset(roles), favor, frozenset(team))
     try:
         hash(key)
     except TypeError:
         key = object()
     if _RELEASE[0] != key:
         _RELEASE[:] = [key, *_release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards,
-                                             requested, roles, favor)]
+                                             requested, roles, favor, team)]
     return _RELEASE[1]
 
 
@@ -193,10 +202,10 @@ def held_identities(s):
     return {identity(mon) for mon in [*(asdict(mon) for mon in s.party), *stored] if mon.get('trainer_id') is not None}
 
 
-def _release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards, requested, roles, favor):
+def _release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards, requested, roles, favor, team=frozenset()):
     from ..planning.ledger import box_wanted
     from ..pcvalue import deadlocked, releases, requested as asked
-    every = release_rated(s, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor)
+    every = release_rated(s, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor, team=team)
     rated = [row for row in every if row.entry.slot not in reserved]
     # The visit takes every owner request, as in Gold, Silver and Crystal (gen2/ledger.py).
     chosen = releases(rated, max(box_wanted(storage_headroom(s), True), len(asked(rated)), 1),

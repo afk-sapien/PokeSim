@@ -686,6 +686,11 @@ class Emulator:
             from .release import keeps_another
             activity, reopened = returns.observe_events(self.store, snapshot, self.pb.memory, walking,
                                                         lambda dex: keeps_another(self.policy, snapshot, dex))
+            declined = getattr(self.policy, 'declined', None)
+            if isinstance(declined, set):
+                for dex in declined:
+                    returns.decline(self.store, dex)
+                self.policy.declined = set()
             ready, closed = returns.claims(self.store)
             self.policy.returned = ready | returns.returned_events(self.store)
             for event in notices + activity:

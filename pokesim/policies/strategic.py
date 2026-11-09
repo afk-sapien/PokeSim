@@ -22,7 +22,7 @@ from .menus import select, tap
 from .shopping import ShoppingController
 from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
-from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, legendary_project, snorlax_project
+from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, improves, legendary_project, snorlax_project
 from ..planning import values
 from ..planning import arbiter
 from ..planning import boss
@@ -33,7 +33,8 @@ from ..planning.monitor import STOOD_DOWN
 from ..planning.stance import FLEE_TRIES, STORY, TRAIN
 from .awareness import ActionWatch
 from .team import (development_candidate, held_identities, potential, readiness, release_note, requested_slots,
-                   reserve_to_deposit, storage_headroom)
+                   reserve_to_deposit, storage_headroom, team_keys)
+from ..pcvalue import VisitTeam
 from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
@@ -302,6 +303,7 @@ class StrategicPolicy(Policy):
         self.shop = ShoppingController()
         # The PC menu ranks releases with the same call as the planner, so the two never disagree.
         self.pc = StorageController(ranker=self._release_target)
+        self.visit_team = VisitTeam()
         # The spare the run lets go next as (box, position). Trading never offers it.
         self.release_spare = None
         # Its (species, PC value text) for the journal, and whether the PC is full with nothing that may go.
@@ -451,6 +453,8 @@ class StrategicPolicy(Policy):
         frame = s.frame
         pos = (s.map, s.x, s.y)
         self.decisions += 1
+        # A team member deposited at this PC visit stays until a later one (pcvalue.VisitTeam).
+        self.pc.team = self.visit_team.observe(s.map, team_keys(s.party))
         # PC transfers briefly combine a new partner with the old slot's level.
         # Accept training gains in battle or after returning to the overworld.
         # A release visit to the PC is storage work, so its frames do not count against the project.
@@ -708,7 +712,8 @@ class StrategicPolicy(Policy):
             missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
             targeted = self.collection.repeat_target(s.enemy_species, s.map, s, enemy_dvs(mem),
                                                      self.catch_rating(s)) == s.enemy_species
-            if not s.can_catch or not (s.enemy_shiny or missing or targeted or useful_capture(s, s.enemy_species, s.enemy_level)):
+            if not s.can_catch or not (s.enemy_shiny or missing or targeted
+                                       or useful_capture(s, s.enemy_species, s.enemy_level, keeps=self._keeps(s, s.enemy_species, mem))):
                 self.reason = ('Leave the encounter because the party and active box are full' if not s.can_catch
                                else 'Leave an unnecessary duplicate already covered by the collection')
                 if scr.top_x != 13:
@@ -749,7 +754,8 @@ class StrategicPolicy(Policy):
                                                                                          self.catch_rating(s)),
                                             training_index=self.collection.trainee(s, self.collection.project)
                                             if self.collection.project and self.collection.project['method'] == 'train' else None,
-                                            kind=getattr(self.goal, 'kind', STORY), flee_tries=self.flee_tries)
+                                            kind=getattr(self.goal, 'kind', STORY), flee_tries=self.flee_tries,
+                                            keeps=self._keeps(s, enemy.species, mem))
                 self.intent_since = s.frame
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
@@ -1404,7 +1410,7 @@ class StrategicPolicy(Policy):
                                   if key[0] == 'release' and until > snapshot.frame) | guarded(snapshot, self.sp)
         self.pc.partners = frozenset(self.trade_partners()) if hasattr(self, 'trade_partners') else frozenset()
         target = self.pc.release_target(snapshot, self.collection.project, self._preferences(), self.collection,
-                                        self.pc.avoid, self.pc.partners, *self.release_inputs())
+                                        self.pc.avoid, self.pc.partners, *self.release_inputs(), team=self.pc.team)
         # The journal quotes the chosen Pokémon's PC value, and says once when nothing may go.
         self.release_note, self.pc_deadlock = release_note()
         return target
@@ -1415,11 +1421,15 @@ class StrategicPolicy(Policy):
         partners = frozenset(self.trade_partners()) if hasattr(self, 'trade_partners') else frozenset()
         rewards, requested, favor = self.release_inputs()
         return self.pc.rated(snapshot, self.collection.project, self._preferences(), self.collection, partners,
-                             frozenset(rewards) | marks, requested, favor, extra)
+                             frozenset(rewards) | marks, requested, favor, extra, self.pc.team)
 
     def catch_rating(self, snapshot):
         """The PC rated with a wild catch's extra rows as the next release rates it (collection.improves)."""
         return lambda extra: self.pc_rated(snapshot, extra=extra)
+
+    def _keeps(self, snapshot, species, mem):
+        """Whether the PC would keep the wild ``species`` in battle, asked only when a catch rule needs it."""
+        return lambda: improves(snapshot, species, enemy_dvs(mem), self.catch_rating(snapshot))
 
     def release_pending(self, snapshot):
         """Whether an owner's release request waits for the next PC visit. A request whose Pokémon has
