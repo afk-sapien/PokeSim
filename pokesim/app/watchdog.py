@@ -402,7 +402,7 @@ class Watchdog:
             self.progress.pop(aid, None)
             self.held[aid] = now
             return
-        self._stalled(row, now, found)
+        self._stalled(row, now, found, status)
         game = status.get('game') or {}
         place = game.get('map_name') or 'the same place'
         stuck = status.get('stuck_seconds')
@@ -446,9 +446,10 @@ class Watchdog:
             return False
         return now - current.since >= self.limits.no_progress
 
-    def _stalled(self, row, now, found):
+    def _stalled(self, row, now, found, status=None):
         """Read the adventure's progress table and journal every few minutes (progress_sweep.py). Time
-        spent stopped, down or held still never counts toward a stall."""
+        spent stopped, down or held still never counts toward a stall. Two stall entries at one place
+        within an hour count at once, and so does a day with every box full and nothing caught."""
         root = getattr(self.manager, 'root', None)
         if root is None:
             return
@@ -464,6 +465,20 @@ class Watchdog:
         reading = cached[1]
         if reading is None:
             return
+        repeat = progress_sweep.repeated(reading.stalls, now)
+        if repeat:
+            place, first, count = repeat
+            found[f'repeat_stall:{aid}'] = Problem(
+                f'repeat_stall:{aid}', 'repeat_stall',
+                f'{name} got stuck {count} times at {place} within {duration(now - first)}.',
+                first, aid, f'{name} has not been stuck at {place} again for an hour.')
+        watch = (status or {}).get('watch') or {}
+        caught = max(reading.caught, self.held.get(aid, 0))
+        if watch.get('boxes_full') and now - caught >= progress_sweep.CATCH_QUIET:
+            found[f'boxes_full:{aid}'] = Problem(
+                f'boxes_full:{aid}', 'boxes_full',
+                f'{name} has full boxes and has caught nothing for {duration(now - caught)}.',
+                caught, aid, f'{name} has room to catch again.')
         since = max(reading.last, self.held.get(aid, 0))
         if now - since < reading.limit:
             return

@@ -32,7 +32,7 @@ DATA = SimpleNamespace(
              73: {'types': [21, 3], 'stats': [80, 70, 65, 100, 80, 120]},
              132: {'types': [0, 0], 'stats': [48, 48, 48, 48, 48, 48]}},
     moves={HYDRO_PUMP: move('Hydro Pump', 120, 21, 5), WATERFALL: move('Waterfall', 80, 21, 15),
-           REST: move('Rest', 0, 24, 10), GROWL: move('Growl', 0, 0, 40), PECK: move('Peck', 35, 2, 35),
+           REST: dict(move('Rest', 0, 24, 10), effect='EFFECT_HEAL'), GROWL: move('Growl', 0, 0, 40), PECK: move('Peck', 35, 2, 35),
            SURF: move('Surf', 95, 21, 15), TRANSFORM: dict(move('Transform', 0, 0, 10), effect='EFFECT_TRANSFORM')},
     matchups={(21, 21): 0.5}, items={'MAX_ELIXER': 1, 'ELIXER': 2}, map_ids={'INDIGO_PLATEAU_POKECENTER_1F': 7, 'ROUTE_23': 3})
 
@@ -82,6 +82,8 @@ def test_a_party_with_nothing_but_rest_and_growl_cannot_end_the_battle(data):
     # With no PP at all Struggle attacks, and a wild battle can be run from.
     assert not hopeless(lance((mon(134, 100, 359, (HYDRO_PUMP, REST, 0, 0), (0, 0, 0, 0)),)))
     assert not hopeless(lance((vaporeon(),), in_battle=1))
+    # Without Rest the foe knocks Vaporeon out in the end, so the battle ends in a loss.
+    assert not hopeless(lance((fainted, mon(134, 100, 359, (HYDRO_PUMP, GROWL, 0, 0), (0, 34, 0, 0)))))
 
 
 class BattleMemory:
