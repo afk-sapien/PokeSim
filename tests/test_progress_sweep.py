@@ -34,8 +34,8 @@ class Adventure:
         self.db.execute('INSERT INTO progress(ts, badges, owned, seen, league, level100, perfect) '
                         'VALUES (?,?,?,?,?,?,?)', row)
 
-    def event(self, ts, kind, title='entry'):
-        self.db.execute('INSERT INTO events(ts, type, title) VALUES (?,?,?)', (ts, kind, title))
+    def event(self, ts, kind, title='entry', place=''):
+        self.db.execute('INSERT INTO events(ts, type, title, map) VALUES (?,?,?,?)', (ts, kind, title, place))
 
 
 @pytest.fixture
@@ -64,7 +64,10 @@ def sweep(tmp_path):
         child.watch = (now, seen or child.watch[1])
         watchdog.tick()
         return [row for row in watchdog.public()['problems'] if row['kind'] == 'stalled']
-    return SimpleNamespace(adventure=adventure, start=start, at=at, sent=sent)
+
+    def kinds():
+        return sorted(row['kind'] for row in watchdog.public()['problems'])
+    return SimpleNamespace(adventure=adventure, start=start, at=at, sent=sent, kinds=kinds)
 
 
 def test_the_story_limit_is_twice_the_slowest_stage_with_a_three_hour_floor():
@@ -161,3 +164,48 @@ def test_time_held_still_never_counts(sweep):
     assert sweep.at(start + 30 * HOUR, status(paused=True)) == []
     assert sweep.at(start + 53 * HOUR, status()) == []
     assert len(sweep.at(start + 54 * HOUR + 60)) == 1
+
+
+# Gold at Violet Gym with 0 badges: the last progress row, then two reloads 34 minutes apart.
+VIOLET_ROW = (1794247024.4673505, 0, 4, None, 0, None, None)
+VIOLET_STALLS = (1794247332.24468, 1794249403.3313262)
+
+
+def test_two_stalls_at_one_place_within_an_hour_alert_at_once(sweep):
+    sweep.adventure.row(VIOLET_ROW)
+    sweep.adventure.event(VIOLET_STALLS[0] - 600, 'stall', 'Stuck?', 'Route 31')
+    sweep.adventure.event(VIOLET_STALLS[0], 'stall', 'Stuck? The adventure had to reload twice', 'Violet Gym')
+    sweep.start(VIOLET_STALLS[0] + 60, 'gold')
+    # One stall here and one somewhere else is the game's own recovery doing its job.
+    assert sweep.at(VIOLET_STALLS[0] + 60) == [] and sweep.kinds() == []
+    sweep.adventure.event(VIOLET_STALLS[1], 'stall', 'Stuck? The adventure had to reload twice', 'Violet Gym')
+    sweep.at(VIOLET_STALLS[1] + 60)
+    # The three hour floor is still far off, and the repeat does not wait for it.
+    assert sweep.kinds() == ['repeat_stall']
+    assert sweep.sent == [('Needs attention', 'Mischievous Badge Hunt got stuck 2 times at Violet Gym within 35 minutes.')]
+    sweep.at(VIOLET_STALLS[0] + HOUR + 60)
+    assert sweep.kinds() == [] and [title for title, _ in sweep.sent] == ['Needs attention', 'Recovered']
+
+
+def test_full_boxes_and_a_day_without_a_catch_alert(sweep):
+    sweep.adventure.row(SILVER)
+    start = SILVER[0]
+    sweep.adventure.event(start, 'catch', 'Caught Golbat!')
+    full = status(watch={'map': 1, 'owned': 251, 'badges': 16, 'hall_of_fame': 3, 'boxes_full': True})
+    sweep.start(start, 'silver')
+    sweep.at(start + 23 * HOUR, full)
+    assert 'boxes_full' not in sweep.kinds()
+    sweep.at(start + 24 * HOUR + 60, full)
+    assert 'boxes_full' in sweep.kinds()
+    assert ('Needs attention', 'Mischievous Badge Hunt has full boxes and has caught nothing for 24 hours and 1 minute.') in sweep.sent
+    sweep.at(start + 24 * HOUR + 120, status())
+    assert 'boxes_full' not in sweep.kinds()
+
+
+def test_the_supervisor_summary_says_when_every_box_is_full():
+    from pokesim.web.app import status_summary
+    def boxes(*counts):
+        return status_summary({'game': {'storage': {'box_counts': list(counts), 'capacity': 20}}})['watch']['boxes_full']
+    assert boxes(20, 20, 20) is True
+    assert boxes(20, 19, 20) is False
+    assert boxes() is False

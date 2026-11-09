@@ -317,7 +317,9 @@ class Store:
         return value if value in ('shiny', 'dvs') else None
 
     def attach(self, policy, generation=1):
-        """Give a policy the stored trade settings and the release inputs pcvalue reads."""
+        """Give a policy the stored trade settings, the release inputs pcvalue reads and its boss losses."""
+        from .planning.losses import Losses
+        policy.losses = Losses(self)
         policy.trade_preferences = self.trade_preferences
         policy.trade_partners = self.trade_partners
         policy.league_marks = lambda: self.league_marks(generation)

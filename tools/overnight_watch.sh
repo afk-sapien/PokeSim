@@ -3,7 +3,7 @@
 # private saves CI lacks at the commit the hosted app runs, checks that the app is up,
 # and checks that Gen 2 adventures go back to quality hunts once training runs out.
 # Writes one log per night and keeps the newest 14.
-# Settings come from POKESIM_WATCH_* environment variables. HOST and SITE have no default.
+# Settings come from POKESIM_WATCH_* environment variables. HOST has no default.
 # The systemd units in deploy/systemd run it from the watch's own PokeSim clone, which it
 # moves to origin/main first. The whole script is one function, so bash has read all of it
 # before the clone changes under it.
@@ -21,9 +21,8 @@ ROMS=${POKESIM_WATCH_ROMS:-$HOME/roms/pokemon}
 DATA=${POKESIM_WATCH_DATA:-$HOME/Repos/pokesim/data}
 # Save states plus a shortcuts.json manifest for Core's shortcut test on real cartridges.
 SHORTCUTS=${POKESIM_CORE_SHORTCUT_STATES:-$HOME/roms/pokemon/shortcut-states}
-# The SSH host that runs the app and the site name its proxy answers to.
+# The SSH host that runs the app. Every check reads it through docker there, so none needs a login.
 HOST=${POKESIM_WATCH_HOST:?set POKESIM_WATCH_HOST to the SSH host running the app}
-SITE=${POKESIM_WATCH_SITE:?set POKESIM_WATCH_SITE to the app site name}
 CONTAINER=${POKESIM_WATCH_CONTAINER:-pokesim-app-pokesim-1}
 LOGS=${POKESIM_WATCH_LOGS:-$HOME/.local/state/pokesim-overnight}
 KEEP=${POKESIM_WATCH_KEEP:-14}
@@ -142,7 +141,8 @@ fi
 echo "-- Gen 2 quality hunts on $HOST"
 # A Gold, Silver or Crystal adventure with no trainee left must start a better-DV hunt within 6 game
 # hours. The state file keeps the game hour at which each one was first seen without a trainee.
-if ! ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST" "docker exec -i $CONTAINER python - collect $SITE" \
+# It reads the adventures' files inside the container, never the site, so it needs no login.
+if ! ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST" "docker exec -i $CONTAINER python - collect" \
     <"$HERE/quality_hunt_watch.py" | python3 "$HERE/quality_hunt_watch.py" judge "$LOGS/quality-hunts.json"; then
   failed+=(quality)
 fi
