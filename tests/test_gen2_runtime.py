@@ -2598,7 +2598,15 @@ def test_scripted_uncatchable_shiny_does_not_retry_forbidden_escape(real_data, b
     assert policy.shiny_missed == 'no balls'
 
 
-def test_first_gym_waits_for_a_level_fourteen_partner(real_data):
+@pytest.fixture
+def route_31_walk(real_data, monkeypatch):
+    """Route 31 has a reachable tile, since these snapshots carry no position to route from."""
+    from pokesim.gen2 import training
+    route = real_data.map_ids['ROUTE_31']
+    monkeypatch.setattr(training, 'walk_points', lambda policy, snapshot, mid: [(10, 10, 0)] if mid == route else [])
+
+
+def test_first_gym_waits_for_a_level_fourteen_partner(real_data, route_31_walk):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
     mon = SimpleNamespace(level=9, egg=False, moves=(TACKLE,))
@@ -2616,7 +2624,7 @@ def test_first_gym_waits_for_a_level_fourteen_partner(real_data):
 TACKLE, HARDEN = 33, 106
 
 
-def test_a_pokemon_with_no_damaging_move_is_no_fighter_for_falkner(real_data):
+def test_a_pokemon_with_no_damaging_move_is_no_fighter_for_falkner(real_data, route_31_walk):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
     # The Gold party: Chikorita 13 plus a Metapod that knows only Harden is not ready for Falkner.
@@ -2632,7 +2640,7 @@ def test_a_pokemon_with_no_damaging_move_is_no_fighter_for_falkner(real_data):
     assert policy.journey(snapshot, None).key == 'zephyr'
 
 
-def test_a_loss_to_falkner_raises_the_level_the_team_trains_to(real_data):
+def test_a_loss_to_falkner_raises_the_level_the_team_trains_to(real_data, route_31_walk):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
     # Like the Gold save at Violet Gym: a Chikorita, a bench at Lv 3 to 5 and a Metapod with only
