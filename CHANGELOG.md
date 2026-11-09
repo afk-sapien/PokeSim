@@ -85,6 +85,8 @@
 
 - Heal before a boss battle when the party is not ready, in all six games. Before a gym leader, an Elite Four member, the Champion, the Gen I rival in the League or Red, a Pokémon under half its HP, or under half the PP of the attacks it fights with, sends the party to a Pokémon Center first. Each attack's PP counts by how hard it hits, so a spent Flamethrower is not hidden by a full Strength. One approach takes at most three such trips. With no Center in reach, or the trips used, the party goes in as it stands and the journal says "Went in unready".
 
+- Keep the image that can restore each host backup, and keep fixes on `main` from sitting outside production. `tools/deploy_host.sh` named each backup after the commit it deployed and kept that image, but the data was written by the image before it, so a backup could outlive the only image that could open it. Each backup now has a json file naming its writer image, and that image is kept. The script also lists the `main` commits a candidate lacks and refuses when one is over a day old, unless `--behind-main` is passed.
+
 ## 0.6.2
 
 - Publish the container image for linux/arm64 as well as linux/amd64, so it runs on a Raspberry Pi 4 or 5, an ARM NAS or an Apple silicon Mac without emulation. The release workflow builds and tests each architecture on its own native runner, pushes each as `<version>-linux-<arch>` and joins them into one multi-platform tag, then checks anonymously that the tag serves both and that each pulls the tested image ([#269](https://github.com/afk-sapien/PokeSim/issues/269)).
