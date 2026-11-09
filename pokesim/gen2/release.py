@@ -73,16 +73,63 @@ def gift(mon):
     return (getattr(mon, 'caught', 0) & 0x7F) in (GIFT_LANDMARK, EVENT_LANDMARK)
 
 
+# HM01 Cut, HM02 Fly, HM03 Surf, HM04 Strength, HM06 Whirlpool and HM07 Waterfall, the HMs the
+# policy teaches for the field (policy.py).
+TAUGHT_HMS = frozenset({15, 19, 57, 70, 250, 127})
+
+
+def taught_machines(data):
+    """The move ids of the TMs and HMs the bot teaches, per Pokédex number that can learn them.
+
+    The bot teaches only the one-time TMs the Goldenrod Champion clerks sell (champion_shop.limited_tms),
+    bought or found, and TAUGHT_HMS. Iron Tail, which it teaches a Normal lead, is one of those TMs."""
+    from .champion_shop import limited_tms
+    try:
+        taught = set(limited_tms(data).values()) | TAUGHT_HMS
+    except (AttributeError, KeyError):
+        taught = set(TAUGHT_HMS)
+    return {dex: taught.intersection(row.get('machines') or ()) for dex, row in getattr(data, 'species', {}).items()}
+
+
+def families(data):
+    """The game's final forms per Pokédex number, for rarity.py, kept on ``data``. Special is the mean of
+    Special Attack and Special Defense, which share one DV, so a family scores as it does in Gen I."""
+    cached = getattr(data, '_families', None)
+    if cached is None:
+        from ..rarity import SELF_KO, Families
+        species = {}
+        for dex, row in getattr(data, 'species', {}).items():
+            stats = row.get('stats') or ()
+            if len(stats) == 6:
+                hp, attack, defense, speed, special_attack, special_defense = stats
+                species[dex] = ((hp, attack, defense, speed, (special_attack + special_defense) / 2),
+                                tuple(row.get('types') or ()), [move for _, move in row.get('learnset', [])],
+                                [evolution['species'] for evolution in row.get('evolutions', [])])
+        moves = {key: (move['power'], move['accuracy'], move['type'])
+                 for key, move in getattr(data, 'moves', {}).items() if move.get('effect') not in SELF_KO}
+        cached = Families(species, moves, taught_machines(data))
+        data._families = cached
+    return cached
+
+
+def rarity(data):
+    """A copy's rarity from its Pokédex number and DVs, the shape pcvalue.Inputs takes. A species
+    without stats rates by the DV total."""
+    return families(data).rarity
+
+
 def rated(snapshot, demand=None, stock=(), preferences=None, partners=(), owners=None, rewards=frozenset(),
-          requested=None, names=None, focus=frozenset(), favor=None, extra=()):
+          requested=None, names=None, focus=frozenset(), favor=None, extra=(), rarity=None):
     """Every Pokémon scored with pcvalue.rate, in party then box order. ``demand`` maps a species to the
     linked adventures missing it, which keeps that many copies and counts as trade demand. ``favor`` is
-    the Favor shiny or Favor DVs setting, and ``extra`` rows are rated after the PC."""
+    the Favor shiny or Favor DVs setting, ``extra`` rows are rated after the PC and ``rarity`` is as in
+    pcvalue.Inputs, by the DV total when not given."""
     from collections import Counter
     from ..pcvalue import Inputs, rate
+    from ..rarity import generic
     rows = entries(snapshot, names or {}, preferences, partners, stock, owners, rewards, requested) + list(extra)
     return rate(rows, Inputs(demand=dict(demand or {}), focus=frozenset(focus), wishes=Counter(demand or {}),
-                             favor=favor))
+                             favor=favor, rarity=rarity or generic))
 
 
 def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset(), extra=()):
@@ -101,25 +148,34 @@ def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset()
     favor = policy.pc_favor() if hasattr(policy, 'pc_favor') else None
     names = {sid: row.get('name', '?') for sid, row in getattr(policy.data, 'species', {}).items()}
     return rated(snapshot, policy.demand, stock, policy.trade_preferences() if preferences is None else preferences,
-                 plan_partners(policy.collection), owners, marks, requested, names, favor=favor, extra=extra)
+                 plan_partners(policy.collection), owners, marks, requested, names, favor=favor, extra=extra,
+                 rarity=rarity(policy.data))
 
 
-def keeps_another(policy, snapshot, dex, level=5):
-    """Whether the PC would keep one more copy of ``dex`` whose DVs are not known yet.
+def keeps_another(policy, snapshot, dex, level=5, dvs=None):
+    """Whether the PC would keep one more copy of ``dex`` (pcvalue.worth), with ``dvs`` when known.
 
     A walking return or a repeat gift is skipped when its Pokémon would be the next spare, as
     Sudowoodo, Eevee and Tyrogue were, received and released again every return. Its DVs are rolled
     in the encounter, so it is rated with none and only beats copies through a plan's demand or by
-    being the first. Crystal's caught data marks a gift, which Gold and Silver cannot tell from a catch.
+    being the first. With ``dvs`` it is kept by the same rule as a Gen I catch (collection.improves).
+    Crystal's caught data marks a gift, which Gold and Silver cannot tell from a catch. It is rated
+    as the next release rates the PC, and not kept when the PC visit it brings would release it or a
+    rarer copy for it (pcvalue.pushes_out).
     """
-    from ..pcvalue import Entry
+    from ..pcvalue import Entry, catch_visit, requested, verdict
     names = getattr(policy.data, 'species', {})
     origin = 'gift' if getattr(policy.data, 'game', '') == 'crystal' else 'caught'
     if dex in LEGENDARY_DEX:
         origin = 'legendary'
-    phantom = Entry((-1, 0), (dex, 0), names.get(dex, {}).get('name', '?'), level, origin=origin)
-    rows = release_rated(policy, snapshot, extra=(phantom,))
-    return rows[-1].status != 'spare'
+    phantom = Entry((-1, 0), (dex, 0), names.get(dex, {}).get('name', '?'), level, dvs=tuple(dvs or ()),
+                    origin=origin)
+    owned = getattr(snapshot, 'owned', None)
+    rows = (policy.pc_rated(snapshot, extra=(phantom,)) if hasattr(policy, 'pc_rated')
+            else release_rated(policy, snapshot, extra=(phantom,)))
+    needed = catch_visit(headroom(snapshot), len(requested(rows))) if hasattr(snapshot, 'box_counts') else 0
+    return verdict(rows, missing=owned is not None and dex not in owned, needed=needed,
+                   active_box=getattr(snapshot, 'active_box', None)).keep
 
 
 def pending(policy, snapshot):

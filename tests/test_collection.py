@@ -626,3 +626,36 @@ def test_story_comes_before_side_projects_until_the_champion():
         chosen.append(after.project)
     assert all(new_entry(project) for project in chosen)
     assert {project['method'] for project in chosen} & {'grass', 'evolve'}
+
+
+def test_a_dv_hunt_catches_only_a_copy_twice_as_rare_as_the_one_held():
+    from pokesim.investment import dex_rarity
+    from pokesim.policies.collection import improves
+    from test_duplicates import snapshot, stored
+    held, rarer, rarest = (0, 8, 8, 8, 8), (0, 0, 0, 13, 15), (0, 0, 1, 11, 15)
+    assert 1.5 <= dex_rarity(1, held) / dex_rarity(1, rarer) < 2 <= dex_rarity(1, held) / dex_rarity(1, rarest)
+    s = snapshot([stored(0, dvs=held)])
+    assert not improves(s, 0x99, rarer)
+    assert improves(s, 0x99, rarest)
+    # A missing entry and a shiny are always caught, however common their DVs.
+    assert improves(replace(s, owned=frozenset()), 0x99, (0, 2, 2, 2, 2))
+    assert improves(s, 0x99, (0, 2, 10, 10, 10))
+    assert not improves(s, 0x99, (0, 2, 2, 2, 2))
+
+
+def test_a_gen1_visit_takes_every_owner_request_before_a_spare_or_a_catch():
+    from pokesim.policies.collection import improves
+    from pokesim.policies.team import release_rated, release_target
+    from pokesim.trade.preferences import identity
+    from test_duplicates import snapshot, stored
+    best, plain = stored(0, dvs=(0, 10, 10, 10, 10), trainer_id=7), stored(1, dvs=(0, 4, 4, 4, 4), trainer_id=7)
+    rare = stored(2, dvs=(0, 2, 10, 10, 10), trainer_id=7)
+    common = replace(stored(0, dvs=(0, 2, 2, 2, 2), trainer_id=7), box=2)
+    s = replace(snapshot([best, plain, rare, common]), box_counts=(3, 0, 1) + (0,) * 9, active_box=0)
+    rows = {(mon['box'], mon['position']): identity(mon) for mon in s.storage_entries()}
+    asked = {rows[0, 2]: 'release', rows[2, 0]: 'release'}
+    # Both requests are in the visit, so it starts in the open box though the other request scores lower.
+    assert release_target(s, requested=asked) == (0, 2)
+    # With the boxes nearly full the visit takes the requests and spares, never a rarer new catch.
+    full = replace(s, box_counts=(17, 20, 19) + (20,) * 9)
+    assert improves(full, 0x99, (0, 15, 15, 15, 15), rated=lambda extra: release_rated(full, requested=asked, extra=extra))

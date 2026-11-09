@@ -243,6 +243,19 @@ def test_a_help_request_shows_but_does_not_send(world):
         'Mischievous Badge Hunt asked for help. The policy has stopped making game progress.')
 
 
+def test_a_pc_that_cannot_rate_is_announced_even_while_paused(world):
+    world.registry.rows = [game()]
+    world.child(seen=status(paused=True, rating_problem='The cartridge TM move table could not be verified.'))
+    world.tick()
+    message = ('Mischievous Badge Hunt cannot rate its PC, so it releases nothing. The cartridge TM move table '
+               'could not be verified. Restart it once the cartridge reads.')
+    assert world.sent == [('Needs attention', message)]
+    assert world.watchdog.public()['problems'][0]['kind'] == 'rating'
+    world.child(seen=status(rating_problem=None))
+    world.tick(60)
+    assert world.sent[-1] == ('Recovered', 'Mischievous Badge Hunt rates its PC again.')
+
+
 def trade(tid, phase, updated, error=None, participants=(AID, BID)):
     return {'id': tid, 'phase': phase, 'updated_at': updated, 'created_at': updated, 'error': error,
             'plan': {'participants': list(participants)}}

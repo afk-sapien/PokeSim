@@ -12,18 +12,30 @@ from .world import update as update_world
 
 KEY = 'interaction_preparation'
 FULL = 'Every PC box is full and no spare duplicate can be safely released to make room for this trade'
+# Field moves the game withdraws a partner for from the PC, cheapest to lose first: Whirlpool, Surf, Waterfall.
+RECOVERABLE = (250, 57, 127)
+
+
+def only(party, index):
+    """The field moves no other party member knows."""
+    others = {move for other, mate in enumerate(party) if other != index for move in getattr(mate, 'moves', ())}
+    return FIELD_MOVES.intersection(getattr(party[index], 'moves', ())) - others
 
 
 def reserves(party):
-    """Party slots an automatic trade may deposit, never the lead or the party's only user of a field move."""
-    found = []
-    for index, member in enumerate(party):
-        if not index:
-            continue
-        others = {move for other, mate in enumerate(party) if other != index for move in getattr(mate, 'moves', ())}
-        if FIELD_MOVES.intersection(getattr(member, 'moves', ())) <= others:
-            found.append(index)
-    return found
+    """Party slots an automatic trade may deposit, never the lead or the party's only user of a field move.
+
+    A party of sole field-move users had no one to deposit, so every boxed offer into it failed. When no
+    one else may go, a holder of only Whirlpool, Surf or Waterfall may wait in the PC, because the game
+    withdraws a partner for those moves. Cut, Strength, Fly and Flash holders always stay.
+    """
+    found = [index for index in range(1, len(party)) if not only(party, index)]
+    return found or [index for index in range(1, len(party)) if only(party, index) <= set(RECOVERABLE)]
+
+
+def cost(party, index):
+    """How late a reserve goes to the PC. A reserve with no sole field move goes first."""
+    return max((RECOVERABLE.index(move) + 1 for move in only(party, index)), default=0)
 
 
 def selected(snapshot, preferences, key):
@@ -282,10 +294,11 @@ class Preparation:
                     return self.heal(snapshot, mem)
                 candidates = [i for i in candidates if not stranded(snapshot.party, i)]
                 # An egg only hatches in the party, so it goes to the PC last, after any other egg if it was
-                # brought out to hatch.
+                # brought out to hatch. A sole Whirlpool holder goes before Surf, and Surf before Waterfall.
                 from .breeding import carried
                 self.menu = Storage('DEPOSIT', min(candidates, key=lambda i: (
-                    carried(self.emu.policy, snapshot, snapshot.party[i]), snapshot.party[i].egg, snapshot.party[i].level)), 6)
+                    cost(snapshot.party, i), carried(self.emu.policy, snapshot, snapshot.party[i]),
+                    snapshot.party[i].egg, snapshot.party[i].level)), 6)
         elif mon.box != snapshot.active_box:
             self.menu = ChangeBox(mon.box)
         else:

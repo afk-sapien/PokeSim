@@ -110,7 +110,7 @@ def test_a_rare_species_is_hunted_only_while_its_next_catch_pays(data, monkeypat
     monkeypatch.setattr(postgame, 'reachable', lambda policy, snapshot, rows: rows[0])
     policy = expedition(data)
     good = (0, 12, 12, 12, 12)
-    assert 0.1 < postgame.tail(mon(16, dvs=good)) < 0.2
+    assert 0.1 < postgame.tail(data, mon(16, dvs=good)) < 0.2
     # Equally good copies: the common species pays for its next catch and the rare one does not.
     state = snapshot([lead()], [mon(16, dvs=good), mon(19, position=1, dvs=good)])
     assert postgame.quality(policy, state, 'day')['species'] == 19
@@ -147,7 +147,7 @@ def test_a_hunt_running_dry_ends_before_its_stand_down_budget_and_is_not_picked_
     assert hunt['species'] == 16
     postgame.state(policy)['activity'] = hunt
     # The table rate is one catch already seen, so the hunt pays until a dry run stretches it past WORTH.
-    dry = postgame.catch_value(postgame.tail(first)) / postgame.WORTH - search_expected(30)
+    dry = postgame.catch_value(postgame.tail(data, first)) / postgame.WORTH - search_expected(30)
     assert 0 < dry < 3 * hunt['expected']
     policy.decisions = 1000 + int(dry) - 10
     assert not postgame.done(policy, state, hunt, 'day')
@@ -167,7 +167,7 @@ def test_a_better_dv_hunt_ends_at_its_first_better_copy(data):
     postgame.state(policy)['activity'] = hunt
     caught = [mon(16, position=1, trainer_id=99)]
     assert not postgame.done(policy, snapshot([lead()], [first] + caught), hunt, 'day')
-    assert hunt['tail'] == postgame.tail(first) and hunt['caught'] == 1
+    assert hunt['tail'] == postgame.tail(data, first) and hunt['caught'] == 1
     caught.append(mon(16, position=2, dvs=(0, 12, 12, 12, 12)))
     assert postgame.done(policy, snapshot([lead()], [first] + caught), hunt, 'day') and hunt['caught'] == 2
     postgame.finish(policy)

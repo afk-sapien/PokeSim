@@ -36,9 +36,10 @@ def full(stored, party=None, active_box=0):
 
 def gold_like():
     """The live Gold PC in miniature: eggs, single copies and boxed Snorlax holding Leftovers."""
-    lead = mon(SNORLAX, box=None, position=None, held_item=146, dvs=(12, 12, 12, 12, 12))
+    # Even DVs leave the HP DV at 0, so a higher DV total is a rarer copy.
+    lead = mon(SNORLAX, box=None, position=None, held_item=146, dvs=(0, 12, 12, 12, 12))
     boxed = [mon(SNORLAX, box=box, position=position, held_item=146, dvs=dvs)
-             for box, position, dvs in ((4, 3, (9, 9, 9, 9, 9)), (11, 1, (5, 6, 7, 8, 6)), (13, 5, (14, 13, 13, 13, 13)))]
+             for box, position, dvs in ((4, 3, (0, 8, 8, 8, 8)), (11, 1, (0, 4, 6, 8, 6)), (13, 5, (0, 14, 12, 12, 12)))]
     eggs = [mon(SNEASEL, box=0, position=position, egg=True, level=5) for position in range(3)]
     single = mon(1, box=2, position=0)
     return full([*eggs, single, *boxed], party=[lead, *(mon(9, box=None, position=None, trainer_id=slot) for slot in range(5))])
@@ -48,21 +49,21 @@ def test_a_trade_may_release_a_spare_holding_an_item_but_never_an_egg_or_a_last_
     snapshot = gold_like()
     # The weakest boxed Snorlax goes first. The lead and best copies, the eggs and the single Bulbasaur stay.
     assert [(m.box, m.position) for m in spares(snapshot)] == [(11, 1), (4, 3)]
-    plain = mon(SNORLAX, box=6, position=0, dvs=(13, 13, 13, 13, 13))
-    trained = mon(SNORLAX, box=6, position=1, dvs=(2, 2, 2, 2, 2), stat_exp=(30000,) * 5)
+    plain = mon(SNORLAX, box=6, position=0, dvs=(0, 10, 10, 8, 8))
+    trained = mon(SNORLAX, box=6, position=1, dvs=(0, 2, 2, 2, 2), stat_exp=(30000,) * 5)
     roomy = full([*snapshot.stored, plain, trained], party=snapshot.party)
-    # Training outscores DVs, so the trained copy becomes the best copy and the rest go lowest score first.
-    assert [(m.box, m.position) for m in spares(roomy)] == [(11, 1), (4, 3), (6, 0), (13, 5)]
+    # The trained copy and the rarest copy stay, and the rest go commonest first.
+    assert [(m.box, m.position) for m in spares(roomy)] == [(11, 1), (4, 3), (6, 0)]
 
 
-def test_shiny_and_perfect_copies_go_after_plain_ones():
+def test_a_shiny_and_the_rarest_copy_stay_while_a_plain_one_goes():
     best = mon(SNORLAX, box=1, position=0, dvs=(13, 13, 13, 13, 13))
     shiny = mon(SNORLAX, box=1, position=1, dvs=(1, 10, 10, 10, 10), held_item=146)
     perfect = mon(SNORLAX, box=1, position=2, dvs=(15, 15, 15, 15, 15), held_item=146)
     egg = mon(SNORLAX, box=1, position=3, egg=True, level=5)
-    # The shiny scores highest, so it is the best copy and stays. The plain copy goes before the perfect one.
-    assert spares(full([best, shiny, perfect, egg])) == [best, perfect]
-    assert spares(full([shiny, perfect, egg])) == [perfect]
+    # The shiny scores highest, so it is the best copy, and the perfect one is the rarest copy.
+    assert spares(full([best, shiny, perfect, egg])) == [best]
+    assert spares(full([shiny, perfect, egg])) == []
 
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])

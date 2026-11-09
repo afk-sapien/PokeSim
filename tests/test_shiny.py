@@ -24,7 +24,10 @@ def test_a_shiny_spare_goes_only_after_every_plain_spare():
     shiny = dict(species=165, level=5, dvs=(0,2,10,10,10), stat_exp=(0,)*5, moves=(1,), box=1, position=1)
     better = {**shiny, 'level': 50, 'dvs': (15,)*5, 'position': 2}
     plain = {**shiny, 'level': 30, 'dvs': (9,)*5, 'position': 3}
-    assert spare_entries([], [shiny, better, plain]) == [plain, shiny]
+    twin = {**shiny, 'position': 4}
+    # One shiny is the best copy and the perfect one the rarest, so the second shiny is the spare.
+    line = spare_entries([], [shiny, better, plain, twin])
+    assert len(line) == 2 and line[0] == plain and line[1] in (shiny, twin)
 
 
 def test_receipts_survive_reopen_without_double_counting(tmp_path):

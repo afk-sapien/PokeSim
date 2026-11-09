@@ -35,7 +35,7 @@ def gen2_rows(run, store, value):
     today = release.spares(snap, policy.demand, stock, preferences, release.plan_partners(policy.collection),
                            owners=owners(player, store.trade_partners()))
     old = [f'{names.get(mon.species, "?")} Lv {mon.level} box {mon.box + 1}' for mon in today]
-    return snap, rows, pcvalue.Inputs(demand=dict(policy.demand)), old
+    return snap, rows, pcvalue.Inputs(demand=dict(policy.demand), rarity=release.rarity(run.data)), old
 
 
 def gen1_rows(run, store, value):
@@ -62,7 +62,8 @@ def gen1_rows(run, store, value):
         avoid.add(tuple(slot))
         mon = next(mon for mon in snap.storage_entries() if (mon['box'], mon['position']) == tuple(slot))
         old.append(f'{SPECIES[mon["species"]]["name"].title()} Lv {mon["level"]} box {mon["box"] + 1}')
-    return snap, rows, pcvalue.Inputs(demand=dict(collection.demand())), old
+    from pokesim.investment import dex_rarity
+    return snap, rows, pcvalue.Inputs(demand=dict(collection.demand()), rarity=dex_rarity), old
 
 
 def main():

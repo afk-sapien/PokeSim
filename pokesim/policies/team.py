@@ -67,9 +67,10 @@ def release_rated(s, preferences=None, roles=(), stock=(), partners=frozenset(),
     missing it, which keeps that many copies and counts as trade demand. ``favor`` is the Favor shiny or
     Favor DVs setting, ``extra`` adds rows such as an incoming trade, and the rest are as in ``entries``."""
     from collections import Counter
+    from ..investment import dex_rarity
     from ..pcvalue import Inputs, rate
     return rate([*entries(s, preferences, roles, stock, partners, gifts, rewards, requested), *extra],
-                Inputs(demand=dict(demand or {}), wishes=Counter(demand or {}), favor=favor))
+                Inputs(demand=dict(demand or {}), wishes=Counter(demand or {}), favor=favor, rarity=dex_rarity))
 
 
 def spare_copies(s, stock=()):
@@ -194,10 +195,12 @@ def held_identities(s):
 
 def _release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards, requested, roles, favor):
     from ..planning.ledger import box_wanted
-    from ..pcvalue import deadlocked, releases
+    from ..pcvalue import deadlocked, releases, requested as asked
     every = release_rated(s, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor)
     rated = [row for row in every if row.entry.slot not in reserved]
-    chosen = releases(rated, max(box_wanted(storage_headroom(s), True), 1), getattr(s, 'active_box', None))
+    # The visit takes every owner request, as in Gold, Silver and Crystal (gen2/ledger.py).
+    chosen = releases(rated, max(box_wanted(storage_headroom(s), True), len(asked(rated)), 1),
+                      getattr(s, 'active_box', None))
     row = chosen[0] if chosen else None
     return (row.entry.slot if row else None,
             ((row.entry.record['species'], row.describe()) if row else None,

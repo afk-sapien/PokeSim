@@ -701,7 +701,8 @@ class StrategicPolicy(Policy):
             self.flee_tries, self.fleeing = 0, False
         if kind == "safari":
             missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
-            targeted = self.collection.repeat_target(s.enemy_species, s.map, s, enemy_dvs(mem)) == s.enemy_species
+            targeted = self.collection.repeat_target(s.enemy_species, s.map, s, enemy_dvs(mem),
+                                                     self.catch_rating(s)) == s.enemy_species
             if not s.can_catch or not (s.enemy_shiny or missing or targeted or useful_capture(s, s.enemy_species, s.enemy_level)):
                 self.reason = ('Leave the encounter because the party and active box are full' if not s.can_catch
                                else 'Leave an unnecessary duplicate already covered by the collection')
@@ -739,7 +740,8 @@ class StrategicPolicy(Policy):
                                             {'catch_cut': 15, 'catch_surf': 57, 'catch_strength': 70}.get(self.goal.key), collect_missing=True,
                                             capture_species=self.collection.project['species']
                                             if legendary_project(self.collection.project) else None,
-                                            repeat_species=self.collection.repeat_target(enemy.species, s.map, s, enemy_dvs(mem)),
+                                            repeat_species=self.collection.repeat_target(enemy.species, s.map, s, enemy_dvs(mem),
+                                                                                         self.catch_rating(s)),
                                             training_index=self.collection.trainee(s, self.collection.project)
                                             if self.collection.project and self.collection.project['method'] == 'train' else None,
                                             kind=getattr(self.goal, 'kind', STORY), flee_tries=self.flee_tries)
@@ -1400,6 +1402,10 @@ class StrategicPolicy(Policy):
         rewards, requested, favor = self.release_inputs()
         return self.pc.rated(snapshot, self.collection.project, self._preferences(), self.collection, partners,
                              frozenset(rewards) | marks, requested, favor, extra)
+
+    def catch_rating(self, snapshot):
+        """The PC rated with a wild catch's extra rows as the next release rates it (collection.improves)."""
+        return lambda extra: self.pc_rated(snapshot, extra=extra)
 
     def release_pending(self, snapshot):
         """Whether an owner's release request waits for the next PC visit. A request whose Pokémon has

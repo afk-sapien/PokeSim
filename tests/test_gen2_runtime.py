@@ -2616,7 +2616,8 @@ def test_first_gym_waits_for_a_level_twelve_partner(real_data):
 def _shiny_lead():
     return SimpleNamespace(species=155, nick='CYNDAQUIL', name='CYNDAQUIL', level=40, hp=120, max_hp=120, status=0,
                            egg=False, moves=(33, 0, 0, 0), pp=(35, 0, 0, 0), stats=(120, 60, 60, 60, 60, 60),
-                           item=0, box=None)
+                           item=0, box=None, trainer_id=1, dvs=(10, 10, 10, 10),
+                           experience=60000, stat_exp=(0, 0, 0, 0, 0), position=0)
 
 
 @pytest.mark.parametrize('can_catch,balls,why', [

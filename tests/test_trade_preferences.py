@@ -19,7 +19,8 @@ from test_broker import status, MAGIKARP, ZUBAT
 def payload(version='red', dex=MAGIKARP):
     data = status({dex}, stored=[(dex, 5), (dex, 20)], version=version)
     for i, mon in enumerate(data['storage']['pokemon']):
-        mon.update(trainer_id=100, dvs=[i + 1] * 5, stat_exp=[0] * 5, position=i + 1)
+        # Even DVs leave the HP DV at 0, so the later copy is the better one.
+        mon.update(trainer_id=100, dvs=[0] + [2 * i + 2] * 4, stat_exp=[0] * 5, position=i + 1)
     return data
 
 
