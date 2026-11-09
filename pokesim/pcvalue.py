@@ -269,12 +269,20 @@ class VisitTeam:
     visit, however the menus open and close between the deposit and the release."""
 
     def __init__(self):
-        self.where, self.keys = None, frozenset()
+        self.where, self.keys, self.errands = None, frozenset(), frozenset()
 
     def observe(self, where, keys):
-        self.keys = frozenset(keys) | (self.keys if where == self.where else frozenset())
+        same = where == self.where
+        self.errands = self.errands if same else frozenset()
+        self.keys = (frozenset(keys) - self.errands) | (self.keys if same else frozenset())
         self.where = where
         return self.keys
+
+    def errand(self, key):
+        """A boxed spare withdrawn at this visit only for one PC step, as the Gen II item route takes its
+        item off, is no team member unless it already was one. A trainee, a League partner or any other
+        Pokémon withdrawn for a role is never an errand, so it stays a team member."""
+        self.errands |= {key}
 
 
 def keeps_new(rows, *, missing=False, headroom=None, active_box=None):

@@ -129,8 +129,9 @@ class Preparation:
         box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
         if box is not None:
             return ChangeBox(box)
+        from .release import may_release
         spare = self.emu.policy.trade_spare(snapshot, self.state.get('protect', ()), self.state.get('wished', ()))
-        if spare is None:
+        if spare is None or not may_release(self.emu.policy, snapshot, spare.box, spare.position):
             raise ValueError(FULL)
         if spare.box != snapshot.active_box:
             return ChangeBox(spare.box)

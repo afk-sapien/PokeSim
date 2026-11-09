@@ -742,9 +742,10 @@ def test_gen2_make_room_opens_the_first_box_with_space(box):
 
 
 @pytest.mark.parametrize('box', [11, 13], ids=['box12', 'box14'])
-def test_gen2_make_room_releases_a_spare_from_a_high_box(box):
+def test_gen2_make_room_releases_a_spare_from_a_high_box(box, monkeypatch):
     from pokesim.gen2.menus import ChangeBox, Release
     from pokesim.gen2.preparation import Preparation
+    monkeypatch.setattr('pokesim.gen2.release.may_release', lambda *args: True)
     spare = gen2_member(33, box=box, position=19)
     policy = SimpleNamespace(trade_spare=lambda snap, protect, wished: spare)
     prep = Preparation(SimpleNamespace(policy=policy), {'protect': ['kept'], 'wished': [25]})
