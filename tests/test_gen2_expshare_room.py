@@ -22,6 +22,7 @@ FRAMES = 72000
 SHELLDER = 90
 
 
+@pytest.mark.slow
 def test_a_full_bag_makes_room_for_the_exp_share_swap_from_a_real_checkpoint():
     if not os.environ.get('GEN2_CARTRIDGE_DIR'):
         pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')

@@ -182,8 +182,15 @@ def test_publish_checks_come_from_the_dispatching_commit_and_guard_every_push():
 
 
 class Item:
-    def __init__(self, nodeid):
+    def __init__(self, nodeid, markers=()):
         self.nodeid = nodeid
+        self.markers = list(markers)
+
+    def get_closest_marker(self, name):
+        return next((marker for marker in self.markers if getattr(marker, 'name', marker) == name), None)
+
+    def add_marker(self, marker):
+        self.markers.append(marker)
 
 
 class Config:
@@ -233,6 +240,20 @@ def test_shards_balance_by_recorded_time_and_guess_new_modules(tmp_path, monkeyp
     assert shard(conftest, monkeypatch, '2/2', names) == ['tests/test_b.py::t', 'tests/test_c.py::t', 'tests/test_d.py::t']
     monkeypatch.setattr(conftest, 'DURATIONS', tmp_path / 'missing.json')
     assert conftest.recorded() == ({}, 1.0)
+
+
+def test_slow_tests_skip_unless_asked(monkeypatch):
+    conftest = root_conftest()
+    monkeypatch.delenv('POKESIM_TEST_SHARD', raising=False)
+    monkeypatch.delenv('POKESIM_SLOW_TESTS', raising=False)
+    slow, quick = Item('tests/test_a.py::slow', ['slow']), Item('tests/test_a.py::quick')
+    conftest.pytest_collection_modifyitems(Config(), [slow, quick])
+    assert 'POKESIM_SLOW_TESTS=1' in slow.get_closest_marker('skip').kwargs['reason']
+    assert quick.get_closest_marker('skip') is None
+    monkeypatch.setenv('POKESIM_SLOW_TESTS', '1')
+    asked = Item('tests/test_a.py::slow', ['slow'])
+    conftest.pytest_collection_modifyitems(Config(), [asked])
+    assert asked.get_closest_marker('skip') is None
 
 
 def test_validate_and_gate_both_refuse_unfinished_pins():

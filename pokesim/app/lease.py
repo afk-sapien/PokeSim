@@ -475,11 +475,12 @@ class Leases:
                     self.again.discard(aid)
         threading.Thread(target=send, name='control-converge', daemon=True).start()
 
-    def answer(self, aid, desired, timeout=ANSWER_SECONDS):
+    def answer(self, aid, desired, timeout=None):
         """Wait for the worker's answer to `desired`, sending it once more when the first send got
         none, since it may have got there. Returns applied, deferred, refused, unanswered, or
-        superseded when a newer change replaced it before it was sent."""
-        deadline = time.monotonic() + timeout
+        superseded when a newer change replaced it before it was sent. The wait is
+        `ANSWER_SECONDS` unless `timeout` is given, read on each call so a test can shorten it."""
+        deadline = time.monotonic() + (ANSWER_SECONDS if timeout is None else timeout)
         outcome = self._answered(aid, desired, 1, deadline)
         if outcome == 'unanswered':
             self.kick(aid)

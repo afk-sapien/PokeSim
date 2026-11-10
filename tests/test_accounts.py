@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 import httpx
 import pytest
 
+from pokesim.app import manager as manager_module
 from pokesim.app import policy
 from pokesim.app.accounts import USER_LOCKOUT
 from pokesim.app.auth import Limiter
@@ -662,16 +663,19 @@ def test_any_password_that_is_not_empty_is_accepted(library, people):
         library.manager.auth.create_user('dave', '')
 
 
-def test_cookieless_session_requests_cannot_lock_out_new_browsers(library, people):
+def test_cookieless_session_requests_cannot_lock_out_new_browsers(library, people, monkeypatch):
     """About 1024 of them filled the table for a day, and every new browser got 429 and no CSRF token."""
+    # A smaller table fills the same way with far fewer requests. Each flood is twice its size.
+    limit = 64
+    monkeypatch.setattr(manager_module, 'ANONYMOUS_SESSIONS', limit)
     flood = TestClient(library.app)
-    for _ in range(1100):
+    for _ in range(2 * limit):
         flood.cookies.clear()
         assert flood.get('/api/v1/session').status_code == 200
     # Many addresses at once push out the oldest, not the newcomer.
-    for number in range(1100):
+    for number in range(2 * limit):
         library.manager.anonymous_session(None, f'10.0.{number // 250}.{number % 250}')
-    assert len(library.manager.sessions) <= 1024
+    assert len(library.manager.sessions) <= limit
     newest = max(library.manager.sessions.values(), key=lambda session: session['expires'])
     # Until a login it lasts an hour, not a day.
     assert newest['expires'] <= time.time() + 3600

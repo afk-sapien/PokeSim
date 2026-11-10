@@ -63,6 +63,7 @@ CASES = [('red-partial-training-20260915', 1, {'overworld', 'collection'}, FRAME
          ('silver-np-gate-corner-20261020', 2, {'ladder', 'postgame'}, 55000)]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('name,generation,points,frames', CASES)
 def test_the_chosen_goal_is_the_same_with_the_shadow_on_or_off(name, generation, points, frames):
     loaded = scenario(name, generation)

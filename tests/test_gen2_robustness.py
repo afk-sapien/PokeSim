@@ -1,4 +1,5 @@
 """Nickname and menu-word collisions, stuck recovery and trade preparation edge cases."""
+import copy
 import os
 from collections import deque
 from types import SimpleNamespace
@@ -109,15 +110,24 @@ def decision(policy, layout, nick, **values):
     return action_of(policy, screen(layout(nick)), **values)
 
 
-@pytest.mark.parametrize('layout', LAYOUTS)
-def test_menu_words_as_nicknames_never_change_the_battle_decision(real_data, layout):
+@pytest.fixture(scope='module')
+def new_policy(real_data):
+    """Policies for one game, each in the state a new one starts in. Building one reads every map,
+    which took most of the nickname sweep, so one is built per game and each call copies it."""
     from pokesim.gen2.policy import Policy
+    template = Policy(real_data, seed=1, starter='cyndaquil')
+    # Each copy shares the game data, as every policy built from it does.
+    return lambda: copy.deepcopy(template, {id(real_data): real_data})
+
+
+@pytest.mark.parametrize('layout', LAYOUTS)
+def test_menu_words_as_nicknames_never_change_the_battle_decision(new_policy, layout):
     from pokesim.nicknames import POKEMON_NAMES
     names = sorted({*KEYWORDS, *POKEMON_NAMES, *name_pool()[:200]})
-    neutral = decision(Policy(real_data, seed=1, starter='cyndaquil'), layout, 'ZZZZ')
+    neutral = decision(new_policy(), layout, 'ZZZZ')
     wrong = {}
     for nick in names:
-        got = decision(Policy(real_data, seed=1, starter='cyndaquil'), layout, nick[:10])
+        got = decision(new_policy(), layout, nick[:10])
         if got != neutral:
             wrong[nick] = got
     assert not wrong, f'{layout.__name__} expected {neutral}, differing nicknames {wrong}'

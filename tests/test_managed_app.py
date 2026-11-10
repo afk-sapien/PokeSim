@@ -176,8 +176,12 @@ def test_game_trading_stays_scoped_and_available_when_stopped(client):
     done = transaction(a, b, 'completed', 'COMMIT')
     transaction(a, b, 'aborted', 'ABORT')
     active = transaction(b, c, 'preparing')
+    # Two thousand commits that each wait for the disk took most of this test. The rows are the
+    # same without that wait, and the library waits for the disk again before the pages read them.
+    registry.db.execute('PRAGMA synchronous=OFF')
     for _ in range(1001):
         transaction(b, c, 'completed', 'COMMIT')
+    registry.db.execute('PRAGMA synchronous=FULL')
     base = f'/games/{a["id"]}'
     response = client.get(base + '/trading', follow_redirects=False)
     assert response.status_code == 200
