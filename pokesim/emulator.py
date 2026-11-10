@@ -39,6 +39,11 @@ LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM'
 LEAGUE_ENTRY = MAPS['LORELEIS_ROOM']
 LEAGUE_CHECKPOINT = 'league-entry.state'
 BEFORE_STALL_CHECKPOINT = 'before-stall.state'
+# Kept by name, so a wrong rewind or restart can be undone from the saves list.
+BEFORE_LOAD_CHECKPOINT = 'before-load.state'
+BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
+# The phases of an exchange's preparation that hold back every command but stop, speed and pause.
+PREPARING = {'travelling', 'storage', 'rendezvous'}
 MAX_RELOADS = 12  # reloads in a row without progress after which reloading stops, as in Generation II
 
 log = logging.getLogger("pokesim.emu")
@@ -258,6 +263,28 @@ class Emulator:
         if button in BUTTONS:
             self.command("press", button)
 
+    def held_back(self, name):
+        """Why the game drops this command now, or None when it runs it."""
+        if not getattr(self, 'store', None) or name in ('stop', 'speed', 'pause'):
+            return None
+        if (self.store.get('interaction_preparation') or {}).get('phase') in PREPARING:
+            return 'The adventure is getting ready for an exchange'
+        if self.store.get('trade_hold'):
+            return 'An exchange is holding this adventure'
+        return None
+
+    def control(self, name, timeout=4, gate=None):
+        """Run take_control, resume or pause now. Returns why the game held it back, or None.
+        `gate` is asked on the game thread first: None runs it, '' counts it as done already."""
+        def apply():
+            reason = self.held_back(name)
+            if reason is None and gate is not None:
+                reason = gate()
+            if reason is None:
+                self._handle_command(name, None)
+            return reason or None
+        return self.call(apply, timeout)
+
     def status(self) -> dict:
         from .investment import rating_problem
         from .randomized import status as randomizer_status
@@ -398,6 +425,9 @@ class Emulator:
         self.snapshot = read_snapshot(self.pb.memory, self.frame)
         if self.snapshot.started:
             self.play_clock.seed(self.snapshot.playtime_seconds)
+        # A restart empties the gift ledger. Loading a game from before it would otherwise count
+        # every earlier League win as new on the next win, and pay each gift out again.
+        rewards.initialize(self.store, getattr(self, 'mem', RunMemory()).championships)
 
     def _decline_returns(self):
         """Close the returned legendaries the battle refused to catch."""
@@ -814,6 +844,16 @@ class Emulator:
         # The checkpoint's copy, since building it again doubles the work of every save.
         self.store.set("policy_state", manifest["policy_state"])
 
+    def _checkpoint_before(self, name: str):
+        """Keep the game as it is now under `name` before a rewind or restart replaces it."""
+        if self.store.get("trade_hold"):
+            return
+        try:
+            # A named checkpoint, not an autosave: as the newest autosave it would undo the rewind on the next start.
+            self.store.write_checkpoint(self._state_bytes(), self._manifest(), name)
+        except Exception:
+            log.exception("cannot keep the save from before %s", name)
+
     def _reset_watch(self):
         now = time.time()
         self.stuck_since = self.last_reload = now
@@ -1114,13 +1154,10 @@ class Emulator:
             return True
         if getattr(self, 'store', None):
             preparation = self.store.get('interaction_preparation') or {}
-            if preparation.get('phase') in {'travelling', 'storage', 'rendezvous'}:
-                if name == 'pause' and getattr(self, 'preparation', None):
-                    from .runtime.preparation import cancel
-                    cancel(self, preparation['id'])
-                elif name not in ('stop', 'speed', 'pause'):
-                    return True
-        if getattr(self, 'store', None) and self.store.get('trade_hold') and name not in ('stop', 'speed', 'pause'):
+            if preparation.get('phase') in PREPARING and name == 'pause' and getattr(self, 'preparation', None):
+                from .runtime.preparation import cancel
+                cancel(self, preparation['id'])
+        if self.held_back(name):
             return True
         if name == "stop":
             return False
@@ -1128,6 +1165,11 @@ class Emulator:
             self.paused = True
             self.manual_mode = False
         elif name in ("take_control", "press"):
+            if name == "take_control":
+                # A new holder of the control lease never inherits presses someone else queued.
+                self.input_epoch += 1
+                while not self.manual.empty():
+                    self.manual.get_nowait()
             if not self.manual_mode:
                 self.policy.on_restore()
                 if hasattr(self, 'statistics'):
@@ -1150,14 +1192,18 @@ class Emulator:
         elif name == "load_state":
             p = self.store.state_path(arg)
             if p:
-                try:
-                    self._load_state_file(p)
-                except ValueError as error:
-                    log.warning("Rewind to %s refused: %s", p.name, error)
-                else:
-                    log.info("loaded %s", p.name)
+                # Undoing a rewind loads before-load itself, so it is held while the checkpoint replaces it.
+                with self.store.held(p, BEFORE_LOAD_CHECKPOINT) as source:
+                    self._checkpoint_before(BEFORE_LOAD_CHECKPOINT)
+                    try:
+                        self._load_state_file(source)
+                    except ValueError as error:
+                        log.warning("Rewind to %s refused: %s", p.name, error)
+                    else:
+                        log.info("loaded %s", p.name)
         elif name == "restart":
             log.warning("restarting run from power-on")
+            self._checkpoint_before(BEFORE_RESTART_CHECKPOINT)
             if hasattr(self, 'statistics'):
                 self.statistics.flush()
                 self.statistics.reset_baseline()
@@ -1174,9 +1220,9 @@ class Emulator:
             self.mem = RunMemory()
             self.legendary_recovery = LegendaryRecovery()
             self.last_achievement = None
-            self.store.set("trade_barrier", None)
+            # The trade and reward barriers stay. Named checkpoints from before them survive a restart,
+            # and loading one would undo a trade the partner keeps, or a reward.
             self.store.clear_trade_preferences()
-            self.store.set("custom-reward-barrier-v1", None)
             self.store.set("custom-reward-pending-v1", None)
             if hasattr(self, 'milestones'):
                 self.milestones.reset()

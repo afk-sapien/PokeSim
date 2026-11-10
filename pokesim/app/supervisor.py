@@ -31,6 +31,13 @@ SETUP_DELAYS = (30, 120, 300)
 VIEWER_IDLE = 300   # seconds before an unwatched stopped-adventure viewer closes
 
 
+class WorkerError(RuntimeError):
+    """The worker answered with an error, with its HTTP status."""
+    def __init__(self, detail, status):
+        super().__init__(detail)
+        self.status = status
+
+
 class Child:
     def __init__(self, bootstrap, command=None):
         self.bootstrap = bootstrap
@@ -126,18 +133,18 @@ class Child:
             except OSError:
                 pass
 
-    def request(self, method, path, data=None, timeout=20):
+    def request(self, method, path, data=None, timeout=20, headers=None):
         if not self.url or self.process.poll() is not None:
             raise RuntimeError('Adventure worker is not running')
         with httpx.Client(trust_env=False, timeout=timeout) as client:
             response = client.request(method, self.url + path, json=data,
-                                      headers={'Authorization': 'Bearer ' + self.token})
+                                      headers={**(headers or {}), 'Authorization': 'Bearer ' + self.token})
             if response.is_error:
                 try:
                     detail = response.json().get('detail', response.text[:300])
                 except ValueError:
                     detail = response.text[:300]
-                raise RuntimeError(str(detail))
+                raise WorkerError(str(detail), response.status_code)
             return response.json()
 
     def stop(self, timeout=50):
@@ -368,9 +375,15 @@ class Supervisor:
                 if aid in self.setup_retries and self.setup_retries[aid][0] == float('inf'):
                     self.setup_retries.pop(aid)
 
-    def stop(self, aid, preserve_desired=False):
+    def stop(self, aid, preserve_desired=False, only_if_stopped=False):
+        """Stop the adventure's worker. With `only_if_stopped`, stop it only while the owner still
+        wants it stopped, read under the lock a Start takes, and return None when they started it."""
         with (nullcontext() if self.closed.is_set() else self.admission), self._lock(aid):
-            self.registry.adventure(aid)
+            row = self.registry.adventure(aid)
+            if only_if_stopped:
+                if row['desired_state'] != 'stopped':
+                    return None
+                preserve_desired = True
             if not preserve_desired:
                 self.registry.update(aid, desired_state='stopped')
             with self.guard:

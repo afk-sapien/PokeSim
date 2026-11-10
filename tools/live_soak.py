@@ -746,6 +746,8 @@ def play_one(manager, aid, frames, progress):
             if frame - start >= frames:
                 break
             time.sleep(POLL_SECONDS)
+        # Rate the copies held at the end while the cartridge's rating helper still runs.
+        rarest = copies.rarest()
     finally:
         manager.registry.request_lifecycle(aid, 'stop', identifier())
         manager.supervisor.stop(aid)
@@ -763,7 +765,7 @@ def play_one(manager, aid, frames, progress):
     result.update(frames=(end or 0) - (start or 0), wall_seconds=round(time.monotonic() - began, 1),
                   events=[[row[0], row[1], row[2], row[3]] for row in events],
                   journal_bytes=sum(row[4] for row in events), kv_bytes=kv_after - kv_before,
-                  receipts=[list(row) for row in receipts], catches=catches.finish(best, copies.rarest()),
+                  receipts=[list(row) for row in receipts], catches=catches.finish(best, rarest),
                   held_start=held_start, held_end=held_end, reloads=reloads, errors=len(errors),
                   error_lines=errors[:5], help=help_reason, names=names,
                   first_visit=copies.first_visit, pushed_out=copies.pushed_out, first_wave=copies.first_wave,

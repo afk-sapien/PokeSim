@@ -49,6 +49,19 @@ questions:
           schema:
             type: string
             default: ""
+        - variable: auth
+          label: Accounts
+          description: Empty stays open until accounts are set up. Accounts means everyone logs in. None leaves the Library open.
+          schema:
+            type: string
+            default: ""
+            enum:
+              - value: ""
+                description: Open until accounts are set up
+              - value: accounts
+                description: Accounts
+              - value: none
+                description: None
         - variable: additional_envs
           label: Additional Environment Variables
           schema:

@@ -1,19 +1,152 @@
 # Authentication and view links
 
-PokeSim has no login. Anyone who reaches the Library can manage every adventure, its ROMs,
-saves and backups. Put it behind a proxy that authenticates people, such as
-[Authelia](https://www.authelia.com), and open only view links without a login.
+PokeSim can run open or with accounts. `AUTH` picks the mode:
 
-A view link is `/view/<adventure id>/`. Copy one with **Copy view link** on an adventure's
-live page. It shows the screen, team, journal, progress and statistics with every control
-hidden. Under `/view/` the server allows only `GET` and `HEAD`, returns 403 for everything
-else, and never lists or exports saves. `/view/` is the only path that is safe to open
-without authentication. Everything else, including `/`, `/games/`, `/api/v1/` and `/static/`,
-must stay behind the login. Adventure ids are random, but they are not passwords: anyone who
-has a link can watch that adventure.
+| `AUTH` | What happens |
+| --- | --- |
+| `none` | No login. Anyone who reaches the Library manages every adventure, ROM, save and backup. Put it behind a proxy that logs people in. |
+| `accounts` | Everyone logs in. Admins manage the Library, members see their own adventures and the ones shared with them. |
+| unset | Open, as with `none`, until the Library uses accounts. Once it has started with `AUTH=accounts` or has an admin, it keeps accounts. Setting up OpenID Connect, a trusted proxy or a first admin from the environment also turns accounts on. |
+
+An open Library that listens on more than this machine, as a Docker or NAS install does,
+shows a notice that anyone who reaches it controls PokeSim. Dismiss it once and it stays
+gone. The desktop app and a server on `127.0.0.1` never show it.
+
+With Docker Compose, set `AUTH` in `.env`. `compose.yaml` and `compose.quickstart.yaml` pass
+`AUTH`, `AUTH_TRUSTED_PROXIES`, `POKESIM_ADMIN_USER` and `POKESIM_ADMIN_PASSWORD` to the
+app. Add the identity provider and proxy settings below under `environment:` yourself.
+
+The desktop app runs with `AUTH=none` unless you set `AUTH` yourself. For how admins,
+members, invites and sharing work day to day, see [Users and sharing](users-and-sharing.md).
 
 The examples use `pokesim.example.com`. Set `PUBLIC_URL=https://pokesim.example.com` and
 keep the proxy's `Host` header, because PokeSim refuses other addresses.
+
+## The first admin
+
+With accounts on and no admin yet, PokeSim writes a one-time setup code to its log:
+
+```sh
+docker logs pokesim 2>&1 | grep 'one-time code'
+```
+
+Open `/setup`, enter the code and choose a username and a password. The code works
+once and lasts an hour. A restart prints a new one. Every adventure that existed
+before accounts belongs to this first admin.
+
+To skip the code, set `POKESIM_ADMIN_USER` and `POKESIM_ADMIN_PASSWORD` on the first start.
+PokeSim creates that admin only while it has none, so later starts ignore both values.
+Remove them once the admin exists. With `AUTH` unset, setting both also turns accounts on,
+just as `AUTH=accounts` does.
+
+Logins last 14 days. After five wrong passwords PokeSim makes each next try wait, up to 15
+minutes, and says how long.
+
+### A forgotten password
+
+Run this on the machine that holds the data. It prints a new random password, ends every
+session of that user, and works while PokeSim runs:
+
+```sh
+docker exec pokesim pokesim admin reset-password <username>
+```
+
+### API reference and smoke check
+
+With accounts on, admins can open `/docs` for the HTTP API reference and `/openapi.json`
+for its schema. Everyone else gets a 404. Without accounts both stay off unless
+`API_DOCS=1` turns them on.
+
+To check a running server through its HTTP API, run this on the machine that holds the
+data:
+
+```sh
+docker exec pokesim pokesim smoke
+```
+
+It acts as an admin through the command line token, so no password is typed. It checks
+health, the login limiter, invites, what one member can reach of another's adventures,
+saves, cartridges, offers and inbox, CSRF, the session role and logout, and that backups
+can be listed. It takes under a minute. Each throwaway user, invite and adventure it makes
+is deleted again, even when a check fails. Their entries in the audit log stay. It prints
+one line per failure and exits non-zero on any. `--with-backup` also makes a backup.
+`--url` checks another address, such as the one behind your proxy. `--rom` gives it a
+cartridge when the library has none, otherwise the adventure checks are skipped.
+
+From a source checkout, `sh tools/smoke_server.sh accounts` or `sh tools/smoke_server.sh none`
+starts a throwaway server and runs the same check against it.
+
+## Sign in with an identity provider
+
+PokeSim speaks OpenID Connect, so Authelia, Authentik, Keycloak, Pocket ID and similar
+providers can log people in. Register PokeSim as a confidential client with the redirect
+address `https://pokesim.example.com/auth/oidc/callback`, then set:
+
+| Setting | Meaning |
+| --- | --- |
+| `OIDC_ISSUER` | The provider's issuer address, such as `https://auth.example.com` |
+| `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | The client you registered |
+| `OIDC_SCOPES` | Defaults to `openid profile email`. Add `groups` if your provider needs it. |
+| `OIDC_GROUPS_CLAIM` | The claim that lists groups, `groups` by default |
+| `AUTH_ADMIN_GROUP` | Group whose people become admins, `pokesim-admins` by default |
+| `AUTH_MEMBER_GROUP` | Group whose people become members, `pokesim` by default |
+| `OIDC_DEFAULT_ROLE` | `member` or `admin` for people in neither group. Empty by default, which refuses them. |
+| `DISABLE_PASSWORD_LOGIN` | `true` hides the password form, so only the provider logs people in |
+
+The login page then shows a button for the provider. Someone who already has a password can
+link their provider sign-in from Settings and keep the same adventures.
+
+## Log in through a trusted proxy
+
+If your proxy already logs people in, PokeSim can take the username from a header the proxy
+sets. Because anyone can send a header, PokeSim believes it only from the proxy's own
+address and only with a shared secret:
+
+| Setting | Meaning |
+| --- | --- |
+| `AUTH_PROXY_HEADER` | Header with the username, such as `Remote-User` |
+| `AUTH_PROXY_GROUPS_HEADER` | Optional header with a comma separated group list, such as `Remote-Groups` |
+| `AUTH_PROXY_SECRET` | At least 16 characters. The proxy sends it as `X-PokeSim-Proxy-Secret`. |
+| `AUTH_TRUSTED_PROXIES` | The proxy's addresses or networks, comma separated |
+| `AUTH_PROXY_DEFAULT_ROLE` | Role for people in neither group, `member` by default |
+
+`AUTH_ADMIN_GROUP` and `AUTH_MEMBER_GROUP` work as above. PokeSim refuses to start if
+`AUTH_TRUSTED_PROXIES` trusts every address or contains the network's default gateway, since
+direct clients often arrive from the gateway's address. Trust the proxy container alone.
+
+## Client addresses behind a proxy
+
+PokeSim records each login's address and slows down repeated wrong passwords per address. Behind
+a reverse proxy every request seems to come from the proxy, so one person's typos would slow
+everyone. Set `AUTH_TRUSTED_PROXIES` to the proxy's address, and PokeSim takes the client from the
+`X-Forwarded-For` header that proxy sends. It reads the header from the right and stops at the
+first address that is not a trusted proxy, so a client cannot claim another address. Requests
+from anywhere else keep their own address.
+
+This works without header logins too. A forwarded address from the default gateway never
+counts, even inside a trusted network, because Docker's port mapping can make direct clients
+arrive from it. Run the proxy on another machine or in the same Docker network, and trust its
+own address.
+
+Wrong passwords from one address lock that address out for up to 15 minutes. Wrong passwords
+for one account from many addresses slow that account by a minute at most, and never slow a
+browser that logged in to that account in the last 30 days. A signed cookie marks that browser,
+so a shared or made-up address does not count. A new password, or ending that person's sessions,
+makes every browser wait like a new one.
+
+## View links
+
+A view link is `/view/<adventure id>/`. It shows the screen, team, journal, progress and
+statistics with every control hidden. Under `/view/` the server allows only `GET` and
+`HEAD`, returns 403 for everything else, and never lists or exports saves.
+
+With `AUTH=none`, anyone who has a view link can watch, so a proxy may leave `/view/` open.
+Adventure ids are random, but they are not passwords.
+
+With accounts, a plain view link needs a login by someone who may watch that adventure. To
+let someone watch without an account, the owner makes a share link in Settings, under
+Sharing. It looks like `/s/<token>`, can expire, and can be turned off at any time. Leave
+`/s/` and `/view/` open at the proxy, and PokeSim checks the rest itself.
 
 ## Keep the port private
 
@@ -33,6 +166,9 @@ networks:
 ```
 
 ## Authelia rules
+
+These rules suit `AUTH=none`, where Authelia alone decides who gets in. With accounts,
+PokeSim checks every request, so one rule that covers the whole domain is enough.
 
 Authelia needs its own address and a session cookie for a domain that covers both it and
 PokeSim. For example, with Authelia at `auth.example.com`:
@@ -113,8 +249,10 @@ services:
       traefik.http.services.pokesim.loadbalancer.server.port: '8000'
 ```
 
-PokeSim does not read the `Remote-*` headers. Authelia's rules alone decide who reaches
-which path.
+With `AUTH=none`, PokeSim ignores the `Remote-*` headers. To use them for accounts, set
+`AUTH_PROXY_HEADER: Remote-User` and `AUTH_PROXY_GROUPS_HEADER: Remote-Groups`, add the
+secret header to the router with a `headers.customRequestHeaders` middleware, and list
+Traefik's address in `AUTH_TRUSTED_PROXIES`.
 
 Use your proxy's connection and bandwidth limits too. Each open view link keeps a live
 stream running.

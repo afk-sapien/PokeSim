@@ -20,6 +20,8 @@ This index separates current instructions, future plans, and historical evidence
 | Standalone Red and Blue pair coordinator | [Automatic trading](automatic-trading.md) |
 | Backups, upgrades, recovery, and storage | [Operations](operations.md) |
 | Remote access | [Self-hosting](self-hosting.md#configure-ports-and-remote-access) |
+| Logins, identity providers, proxies, and view links | [Authentication](authentication.md) |
+| Admins, members, invites, and sharing adventures | [Users and sharing](users-and-sharing.md) |
 
 ## Develop and maintain
 
@@ -38,6 +40,7 @@ This index separates current instructions, future plans, and historical evidence
 
 ## Plans and historical records
 
+- [Multi-user PokeSim](design/multi-user.md): proposal for accounts, roles, sharing, a control lease and trade offers between people.
 - [Planner systems](design/planner-systems.md): the shared planner systems S1 to S5 that replaced special-case fixes, as proposed and as built, with the parked mastery credit step.
 - [Goal system v2](design/goal-system.md): proposal for a goal tree with hunt templates, typed progress events, one worth oracle, shared supervision and a report button, with the PR order to build it.
 - [Distribution readiness](distribution-readiness.md): historical release-process review.

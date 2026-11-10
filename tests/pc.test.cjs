@@ -550,4 +550,11 @@ test('the release order select saves the favor', async () => {
   const posts = view.calls.filter(call => call.options?.method === 'POST')
   assert.match(posts[0].path, /\/api\/pc\/favor$/)
   assert.deepEqual(JSON.parse(posts[0].options.body), {favor: 'shiny'})
+  assert.equal(view.element('#pc-favor-control').hidden, false)
+})
+
+test('a view link never sees the release order select', async () => {
+  const view = pc([mon(1, 1, 20)], '?box=1', [], '/view/abc')
+  await view.ready()
+  assert.equal(view.element('#pc-favor-control').hidden, true)
 })

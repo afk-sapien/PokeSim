@@ -157,7 +157,7 @@ def test_a_new_game_and_a_rewind_from_the_page_are_owner_restarts(tmp_path, monk
 def library(supervisor):  # noqa: F811
     return SimpleNamespace(check_available=lambda: None, maintenance=nullcontext(), supervisor=supervisor,
                            registry=supervisor.registry, coordinator=SimpleNamespace(reserved=lambda aid: False),
-                           root=supervisor.registry.root)
+                           leases=SimpleNamespace(stop_worker=supervisor.stop), root=supervisor.registry.root)
 
 
 def offline_rows(folder):

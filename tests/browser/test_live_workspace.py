@@ -139,8 +139,15 @@ def test_live_pause_resume_and_save_have_clear_actions(page, live_game):
             state.update(paused=False, manual_mode=False)
     emu.command = command
     page.goto(url)
+    # One play status, under the screen. No Live tag over it and no Running in the rail.
+    status = page.locator('#control-mode')
+    expect(status).to_have_text('AI is playing')
+    expect(page.locator('#connection')).to_be_hidden()
+    assert page.locator('#on-air-label, .on-air').count() == 0
     page.get_by_role('button', name='Pause', exact=True).click()
     expect(page.locator('#pause')).to_have_text('Resume')
+    expect(status).to_have_text('Game paused')
+    expect(page.locator('#connection')).to_be_hidden()
     page.get_by_role('button', name='Resume', exact=True).click()
     expect(page.locator('#pause')).to_have_text('Pause')
     assert emu.commands == [('pause', None), ('resume', None)]
@@ -164,6 +171,9 @@ def test_live_speed_changes_and_failed_updates(page, live_game):
     page.goto(url)
     select = page.get_by_role('combobox', name='Simulation speed', exact=True)
     expect(select).to_have_value('1')
+    # The speed key says what it sets in plain sight, not only in a tooltip.
+    expect(page.locator('.live-speed-label')).to_be_visible()
+    expect(page.locator('.live-speed-label')).to_have_text('Speed')
     select.select_option('4')
     expect(page.locator('#toast')).to_have_text('Simulation speed set to 4×.')
     assert emu.commands[-1] == ('speed', 4)
@@ -185,3 +195,36 @@ def test_plan_action_reads_as_words_apart_from_the_tile_count(page, game):
                                                      'action': 'shortcut: choose_move', 'collection': {'version': 'red'}}}
     page.goto(url)
     expect(page.locator('.plan-meta')).to_have_text('Shortcut: choose move, 31,524 tiles explored')
+
+
+TRAIN = {'key': 'train', 'label': 'Train a Pokemon', 'tier': 'filler', 'species': ['Pikachu', 'Farfetch’d'],
+         'stops': [{'key': 'level:30', 'label': 'Until level 30'}]}
+
+
+@pytest.mark.parametrize('width', [1280, 390])
+def test_choose_next_row_is_labelled_and_even(page, live_game, width):
+    url, emu = live_game
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.route('**/api/goals', lambda route: route.fulfill(json={'goals': [
+        {'key': 'hunt', 'label': 'Find Clefairy', 'tier': 'progress'}, TRAIN], 'pin': None}))
+    page.goto(url)
+    row = page.locator('#next-activity')
+    goal = row.get_by_role('combobox', name='Goal')
+    expect(goal).to_be_visible()
+    expect(row.get_by_text('Train a Pokémon')).to_have_count(1)
+    species = row.get_by_label('Pokémon', exact=True)
+    expect(species).to_be_hidden()
+    goal.select_option('train')
+    # One searchable species field, with only the species this goal can reach, and the stop condition.
+    expect(species).to_be_visible()
+    expect(species).to_have_attribute('placeholder', 'Search Pokémon')
+    assert page.locator('#next-activity-species-list option').evaluate_all('options => options.map(o => o.value)') == ['Pikachu', 'Farfetch’d']
+    expect(row.get_by_role('combobox', name='Stop when')).to_be_visible()
+    assert page.locator('#next-activity-kind').count() == 0
+    for label in ('Find', 'Goal', 'Pokémon', 'Stop when'):
+        expect(row.locator('.plan-pick-field .micro', has_text=label)).to_be_visible()
+    # Every control in the row has one height and one face, buttons included.
+    looks = page.locator('#next-activity select:visible, #next-activity input:visible, #next-activity button:visible').evaluate_all(
+        'controls => controls.map(c => [Math.round(c.getBoundingClientRect().height), getComputedStyle(c).fontFamily, getComputedStyle(c).fontSize])')
+    assert len(looks) == 5 and len({tuple(look) for look in looks}) == 1, looks
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

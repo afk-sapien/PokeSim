@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter, deque
-from contextlib import closing
+from contextlib import ExitStack, closing, nullcontext
 from dataclasses import asdict
 import hashlib
 import json
@@ -21,7 +21,7 @@ import httpx
 
 from ..checkpoints import CheckpointStore
 from ..game_data import VARIANT_ENV
-from . import trade_settings
+from . import inbox, trade_settings
 from .assets import portrait_url
 from .registry import digest, identifier, validate_id
 from pokecore.identity import find, legacy
@@ -474,7 +474,20 @@ class Coordinator:
                 'attention': attention,
                 'message': attention['message'] if attention else self.last_message}
 
-    def adventure_status(self, aid):
+    def adventure_status(self, aid, watcher=False):
+        """One adventure's trades. A watcher never learns which other adventures it traded with."""
+        status = self._adventure_status(aid)
+        if not watcher:
+            return status
+        def hidden(row):
+            return {**row, 'peer_id': None, 'peer_name': 'Another adventure',
+                    **({'failure_reason': None} if 'failure_reason' in row else {})}
+        attention = status['attention'] and {**status['attention'], 'reason': None,
+                                             'message': 'A recent trade attempt did not complete.'}
+        return {**status, 'attention': attention,
+                **{key: [hidden(row) for row in status[key]] for key in ('active', 'queued', 'recent_failures', 'history')}}
+
+    def _adventure_status(self, aid):
         game = self.registry.adventure(aid)
         names = {row['id']: row['name'] for row in self.registry.adventures()}
         rows = self.registry.transactions(adventure_id=aid)
@@ -564,7 +577,14 @@ class Coordinator:
         return bool(modern.get('time_capsule_ready') and offer.get('time_capsule_compatible')
                     and classic.get('time_capsule_compatible') is not False)
 
-    def propose(self, data):
+    def propose(self, data, actor=None, owners=None, across=None):
+        """Record an exchange. With `actor`, only while they still own both adventures.
+
+        `owners` maps each adventure to the owner it had when the trade was chosen, and `across`
+        is whether both had automatic trading with other people on then. Either one changing
+        before the exchange is recorded refuses it.
+        """
+        from .ownership import owned_by
         required = {'left_id', 'right_id', 'left_key', 'right_key'}
         if not isinstance(data, dict) or not required <= set(data) or set(data) - required - {'request_id', 'manual'}:
             raise ValueError('Choose two adventures and their Pokémon')
@@ -619,17 +639,50 @@ class Coordinator:
             raise ValueError('The Time Capsule needs an unlocked Gen II adventure and compatible Kanto Pokémon')
         if not manual and not self._last_copies_useful(give, take, self._benefit(left, take), self._benefit(right, give)):
             raise ValueError('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
-        with self.manager.maintenance, self.guard:
+        # A transfer ends queued trades under `offers.guard`, so the owner is checked again under it.
+        with self.manager.maintenance, self._offers_guard(), owned_by(self.manager, actor, participants), self.guard:
             existing = self._admit(tid, selection)
             if existing:
                 return existing
+            if owners is not None:
+                self._still_chosen(owners, across, manual)
             campaigns = {aid: self.registry.adventure(aid)['campaign_id'] for aid in participants}
             plan = {**selection, 'participants': participants, 'campaign_ids': campaigns,
                     'attempt_id': identifier(), 'kind': 'cable_trade', 'display_offers': display_offers}
             if manual:
                 plan['manual'] = True
-            plan['plan_digest'] = digest(plan)
-            return self.registry.create_transaction(tid, plan)
+            leases = getattr(self.manager, 'leases', None)
+            with ExitStack() as turns:
+                if leases is not None:
+                    # Each adventure's turn waits out a grant under way, and keeps a new one off
+                    # until the trade is recorded and holds the adventure.
+                    for aid in sorted(participants):
+                        turns.enter_context(leases.turn(aid))
+                    held = [aid for aid in participants if leases.holder(aid)]
+                    if held and not manual:
+                        # Someone is playing by hand. Automatic trades wait for them.
+                        raise Waiting('Someone is playing this adventure by hand')
+                    for aid in held:
+                        # The worker hears in the background, so no send waits under these locks.
+                        leases.end(aid, 'trade')
+                plan['plan_digest'] = digest(plan)
+                return self.registry.create_transaction(tid, plan)
+
+    def _offers_guard(self):
+        offers = getattr(self.manager, 'offers', None)
+        return offers.guard if offers is not None else nullcontext()
+
+    def _still_chosen(self, owners, across, manual):
+        """Refuse a trade whose adventures changed hands, or lost trading with other people, since it was chosen."""
+        for aid, owner in owners.items():
+            if self.registry.adventure(aid).get('owner_id') != owner:
+                if manual:
+                    raise ValueError('Cancelled: an adventure changed hands before the trade started')
+                raise Waiting('An adventure changed hands')
+        if not manual and not all(trade_settings.get(self.registry, aid)['enabled'] for aid in owners):
+            raise Waiting('Auto trading was turned off')
+        if across is not None and across != all(trade_settings.get(self.registry, aid)['across_owners'] for aid in owners):
+            raise Waiting('Trading with other people changed')
 
     def _admit(self, tid, selection):
         """The exchange already recorded under this request ID, or None if a new one may start."""
@@ -661,8 +714,20 @@ class Coordinator:
         plan = row['plan']
         # A full PC releases one spare to make room, never a hand-picked Pokémon.
         hand_picked = self.hand_picked_keys()
+        leases = getattr(self.manager, 'leases', None)
+        def cancelled():
+            return self.closed.is_set() or self.registry.transaction(row['id'])['decision'] == 'ABORT'
+        if plan.get('manual') and leases is not None:
+            for aid in plan['participants']:
+                # The lease this trade ended may not have reached the worker yet, and a game
+                # still under manual control cannot prepare. No lock is held here, and a Cancel
+                # or shutdown ends the wait.
+                if not leases.settle(aid, deadline, cancelled):
+                    if cancelled():
+                        raise RuntimeError('Cable Club preparation was cancelled')
+                    raise TimeoutError(f'The adventure did not leave manual control in time (adventure {aid})')
         while len(prepared) != 2:
-            if self.closed.is_set() or self.registry.transaction(row['id'])['decision'] == 'ABORT':
+            if cancelled():
                 raise RuntimeError('Cable Club preparation was cancelled')
             for side, aid in zip(('left', 'right'), plan['participants']):
                 if aid in prepared:
@@ -896,13 +961,26 @@ class Coordinator:
                 self.manager.notifications.trade_completed(row, manifest.get('display') or {})
             except Exception:
                 log.exception('Could not announce trade %s', tid)
+            inbox.trade_completed(self.manager, row, manifest.get('display') or {})
         self._prune_interactions()
         with self.view_guard:
             self.manual_progress.pop(tid, None)
         for aid in plan['participants']:
             self.previews.pop(aid, None)
             if self.registry.adventure(aid)['desired_state'] == 'stopped':
-                self.manager.supervisor.stop(aid)
+                # The owner stopped it during the trade, so the stop drops what its run was told.
+                # The stop reads that again under the lock a Start takes, so a Start since wins.
+                leases = getattr(self.manager, 'leases', None)
+                try:
+                    if leases is not None:
+                        leases.stop_worker(aid, only_if_stopped=True)
+                    else:
+                        self.manager.supervisor.stop(aid, only_if_stopped=True)
+                except Exception:
+                    # The exchange is already final. A failed stop marked it recovering again, and
+                    # that pass replayed it and started this worker again. The supervisor already
+                    # recorded the failure on the adventure, as for an owner's own Stop.
+                    log.exception('Could not stop adventure %s after exchange %s', aid, tid)
             else:
                 self.registry.update(aid, state='running', error=None)
         return row
@@ -966,6 +1044,7 @@ class Coordinator:
             if row['phase'] in TERMINAL:
                 return row
             self.registry.update_transaction(tid, decision='ABORT', phase='aborting', error='Cancelled by the owner')
+        self._wake_settles()
         with self.process_guard:
             if self.process and self.process.poll() is None:
                 self.process.terminate()
@@ -1059,6 +1138,7 @@ class Coordinator:
         blocked = {}
         games = sorted(self.registry.adventures(), key=lambda game: (last.get(game['id'], 0), game['id']))
         campaigns = {game['id']: game['campaign_id'] for game in games}
+        owners = {game['id']: game.get('owner_id') for game in games}
         visits = self.registry.completed_trade_visits()
         recent_species = Counter()
         recent_games = Counter()
@@ -1114,6 +1194,10 @@ class Coordinator:
         candidates = []
         for index, (left_id, left) in enumerate(inventories):
             for right_id, right in inventories[index + 1:]:
+                # Adventures of two different people trade automatically only when both owners opted in.
+                if owners[left_id] != owners[right_id] and not (
+                        settings[left_id]['across_owners'] and settings[right_id]['across_owners']):
+                    continue
                 # Each benefit scans a whole library, so score every offer once per pair
                 # rather than once per combination.
                 gives = [self._offer_for(offer, right) for offer in left.get('offers', [])]
@@ -1151,9 +1235,16 @@ class Coordinator:
         candidates = self._kept_candidates(sorted(candidates, key=lambda item: item[0], reverse=True), now)
         if candidates:
             _, left_id, right_id, left_key, right_key, *_ = candidates[0]
+            pair = (left_id, right_id)
             try:
                 row = self.propose({'left_id': left_id, 'right_id': right_id,
-                                    'left_key': left_key, 'right_key': right_key, 'request_id': identifier()})
+                                    'left_key': left_key, 'right_key': right_key, 'request_id': identifier()},
+                                   owners={aid: owners[aid] for aid in pair},
+                                   across=all(settings[aid]['across_owners'] for aid in pair))
+            except Waiting as error:
+                # An owner or a trading switch changed during the scan. The next pass scores again.
+                log.info('Automatic trade skipped: %s', error)
+                return None
             except Ineligible as error:
                 # Offers change while inventories are read (a release, a League visit), so this
                 # is expected now and then. The next pass picks something else.
@@ -1195,13 +1286,20 @@ class Coordinator:
         """Pokémon in a hand-picked trade that has not finished, as (adventure, trade key) pairs.
 
         Automatic trading never selects them, so a queued trade the owner chose does not lose
-        its Pokémon to an automatic exchange first. Trade offers stored before 0.5.0 are
-        ignored: nothing can answer them any more.
+        its Pokémon to an automatic exchange first. On a Library with accounts, an open trade
+        offer holds its Pokémon the same way, and so does the Pokémon it asks for. An open
+        Library has no offers, so offers stored before 0.5.0 hold nothing there.
         """
         keys = set()
         for entry in self._manual_entries():
             if entry['state'] in MANUAL_WAITING:
                 keys |= {(entry['left_id'], entry['left_key']), (entry['right_id'], entry['right_key'])}
+        if getattr(self.manager, 'auth_mode', 'none') != 'accounts':
+            return keys
+        for offer in self.registry.trade_offers(statuses=('pending', 'accepted')):
+            keys.add((offer['from_id'], offer['from_key']))
+            if offer['to_key']:
+                keys.add((offer['to_id'], offer['to_key']))
         return keys
 
     @staticmethod
@@ -1315,9 +1413,26 @@ class Coordinator:
             entry = next((item for item in entries if item['id'] == mid), None)
             if entry is None or entry['state'] != 'queued':
                 return False
+            if entry.get('cancel_requested'):
+                entry.update(state='cancelled', error='Cancelled by the owner', updated_at=time.time())
+                self._manual_save(entries)
+                return False
             entry.update(state='starting', updated_at=time.time())
             self._manual_save(entries)
         return True
+
+    def _manual_requeue(self, mid):
+        """Put a trade that could not start back in line, unless a cancel was asked for meanwhile."""
+        with self.manual_guard:
+            entries = self._manual_entries()
+            entry = next((item for item in entries if item['id'] == mid), None)
+            if entry is None:
+                return
+            if entry.get('cancel_requested'):
+                entry.update(state='cancelled', error='Cancelled by the owner', updated_at=time.time())
+            else:
+                entry.update(state='queued', updated_at=time.time())
+            self._manual_save(entries)
 
     def manual_waiting(self):
         return any(entry['state'] in MANUAL_WAITING for entry in self._manual_entries())
@@ -1347,11 +1462,13 @@ class Coordinator:
                 raise ValueError('Choose a Pokémon on each side')
         if selection['left_id'] == selection['right_id']:
             raise ValueError('Choose two different adventures')
+        owners = {}
         for aid in (selection['left_id'], selection['right_id']):
             game = self.registry.adventure(aid)
             reason = self.manual_game_reason(game)
             if reason:
                 raise ValueError(f'{game["name"]}: {reason}')
+            owners[aid] = game.get('owner_id')
         if self.closed.is_set() or self.manager.suspended:
             raise ValueError('Trading is paused for application maintenance')
         with self.manual_guard:
@@ -1368,7 +1485,7 @@ class Coordinator:
                 pass
             now = time.time()
             entry = {'id': mid, **selection, 'state': 'queued', 'error': None, 'names': names_shown,
-                     'cancel_requested': False, 'created_at': now, 'updated_at': now}
+                     'owners': owners, 'cancel_requested': False, 'created_at': now, 'updated_at': now}
             entries.append(entry)
             self._manual_save(entries)
         return entry
@@ -1393,7 +1510,7 @@ class Coordinator:
                         self.registry.transaction(entry['id'])
                         self._manual_update(entry['id'], state='started')
                     except KeyError:
-                        self._manual_update(entry['id'], state='queued')
+                        self._manual_requeue(entry['id'])
             while not self.closed.is_set() and not self.manager.suspended:
                 head = next((entry for entry in self._manual_entries() if entry['state'] == 'queued'), None)
                 if head is None:
@@ -1405,10 +1522,11 @@ class Coordinator:
                     continue    # Cancelled after it was read, so it stays cancelled.
                 try:
                     row = self.propose({name: head[name] for name in ('left_id', 'right_id', 'left_key', 'right_key')}
-                                       | {'request_id': head['id'], 'manual': True})
+                                       | {'request_id': head['id'], 'manual': True}, owners=head.get('owners'))
                 except Waiting:
-                    # An adventure is still busy with another trade. This one keeps its place.
-                    self._manual_update(head['id'], state='queued')
+                    # An adventure is still busy with another trade. This one keeps its place,
+                    # unless its owner cancelled it meanwhile.
+                    self._manual_requeue(head['id'])
                     break
                 except Missing as error:
                     # Checked again now it is this trade's turn. Neither save was touched.
@@ -1522,8 +1640,15 @@ class Coordinator:
             return preview
         return None
 
+    def _wake_settles(self):
+        """A trade waiting for a worker to leave manual control rechecks whether it should go on."""
+        leases = getattr(self.manager, 'leases', None)
+        if leases is not None:
+            leases.wake()
+
     def close(self):
         self.closed.set()
+        self._wake_settles()
         with self.process_guard:
             process = self.process
             if process and process.poll() is None:

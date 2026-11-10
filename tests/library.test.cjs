@@ -34,7 +34,10 @@ function library(options = {}) {
   const location = {hash: options.hash || '', pathname: '/', search: '', replace() {}}
   const context = vm.createContext({
     document: {body: {dataset: {page: options.page || 'library', adventure: options.adventure || ''}}, querySelector: element,
-      querySelectorAll: () => [], addEventListener(name, callback) {
+      // Controls that need rights, as the real page lists them, when a test names them.
+      querySelectorAll: selector => selector.endsWith('[data-owner]') ? (options.ownerControls || []).map(element)
+        : selector === '[data-admin-hint]' ? ['#empty-add-cartridge', '#create-add-cartridge'].map(element) : [],
+      addEventListener(name, callback) {
       listeners[name] = callback
       if (name === 'click') clicks.push(callback)
     }, hidden: false},
@@ -150,6 +153,26 @@ test('the page for a failed adventure explains the failure and is not a library'
   assert.match(page, /data-action="start"[^>]*>Retry</)
   assert.doesNotMatch(page, /No adventures yet|Create an adventure/)
   assert.match(view.element('#stopped-lede').textContent, /could not start/)
+})
+
+test('the page for an adventure a cap kept stopped says why, without the failure lamp or retry note', async () => {
+  const id = 'b'.repeat(32)
+  const error = 'Ann has 1 of 1 adventures running. Stop one before starting another'
+  const view = library({page: 'stopped', adventure: id, respond(path) {
+    return path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: [{id, name: 'Capped', version: 'red',
+      state: 'stopped', error, summary: {next_retry: Date.now() / 1000 + 120}}]})} : null
+  }})
+  await settle()
+  const page = view.element('#stopped-card').innerHTML
+  assert.match(page, /<h2 class="status-headline">Stopped</)
+  assert.match(page, /role="alert">Ann has 1 of 1 adventures running/)
+  assert.doesNotMatch(page, /data-on="crit"|try again by itself|>Retry</)
+  const archived = library({page: 'stopped', adventure: id, respond(path) {
+    return path === '/api/v1/adventures' ? {ok: true, json: async () => ({adventures: [{id, name: 'Capped', version: 'red',
+      state: 'stopped', archived: true, error}]})} : null
+  }})
+  await settle()
+  assert.doesNotMatch(archived.element('#stopped-card').innerHTML, /role="alert"/)
 })
 
 test('settings mutations send only fields accepted by the manager', async () => {
@@ -611,6 +634,38 @@ test('the play style select saves through the play route, running or stopped', a
   assert.match(html, /<select id="settings-play-style" data-owner><option value="balanced">Balanced<\/option><option value="story">Story first<\/option><option value="collector">Collector<\/option><\/select>/)
 })
 
+test('a member who owns an adventure can change its play settings and rewards', async () => {
+  const controls = ['#settings-nicknames', '#settings-play-style', '#settings-league-rewards', '#settings-mew-event']
+  const game = {id: 'f'.repeat(32), name: 'Game', version: 'red', state: 'stopped', access: 'owner', settings: {}}
+  const view = library({ownerControls: controls, respond(path) {
+    if (path === '/api/v1/session') return {ok: true, json: async () => ({csrf_token: 'csrf', role: 'member', auth: 'accounts', authenticated: true, user: {id: 'm'}})}
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+  }})
+  await settle()
+  for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+  view.click('settings', game.id)
+  for (const control of controls) {
+    assert.equal(view.element(control).dataset.id, game.id, control)
+    assert.equal(view.element(control).disabled, false, control)
+  }
+})
+
+test('a member who owns an adventure can delete it from the library', async () => {
+  const controls = ['#delete-confirmation', '#adventure-delete-form [type=submit]']
+  const game = {id: 'f'.repeat(32), name: 'Game', version: 'red', state: 'stopped', access: 'owner', settings: {}}
+  const view = library({ownerControls: controls, respond(path) {
+    if (path === '/api/v1/session') return {ok: true, json: async () => ({csrf_token: 'csrf', role: 'member', auth: 'accounts', authenticated: true, user: {id: 'm'}})}
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+  }})
+  await settle()
+  view.click('delete', game.id)
+  assert.equal(view.element('#adventure-delete-dialog').open, true)
+  for (const control of controls) {
+    assert.equal(view.element(control).dataset.id, game.id, control)
+    assert.equal(view.element(control).disabled, false, control)
+  }
+})
+
 test('the nickname pool editor says an empty pool means no nicknames', () => {
   const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
   assert.match(html, /<p id="nickname-empty-hint" class="note">Empty pool = no nicknames<\/p>/)
@@ -740,6 +795,19 @@ test('with no cartridges the library and the dialog both point to Settings', asy
   assert.equal(view.element('#create-submit').hidden, true)
   assert.equal(view.element('#rom-id').value, '')
   assert.equal(view.element('#create-supported').textContent, 'Red, Blue, Yellow, Gold, Silver or Crystal')
+})
+
+test('a member with no cartridges is told to ask an admin, not sent to Settings', async () => {
+  const view = library({slots: SHELF.map(version => slot(version, version === 'red' ? 'red-rom' : '')), respond: path => path === '/api/v1/session'
+    ? {ok: true, json: async () => ({csrf_token: 'csrf', role: 'member', auth: 'accounts', authenticated: true, user: {id: 'm', can_create: true}})} : null})
+  await settle()
+  await view.element('#new-adventure').onclick()
+  await settle()
+  const cards = view.element('#game-choices').innerHTML
+  assert.doesNotMatch(cards, /href="\/settings/)
+  assert.match(cards, /Not in the Library/)
+  assert.equal(view.element('#empty-add-cartridge').hidden, true)
+  assert.equal(view.element('#create-add-cartridge').hidden, true)
 })
 
 test('a starter from the wrong game is refused before the adventure is created', async () => {

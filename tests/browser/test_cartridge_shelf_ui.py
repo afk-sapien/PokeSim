@@ -75,6 +75,36 @@ def assert_even_keys(page):
     assert not any(item['clipped'] for item in keys), keys
 
 
+def test_an_admin_fills_the_library_shelf_and_a_member_plays_from_it(page, library, tmp_path, monkeypatch):
+    """Under accounts only admins add cartridges, and a member who can create picks from all of them."""
+    from playwright.sync_api import expect
+    from test_accounts_ui import OLD, library as accounts
+    from test_inbox_ui import log_in
+    factory, holder = accounts(tmp_path / 'accounts', monkeypatch)
+    with serve(factory) as url:
+        manager = holder['manager']
+        monkeypatch.setattr(manager.assets, 'install_portraits_quietly', lambda raw: 0)
+        manager.auth.create_user('bob', OLD)
+        page.set_viewport_size({'width': 390, 'height': 900})
+        log_in(page, url, 'admin')
+        page.goto(f'{url}/settings#cartridges')
+        upload(page, 'blue', rom_file('blue'))
+        expect(page.locator('#cartridge-blue')).to_have_attribute('data-state', 'installed')
+        expect(page.locator('#cartridge-blue')).to_contain_text('Pokémon Blue added')
+        no_sideways_scroll(page)
+        page.context.clear_cookies()
+        log_in(page, url, 'bob')
+        page.goto(f'{url}/settings')
+        expect(page.locator('#account-panel')).to_be_visible()
+        expect(page.locator('#cartridges')).to_be_hidden()
+        page.goto(url)
+        page.locator('#new-adventure:visible, #empty-create:visible').first.click()
+        dialog = page.locator('#create-dialog')
+        expect(dialog.locator('.game-card[data-version="blue"] input')).to_be_checked()
+        expect(dialog.locator('.game-card[data-version="red"]')).to_contain_text('Not in the Library')
+        expect(dialog.locator('a[href^="/settings"]:visible')).to_have_count(0)
+
+
 def rom_file(version, name=None):
     return {'name': name or f'{version}.gb', 'mimeType': 'application/octet-stream', 'buffer': synthetic(version)}
 

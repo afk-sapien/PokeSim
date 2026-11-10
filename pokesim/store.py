@@ -398,6 +398,9 @@ class Store:
     def keep_as(self, path: Path, name: str):
         self.checkpoints.keep_as(path, name)
 
+    def held(self, path: Path, replaced: str):
+        return self.checkpoints.held(path, replaced)
+
     def write_stall_bundle(self, state: bytes, metadata: dict, report: dict, png: bytes | None,
                            before: Path | None, keep: int) -> Path:
         """Keep a stall bundle, and a row for it that stays when the folder is pruned."""

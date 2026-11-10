@@ -75,12 +75,16 @@ def test_queued_start_waits_until_backup_finishes_copying(tmp_path, monkeypatch)
         manager.close()
 
 
-@pytest.mark.parametrize('state,expected', [
-    ({'paused': True, 'manual_mode': False}, 'pause'),
-    ({'paused': True, 'manual_mode': True}, 'take_control'),
-    ({'paused': False, 'manual_mode': False}, None),
+@pytest.mark.parametrize('auth,state,expected', [
+    ('none', {'paused': True, 'manual_mode': False}, 'pause'),
+    ('none', {'paused': True, 'manual_mode': True}, 'take_control'),
+    ('none', {'paused': False, 'manual_mode': False}, None),
+    ('accounts', {'paused': True, 'manual_mode': False}, 'pause'),
+    # With accounts a backup ends playing by hand, so the autopilot plays again afterwards.
+    ('accounts', {'paused': True, 'manual_mode': True}, None),
+    ('accounts', {'paused': False, 'manual_mode': False}, None),
 ])
-def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, state, expected):
+def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, auth, state, expected):
     controls = []
 
     class PlaybackChild(FakeChild):
@@ -91,7 +95,7 @@ def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, state, ex
                 controls.append(body['action'])
             return {}
 
-    manager = Manager(tmp_path, child_factory=PlaybackChild)
+    manager = Manager(tmp_path, child_factory=PlaybackChild, auth=auth)
     manager.registry.add_rom('rom', 'sha1', 'red')
     row = manager.registry.create('Red', 'rom', {'starter': 'random'}, identifier())
     manager.registry.request_lifecycle(row['id'], 'start', identifier())
@@ -108,6 +112,35 @@ def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, state, ex
         assert manager.supervisor.child(row['id']) is not original
         assert controls == ([expected] if expected else [])
         assert manager.registry.adventure(row['id'])['desired_state'] == 'running'
+    finally:
+        manager.close()
+
+
+def test_a_backup_stays_suspended_until_its_workers_are_back(tmp_path, monkeypatch):
+    """No lease or trade may land on a worker that is still starting after a backup."""
+    seen = []
+
+    class QuietChild(FakeChild):
+        def request(self, method, path, body=None, **kwargs):
+            return {}
+    manager = Manager(tmp_path, child_factory=QuietChild)
+    manager.registry.add_rom('rom', 'sha1', 'red')
+    row = manager.registry.create('Red', 'rom', {'starter': 'random'}, identifier())
+    manager.registry.request_lifecycle(row['id'], 'start', identifier())
+    monkeypatch.setattr(manager.assets, 'rom_path', lambda rid: tmp_path / 'fixture.gb')
+    monkeypatch.setattr(manager.assets, 'prepare', lambda report: tmp_path)
+    monkeypatch.setattr(manager.assets, 'install_portraits', lambda raw: 0)
+    (tmp_path / 'fixture.gb').write_bytes(b'fake')
+    try:
+        manager.supervisor.start(row['id'])
+        start = manager.supervisor.start
+
+        def watched(aid, *args, **kwargs):
+            seen.append(manager.suspended)
+            return start(aid, *args, **kwargs)
+        monkeypatch.setattr(manager.supervisor, 'start', watched)
+        create_backup(manager)
+        assert seen == [True] and manager.suspended is False
     finally:
         manager.close()
 

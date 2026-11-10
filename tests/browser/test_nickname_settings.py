@@ -81,7 +81,8 @@ def test_settings_panels_are_one_full_width_column(page, tmp_path, monkeypatch, 
         layout = page.evaluate('''() => {
             const view = document.querySelector('[data-view="settings"]')
             const box = view.getBoundingClientRect()
-            const panels = [...view.querySelectorAll('section.panel')].map(panel => panel.getBoundingClientRect())
+            // Account panels stay hidden without accounts.
+            const panels = [...view.querySelectorAll('section.panel:not([hidden])')].map(panel => panel.getBoundingClientRect())
             return {container: box.width, left: box.left, widths: panels.map(rect => rect.width),
                     lefts: panels.map(rect => rect.left), tops: panels.map(rect => rect.top),
                     overflow: document.documentElement.scrollWidth > innerWidth}

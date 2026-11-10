@@ -382,7 +382,7 @@ def test_web_lists_goals_and_pins_and_unpins(web):
     assert response.json() == {'ok': True, 'pin': {'key': 'hunt', 'label': 'Find Clefairy', 'started': False}}
     assert client.get('/api/state').json()['strategy']['pin']['label'] == 'Find Clefairy'
     assert client.get('/api/goals').json()['pin']['key'] == 'hunt'
-    assert client.post('/api/control', json={'action': 'unpin_goal'}).json() == {'ok': True}
+    assert client.post('/api/control', json={'action': 'unpin_goal'}).json()['ok'] is True
     assert client.get('/api/state').json()['strategy']['pin'] is None
     assert game.query is None
     client.get('/api/goals', params={'q': '  Clefairy '})

@@ -19,6 +19,10 @@
   }, true)
   let csrf = ''
   let owner = false
+  let canCreate = false
+  // Only accounts have control leases, so only they ask what happens after someone plays by hand.
+  let accounts = false
+  let leaseEnd = null
   let adventures = []
   let busy = false
   let refreshing = false
@@ -72,17 +76,52 @@
     $('#notice').hidden = !message
     $('#notice').classList.toggle('error', error)
   }
+  // An admin runs the whole Library. A member runs the adventures they own and, when allowed,
+  // creates new ones. The server checks every request either way.
+  function allowed(element) {
+    if (owner) return true
+    const id = element.dataset.id
+    if (id) return adventures.find(game => game.id === id)?.access === 'owner'
+    return element.hasAttribute('data-create') && canCreate
+  }
+  // A dialog for one adventure: its controls belong to that adventure, so a member who owns it can use them.
+  function openFor(dialog, game) {
+    document.querySelectorAll(`${dialog} [data-owner]`).forEach(element => { element.dataset.id = game.id })
+    permissions()
+    $(dialog).showModal()
+  }
   function permissions() {
-    document.querySelectorAll('[data-owner]').forEach(element => { element.disabled = !owner || busy || element.hasAttribute('data-blocked') })
+    document.querySelectorAll('[data-owner]').forEach(element => { element.disabled = !allowed(element) || busy || element.hasAttribute('data-blocked') })
     if (notifyIntegration) renderNotifyProvider()
+  }
+  function showAccount(session) {
+    $('#accounts-banner').hidden = !session.setup_recommended
+    $('#account').hidden = session.auth !== 'accounts' || !session.user
+    if (session.user) $('#account-name').textContent = session.user.display_name || session.user.username
   }
   async function initializeSession() {
     if (!sessionPending) sessionPending = api('/api/v1/session').then(session => {
+      if (session.auth === 'accounts' && !session.authenticated) {
+        location.replace(session.setup ? '/setup' : `/login?next=${encodeURIComponent(location.pathname)}`)
+        return new Promise(() => {})
+      }
       csrf = session.csrf_token || ''
-      owner = session.role === 'owner'
+      owner = session.role === 'owner' || session.role === 'admin'
+      canCreate = owner || Boolean(session.user?.can_create)
+      accounts = session.auth === 'accounts'
+      showAccount(session)
       permissions()
+      // Settings for accounts reuse this session, since a second first request would make
+      // another anonymous session and leave one of the two CSRF tokens stale.
+      if (typeof CustomEvent === 'function') document.dispatchEvent?.(new CustomEvent('pokesim:session', {detail: session}))
     }).finally(() => { sessionPending = null })
     return sessionPending
+  }
+  $('#logout').onclick = async () => {
+    try { await api('/api/v1/auth/logout', {method: 'POST'}) } finally { location.replace('/login') }
+  }
+  $('#accounts-banner-dismiss').onclick = async () => {
+    try { $('#accounts-banner').hidden = !(await write('/api/v1/open-notice/dismiss')).setup_recommended } catch (error) { notice(error.message, true) }
   }
   async function api(path, options = {}, retried = false) {
     const {download, ...fetchOptions} = options
@@ -292,7 +331,8 @@
     const lamp = failed ? 'crit' : busyState ? 'warn' : ''
     const headline = game.archived ? 'Archived' : failed ? 'Failed to start' : busyState ? `${stateLabel(game)}…` : 'Stopped'
     const setup = busyState && game.summary?.setup ? `<p class="status-detail">${esc(game.summary.setup)}…</p>` : ''
-    const reason = failed && game.error ? explainError(game) : ''
+    // A stopped adventure can say why too, such as one a running cap kept from starting with PokeSim.
+    const reason = game.error && !game.archived ? explainError(game) : ''
     const raw = typeof game.error === 'string' ? game.error : ''
     const technical = reason && raw && raw !== reason ? `<details class="status-technical"><summary>Technical details</summary><p>${esc(raw)}</p></details>` : ''
     const again = failed ? retryNote(game) : ''
@@ -505,6 +545,8 @@
     try {
       const data = await api('/api/v1/adventures')
       adventures = data.adventures || []
+      // The inbox badge reads its unread count from this poll instead of polling on its own.
+      if (data.inbox && typeof CustomEvent === 'function') document.dispatchEvent?.(new CustomEvent('pokesim:inbox', {detail: data.inbox}))
       renderAttention(data.attention)
       if (page === 'library' || page === 'settings') await refreshCartridges()
       renderAdventures()
@@ -612,6 +654,7 @@
     }
     const none = cartridgesLoaded && !installed().length
     $('#empty-needs-cartridge').hidden = !none
+    adminHints()
     $('#empty-ready').hidden = none
     $('#empty-supported').textContent = supportedGames
     if (page === 'settings' && cartridgesLoaded && !shelfTargeted && /^#cartridge/.test(location.hash)) {
@@ -622,6 +665,11 @@
       target?.querySelector('[data-cartridge-upload]')?.focus({preventScroll: true})
     }
     permissions()
+  }
+  // Admins fill the Library shelf. A member is told to ask one instead of being sent to Settings.
+  function adminHints() {
+    document.querySelectorAll('[data-admin-hint]').forEach(element => { element.hidden = !owner })
+    document.querySelectorAll('[data-member-hint]').forEach(element => { element.hidden = owner })
   }
   async function refreshCartridges() {
     const data = await api('/api/v1/cartridges')
@@ -717,7 +765,9 @@
   function gameCard(slot, selected) {
     const id = esc(slot.version)
     if (!slot.installed) {
-      const action = slot.supported ? `<a class="game-card-add" href="/settings#cartridge-${id}">Add cartridge</a>` : '<span class="game-card-add">Coming in this release</span>'
+      // Only admins add cartridges, so a member sees what is missing without a link to add it.
+      const action = !slot.supported ? '<span class="game-card-add">Coming in this release</span>'
+        : owner ? `<a class="game-card-add" href="/settings#cartridge-${id}">Add cartridge</a>` : '<span class="game-card-add">Not in the Library</span>'
       return `<div class="game-card is-missing" data-version="${id}"><span class="game-card-name">${esc(slot.title)}</span><span class="game-card-meta">${slot.supported ? 'Not installed' : 'Not playable yet'}</span>${action}</div>`
     }
     return `<label class="game-card" data-version="${id}"><input type="radio" name="game" value="${esc(slot.rom.id)}" data-version="${id}"${selected ? ' checked' : ''}><span class="game-card-name">${esc(slot.title)}</span><span class="game-card-meta">Generation ${slot.generation === 2 ? 'II' : 'I'}</span></label>`
@@ -736,6 +786,7 @@
     const none = !ready.length
     $('#create-form').classList.toggle('needs-cartridge', none)
     $('#create-needs-cartridge').hidden = !none
+    adminHints()
     $('#create-submit').hidden = none
     $('#create-supported').textContent = supportedGames
     updateStarters()
@@ -794,7 +845,8 @@
       $('#create-progress').textContent = ''
       $('#create-dialog').showModal()
       if (installed().length) $('#new-name').focus()
-      else $('#create-add-cartridge').focus()
+      else if (owner) $('#create-add-cartridge').focus()
+      else $('#create-dialog [data-close]').focus()
     })
   }
   $('#new-adventure').onclick = openCreate
@@ -824,7 +876,7 @@
       $('#delete-name').textContent = game.name
       $('#delete-confirmation').value = ''
       $('#adventure-delete-dialog .dialog-feedback').textContent = ''
-      $('#adventure-delete-dialog').showModal()
+      openFor('#adventure-delete-dialog', game)
       return
     }
     if (button.dataset.action === 'settings') {
@@ -850,6 +902,16 @@
       // Nicknames and Play style save through the play route, so they stay editable while the adventure runs.
       $('#settings-nicknames').checked = game.settings?.nicknames !== false
       $('#settings-play-style').value = game.settings?.play_style || 'balanced'
+      leaseEnd = null
+      const handsOn = accounts && game.access === 'owner'
+      $('#settings-lease-end-label').hidden = !handsOn
+      $('#settings-lease-end-note').hidden = !handsOn
+      $('#settings-lease-end').value = 'resume'
+      if (handsOn) api(`${gameUrl(game.id)}api/lease`).then(status => {
+        if ($('#settings-id').value !== game.id) return
+        leaseEnd = status.end || 'resume'
+        $('#settings-lease-end').value = leaseEnd
+      }).catch(() => { $('#settings-lease-end-label').hidden = $('#settings-lease-end-note').hidden = true })
       $('#settings-randomizer').hidden = !game.settings?.randomizer
       $('#settings-randomizer-code').textContent = game.settings?.randomizer || ''
       const randomized = parseShareCode(game.settings?.randomizer || '')
@@ -889,7 +951,7 @@
         input.disabled = johto || running(game)
       }
       $('#settings-event-steps-label').textContent = johto ? 'Steps between gift, trade, Sudowoodo and Snorlax returns' : 'Steps between gift, trade and Snorlax returns'
-      $('#adventure-settings').showModal()
+      openFor('#adventure-settings', game)
       return
     }
     if (button.dataset.action === 'download-save') {
@@ -940,6 +1002,9 @@
       const style = $('#settings-play-style').value || 'balanced'
       if (game && style !== (game.settings?.play_style || 'balanced')) changes.play_style = style
       const play = Object.keys(changes).length ? await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}/play`, changes, 'PATCH') : {}
+      const end = $('#settings-lease-end').value
+      // The lease route takes only its own fields, so this skips write and its request id.
+      if (game && leaseEnd && end !== leaseEnd) await api(`${gameUrl(game.id)}api/lease`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'setting', end})})
       const playLabel = 'nicknames' in changes ? ('play_style' in changes ? 'play settings' : 'nickname setting') : 'play style'
       $('#adventure-settings').close()
       const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette', result.fair_wild_dvs_pending && 'fair wild DVs setting', play.play_pending && playLabel].filter(Boolean).join(' and ')
@@ -1214,6 +1279,19 @@
   $('#item-artwork-default').onclick = () => act(async () => {
     renderItemArtwork(await write('/api/v1/item-artwork/default'))
   })
+  function renderCaps(data) {
+    $('#caps-panel').hidden = !data.can_change
+    const limit = value => value === null ? 'no limit' : `a limit of ${value}`
+    $('#caps-summary').textContent = `${data.running} running now. The server has ${limit(data.server)}, each member ${limit(data.member)}. ${data.suggested_member} per member suits this machine.`
+    if (document.activeElement !== $('#caps-server')) $('#caps-server').value = data.server ?? ''
+    if (document.activeElement !== $('#caps-member')) $('#caps-member').value = data.member ?? ''
+  }
+  $('#caps-save').onclick = () => act(async () => {
+    const read = id => $(id).value.trim() === '' ? null : Number($(id).value)
+    renderCaps(await api('/api/v1/running-caps', {method: 'PUT', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({server: read('#caps-server'), member: read('#caps-member')})}))
+    $('#caps-result').textContent = 'Limits saved.'
+  })
   async function enter() {
     await initializeSession()
     $('#workspace').hidden = false
@@ -1221,6 +1299,7 @@
     document.querySelector(`[data-nav="${page === 'stopped' ? 'library' : page}"]`)?.setAttribute('aria-current', 'page')
     if (page === 'settings' && owner) {
       renderNicknameSettings(await api('/api/v1/settings'))
+      renderCaps(await api('/api/v1/running-caps'))
       await refreshBackups()
       await refreshPortraits()
       await refreshItemArtwork()

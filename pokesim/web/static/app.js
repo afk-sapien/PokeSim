@@ -62,6 +62,16 @@ function steadyObjective(objective) {
 let viewerOnly = false
 let paused = false
 let manualMode = false
+// A Pause, Resume or Take Control the library took but the game has not run yet.
+let pendingControl = null
+// The library's generation for that Pause or Resume, so the page sees when another change replaced it.
+let pendingGeneration = null
+const PENDING = {pause: 'Pausing once the game can', resume: 'Resuming once the game can', take_control: 'Taking control once the game can'}
+let stoppedNow = false
+// This person's role on the adventure. Without accounts everyone is the owner.
+let role = 'owner'
+let lease = null
+let leaseEnforced = false
 let stateBusy = false
 let partySignature = ''
 let currentParty = []
@@ -80,19 +90,123 @@ function toast(message, error = false) {
   toastTimer = setTimeout(() => { $('#toast').hidden = true }, 4500)
 }
 
+async function problem(response, fallback) {
+  try {
+    const data = await response.json()
+    return typeof data.detail === 'string' ? data.detail : fallback
+  } catch (_) { return fallback }
+}
+
 async function post(action, value) {
   if (viewerOnly) throw new Error("This instance is view-only.")
   const response = await PokeSim.fetch('/api/control', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({action, value})})
-  if (!response.ok) throw new Error('That action could not be sent. Please try again.')
+  if (!response.ok) throw new Error(await problem(response, 'That action could not be sent. Please try again.'))
   return response.json()
+}
+
+// With accounts, one person at a time plays by hand. The library keeps that control lease.
+const holding = () => !leaseEnforced || Boolean(lease?.you_hold)
+const canPress = () => !viewerOnly && role !== 'viewer' && holding()
+// Why the library took this page out of the line for control, which it says once.
+const LEFT_LINE = {
+  quiet: 'You left the line for control because this page was hidden too long. Ask again to wait.',
+  refused: 'The person playing turned down your request for control.',
+  ended: 'Control ended, so the line for it closed. Ask again to play.',
+  no_longer_allowed: 'You can no longer play this adventure.',
+}
+
+async function refreshLease() {
+  // A standalone game, or a library without accounts, has no lease. The library stamps the page when it has one.
+  if (!PokeSim.base || !document.querySelector('meta[name="pokesim-lease"]')) return
+  try {
+    const response = await PokeSim.fetch('/api/lease', {cache: 'no-store'})
+    if (!response.ok) throw new Error('Unavailable')
+    const status = await response.json()
+    if (status.you_hold && !lease?.you_hold) set('#manual-controls', 'open', true)
+    if (status.left_line) toast(LEFT_LINE[status.left_line] || LEFT_LINE.quiet, true)
+    lease = status
+    leaseEnforced = Boolean(status.enforced)
+  } catch (_) {
+    // Keep the last answer through a brief outage rather than flashing the controls.
+  }
+}
+
+async function leaseAction(button, action, userId) {
+  releaseControls()
+  if (button) button.disabled = true
+  try {
+    const response = await PokeSim.fetch('/api/lease', {method: 'POST', headers: {'content-type': 'application/json'},
+      body: JSON.stringify(userId ? {action, user_id: userId} : {action})})
+    if (!response.ok) throw new Error(await problem(response, 'Control could not change. Please try again.'))
+    const status = await response.json()
+    if (status.you_hold && !lease?.you_hold) set('#manual-controls', 'open', true)
+    lease = status
+    leaseEnforced = Boolean(status.enforced)
+    if (action === 'request' && !status.you_hold) toast('You are in line. The person playing can hand control to you.')
+    renderLease()
+    await refreshState()
+  } catch (error) {
+    toast(error.message, true)
+  } finally {
+    if (button) button.disabled = false
+  }
+}
+
+function renderLease() {
+  window.pokesimHoldsControl = holding()
+  const box = $('#lease')
+  const status = leaseEnforced ? lease : null
+  const manages = role === 'manager' || role === 'owner'
+  // The box speaks only while someone plays by hand or waits to. What happens when control ends is in Settings.
+  if (box) box.hidden = !status || stoppedNow || !(status.holder || status.queued || status.idle_warning || status.queue?.length)
+  $('.controller')?.querySelectorAll('[data-b]').forEach((button) => { button.disabled = !holding() })
+  const take = $('#take-control')
+  if (take) {
+    let action = ''
+    let text = manualMode ? 'Let AI play' : 'Take control'
+    if (status?.you_hold) [action, text] = ['release', status.end === 'pause' ? 'Stop playing' : 'Let AI play']
+    else if (status?.holder) [action, text] = manages ? ['take', 'Take control back'] : status.queued ? ['release', 'Leave the line'] : ['request', 'Ask for control']
+    else if (status) [action, text] = ['request', 'Take control']
+    take.dataset.lease = action
+    take.textContent = text
+  }
+  if (!status) return
+  const holder = status.holder
+  set('#lease-holder', 'textContent', status.you_hold
+    ? `You have control. ${status.end === 'pause' ? 'The game stays paused when you stop.' : 'The AI plays again when you stop.'}`
+    : holder ? `${holder.name} has control.${status.queued ? ' You are in line.' : ''}` : 'Nobody is playing by hand.')
+  if (holder && !status.you_hold && !stoppedNow) set('#control-mode', 'textContent', `${holder.name} is playing. AI paused`)
+  set('#lease-idle', 'hidden', !status.idle_warning)
+  if (status.idle_warning) set('#lease-idle', 'textContent', `No buttons pressed for a while. Control ends in ${status.idle_ends_in} s unless you press one.`)
+  const queue = $('#lease-queue')
+  const decides = status.you_hold || manages
+  const rows = decides ? (status.queue || []).filter((entry) => entry.id) : []
+  if (queue) {
+    queue.hidden = !rows.length
+    const signature = JSON.stringify([rows, status.you_hold])
+    if (queue.dataset.signature !== signature && !queue.contains(document.activeElement)) {
+      queue.dataset.signature = signature
+      queue.innerHTML = rows.map((entry) => `<li><span>${esc(entry.name)} asks for control</span>${status.you_hold ? `<button class="key" data-lease-action="handover" data-user="${esc(entry.id)}">Hand over</button>` : ''}<button class="key" data-lease-action="refuse" data-user="${esc(entry.id)}">Refuse</button></li>`).join('')
+    }
+  }
 }
 
 async function control(button, action, value, message) {
   releaseControls()
   button.disabled = true
   try {
-    await post(action, value)
-    if (message) toast(message)
+    const reply = await post(action, value)
+    if (reply?.applied === false && reply.detail) {
+      // The library sends it again until the game runs it, so the page says it is on its way.
+      pendingControl = PENDING[action] ? action : null
+      pendingGeneration = Number.isInteger(reply.generation) ? reply.generation : null
+      toast(reply.detail)
+    } else if (reply?.applied === false) {
+      throw new Error(reply.reason || 'The game did not run that now. Please try again.')
+    } else {
+      pendingControl = null
+      if (message) toast(message)
+    }
     await refreshState()
   } catch (error) {
     toast(error.message, true)
@@ -168,11 +282,19 @@ async function refreshState() {
     if ($('#connection').classList.contains('is-offline')) window.pokesimScreen?.reconnect()
     // A stopped adventure shows its last save read only, so it takes no controls either.
     const stopped = Boolean(state.stopped)
-    viewerOnly = Boolean(state.viewer_only) || stopped
+    stoppedNow = stopped
+    role = ['viewer', 'player', 'manager', 'owner'].includes(state.role) ? state.role : 'owner'
+    // A player's page is view-only for everything except playing by hand.
+    viewerOnly = (Boolean(state.viewer_only) && role !== 'player') || stopped
+    const manages = role === 'manager' || role === 'owner'
     $('.game-card')?.classList.toggle('is-stopped', stopped)
     document.querySelectorAll('.controls > :not(#sound):not(#sound-status), .manual-controls, .controller, #restart').forEach((element) => {
       element.hidden = viewerOnly
     })
+    for (const selector of ['#take-control', '.manual-controls', '.controller']) set(selector, 'hidden', viewerOnly || role === 'viewer')
+    for (const selector of ['#pause', '#save', '.controls > .live-speed']) set(selector, 'hidden', viewerOnly || !manages)
+    set('#restart', 'hidden', viewerOnly || role !== 'owner')
+    await refreshLease()
     set('#app-version', 'textContent', `v${state.version || 'unknown'}${state.build?.revision ? ` (${String(state.build.revision).slice(0, 7)})` : ''}`)
     const edition = state.strategy?.collection?.version
     if (edition) {
@@ -186,13 +308,21 @@ async function refreshState() {
     }
     manualMode = state.manual_mode
     $('.game-card')?.classList.toggle('is-manual', manualMode)
-    // The bezel's power LED is lit while the game runs and dark while it is paused.
+    // The status lamp under the screen follows the game: lit while it runs, amber while it is paused.
     $('.game-card')?.classList.toggle('is-paused', Boolean(paused) && !manualMode)
-    set('#on-air-label', 'textContent', stopped ? 'Stopped' : manualMode ? 'Manual' : paused ? 'Paused' : 'Live')
-    set('#take-control', 'textContent', manualMode ? 'Let AI play' : 'Take control')
-    set('#control-mode', 'textContent', stopped ? 'Showing the last save' : manualMode ? 'You’re playing. AI paused' : paused ? 'Game paused' : 'AI is playing')
+    set('#control-mode', 'textContent', stopped ? 'Stopped. Showing the last save' : manualMode ? 'You’re playing. AI paused' : paused ? 'Game paused' : 'AI is playing')
+    renderLease()
+    const ran = {pause: paused && !manualMode, resume: !paused && !manualMode, take_control: manualMode}
+    // Another manager's Resume, or a take and a later end, replaces what this page asked for.
+    const replaced = pendingGeneration !== null && lease && lease.pending?.generation !== pendingGeneration
+    if (pendingControl && (stopped || ran[pendingControl] || replaced)) pendingControl = null
+    if (!pendingControl) pendingGeneration = null
+    if (pendingControl) set('#control-mode', 'textContent', PENDING[pendingControl])
+    $('#pause')?.classList.toggle('is-pending', pendingControl === 'pause' || pendingControl === 'resume')
     $('#connection').classList.toggle('is-paused', paused)
     $('#connection').classList.remove('is-offline')
+    // The live page says what is playing once, under the screen. The rail speaks there only when the connection drops.
+    $('#connection').classList.toggle('is-quiet', Boolean($('#control-mode')))
     set('#status', 'textContent', stopped ? 'Stopped' : manualMode ? 'In control' : paused ? 'Paused' : 'Running')
     $('#connection').title = stopped ? 'Adventure stopped. Start it from the library.' : manualMode ? 'You’re in control' : paused ? 'Game paused' : 'Adventure in progress'
     set('#pause', 'textContent', paused && !manualMode ? 'Resume' : 'Pause')
@@ -276,6 +406,7 @@ async function refreshState() {
   } catch (_) {
     set('#status', 'textContent', 'Reconnecting…')
     $('#connection').title = ''
+    $('#connection').classList.remove('is-quiet')
     $('#connection').classList.add('is-offline')
   } finally {
     stateBusy = false
@@ -334,7 +465,32 @@ async function refreshEvents(append = false) {
 }
 
 if ($('#pause')) $('#pause').onclick = (event) => control(event.currentTarget, paused && !manualMode ? 'resume' : 'pause')
-if ($('#take-control')) $('#take-control').onclick = (event) => control(event.currentTarget, manualMode ? 'resume' : 'take_control')
+if ($('#take-control')) $('#take-control').onclick = (event) => {
+  // A press before the first lease answer still asks the library, so it never skips the lease.
+  const early = !lease && PokeSim.base && document.querySelector('meta[name="pokesim-lease"]')
+  const action = event.currentTarget.dataset.lease || (early ? 'request' : '')
+  if (action) return leaseAction(event.currentTarget, action)
+  control(event.currentTarget, manualMode ? 'resume' : 'take_control')
+}
+$('#lease-queue')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-lease-action]')
+  if (button) leaseAction(button, button.dataset.leaseAction, button.dataset.user)
+})
+// The library ends a lease whose page goes quiet, and drops a quiet page from the queue, so a
+// holding or waiting page checks in. Browsers slow a hidden tab's timers, so a page that comes
+// back into view checks in at once and hears whether it is still in line.
+function heartbeat() {
+  if (!leaseEnforced || !(lease?.you_hold || lease?.queued)) return
+  PokeSim.fetch('/api/lease', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({action: 'heartbeat'})})
+    .catch(() => {})
+}
+setInterval(heartbeat, 15000)
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden) return
+  heartbeat()
+  await refreshLease()
+  renderLease()
+})
 if ($('#save')) $('#save').onclick = (event) => control(event.currentTarget, 'save', undefined, 'Checkpoint save requested. Progress also saves automatically.')
 if ($('#simulation-speed')) $('#simulation-speed').onchange = async (event) => {
   const select = event.currentTarget
@@ -433,7 +589,7 @@ const controller = $('.controller')
 if (controller) {
   controller.addEventListener('pointerdown', event => {
     const button = event.target.closest('[data-b]')
-    if (!button || button.disabled || viewerOnly || event.button !== 0) return
+    if (!button || button.disabled || !canPress() || event.button !== 0) return
     event.preventDefault()
     releaseControls(event.pointerId)
     button.setPointerCapture(event.pointerId)
@@ -441,7 +597,7 @@ if (controller) {
     heldControls.set(event.pointerId, held)
     button.classList.add('is-held')
     const repeat = async () => {
-      if (heldControls.get(event.pointerId) !== held || viewerOnly || document.hidden) return
+      if (heldControls.get(event.pointerId) !== held || !canPress() || document.hidden) return
       const ok = await manualPress(button.dataset.b)
       if (!ok) return releaseControls(event.pointerId)
       if (heldControls.get(event.pointerId) === held && !['start', 'select'].includes(button.dataset.b)) {
@@ -457,7 +613,7 @@ if (controller) {
   // Keyboard and assistive activation produce a click without a pointing device.
   controller.addEventListener('click', event => {
     const button = event.target.closest('[data-b]')
-    if (button && event.detail === 0 && !viewerOnly) manualPress(button.dataset.b)
+    if (button && event.detail === 0 && canPress()) manualPress(button.dataset.b)
   })
 }
 window.addEventListener('blur', () => releaseControls())
@@ -495,7 +651,7 @@ async function manualPress(button) {
     await post('press', button)
     manualMode = true
     paused = true
-    set('#take-control', 'textContent', 'Let AI play')
+    if (!leaseEnforced) set('#take-control', 'textContent', 'Let AI play')
     set('#control-mode', 'textContent', 'You’re playing. AI paused')
     $('.game-card')?.classList.add('is-manual')
     return true
@@ -504,7 +660,7 @@ async function manualPress(button) {
 }
 let lastKeyPress = 0
 window.addEventListener('keydown', (event) => {
-  if (viewerOnly || !$('#screen') || globalThis.PartyPopup?.isOpen()) return
+  if (!canPress() || !$('#screen') || globalThis.PartyPopup?.isOpen()) return
   const map = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', z: 'a', x: 'b', Z: 'a', X: 'b', Enter: 'start', Shift: 'select'}
   if (map[event.key] && !event.target.closest('input, select, textarea, [contenteditable]') && !(event.key === 'Enter' && event.target.closest('button, summary, a'))) {
     event.preventDefault()
@@ -523,7 +679,7 @@ function renderIntent(strategy) {
   // Side by side in the plan row, a next step identical to the current one just reads as an echo.
   const next = strategy.next?.title
   const repeated = Boolean(next) && next === (shownObjective?.title || strategy.objective?.title)
-  set('#next-objective', 'textContent', repeated ? 'Still on this one' : next || 'Continue the journey')
+  set('#next-objective', 'textContent', repeated ? 'Finish the plan first' : next || 'Continue the journey')
 }
 
 // A party member opens the same detail popup as the PC page (party-popup.js).

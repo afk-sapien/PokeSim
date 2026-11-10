@@ -96,6 +96,8 @@ STALL_RELOADS = 3  # reloads in a row without new progress before the run is rep
 MAX_RELOADS = 12  # and the number after which reloading stops, since it only replays the same trouble
 # Written on arriving at the Indigo Plateau Pokémon Center, the last place before an Elite Four attempt.
 LEAGUE_CHECKPOINT = 'league-entry.state'
+BEFORE_LOAD_CHECKPOINT = 'before-load.state'
+BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
 CANNOT_END = 'battle cannot end'
 # League attempts restarted from the entry save without a new Hall of Fame entry before the run is
 # called off. Experience gained before each loss counts as progress, so the reload streak never caps it.
@@ -468,6 +470,24 @@ class Emulator:
         if button in BUTTONS:
             self.command('press', button)
 
+    def held_back(self, name):
+        """Why the game drops this command now, or None when it runs it."""
+        if name != 'stop' and self.store.get('trade_hold'):
+            return 'An exchange is holding this adventure'
+        return None
+
+    def control(self, name, timeout=4, gate=None):
+        """Run take_control, resume or pause now. Returns why the game held it back, or None.
+        `gate` is asked on the game thread first: None runs it, '' counts it as done already."""
+        def apply():
+            reason = self.held_back(name)
+            if reason is None and gate is not None:
+                reason = gate()
+            if reason is None:
+                self._handle_command(name, None)
+            return reason or None
+        return self.call(apply, timeout)
+
     def watch(self):
         self._watch_until = time.monotonic() + 2
 
@@ -529,6 +549,16 @@ class Emulator:
                 'reward_id': self.store.get('custom-reward-barrier-v1'),
                 'rtc_elapsed': clock_elapsed(self.pb),
                 'settled': self.policy.menu is None and not getattr(self.policy, 'backing_out', False)}
+
+    def _checkpoint_before(self, name):
+        """Keep the game as it is now under `name` before a rewind or restart replaces it."""
+        if self.store.get('trade_hold'):
+            return
+        try:
+            # A named checkpoint, not an autosave: as the newest autosave it would undo the rewind on the next start.
+            self.store.write_checkpoint(self._state_bytes(), self._manifest(), name)
+        except Exception:
+            log.exception('cannot keep the save from before %s', name)
 
     def _autosave(self, trade_prepare=False):
         if self.store.get('trade_hold') and not trade_prepare:
@@ -609,6 +639,10 @@ class Emulator:
         from .legendary import Recovery
         self.legendary_recovery = Recovery(metadata.get('legendary_recovery'))
         self.snapshot = self._read()
+        # A restart empties the gift ledger. Loading a game from before it would otherwise count
+        # every earlier League win as new on the next win, and pay each gift out again.
+        from .. import rewards
+        rewards.initialize(self.store, self.snapshot.hall_of_fame_count if self.snapshot else 0)
         self.audio.clear()
         self.options_applied = False
         self._reset_watch()
@@ -1109,13 +1143,17 @@ class Emulator:
                 response['error'] = error
             finally:
                 done.set()
-        elif self.store.get('trade_hold') and name != 'stop':
+        elif self.held_back(name):
             return True
         elif name == 'stop':
             return False
         elif name == 'pause':
             self.paused, self.manual_mode = True, False
         elif name in {'take_control', 'press'}:
+            if name == 'take_control':
+                # A new holder of the control lease never inherits presses someone else queued.
+                while not self.manual.empty():
+                    self.manual.get_nowait()
             self.paused, self.manual_mode = True, True
             self.policy.menu = None
             self.policy.on_restore()
@@ -1134,17 +1172,24 @@ class Emulator:
         elif name == 'load_state':
             path = self.store.state_path(arg)
             if path:
-                try:
-                    self._load_state_file(path)
-                except (ValueError, OSError, EOFError) as error:
-                    # A refused rewind (ownership barrier, other cartridge) must never end the adventure.
-                    log.warning('Rewind to %s refused: %s', path.name, error)
+                # Undoing a rewind loads before-load itself, so it is held while the checkpoint replaces it.
+                with self.store.held(path, BEFORE_LOAD_CHECKPOINT) as source:
+                    self._checkpoint_before(BEFORE_LOAD_CHECKPOINT)
+                    try:
+                        self._load_state_file(source)
+                    except (ValueError, OSError, EOFError) as error:
+                        # A refused rewind (ownership barrier, other cartridge) must never end the adventure.
+                        log.warning('Rewind to %s refused: %s', path.name, error)
         elif name == 'restart':
+            # The autosaves go below, so the game kept from before the restart is a named checkpoint.
+            self._checkpoint_before(BEFORE_RESTART_CHECKPOINT)
             self._autosave()
             for path in self.store.states.glob('auto-*.state'):
                 path.unlink()
                 path.with_suffix('.json').unlink(missing_ok=True)
-            for key in ('trade_barrier', 'custom-reward-barrier-v1', 'custom-reward-pending-v1',
+            # The trade and reward barriers stay. Named checkpoints from before them survive a restart,
+            # and loading one would undo a trade the partner keeps, or a reward.
+            for key in ('custom-reward-pending-v1',
                         'league-rewards-v1', 'gen2-mythical-gift-v1', 'gen2-gs-ball-distribution-v1', 'gen2-league-partners-v1',
                         'gen2-mew-returns-v1'):
                 self.store.set(key, None)

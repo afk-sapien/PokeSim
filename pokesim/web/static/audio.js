@@ -7,10 +7,11 @@
   const REQUEST_TIMEOUT = 3000
   let playback = null
   // Watching uses a deep buffer the screen trails. Take Control needs sound close to the live edge.
-  const bufferMode = manual => manual ? 'manual' : 'cached'
+  // With accounts, someone else may hold control. Only the page that holds it trails the live edge.
+  const bufferMode = manual => manual && window.pokesimHoldsControl !== false ? 'manual' : 'cached'
   window.PokeSimAudioSync = {
     // Seconds the screen should wait so it matches what is heard: how far the newest sound plays
-    // behind the live edge. Zero while playing by hand, so button presses show at once.
+    // behind the live edge. Zero while playing by hand on this page, so button presses show at once.
     delay() {
       const buffer = playback?.buffer
       return buffer && buffer.mode === 'cached' ? buffer.latency : 0

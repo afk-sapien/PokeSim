@@ -11,6 +11,7 @@ from ..checkpoints import CheckpointStore
 from ..downloads import retrying
 from ..desktop_setup import MAX_ROM, ROM_NAMES, ensure_game_data
 from .. import game_data
+from .registry import LIBRARY_OWNER
 
 log = logging.getLogger(__name__)
 # Bump when extraction changes the portraits it writes for the same cartridge.
@@ -41,14 +42,14 @@ class Assets:
         self.item_artwork = PortraitPacks(registry, self.cancelled, sets=SETS, legacy='generation-i',
                                          versions=VERSION_SETS, pack='item-artwork', setting='item_artwork')
 
-    def install_rom(self, raw):
-        return self.add_cartridge(raw)['rom']
+    def install_rom(self, raw, owner=LIBRARY_OWNER):
+        return self.add_cartridge(raw, owner=owner)['rom']
 
-    def add_cartridge(self, raw, slot=None):
+    def add_cartridge(self, raw, slot=None, owner=LIBRARY_OWNER):
         """Verify an uploaded cartridge, store it once and file it under the game it really is.
 
-        `slot` is only the shelf slot the owner aimed at. The hash decides where the cartridge
-        goes, and the result says so when the two differ.
+        `slot` is only the shelf slot the admin aimed at. The hash decides where the cartridge
+        goes, and the result says so when the two differ. `owner` is who uploads it.
         """
         from ..cartridges import SLOT_TITLES, identify, unsupported_message, unpack
         if slot is not None and slot not in SLOT_TITLES:
@@ -66,18 +67,25 @@ class Assets:
         version = cartridge.version if cartridge else ROM_NAMES[sha1].split()[1].lower()
         sha256 = hashlib.sha256(raw).hexdigest()
         path = self.root / 'roms' / sha256 / 'rom.gb'
-        path.parent.mkdir(parents=True, exist_ok=True)
-        known = sha256 in {row['id'] for row in self.registry.roms()}
-        if not path.exists():
-            status = 'repaired' if known else 'added'
-            CheckpointStore.atomic_write(path, raw)
-        elif hashlib.sha256(path.read_bytes()).hexdigest() != sha256:
-            # The upload was verified above, so it can safely replace a damaged stored copy.
-            status = 'repaired'
-            CheckpointStore.atomic_write(path, raw)
-        else:
-            status = 'same' if known else 'added'
-        rom = self.registry.add_rom(sha256, sha1, version)
+        # Under the lock that removals delete files in, so a file seen here is never deleted
+        # before its row exists.
+        with self.registry.lock:
+            # An upload still streaming when its owner was deleted would leave a row, and a file,
+            # nobody removes.
+            if owner in self.registry.leaving:
+                raise ValueError('This account is being deleted')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            known = self.registry.has_rom(sha256)
+            if not path.exists():
+                status = 'repaired' if known else 'added'
+                CheckpointStore.atomic_write(path, raw)
+            elif hashlib.sha256(path.read_bytes()).hexdigest() != sha256:
+                # The upload was verified above, so it can safely replace a damaged stored copy.
+                status = 'repaired' if known else 'added'
+                CheckpointStore.atomic_write(path, raw)
+            else:
+                status = 'same' if known else 'added'
+            rom = self.registry.add_rom(sha256, sha1, version)
         title = SLOT_TITLES.get(version, f'Pokémon {version.capitalize()}')
         moved = slot is not None and slot != version
         if moved:
@@ -91,13 +99,17 @@ class Assets:
         return {'rom': rom, 'version': version, 'title': title, 'requested': slot, 'moved': moved,
                 'status': status, 'message': message, 'raw': raw}
 
-    def cartridge_slots(self):
-        """One entry per shelf slot: what is installed there and which adventures use it."""
+    def cartridge_slots(self, owner=None):
+        """One entry per Library shelf slot: what is installed there and which adventures use it.
+
+        With `owner`, only their own adventures are listed, so nobody sees the names of
+        another person's adventures.
+        """
         from ..cartridges import CARTRIDGES, SLOT_GENERATIONS, SLOT_TITLES, SLOTS, supported_versions
         supported = set(supported_versions())
         starters = {cartridge.version: list(cartridge.starters) for cartridge in CARTRIDGES}
         rows = self.registry.roms()
-        adventures = self.registry.adventures()
+        adventures = [game for game in self.registry.adventures() if owner is None or game['owner_id'] == owner]
         versions = list(SLOTS) + sorted({row['version'] for row in rows} - set(SLOTS))
         slots = []
         for version in versions:
@@ -111,7 +123,8 @@ class Assets:
                 except OSError:
                     stat = None
                 candidate = {'id': row['id'], 'sha1': row['sha1'], 'short_hash': row['sha1'][:8],
-                             'size': stat.st_size if stat else None, 'added_at': stat.st_mtime if stat else None,
+                             'size': stat.st_size if stat else None,
+                             'added_at': stat.st_mtime if stat else None,
                              'file_missing': stat is None}
                 if rom is None or (rom['file_missing'] and stat is not None):
                     rom = candidate
@@ -129,7 +142,7 @@ class Assets:
         return slots
 
     def remove_cartridge(self, version):
-        """Forget a cartridge and delete its stored file, unless an adventure still plays it."""
+        """Take a cartridge off the Library shelf, unless any adventure, of anyone, still plays it."""
         from ..cartridges import SLOT_TITLES
         title = SLOT_TITLES.get(version, f'Pokémon {version.capitalize()}')
         with self.registry.lock:
@@ -139,13 +152,17 @@ class Assets:
             users = [game for game in self.registry.adventures() if game['rom_id'] in ids]
             if users:
                 names = ', '.join(game['name'] + (' (archived)' if game['archived'] else '') for game in users)
-                count = 'adventure uses' if len(users) == 1 else f'{len(users)} adventures use'
-                raise ValueError(f'{title} cannot be removed because this {count} it: {names}. '
+                count = 'this adventure uses' if len(users) == 1 else f'these {len(users)} adventures use'
+                raise ValueError(f'{title} cannot be removed because {count} it: {names}. '
                                  'Delete those adventures first. Archived adventures count, since they can be restored.')
             self.registry.remove_roms(ids)
-        for rom_id in ids:
-            shutil.rmtree(self.root / 'roms' / rom_id, ignore_errors=True)
+            # Inside the lock, so an upload of the same file cannot add its row between the two.
+            self.delete_rom_files(ids)
         return {'version': version, 'title': title, 'message': f'{title} removed. Add it again at any time.'}
+
+    def delete_rom_files(self, rom_ids):
+        for rom_id in rom_ids:
+            shutil.rmtree(self.root / 'roms' / rom_id, ignore_errors=True)
 
     def install_portraits_quietly(self, raw):
         """Extract portraits right after an upload when the reference data is already prepared.

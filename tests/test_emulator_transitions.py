@@ -70,11 +70,44 @@ def test_restart_resets_the_adventure_and_input_but_keeps_event_history(emu):
     assert emu.pending == [] and emu.manual.empty() and emu.input_epoch == 8
     assert emu.battle_since is None and emu.invalid_since is None
     assert not emu.paused and not emu.manual_mode and emu.speed == 4
-    assert emu.store.get('trade_barrier') is None
+    assert emu.store.get('trade_barrier') == '123'
     assert emu.store.trade_preferences() == {} and emu.store.get('policy_state') == {}
     assert emu.store.event(eid)['title'] == 'Kept in journal'
     assert not path.exists()
     emu.policy.reset.assert_called_once()
+
+
+@pytest.mark.parametrize('command,kept', [('load_state', 'before-load.state'), ('restart', 'before-restart.state')])
+def test_a_rewind_or_restart_first_keeps_the_game_it_replaces(emu, monkeypatch, command, kept):
+    (emu.store.states / 'chosen.state').write_bytes(b'chosen')
+    monkeypatch.setattr(emu, '_state_bytes', lambda: b'before', raising=False)
+    monkeypatch.setattr(emu, '_manifest', lambda: {'frame': 900}, raising=False)
+    monkeypatch.setattr(emu, '_load_state_file', Mock(), raising=False)
+    emu._handle_command(command, 'chosen.state')
+    assert (emu.store.states / kept).read_bytes() == b'before'
+    # It is a named checkpoint, so the next start does not resume it as the newest autosave.
+    assert not list(emu.store.states.glob('auto-*.state'))
+
+
+@pytest.mark.parametrize('chosen', ['before-load.state', 'before-restart.state'])
+def test_undoing_a_rewind_or_restart_loads_the_game_from_before_it(emu, monkeypatch, chosen):
+    """Loading before-load.state first wrote the present over it, so the undo reloaded the present."""
+    (emu.store.states / chosen).write_bytes(b'past')
+    monkeypatch.setattr(emu, '_state_bytes', lambda: b'present', raising=False)
+    monkeypatch.setattr(emu, '_manifest', lambda: {'frame': 900}, raising=False)
+    loaded = []
+    monkeypatch.setattr(emu, '_load_state_file', lambda path: loaded.append(path.read_bytes()), raising=False)
+    emu._handle_command('load_state', chosen)
+    assert loaded == [b'past']
+    # The undo can be undone in turn, and the copy it held on to is gone.
+    assert (emu.store.states / 'before-load.state').read_bytes() == b'present'
+    assert {path.name for path in emu.store.states.iterdir()} == {chosen, 'before-load.state', 'before-load.json'}
+
+
+def test_taking_control_drops_queued_presses(emu):
+    emu.manual_mode = emu.paused = False
+    emu._handle_command('take_control', None)
+    assert emu.manual_mode and emu.manual.empty() and emu.input_epoch == 8
 
 
 @pytest.mark.parametrize('command', ['restart', 'resume', 'load_state', 'take_control'])

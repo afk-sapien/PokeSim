@@ -7,6 +7,7 @@
 
 {% do c1.environment.add_env("PUBLIC_URL", values.pokesim.public_url) %}
 {% do c1.environment.add_env("PORT", values.consts.container_port) %}
+{% do c1.environment.add_env("AUTH", values.pokesim.auth) %}
 {% do c1.environment.add_env("NTFY_URL", values.pokesim.ntfy_url) %}
 {% do c1.environment.add_env("NTFY_TOKEN", values.pokesim.ntfy_token) %}
 {% do c1.environment.add_env("NTFY_MIN_PRIORITY", values.pokesim.ntfy_min_priority) %}

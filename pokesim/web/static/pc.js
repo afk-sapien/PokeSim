@@ -87,6 +87,8 @@ function render() {
   $('#pc-boxes-view').setAttribute('aria-pressed', String(!all))
   $('#pc-all-view').setAttribute('aria-pressed', String(all))
   $('#pc-favor').value = latest?.pc_favor || ''
+  // Viewers and players may not change the release order, so they never see it.
+  $('#pc-favor-control').hidden = viewer()
   $('#pc-favor').disabled = viewer() || !fresh
   $('#pc-deadlock').hidden = !latest?.pc_deadlock
   $('#pc-deadlock').textContent = latest?.pc_deadlock || ''
