@@ -18,7 +18,7 @@ def playtime(seconds):
 def store(folder, version='red', events=(), receipts=(), progress=()):
     """A small adventure folder with only the tables the replay reads."""
     folder.mkdir(parents=True)
-    (folder / 'adventure.json').write_text(json.dumps({'id': folder.name, 'version': version}))
+    (folder / 'adventure.json').write_text(json.dumps({'id': folder.name, 'version': version}), encoding='utf-8')
     db = sqlite3.connect(folder / 'pokesim.sqlite')
     db.execute('CREATE TABLE events (id INTEGER PRIMARY KEY, ts REAL, type TEXT, title TEXT, body TEXT, detail TEXT, '
                'map TEXT, playtime TEXT)')
@@ -134,7 +134,7 @@ def test_cli_writes_report_and_leaves_input_alone(tmp_path, capsys):
     assert main(['run', str(tmp_path / 'stores'), '--days', '7', '--out', str(out)]) == 0
     after = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in folder.iterdir()}
     assert before == after
-    report = json.loads(out.read_text())
+    report = json.loads(out.read_text(encoding='utf-8'))
     result = report['inputs'][0]['adventures'][0]
     assert result['new']['caught'] == 1 and result['old']['missed'] == 1
     assert 'No stall bundles in this input.' in report['inputs'][0]['notes']

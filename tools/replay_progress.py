@@ -113,7 +113,7 @@ def connect(path):
 def load(folder):
     """Read one adventure folder."""
     folder = Path(folder)
-    meta = json.loads((folder / 'adventure.json').read_text()) if (folder / 'adventure.json').exists() else {}
+    meta = json.loads((folder / 'adventure.json').read_text(encoding='utf-8')) if (folder / 'adventure.json').exists() else {}
     db = connect(folder / 'pokesim.sqlite')
     try:
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
@@ -143,7 +143,7 @@ def load(folder):
     bundles = []
     for path in sorted((folder / 'stalls').glob('stall-*/report.json')):
         try:
-            report = json.loads(path.read_text())
+            report = json.loads(path.read_text(encoding='utf-8'))
             ts = time.mktime(time.strptime(path.parent.name[6:], '%Y%m%dT%H%M%SZ')) - time.timezone
         except (ValueError, OSError):
             continue
@@ -685,9 +685,9 @@ def main(argv=None):
     show.add_argument('report', type=Path)
     args = parser.parse_args(argv)
     if args.command == 'report':
-        print(render(json.loads(args.report.read_text())))
+        print(render(json.loads(args.report.read_text(encoding='utf-8'))))
         return 0
-    labels = json.loads(args.labels.read_text()).get('labels', []) if args.labels else []
+    labels = json.loads(args.labels.read_text(encoding='utf-8')).get('labels', []) if args.labels else []
     for stores in args.stores:
         if args.out.resolve().is_relative_to(stores.resolve()):
             parser.error('The report must go outside the input')
@@ -704,7 +704,7 @@ def main(argv=None):
     report['bar'] = {'pass': not failures, 'failures': failures}
     report['seconds'] = round(time.time() - began, 1)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, indent=1, default=asdict))
+    args.out.write_text(json.dumps(report, indent=1, default=asdict), encoding='utf-8')
     print(render(report))
     return 0
 
