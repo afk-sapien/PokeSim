@@ -12,17 +12,17 @@
   "blue/badges_2": {
    "stall": null,
    "errors": 0,
-   "waste": 7.59
+   "waste": 7.48
   },
   "blue/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 25.62
+   "waste": 20.2
   },
   "blue/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 11.77
+   "waste": 9.21
   },
   "blue/badges_8": {
    "stall": null,
@@ -172,12 +172,12 @@
   "red/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 12.27
+   "waste": 9.26
   },
   "red/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 7.54
+   "waste": 5.29
   },
   "red/badges_8": {
    "stall": null,
@@ -197,7 +197,7 @@
   "red-randomized/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 1.86
+   "waste": 1.26
   },
   "red-randomized/badges_4": {
    "stall": null,
@@ -267,7 +267,7 @@
   "yellow/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 1.78
+   "waste": 1.06
   },
   "yellow/badges_2": {
    "stall": null,
@@ -277,12 +277,12 @@
   "yellow/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 13.14
+   "waste": 12.12
   },
   "yellow/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 24.23
+   "waste": 18.96
   },
   "yellow/badges_8": {
    "stall": null,
