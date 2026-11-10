@@ -1,7 +1,9 @@
 """A managed Generation II worker must stay up under the real supervisor.
 
 Skips unless GEN2_CARTRIDGE_DIR (extracted gold.gbc, silver.gbc, crystal.gbc) and GEN2_DATA_DIR
-(generated local game data) are set. Set POKESIM_GEN2_SOAK_SECONDS to change the 80 second soak.
+(generated local game data) are set. The monitor runs every second here and fails a worker whose
+health stays stale for 15 seconds, so the 30 second soak runs twice past that limit. Set
+POKESIM_GEN2_SOAK_SECONDS to change the soak.
 """
 import os
 import shutil
@@ -12,14 +14,17 @@ from types import SimpleNamespace
 
 import pytest
 
+from pokesim.app import supervisor as supervisor_module
 from pokesim.app.registry import Registry, identifier
 from pokesim.app.supervisor import Supervisor
 
-SOAK = float(os.environ.get('POKESIM_GEN2_SOAK_SECONDS', '80'))
+MONITOR_SECONDS = 1
+STALE_SECONDS = 15
+SOAK = float(os.environ.get('POKESIM_GEN2_SOAK_SECONDS', '30'))
 
 
 @pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
-def test_real_gen2_worker_stays_healthy_past_the_monitor_sync_interval(tmp_path, version):
+def test_real_gen2_worker_stays_healthy_past_the_monitor_sync_interval(tmp_path, version, monkeypatch):
     cartridges, data = os.environ.get('GEN2_CARTRIDGE_DIR'), os.environ.get('GEN2_DATA_DIR')
     if not cartridges or not data:
         pytest.skip('Set GEN2_CARTRIDGE_DIR and GEN2_DATA_DIR to run a real Generation II worker')
@@ -39,6 +44,10 @@ def test_real_gen2_worker_stays_healthy_past_the_monitor_sync_interval(tmp_path,
     assets = SimpleNamespace(rom_path=lambda rid: rom, game_data_dir=Path(data),
                              prepare_gen2=lambda game, report: Path(data), install_portraits=lambda raw: 0,
                              cancelled=threading.Event())
+    # A stale worker fails after STALE_SECONDS, not the minute the library allows, so a short
+    # soak still runs past the limit the palette sync once tripped (#58).
+    monkeypatch.setattr(supervisor_module, 'MONITOR_SECONDS', MONITOR_SECONDS)
+    monkeypatch.setattr(supervisor_module, 'STALE_SECONDS', STALE_SECONDS)
     supervisor = Supervisor(registry, assets, 'http://127.0.0.1:8000')
     try:
         row = registry.create('Johto', 'digest', {'starter': 'random', 'celebi_event': False}, identifier())

@@ -7,9 +7,11 @@ from unittest.mock import Mock
 
 import httpx
 import pytest
+from argon2 import PasswordHasher
 from fastapi.testclient import TestClient
 
 from pokesim import config
+from pokesim.app import auth as auth_module
 from pokesim.app import lease as lease_module
 from pokesim.app import manager as manager_module
 from pokesim.app import policy
@@ -19,6 +21,19 @@ from pokesim.web.app import create_app
 from pokesim.web.security import LEASE_HEADER, role_allows
 
 from test_accounts import library, people  # noqa: F401
+
+# How long a page waits for the worker's answer, as the library sets it and as these tests do.
+FULL_ANSWER_SECONDS = lease_module.ANSWER_SECONDS
+QUICK_ANSWER_SECONDS = 2
+
+
+@pytest.fixture(autouse=True)
+def quick(monkeypatch):
+    """A worker that never answers is given up on sooner, and passwords take a cheap hash, since
+    no test here needs the full wait or a strong hash. Both apply before the library starts."""
+    monkeypatch.setattr(lease_module, 'ANSWER_SECONDS', QUICK_ANSWER_SECONDS)
+    monkeypatch.setattr(auth_module, 'PasswordHasher',
+                        lambda: PasswordHasher(time_cost=1, memory_cost=8, parallelism=1))
 
 
 class Clock:
@@ -433,6 +448,9 @@ def test_a_backup_during_a_lease_change_does_not_hang(game, monkeypatch):
 def test_a_grant_while_the_worker_resumes_wins(game, monkeypatch):
     """Resume ends the lease before the worker hears it, so a request meanwhile is a fresh grant,
     and the worker ends up in the newest state, Carol's take_control."""
+    # Carol's request waits for an answer that this Resume's send holds up. With a short wait she
+    # would give up first and the Resume would reach the worker while the last check runs.
+    monkeypatch.setattr(lease_module, 'ANSWER_SECONDS', FULL_ANSWER_SECONDS)
     manager = game.library.manager
     leases, worker = manager.leases, manager.leases.worker
     lease(game.bob, game.red, 'request')

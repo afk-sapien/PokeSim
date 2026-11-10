@@ -215,6 +215,7 @@ def wild_encounters(tmp_path, monkeypatch, count=3, headless=None):
     return hooked, battled
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(not ROM.is_file() or not CHECKPOINT.is_file(), reason='private ROM and checkpoint unavailable')
 def test_rom_wild_battles_keep_the_dvs_the_hook_wrote(tmp_path, monkeypatch):
     hooked, battled = wild_encounters(tmp_path / 'on', monkeypatch)
@@ -227,6 +228,7 @@ def test_rom_wild_battles_keep_the_dvs_the_hook_wrote(tmp_path, monkeypatch):
     assert wild_encounters(tmp_path / 'again', monkeypatch)[0] == hooked
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(not ROM.is_file() or not CHECKPOINT.is_file(), reason='private ROM and checkpoint unavailable')
 def test_a_headless_run_with_the_adventure_key_meets_the_adventure_encounters(tmp_path, monkeypatch):
     live = wild_encounters(tmp_path / 'live', monkeypatch)[0]

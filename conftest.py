@@ -1,4 +1,6 @@
-"""Optional test sharding so CI can run one suite as several parallel jobs.
+"""Slow tests that run only on request, and optional sharding so CI can run one suite as several jobs.
+
+A test marked `slow` is skipped unless POKESIM_SLOW_TESTS=1. The local nightly run sets it.
 
 Set POKESIM_TEST_SHARD to "index/total" (for example "2/4"). Whole test modules are assigned to shards by
 their recorded run time in tests/durations.json, so tests that share module state stay together and the
@@ -10,7 +12,10 @@ import json
 import os
 from pathlib import Path
 
+import pytest
+
 DURATIONS = Path(__file__).resolve().parent / 'tests' / 'durations.json'
+SLOW_SKIP = pytest.mark.skip(reason='set POKESIM_SLOW_TESTS=1 to run the slow tests, as the local nightly run does')
 
 
 def recorded():
@@ -25,6 +30,10 @@ def recorded():
 
 
 def pytest_collection_modifyitems(config, items):
+    if os.environ.get('POKESIM_SLOW_TESTS') != '1':
+        for item in items:
+            if item.get_closest_marker('slow'):
+                item.add_marker(SLOW_SKIP)
     spec = os.environ.get('POKESIM_TEST_SHARD')
     if not spec:
         return

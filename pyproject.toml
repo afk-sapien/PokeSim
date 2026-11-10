@@ -56,6 +56,7 @@ pythonpath = ["."]
 # one process.
 addopts = "-n 12 --dist loadgroup"
 filterwarnings = ["ignore::UserWarning"]
+markers = ["slow: a long test that runs only when POKESIM_SLOW_TESTS=1, as the local nightly run sets"]
 
 [tool.setuptools.package-data]
 pokesim = ["web/static/*", "web/static/fonts/*", "broker/static/*", "_build.json"]

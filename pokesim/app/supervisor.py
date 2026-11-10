@@ -29,6 +29,10 @@ GEN2_VERSIONS = {'gold', 'silver', 'crystal'}
 SETUP_RETRIES = 3
 SETUP_DELAYS = (30, 120, 300)
 VIEWER_IDLE = 300   # seconds before an unwatched stopped-adventure viewer closes
+# The monitor checks each worker this often, and fails one whose health stays stale this long.
+# Both are read on each pass, so a test can shorten them.
+MONITOR_SECONDS = 3
+STALE_SECONDS = 60
 
 
 class WorkerError(RuntimeError):
@@ -580,7 +584,7 @@ class Supervisor:
         self.thread.start()
 
     def _monitor(self):
-        while not self.closed.wait(3):
+        while not self.closed.wait(MONITOR_SECONDS):
             self.run_setup_retries()
             self.close_idle_viewers()
             with self.guard:
@@ -642,10 +646,11 @@ class Supervisor:
                 except (RuntimeError, OSError, httpx.HTTPError):
                     since = self.unhealthy_since.setdefault(aid, time.monotonic())
                     log.warning('Adventure %s is not responding', aid)
-                    if time.monotonic() - since >= 60 and not self.closed.is_set():
+                    if time.monotonic() - since >= STALE_SECONDS and not self.closed.is_set():
                         with self.admission, self._lock(aid):
                             if self.children.get(aid) is child:
-                                self.registry.update(aid, state='failed', error='Adventure health remained stale for 60 seconds')
+                                self.registry.update(aid, state='failed',
+                                                     error=f'Adventure health remained stale for {STALE_SECONDS} seconds')
                                 try:
                                     child.stop(timeout=5)
                                 except RuntimeError:
