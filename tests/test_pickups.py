@@ -122,7 +122,7 @@ def test_a_release_visit_does_not_consume_the_main_project_budget():
     p.goal = Goal('party_release', 'Make room in storage', 'Let a spare go')
     p.collection.observe = Mock(side_effect=StopIteration)
     try:
-        p.step(SimpleNamespace(snapshot=cave(), mem=bytearray(0x10000)))
+        p.step(SimpleNamespace(snapshot=cave(), clock=0, mem=bytearray(0x10000)))
     except StopIteration:
         pass
     assert p.collection.observe.call_args.kwargs['suspended']
