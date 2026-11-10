@@ -277,6 +277,7 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(stage_ladder.subprocess, 'run', fake)
+    monkeypatch.setattr(stage_ladder, 'GATE_BASELINE', root / 'gate-baseline.json')
     monkeypatch.delenv(stage_ladder.GATE_HELD, raising=False)
     monkeypatch.setenv('POKESIM_GEN1_VARIANT', 'yellow')
     args = ['gate', str(tmp_path / 'roms'), str(root), '--out', str(tmp_path / 'out')]
@@ -299,6 +300,20 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
     assert 'red-randomized/badges_4: 30.0% wasted, 20.0% before' in capsys.readouterr().out
     with pytest.raises(SystemExit, match='108000'):
         main(args + ['--frames', '36000'])
+
+
+def test_the_tracked_baseline_is_the_default_and_names_every_rung_once():
+    # The baseline moves only in a pull request, so it lives in the checkout beside the gate.
+    assert stage_ladder.GATE_BASELINE == stage_ladder.ROOT / 'tools' / 'ladder' / 'gate-baseline.json'
+    stored = json.loads(stage_ladder.GATE_BASELINE.read_text(encoding='utf-8'))
+    assert stored['frames'] == stage_ladder.GATE_FRAMES and stored['commit'] and stored['taken']
+    rungs = {'1': stage_ladder.GEN1_RUNGS, '2': stage_ladder.GEN2_RUNGS}
+    for name, rung in stored['rungs'].items():
+        ladder, stage = name.split('/')
+        allowed = stage_ladder.RANDOMIZED_RUNGS if ladder.endswith('-randomized') else \
+            rungs['2' if ladder.split('-')[0] in ('gold', 'silver', 'crystal') else '1']
+        assert stage in allowed, name
+        assert set(rung) == {'stall', 'errors', 'waste'} and 0 <= rung['waste'] <= 100, name
 
 
 @pytest.mark.skipif(shutil.which('flock') is None, reason='needs flock')

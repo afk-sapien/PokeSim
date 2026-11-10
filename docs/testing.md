@@ -195,6 +195,12 @@ and `ROM_PATH` set to that share code and cartridge.
 `stage_ladder.py gate` writes a `gate-report.json` that records its attempt, the number of gate
 runs for that commit so far, so a pass on the fifth try reads as one.
 
+The gate compares with the tracked `tools/ladder/gate-baseline.json`, so a branch compares with the
+baseline of the main it was branched from or last merged. `--write-baseline` rewrites that file, and
+the pull request that carries it names the behaviour change it accepts. A rung that gets worse goes on
+record in a dated list beside the baseline before the move, such as
+`tools/ladder/regressions-suspected-20261109.md`.
+
 ## Live soak before a deploy
 
 `tools/live_soak.py` plays copies of the live adventures with the real Manager and workers. `prepare`
