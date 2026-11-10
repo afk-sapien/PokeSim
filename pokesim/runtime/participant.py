@@ -705,13 +705,21 @@ def install(app, runtime, participant_type=Participant):
     participant = participant_type(runtime, app.state.bootstrap)
     app.state.participant = participant
 
+    def listing(function):
+        try:
+            return runtime.call(function)
+        except TimeoutError as error:
+            # A game thread busy past the wait is not a fault. The manager skips this adventure or
+            # shows its last list, so the worker answers busy instead of logging a 500 with a traceback.
+            raise HTTPException(409, str(error)) from error
+
     @app.get('/internal/participant/inventory')
     def inventory():
-        return runtime.call(participant.inventory)
+        return listing(participant.inventory)
 
     @app.get('/internal/participant/manual-inventory')
     def manual_inventory():
-        return runtime.call(participant.manual_inventory)
+        return listing(participant.manual_inventory)
 
     @app.get('/internal/participant/status/{tid}')
     def status(tid: str):

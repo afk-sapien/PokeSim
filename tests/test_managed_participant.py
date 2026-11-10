@@ -183,6 +183,30 @@ def test_a_busy_emulator_answers_retryable_rather_than_internal_error(tmp_path):
     assert 'Retry the same operation' in response.json()['detail']
 
 
+@pytest.mark.parametrize('listing', ['inventory', 'manual-inventory'])
+def test_a_busy_game_answers_an_inventory_request_busy_without_a_traceback(tmp_path, caplog, listing):
+    # The manager asks every running game for its inventory. A Gen II game thread busy for 30 s made
+    # the worker log a 500 with a traceback, which the hosted watchdog raised as an unexpected error.
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from pokesim.runtime.participant import install
+
+    app = FastAPI()
+    app.state.bootstrap = {'adventure_id': 'a' * 32, 'generation': 'b' * 32,
+                           'settings': {'data_dir': str(tmp_path)}}
+    store = SimpleNamespace(dir=tmp_path, get=lambda key: None, set=lambda key, value: None)
+
+    def call(function, timeout=30):
+        raise TimeoutError('The adventure is busy')
+
+    install(app, SimpleNamespace(call=call, store=store, emulator=SimpleNamespace()))
+    response = TestClient(app, raise_server_exceptions=False).get('/internal/participant/' + listing)
+    assert response.status_code == 409, response.text
+    assert response.json()['detail'] == 'The adventure is busy'
+    assert not [record for record in caplog.records if record.exc_info]
+
+
 def finished(store, phase, age):
     import os
     tid = identifier()
