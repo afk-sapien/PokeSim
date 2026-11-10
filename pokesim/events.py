@@ -5,7 +5,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from .game_data import load
 from .ground_items import ground_item
-from .strategy_data import DATA as STRATEGY_DATA, WORLD
+from .strategy_data import DATA as STRATEGY_DATA, SPECIES, WORLD
 from typing import Callable
 
 from .ram import (BADGES, DEX_NAMES, HALL_OF_FAME_MAP, ITEM_NAMES, KEY_ITEM_IDS, LEADERS, NOTABLE_TRAINERS,
@@ -15,7 +15,9 @@ EVOLUTION_PAIRS = {(int(parent), row['species'])
                    for parent, rows in load('collection.json')['evolutions'].items()
                    for row in rows}
 
-MONEY_MILESTONES = (10_000, 50_000, 100_000, 250_000, 500_000, 999_999)
+SPECIES_DEX = {sid: row['dex'] for sid, row in SPECIES.items()}
+
+MONEY_MILESTONES =(10_000, 50_000, 100_000, 250_000, 500_000, 999_999)
 PLAYTIME_MILESTONE_HOURS = 10
 
 # Priority scale (same as ntfy's): 5 urgent, 4 high, 3 normal, 2 low, 1 minimal.
@@ -38,6 +40,8 @@ class Event:
     # If set, the event is only emitted when this still holds on the *next* snapshot. Guards against
     # half-written RAM during cutscenes (e.g. a party struct with species set but HP not yet filled in).
     still: Callable[[Snapshot], bool] | None = None
+    # The Pokédex number of the Pokémon a receive or release is about, for its progress row.
+    species: int | None = None
 
     def __post_init__(self):
         if self.notable is None:
@@ -115,7 +119,7 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
         else:
             events.append(Event("obtain", f"Got {name}!",
                                 f"New Pokédex entry on {cur.map_name}. {len(cur.owned)} owned.", priority=HIGH,
-                                tags="gift", still=lambda s, d=dex: d in s.owned))
+                                tags="gift", still=lambda s, d=dex: d in s.owned, species=dex))
     for dex in sorted(cur.seen - prev.seen - new_owned):
         events.append(Event("seen", f"Saw {DEX_NAMES.get(dex, f'#{dex}')} for the first time", priority=MINIMAL,
                             still=lambda s, d=dex: d in s.seen))
@@ -178,7 +182,7 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
             for _ in range(count):
                 events.append(Event("release", release_title(name),
                                     f"Storage was nearly full, so a duplicate {name} was let go on {cur.map_name}.",
-                                    priority=MINIMAL, tags="wave",
+                                    priority=MINIMAL, tags="wave", species=SPECIES_DEX.get(species),
                                     still=lambda s, sp=species, label=nick, n=population:
                                         sum(p.species == sp and p.nick == label for p in s.party)
                                         + sum(row[1] == sp and row[3] == label for row in s.stored_pokemon) <= n))

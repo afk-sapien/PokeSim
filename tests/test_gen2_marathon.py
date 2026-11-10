@@ -17,6 +17,11 @@ def data(request):
     return GameData.load(directory, request.param)
 
 
+def journal(rows):
+    """The journal entries, without the progress rows queued with them for each checkpoint."""
+    return [row for row in rows if 'progress' not in row]
+
+
 def runner(**extra):
     fields = dict(species=157, nick='TYPHLOSION', trainer_id=1, dvs=(15,) * 5, hp=200, status=0, pp=(10, 10, 0, 0),
                   moves=(53, 15, 0, 0), egg=False, box=None, level=60)
@@ -135,7 +140,9 @@ def test_a_full_race_is_timed_journaled_and_recorded(data, monkeypatch):
         assert f'Checkpoint {index + 1} of 10' in goal.label
     frame = run_course(policy, points[-1:], frame)
     assert postgame.state(policy)['activity'] is None
-    [finish] = marathon.take_events(policy)
+    taken = marathon.take_events(policy)
+    assert [row['score'] for row in taken if 'progress' in row] == list(range(1, 11))
+    [finish] = journal(taken)
     assert finish['title'] == 'Johto Marathon finished!' and finish['tags'] == 'runner'
     assert 'Finished in 1:40 game time. 10/10 checkpoints' in finish['body'] and 'First personal best!' in finish['body']
     records = marathon.records(policy)
@@ -147,7 +154,7 @@ def test_a_full_race_is_timed_journaled_and_recorded(data, monkeypatch):
     policy.marathon_previous = None
     activity = start(policy, at(points[0], frame + engine.INTERVAL), monkeypatch)
     run_course(policy, points, frame + engine.INTERVAL, gap=300)
-    [_, faster] = marathon.take_events(policy)
+    [_, faster] = journal(marathon.take_events(policy))
     assert 'New personal best, 0:50 faster!' in faster['body']
     assert marathon.records(policy)['records']['completed'] == 2
 

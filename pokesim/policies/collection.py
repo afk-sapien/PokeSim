@@ -30,6 +30,7 @@ from ..planning.ledger import MONEY, Need
 from ..planning.stance import HUNT, TRAIN
 from ..planning.monitor import CONTINUE, SPENT, STOOD_DOWN, ProgressEvent
 from . import training, marathon, league_rotation
+from .. import progress_events
 from ..shiny import is_shiny
 from ..milestones import is_perfect, level_credit
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, EVENTS, event_set, object_hidden
@@ -678,8 +679,9 @@ class Collection:
         self.marathon_previous = None
 
     def take_activity_events(self):
+        """Journal entries as events, and queued progress rows as they are, for the emulator to write."""
         from ..events import Event
-        events = [Event(**row) for row in self.activity_events]
+        events = [row if 'progress' in row else Event(**row) for row in self.activity_events]
         self.activity_events = []
         return events
 
@@ -760,6 +762,7 @@ class Collection:
                     self.idle_frames = 0
                 if before == 0 and project['checkpoint'] == 1:
                     self.activity_events.append(marathon.start_event())
+                self.activity_events += progress_events.checkpoints(before, project['checkpoint'], self.project_key)
             if project['method'] == 'marathon':
                 self.remaining -= delta
             if len(self.project_flags) != len(s.event_flags):
