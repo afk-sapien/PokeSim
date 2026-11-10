@@ -6,7 +6,6 @@ import hashlib
 import io
 import logging
 import queue
-import secrets
 import threading
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 import time
@@ -22,7 +21,7 @@ from .audio import AudioFeed, enable_checkpoint_sound
 from .build_info import build_info
 from .checkpoints import open_state
 from .events import HIGH, LOW, Event, RunMemory, diff
-from . import progress_events, rewards, stall_truth
+from . import progress_events, rewards, seeds, stall_truth
 from .legendary import LegendaryRecovery
 from .loop_errors import loop_failed
 from .play_clock import PlayClock
@@ -92,7 +91,8 @@ class Emulator:
         self.paused = False
         self.frozen = False
         self.manual_mode = False
-        self.policy = make_policy(config.POLICY, config.SEED)
+        self.adventure_seed = seeds.adventure_seed(store)
+        self.policy = make_policy(config.POLICY, self.adventure_seed)
         store.attach(self.policy, 1)
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
@@ -918,10 +918,12 @@ class Emulator:
             if guard:
                 guard.reloaded(target.name)
             candidates = [target] + [p for p in reversed(saves) if p != target]
+            clock = self.play_clock.frames
             self._restore_first_valid(candidates)
             # The emulator is deterministic, so the same save and the same choices would replay the
-            # same trouble. Idling a random moment moves the game's random numbers along.
-            self._tick(1 + secrets.randbelow(180))
+            # same trouble. Idling a moment drawn from the reload stream moves the game's random
+            # numbers along, the same way in a replay.
+            self._tick(seeds.reload_idle(self.adventure_seed, clock))
         else:
             log.warning("%s and no save state to go back to; power-cycling", why)
             self.pb.stop(save=False)
@@ -1233,6 +1235,9 @@ class Emulator:
             self.store.set("play_clock", self.play_clock.state_dict())
             self.snapshot = None
             self.store.set("run_memory", self.mem.to_dict())
+            # A new game draws a new seed, so it gets its own starter and choices.
+            self.store.set(seeds.KEY, None)
+            self.adventure_seed = self.policy.seed = seeds.adventure_seed(self.store)
             self.policy.reset()
             self.store.set("policy_state", {})
             self.pb = self._boot()

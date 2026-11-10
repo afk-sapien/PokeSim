@@ -25,6 +25,8 @@ def decline(snapshot):
 
 class Naming:
     def __init__(self, seed=None):
+        # Seeded from the adventure seed and saved with the names, as Gen I naming is, so a restart
+        # picks the name it would have picked before.
         self.rng = random.Random(seed)
         self.target = None
         self.subject = None
@@ -32,9 +34,13 @@ class Naming:
         self.steps = 0
 
     def state_dict(self):
-        return {'target': self.target, 'subject': self.subject, 'used': sorted(self.used)}
+        return {'rng': self.rng.getstate(), 'target': self.target, 'subject': self.subject, 'used': sorted(self.used)}
 
     def load_state_dict(self, state):
+        def tuples(value):
+            return tuple(tuples(item) for item in value) if isinstance(value, (list, tuple)) else value
+        if 'rng' in state:
+            self.rng.setstate(tuples(state['rng']))
         self.target = state.get('target')
         self.subject = state.get('subject')
         self.used = set(state.get('used', []))

@@ -373,7 +373,7 @@ def test_the_lives_are_what_each_restart_does_today():
                 and domain.kind != domains.TABLE}
     # emulator.py and gen2/emulator.py, the restart command, and the tracker resets they call.
     both = {'custom-reward-pending-v1', 'league-rewards-v1', 'play_clock', 'capture-statistics-v1',
-            'pokedex-milestones-v1', 'adventure-records-v1', 'trade_offer:'}
+            'pokedex-milestones-v1', 'adventure-records-v1', 'trade_offer:', 'adventure-seed-v1'}
     assert keys(domains.RESETS_ON_RESTART, 1) == both | {'shiny-statistics-v1'}
     assert keys(domains.RESETS_ON_RESTART, 2) == both | {
         'gen2-shiny-statistics-v1', 'gen2-mythical-gift-v1', 'gen2-gs-ball-distribution-v1',

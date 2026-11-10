@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-import secrets
 
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 from pokecore.gen2.clock import (boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed,
@@ -19,6 +18,7 @@ from pokecore.gen2.ram import read_snapshot
 from .. import __version__, config
 from ..checkpoints import CheckpointStore, open_state
 from ..experimental.gen2 import identify
+from ..seeds import RELOAD_IDLE, reload_idle
 from .data import GameData
 from .emulator import BUTTONS, SCREEN_FRAMES, count_league
 from .menus import stack_pointer
@@ -102,9 +102,11 @@ class HeadlessRun:
     def reload(self, path):
         """Go back to a checkpoint as the guards do, idling a random moment so the trouble differs."""
         self.clock = clock_elapsed(self.pb)
+        frame = self.frame
         self._load(Path(path))
         self.policy.menu = None
-        self.tick(1 + (self.rng.randrange(180) if self.rng else secrets.randbelow(180)))
+        # A scenario's own generator picks the idle, and otherwise the reload stream does.
+        self.tick(1 + self.rng.randrange(RELOAD_IDLE) if self.rng else reload_idle(self.seed, frame))
 
     def save(self, path, compress=False):
         """Write a checkpoint the application and the replay tools both accept, with the manifest

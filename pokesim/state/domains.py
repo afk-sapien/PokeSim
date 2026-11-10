@@ -103,6 +103,8 @@ DOMAINS = (
     Domain('boss_losses', 'pokesim.planning.losses', SURVIVES, policy_reads=True),
     Domain('boss_aces', 'pokesim.planning.losses', SURVIVES, policy_reads=True),
     Domain('fair-wild-dvs-v1', 'pokesim.fair_dvs', SURVIVES),
+    # The seed every bot choice is drawn from. A restart draws a new one for the new game.
+    Domain('adventure-seed-v1', 'pokesim.seeds', RESETS_ON_RESTART, policy_reads=True),
 
     # Walking, returns and the Champion shops.
     Domain('cartridge-steps-v1', 'pokesim.gen2.steps', SURVIVES, policy_reads=True, cached=True),
