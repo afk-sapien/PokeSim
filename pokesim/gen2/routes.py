@@ -390,12 +390,13 @@ def link_walks(data, regions):
     return kinds
 
 
-def sides(data, regions, cut, surf):
+def sides(data, regions, cut, surf, rooms=()):
     """Where each step between two maps lands and leaves, as (landing, leaving) {(map, other map): roots}.
 
     A root names the ground of one map that its regions join into across ledges, slides and the
     like. A step from map to other map leaves from ground with a root in leaving, and lands on
-    ground with a root in landing.
+    ground with a root in landing. A walk takes a room link, one of rooms, through the room
+    between its two maps, so that step leaves and lands at the room's doors.
     """
     parent = {}
 
@@ -405,16 +406,23 @@ def sides(data, regions, cut, surf):
             node = parent[node]
         return node
 
-    steps = []
+    steps, doors = [], []
     for mid in data.maps:
         for region in set(regions.regions(mid, cut, surf).values()):
-            node = (mid, region)
+            node, out = (mid, region), {}
             find(node)
-            for target, _, _ in regions.edges(node, cut, surf):
+            for target, _, kind in regions.edges(node, cut, surf):
                 if target[0] == mid:
                     parent[find(node)] = find(target)
                 else:
                     steps.append((node, target))
+                    if kind == 'warp':
+                        out.setdefault(target[0], set()).add(target)
+            doors.append(out)
+    for out in doors:
+        for one, other in rooms:
+            if one in out and other in out:
+                steps.extend((leave, land) for leave in out[one] for land in out[other])
     landing, leaving = {}, {}
     for node, target in steps:
         leaving.setdefault((node[0], target[0]), set()).add(find(node))
@@ -422,16 +430,17 @@ def sides(data, regions, cut, surf):
     return landing, leaving
 
 
-def crossings(data, regions):
+def crossings(data, regions, rooms=()):
     """The field moves a walk needs to cross a map, as {(previous map, map, next map): alternatives}.
 
     A walk that comes into a map from the previous map lands on some ground, and it goes on to the
     next map only from ground joined to that. Each alternative is a smallest set of FIELD_MOVES
     that joins them, so crossing Ilex Forest between its two gates needs Cut. A crossing joined
     with no field move is left out. So is one joined by none of the sets, since it needs a move
-    the regions do not model, such as Strength.
+    the regions do not model, such as Strength. A room link in rooms lands at its room's doors, so
+    the walk from Ecruteak City over Route 42 to Mahogany Town needs Surf.
     """
-    tables = {moves: sides(data, regions, 'cut' in moves, 'surf' in moves) for moves in FIELD_MOVES}
+    tables = {moves: sides(data, regions, 'cut' in moves, 'surf' in moves, rooms) for moves in FIELD_MOVES}
     landing, leaving = tables[FIELD_MOVES[-1]]
     into = {}
     for previous, mid in landing:
@@ -453,8 +462,10 @@ def walk_facts(data):
     if entry is None or entry[0] is not data:
         # One Regions serves both, since the regions with Cut and Surf take most of the time.
         regions = Regions(data)
-        links = frozenset(key for key, kind in link_walks(data, regions).items() if kind in WALKED)
-        entry = _WALK_FACTS[id(data)] = (data, links, crossings(data, regions))
+        kinds = link_walks(data, regions)
+        links = frozenset(key for key, kind in kinds.items() if kind in WALKED)
+        rooms = {(mid, other) for (mid, _, other), kind in kinds.items() if kind == 'room'}
+        entry = _WALK_FACTS[id(data)] = (data, links, crossings(data, regions, rooms))
     return entry
 
 
