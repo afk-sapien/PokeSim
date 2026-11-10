@@ -18,6 +18,7 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
+from ..runtime.restart import restart
 from ..stalls import LoopGuard, StallWatch, boss_attempt, stalled_state
 from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
@@ -32,6 +33,11 @@ log = logging.getLogger('pokesim.gen2')
 
 # The running cartridge clock's latest reading, in seconds since its zero point (see core.clock_elapsed).
 CLOCK_KEY = 'gen2-clock-v1'
+
+
+def new_history():
+    """The maps, Pokédex and League progress a new game's journal starts from."""
+    return {'maps': [], 'owned': [], 'badges': 0, 'league': 0}
 
 
 # pret engine/events/halloffame.asm: the cartridge stops counting Hall of Fame entries at
@@ -265,7 +271,7 @@ class Emulator:
         self.last_reload_frame = -10 ** 9
         self._guard_frame = 0
         self._watch_until = self._last_publish = 0.0
-        self.history = store.get('gen2-history', {'maps': [], 'owned': [], 'badges': 0, 'league': 0})
+        self.history = store.get('gen2-history', new_history())
         self.last_achievement = next(iter(store.events(limit=1)), None)
         from .tracking import Tracker
         self.tracker = Tracker(store, self.data, fresh=not bool(store.autosaves()))
@@ -1181,51 +1187,56 @@ class Emulator:
                         # A refused rewind (ownership barrier, other cartridge) must never end the adventure.
                         log.warning('Rewind to %s refused: %s', path.name, error)
         elif name == 'restart':
-            # The autosaves go below, so the game kept from before the restart is a named checkpoint.
+            # The restart removes every autosave, so the game from before it stays as a named checkpoint.
             self._checkpoint_before(BEFORE_RESTART_CHECKPOINT)
-            self._autosave()
-            for path in self.store.states.glob('auto-*.state'):
-                path.unlink()
-                path.with_suffix('.json').unlink(missing_ok=True)
-            # The trade and reward barriers stay. Named checkpoints from before them survive a restart,
-            # and loading one would undo a trade the partner keeps, or a reward.
-            for key in ('custom-reward-pending-v1',
-                        'league-rewards-v1', 'gen2-mythical-gift-v1', 'gen2-gs-ball-distribution-v1', 'gen2-league-partners-v1',
-                        'gen2-mew-returns-v1'):
-                self.store.set(key, None)
-            self.store.clear_trade_preferences()
-            self.pb.stop(save=False)
-            self.tracker.reset()
             self.steps.flush(force=True)
-            self.statistics.previous = None
-            self.statistics.records.reset()
-            from .legendary import Recovery
-            self.legendary_recovery = Recovery()
-            # A new run starts a new cartridge clock.
-            self.store.set(CLOCK_KEY, None)
-            self.pb = self._boot()
-            self._sync_clock()
-            self.options_applied = False
-            self.frame = 0
-            self.previous = self.snapshot = None
-            self.history = {'maps': [], 'owned': [], 'badges': 0, 'league': 0}
-            self.policy = Policy(self.data, seed=config.SEED, starter=config.STARTER)
-            self.store.attach(self.policy, 2)
-            self.play_clock = PlayClock()
-            self.paused = self.manual_mode = False
-            # The old run's bests and reload streak would hold the new one stalled for good, and the
-            # watch clocks still pointed at its frames, which kept the guards and reward checks off.
-            self.best_progress = (0,) * 6
-            self.best_experience, self.best_egg_cycles = {}, {}
-            self.unstick_streak = 0
-            self.reloads_exhausted = False
-            self.league_restarts = (0, 0)
-            self.loop_guard = LoopGuard()
-            self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
-                                    config.STALL_ALERT_REPEAT_HOURS)
-            self._reset_watch()
-            self._autosave()
+            self.statistics.flush(self.snapshot)
+            restart(self, 2, self._new_game(), self._start_new_game)
         return True
+
+    def _new_game(self):
+        """The rows the new game starts with, which the restart's transaction writes. The trade and
+        reward barriers stay, so a named checkpoint from before a trade or a gift still cannot load.
+        The cartridge clock row goes, so the new game starts a new clock."""
+        from .. import adventure_records, shiny
+        from .tracking import CAPTURES, new_ledger
+        return {'play_clock': PlayClock().state_dict(), 'policy_state': {}, 'gen2-history': new_history(),
+                CAPTURES: new_ledger(True), shiny.GEN2_KEY: shiny.fresh(True),
+                adventure_records.KEY: adventure_records.fresh()}
+
+    def _start_new_game(self):
+        """Boot the committed new game, with trackers that hold nothing of the old one in memory."""
+        from ..goal_time import GoalTime
+        from .legendary import Recovery
+        from .statistics import Statistics
+        from .tracking import Tracker
+        self.pb.stop(save=False)
+        self.tracker = Tracker(self.store, self.data, fresh=True)
+        self.statistics = Statistics(self.store, clock=lambda: self.play_clock.status())
+        self.goal_time = GoalTime(self.store)
+        self.legendary_recovery = Recovery()
+        self.pb = self._boot()
+        self._sync_clock()
+        self.options_applied = False
+        self.frame = 0
+        self.previous = self.snapshot = None
+        self.history = new_history()
+        self.policy = Policy(self.data, seed=config.SEED, starter=config.STARTER)
+        self.store.attach(self.policy, 2)
+        self.play_clock = PlayClock()
+        self.paused = self.manual_mode = False
+        # The old run's bests and reload streak would hold the new one stalled for good, and the
+        # watch clocks still pointed at its frames, which kept the guards and reward checks off.
+        self.best_progress = (0,) * 6
+        self.best_experience, self.best_egg_cycles = {}, {}
+        self.unstick_streak = 0
+        self.reloads_exhausted = False
+        self.league_restarts = (0, 0)
+        self.loop_guard = LoopGuard()
+        self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
+                                config.STALL_ALERT_REPEAT_HOURS)
+        self._reset_watch()
+        self._autosave()
 
     def _run(self):
         next_save = time.monotonic() + config.AUTOSAVE_SECONDS

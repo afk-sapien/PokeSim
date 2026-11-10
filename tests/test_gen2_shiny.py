@@ -63,7 +63,8 @@ def test_shiny_wild_encounters_and_catches_are_counted_once(real_data, tmp_path)
     assert (result['seen'], result['acquired'], result['seen_species'], result['acquired_species']) == (1, 1, [130], [130])
     assert result['available'] and result['complete_history']
     assert shiny.status(store)['seen'] == 0
-    tracker.reset()
+    store.restart(2, {shiny.GEN2_KEY: shiny.fresh(True)})
+    Tracker(store, real_data, fresh=True)
     assert shiny.status(store, 2)['seen'] == 0
     store.close()
 

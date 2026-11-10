@@ -109,13 +109,10 @@ def test_a_gen2_goal_key_names_the_activity_hunt_or_training():
 
 
 def test_both_forget_the_rows_on_a_new_game(tmp_path):
-    from pokesim.catches import CatchTracker
-    from pokesim.gen2.tracking import Tracker
-    from test_gen2_activity import fake_data
     first, second = gen1_catches(tmp_path, 'red'), gen2_catches(tmp_path, 'gold')
     try:
-        CatchTracker(first, 'unused').reset()
-        Tracker(second, fake_data(), fresh=False).reset()
+        first.restart(1, {})
+        second.restart(2, {})
         for store in (first, second):
             assert store.db.execute('SELECT COUNT(*) FROM progress_events').fetchone()[0] == 0
     finally:

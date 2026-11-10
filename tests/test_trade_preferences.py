@@ -162,11 +162,11 @@ def test_each_game_sees_its_own_send_receive_and_history():
         assert result['trading']['enabled']
 
 
-def test_new_adventure_clears_only_offer_preferences(tmp_path):
+def test_a_restart_clears_only_offer_preferences(tmp_path):
     store = Store(tmp_path)
     store.set('other_setting', 12)
     store.set_trade_preference('example', {'state': 'offered'})
-    store.clear_trade_preferences()
+    store.restart(1, {})
     assert store.trade_preferences() == {}
     assert store.get('other_setting') == 12
     store.close()
