@@ -57,4 +57,8 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   crystal/new_game, crystal/badges_2, gold/badges_2, crystal/kanto_entry, gold-randomized/badges_8,
   silver/red and silver/kanto_entry are back at or below their 171176e values, and the baseline moved
   for them. silver/post_game fell to 2.3% and crystal/red to 6.3%, still above 171176e.
+- #376, 2026-11-10: the training site picker and the hunt judged reach from that same wall tile, found
+  no route, and ended training. A Crystal postgame run outside the Silver Cave stood down one trainee
+  after another. They now wait for the jump to land. crystal/post_game, gold/post_game and
+  silver/post_game are back at 0.0%, and the baseline moved for them.
 - The other rungs are still open.
