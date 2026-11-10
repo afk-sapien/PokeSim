@@ -6,7 +6,7 @@ from pokecore.gen2.maps import (DIRS, OPPOSITE, WALLS, blocked_side, decode_bloc
                                     passable, travel_collision)
 
 from pokecore.gen2.ram import Memory, Snapshot
-from .routes import CARPETS, Regions, Search
+from .routes import CARPETS, Regions, Search, walk_links
 
 
 class Navigator:
@@ -202,13 +202,27 @@ class Navigator:
                           for y in range(max(0, offset), min(height, offset + target['height']))]
             yield connection['map'], points, direction
 
-    def route(self, start, target, excluded=()):
+    def steps(self, mid, walk=False):
+        """The edges out of mid a route takes. A walk takes a map link only where walk_links counts it."""
+        links = walk_links(self.data) if walk else None
+        for destination, points, kind in self.edges(mid):
+            if links is None or kind == 'warp' or (mid, kind, destination) in links:
+                yield destination, points, kind
+
+    def walk(self, start, target):
+        """The map route a walk takes from start to target, or None.
+
+        The storage, heal, shop, roamer, postgame and collection choices rank places by its length.
+        """
+        return self.route(start, target, walk=True)
+
+    def route(self, start, target, excluded=(), *, walk=False):
         excluded, failed = frozenset(excluded), frozenset(self.failed_edges)
-        key = (start, excluded, failed)
+        key = (start, excluded, failed, walk)
         search = self.searches.get(key)
         if search is None:
             def expand(mid):
-                for destination, points, kind in self.edges(mid):
+                for destination, points, kind in self.steps(mid, walk):
                     if destination not in excluded and (mid, destination) not in failed:
                         yield destination, (mid, destination, points, kind)
             if len(self.searches) > 512:

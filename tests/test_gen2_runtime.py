@@ -652,7 +652,7 @@ def test_postgame_restocking_reaches_a_mart_beyond_the_local_map_limit(real_data
     policy.completed.update(red=1, ice_path=1)
     mart = real_data.map_ids['VIOLET_MART']
     policy.travel_region = lambda snapshot: real_data.maps[mart]['region']
-    policy.nav.route = lambda source, target: [(None, target, None, None)] * 6 if target == mart else None
+    policy.nav.walk = lambda source, target: [(None, target, None, None)] * 6 if target == mart else None
     policy.nav.regions.route = lambda snapshot, target, *args, **kwargs: [(None, (target, 0), None, 'warp')] * 6
     policy.person = lambda snapshot, key, label, name, script: Goal(key, label, name, 1, 1)
     snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_ROOM_2'], items=(), party=(),
@@ -662,9 +662,9 @@ def test_postgame_restocking_reaches_a_mart_beyond_the_local_map_limit(real_data
 
 
 def test_restock_does_not_walk_to_a_mart_through_ice_path(real_data):
-    # Shopping is off inside Ice Path. Route 44 and Blackthorn City share a map edge, so the
-    # Blackthorn Mart looked two maps away, but the walk goes through the cave: the trip was
-    # dropped at the cave mouth, the Radio Card goal walked back out, and the mart won again.
+    # Shopping is off inside Ice Path. The Blackthorn Mart is three maps from Route 44 through the
+    # cave, nearer than Ecruteak's, but the trip was dropped at the cave mouth, the Radio Card goal
+    # walked back out, and the mart won again.
     from pokesim.gen2.policy import Policy, Goal
     policy = Policy(real_data)
     policy.completed.update(ice_path=1)
@@ -679,7 +679,7 @@ def test_restock_does_not_walk_to_a_mart_through_ice_path(real_data):
     snapshot = SimpleNamespace(map=ids['ROUTE_44'], x=56, y=8, items=(), party=(), owned=set(),
         pockets={'balls': ()}, money=18000, can_catch=True, badges=255, hall_of_fame_count=1,
         event=lambda name: True)
-    assert len(policy.nav.route(ids['ROUTE_44'], blackthorn)) < len(policy.nav.route(ids['ROUTE_44'], ecruteak))
+    assert len(policy.nav.walk(ids['ROUTE_44'], blackthorn)) < len(policy.nav.walk(ids['ROUTE_44'], ecruteak))
     goal = policy.shop(snapshot)
     assert goal is not None and goal.map_name != 'BLACKTHORN_MART'
 
@@ -694,7 +694,7 @@ def test_restock_prefers_ultra_balls_while_a_legendary_is_uncaught(real_data, ow
     ids = real_data.map_ids
     near, far = ids['ECRUTEAK_MART'], ids['BLACKTHORN_MART']
     policy.travel_region = lambda snapshot: real_data.maps[near]['region']
-    policy.nav.route = lambda source, target: ([(None, target, None, None)] * (1 if target == near else 3)
+    policy.nav.walk = lambda source, target: ([(None, target, None, None)] * (1 if target == near else 3)
                                                 if target in {near, far} else None)
     policy.nav.regions.route = lambda snapshot, target, *args, **kwargs: [(None, (target, 0), None, 'warp')] * (1 if target == near else 3)
     policy.person = lambda snapshot, key, label, name, script: Goal(key, label, name, 1, 1)
@@ -1517,7 +1517,7 @@ def test_roamer_search_steps_toward_a_neighbour_of_the_beasts_route(real_data, m
     from pokesim.gen2.policy import Goal
     ids = real_data.map_ids
     policy = SimpleNamespace(data=real_data, collection={}, decisions=0, memory=None,
-        nav=SimpleNamespace(route=lambda start, end: [None] * (1 if end == ids['ROUTE_36'] else 5),
+        nav=SimpleNamespace(walk=lambda start, end: [None] * (1 if end == ids['ROUTE_36'] else 5),
                             local=lambda *args, **kwargs: ['left'], visits={},
                             regions=SimpleNamespace(route=lambda *args, **kwargs: [])))
     snapshot = SimpleNamespace(map=ids['VIOLET_CITY'], x=1, y=8, badges=0, owned=set(), party=(), stored=(),
@@ -2403,7 +2403,7 @@ def _item_policy(data, demand=None):
         return Goal(key, label, map_name, 0, 0)
     return SimpleNamespace(data=data, demand=demand or {}, collection={}, decisions=0, person=person,
                            storage_goal=lambda snapshot: Goal('storage', 'PC', 'SILVER_CAVE_POKECENTER_1F', 9, 2, 'up'),
-                           nav=SimpleNamespace(route=lambda start, end: []))
+                           nav=SimpleNamespace(route=lambda start, end: [], walk=lambda start, end: []))
 
 
 def test_item_needs_count_stones_for_missing_and_requested_evolutions(real_data):
