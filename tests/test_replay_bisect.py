@@ -234,6 +234,34 @@ def test_two_commits_with_the_same_records_say_so():
     assert 'only the headers differ' in diverge.markdown(report)
 
 
+def _clock(call, at, follow=True):
+    return {'source': 'clock', 'payload': {'call': call, 'args': [], 'kwargs': {'at': at, 'follow_frames': follow}}}
+
+
+def test_wall_clock_readings_differ_without_parting_the_play():
+    a = _records((0, 'decide', _decide('boot')), (0, 'input', _clock('lock_clock', 1.5)), (2, 'press', {'button': 'a'}))
+    b = _records((0, 'decide', _decide('boot')), (0, 'input', _clock('lock_clock', 9.25)), (2, 'press', {'button': 'a'}))
+    assert diverge.first_difference(a, b)['position'] == 1
+    assert diverge.first_difference(a, b, clock_values=False) is None
+    assert diverge.clock_readings(a, b) == 1
+    # Another call or another flag still parts the play.
+    for other in (_clock('advance_clock', 1.5), _clock('lock_clock', 1.5, follow=False)):
+        c = _records((0, 'decide', _decide('boot')), (0, 'input', other), (2, 'press', {'button': 'a'}))
+        assert diverge.first_difference(a, c, clock_values=False)['position'] == 1
+
+
+def test_the_self_check_passes_two_runs_whose_clock_readings_alone_differ(monkeypatch):
+    one, two = _run(), _run()
+    two.shim = {**two.shim, 'head': 'other'}
+    monkeypatch.setattr(search.diverge, 'compare', lambda a, b: {'clock_only': True, 'clock_readings': 2})
+    check = search.twice(one, two)
+    assert (check['same_head'], check['same'], check['reason']) == (False, True, 'only wall-clock readings differ')
+    monkeypatch.setattr(search.diverge, 'compare', lambda a, b: {'clock_only': False, 'clock_readings': 0})
+    assert search.twice(one, two)['same'] is False
+    assert search.twice(one, one) == {'same_head': True, 'same': True, 'reason': 'same head'}
+    assert search.twice(one, _run(ok=False))['reason'] == 'a run failed'
+
+
 # Environments.
 
 def test_env_key_covers_the_lock_the_core_tree_and_the_pyboy_choice():

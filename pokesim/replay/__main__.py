@@ -19,7 +19,7 @@ from pathlib import Path
 from . import diverge
 from .envs import CURRENT, DEFAULT_CACHE, OWN, ROOT, resolve
 from .rung import GATE_FRAMES, GATE_WASTE_POINTS
-from .search import BOTH, STALL, WASTE, Options, bisect, markdown, record
+from .search import BOTH, STALL, WASTE, Options, bisect, markdown, record, twice
 
 
 def _options(args):
@@ -54,12 +54,14 @@ def cmd_record(args):
         print('a run failed, see log.txt in its folder', file=sys.stderr)
         return 1
     if args.twice:
-        same = runs[0].head == runs[1].head
-        print(f'Same head twice: {"yes" if same else "no"}')
-        if not same:
-            report = diverge.compare(runs[0].folder, runs[1].folder)
+        check = twice(runs[0], runs[1])
+        print(f'Same head twice: {"yes" if check["same_head"] else "no"}')
+        if not check['same_head']:
+            print(f'Same play twice: {"yes" if check["same"] else "no"}, {check["reason"]}')
+            report = check['diverge']
             _write(_folder(options, args.rung) / f'self-{sha[:12]}', report,
                    diverge.markdown(report, f'{args.rung} at {sha[:12]} against itself'))
+        if not check['same']:
             return 1
     return 0
 

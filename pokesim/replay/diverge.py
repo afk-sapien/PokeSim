@@ -23,8 +23,29 @@ NEXT = 6
 TOP_ROWS = 5
 
 
-def _body(record):
-    return {key: value for key, value in record.items() if key not in ('index', 'frame', 'hash')}
+def _clock(record):
+    return record['kind'] == 'input' and record.get('source') == 'clock'
+
+
+def _blank(value):
+    """``value`` with every number left out, keeping its shape, flags and names."""
+    if isinstance(value, bool) or value is None or isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        return None
+    if isinstance(value, dict):
+        return {key: _blank(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_blank(item) for item in value]
+    return value
+
+
+def _body(record, clock_values=True):
+    body = {key: value for key, value in record.items() if key not in ('index', 'frame', 'hash')}
+    if not clock_values and _clock(record):
+        # A wall-clock reading is an input from outside the game. Keep the call and its flags, not the time it read.
+        body['payload'] = _blank(record.get('payload'))
+    return body
 
 
 def short(record):
@@ -70,15 +91,16 @@ def _side(stream, position, start):
             'next': [short(item[1]) for item in stream[position:position + NEXT]]}
 
 
-def first_difference(a, b, kinds=None, starts=(0, 0)):
+def first_difference(a, b, kinds=None, starts=(0, 0), clock_values=True):
     """The first record of ``kinds`` that differs between record lists ``a`` and ``b``, or None.
 
     ``kinds`` None means every kind but hook registrations. ``starts`` are the segment start
-    frames, since records compare by frame offset.
+    frames, since records compare by frame offset. ``clock_values`` False lets clock inputs
+    differ in the time they read, as long as the same call made them.
     """
     left, right = _stream(a, starts[0], kinds), _stream(b, starts[1], kinds)
     for position, (x, y) in enumerate(zip(left, right)):
-        if x[0] != y[0] or _body(x[1]) != _body(y[1]):
+        if x[0] != y[0] or _body(x[1], clock_values) != _body(y[1], clock_values):
             return {'position': position, 'a': _side(left, position, starts[0]), 'b': _side(right, position, starts[1])}
     if len(left) == len(right):
         return None
@@ -88,6 +110,12 @@ def first_difference(a, b, kinds=None, starts=(0, 0)):
         if position < len(stream):
             found[name] = _side(stream, position, start)
     return found
+
+
+def clock_readings(a, b):
+    """How many clock inputs the two record lists hold side by side with different readings."""
+    return sum(1 for x, y in zip(_stream(a, 0, None), _stream(b, 0, None))
+               if _clock(x[1]) and _clock(y[1]) and x[1].get('payload') != y[1].get('payload'))
 
 
 def goal_changes(records, start=0):
@@ -180,8 +208,11 @@ def compare(a, b):
     right, tb = side(b)
     starts = (ta.header.get('frame', 0), tb.header.get('frame', 0))
     first = first_difference(ta.records, tb.records, None, starts)
+    play = first if first is None else first_difference(ta.records, tb.records, None, starts, clock_values=False)
     # The head covers the header, which names the commit, so two commits differ there even when every record agrees.
+    # Before the frame clock work, Gen II reads the wall clock, so two runs of one commit can differ only in those readings.
     return {'a': left, 'b': right, 'same_head': ta.head == tb.head, 'same_records': first is None,
+            'clock_only': first is not None and play is None, 'clock_readings': clock_readings(ta.records, tb.records),
             'first_record': first,
             'first_action': first_difference(ta.records, tb.records, ACTIONS, starts),
             'first_goal': goal_divergence(ta.records, tb.records, starts)}
@@ -218,6 +249,9 @@ def markdown(report, title='Diverge'):
         lines.append('- Same head: yes.')
     elif report.get('same_records'):
         lines.append('- Same head: no, only the headers differ. Every record agrees.')
+    elif report.get('clock_only'):
+        lines.append(f'- Same head: no, only wall-clock readings differ, in {report["clock_readings"]} clock inputs. '
+                     'Every other record agrees.')
     else:
         lines.append('- Same head: no.')
     lines += _found('First record that differs', report['first_record'])
