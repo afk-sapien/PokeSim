@@ -6,35 +6,10 @@ are written in shadow mode: nothing reads them for a decision yet, and a stall, 
 watchdog still go by the journal.
 
 ``encounter_counts`` keeps one row per goal per game hour. Its writer comes with the goal record,
-which knows the hunt's target and rule.
+which knows the hunt's target and rule. Both tables come from the schema version (pokesim.state).
 """
-import sqlite3
 import time
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS progress_events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  frame INTEGER,
-  ts REAL NOT NULL,
-  kind TEXT NOT NULL,
-  goal TEXT NOT NULL DEFAULT '',
-  tier TEXT NOT NULL DEFAULT '',
-  species INTEGER,
-  identity TEXT,
-  score REAL,
-  net INTEGER NOT NULL,
-  rewound INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS progress_events_kind ON progress_events(kind, species);
-CREATE TABLE IF NOT EXISTS encounter_counts (
-  goal TEXT NOT NULL,
-  hour INTEGER NOT NULL,
-  encounters INTEGER NOT NULL DEFAULT 0,
-  target INTEGER NOT NULL DEFAULT 0,
-  met_rule INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (goal, hour)
-);
-"""
 # Net per kind. An item is net only when it was needed, so its writer says which.
 NET = {'dex': 1, 'improve': 1, 'badge': 1, 'league': 1, 'event': 1, 'area': 1, 'checkpoint': 1,
        'catch': 0, 'receive': 0, 'release': 0, 'room': 0, 'level': 0, 'goal': 0, 'plan': 0}
@@ -46,20 +21,10 @@ JOURNAL = {'obtain': 'receive', 'trade': 'receive', 'hatch': 'receive', 'release
 HOUR = 216000
 
 
-def initialize(db):
-    # One statement at a time, since executescript would commit the caller's transaction.
-    for statement in SCHEMA.split(';'):
-        if statement.strip():
-            db.execute(statement)
-
-
 def clear(db):
     """Forget every row when the adventure restarts from a new game."""
     for table in ('progress_events', 'encounter_counts'):
-        try:
-            db.execute(f'DELETE FROM {table}')
-        except sqlite3.OperationalError:
-            pass
+        db.execute(f'DELETE FROM {table}')
 
 
 def frame(store):
@@ -84,12 +49,7 @@ def record(db, kind, *, frame=None, goal='', tier='', species=None, identity=Non
     row = (frame, time.time(), kind, goal or '', tier or '', species, identity, score, int(bool(net)))
     sql = ('INSERT INTO progress_events(frame, ts, kind, goal, tier, species, identity, score, net) '
            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    try:
-        db.execute(sql, row)
-    except sqlite3.OperationalError:
-        # A database a worker opened without the Store, such as a trade worker's, may predate the table.
-        initialize(db)
-        db.execute(sql, row)
+    db.execute(sql, row)
 
 
 def write(store, kind, **fields):

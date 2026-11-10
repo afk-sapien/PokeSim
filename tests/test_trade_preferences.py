@@ -244,6 +244,8 @@ def test_migration_turns_withdrawn_into_keep_once(tmp_path):
     store = Store(tmp_path)
     store.close()
     db = sqlite3.connect(tmp_path / 'pokesim.sqlite')
+    # A database from before schema versions, whose first open runs the migration.
+    db.execute('PRAGMA user_version = 0')
     with db:
         db.execute('DELETE FROM kv WHERE k=?', (preferences.MIGRATED,))
         for key, state in (('a', 'withdrawn'), ('b', 'locked'), ('c', 'offered'), ('d', 'auto'), ('e', 'unlocked')):

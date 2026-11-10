@@ -23,6 +23,7 @@ from ..checkpoints import CheckpointStore
 from ..game_data import VARIANT_ENV
 from . import inbox, trade_settings
 from .assets import portrait_url
+from ..state import schema
 from .errors import Conflict, NotFound, Refused
 from .loops import Loop
 from .registry import digest, identifier, validate_id
@@ -286,7 +287,7 @@ class Coordinator:
         if not path.is_file():
             return {}
         try:
-            with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=0.1)) as connection:
+            with closing(schema.connect(path, read_only=True, timeout=0.1)) as connection:
                 saved = connection.execute('SELECT v FROM kv WHERE k=?',
                                            ('managed_interaction:' + row['id'],)).fetchone()
             receipt = json.loads(saved[0]) if saved else {}

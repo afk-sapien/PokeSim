@@ -12,47 +12,28 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 import threading
 import time
 from contextlib import closing
 from pathlib import Path
 
 from . import progress_events
+from .state import schema
 
 log = logging.getLogger(__name__)
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS stall_truth (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  frame INTEGER,
-  ts REAL NOT NULL,
-  kind TEXT NOT NULL,
-  source TEXT NOT NULL DEFAULT '',
-  detail_json TEXT NOT NULL DEFAULT '{}'
-)
-"""
 KINDS = frozenset({'bundle', 'help', 'restart'})
 # Both generations ask for help with these words, so the start of the reason names the request.
 LOOP = 'The run is caught in a loop'
 
 
-def initialize(db):
-    db.execute(SCHEMA)
-
-
 def record(db, kind, *, frame=None, source='', **detail):
-    """Write one row inside the caller's transaction."""
+    """Write one row inside the caller's transaction. The table comes from the schema version
+    (pokesim.state)."""
     if kind not in KINDS:
         raise ValueError(f'Unknown stall truth kind {kind!r}')
     row = (frame, time.time(), kind, source or '', json.dumps(detail, sort_keys=True, default=str))
-    sql = 'INSERT INTO stall_truth(frame, ts, kind, source, detail_json) VALUES (?, ?, ?, ?, ?)'
-    try:
-        db.execute(sql, row)
-    except sqlite3.OperationalError:
-        # A database opened without the Store, such as a stopped adventure's, may predate the table.
-        initialize(db)
-        db.execute(sql, row)
+    db.execute('INSERT INTO stall_truth(frame, ts, kind, source, detail_json) VALUES (?, ?, ?, ?, ?)', row)
 
 
 def write(store, kind, *, source='', **detail):
@@ -121,7 +102,7 @@ def lifecycle(folder, action, source, **detail):
     if not path.is_file():
         return
     try:
-        with closing(sqlite3.connect(path, timeout=5)) as db, db:
+        with closing(schema.connect(path, timeout=5)) as db, db:
             row = db.execute("SELECT v FROM kv WHERE k='play_clock'").fetchone()
             clock = json.loads(row[0]) if row else None
             frame = clock.get('frames') if isinstance(clock, dict) else None

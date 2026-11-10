@@ -50,8 +50,6 @@ class Tracker:
         self.store, self.data = store, data
         self.candidate = self.confirmed = None
         with store.lock, store.db:
-            store.db.execute('CREATE TABLE IF NOT EXISTS capture_receipts '
-                             '(fingerprint TEXT PRIMARY KEY, dex INTEGER NOT NULL, recorded_at REAL NOT NULL)')
             store.db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)', (CAPTURES, json.dumps({
                 'counts': {}, 'total': 0, 'started_at': time.time(), 'complete_history': fresh, 'available': True})))
             shiny.start(store.db, 2, available=True, fresh=fresh)

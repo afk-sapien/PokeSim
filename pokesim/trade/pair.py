@@ -2,13 +2,13 @@
 import argparse
 import hashlib
 import json
-import sqlite3
 from pokecore.emulator_state import validate_runtime
 from pathlib import Path
 
 from ..broker import inventory, routine
 from ..checkpoints import CheckpointStore
 from ..ram import read_snapshot
+from ..state import schema
 from ..web.pokedex import live_status
 from . import boxes
 from . import preferences
@@ -67,7 +67,7 @@ def stage(root, transaction):
         policy = json.loads((root / 'policy.json').read_text(encoding='utf-8'))
         protected += policy.get('protected_species', {}).get(name, [])
         payload = live_status(snapshot.to_dict())
-        with sqlite3.connect(data / 'pokesim.sqlite') as db:
+        with schema.connect(data / 'pokesim.sqlite') as db:
             payload = preferences.apply(payload, preferences.read(db))
         inv = inventory.normalise(name, '', payload, protected)
         inventories.append(inv)
@@ -76,8 +76,7 @@ def stage(root, transaction):
         backup.mkdir(parents=True, exist_ok=True)
         for path in [state, state.with_suffix('.json')]:
             CheckpointStore.atomic_write(backup / path.name, path.read_bytes())
-        with sqlite3.connect(data / 'pokesim.sqlite') as db, sqlite3.connect(backup / 'pokesim.sqlite') as dest:
-            db.backup(dest)
+        schema.copy(data / 'pokesim.sqlite', backup / 'pokesim.sqlite')
         source[name] = {'rom': rom, 'state': backup / state.name}
     deals = routine.proposals(inventories, limit=1, allow_last_copies=policy.get('allow_last_copies', False))
     if not deals:
@@ -130,12 +129,11 @@ def journal(root, transaction):
         if moved['received']['evolved_from']:
             body += ' The incoming partner evolved during the exchange.'
         # The journal row and idempotency marker commit together.
-        with sqlite3.connect(data / 'pokesim.sqlite') as db:
+        with schema.connect(data / 'pokesim.sqlite') as db:
             from ..activity_ledger import initialize as initialize_activity
             from ..trade_statistics import initialize as initialize_trades, record
             initialize_activity(db)
             initialize_trades(db)
-            db.execute('CREATE TABLE IF NOT EXISTS completed_trades (id TEXT PRIMARY KEY)')
             cursor = db.execute('INSERT OR IGNORE INTO completed_trades(id) VALUES (?)', (key,))
             record(db, 'legacy:' + transaction, moved['sent'].get('species'), moved['received'].get('species'))
             if cursor.rowcount:

@@ -1,12 +1,12 @@
 """Custom Pokémon rewards delivered through held checkpoint transactions."""
 import hashlib
 import json
-import sqlite3
 
 from . import boxes, pair
 from .pair import verified
 from .execute import _boot, _publish, _state_bytes, register_arrival
 from ..policies.collection import champion
+from ..state import schema
 from ..strategy_data import MOVES, SPECIES
 from .. import rewards
 
@@ -50,7 +50,7 @@ def gift_slot(seed, species=MEW, *, random_name=False):
 
 
 def received(data):
-    with sqlite3.connect(data / 'pokesim.sqlite') as db:
+    with schema.connect(data / 'pokesim.sqlite') as db:
         row = db.execute('SELECT v FROM kv WHERE k=?', (EVENT_KEY,)).fetchone()
     return bool(row and json.loads(row[0]))
 
@@ -68,7 +68,7 @@ def stage(root, transaction, league_rewards=False):
         space = next(((box, count + 1) for box, count in enumerate(snapshot.box_counts, 1)
                       if count < boxes.BOX_CAPACITY), None)
         if league_rewards:
-            with sqlite3.connect(data / 'pokesim.sqlite') as db:
+            with schema.connect(data / 'pokesim.sqlite') as db:
                 claims[name] = rewards.ledger(db)
             eligible[name] = space if claims[name]['earned'] > claims[name]['delivered'] else None
         else:
@@ -78,8 +78,7 @@ def stage(root, transaction, league_rewards=False):
         backup.mkdir(parents=True, exist_ok=True)
         for path in (state, state.with_suffix('.json')):
             pair.CheckpointStore.atomic_write(backup / path.name, path.read_bytes())
-        with sqlite3.connect(data / 'pokesim.sqlite') as db, sqlite3.connect(backup / 'pokesim.sqlite') as dest:
-            db.backup(dest)
+        schema.copy(data / 'pokesim.sqlite', backup / 'pokesim.sqlite')
         sources[name] = rom, backup / state.name
     if not any(eligible.values()):
         pair.write_json(work / 'result.json', {'status': 'no_opportunity'})
@@ -144,8 +143,7 @@ def journal(root, transaction):
     result = json.loads((root / 'transactions' / transaction / 'result.json').read_text(encoding='utf-8'))
     recipients = {gift['instance'] for gift in result['gifts']}
     for name in result['states']:
-        with sqlite3.connect(pair.PAIR_ROOT / name / 'pokesim.sqlite') as db:
-            db.execute('CREATE TABLE IF NOT EXISTS completed_events (id TEXT PRIMARY KEY)')
+        with schema.connect(pair.PAIR_ROOT / name / 'pokesim.sqlite') as db:
             cursor = db.execute('INSERT OR IGNORE INTO completed_events(id) VALUES (?)', (transaction,))
             if cursor.rowcount:
                 db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', ('trade_barrier', json.dumps(transaction)))

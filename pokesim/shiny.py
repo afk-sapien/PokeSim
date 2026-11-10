@@ -38,28 +38,17 @@ def status(store, generation=1):
     return {**empty(), **(store.get(LEDGERS[generation][0]) or {})}
 
 
-def _dated(db, table):
-    return 'ts' in {row[1] for row in db.execute(f'PRAGMA table_info({table})')}
-
-
 def initialize(db, generation=1):
-    key, table, _ = LEDGERS[generation]
-    db.execute(f'CREATE TABLE IF NOT EXISTS {table} '
-               '(kind TEXT NOT NULL, fingerprint TEXT NOT NULL, dex INTEGER NOT NULL, '
-               'PRIMARY KEY(kind,fingerprint))')
-    if not _dated(db, table):
-        # Receipts from before dates were kept stay undated. Their dates are never guessed.
-        db.execute(f'ALTER TABLE {table} ADD COLUMN ts REAL')
+    """Open the ledger's counts. The receipt table comes from the schema version (pokesim.state)."""
+    key = LEDGERS[generation][0]
     db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)', (key, json.dumps(empty())))
 
 
 def log(db, generation, names, limit=200):
-    """The newest shinies seen and acquired, with their dates where known, oldest first."""
+    """The newest shinies seen and acquired, with their dates where known, oldest first. Receipts
+    from before dates were kept stay undated."""
     _, table, _ = LEDGERS[generation]
-    if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
-        return []
-    ts = 'ts' if _dated(db, table) else 'NULL'
-    rows = db.execute(f'SELECT kind, dex, {ts} FROM {table} ORDER BY {ts} IS NOT NULL DESC, {ts} DESC, rowid DESC '
+    rows = db.execute(f'SELECT kind, dex, ts FROM {table} ORDER BY ts IS NOT NULL DESC, ts DESC, rowid DESC '
                       'LIMIT ?', (limit,)).fetchall()
     return [{'kind': kind, 'dex': dex, 'name': names.get(dex, f'#{dex:03d}'), 'ts': when}
             for kind, dex, when in reversed(rows)]

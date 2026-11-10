@@ -7,10 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from pokesim import progress
 from pokesim.app import progress_sweep
 from pokesim.app.watchdog import Limits, Watchdog
-from pokesim.store import SCHEMA
+from pokesim.state import schema
 from test_watchdog import AID, Clock, FakeRegistry, Process, game, status
 
 HOUR = 3600
@@ -28,7 +27,7 @@ class Adventure:
         folder = root / 'adventures' / aid
         folder.mkdir(parents=True)
         self.db = sqlite3.connect(folder / 'pokesim.sqlite', isolation_level=None)
-        self.db.executescript(SCHEMA + progress.SCHEMA)
+        schema.migrate(self.db)
 
     def row(self, row):
         self.db.execute('INSERT INTO progress(ts, badges, owned, seen, league, level100, perfect) '

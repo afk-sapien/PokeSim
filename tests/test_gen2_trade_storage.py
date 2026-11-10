@@ -27,7 +27,8 @@ def sealed_snapshot(data, *, box_counts=(20,) * 14):
                   enumerate([(154, 100), (169, 66), (73, 41), (18, 51), (218, 5), (143, 50)]))
     stored = (member(120, 40, box=3, position=19),)
     return SimpleNamespace(party=party, stored=stored, box_counts=box_counts, active_box=11,
-                           pockets={'items': ()}, money=0, can_catch=box_counts[11] < 20, map=data.map_ids['CHERRYGROVE_POKECENTER_1F'], x=9, y=2)
+                           pockets={'items': ()}, money=0, can_catch=box_counts[11] < 20, map=data.map_ids['CHERRYGROVE_POKECENTER_1F'], x=9, y=2,
+                           badges=0)
 
 
 def test_a_sealed_pc_does_not_send_the_run_to_deposit_a_field_move_partner(data):

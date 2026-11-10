@@ -678,7 +678,7 @@ class Ladder:
         walk = getattr(getattr(policy, 'nav', None), 'walk', None)
         if mid is None or walk is None or mid == snapshot.map:
             return 0
-        path = walk(snapshot.map, mid)
+        path = walk(snapshot, mid)
         return MAP_FRAMES * (len(path) if path is not None else FAR_MAPS)
 
     def offer(self, name, tier, value, work, build, price=None):
@@ -1036,7 +1036,7 @@ def pokedex_hunt(policy, snapshot, Goal, current_time):
         distances = {}
         for mid, _, _, _ in groups:
             if mid not in distances:
-                route = policy.nav.walk(snapshot.map, mid)
+                route = policy.nav.walk(snapshot, mid)
                 distances[mid] = len(route) if route is not None else 9999
         carriers = item_hunts(policy, snapshot)
         ranked = sorted(groups.items(), key=lambda pair: (not bool(policy.demand.get(pair[0][2])

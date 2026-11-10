@@ -61,11 +61,8 @@ YELLOW_HOOKS = (
 
 
 def initialize(db):
-    db.execute('CREATE TABLE IF NOT EXISTS activity_counts ('
-               'kind TEXT NOT NULL, subject INTEGER NOT NULL, total INTEGER NOT NULL, '
-               'PRIMARY KEY(kind,subject))')
-    db.execute('CREATE TABLE IF NOT EXISTS activity_receipts ('
-               'kind TEXT NOT NULL, fingerprint BLOB NOT NULL, PRIMARY KEY(kind,fingerprint))')
+    """Start the counts once from the receipts kept before them. The tables come from the schema
+    version (pokesim.state)."""
     if db.execute('SELECT 1 FROM kv WHERE k=?', (KEY,)).fetchone():
         return
     if db.execute("SELECT 1 FROM sqlite_master WHERE name='capture_receipts'").fetchone():

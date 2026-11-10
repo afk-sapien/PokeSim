@@ -13,6 +13,7 @@ import tempfile
 import time
 import zipfile
 
+from ..state import schema
 from .errors import Conflict, Refused
 from .registry import identifier
 
@@ -185,6 +186,10 @@ def restore_backup(archive, destination):
         with closing(sqlite3.connect(staging / 'app.sqlite')) as db:
             if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                 raise Conflict('Backup database is damaged')
+        for database in sorted((staging / 'adventures').glob('*/pokesim.sqlite')):
+            # A newer PokeSim's adventure is refused here, before anything restores it.
+            if not schema.intact(database):
+                raise Conflict(f'The backup copy of adventure {database.parent.name} is damaged')
         if destination.exists():
             destination.rmdir()
         staging.rename(destination)

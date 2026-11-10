@@ -12,15 +12,6 @@ GAUGES = ('held', 'collection_power', 'strongest_six_power', 'average_power',
           'average_dv', 'average_level', 'high_quality_held')
 
 
-def initialize(db):
-    db.execute('CREATE TABLE IF NOT EXISTS statistics_history '
-               '(bucket INTEGER PRIMARY KEY, ts REAL NOT NULL, data TEXT NOT NULL)')
-    db.execute("CREATE INDEX IF NOT EXISTS statistics_marathons ON events(id) "
-               "WHERE type='marathon' AND title='Kanto Marathon finished!'")
-    db.execute("CREATE INDEX IF NOT EXISTS statistics_johto_marathons ON events(id) "
-               "WHERE type='marathon' AND title='Johto Marathon finished!'")
-
-
 def marathons(db, course='Kanto Marathon'):
     """Races finished on ``course``, counted from the journal, which outlasts checkpoint restores."""
     if course == 'Johto Marathon':

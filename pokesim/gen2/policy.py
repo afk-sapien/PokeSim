@@ -882,7 +882,7 @@ class Policy:
                 continue
             if entry['constant'] == 'BLACKTHORN_POKECENTER_1F' and 'ice_path' not in self.completed:
                 continue
-            route = self.nav.walk(snapshot.map, mid)
+            route = self.nav.walk(snapshot, mid)
             if route is None:
                 continue
             choices.extend((len(route), mid, x, y) for x, y in pcs)
@@ -1226,10 +1226,10 @@ class Policy:
                 continue
             if entry['constant'] == 'BLACKTHORN_POKECENTER_1F' and 'ice_path' not in self.completed:
                 continue
-            route = self.nav.walk(snapshot.map, mid)
+            route = self.nav.walk(snapshot, mid)
             if route is None:
                 continue
-            nurse = next(obj for obj in entry['objects'] if obj['sprite'] == 'SPRITE_NURSE')
+            nurse =next(obj for obj in entry['objects'] if obj['sprite'] == 'SPRITE_NURSE')
             # The walk from Route 44 to Blackthorn City goes through Ice Path, where healing stands down.
             # The trip would step into the cave, hand back to the main goal, step out and choose the same
             # center again. So a known walk must stay out of Ice Path. With no walk known yet, the map
@@ -1319,7 +1319,7 @@ class Policy:
             for mid, entry in self.data.maps.items():
                 if entry['region'] != self.travel_region(snapshot) or not entry['shops']:
                     continue
-                route = self.nav.walk(snapshot.map, mid)
+                route = self.nav.walk(snapshot, mid)
                 if route is None:
                     continue
                 current = bool(self.shop_location) and mid == self.shop_location[0]
