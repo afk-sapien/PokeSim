@@ -5,6 +5,7 @@ from itertools import count
 import os
 
 from ..mapfacts.gen1 import SHUT, SWAPS
+from ..mapfacts.gen1_hand import HAND
 from ..planning.conditions import AnyOf, Badge, Event, Item
 from ..strategy_data import DATA, ITEMS, MAPS, WORLD, event_set
 from . import gates
@@ -12,18 +13,24 @@ from . import gates
 DIRS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 PAIR_COLLISIONS = {(ts, a, b) for ts, a, b in DATA["collision_pairs"]}
 WATER_TILESETS = {"OVERWORLD", "PLATEAU", "FOREST", "CAVERN", "SHIP_PORT"}
-OPTIONAL_LIFTS = {MAPS["CELADON_MART_ELEVATOR"], MAPS["SILPH_CO_ELEVATOR"]}
+OPTIONAL_LIFTS = {MAPS[row.map] for row in HAND if row.kind == 'lift'}
+
+
+def _falls(mansion):
+    """{square: landing square} of the falls in the Mansion, or of the falls outside it."""
+    return {(MAPS[row.map], x, y): (MAPS[row.to[0]], *row.to[1:]) for row in HAND
+            if row.effect == 'fall' and row.map.startswith('POKEMON_MANSION_') == mansion for x, y in row.tiles}
+
+
+# The Mansion planner routes through the Mansion falls with the switch. Every other fall is a forced move.
 FORCED = {(m, x, y): (m, tx, ty) for m, w in WORLD.items() for x, y, tx, ty in w.get("forced_moves", [])}
-FORCED[(MAPS["VICTORY_ROAD_3F"], 23, 15)] = (MAPS["VICTORY_ROAD_2F"], 22, 16)
-MANSION_FALLS = {(MAPS['POKEMON_MANSION_3F'], x, 14): (MAPS['POKEMON_MANSION_1F'], 16, 14)
-                 for x in (16, 17)}
+FORCED.update(_falls(False))
+MANSION_FALLS = _falls(True)
 LEDGES = {(dr, a, b) for dr, a, b in DATA["ledges"]}
-SEAFOAM_HOLES = {(MAPS[name], x, y) for name, points in (
-    ("SEAFOAM_ISLANDS_1F", ((17, 6), (24, 6))),
-    ("SEAFOAM_ISLANDS_B1F", ((18, 6), (23, 6))),
-    ("SEAFOAM_ISLANDS_B2F", ((19, 6), (22, 6))),
-    ("SEAFOAM_ISLANDS_B3F", ((3, 16), (6, 16))),
-) for x, y in points}
+SEAFOAM_HOLES = {(MAPS[row.map], x, y) for row in HAND if row.kind == 'hole' and row.effect == 'avoid'
+                 for x, y in row.tiles}
+# (flags, squares): routes keep off the squares until every flag is set.
+CURRENTS = tuple((row.until, {(MAPS[row.map], x, y) for x, y in row.tiles}) for row in HAND if row.kind == 'current')
 
 
 def _hideout_door():
@@ -326,12 +333,10 @@ class Navigator:
         self.can_cut = bool(snapshot.badges & 2 and any(15 in p.moves for p in snapshot.party))
         # Routine routes use ladders to avoid scripted falls and downstream currents.
         self.story_blocks = set(SEAFOAM_HOLES)
-        if not all(event_set(snapshot.event_flags, flag) for flag in
-                   ('EVENT_SEAFOAM3_BOULDER1_DOWN_HOLE', 'EVENT_SEAFOAM3_BOULDER2_DOWN_HOLE')):
-            # The current pushes the player away from these apparent exits.
-            self.story_blocks.add((MAPS['SEAFOAM_ISLANDS_B3F'], 15, 8))
-            self.story_blocks.update((MAPS['SEAFOAM_ISLANDS_B4F'], x, y)
-                                     for x in (20, 21) for y in (16, 17))
+        for flags, squares in CURRENTS:
+            if not all(event_set(snapshot.event_flags, flag) for flag in flags):
+                # The current pushes the player away from these apparent exits.
+                self.story_blocks.update(squares)
         if not event_set(snapshot.event_flags, HIDEOUT_DOOR_FLAG):
             # The map draws this door open. The map script shuts it until the Rocket behind it is beaten,
             # so the elevator is reached through the B2F spin maze.

@@ -8,6 +8,9 @@ B1F door. The tool follows each script's instructions from every routine, so a s
 the code that makes it and never copied by hand. tests/test_gen1_map_facts.py regenerates the
 facts whenever a checkout is present and fails when the checked-in file has drifted.
 
+A switch the player flips both ways, such as the Pokémon Mansion statue switch, sets a flag that one
+routine both sets and resets. Its swaps go in SWITCHES, since navigation reads both states of them.
+
 The same walk lists every flag-gated swap in the scripts. Each one is a fact or sits on a map in
 ALLOWED with the reason the facts leave it out, which is the coverage check of the map audit.
 
@@ -30,8 +33,6 @@ ALLOWED = {
     'VERMILION_GYM': 'The trash can locks open the door. The gym policy solves them before it walks in.',
     **{f'SILPH_CO_{floor}F': 'Card key doors. locked_doors reads them from the same script.'
        for floor in range(2, 12)},
-    **{f'POKEMON_MANSION_{floor}': 'Switch gates. switch_blocks in data_tools/strategy.py lists them by hand.'
-       for floor in ('1F', '2F', '3F', 'B1F')},
 }
 # Red only. The Yellow script has no door there.
 RED_ONLY = {'ROCKET_HIDEOUT_B4F'}
@@ -234,14 +235,35 @@ def _decide(name, site, cases):
     return flag, outcome({**rest, flag: True}), outcome({**rest, flag: False})
 
 
-def facts(src):
-    """Rows of (map, block x, block y, flag, block once set, block until set), one per swapped block.
+def toggled(src):
+    """Flags one routine both sets and resets, as a switch the player flips both ways does."""
+    code, _, _ = _link(src)
+    sets, resets = {}, {}
+    for op, args, scope in code:
+        if args and args[0].startswith('EVENT_'):
+            for prefix, found in (('Set', sets), ('Reset', resets)):
+                if op.removeprefix('CheckAnd').startswith(prefix):
+                    found.setdefault(scope, set()).add(args[0])
+    return {flag for scope, flags in sets.items() for flag in flags & resets.get(scope, set())}
+
+
+def tables(src):
+    """(swaps, switches): rows of (map, block x, block y, flag, block once set, block until set), one per
+    swapped block. switches holds the rows whose flag a switch flips both ways, and swaps the rest.
 
     None means the script draws nothing in that state, so the map file's block stays.
     """
-    return tuple((name, x, y, *_decide(name, (x, y), cases))
+    rows = tuple((name, x, y, *_decide(name, (x, y), cases))
                  for name, sites in swaps(src).items() if name not in ALLOWED
                  for (x, y), cases in sorted(sites.items()))
+    flipped = toggled(src)
+    return (tuple(row for row in rows if row[3] not in flipped),
+            tuple(row for row in rows if row[3] in flipped))
+
+
+def facts(src):
+    """The swap rows of :func:`tables`, without the switches."""
+    return tables(src)[0]
 
 
 def _labelled(text, label, value):
@@ -300,7 +322,10 @@ def shut(src, rows):
 
 
 def uncovered(src, rows):
-    """The coverage check: flag-gated swaps with no fact and no allowed map, and allowed maps with no swap."""
+    """The coverage check: flag-gated swaps with no fact and no allowed map, and allowed maps with no swap.
+
+    rows are the swap and switch rows together.
+    """
     found = swaps(src)
     have = {(name, x, y) for name, x, y, *_ in rows}
     missing = [f'{name} block ({x}, {y}) swaps on a flag and has no fact'
@@ -332,7 +357,7 @@ def _row(row):
 
 def body(src):
     """The facts without their header, the same for every source that agrees on them."""
-    rows = facts(src)
+    rows, switches = tables(src)
     lines = [
         '# (map, block x, block y, flag, block once set, block until set): when the map loads, its script',
         '# redraws the block by the flag. None draws nothing, so the map file block stays.',
@@ -344,6 +369,12 @@ def body(src):
         '# map file draws another. Navigation reads the map files, so it draws these itself.',
         'SHUT = (',
         *(f'    ({name!r}, {x}, {y}, {flag!r}, 0x{tile:02X}),' for name, x, y, flag, tile in shut(src, rows)),
+        ')',
+        '',
+        '# The same rows for a switch the player flips both ways. The map script redraws the block by the',
+        '# flag each time the map loads or the switch is pressed.',
+        'SWITCHES = (',
+        *(_row(row) for row in switches),
         ')',
     ]
     return '\n'.join(lines) + '\n'
