@@ -113,6 +113,7 @@
 - Fix Take Control showing control as granted when the game refused it faster than the page could look.
 - Stop a busy server from turning a right password into "Wrong username or password". The password check needs 64 MiB and its own threads, and when it could not get them, the error counted as a wrong password. It now tries 3 times, and then the login says the server is busy and to try again. At most 4 checks run at once, about 256 MiB, and a login that waits over 10 seconds for its turn gets the same busy answer.
 - Move to PyBoy RS 0.1.5. The window's line counter now starts again at the top of every frame, so the first frame after loading a save in a new process draws menus and text boxes on the right line instead of one line low. The save format is unchanged. The wheels, the lock and the image's emulator source archive all point at the 0.1.5 release.
+- Stop the main page from raising "an unexpected error" when a game is too busy to list its Pokémon for trading within 30 seconds. Its worker now answers busy, and trading skips that game for the round as before.
 - Cap all local PokeSim work on a developer machine at 12 cores and 22G with systemd user slices in `deploy/systemd`. `sh tools/local_sims.sh install` installs them, and `sh tools/local_sims.sh start` runs a local app in the sims slice (12G). `tools/load_gate.sh` runs test jobs in the tests slice (10G), whose CPU weight beats the sims, and a heavy job may now use `pytest -n 12`.
 
 ## 0.6.2
