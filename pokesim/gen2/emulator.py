@@ -17,6 +17,7 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
+from ..runtime.reload import FRAMES_PER_SECOND, Cadence, reload_target
 from ..runtime.restart import restart
 from ..stalls import LoopGuard, StallWatch, boss_attempt, stalled_state
 from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
@@ -135,16 +136,6 @@ class Event:
     species: int | None = None
 
 
-def settled(metadata):
-    """Whether a checkpoint was taken with no menu task running and nothing being backed out of.
-
-    A reload drops the running menu task, so a save taken inside a menu brings the run back into a
-    screen no plan owns. Saves from before this flag existed count when no menu task was saved.
-    """
-    if 'settled' in metadata:
-        return bool(metadata['settled'])
-    return not (metadata.get('policy_state') or {}).get('menu')
-
 
 def hatch_progress(best, snapshot):
     """Whether a carried egg lost a cycle or hatched since the best seen, updating ``best``.
@@ -185,24 +176,6 @@ def progress_key(tiles, maps, snapshot):
             tuple((mon.species, mon.level, mon.experience, mon.egg, mon.friendship if mon.egg else None)
                   for mon in snapshot.party),
             snapshot.step_count if snapshot.breeding_compatible else None)
-
-
-def reload_target(store, saves, since_frame):
-    """The newest settled autosave made at least SCREEN_FRAMES of game time before ``since_frame``.
-
-    Autosaves record the game frame, the clock the stuck guards count in, so the choice does not
-    depend on wall-clock time or emulation speed. A save taken inside a menu is used only when no
-    settled save is old enough. The oldest save is the fallback.
-    """
-    early = []
-    for path in reversed(saves):
-        metadata = store.checkpoint_metadata(path) or {}
-        frame = metadata.get('frame')
-        if isinstance(frame, int) and frame < since_frame - SCREEN_FRAMES:
-            if settled(metadata):
-                return path
-            early.append(path)
-    return early[0] if early else saves[0] if saves else None
 
 
 class Emulator:
@@ -249,13 +222,12 @@ class Emulator:
         self.manual = queue.Queue(maxsize=16)
         self.started_at = time.time()
         self.last_activity = time.monotonic()
-        self.stuck_since = time.time()
         self.progress_frame = 0
         self.progress_key = None
         self.explored = set()
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
-        self.loop_guard = LoopGuard()
+        self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
         self.reloads = 0
         self.last_reload = 0.0
         self.unstick_streak = 0
@@ -267,7 +239,6 @@ class Emulator:
         self.invalid_frame = self.battle_frame = None
         self.screen_key = None
         self.screen_frame = self.stuck_frame = 0
-        self.stuck_ts = time.time()
         self.last_reload_frame = -10 ** 9
         self._guard_frame = 0
         self._watch_until = self._last_publish = 0.0
@@ -710,7 +681,7 @@ class Emulator:
         self.snapshot = snapshot
         self.invalid_frame = (self.invalid_frame if self.invalid_frame is not None else self.frame) if not snapshot.valid else None
         if not snapshot.valid or not snapshot.started:
-            self.stuck_frame, self.stuck_ts = self.frame, time.time()
+            self.stuck_frame = self.frame
             return
         if not self.options_applied and not self.manual_mode:
             from pokecore.gen2.ram import Memory
@@ -814,14 +785,13 @@ class Emulator:
                                       priority=4 if mon.level in (50, 100) else 2, notable=mon.level % 10 == 0), snapshot)
         now = time.time()
         self._watch_boss(before, snapshot)
-        self._watch_progress(snapshot, now)
+        self._watch_progress(snapshot)
         self._note_progress(snapshot, now)
         screen = hash((snapshot.tiles, snapshot.map, snapshot.x, snapshot.y, snapshot.in_battle))
         if screen != self.screen_key:
             self.screen_key, self.screen_frame = screen, self.frame
         if before and (before.map, before.x, before.y) != (snapshot.map, snapshot.x, snapshot.y) or snapshot.in_battle:
-            self.stuck_since = now
-            self.stuck_frame, self.stuck_ts = self.frame, now
+            self.stuck_frame = self.frame
         self._time_battle(snapshot)
         self.previous = snapshot
 
@@ -899,7 +869,7 @@ class Emulator:
             self.unstick_streak = 0
             self.reloads_exhausted = False
 
-    def _watch_progress(self, snapshot, now):
+    def _watch_progress(self, snapshot):
         """Restart the progress clocks and the failure streak when the run achieves something new.
 
         Tiles stepped on count from this record, not from the policy's navigator. Each policy recovery
@@ -911,15 +881,13 @@ class Emulator:
         key = progress_key(len(self.explored), len(self.history['maps']), snapshot)
         if key != self.progress_key:
             self.progress_key, self.progress_frame = key, self.frame
-            self.stuck_frame, self.stuck_ts = self.frame, now
+            self.stuck_frame = self.frame
             self.failure_streak = 0
 
     def _reset_watch(self):
         """Restart the stuck clocks after a reload, which also rewinds the frame counter."""
-        now = time.time()
         self.explored = set()
         self.progress_frame = self.screen_frame = self.stuck_frame = self.last_reload_frame = self.frame
-        self.stuck_ts = self.stuck_since = now
         self.screen_key = self.progress_key = None
         self.invalid_frame = self.battle_frame = None
         self._reward_check_frame = self.frame
@@ -955,9 +923,13 @@ class Emulator:
         return True
 
     def _looping(self):
-        """Why the loop guard sees the same gift and release, or the same reload, repeating, or None."""
+        """Why the loop guard saw the same gift and release, or the same reload, repeating, or None.
+
+        This is the answer of the last scan. Only the guard check scans, on the emulator thread, so
+        the status page cannot move a scan to a frame a replay would not reach.
+        """
         guard = getattr(self, 'loop_guard', None)
-        return guard.looping(self.store) if guard else None
+        return guard.reason if guard else None
 
     def _unstick(self, since_frame, why):
         """Go back to an autosave from before the trouble started, or power-cycle when there is none."""
@@ -1053,8 +1025,9 @@ class Emulator:
         """Escalate from a gentle policy reset, to exploratory buttons, to reloading an older save."""
         if self.paused or self.manual_mode or self.preparation or self.store.get('trade_hold'):
             self.stuck_frame = self.screen_frame = self.progress_frame = self.frame
-            self.stuck_ts = time.time()
             return
+        if guard := getattr(self, 'loop_guard', None):
+            guard.looping(self.store)
         snapshot = self.snapshot
         if snapshot is None or self.frame - self.last_reload_frame < 3600:
             return
@@ -1062,7 +1035,6 @@ class Emulator:
             # Standing still until the cartridge clock reaches another day is the plan, not a
             # stuck run. Reloading cannot hurry the clock and only rewinds the adventure.
             self.stuck_frame = self.screen_frame = self.progress_frame = self.frame
-            self.stuck_ts = time.time()
             self.stall.frame = None
             self.waiting = True
             return
@@ -1236,14 +1208,16 @@ class Emulator:
         self.unstick_streak = 0
         self.reloads_exhausted = False
         self.league_restarts = (0, 0)
-        self.loop_guard = LoopGuard()
+        self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
         self._reset_watch()
         self._autosave()
 
     def _run(self):
-        next_save = time.monotonic() + config.AUTOSAVE_SECONDS
+        # Game time, so a replay saves on the same frames at any pace. A reload rewinds the frame and
+        # the cadence counts again from there.
+        autosave = Cadence(config.AUTOSAVE_SECONDS * FRAMES_PER_SECOND, self.frame)
         self.consecutive_errors = 0
         try:
             running = True
@@ -1295,9 +1269,8 @@ class Emulator:
                     if self.frame >= self._guard_frame:
                         self._guard_frame = self.frame + 60
                         self._check_guards()
-                    if time.monotonic() >= next_save and not getattr(self.policy, 'backing_out', False):
+                    if not getattr(self.policy, 'backing_out', False) and autosave.due(self.frame):
                         self._autosave()
-                        next_save = time.monotonic() + config.AUTOSAVE_SECONDS
                     self.consecutive_errors = 0
                 except Exception:
                     if loop_failed(self, log):
@@ -1333,7 +1306,7 @@ class Emulator:
         live = not self.paused and not self.manual_mode
         waiting = live and self.waiting
         loop = live and Emulator._looping(self)
-        stalled = stalled_state(live, waiting, self.stall.stalled(self.frame, time.time())
+        stalled = stalled_state(live, waiting, self.stall.stalled(self.frame)
                                 or self.unstick_streak >= STALL_RELOADS, loop)
         recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
@@ -1342,7 +1315,7 @@ class Emulator:
                 'policy': self.policy.describe(), 'strategy': self.policy.details(), 'frame': self.frame,
                 'game': self.snapshot.to_dict(egg_view=True) if self.snapshot else None, 'rom': self.rom_note,
                 'play_clock': self.play_clock.status(), 'clock': getattr(self, 'game_clock', None), 'performance': {'frames': self.executed_frames, 'sampled_at': time.monotonic()},
-                'uptime': int(time.time() - self.started_at), 'stuck_seconds': int(time.time() - self.stuck_since),
+                'uptime': int(time.time() - self.started_at), 'stuck_seconds': max(0, self.frame - self.stuck_frame) // FRAMES_PER_SECOND,
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,
                 'help_request': observe_help(self, {

@@ -135,7 +135,7 @@ def test_release_drops_the_staged_snapshot(tmp_path):
     participant = Participant(SimpleNamespace(store=store, emulator=None),
                               SimpleNamespace())
     participant.emu = SimpleNamespace(paused=True, policy=SimpleNamespace(on_restore=lambda: None),
-                                      stuck_since=0)
+                                      stuck_frame=0)
     store.set(PREFIX + record['id'], {**store.get(PREFIX + record['id']), 'phase': 'applied'})
     released = participant.release({'id': record['id']})
     assert released['phase'] == 'released'

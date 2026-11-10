@@ -30,6 +30,7 @@ from .planning import pin
 from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext, stack_pointer
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
+from .runtime.reload import FRAMES_PER_SECOND, Cadence, reload_target
 from .runtime.restart import restart
 from .screen import W_OPTIONS
 from .stalls import PROGRESS_EVENTS, LoopGuard, StallWatch, advanced, boss_attempt
@@ -45,6 +46,11 @@ BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
 # The phases of an exchange's preparation that hold back every command but stop, speed and pause.
 PREPARING = {'travelling', 'storage', 'rendezvous'}
 MAX_RELOADS = 12  # reloads in a row without progress after which reloading stops, as in Generation II
+# Game frames, as in Generation II: no guard runs for a minute after a reload, and a glitched state
+# gets 5 seconds, or a minute in a Pokémon Center while the healing trip finishes.
+RELOAD_QUIET_FRAMES = 60 * FRAMES_PER_SECOND
+INVALID_GRACE_FRAMES = 5 * FRAMES_PER_SECOND
+CENTER_GRACE_FRAMES = 60 * FRAMES_PER_SECOND
 
 log = logging.getLogger("pokesim.emu")
 
@@ -74,6 +80,13 @@ class Emulator:
     # frame after which whatever is on screen is kept anyway.
     _retakes = ()
     _retake_until = 0
+    # The emulator frame and the guard clocks that count it, also class defaults for a partially
+    # built emulator. No reload has happened yet, so its quiet spell is long past.
+    frame = 0
+    stuck_frame = 0
+    last_reload_frame = -10 ** 9
+    invalid_frame = None
+    battle_frame = None
 
     def __init__(self, store, ntfy=None, *, isolated_ram=False):
         self.isolated_ram = isolated_ram
@@ -114,7 +127,7 @@ class Emulator:
         self.last_achievement = achievements[0] if achievements else None
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
-        self.loop_guard = LoopGuard()
+        self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
         self.policy.load_state_dict(store.get("policy_state", {}))
         self.commands: queue.Queue = queue.Queue()
         self.manual: queue.Queue = queue.Queue(maxsize=2)
@@ -123,11 +136,14 @@ class Emulator:
         self.fatal_error = None
         self.stopping = False
         self.consecutive_errors = 0
-        self.stuck_since = time.time()
+        # The guards count emulator frames, which a reload rewinds with the save, so they fire on the
+        # same frames in a replay at any pace. ``last_reload`` is wall time for the status page only.
+        self.stuck_frame = 0
         self.last_pos = None
         self.last_reload = 0.0
-        self.invalid_since: float | None = None
-        self.battle_since: float | None = None
+        self.last_reload_frame = -10 ** 9
+        self.invalid_frame: int | None = None
+        self.battle_frame: int | None = None
         self.reloads = 0
         self.pending: list = []      # events waiting for confirmation on the next snapshot
         self.rom_note = self._check_rom()
@@ -309,10 +325,10 @@ class Emulator:
             "play_clock": self.play_clock.status(),
             "performance": {"frames": self.executed_frames, "sampled_at": time.monotonic()},
             "frame": self.frame, "uptime": int(time.time() - self.started_at),
-            "stuck_seconds": int(time.time() - self.stuck_since), "rom": self.rom_note,
+            "stuck_seconds": max(0, self.frame - self.stuck_frame) // FRAMES_PER_SECOND, "rom": self.rom_note,
             "game": snap.to_dict() if snap else None,
             "areas_discovered": len(self.mem.seen_maps), "reloads": self.reloads,
-            "glitched": bool(self.invalid_since),
+            "glitched": self.invalid_frame is not None,
             "strategy": strategy,
             "progress": self.progress_status(),
             "league_rewards": rewards.status(self.store),
@@ -325,10 +341,12 @@ class Emulator:
         stall = getattr(self, 'stall', None)
         if self.paused or self.manual_mode:
             return None
+        # The answer of the last scan. Only the guard check scans, on the emulator thread, so the
+        # status page cannot move a scan to a frame a replay would not reach.
         guard = getattr(self, 'loop_guard', None)
-        if loop := guard and guard.looping(self.store):
+        if loop := guard and guard.reason:
             return {'reason': f'The run is caught in a loop. {loop}', 'action': strategy.get('action', '')}
-        if not stall or not stall.stalled(self.frame, time.time()):
+        if not stall or not stall.stalled(self.frame):
             # A missing entry left uncaught for want of a slot, with nothing in the PC that may go.
             from .pcvalue import BOXES_FULL, boxes_full
             from .policies.collection import catch_room
@@ -342,12 +360,12 @@ class Emulator:
         achievement = getattr(self, 'last_achievement', None)
         age = max(0, int(time.time() - achievement['ts'])) if achievement else None
         mode = self.policy.details().get('action', '')
-        state = 'recovering' if (self.invalid_since or time.time() - self.last_reload < 30
+        state = 'recovering' if (self.invalid_frame is not None or time.time() - self.last_reload < 30
                                  or mode == 'finding another approach') else 'making_progress' if age is not None and age < 120 else 'exploring'
-        stall, now = getattr(self, 'stall', None), time.time()
-        if stall and stall.stalled(self.frame, now) or getattr(self, 'reloads_exhausted', False):
+        stall = getattr(self, 'stall', None)
+        if stall and stall.stalled(self.frame) or getattr(self, 'reloads_exhausted', False):
             state = 'stalled'
-        return {'state': state, 'quiet_game_minutes': stall.quiet(self.frame, now)[0] if stall else 0,
+        return {'state': state, 'quiet_game_minutes': stall.game_minutes(self.frame) if stall else 0,
                 'last_achievement': {
                     'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
                     'age_seconds': age,
@@ -454,9 +472,8 @@ class Emulator:
         if hasattr(self, 'statistics'):
             self.statistics.reset_baseline()
         self.input_epoch = getattr(self, 'input_epoch', 0) + 1
-        self.stuck_since = self.last_reload = time.time()
+        Emulator._reset_watch(self)
         self.last_pos = None
-        self.invalid_since = self.battle_since = None
         manual = getattr(self, 'manual', None)
         if manual is not None:
             while not manual.empty():
@@ -715,19 +732,18 @@ class Emulator:
         if snap.valid and snap.started:
             self.store.upgrade_trade_preferences(
                 lambda: [dataclasses.asdict(mon) for mon in snap.party] + snap.storage_entries())
-        now = time.time()
         pos = (snap.map, snap.x, snap.y)
         if pos != self.last_pos or snap.in_battle or not snap.started:
             self.last_pos = pos
-            self.stuck_since = now
+            self.stuck_frame = self.frame
         if not snap.valid:
-            self.invalid_since = self.invalid_since or now
+            self.invalid_frame = self.frame if self.invalid_frame is None else self.invalid_frame
         else:
-            self.invalid_since = None
+            self.invalid_frame = None
         if snap.in_battle and snap.started:
-            self.battle_since = self.battle_since or now
+            self.battle_frame = self.frame if self.battle_frame is None else self.battle_frame
         else:
-            self.battle_since = None
+            self.battle_frame = None
         if events:
             self._handle_events(events, snap)
             self.store.set("run_memory", self.mem.to_dict())
@@ -818,9 +834,10 @@ class Emulator:
         if hasattr(self, 'statistics'):
             self.statistics.flush()
         snap = self.snapshot
-        battle_since = getattr(self, 'battle_since', None)
-        if battle_since and not trade_prepare and (time.time() - battle_since > config.BATTLE_TIMEOUT_SECONDS / 3
-                                                   or getattr(self.policy, 'hopeless_battle', False)):
+        battle_frame = getattr(self, 'battle_frame', None)
+        if battle_frame is not None and not trade_prepare and (
+                self.frame - battle_frame > config.BATTLE_TIMEOUT_SECONDS * FRAMES_PER_SECOND // 3
+                or getattr(self.policy, 'hopeless_battle', False)):
             # A battle this long may never end, and the only way out is a save from before it began.
             # Rotating autosaves during it would push that save out before the timeout reloads it.
             return
@@ -856,9 +873,10 @@ class Emulator:
             log.exception("cannot keep the save from before %s", name)
 
     def _reset_watch(self):
-        now = time.time()
-        self.stuck_since = self.last_reload = now
-        self.invalid_since = self.battle_since = None
+        """Restart the guard clocks from the current frame, which a reload has just rewound."""
+        self.stuck_frame = self.last_reload_frame = self.frame
+        self.last_reload = time.time()
+        self.invalid_frame = self.battle_frame = None
 
     def _give_up(self, why):
         """Abandon the collection project that every reload left stuck, so the next goal runs instead.
@@ -883,8 +901,12 @@ class Emulator:
         self.input_epoch += 1
         return True
 
-    def _unstick(self, since: float, why: str):
-        """Go back to an autosave from before the trouble started (or power-cycle if there is none)."""
+    def _unstick(self, since_frame: int, why: str):
+        """Go back to an autosave from before the trouble started (or power-cycle if there is none).
+
+        ``since_frame`` is the frame the trouble started on. The target is picked by the frame each
+        autosave records, not by file time, so a replay picks the same save at any pace.
+        """
         Emulator._drop_pin(self, pin.STUCK)
         note = getattr(getattr(self, 'policy', None), 'note_boss_loss', None)
         snapshot = getattr(self, 'snapshot', None)
@@ -905,8 +927,7 @@ class Emulator:
             Emulator._reset_watch(self)
             return
         saves = self.store.autosaves()
-        older = [p for p in saves if p.stat().st_mtime < since - 30]
-        target = older[-1] if older else (saves[0] if saves else None)
+        target = reload_target(self.store, saves, since_frame)
         # A recent save inside the League can already be lost: one frozen partner left and an
         # opponent that never attacks. If going back a little did not help, restart the attempt.
         self.unstick_streak += 1
@@ -915,7 +936,8 @@ class Emulator:
             log.warning("%s again with no progress, restarting the League attempt", why)
             target, saves = entry, [entry] + saves
         if target:
-            log.warning("%s for %ds, reloading %s", why, time.time() - since, target.name)
+            log.warning("%s for %.1f game minutes, reloading %s", why,
+                        max(0, self.frame - since_frame) / FRAMES_PER_SECOND / 60, target.name)
             if guard:
                 guard.reloaded(target.name)
             candidates = [target] + [p for p in reversed(saves) if p != target]
@@ -935,42 +957,47 @@ class Emulator:
             if hasattr(self, 'statistics'):
                 self.statistics.reset_baseline()
             self.input_epoch += 1
-        now = time.time()
-        self.stuck_since = self.last_reload = now
-        self.invalid_since = self.battle_since = None
+        Emulator._reset_watch(self)
         self.reloads += 1
 
     def _check_guards(self):
-        now = time.time()
-        if now - self.last_reload < 60:
+        """Reload or replan a run that is stuck, glitched or in a battle that never ends.
+
+        Every limit counts emulator frames, so a guard fires on the same frame in a replay and at
+        any pace. The configured limits are in game seconds.
+        """
+        if guard := getattr(self, 'loop_guard', None):
+            guard.looping(self.store)
+        frame = self.frame
+        if frame - self.last_reload_frame < RELOAD_QUIET_FRAMES:
             return
-        invalid_grace = 5
-        if self.invalid_since:
+        invalid_grace = INVALID_GRACE_FRAMES
+        if self.invalid_frame is not None:
             from pokecore.centers import CENTERS
             snapshot = self.snapshot
             if (snapshot is not None and snapshot.map in CENTERS and not snapshot.in_battle
                     and snapshot.hp_overflow_only and hasattr(self.policy, 'heal_latch')):
-                # Give the normal healing trip time to finish, including at slow speeds.
-                # The state remains invalid for saving and the grace is still bounded.
-                invalid_grace = 60 / min(1, max(0.1, self.speed or 1))
-        if self.invalid_since and now - self.invalid_since > invalid_grace:
-            self._unstick(self.invalid_since, "game state glitched")
-        elif config.STUCK_RELOAD_SECONDS and now - self.stuck_since > config.STUCK_RELOAD_SECONDS:
+                # Give the normal healing trip time to finish. The state remains invalid for saving
+                # and the grace is still bounded.
+                invalid_grace = CENTER_GRACE_FRAMES
+        if self.invalid_frame is not None and frame - self.invalid_frame > invalid_grace:
+            self._unstick(self.invalid_frame, "game state glitched")
+        elif config.STUCK_RELOAD_SECONDS and frame - self.stuck_frame > config.STUCK_RELOAD_SECONDS * FRAMES_PER_SECOND:
             recover = getattr(self.policy, 'recover_stall', None)
             if recover and self.snapshot and self.snapshot.valid and not self.snapshot.in_battle:
                 self._drop_pin(pin.STUCK)
                 recover(self.snapshot)
-                self.stuck_since = now
+                self.stuck_frame = frame
                 self.input_epoch += 1
                 log.warning('stationary objective abandoned, replanning without a save reload')
             else:
-                self._unstick(self.stuck_since, "stuck")
-        elif self.battle_since and now - self.battle_since > config.BATTLE_TIMEOUT_SECONDS:
-            self._unstick(self.battle_since, "battle never ended")
-        elif self.battle_since and getattr(self.policy, 'hopeless_battle', False):
+                self._unstick(self.stuck_frame, "stuck")
+        elif self.battle_frame is not None and frame - self.battle_frame > config.BATTLE_TIMEOUT_SECONDS * FRAMES_PER_SECOND:
+            self._unstick(self.battle_frame, "battle never ended")
+        elif self.battle_frame is not None and getattr(self.policy, 'hopeless_battle', False):
             # The player has worked out that neither side can finish, so the timeout has nothing to wait for.
-            self._unstick(self.battle_since, "battle cannot end")
-        self._check_stall(now)
+            self._unstick(self.battle_frame, "battle cannot end")
+        self._check_stall(time.time())
 
     def _check_stall(self, now):
         """Report a run that is healthy and moving but has achieved nothing for hours of game time."""
@@ -1124,7 +1151,7 @@ class Emulator:
         self.policy.on_restore()
         if hasattr(self, 'statistics'):
             self.statistics.reset_baseline()
-        self.stuck_since = time.time()
+        self.stuck_frame = self.frame
         return {'id': transaction, 'phase': 'released'}
 
     def _handle_command(self, name, arg) -> bool:
@@ -1229,7 +1256,7 @@ class Emulator:
         """Boot the committed new game, with trackers that hold nothing of the old one in memory."""
         from .goal_time import GoalTime
         self.pb.stop(save=False)
-        self.loop_guard = LoopGuard()
+        self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
         self.goal_time = GoalTime(self.store)
         if hasattr(self, 'milestones'):
             from .milestones import MilestoneTracker
@@ -1261,7 +1288,9 @@ class Emulator:
 
     def _run(self):
         pending: list[Action] = []
-        next_autosave = time.time() + config.AUTOSAVE_SECONDS
+        # Game time, so a replay saves on the same frames at any pace. A reload rewinds the frame and
+        # the cadence counts again from there.
+        autosave = Cadence(config.AUTOSAVE_SECONDS * FRAMES_PER_SECOND, self.frame)
         running = True
         self.consecutive_errors = 0
         input_epoch = self.input_epoch
@@ -1323,10 +1352,8 @@ class Emulator:
                     after = read_snapshot(self.pb.memory, self.frame)
                     nav.observe((after.map, after.x, after.y), self.frame, bool(self.pb.memory[0xCFC5]),
                                 interrupted=bool(after.in_battle or after.textbox or after.start_menu))
-                now = time.time()
-                if now >= next_autosave:
+                if autosave.due(self.frame):
                     self._autosave()
-                    next_autosave = now + config.AUTOSAVE_SECONDS
                 if not self.manual_mode and not self.paused and not getattr(self, 'preparation', None):
                     self._check_guards()
                 if getattr(self, 'isolated_ram', False) and getattr(self.policy, 'tm_plan', None):

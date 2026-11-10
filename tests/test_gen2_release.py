@@ -192,7 +192,7 @@ def guard_emulator(idle):
     emu = SimpleNamespace(paused=False, manual_mode=False, preparation=None, store=SimpleNamespace(get=lambda key: None),
                           snapshot=SimpleNamespace(valid=True, started=True), frame=10 ** 6, last_reload_frame=0,
                           policy=policy, failure_streak=0, invalid_frame=None, battle_frame=None, stuck_frame=0,
-                          screen_frame=0, progress_frame=0, stuck_ts=0.0, stall=SimpleNamespace(frame=5), waiting=False)
+                          screen_frame=0, progress_frame=0, stall=SimpleNamespace(frame=5), waiting=False)
     emu._unstick = lambda since, why: reloads.append((since, why))
     emu._check_stall = lambda: None
     Emulator._check_guards(emu)

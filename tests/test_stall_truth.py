@@ -25,12 +25,23 @@ def truth(store, kind=None):
     return [{k: v for k, v in row.items() if k not in ('id', 'ts')} for row in stall_truth.rows(store.db, kind)]
 
 
+class LastScan:
+    """The loop guard as the status sees it: the answer of the emulator thread's last scan."""
+
+    def __init__(self, loop):
+        self.loop = loop
+
+    @property
+    def reason(self):
+        return self.loop[0]
+
+
 def stalled_game(store, loop):
     """The parts of a stalled run that a help request reads, for both generations."""
     stall = StallWatch(game_minutes=120, real_minutes=0)
     stall.progress(0, 0)
     return dict(store=store, stall=stall, frame=130 * MINUTE, paused=False, manual_mode=False,
-                loop_guard=SimpleNamespace(looping=lambda store: loop[0]))
+                loop_guard=LastScan(loop))
 
 
 def gen1_help(game):
@@ -54,7 +65,7 @@ def gen2_game(store, loop):
     return SimpleNamespace(**stalled_game(store, loop), last_achievement=None, progress_frame=0, waiting=False,
                            unstick_streak=0, last_reload=0, policy=policy, frozen=False, health=dict, speed=1,
                            snapshot=None, rom_note='', play_clock=PlayClock(), executed_frames=0, started_at=now,
-                           stuck_since=now, history={'maps': set()}, reloads=0, invalid_frame=None,
+                           stuck_frame=130 * MINUTE, history={'maps': set()}, reloads=0, invalid_frame=None,
                            legendary_recovery=SimpleNamespace(state_dict=dict))
 
 

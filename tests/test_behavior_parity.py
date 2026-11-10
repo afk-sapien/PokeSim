@@ -129,14 +129,15 @@ def gen1_ladder():
     steps = []
     policy = SimpleNamespace(collection=SimpleNamespace(project={'method': 'grass'}, abandon=lambda reason: True),
                              goal=SimpleNamespace(title='Catch a better Pidgey'), on_restore=lambda: None)
-    emu = SimpleNamespace(policy=policy, unstick_streak=0, reloads=0, input_epoch=0, loop_guard=None,
+    emu = SimpleNamespace(policy=policy, unstick_streak=0, reloads=0, input_epoch=0, loop_guard=None, frame=10 ** 6,
                           play_clock=PlayClock(), adventure_seed=7,
                           snapshot=SimpleNamespace(started=True, map_name='Route 1', map=12, in_battle=0, valid=True),
-                          store=SimpleNamespace(autosaves=lambda: [save()], state_path=lambda key: None),
+                          store=SimpleNamespace(autosaves=lambda: [save()], checkpoint_metadata=lambda path: {'frame': 0},
+                                                state_path=lambda key: None),
                           _restore_first_valid=lambda candidates: steps.append('reload'), _tick=lambda frames: None,
                           _handle_events=lambda events, snap: steps.extend(step(e.title) for e in events))
     for _ in range(20):
-        Emulator._unstick(emu, time.time(), 'no progress')
+        Emulator._unstick(emu, emu.frame, 'no progress')
         if 'give up' in steps:
             break
     return steps

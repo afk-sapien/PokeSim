@@ -160,11 +160,12 @@ def pinned_emulator():
     return emu
 
 
-def test_gen1_a_stall_recovery_drops_the_pin(monkeypatch):
+def test_gen1_a_stall_recovery_drops_the_pin():
+    from pokesim.runtime.reload import FRAMES_PER_SECOND
     emu = pinned_emulator()
-    emu.last_reload, emu.stuck_since, emu.invalid_since, emu.battle_since, emu.input_epoch = 0, 1, None, None, 0
+    emu.frame, emu.input_epoch = 10 ** 6, 0
+    emu.stuck_frame = emu.frame - (config.STUCK_RELOAD_SECONDS + 1) * FRAMES_PER_SECOND
     emu._unstick = Mock()
-    monkeypatch.setattr('pokesim.emulator.time.time', lambda: config.STUCK_RELOAD_SECONDS + 2)
     emu._check_guards()
     assert emu.policy.pin is None
     assert emu.journal == ['Gave up on Find Clefairy: stuck']

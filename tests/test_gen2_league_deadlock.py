@@ -141,7 +141,7 @@ def guarded(hopeless_now):
     emu = SimpleNamespace(paused=False, manual_mode=False, preparation=None, store=SimpleNamespace(get=lambda key: None),
                           snapshot=SimpleNamespace(valid=True, started=True, map_name="Lance's Room"), frame=100000,
                           last_reload_frame=0, failure_streak=0, invalid_frame=None, battle_frame=99000,
-                          stuck_frame=100000, screen_frame=100000, progress_frame=100000, stuck_ts=0.0,
+                          stuck_frame=100000, screen_frame=100000, progress_frame=100000,
                           stall=SimpleNamespace(check=lambda frame, now: None),
                           policy=SimpleNamespace(recoveries=0, take_failure=lambda: None, idle=lambda snapshot: False,
                                                  waiting=lambda snapshot: False, recover=lambda level: None,

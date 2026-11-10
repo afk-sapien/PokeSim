@@ -6,7 +6,6 @@ import logging
 import re
 import sqlite3
 import threading
-import time
 
 log = logging.getLogger(__name__)
 
@@ -16,7 +15,8 @@ PROGRESS_EVENTS = ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'tr
 
 
 class StallWatch:
-    """Both clocks must pass: game time so pace does not matter, real time so Max pace does not spam."""
+    """Game time decides a stall, so pace does not matter. Real time only paces the alert and its
+    repeat, so Max pace does not send one every few minutes."""
 
     def __init__(self, game_minutes=120, real_minutes=15, repeat_hours=6):
         self.game_frames = game_minutes * FRAMES_PER_GAME_MINUTE
@@ -56,16 +56,29 @@ class StallWatch:
             self.frame, self.since, self.alerted = frame, now, None
         return (frame - self.frame) // FRAMES_PER_GAME_MINUTE, int(now - self.since) // 60
 
-    def stalled(self, frame, now):
-        self.quiet(frame, now)
-        return bool(self.game_frames) and frame - self.frame >= self.game_frames and now - self.since >= self.real_seconds
+    def game_minutes(self, frame):
+        """Game minutes since the last progress, for the status page. Like ``stalled`` it changes nothing."""
+        if frame is None or self.frame is None or frame < self.frame:
+            return 0
+        return (frame - self.frame) // FRAMES_PER_GAME_MINUTE
+
+    def stalled(self, frame):
+        """Whether the game clock has passed the stall limit since the last progress.
+
+        It changes nothing, so the web status thread can ask at any time without moving the clocks
+        the emulator thread keeps. A frame from before the last progress is a reload, not a stall.
+        """
+        return (bool(self.game_frames) and frame is not None and self.frame is not None
+                and self.frame <= frame and frame - self.frame >= self.game_frames)
 
     def check(self, frame, now):
         """Return the quiet minutes when an alert is due, otherwise None."""
-        if not self.stalled(frame, now) or (self.alerted is not None and now - self.alerted < self.repeat_seconds):
+        quiet = self.quiet(frame, now)
+        if (not self.stalled(frame) or now - self.since < self.real_seconds
+                or self.alerted is not None and now - self.alerted < self.repeat_seconds):
             return None
         self.alerted = now
-        return self.quiet(frame, now)
+        return quiet
 
 
 def held(snapshot):
@@ -115,6 +128,8 @@ REAL_PROGRESS = ('badge', 'catch', 'event_return', 'evolve', 'hatch', 'champion'
 # Repeats that count as a loop: the same Pokémon received and released, or the same save reloaded.
 LOOP_LIMIT = 6
 LOOP_EVENTS = 400
+# The loop guard reads the journal at most once in this many game frames, half a game minute.
+SCAN_FRAMES = 1800
 # How far back a progress entry is compared after a reload. A reload rewinds the run, and the replay
 # journals the same maps, trainers and levels again, which is not progress.
 REPLAY_EVENTS = 2000
@@ -141,10 +156,12 @@ class LoopGuard:
     The same save was also reloaded over and over. Once either repeats LOOP_LIMIT times, the run
     asks for help, gifts stop and reloading stops, until it makes real progress again.
 
-    The web status thread and the emulator thread both ask, so the state is behind a lock.
+    ``clock`` counts game frames, PlayClock frames in both emulators, so a scan falls at the same
+    point of a replay at any pace. Only the emulator thread scans. The web status thread reads
+    ``reason``, so when it asks cannot move a scan. The state is still behind a lock.
     """
 
-    def __init__(self, limit=LOOP_LIMIT, every=30, clock=time.time):
+    def __init__(self, clock, limit=LOOP_LIMIT, every=SCAN_FRAMES):
         self.limit, self.every, self.clock = limit, every, clock
         self.reloads, self.since, self.scanned, self.returned = {}, None, None, {}
         self.reason, self.checked, self.saved = None, None, {}
@@ -183,10 +200,13 @@ class LoopGuard:
             self.held, self.checked = None, None
 
     def looping(self, store):
-        """Why the run is in a loop, or None. Reads the journal at most once every ``every`` seconds."""
+        """Why the run is in a loop, or None. Reads the journal at most once every ``every`` frames.
+
+        A clock that went back, as on a new game, scans again at once.
+        """
         with self.lock:
             now = self.clock()
-            if self.checked is not None and now - self.checked < self.every:
+            if self.checked is not None and 0 <= now - self.checked < self.every:
                 return self.reason
             self.checked = now
             with store.lock:

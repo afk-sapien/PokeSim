@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from pokesim.emulator import Emulator
 from pokesim.gen2.emulator import Emulator as Gen2Emulator
-from pokesim.stalls import LOOP_LIMIT, LoopGuard, StallWatch, advanced, boss_attempt
+from pokesim.stalls import LOOP_LIMIT, SCAN_FRAMES, LoopGuard, StallWatch, advanced, boss_attempt
 from pokesim.store import Store
 from pokesim.strategy_data import MAPS
 from test_events import snap
@@ -103,11 +103,11 @@ def test_trainer_wins_before_a_blackout_do_not_reset_the_reload_count(tmp_path):
         add(store, 'level', 'TYPHLOSION grew to level 57')
         boss_attempt(stall, guard, store, False, True)
         guard.reloaded('league-entry.state')
-        clock.now += 60
+        clock.now += SCAN_FRAMES
         assert 'reloaded league-entry.state 6 times' in guard.looping(store)
         # A won battle outside any boss attempt is real progress again.
         add(store, 'badge', 'Earned the Rising Badge')
-        clock.now += 60
+        clock.now += SCAN_FRAMES
         assert guard.looping(store) is None
     finally:
         store.close()

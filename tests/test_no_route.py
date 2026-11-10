@@ -72,7 +72,7 @@ def gen2_guards(policy):
     emu = SimpleNamespace(paused=False, manual_mode=False, preparation=None, store=SimpleNamespace(get=lambda key: None),
                           snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 23'), frame=frame,
                           last_reload_frame=0, policy=watched, failure_streak=0, invalid_frame=None, battle_frame=None,
-                          stuck_frame=frame, screen_frame=frame, progress_frame=frame, stuck_ts=0.0,
+                          stuck_frame=frame, screen_frame=frame, progress_frame=frame,
                           stall=StallWatch(), waiting=False)
     emu._unstick = lambda since, why: reloads.append(why)
     emu._event = lambda event, snapshot: events.append(event)

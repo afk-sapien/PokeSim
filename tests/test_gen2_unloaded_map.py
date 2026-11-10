@@ -63,13 +63,13 @@ def test_a_policy_recovery_does_not_make_the_same_tile_look_like_progress(data):
     policy = Policy(data, seed=1, starter='cyndaquil')
     snapshot = snapshot_at(data, 'ROUTE_29')
     emu = SimpleNamespace(policy=policy, history={'maps': [snapshot.map]}, explored=set(), progress_key=None,
-                          progress_frame=0, stuck_frame=0, stuck_ts=0.0, frame=100, failure_streak=0)
-    Emulator._watch_progress(emu, snapshot, 0.0)
+                          progress_frame=0, stuck_frame=0, frame=100, failure_streak=0)
+    Emulator._watch_progress(emu, snapshot)
     for frame in (200, 300, 400):
         policy.nav.visits[(snapshot.map, snapshot.x, snapshot.y)] = 1
         policy.fail('no route to a goal')
         emu.failure_streak += 1
         emu.frame = frame
-        Emulator._watch_progress(emu, snapshot, 0.0)
+        Emulator._watch_progress(emu, snapshot)
     assert emu.failure_streak == 3
     assert emu.progress_frame == 100

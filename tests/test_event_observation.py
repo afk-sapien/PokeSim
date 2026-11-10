@@ -24,8 +24,8 @@ def observer(monkeypatch):
     emu.rom_sha1 = 'unverified-test-rom'
     emu.lock = threading.Lock()
     emu.last_pos = None
-    emu.invalid_since = None
-    emu.battle_since = None
+    emu.invalid_frame = None
+    emu.battle_frame = None
     def observe(snapshot):
         emu.frame = snapshot.frame
         monkeypatch.setattr('pokesim.emulator.read_snapshot', lambda *args: snapshot)
@@ -48,7 +48,7 @@ def test_invalid_withdrawal_write_does_not_report_a_release(monkeypatch):
                 for event in call.args[0] if event.type == 'release']
     assert releases == []
     assert emu.snapshot.party[-1] == partner
-    assert emu.invalid_since is None
+    assert emu.invalid_frame is None
 
 
 def test_invalid_snapshot_still_reaches_health_and_expires_event_baseline(monkeypatch):
@@ -57,7 +57,8 @@ def test_invalid_snapshot_still_reaches_health_and_expires_event_baseline(monkey
     invalid = replace(before, frame=130, party=(PartyMon(0x65, 200, 100, 58, 'PIXEL'),))
     observe(before)
     observe(invalid)
-    assert emu.snapshot == invalid and emu.invalid_since is not None
+    # The glitch is timed from the emulator frame it was first seen on.
+    assert emu.snapshot == invalid and emu.invalid_frame == 130
     assert emu.prev_snapshot == before
     expired = replace(invalid, frame=250)
     observe(expired)

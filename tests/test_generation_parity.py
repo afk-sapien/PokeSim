@@ -134,10 +134,10 @@ def common(emu, store):
     now = time.time()
     emu.store, emu.paused, emu.manual_mode, emu.frozen, emu.stopping, emu.speed = store, False, False, False, False, 1
     emu.frame = emu.executed_frames = 3600
-    emu.started_at = emu.stuck_since = now - 600
+    emu.started_at, emu.stuck_frame = now - 600, 0
     emu.last_activity, emu.last_reload, emu.fatal_error, emu.reloads = time.monotonic(), 0.0, None, 1
     emu.thread = SimpleNamespace(is_alive=lambda: True)
-    emu.stall = SimpleNamespace(stalled=lambda *_: False, quiet=lambda *_: (1.5, 0))
+    emu.stall = SimpleNamespace(stalled=lambda *_: False, game_minutes=lambda *_: 1)
     # An hour of play, counted in frames.
     emu.play_clock = PlayClock({'frames': 3600 * 60, 'initialized': True})
     emu.last_achievement = {'id': 1, 'title': 'Caught a Pokémon', 'ts': now - 30}
@@ -180,7 +180,7 @@ def gen1_adventure(tmp_path):
     emu.policy = make_policy(config.POLICY, 1)
     emu.preparation, emu.palette, emu.rom_note = None, 'original', 'Pokémon Red'
     emu.mem = RunMemory(seen_maps={1, 2})
-    emu.invalid_since = None
+    emu.invalid_frame = None
     emu.legendary_recovery = LegendaryRecovery()
     return emu, store
 

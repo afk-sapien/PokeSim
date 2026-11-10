@@ -72,7 +72,7 @@ def test_migration_recovers_verified_records_and_marks_missing_history(tmp_path)
 
 def participant(store):
     result = Participant(SimpleNamespace(store=store, emulator=None), SimpleNamespace())
-    result.emu = SimpleNamespace(paused=True, policy=SimpleNamespace(on_restore=lambda: None), stuck_since=0)
+    result.emu = SimpleNamespace(paused=True, policy=SimpleNamespace(on_restore=lambda: None), stuck_frame=0)
     return result
 
 
