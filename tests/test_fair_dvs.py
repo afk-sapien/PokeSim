@@ -245,6 +245,7 @@ def test_a_headless_run_refuses_fair_dvs_on_an_unverified_cartridge():
 
 
 def test_the_audit_takes_fair_dvs_as_a_flag_or_an_adventure_key(monkeypatch):
+    from pokesim.replay import rung
     from tools import replay_audit
     seen = []
     monkeypatch.setattr(replay_audit, 'run_one', seen.append)
@@ -253,7 +254,7 @@ def test_the_audit_takes_fair_dvs_as_a_flag_or_an_adventure_key(monkeypatch):
     replay_audit.main(['run', 'red.gb', 'a.state', '60', 'out.json'])
     assert [args.fair_wild_dvs for args in seen] == [True, bytes.fromhex('11' * 32), None]
     with pytest.raises(ValueError, match='only for Red'):
-        replay_audit._open(Path('gold.gbc'), None, None, 7, True)
+        rung._open(Path('gold.gbc'), None, None, 7, True)
 
 
 def test_yellow_rerolls_its_own_shifted_addresses():

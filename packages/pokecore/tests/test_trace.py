@@ -184,6 +184,33 @@ def test_a_write_from_a_hook_registered_before_attach_is_refused(tmp_path):
     assert result.code == HARNESS and 'could not log' in result.message
 
 
+def test_begin_follows_a_memory_object_the_emulator_built_after_attaching(tmp_path):
+    from pokecore.memory_snapshot import snapshot_emulator
+    recorders = []
+
+    class Attached(Emulator):
+        """Attaches a recorder at the end of the base constructor, before the snapshot memory exists."""
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            recorders.append(Recorder(self))
+
+    path = tmp_path / 'a.jsonl.gz'
+    with snapshot_emulator(Attached)(demo_rom(), sound_emulated=False) as game:
+        (recorder,) = recorders
+        built = game.memory
+        assert type(built).__name__ == 'SnapshotMemory'
+        game.tick(LEAD_IN)
+        recorder.begin(Segment(path, keep_start=True))
+        assert type(built).__name__ == 'TracedSnapshotMemory'
+        game.memory[0xC123] = 5
+        game.tick(2)
+        recorder.detach()
+        assert type(built).__name__ == 'SnapshotMemory'
+    writes = [record for record in Trace.read(path).records if record['kind'] == 'write']
+    assert [(record['address'], record['value']) for record in writes] == [(0xC123, 5)]
+    assert verify(path, machine()).code == OK
+
+
 def test_a_cut_off_segment_keeps_its_complete_records(tmp_path):
     path = tmp_path / 'a.jsonl.gz'
     with machine() as game:
