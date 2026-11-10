@@ -4,6 +4,7 @@ from dataclasses import asdict
 from .battle import HEALING, damage, effectiveness, ranked_moves
 from ..events import LEGENDARY_DEX
 from ..game_data import current_variant
+from ..planning.readiness import READY, hp_stat, score as matchup, stat as trainer_stat
 from ..ram import BOX_CAPACITY, DEX_NAMES, PartyMon
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, event_set
 
@@ -288,8 +289,8 @@ def _readiness(s, bit):
     name, species_name, level = OPPONENTS[bit]
     sid, data = next(((sid, data) for sid, data in SPECIES.items() if data.get('name') == species_name))
     hp, attack, defense, speed, special = data['stats']
-    stat = lambda base: (2 * (base + 8) * level // 100) + 5
-    max_hp = stat(hp) + level + 5
+    stat = lambda base: trainer_stat(base, level)  # noqa: E731
+    max_hp = hp_stat(hp, level)
     enemy_moves = list(data.get('initial_moves', [33]))
     for learned_level, mid in data.get('learnset', []):
         if learned_level <= level and mid not in enemy_moves:
@@ -311,9 +312,7 @@ def _readiness(s, bit):
         attack_damage = max((damage(p.moves[k], p, enemy) * MOVES[p.moves[k]]['accuracy'] / 100
                              for _, k in moves), default=0)
         incoming = max((damage(mid, enemy, p) * MOVES[mid]['accuracy'] / 100 for mid in enemy.moves), default=1)
-        turns = enemy.hp / max(1, attack_damage)
-        survival = p.hp / max(1, incoming)
-        score = min(100, round(100 * survival / max(1, turns + (p.speed < enemy.speed)))) if attack_damage and p.hp else 0
+        score = matchup(p.hp, attack_damage, incoming, enemy.hp, p.speed < enemy.speed)
         if p.status:
             score //= 2
         members.append({'index': i, 'name': p.nick or p.name, 'level': p.level, 'score': score,
@@ -323,7 +322,7 @@ def _readiness(s, bit):
     healing = sum(qty for item, qty in s.items if item in HEALING)
     revives = dict(s.items).get(ITEMS['REVIVE'], 0)
     concerns = []
-    if not best or best['score'] < 75:
+    if not best or best['score'] < READY:
         concerns.append('The strongest matchup still needs preparation')
     if any(p.status or not p.hp for p in s.party):
         concerns.append('Heal fainted partners or status conditions')

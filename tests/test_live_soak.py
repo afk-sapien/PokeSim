@@ -5,6 +5,7 @@ only the gate.
 """
 import json
 import sqlite3
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -505,6 +506,33 @@ def test_check_needs_a_passing_report_for_that_commit(tmp_path, capsys):
     (tmp_path / f'{sha}.json').write_text(json.dumps({'commit': sha, 'passed': True}))
     assert live_soak.check(args) == 0
     assert 'no report' in capsys.readouterr().err
+
+
+def test_check_takes_a_passing_report_for_a_commit_with_the_same_tree(tmp_path, monkeypatch, capsys):
+    # A merge commit identical to its soaked head once needed a second 10 minute soak to deploy.
+    repo, reports = tmp_path / 'repo', tmp_path / 'reports'
+    repo.mkdir()
+    reports.mkdir()
+    def git(*command):
+        return subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', *command], cwd=repo,
+                              capture_output=True, text=True, check=True).stdout.strip()
+    git('init', '-q')
+    (repo / 'a.txt').write_text('one')
+    git('add', 'a.txt')
+    git('commit', '-q', '-m', 'soaked')
+    soaked = git('rev-parse', 'HEAD')
+    git('commit', '-q', '--allow-empty', '-m', 'merge with no change')
+    twin = git('rev-parse', 'HEAD')
+    (repo / 'a.txt').write_text('two')
+    git('commit', '-q', '-am', 'changed')
+    changed = git('rev-parse', 'HEAD')
+    monkeypatch.setattr(live_soak, 'ROOT', repo)
+    (reports / f'{soaked}.json').write_text(json.dumps({'commit': soaked, 'passed': True}))
+    assert live_soak.check(SimpleNamespace(sha=twin, reports=reports)) == 0
+    assert f'tree of {soaked[:7]}' in capsys.readouterr().err
+    assert live_soak.check(SimpleNamespace(sha=changed, reports=reports)) == 1
+    (reports / f'{soaked}.json').write_text(json.dumps({'commit': soaked, 'passed': False}))
+    assert live_soak.check(SimpleNamespace(sha=twin, reports=reports)) == 1
 
 
 def test_the_copy_keeps_running_adventures_and_drops_private_files():

@@ -60,7 +60,7 @@ checkouts that might not load this file automatically.
 
 ## Local runs
 
-- Local pytest and replay pools use at most 10 processes. Run one heavy job at a time under `tools/load_gate.sh`, at `nice -n 10`.
+- Local pytest and replay pools use at most 10 processes. Run one heavy job at a time under `tools/load_gate.sh`, which runs every command at nice 10 or lower priority.
 - Before a PR, run locally only the tests for the files you touched, plus lint. CI runs the full suite on 3 Pythons and the browsers, so do not repeat it locally.
 - Run the scenario suite and the 3-run batches only when a change can alter planner or bot behavior: planning, strategy, battle or overworld code. Storage, UI, tooling and docs changes skip them.
 - A scenario that also fails on main gets logged once, and the work goes on. Do not rerun it to prove it.

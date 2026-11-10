@@ -8,6 +8,7 @@ import re
 from types import SimpleNamespace
 
 from ..planning.ledger import FIELD_MOVES, LEARN_KEPT
+from ..planning.losses import ace_slot
 from ..planning.shadow import Shadow
 from ..planning.stance import FLEE, STORY, Encounter, stance
 from .navigation import DIRS, Navigator
@@ -1041,10 +1042,16 @@ class Policy:
         from ..planning.losses import best_level
         return best_level(party, self.move_power)
 
+    def boss_ace(self, key):
+        """The level of the boss's ace, from the cartridge's trainer tables when they were read."""
+        from .readiness import ace_level
+        key = self.boss_key(key)
+        return ace_level(self.data, key) or self.BOSS_ACES[key]
+
     def boss_bar(self, key):
         """The level the best fighter trains to before the boss goal ``key``."""
         key = self.boss_key(key)
-        return self.losses.bar(key, self.BOSS_FLOORS.get(key, 0), self.BOSS_ACES[key])
+        return self.losses.bar(key, self.BOSS_FLOORS.get(key, 0), self.boss_ace(key))
 
     def boss_training(self, snapshot, goal):
         """A walk that trains toward the bar before the boss ``goal`` names, or None once the team is ready.
@@ -1056,11 +1063,42 @@ class Policy:
             return self.story_training(snapshot, goal)
         bar = self.boss_bar(goal.key)
         if self.fighter_level(snapshot.party) >= bar:
-            return None
+            return self.matchup_training(snapshot, goal)
         key = self.boss_key(goal.key)
         from .training import walk_goal
         return walk_goal(self, snapshot, Goal, lambda: f'Train the team to level {bar} before {self.BOSS_NAMES[key]}',
                          map_name=self.BOSS_TRAINING[key])
+
+    # The gyms the team trains for until it matches up with the leader's ace, as Red, Blue and Yellow
+    # do before every gym (planning/readiness.py). Falkner keeps his level floor.
+    MATCHUP_GYMS = frozenset({'hive', 'plain', 'fog', 'storm', 'mineral', 'glacier', 'clair'})
+
+    def matchup_training(self, snapshot, goal):
+        """A walk that trains before a Johto gym or the first League while the team does not match up, or None.
+
+        A gym trains until the best score reaches READY or the best fighter is MARGIN levels over the
+        leader's ace. The League trains until every room scores LEAGUE_READY or the best fighter reaches
+        the top League ace's level, Lv 50 on a clean cartridge, the twin of Red and Blue's Lv 65. Inside
+        the gym the battle carries on."""
+        from ..planning.readiness import MARGIN, league_unready, unready
+        from .readiness import LEAGUE, readiness
+        key, level = self.boss_key(goal.key), self.fighter_level(snapshot.party)
+        ace = self.boss_ace(key)
+        if key in self.MATCHUP_GYMS:
+            best = readiness(self, snapshot.party, goal.key)
+            if (self.BOSS_ROOMS.get(self.constant(snapshot)) == key or best is None
+                    or not unready(best, level, ace)):
+                return None
+            label = f'Prepare for {self.BOSS_NAMES[key]}: train until the team matches up or reaches level {ace + MARGIN}'
+        elif key == 'league':
+            scores = [readiness(self, snapshot.party, room) for room in LEAGUE]
+            if None in scores or not league_unready(scores, level, ace):
+                return None
+            label = f'Prepare for the Pokémon League: train until the team matches up or reaches level {ace}'
+        else:
+            return None
+        from .training import walk_goal
+        return walk_goal(self, snapshot, Goal, lambda: label, map_name=self.BOSS_TRAINING[key])
 
     # The badge each boss goal earns, in the order the story takes them. A story loss trains where
     # the team would before the first one not yet won, or the League before the first Hall of Fame.
@@ -1466,10 +1504,11 @@ class Policy:
                             ('EVENT_GOT_HM04_STRENGTH', 70), ('EVENT_GOT_HM06_WHIRLPOOL', 250), ('EVENT_GOT_HM07_WATERFALL', 127)]):
             if snapshot.event(event) and not any(move in mon.moves for mon in snapshot.party):
                 protected = FIELD_MOVES
+                ace = ace_slot(snapshot.party, self.move_power)
                 slot = min((i for i, mon in enumerate(snapshot.party)
                             if not mon.egg and move in self.data.species[mon.species]['machines']
                             and not all(known in protected for known in mon.moves)),
-                           key=lambda i: (len(protected.intersection(snapshot.party[i].moves)), i), default=None)
+                           key=lambda i: (i == ace, len(protected.intersection(snapshot.party[i].moves)), i), default=None)
                 if slot is not None:
                     teach = Teach(move, slot)
                     if not self.allowed(teach, snapshot):

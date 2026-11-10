@@ -7,6 +7,11 @@
 # The lock files live in POKESIM_LOAD_GATE, by default ~/.local/state/pokesim-load.
 # A heavy run exports POKESIM_LOAD_GATE_HEAVY=1, and a load gate inside it runs its command at once,
 # since waiting on a lock its own parent holds would never end.
+# Every gated command runs at nice 10 or lower priority, so callers need not remember to add it.
+n=$(ps -o nice= -p $$ | tr -d ' ')
+if [ "${n:-0}" -lt 10 ]; then
+  exec nice -n $((10 - ${n:-0})) sh "$0" "$@"
+fi
 D=${POKESIM_LOAD_GATE:-$HOME/.local/state/pokesim-load}
 mkdir -p "$D"
 mode=$1

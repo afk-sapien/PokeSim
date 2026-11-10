@@ -36,6 +36,8 @@ class HeadlessRun:
         self.data = GameData.load(data_root, self.game)
         from ..planning.cost import gen2_cartridge_rows
         self.data.encounters = gen2_cartridge_rows(rom, self.game, self.data.encounters)
+        from .readiness import boss_parties
+        self.data.boss_parties = boss_parties(rom, self.game)
         # A randomized run (RANDOMIZER set) plays the patched cartridge, as the managed worker does.
         from ..randomized import rom_stream
         self.pb = boot(rom_stream(rom), sound=False)

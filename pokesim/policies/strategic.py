@@ -18,7 +18,7 @@ from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner,
 from .move_development import hm_upgrade, move_name
 from .progression import (GAME_STARTERS, STARTERS, YELLOW, Goal, boss_key, boss_room, boss_training, fighter_level,
                           healing_goal, journey, league_partner, milestones, story_goal)
-from ..planning.losses import Losses, boss_trainer
+from ..planning.losses import Losses, ace_slot, boss_trainer
 from . import training
 from .menus import select, tap
 from .shopping import ShoppingController
@@ -1116,7 +1116,9 @@ class StrategicPolicy(Policy):
             candidates = [i for i, p in enumerate(s.party) if move in SPECIES.get(p.species, {}).get("hms", [])
                           and (0 in p.moves or replacement_slot(p, move) is not None)]
             if candidates:
-                target = max(candidates, key=lambda i: s.party[i].level)
+                # The best fighter learns a field move only when no other member can (planning/losses.py).
+                ace = ace_slot(s.party, lambda move: MOVES.get(move, {}).get('power'))
+                target = max(candidates, key=lambda i: (i != ace, s.party[i].level))
                 action = self._use_item(s, ITEMS[hm], target)
                 if action:
                     return action
