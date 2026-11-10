@@ -31,7 +31,9 @@ git archive HEAD pokesim | tar -x -C /tmp/pokesim-benchmark-baseline
 python tools/benchmark_decisions.py --source-root /tmp/pokesim-benchmark-baseline capture /path/to/private/fixture.json --frames 12000 --output /tmp/pokesim-captured-work
 ```
 
-The capture runs exactly the requested number of emulated frames. It records each
+The capture plays the same game loop as the simulator until it reaches the requested
+number of emulated frames. The last decision's actions always finish, so a capture can
+end a few frames past the budget. It records each
 decision's snapshot, RAM view, actions, persisted policy state, and route-call count.
 Its report includes complete trace and final checkpoint hashes. Policy time derives
 from emulated frames, so faster computation cannot alter time-based policy inputs.

@@ -7,7 +7,9 @@ from types import SimpleNamespace
 
 from pokesim.gen2.emulator import Emulator
 from pokecore.gen2.ram import read_snapshot
+from pokesim.gen2.policy import Action
 from pokesim.gen2.trading import Participant
+from pokesim.runtime.game_loop import GameLoop, Gen2, play
 from pokesim.runtime.settings import SimulationSettings
 from pokesim.store import Store
 
@@ -38,6 +40,12 @@ def main():
     settings.install(managed=True)
     store = Store(Path(settings.data_dir))
     emu = Emulator(store)
+
+    def tick(count):
+        if count > 0:
+            emu.pb.tick(count, True)
+            emu.frame += count
+
     try:
         with args.load.open('rb') as source:
             emu.pb.load_state(source)
@@ -45,27 +53,17 @@ def main():
         if metadata.exists():
             emu.policy.load_state_dict(json.loads(metadata.read_text(encoding='utf-8')))
         for _ in range(12):
-            emu.pb.button_press('b')
-            emu.pb.tick(8, True)
-            emu.pb.button_release('b')
-            emu.pb.tick(32, True)
+            # Close any open text before the policy starts. These presses are not game time.
+            play(emu.pb, Action('b', 8, 32), lambda count: emu.pb.tick(count, True))
         emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
+        loop = GameLoop(emu, Gen2(), tick)
         for _ in range(6000):
             from pokecore.gen2.ram import Memory
             snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
             if (snapshot.started and not snapshot.in_battle and not emu.policy.in_league(snapshot)
                     and not Memory(emu.pb.memory, emu.data).byte('wScriptRunning')):
                 break
-            action = emu.policy.step(snapshot, emu.pb.memory)
-            if action.button:
-                emu.pb.button_press(action.button)
-            if action.hold:
-                emu.pb.tick(action.hold, True)
-            if action.button:
-                emu.pb.button_release(action.button)
-            if action.gap:
-                emu.pb.tick(action.gap, True)
-            emu.frame += action.hold + action.gap
+            loop.step(snapshot)
         emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
         runtime = SimpleNamespace(store=store, emulator=emu, settings=settings)
         participant = Participant(runtime, SimpleNamespace(adventure_id=args.game, generation=1))
@@ -96,16 +94,8 @@ def main():
             emu.preparation.state['replace_held'] = True
         for step in range(4000):
             snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
-            action = emu.preparation.step(snapshot)
-            if action.button:
-                emu.pb.button_press(action.button)
-            if action.hold:
-                emu.pb.tick(action.hold, True)
-            if action.button:
-                emu.pb.button_release(action.button)
-            if action.gap:
-                emu.pb.tick(action.gap, True)
-            emu.frame += action.hold + action.gap
+            loop.pending = [emu.preparation.step(snapshot)]
+            action = loop.act()
             emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
             if step % 50 == 0:
                 print(step, emu.snapshot.map_name, emu.snapshot.x, emu.snapshot.y, action,

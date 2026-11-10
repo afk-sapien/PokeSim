@@ -24,7 +24,7 @@ def test_policy_help_signal_cannot_take_over_the_emulator(monkeypatch):
     emu.policy = Mock()
     emu.policy.needs_help = 'Legacy request that must not pause the simulator'
     emu.policy.step.return_value = [Action('right', 8, 2)]
-    emu.pb = Mock()
+    emu.pb = Mock(memory=bytearray(0x10000))
     emu._autosave = Mock()
     emu._check_guards = Mock()
     ticks = []

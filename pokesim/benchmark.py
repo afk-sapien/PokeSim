@@ -8,19 +8,21 @@ from pokecore.emulator_state import checkpoint_metadata
 from collections import Counter
 from pathlib import Path
 from statistics import mean
+from types import SimpleNamespace
 
 from . import config, game_data
 from .policies import POLICIES, make_policy
-from .policies.base import PolicyContext, stack_pointer
 from .policies.progression import milestones
 from .ram import read_snapshot
-from .screen import Screen, W_OPTIONS
+from .runtime.game_loop import GameLoop, Gen1
+from .screen import Screen
 
 
 def policy_fingerprint():
     root = Path(__file__).parent
     paths = sorted((root / "policies").glob("*.py")) + [root / name for name in
-            ("screen.py", "ram.py", "strategy_data.py", "benchmark.py", "game_data.py", "ground_items.py", "events.py")]
+            ("screen.py", "ram.py", "strategy_data.py", "benchmark.py", "game_data.py", "ground_items.py", "events.py",
+             "runtime/game_loop.py")]
     digest = hashlib.sha256()
     for path in paths:
         digest.update(path.relative_to(root).as_posix().encode())
@@ -66,7 +68,20 @@ def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None
     if hasattr(policy, "nav"):
         policy.nav.use_world = rom_sha in config.GEN1_ROM_SHA1
     metrics = Metrics()
-    frame = 0
+    host = SimpleNamespace(pb=pb, policy=policy, frame=0, mode=policy_name)
+
+    def tick(count):
+        # Four frames at a time, so the metrics see each step, and never past the frame budget.
+        remaining = min(count, frames - host.frame)
+        while remaining > 0:
+            chunk = min(remaining, 4)
+            pb.tick(chunk, render=False)
+            host.frame += chunk
+            remaining -= chunk
+            metrics.modes[host.mode] += chunk
+            metrics.observe(read_snapshot(pb.memory, host.frame), host.frame)
+
+    loop = GameLoop(host, Gen1(lambda: host.frame), tick)
     last_pos = None
     stuck_frame = battle_frame = invalid_frame = None
     saves = []
@@ -78,19 +93,16 @@ def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None
         if checkpoint:
             with Path(checkpoint).open("rb") as f:
                 pb.load_state(f)
-        first = read_snapshot(pb.memory, frame)
+        first = read_snapshot(pb.memory, 0)
         initial = sorted(name for name, done in milestones(first).items() if done)
         metrics.observe(first, 0)
-        while frame < frames:
+        while host.frame < frames:
+            frame = host.frame
             snapshot = read_snapshot(pb.memory, frame)
             metrics.observe(snapshot, frame)
             if target and target in metrics.milestones:
                 break
-            if snapshot.started:
-                pb.memory[W_OPTIONS] = (pb.memory[W_OPTIONS] & ~7) | 1
-                if not config.BATTLE_ANIMATIONS:
-                    pb.memory[W_OPTIONS] |= 128
-            pos = (snapshot.map, snapshot.x, snapshot.y)
+            pos =(snapshot.map, snapshot.x, snapshot.y)
             if pos != last_pos or snapshot.in_battle or not snapshot.started:
                 stuck_frame = frame
                 last_pos = pos
@@ -113,36 +125,17 @@ def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None
                 last_pos = None
                 stuck_frame = battle_frame = invalid_frame = None
                 continue
-            ctx = PolicyContext(snapshot, frame, pb.memory, stack_pointer(pb))
-            actions = policy.step(ctx)
-            mode = getattr(policy, "mode", policy_name)
+            loop.decide(snapshot)
+            mode = host.mode = getattr(policy, "mode", policy_name)
             signature = (pos, snapshot.in_battle, mode, tuple(p.level for p in snapshot.party), snapshot.items, Screen(pb.memory).text)
             if trace and signature != last_trace:
                 trace.write(json.dumps({"frame": frame, "position": pos, "mode": mode,
                                         "screen": Screen(pb.memory).text, "strategy": policy.details()}) + "\n")
                 last_trace = signature
-            for action in actions:
-                if frame >= frames:
-                    break
-                if action.button is not None:
-                    pb.button_press(action.button)
-                for part in (action.hold, action.gap):
-                    remaining = min(part, frames - frame)
-                    while remaining:
-                        chunk = min(remaining, 4)
-                        pb.tick(chunk, render=False)
-                        frame += chunk
-                        remaining -= chunk
-                        metrics.modes[mode] += chunk
-                        metrics.observe(read_snapshot(pb.memory, frame), frame)
-                    if action.button is not None:
-                        pb.button_release(action.button)
-            if not actions:
-                remaining = min(12, frames - frame)
-                pb.tick(remaining, render=False)
-                frame += remaining
-        final = read_snapshot(pb.memory, frame)
-        return {"policy": policy_name, "seed": seed, "frames": frame, "frame_budget": frames,
+            while loop.pending and host.frame < frames:
+                loop.act()
+        final = read_snapshot(pb.memory, host.frame)
+        return {"policy": policy_name, "seed": seed, "frames": host.frame, "frame_budget": frames,
                 "checkpoint": str(checkpoint) if checkpoint else None, "target": target,
                 "success": target in metrics.milestones if target else None,
                 "initial_milestones": initial, "milestones": metrics.milestones,

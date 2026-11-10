@@ -28,9 +28,10 @@ from .play_clock import PlayClock
 from .palettes import PALETTES, recolor, validate_palette
 from .planning import pin
 from .policies import make_policy
-from .policies.base import BUTTONS, Action, PolicyContext, stack_pointer
+from .policies.base import BUTTONS, Action
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
-from .runtime.reload import FRAMES_PER_SECOND, Cadence, reload_target
+from .runtime.game_loop import GameLoop, Gen1, gen1_options
+from .runtime.reload import FRAMES_PER_SECOND, reload_target
 from .runtime.restart import restart
 from .screen import W_OPTIONS
 from .stalls import PROGRESS_EVENTS, LoopGuard, StallWatch, advanced, boss_attempt
@@ -806,11 +807,7 @@ class Emulator:
 
     def _enforce_options(self):
         """Keep text speed FAST (random menu presses can set it to SLOW) and optionally animations off."""
-        want = self.pb.memory[W_OPTIONS]
-        if config.FAST_TEXT:
-            want = (want & ~0x07) | 0x01
-        if not config.BATTLE_ANIMATIONS:
-            want |= 0x80
+        want = gen1_options(self.pb.memory[W_OPTIONS])
         if want != self.pb.memory[W_OPTIONS]:
             self.pb.memory[W_OPTIONS] = want
 
@@ -1286,11 +1283,16 @@ class Emulator:
         self.paused = self.manual_mode = False
         self._reset_transient(clear_observation=True)
 
+    def _guards(self):
+        """The stuck, battle and glitch guards, which stand aside while a person or a trade has the game."""
+        if not self.manual_mode and not self.paused and not getattr(self, 'preparation', None):
+            self._check_guards()
+
     def _run(self):
-        pending: list[Action] = []
-        # Game time, so a replay saves on the same frames at any pace. A reload rewinds the frame and
-        # the cadence counts again from there.
-        autosave = Cadence(config.AUTOSAVE_SECONDS * FRAMES_PER_SECOND, self.frame)
+        # The autosave counts game time, so a replay saves on the same frames at any pace. A reload
+        # rewinds the frame and the cadence counts again from there.
+        loop = GameLoop(self, Gen1(lambda: self.play_clock.frames), self._tick, guards=self._guards,
+                        autosave=self._autosave)
         running = True
         self.consecutive_errors = 0
         input_epoch = self.input_epoch
@@ -1302,26 +1304,25 @@ class Emulator:
                 if not running:
                     break
                 if input_epoch != self.input_epoch:
-                    pending.clear()
+                    loop.pending.clear()
                     input_epoch = self.input_epoch
                     while not self.manual.empty():
                         self.manual.get_nowait()
                 if not self.manual.empty():
-                    pending = [self.manual.get_nowait()]
+                    loop.pending = [self.manual.get_nowait()]
                 elif self.manual_mode:
-                    pending = [Action(None, 0, 4)]
+                    loop.pending = [Action(None, 0, 4)]
                 elif self.paused:
                     self.last_activity = time.monotonic()
                     self.consecutive_errors = 0
-                    pending.clear()
+                    loop.pending.clear()
                     time.sleep(0.1)
                     continue
-                if not pending:
+                if not loop.pending:
                     snap = read_snapshot(self.pb.memory, self.frame)
                     self._report_uncatchable_shiny(snap)
-                    ctx = PolicyContext(snap, self.play_clock.frames, self.pb.memory, stack_pointer(self.pb))
                     preparation = getattr(self, 'preparation', None)
-                    pending = list(preparation.step(ctx) if preparation else self.policy.step(ctx))
+                    loop.decide(snap, preparation)
                     if not preparation and hasattr(self.policy, 'collection'):
                         activity_events = progress_events.drain(
                             self.store, self.policy.collection.take_activity_events())
@@ -1333,29 +1334,17 @@ class Emulator:
                             self._handle_events(activity_events, snap)
                     if self.paused:
                         continue
-                    pending = pending or [Action(None, 0, 12)]
-                act = pending.pop(0)
+                act = loop.pending[0]
                 nav = getattr(self.policy, "nav", None) if self.manual_mode else None
                 if nav and act.button in ("up", "down", "left", "right") and not self.pb.memory[0xCFC5]:
                     before = read_snapshot(self.pb.memory, self.frame)
                     if not before.in_battle and not before.textbox and not before.start_menu:
                         nav.issued((before.map, before.x, before.y), act.button, self.frame)
-                if act.button is not None:
-                    self.pb.button_press(act.button)
-                try:
-                    self._tick(act.hold)
-                finally:
-                    if act.button is not None:
-                        self.pb.button_release(act.button)
-                self._tick(act.gap)
+                loop.act()
                 if nav:
                     after = read_snapshot(self.pb.memory, self.frame)
                     nav.observe((after.map, after.x, after.y), self.frame, bool(self.pb.memory[0xCFC5]),
                                 interrupted=bool(after.in_battle or after.textbox or after.start_menu))
-                if autosave.due(self.frame):
-                    self._autosave()
-                if not self.manual_mode and not self.paused and not getattr(self, 'preparation', None):
-                    self._check_guards()
                 if getattr(self, 'isolated_ram', False) and getattr(self.policy, 'tm_plan', None):
                     from .runtime.tm_purchase import purchase
                     purchase(self)

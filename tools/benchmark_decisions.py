@@ -215,10 +215,10 @@ class Timings:
                 self.backend['nopython_signatures'] = [str(item) for item in getattr(
                     getattr(module, '_kernel', None), 'nopython_signatures', ())]
 
-    def step(self, policy, ctx):
+    def step(self, decide, ctx):
         wall, cpu = time.perf_counter_ns(), time.thread_time_ns()
         try:
-            return list(policy.step(ctx))
+            return list(decide(ctx))
         finally:
             self.decision_wall.append((time.perf_counter_ns() - wall) / 1e6)
             self.decision_cpu.append((time.thread_time_ns() - cpu) / 1e6)
@@ -229,6 +229,19 @@ class Timings:
                 'backend': self.backend,
                 'first_decision_wall_ms': self.decision_wall[0] if self.decision_wall else None,
                 'first_route_wall_ms': self.route_wall[0] if self.route_wall else None}
+
+
+class Measured:
+    """The policy a headless run asks, with each decision passed through ``decide``."""
+
+    def __init__(self, policy, decide):
+        self.policy, self.decide = policy, decide
+
+    def step(self, ctx):
+        return self.decide(ctx)
+
+    def __getattr__(self, name):
+        return getattr(self.policy, name)
 
 
 def simulate(fixture_path, frames, capture):
@@ -244,67 +257,51 @@ def simulate(fixture_path, frames, capture):
     with tempfile.TemporaryDirectory(prefix='pokesim-decisions-') as temporary:
         settings = configure(fixture, Path(temporary))
         from pokecore.emulator_state import validate_runtime
-        from pokecore.emulator import Emulator as PyBoy
-        from pokesim.policies.base import Action, PolicyContext, stack_pointer
+        # The source root's own headless run plays the decisions, so a root from before the shared
+        # game loop still plays the loop it shipped with.
+        from pokesim.headless import HeadlessRun
+        from pokesim.policies.base import Action
         from pokesim.ram import read_snapshot
-        from pokesim.screen import W_OPTIONS
         if hashlib.sha1(Path(settings.rom_path).read_bytes()).hexdigest() != metadata['rom_sha1']:
             raise ValueError('Fixture ROM does not match its checkpoint')
         validate_runtime(metadata)
         policy = policy_start(fixture, metadata)
-        pb = PyBoy(settings.rom_path, window='null', sound_emulated=False, ram_file=io.BytesIO(bytes(32768)))
-        pb.set_emulation_speed(0)
+        run = HeadlessRun(Path(settings.rom_path))
+        pb = run.pb
         start_frame = metadata.get('frame', 0)
-        frame = start_frame
         stop_frame = start_frame + frames
         action_count = 0
+
+        def decide(ctx):
+            nonlocal action_count
+            # Decision time comes only from emulated frames, never CPU speed.
+            memory = bytes(pb.memory[0:65536]) if capture else None
+            routes_before = len(timings.route_wall)
+            actions = timings.step(policy.step, ctx)
+            row = {'frame': run.frame, 'snapshot': digest(ctx.snapshot.to_dict()),
+                   'actions': [asdict(action) for action in actions],
+                   'policy_state': digest(policy.state_dict()),
+                   'route_calls': len(timings.route_wall) - routes_before}
+            trace.append(row)
+            if capture:
+                workload.append({'snapshot': ctx.snapshot, 'memory': memory,
+                    'clock': ctx.clock, 'expected': row})
+            actions = actions or [Action(None, 0, 12)]
+            if any(action.hold + action.gap <= 0 for action in actions):
+                raise ValueError('A policy action did not advance emulated time')
+            action_count += len(actions)
+            return actions
+
+        run.policy = Measured(policy, decide)
         try:
             with checkpoint.open('rb') as stream:
                 pb.load_state(stream)
+            run.frame = start_frame
             with timings.routes():
-                while frame < stop_frame:
-                    snap = read_snapshot(pb.memory, frame)
-                    # Decision time comes only from emulated frames, never CPU speed.
-                    ctx = PolicyContext(snap, frame, pb.memory, stack_pointer(pb))
-                    memory = bytes(pb.memory[0:65536]) if capture else None
-                    routes_before = len(timings.route_wall)
-                    actions = timings.step(policy, ctx)
-                    row = {'frame': frame, 'snapshot': digest(snap.to_dict()),
-                           'actions': [asdict(action) for action in actions],
-                           'policy_state': digest(policy.state_dict()),
-                           'route_calls': len(timings.route_wall) - routes_before}
-                    trace.append(row)
-                    if capture:
-                        workload.append({'snapshot': snap, 'memory': memory,
-                            'clock': ctx.clock, 'expected': row})
-                    for action in actions or [Action(None, 0, 12)]:
-                        if frame >= stop_frame:
-                            break
-                        if action.hold + action.gap <= 0:
-                            raise ValueError('A policy action did not advance emulated time')
-                        action_count += 1
-                        if action.button is not None:
-                            pb.button_press(action.button)
-                        try:
-                            for part in (action.hold, action.gap):
-                                remaining = min(part, stop_frame - frame)
-                                while remaining:
-                                    chunk = min(remaining, 4)
-                                    pb.tick(chunk, render=False)
-                                    frame += chunk
-                                    remaining -= chunk
-                                    if frame // 30 != (frame - chunk) // 30:
-                                        current = read_snapshot(pb.memory, frame)
-                                        if current.started:
-                                            if settings.fast_text:
-                                                pb.memory[W_OPTIONS] = (pb.memory[W_OPTIONS] & ~7) | 1
-                                            if not settings.battle_animations:
-                                                pb.memory[W_OPTIONS] |= 128
-                                if action.button is not None:
-                                    pb.button_release(action.button)
-                        finally:
-                            if action.button is not None:
-                                pb.button_release(action.button)
+                # Each decision plays out in full, so the run can end past the budget by one decision.
+                while run.frame < stop_frame:
+                    run.step(read_snapshot(pb.memory, run.frame))
+            frame = run.frame
             final = read_snapshot(pb.memory, frame)
             state = io.BytesIO()
             pb.save_state(state)
@@ -348,7 +345,7 @@ def replay(path, repeats, warmups, decisions):
                     clock = record['clock'] if 'clock' in record else round(record['real_time'] * 60)
                     ctx = PolicyContext(record['snapshot'], clock, memory)
                     before = len(timings.route_wall)
-                    actions = timings.step(policy, ctx)
+                    actions = timings.step(policy.step, ctx)
                     expected = record['expected']
                     actual = {'actions': [asdict(action) for action in actions],
                               'policy_state': digest(policy.state_dict()),
