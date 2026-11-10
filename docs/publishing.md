@@ -151,9 +151,10 @@ and it never becomes the latest release, so `/releases/latest/` keeps serving Po
 2. Tag that commit on `main` and start the workflow. Add `-f dry_run=true` to do everything except the release.
 
    ```sh
-   git tag pokecore-v0.11.1
-   git push origin pokecore-v0.11.1
-   gh workflow run pokecore-release.yml --ref main -f tag=pokecore-v0.11.1
+   version=0.11.1
+   git tag "pokecore-v$version"
+   git push origin "pokecore-v$version"
+   gh workflow run pokecore-release.yml --ref main -f tag="pokecore-v$version"
    ```
 
 3. The workflow checks the tag against both versions, the changelog section and that `main` holds the commit.
