@@ -150,6 +150,21 @@ def test_a_restock_that_sells_from_the_bag_is_support_and_one_that_changes_nothi
     assert _goal_events('restock', full, sold) == []
 
 
+def test_a_deposit_that_makes_room_for_a_gift_is_progress_and_a_visit_that_deposits_nothing_is_waste():
+    # Red's postgame caught a better Dugtrio copy, and the Eevee gift waited on a deposit.
+    dugtrio = _mon('Dugtrio')
+    party = [_mon(species) for species in ('Mew', 'Rhydon', 'Lapras', 'Nidoking', 'Dragonair')]
+    full, deposited = _snapshot(party + [dugtrio], []), _snapshot(party, [dugtrio])
+    assert [(event.kind, event.detail) for event in _goal_events('party_collection_space', full, deposited)] \
+        == [('deposit', 1)]
+    # A visit that moves no one stays wasted, a withdrawal is no deposit, and other goals gain nothing.
+    assert _goal_events('party_collection_space', full, full) == []
+    assert _goal_events('party_collection_space', deposited, full) == []
+    assert _goal_events('collect_gift', full, deposited) == []
+    deposited.valid = False
+    assert _goal_events('party_collection_space', full, deposited) == []
+
+
 def test_a_battle_fought_under_any_goal_counts_its_experience():
     before, after = _snapshot([_mon('Pidgey')], []), _snapshot([_mon('Pidgey')], [])
     after.party[0].experience = 8200

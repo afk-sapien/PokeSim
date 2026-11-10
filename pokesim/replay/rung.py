@@ -209,6 +209,13 @@ def _goal_events(key, previous, current):
         freed = len(previous.items) - len(current.items)
         if freed > 0 or getattr(current, 'money', 0) > getattr(previous, 'money', 0):
             found.append(ProgressEvent('sold', max(freed, 0)))
+    # A gift for a full party waits on a deposit, which keeps the held count, so no other event shows it,
+    # yet it is the whole of the goal. In Red's postgame a better Dugtrio copy filled the party, and the
+    # Eevee gift then waited on a deposit at the Vermilion Pokémon Center.
+    if key == 'party_collection_space' and previous is not None and current is not None and not found \
+            and getattr(current, 'valid', True) and getattr(previous, 'valid', True) \
+            and len(current.party) < len(previous.party):
+        found.append(ProgressEvent('deposit', len(previous.party) - len(current.party)))
     # A PC visit that swaps the trainee into the party keeps the held count, so no other event shows it,
     # yet it is the whole of the preparation goal. A goal cut short between the deposit and the withdrawal
     # leaves two spans, so each half of the swap counts.
