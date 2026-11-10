@@ -147,7 +147,10 @@ def adventure(root, aid, version, state='running', frames=0, policy=None):
     db = sqlite3.connect(folder / 'pokesim.sqlite')
     db.execute('CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT)')
     db.execute('CREATE TABLE capture_receipts (dex INTEGER, recorded_at REAL)')
-    db.execute("INSERT INTO kv VALUES ('policy_state', ?)", (json.dumps(policy or {'decisions': 7}),))
+    # The policy's state lives in the newest autosave's manifest, and an older one holds a stale copy.
+    (folder / 'states').mkdir()
+    (folder / 'states' / 'auto-v1-1.json').write_text(json.dumps({'policy_state': {'decisions': 1}}))
+    (folder / 'states' / 'auto-v1-2.json').write_text(json.dumps({'policy_state': policy or {'decisions': 7}}))
     db.execute("INSERT INTO kv VALUES ('play_clock', ?)", (json.dumps({'frames': frames}),))
     db.execute('INSERT INTO capture_receipts VALUES (16, 5.0)')
     db.commit()

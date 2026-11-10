@@ -43,7 +43,7 @@ A new `pokesim/state/` package holds `schema.py` (the version, the migrations an
 
 Reads and writes through `store.get` and `store.set` already go through the owner, so they stay. About 50 `trade_hold` reads are of this kind and do not move. What moves is raw SQL on `store.db`.
 
-The last slice adds a test that fails when a module outside `pokesim/state/` and `store.py` uses a store's `db` or opens a `pokesim.sqlite`.
+The last slice adds a test that fails when a module outside `pokesim/state/` and `store.py` uses a store's `db` or opens a `pokesim.sqlite`. That test is `tests/test_state_owner.py`. It covers the package. The modules that own `app.sqlite` and `auth.sqlite` may open those files with sqlite3, and nothing else may.
 
 ### 3.2 Schema version
 
@@ -85,9 +85,9 @@ The trade and reward barriers are `survives`, as the comment at `emulator.py:122
 
 ### 3.5 The rewinding state lives once
 
-`policy_state`, `gen2-history` and `run_memory` leave kv. Boot and reload read the manifest only. `run_memory` keeps one field across a reload today, the announced playtime milestones. That field becomes its own `survives` key. `play_clock` stays in kv as `resets_on_restart`: a reload keeps the larger count, and a restart writes an empty clock.
+`policy_state`, `gen2-history` and `run_memory` leave kv. Boot and reload read the manifest only. `run_memory` keeps one field across a reload today, the announced playtime milestones. That field becomes its own key, `playtime-milestones-v1`, for Gen I. It is `resets_on_restart`, not `survives`: the hours are the cartridge's play time, which a new game counts again from zero, and today's restart empties them with the rest of `run_memory`. Gen II keeps its milestones in its history, which rewinds as it does today. `play_clock` stays in kv as `resets_on_restart`: a reload keeps the larger count, and a restart writes an empty clock.
 
-A Gen I save with no manifest loads today, and `_load_state_file` skips the manifest steps for it (`emulator.py:392`, `:409`). For that case only, the last kv copy of `policy_state` stays readable. A later migration drops it.
+A Gen I save with no manifest loads today, and `_load_state_file` skips the manifest steps for it (`emulator.py:392`, `:409`). For that case only, the last kv copy of `policy_state` stays readable. A Gen II manifest from before 2026-10-16 has no `gen2_history`. A rewind to one keeps the current game's history, as today. A boot on one takes the last kv copy of `gen2-history`, which today's boot reads first, so the journal does not announce every map, catch and badge again. A restart drops both copies, and a later migration drops them everywhere.
 
 ## 4. What a restart resets: the generations disagree
 
@@ -112,7 +112,7 @@ Each slice deletes the old call sites it replaces, in the same PR. Line numbers 
 | S1 | Schema version | `state/schema.py` with migration 1 and `connect`. Version checks on import, restore and load. Tests: a version 0 copy migrates, a newer one is refused, the read-only store migrates in memory | `SCHEMA` (`store.py:35-52`), the table setup in `Store.__init__` (`:94-108`), the column probes (`:110-129`). The table creation at `activity_ledger.py:64` and `:67`, `catches.py:125`, `gen2/tracking.py:53`, `progress.py:12`, `progress_events.py:15` and `:29`, `shiny.py:47`, `stall_truth.py:26`, `statistics.py:16`, `trade_statistics.py:112`, `trade/pair.py:138`, `trade/event.py:148`. The 14 raw opens in section 2 | 3 |
 | S2 | State domains | `state/domains.py` declaring every key and table with today's behaviour, and the undeclared-key test. No behaviour change | `OBSERVATION_READ_KEYS` (`store.py:30-33`) and `PENDING_REWARD` (`:28`), which become domain fields | 2 |
 | S3 | Atomic owner restart | `store.restart`, `restart-pending-v1`, `drop_autosaves`, and the lead's ruling on section 4. Tests: a failure at each step leaves the old game whole or the new game whole, in both generations | Gen I, `emulator.py`: the catch reset `:1211-1214`, the unlink loop `:1215-1217`, the shiny reset `:1218-1219`, the store writes at `:1225-1237` (trade preferences, pending reward, milestones, League ledger, records, play clock, run memory, policy state). Gen II, `gen2/emulator.py`: `_autosave` `:1186`, the unlink loop `:1187-1189`, the key loop `:1192-1195`, trade preferences `:1196`, tracker reset `:1198`, records `:1201`, clock key `:1205`. The database half of `reset` in `catches.py:52-57`, `shiny.py:149-153` and `gen2/tracking.py:59-67` | 3 |
-| S4 | The rewinding state lives once | `playtime-milestones-v1` as a `survives` key. Boot and reload read the manifest only | kv reads at `emulator.py:110`, `:117`, `gen2/emulator.py:222`, `:268`. kv writes at `emulator.py:418`, `:732`, `:845`, `gen2/emulator.py:582`, `:583`. The milestone merge at `emulator.py:411-412`. The raw ledger read at `:414-416` becomes a store call | 2 |
+| S4 | The rewinding state lives once | `playtime-milestones-v1` as a `resets_on_restart` key (section 3.5). Boot and reload read the manifest only | kv reads at `emulator.py:110`, `:117`, `gen2/emulator.py:222`, `:268`. kv writes at `emulator.py:418`, `:732`, `:845`, `gen2/emulator.py:582`, `:583`. The milestone merge at `emulator.py:411-412`. The raw ledger read at `:414-416` becomes a store call | 2 |
 | R1 | Trade and reward ledgers behind repositories | `state/ledgers.py`. Value-moving writes in `durable()` | 82 raw uses in `runtime/participant.py`, `rewards.py`, `runtime/reward_delivery.py`, `runtime/tm_purchase.py`, `gen2/league.py`, `league_partners.py`, `gen2/celebi.py`, `gen2/rewards.py`, `fair_dvs.py`, `trade_statistics.py`, `mew_returns.py`. The five `synchronous` toggles at `gen2/celebi.py:51`, `gen2/rewards.py:95`, `runtime/participant.py:310`, `runtime/reward_delivery.py:166`, `runtime/tm_purchase.py:78` | 5 |
 | R2 | Catches, statistics and records behind repositories | `state/tracking.py` | 73 raw uses in `gen2/tracking.py`, `statistics.py`, `catches.py`, `shiny.py`, `gen2/statistics.py`, `milestones.py`, `adventure_counters.py`, `catch_rates.py`, `adventure_records.py`, `money_flow.py` | 3 |
 | R3 | Journal, progress and guards behind repositories, and the owner test | `state/journal.py`. The test from section 3.1 | 54 raw uses in `activity_ledger.py`, `league_history.py`, `gen2/activity.py`, `stalls.py`, `progress_events.py`, `stall_truth.py`, `web/app.py`, `goal_time.py`, `gen2/steps.py` | 3 |
@@ -154,6 +154,7 @@ Phase 1 files the state store never touches: `runtime/game_loop.py` and `runtime
 1. What a reload keeps, stand-downs across a reload and persisted reload counts. Those are v2 PR 6. Its new domains, and the PR 5 claims table, get declared in `domains.py`.
 2. `app.sqlite` and `adventure.json`. The registry already has its own version.
 3. Loading a named checkpoint from before a restart. Today `rewards.initialize` guards the gift ledger after such a load (`emulator.py:428-430`, `gen2/emulator.py:642-645`). Other `resets_on_restart` domains stay reset, as they do today.
+4. The scripts in `tools/`. They check, soak and profile copies or live folders, outside any worker. Eight of them open `pokesim.sqlite` with sqlite3 or use a store's `db`: `check_managed_app.py`, `check_managed_cable.py`, `live_soak.py`, `pc_dry_run.py`, `profile_simulation.py`, `quality_hunt_watch.py`, `replay_progress.py` and `sample_live.py`, whose remote script does it on the server. The owner test does not cover them.
 
 ## 8. Rulings
 

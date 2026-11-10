@@ -9,8 +9,8 @@ from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositPokemon, 
 from .base import Action, Policy
 from ..planning.ledger import box_wanted
 from pokecore.textmatch import ScreenText
-from .battle import (BALLS, CURES, HEALING, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
-                     enemy_dvs, healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
+from .battle import (BALLS, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
+                     enemy_dvs, field_cure, healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
 from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .pickups import Pickups, ground_item
@@ -870,7 +870,8 @@ class StrategicPolicy(Policy):
         return self._overworld(s, mem)
 
     def _update_heal_latch(self, s):
-        if needs_healing(s.party):
+        # A status the bag cures is cured in the field (_overworld), so it latches no heal.
+        if needs_healing(s.party, s.items):
             if not self.heal_latch:
                 # A heal its spent PP called for says so in the journal once the nurse is done.
                 self.pp_heal = battle_room(s.party)[PP] == 0
@@ -958,19 +959,19 @@ class StrategicPolicy(Policy):
         goal = choice.goal
         if in_league:
             # Between rooms the bag heals toward the boss check's bar (planning/boss.py treatment), the same
-            # rule Gold, Silver and Crystal use, and a cure clears a status.
+            # rule Gold, Silver and Crystal use.
             found = league_treatment(s.party, s.items)
             if found is not None:
                 target, item, move = found
                 actions = self._use_item(s, item, target, move=move)
                 if actions:
                     return actions
-            for target, mon in enumerate(s.party):
-                cures = sorted((item for item, qty in s.items if qty and mon.hp and mon.status & CURES.get(item, 0)),
-                               key=lambda item: item in HEALING)
-                actions = cures and self._use_item(s, cures[0], target)
-                if actions:
-                    return actions
+        # A cure clears a status where the party stands, so the walk budget counts its HP again.
+        for target, mon in enumerate(s.party):
+            cure = field_cure(s.items, mon, league=in_league)
+            actions = cure is not None and self._use_item(s, cure, target, "Cure a status in the field")
+            if actions:
+                return actions
         # A bag this full cannot take a new kind of item, Poké Balls included, so spend the vitamins and
         # Rare Candies that fill it, whether or not a collection project is under way.
         if len(s.items) >= 18:
@@ -1953,7 +1954,11 @@ class StrategicPolicy(Policy):
         if any(p.status for p in s.party) or max((p.hp / max(1, p.max_hp) for p in s.party), default=0) < 0.8:
             return None
         encounters = w.get('encounters', [])
-        trainee = development_candidate(s, max((level for _, level in encounters), default=100))
+        # The cartridge's grass table prices a battle here. Gen I has no training site picker, so a trainee
+        # this map cannot raise waits for a map on the way that can.
+        wild = self.collection.wild
+        trainee = development_candidate(s, max((level for _, level in encounters), default=100),
+                                        wild.battle_experience(s.map) if wild is not None else None)
         grass = tuple((s.map, x, y) for y, row in enumerate(w.get('tiles', [])) for x, tile in enumerate(row)
                       if tile == 0x52 and abs(x - s.x) + abs(y - s.y) <= 8)
         if trainee is not None and grass and s.frame >= self.development_cooldown:

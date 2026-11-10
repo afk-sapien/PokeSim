@@ -3,7 +3,7 @@
 Damage scores are estimates, not an exhaustive battle simulator. They use the
 live battle stats, Generation I type categories, accuracy, and special effects.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from pokecore.dvs import hp_dv
 
@@ -185,7 +185,33 @@ def replacement_slot(mon, new_move):
     return min(choices, key=lambda i: moveset_score(mon, (mon.moves[i],)), default=None)
 
 
-def needs_healing(party):
+def field_cure(items, mon, league=False):
+    """The cure to use on ``mon`` outside battle, the cheapest in ``items`` that clears its status, or None.
+
+    Outside the League a Full Restore is kept for the HP it restores."""
+    if not mon.hp or not mon.status:
+        return None
+    found = [(item in HEALING, PRICES.get(item, 1000), item) for item, qty in items
+             if qty and mon.status & CURES.get(item, 0) and (league or item not in HEALING)]
+    return min(found)[2] if found else None
+
+
+def cured(party, items):
+    """``party`` once the field cures in ``items`` clear what they can, one cure a Pokémon."""
+    stock = dict(items)
+    treated = []
+    for mon in party:
+        cure = field_cure(tuple(stock.items()), mon)
+        if cure is not None:
+            stock[cure] -= 1
+            mon = replace(mon, status=0)
+        treated.append(mon)
+    return tuple(treated)
+
+
+def needs_healing(party, items=()):
+    """Whether the party is due at a Pokémon Center. A status a cure in ``items`` clears in the field is
+    left out, since the cure goes first. Fuchsia made four trips to poison at 164 of 169 HP otherwise."""
     if not party:
         return False
     # PC withdrawal can retain stored HP above the recalculated maximum.
@@ -194,7 +220,7 @@ def needs_healing(party):
         return True
     # The heal line is the battle stance's HP and PP budget (planner design S5), so one rule decides both.
     from .ledger import walk_spent
-    return walk_spent(party)
+    return walk_spent(cured(party, items) if items else party)
 
 
 def healing_item(items, mon, incoming=0):
@@ -214,9 +240,10 @@ def healing_item(items, mon, incoming=0):
 
 
 def shopping_item(items, stock, money, league=False, collecting=False, legendary=False, reserve=300,
-                  hunt_reserve=None):
+                  hunt_reserve=None, cure_room=False):
     """The next item to buy, or None. ``hunt_reserve``, during a hunt, is the money kept back while
-    the ball stock grows past the collecting 15 toward HUNT_STOCK."""
+    the ball stock grows past the collecting 15 toward HUNT_STOCK. ``cure_room`` lets a first cure into
+    a bag past the 18 entries a new kind needs (shopping.cure_room)."""
     counts = dict(items)
     if legendary and not counts.get(ITEMS['MASTER_BALL']):
         if ITEMS['ULTRA_BALL'] not in stock:
@@ -247,6 +274,9 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
         desired[ITEMS["REVIVE"]] = counts.get(ITEMS["REVIVE"], 0) + extra
         # Freeze never thaws, and Lance's Dragonair can stall forever against a frozen last partner.
         desired[ITEMS["FULL_HEAL"]] = 3
+    elif ITEMS["ANTIDOTE"] not in stock:
+        # Fuchsia, Saffron and Cinnabar sell no Antidote, so their cure is a Full Heal.
+        desired[ITEMS["FULL_HEAL"]] = max(0, 2 - counts.get(ITEMS["ANTIDOTE"], 0))
     order = sorted(stock, key=lambda item: (item not in strong, strong.index(item) if item in strong else 0,
                                             item != ITEMS["REVIVE"])) if league else stock
     for item in order:
@@ -257,7 +287,9 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
                 target = max(target, HUNT_STOCK - ball_count + counts.get(item, 0))
         if item in HEALING:
             target = max(0, heal_target - heal_count + counts.get(item, 0))
-        if counts.get(item, 0) >= target or (len(items) >= (20 if league else 18) and item not in counts):
+        first_cure = cure_room and item in CURES and item not in HEALING
+        if counts.get(item, 0) >= target or (len(items) >= (20 if league else 18) and item not in counts
+                                             and not first_cure):
             continue
         if 0 < PRICES.get(item, 0) <= money - reserve:
             return item

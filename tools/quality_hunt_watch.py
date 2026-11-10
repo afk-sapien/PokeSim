@@ -102,6 +102,7 @@ def collect():
 
     from pokesim.gen2.standdown import BACKOFF, train_key
     from pokesim.planning.monitor import Monitor
+    from pokesim.state import manifests
 
     root = Path(os.environ.get('DATA_DIR', '/data'))
     rows = []
@@ -113,9 +114,9 @@ def collect():
         rows.append(row)
         if row['state'] != 'running':
             continue
+        saved = (manifests.newest(path.parent / 'states') or {}).get('policy_state') or {}
         db = sqlite3.connect(f'file:{path.parent / "pokesim.sqlite"}?mode=ro', uri=True)
         try:
-            saved = json.loads(db.execute("SELECT v FROM kv WHERE k='policy_state'").fetchone()[0])
             clock = db.execute("SELECT v FROM kv WHERE k='play_clock'").fetchone()
             captures = db.execute('SELECT dex, recorded_at FROM capture_receipts').fetchall()
         finally:

@@ -45,6 +45,8 @@ LEAGUE_CHECKPOINT = 'league-entry.state'
 # Kept by name, so a wrong rewind or restart can be undone from the saves list.
 BEFORE_LOAD_CHECKPOINT = 'before-load.state'
 BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
+# The playtime hours already announced. A reload keeps them, so a rewound game does not announce an hour twice.
+PLAYTIME_MILESTONES = 'playtime-milestones-v1'
 # The phases of an exchange's preparation that hold back every command but stop, speed and pause.
 PREPARING = {'travelling', 'storage', 'rendezvous'}
 MAX_RELOADS = 12  # reloads in a row without progress after which reloading stops, as in Generation II
@@ -123,14 +125,14 @@ class Emulator:
         self.goal_watch = progress_events.GoalWatch()
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
-        self.mem = RunMemory.from_dict(store.get("run_memory", {}))
+        # The newest autosave's manifest replaces this, and the policy's state, when start() loads it.
+        self.mem = RunMemory()
         self.legendary_recovery = LegendaryRecovery()
         achievements = store.events(limit=1, types=('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'))
         self.last_achievement = achievements[0] if achievements else None
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
         self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
-        self.policy.load_state_dict(store.get("policy_state", {}))
         self.commands: queue.Queue = queue.Queue()
         self.manual: queue.Queue = queue.Queue(maxsize=2)
         self.started_at = time.time()
@@ -437,13 +439,16 @@ class Emulator:
         if metadata:
             self.policy.load_state_dict(metadata["policy_state"])
             announced = getattr(self, 'mem', RunMemory()).playtime_milestones.copy()
-            announced.update(self.store.get('run_memory', {}).get('playtime_milestones', []))
+            announced.update(self.store.get(PLAYTIME_MILESTONES, []))
             self.mem = RunMemory.from_dict(metadata["run_memory"])
             with self.store.reading() as db:
                 self.mem.championships = max(self.mem.championships, rewards.championship_count(rewards.ledger(db)))
             self.mem.playtime_milestones.update(announced)
-            self.store.set('run_memory', self.mem.to_dict())
             self.frame = metadata.get("frame", self.frame)
+        else:
+            # A save from before checkpoint manifests rewinds the cartridge alone. Its policy takes the last kv
+            # copy, the one case docs/design/adventure-state-store.md section 3.5 keeps that copy readable for.
+            self.policy.load_state_dict(self.store.get('policy_state', {}))
         self._reset_transient(clear_observation=True)
         self.legendary_recovery = LegendaryRecovery((metadata or {}).get('legendary_recovery'))
         self.play_clock.restore(metadata.get("play_clock") if metadata else None)
@@ -754,7 +759,8 @@ class Emulator:
             self.battle_frame = None
         if events:
             self._handle_events(events, snap)
-            self.store.set("run_memory", self.mem.to_dict())
+            if any(event.type == 'playtime' for event in events):
+                self.store.set(PLAYTIME_MILESTONES, sorted(self.mem.playtime_milestones))
         if restored_legendary:
             self._autosave()
 
@@ -855,8 +861,6 @@ class Emulator:
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
         self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
         self.store.prune_reward_results()
-        # The checkpoint's copy, since building it again doubles the work of every save.
-        self.store.set("policy_state", manifest["policy_state"])
 
     def _checkpoint_before(self, name: str):
         """Keep the game as it is now under `name` before a rewind or restart replaces it."""
@@ -1235,8 +1239,8 @@ class Emulator:
         """The rows the new game starts with, which the restart's transaction writes. The trade and
         reward barriers stay, so a named checkpoint from before a trade or a gift still cannot load."""
         from . import adventure_records, catches, milestones, shiny
-        values = {'play_clock': PlayClock().state_dict(), 'run_memory': RunMemory().to_dict(), 'policy_state': {},
-                  milestones.KEY: milestones.empty(), adventure_records.KEY: adventure_records.fresh()}
+        values = {'play_clock': PlayClock().state_dict(), milestones.KEY: milestones.empty(),
+                  adventure_records.KEY: adventure_records.fresh()}
         if getattr(self, 'catch_tracker', None) is not None:
             values[catches.KEY] = self.catch_tracker.empty(True)
         if getattr(self, 'shiny_tracker', None) is not None:

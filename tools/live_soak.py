@@ -272,12 +272,12 @@ def _kv_bytes(db):
     return db.execute('SELECT COALESCE(SUM(LENGTH(k) + LENGTH(v)), 0) FROM kv').fetchone()[0]
 
 
-def _goal(db):
-    """The collection project the policy works on, by its key, from the copy each autosave keeps."""
-    row = db.execute("SELECT v FROM kv WHERE k='policy_state'").fetchone()
+def _goal(states):
+    """The collection project the policy works on, by its key, from the newest autosave's manifest."""
+    from pokesim.state import manifests
     try:
-        project = (json.loads(row[0]) or {}).get('collection', {}).get('project') if row else None
-    except (TypeError, ValueError, AttributeError):
+        project = ((manifests.newest(states) or {}).get('policy_state') or {}).get('collection', {}).get('project')
+    except AttributeError:
         return 'unknown'
     if not project:
         return 'none'
@@ -746,7 +746,7 @@ def play_one(manager, aid, frames, progress):
             with _readonly(database) as db:
                 fresh = [row for row in db.execute('SELECT fingerprint, dex, recorded_at FROM capture_receipts '
                                                    'ORDER BY recorded_at') if row[0] not in seen]
-                goal = _goal(db)
+                goal = _goal(database.parent / 'states')
                 released = db.execute("SELECT COUNT(*) FROM events WHERE id > ? AND type = 'release'",
                                       (first_event,)).fetchone()[0]
             db.close()

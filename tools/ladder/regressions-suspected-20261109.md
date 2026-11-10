@@ -102,4 +102,20 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   run back to a Pokémon Center, and the heal cuts a long walk short before any event. Yellow makes four
   such trips to Fuchsia under the lapras goal, 16072 frames. Outside the League the run uses no cure in
   the field, and the shop skips a new item kind at 18 entries or more. Both rules are older than 171176e.
+- The field cure, 2026-11-10: a status a cure in the bag can treat no longer latches a heal, and the run
+  cures it where it stands. A mart with no Antidote sells a first Full Heal into a bag of 18 or 19
+  entries while a finite TM could still be sold for a story item. The four Fuchsia trips are gone.
+  yellow/badges_6 fell to 14.2% and red/badges_6 to 9.0%, and the baseline moved for both. blue/badges_6
+  did not move. Both runs now train a partner on Route 11 for about 55000 frames and reach the Safari
+  Zone too late to get Surf inside the window. Training ends only on a level or 2400 frames without
+  experience, and a level 41 partner on level 15 grass gains a little in every battle. That stall is
+  older than 171176e and is still open.
+- The training skip, 2026-11-10: a partner whose next level would take more than ten wild battles on the
+  map is not trained there. Training waste fell from 9420 to 880 frames in yellow/badges_6 and from 9260
+  to 3480 in red/badges_6. Both runs now get Surf, the Gold Teeth and Strength and teach both HMs, and
+  Yellow starts on the Secret Key. yellow/badges_6 rose to 26.6% on goals the old window never reached.
+  teach_surf is wasted in full in both runs, 2502 frames in Yellow and 3480 in Red, and the restock after
+  Surf wastes 5688 in Yellow. The lead accepted the rise for this rung alone and its baseline moved up.
+  red/badges_6 is 9.5%, inside the gate. The teach_surf and restock waste are open, and each fix brings
+  the baseline back down.
 - The other rungs are still open.
