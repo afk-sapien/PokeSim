@@ -21,6 +21,7 @@ import time
 from pokecore.identity import find
 
 from . import inbox
+from .errors import Conflict
 from .loops import Loop
 from .policy import adventure_role, can
 from .registry import LIBRARY_OWNER, identifier, validate_id
@@ -50,11 +51,11 @@ class NoLongerManaged(PermissionError):
     """The sender stopped managing the adventure, for example after a transfer, while offering."""
 
 
-class LimitReached(ValueError):
+class LimitReached(Conflict):
     """Too many offers are open or were sent today."""
 
 
-class Changed(ValueError):
+class Changed(Conflict):
     """A Pokémon in the offer changed since it was made. The receiver confirms the new one."""
 
     def __init__(self, message, offer):
@@ -130,17 +131,17 @@ class TradeOffers(TradeBuilder):
     def create(self, data, actor=None):
         names = ('from_id', 'from_key', 'to_id')
         if not isinstance(data, dict) or not set(names) <= set(data) or set(data) - set(names) - {'to_key', 'request_id'}:
-            raise ValueError('Choose a Pokémon to offer and an adventure to offer it to')
+            raise Conflict('Choose a Pokémon to offer and an adventure to offer it to')
         selection = {name: data[name] for name in names}
         selection['to_key'] = data.get('to_key') or ''
         for name in ('from_id', 'to_id'):
             validate_id(selection[name])
         if not isinstance(selection['from_key'], str) or not 1 <= len(selection['from_key']) <= 256:
-            raise ValueError('Choose a Pokémon to offer')
+            raise Conflict('Choose a Pokémon to offer')
         if not isinstance(selection['to_key'], str) or len(selection['to_key']) > 256:
-            raise ValueError('Choose a Pokémon to ask for, or none')
+            raise Conflict('Choose a Pokémon to ask for, or none')
         if selection['from_id'] == selection['to_id']:
-            raise ValueError('Choose another adventure to trade with')
+            raise Conflict('Choose another adventure to trade with')
         oid = validate_id(data.get('request_id') or identifier())
         sender = self.registry.adventure(selection['from_id'])
         receiver = self.registry.adventure(selection['to_id'])
@@ -151,7 +152,7 @@ class TradeOffers(TradeBuilder):
             existing = None
         if existing:
             if any(existing[name] != value for name, value in selection.items()):
-                raise ValueError('This request ID already belongs to another offer')
+                raise Conflict('This request ID already belongs to another offer')
             return self.public(existing)
         self._owner_check(actor, selection['from_id'], selection['from_key'])
         sender_id = (actor.id if actor is not None else None) or LIBRARY_OWNER
@@ -163,7 +164,7 @@ class TradeOffers(TradeBuilder):
                 raise NoLongerManaged('You can no longer offer trades from this adventure')
             pending = self.registry.trade_offers(selection['from_id'], statuses=[PENDING])
             if any(all(row[name] == value for name, value in selection.items()) for row in pending):
-                raise ValueError('You already offered this trade')
+                raise Conflict('You already offered this trade')
             self._limits(sender_id, selection['to_id'])
             display = {'from': self._snapshot(give), 'to': self._snapshot(take) if take else {}}
             row = self.registry.create_trade_offer({'id': oid, **selection, 'sender_id': sender_id, 'display': display})
@@ -195,13 +196,13 @@ class TradeOffers(TradeBuilder):
         offer = self.registry.trade_offer(validate_id(oid))
         self._writer(offer['to_id'])
         if to_key is not None and (not isinstance(to_key, str) or not 1 <= len(to_key) <= 256):
-            raise ValueError('Choose a Pokémon to give')
+            raise Conflict('Choose a Pokémon to give')
         offer = self._settle(self.registry.trade_offer(oid))
         if offer['status'] != PENDING:
-            raise ValueError(f'This offer is already {offer["status"]}')
+            raise Conflict(f'This offer is already {offer["status"]}')
         chosen = to_key or offer['to_key']
         if not chosen:
-            raise ValueError('Choose a Pokémon to give in return')
+            raise Conflict('Choose a Pokémon to give in return')
         # Both games are asked about their Pokémon before `guard`, which never waits on a game.
         self._owner_check(actor, offer['to_id'], chosen)
         trade = {**offer, 'to_key': chosen}
@@ -231,7 +232,7 @@ class TradeOffers(TradeBuilder):
                     if (row['status'] == ACCEPTED or row['updated_at'] >= started)
                     and {(row['from_id'], row['from_key']), (row['to_id'], row['to_key'])} & sides]
             if busy:
-                raise ValueError('One of these Pokémon is in another trade that is under way or just finished. Try again')
+                raise Conflict('One of these Pokémon is in another trade that is under way or just finished. Try again')
             # The receiver may have lost the adventure while the games were asked, as in create.
             if not self._still_manages(actor, offer['to_id']):
                 raise NoLongerManaged('You can no longer accept trades for this adventure')
@@ -242,7 +243,7 @@ class TradeOffers(TradeBuilder):
                                                    manual_id=mid, to_key=chosen,
                                                    display={'from': self._snapshot(give), 'to': self._snapshot(take)})
             if row is None:
-                raise ValueError(f'This offer is already {self.registry.trade_offer(oid)["status"]}')
+                raise Conflict(f'This offer is already {self.registry.trade_offer(oid)["status"]}')
             try:
                 self.coordinator.enqueue_manual({'left_id': trade['from_id'], 'left_key': trade['from_key'],
                                                  'right_id': trade['to_id'], 'right_key': chosen, 'request_id': mid})
@@ -256,7 +257,7 @@ class TradeOffers(TradeBuilder):
         """End a pending offer that can no longer trade, unless it moved on first."""
         row = self.registry.update_trade_offer(oid, expect=(PENDING,), status=status, reason=reason)
         if row is None:
-            raise ValueError(f'This offer is already {self.registry.trade_offer(oid)["status"]}')
+            raise Conflict(f'This offer is already {self.registry.trade_offer(oid)["status"]}')
         return row
 
     def _announce(self, row, actor=None):
@@ -271,7 +272,7 @@ class TradeOffers(TradeBuilder):
         with self.guard:
             row = self.registry.update_trade_offer(oid, expect=(PENDING,), status=status, reason=None)
         if row is None:
-            raise ValueError(f'This offer is already {self.registry.trade_offer(oid)["status"]}')
+            raise Conflict(f'This offer is already {self.registry.trade_offer(oid)["status"]}')
         return self.public(self._announce(row, actor) if status == 'declined' else row)
 
     def decline(self, oid, actor=None):

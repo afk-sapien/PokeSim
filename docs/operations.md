@@ -291,6 +291,8 @@ It answers 503 and lists the problem in `problems` when a background loop has st
 adventure supervisor, trade scheduler, watchdog, trade offer sweep or control lease sweep) or
 when the adventure supervisor has made no progress for 3 minutes. A failure inside a loop is
 logged with its traceback, and the same failure again at most once a minute.
+A request that fails in a way PokeSim does not expect is logged as a warning with the request's
+method, path and traceback. The answer it gets is unchanged.
 Each change of an adventure's state is logged with its reason, for example
 `Adventure <id> went from running to failed: its worker exited`. A change the library does not
 expect is logged as an error. An adventure that reads as running while no worker runs for it

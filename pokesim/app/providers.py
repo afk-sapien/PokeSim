@@ -16,6 +16,8 @@ from urllib.parse import urlencode
 
 import httpx
 
+from .errors import Conflict
+
 log = logging.getLogger(__name__)
 FLOW_SECONDS = 600
 
@@ -222,7 +224,7 @@ class OIDC:
                 response.raise_for_status()
                 metadata = response.json()
             if metadata.get('issuer', '').rstrip('/') != self.issuer:
-                raise ValueError('The OpenID provider reports a different issuer')
+                raise Conflict('The OpenID provider reports a different issuer')
             self.metadata = metadata
         return self.metadata
 
@@ -245,7 +247,7 @@ class OIDC:
         with self.lock:
             self.flows = {key: value for key, value in self.flows.items() if value['expires'] > now}
             if len(self.flows) > 1000:
-                raise ValueError('Too many logins in progress')
+                raise Conflict('Too many logins in progress')
             self.flows[state] = {'nonce': nonce, 'verifier': verifier, 'binding': hashlib.sha256(binding.encode()).hexdigest(),
                                  'link_user': link_user, 'expires': now + FLOW_SECONDS}
         query = {'response_type': 'code', 'client_id': self.client_id, 'redirect_uri': self.redirect_uri,
@@ -259,9 +261,9 @@ class OIDC:
             flow = self.flows.pop(state, None) if isinstance(state, str) else None
         if (flow is None or flow['expires'] < time.time() or not isinstance(binding, str)
                 or not hmac.compare_digest(hashlib.sha256(binding.encode()).hexdigest(), flow['binding'])):
-            raise ValueError('This login expired. Start it again.')
+            raise Conflict('This login expired. Start it again.')
         if not isinstance(code, str) or not code:
-            raise ValueError('The provider did not return a login code')
+            raise Conflict('The provider did not return a login code')
         metadata = self.discover()
         form = {'grant_type': 'authorization_code', 'code': code, 'redirect_uri': self.redirect_uri,
                 'client_id': self.client_id, 'code_verifier': flow['verifier']}
@@ -269,10 +271,10 @@ class OIDC:
         with self.client() as client:
             response = client.post(metadata['token_endpoint'], data=form, auth=auth)
         if not response.is_success:
-            raise ValueError('The provider refused the login code')
+            raise Conflict('The provider refused the login code')
         token = response.json().get('id_token')
         if not isinstance(token, str):
-            raise ValueError('The provider returned no ID token')
+            raise Conflict('The provider returned no ID token')
         return self.check(token, flow['nonce']), flow['link_user']
 
     def check(self, token, nonce):
@@ -290,15 +292,15 @@ class OIDC:
             jwt.JWTClaimsRegistry(iss={'essential': True, 'value': self.metadata['issuer']},
                                   sub={'essential': True}, exp={'essential': True}).validate(claims)
         except (JoseError, ValueError) as error:
-            raise ValueError('The ID token did not pass its checks') from error
+            raise Conflict('The ID token did not pass its checks') from error
         audience = claims.get('aud')
         audience = [audience] if isinstance(audience, str) else audience or []
         if self.client_id not in audience:
-            raise ValueError('The ID token is for another application')
+            raise Conflict('The ID token is for another application')
         if (len(audience) > 1 or 'azp' in claims) and claims.get('azp') != self.client_id:
-            raise ValueError('The ID token is for another application')
+            raise Conflict('The ID token is for another application')
         if not isinstance(claims.get('nonce'), str) or not hmac.compare_digest(claims['nonce'], nonce):
-            raise ValueError('The ID token does not belong to this login')
+            raise Conflict('The ID token does not belong to this login')
         return claims
 
     def role(self, claims):

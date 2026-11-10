@@ -41,6 +41,7 @@ import time
 
 from ..web.security import LEASE_HEADER
 from . import inbox
+from .errors import Conflict
 from .loops import Loop
 from .policy import can
 from .supervisor import WorkerError
@@ -71,7 +72,7 @@ def idle_limit():
         return 120
 
 
-class LeaseRefused(ValueError):
+class LeaseRefused(Conflict):
     """A lease request that cannot be granted, with the reason to show."""
 
 
@@ -250,7 +251,7 @@ class Leases:
         handler = {'request': self.request, 'release': self.release, 'heartbeat': self.heartbeat,
                    'handover': self.handover, 'refuse': self.refuse, 'take': self.take}.get(action)
         if handler is None:
-            raise ValueError('Unknown lease action')
+            raise Conflict('Unknown lease action')
         self.made.desired = None
         if action in {'handover', 'refuse'}:
             handler(aid, actor, adventure, target)
