@@ -241,7 +241,7 @@ class AuthStore:
     def create_user(self, username, password=None, *, role='member', display_name=None, can_create=True):
         username = validate_username(username)
         if role not in SERVER_ROLES:
-            raise ValueError('Unknown role')
+            raise Conflict('Unknown role')
         hashed = self.hasher.hash(validate_password(password)) if password is not None else None
         uid = identifier()
         display = str(display_name or username).strip()[:120] or username
@@ -413,7 +413,7 @@ class AuthStore:
 
     def link_identity(self, uid, provider, issuer, subject):
         if provider not in {'oidc', 'proxy'} or not subject:
-            raise ValueError('Unknown identity')
+            raise Conflict('Unknown identity')
         with self.lock, self.db:
             existing = self.db.execute('SELECT user_id FROM identities WHERE provider=? AND issuer=? AND subject=?',
                                        (provider, issuer, subject)).fetchone()
@@ -556,7 +556,7 @@ class AuthStore:
         with self.lock:
             row = self.db.execute('SELECT * FROM invites WHERE id=?', (iid,)).fetchone()
         if row is None:
-            raise KeyError('Invite not found')
+            raise NotFound('Invite not found')
         return self._public_invite(row)
 
     def invites(self):
@@ -691,14 +691,14 @@ class AuthStore:
     def notify(self, user_id, kind, text, adventure_id=None, link=None):
         """Put one item in a user's inbox and keep only their newest INBOX_KEEP. Returns its id."""
         if not isinstance(kind, str) or not KIND.fullmatch(kind):
-            raise ValueError('Unknown notification kind')
+            raise Conflict('Unknown notification kind')
         text = str(text or '').strip()[:500]
         if not text:
-            raise ValueError('A notification needs text')
+            raise Conflict('A notification needs text')
         # Links stay inside PokeSim, so an inbox item can never send anyone elsewhere.
         if link is not None and (not isinstance(link, str) or not link.startswith('/') or link.startswith('//')
                                  or '\\' in link or len(link) > 300):
-            raise ValueError('A notification link must be a PokeSim path')
+            raise Conflict('A notification link must be a PokeSim path')
         with self.lock, self.db:
             if self.db.execute('SELECT 1 FROM users WHERE id=?', (user_id,)).fetchone() is None:
                 raise NotFound('User not found')

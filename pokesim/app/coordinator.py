@@ -747,7 +747,7 @@ class Coordinator:
                     receipt = self._request(aid, 'prepare', request)
                 except (RuntimeError, ValueError) as error:
                     # Some subclasses, such as JSONDecodeError, cannot be rebuilt from a message alone.
-                    kind = ValueError if isinstance(error, ValueError) else RuntimeError
+                    kind = Conflict if isinstance(error, ValueError) else Refused
                     raise kind(f'{error} (adventure {aid})') from error
                 if plan.get('manual'):
                     with self.view_guard:
@@ -756,10 +756,10 @@ class Coordinator:
                                          (receipt.get('preparation') or {}).get('phase') or 'travelling')
                 if receipt.get('phase') == 'prepared':
                     if receipt.get('plan_digest') != plan['plan_digest'] or receipt.get('selected_key') != plan[side + '_key']:
-                        raise ValueError('Preparation receipt does not match the selected exchange')
+                        raise Conflict('Preparation receipt does not match the selected exchange')
                     prepared[aid] = receipt
                 elif receipt.get('phase') != 'preparing':
-                    raise ValueError('Unexpected participant preparation state')
+                    raise Conflict('Unexpected participant preparation state')
             if len(prepared) == 2:
                 return prepared
             if time.monotonic() >= deadline:
@@ -786,7 +786,7 @@ class Coordinator:
         CheckpointStore.atomic_write(plan_path, json.dumps(session_plan, sort_keys=True).encode())
         output = directory / 'outputs'
         if output.exists():
-            raise ValueError('This cable attempt already has output. Recovery cannot run it a second time.')
+            raise Conflict('This cable attempt already has output. Recovery cannot run it a second time.')
         command = ([sys.executable, '--link-session'] if getattr(sys, 'frozen', False)
                    else [sys.executable, '-m', 'pokesim.interactions.link_worker'])
         command += ['--plan', str(plan_path), '--out', str(output), '--watch-parent']
@@ -873,7 +873,7 @@ class Coordinator:
         if (manifest.get('adapter_id') != ADAPTER_ID or manifest.get('status') != 'verified' or manifest.get('schema_version') != 1
                 or manifest.get('interaction_id') != row['id'] or manifest.get('attempt_id') != row['plan']['attempt_id']
                 or manifest.get('plan_sha256') != expected or set(manifest.get('participants', {})) != set(row['plan']['participants'])):
-            raise ValueError('Cable output does not match this exact paired attempt')
+            raise Conflict('Cable output does not match this exact paired attempt')
 
     def execute(self, tid, wait=None):
         """Run one exchange. With ``wait``, queue behind the one finishing for up to that many seconds."""
@@ -914,7 +914,7 @@ class Coordinator:
                         if (receipt.get('phase') != 'staged' or receipt.get('attempt_id') != row['plan']['attempt_id']
                                 or receipt.get('plan_digest') != row['plan']['plan_digest']
                                 or receipt.get('staged', {}).get('checkpoint_sha256') != result['checkpoint_sha256']):
-                            raise ValueError('Participant did not durably stage the negotiated result')
+                            raise Conflict('Participant did not durably stage the negotiated result')
                     row = self.registry.update_transaction(tid, decision='COMMIT', phase='committed', result=manifest, error=None)
                 return self._recover(row)
             except Exception as error:
@@ -943,22 +943,22 @@ class Coordinator:
             for aid in plan['participants']:
                 receipt = self._request(aid, 'abort', {'id': tid}, recovery=True)
                 if receipt.get('phase') != 'aborted':
-                    raise ValueError('Participant did not acknowledge abort')
+                    raise Conflict('Participant did not acknowledge abort')
             row = self.registry.update_transaction(tid, phase='aborted')
         else:
             manifest = row['result']
             if not manifest:
-                raise ValueError('Committed result manifest is unavailable')
+                raise Conflict('Committed result manifest is unavailable')
             for aid in plan['participants']:
                 receipt = self._request(aid, 'apply', {'id': tid, 'attempt_id': plan['attempt_id'],
                     'plan_digest': plan['plan_digest'], 'checkpoint_sha256': manifest['participants'][aid]['checkpoint_sha256']}, recovery=True)
                 if receipt.get('phase') not in {'applied', 'released'} or receipt.get('decision') != 'COMMIT':
-                    raise ValueError('Participant did not acknowledge committed application')
+                    raise Conflict('Participant did not acknowledge committed application')
             self.registry.update_transaction(tid, phase='releasing', error=None)
             for aid in plan['participants']:
                 receipt = self._request(aid, 'release', {'id': tid})
                 if receipt.get('phase') != 'released':
-                    raise ValueError('Participant did not acknowledge release')
+                    raise Conflict('Participant did not acknowledge release')
             row = self.registry.update_transaction(tid, phase='completed', error=None)
             try:
                 self.manager.notifications.trade_completed(row, manifest.get('display') or {})
@@ -1665,4 +1665,4 @@ class Coordinator:
         if self.scheduler and self.scheduler is not threading.current_thread():
             self.scheduler.join(timeout=60)
             if self.scheduler.is_alive():
-                raise RuntimeError('Trading shutdown exceeded its deadline. Keep the registry open until its worker exits.')
+                raise Refused('Trading shutdown exceeded its deadline. Keep the registry open until its worker exits.')
