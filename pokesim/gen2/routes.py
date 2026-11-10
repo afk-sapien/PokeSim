@@ -332,3 +332,70 @@ class Regions:
                 self.searches = {}
             search = self.searches[key] = Search(starts, expand)
         return search.find(goals)
+
+
+# The map links a walk crosses, kept per game data as {id: (data, links)}.
+_WALK_LINKS = {}
+WALKED = ('ground', 'room')
+
+
+def reachable(data, regions):
+    """Every region a player can reach from a warp, with Cut and Surf.
+
+    Most maps have a walkable ring of tree tops around the edge that no warp opens onto, and the
+    rings of two maps often meet across a link. Those rings are left out.
+    """
+    seeds = {(mid, region) for mid, entry in data.maps.items() for warp in entry['warps']
+             for region in regions.memberships(mid, (warp['x'], warp['y']), True, True, arrive=True)}
+    seen, queue = set(seeds), deque(seeds)
+    while queue:
+        for target, _, _ in regions.edges(queue.popleft(), True, True):
+            if target not in seen:
+                seen.add(target)
+                queue.append(target)
+    return seen
+
+
+def link_walks(data, regions):
+    """How a walk crosses each map link of the map files, as {(map, direction, other map): kind}.
+
+    The kind is 'ground' where ground a player reaches meets across the link, and 'room' where one
+    room has doors into both maps, as a gate room does. It is 'pocket' where only ground no warp
+    reaches meets across it, and 'no crossing' where no ground meets at all.
+    """
+    reached = reachable(data, regions)
+    crossings, rings, joined = set(), set(), set()
+    for mid in data.maps:
+        for region in set(regions.regions(mid, True, True).values()):
+            node, doors = (mid, region), set()
+            for target, _, kind in regions.edges(node, True, True):
+                if kind in EDGE_BUTTONS and target[0] != mid:
+                    (crossings if node in reached else rings).add((mid, kind, target[0]))
+                elif kind == 'warp' and node in reached:
+                    doors.add(target[0])
+            joined.update((one, other) for one in doors for other in doors if one != other and mid not in (one, other))
+    kinds = {}
+    for mid, entry in data.maps.items():
+        for link in entry['connections']:
+            key = (mid, link['direction'], link['map'])
+            if key in crossings:
+                kinds[key] = 'ground'
+            elif (mid, link['map']) in joined:
+                kinds[key] = 'room'
+            else:
+                kinds[key] = 'pocket' if key in rings else 'no crossing'
+    return kinds
+
+
+def walk_links(data):
+    """The map links a walk crosses, as a frozenset of (map, direction, other map), read from the map files.
+
+    Some links join only a ring of tree tops no warp reaches, or no ground at all. Route 44 and
+    Blackthorn City meet that way, and the walk between them is Ice Path. tools/map_audit.py checks
+    that the walk router counts no such link.
+    """
+    entry = _WALK_LINKS.get(id(data))
+    if entry is None or entry[0] is not data:
+        links = frozenset(key for key, kind in link_walks(data, Regions(data)).items() if kind in WALKED)
+        entry = _WALK_LINKS[id(data)] = (data, links)
+    return entry[1]

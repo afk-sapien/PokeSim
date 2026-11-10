@@ -18,7 +18,7 @@ def goal(key, map_name='HERE'):
 def policy(**extra):
     data = SimpleNamespace(map_ids={'HERE': 1, 'NEAR': 2, 'FAR': 3})
     hops = {(1, 1): [], (1, 2): [None], (1, 3): [None] * 20}
-    nav = SimpleNamespace(route=lambda source, target: hops.get((source, target)))
+    nav = SimpleNamespace(walk=lambda source, target: hops.get((source, target)))
     return SimpleNamespace(data=data, nav=nav, collection={'target': None}, menu=None, completed={}, decisions=10, **extra)
 
 

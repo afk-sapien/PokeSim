@@ -882,7 +882,7 @@ class Policy:
                 continue
             if entry['constant'] == 'BLACKTHORN_POKECENTER_1F' and 'ice_path' not in self.completed:
                 continue
-            route = self.nav.route(snapshot.map, mid)
+            route = self.nav.walk(snapshot.map, mid)
             if route is None:
                 continue
             choices.extend((len(route), mid, x, y) for x, y in pcs)
@@ -1226,14 +1226,14 @@ class Policy:
                 continue
             if entry['constant'] == 'BLACKTHORN_POKECENTER_1F' and 'ice_path' not in self.completed:
                 continue
-            route = self.nav.route(snapshot.map, mid)
+            route = self.nav.walk(snapshot.map, mid)
             if route is None:
                 continue
             nurse = next(obj for obj in entry['objects'] if obj['sprite'] == 'SPRITE_NURSE')
-            # Map links can cross a cliff. Route 44 links to Blackthorn City that way, though the walk goes
-            # through Ice Path, where healing stands down. The trip would step into the cave, hand back to
-            # the main goal, step out and choose the same center again. So a known walk must stay out
-            # of Ice Path. With no walk known yet, the map links decide as before.
+            # The walk from Route 44 to Blackthorn City goes through Ice Path, where healing stands down.
+            # The trip would step into the cave, hand back to the main goal, step out and choose the same
+            # center again. So a known walk must stay out of Ice Path. With no walk known yet, the map
+            # walk decides alone.
             walk = self.nav.regions.route(snapshot, mid, [(nurse['x'], nurse['y'] + 2)], cut=cut, surf=surf)
             if walk is None or not any(
                     self.data.maps[step[1][0]]['constant'].startswith('ICE_PATH_') for step in walk):
@@ -1319,7 +1319,7 @@ class Policy:
             for mid, entry in self.data.maps.items():
                 if entry['region'] != self.travel_region(snapshot) or not entry['shops']:
                     continue
-                route = self.nav.route(snapshot.map, mid)
+                route = self.nav.walk(snapshot.map, mid)
                 if route is None:
                     continue
                 current = bool(self.shop_location) and mid == self.shop_location[0]

@@ -37,15 +37,41 @@ def test_every_finding_is_allowed_and_every_allow_row_is_found(game):
     assert stale == []
 
 
-def test_the_route_44_seam_fails_without_its_row(game):
+SEAMS = {
+    ('seam', 'ROUTE_44', 'east', 'BLACKTHORN_CITY', 'pocket'),
+    ('seam', 'BLACKTHORN_CITY', 'west', 'ROUTE_44', 'pocket'),
+    ('seam', 'ROUTE_10_NORTH', 'south', 'ROUTE_10_SOUTH', 'pocket'),
+    ('seam', 'ROUTE_10_SOUTH', 'north', 'ROUTE_10_NORTH', 'pocket'),
+    ('seam', 'AZALEA_TOWN', 'west', 'ROUTE_34', 'no crossing'),
+    ('seam', 'ROUTE_34', 'east', 'AZALEA_TOWN', 'no crossing'),
+}
+
+
+def test_a_router_that_counts_every_link_fails_on_the_seams(game):
     # The router counted Blackthorn one map from Route 44, so a healing trip walked into Ice Path
-    # and stalled (#254). Only the heal choice knows since #255, so the audit must keep naming it.
-    name, _, findings = game
-    key = ('seam', 'ROUTE_44', 'east', 'BLACKTHORN_CITY', 'pocket')
-    allow = tool.allowed(name)
-    del allow[key]
-    new, _ = tool.problems(name, findings, allow)
-    assert list(new) == [key]
+    # and stalled (#254). The walk router skips that link and five like it, and the audit must
+    # name all six for a router that counts them again.
+    _, data, findings = game
+    assert not any(key[0] == 'seam' for key in findings)
+    names = {mid: entry['constant'] for mid, entry in data.maps.items()}
+    every = tool.check_seams(data, Regions(data), Navigator(data), names, walk=False)
+    assert set(every) == SEAMS
+
+
+def test_a_walk_goes_through_the_cave_or_forest_between_two_seam_maps(game):
+    _, data, _ = game
+    ids = {entry['constant']: mid for mid, entry in data.maps.items()}
+    names = {mid: entry['constant'] for mid, entry in data.maps.items()}
+    navigator = Navigator(data)
+
+    def walk(start, target):
+        return [names[step[1]] for step in navigator.walk(ids[start], ids[target])]
+
+    assert walk('ROUTE_44', 'BLACKTHORN_CITY') == ['ICE_PATH_1F', 'BLACKTHORN_CITY']
+    assert walk('ROUTE_10_NORTH', 'ROUTE_10_SOUTH') == ['ROUTE_9', 'ROCK_TUNNEL_1F', 'ROUTE_10_SOUTH']
+    assert walk('AZALEA_TOWN', 'ROUTE_34') == [
+        'ILEX_FOREST_AZALEA_GATE', 'ILEX_FOREST', 'ROUTE_34_ILEX_FOREST_GATE', 'ROUTE_34']
+    assert walk('ROUTE_34', 'GOLDENROD_CITY') == ['GOLDENROD_CITY']
 
 
 class CarpetDoors:
