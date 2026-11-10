@@ -44,7 +44,7 @@ class Library:
 
     def adventure(self, name, owner):
         row = self.manager.registry.create(name, 'fixture', {}, identifier(), owner=owner['id'])
-        self.manager.registry.update(row['id'], state='running')
+        self.manager.registry.transition(row['id'], 'running', 'test setup')
         return row['id']
 
 

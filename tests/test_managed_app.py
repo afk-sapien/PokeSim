@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 import pytest
 
+from pokesim.app.loops import Loop
 from pokesim.app.manager import Manager, create_app
 from pokesim.app.registry import identifier
 from pokesim.app.supervisor import AdventureRunning
@@ -19,6 +20,28 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, 'start', lambda: None)
     with TestClient(create_app(manager)) as client:
         yield client, manager
+
+
+def test_readiness_names_a_frozen_monitor_and_a_dead_loop(client):
+    client, manager = client
+    # Loops that have not started yet are no reason to fail readiness.
+    assert client.get('/health/ready').status_code == 200
+    monitor = manager.supervisor.monitor
+    monitor.thread = SimpleNamespace(is_alive=lambda: True)
+    monitor.heartbeat = monitor.clock() - 200
+    try:
+        frozen = client.get('/health/ready')
+        assert frozen.status_code == 503
+        assert frozen.json()['problems'] == ['adventure-supervisor has made no progress for 200 seconds']
+        manager.watchdog.loop = Loop('library-watchdog', lambda: None, 60, lambda seconds: True)
+        manager.watchdog.loop.thread = SimpleNamespace(is_alive=lambda: False)
+        monitor.beat()
+        response = client.get('/health/ready')
+        assert response.status_code == 503
+        assert response.json() == {'ok': False, 'adventures': 0, 'problems': ['library-watchdog stopped']}
+    finally:
+        monitor.thread = None
+        manager.watchdog.loop = None
 
 
 def login(client, manager):
@@ -222,7 +245,7 @@ def test_speed_is_independent_and_editable_while_running(client):
     manager.registry.add_rom('fixture-rom', 'sha1', 'red')
     first = manager.registry.create('Red', 'fixture-rom', {'speed': 8}, identifier())
     second = manager.registry.create('Blue', 'fixture-rom', {'speed': 2}, identifier())
-    manager.registry.update(first['id'], state='running')
+    manager.registry.transition(first['id'], 'running', 'test setup')
     route = '/api/v1/adventures/' + first['id']
     for value in (0, 0.5, 1, 4, 16):
         response = client.patch(route, json={'settings': {'speed': value}}, headers=headers)
@@ -353,7 +376,7 @@ def test_play_settings_save_running_or_stopped_and_push_live(client, monkeypatch
     stopped = client.patch(route, headers=headers, json={'nicknames': False})
     assert stopped.status_code == 200 and stopped.json()['settings']['nicknames'] is False
     assert stopped.json()['play_pending'] is False and pushed == [row['id']]
-    manager.registry.update(row['id'], state='running')
+    manager.registry.transition(row['id'], 'running', 'test setup')
     # The general settings route still keeps play settings to the play route while running.
     assert client.patch(f"/api/v1/adventures/{row['id']}", headers=headers,
                         json={'settings': {'nicknames': True}}).status_code == 409
@@ -379,7 +402,7 @@ def test_the_play_style_route_takes_only_known_styles(client, monkeypatch):
         response = client.patch(route, headers=headers, json=bad)
         assert response.status_code == 409 and 'balanced, story, collector' in response.text
     assert pushed == []
-    manager.registry.update(row['id'], state='running')
+    manager.registry.transition(row['id'], 'running', 'test setup')
     collector = client.patch(route, headers=headers, json={'play_style': 'collector'})
     assert collector.status_code == 200 and collector.json()['settings']['play_style'] == 'collector'
     both = client.patch(route, headers=headers, json={'nicknames': False, 'play_style': 'story'})
@@ -458,7 +481,7 @@ def test_audio_proxy_preserves_pcm_metadata_and_adventure_boundary(client, monke
     client, manager = client
     manager.registry.add_rom('fixture-rom', 'sha1', 'red')
     adventure = manager.registry.create('Audio Red', 'fixture-rom', {}, identifier())
-    manager.registry.update(adventure['id'], state='running')
+    manager.registry.transition(adventure['id'], 'running', 'test setup')
     child = SimpleNamespace(url='http://worker', token='private-worker-token')
     monkeypatch.setattr(manager.supervisor, 'child', lambda aid: child)
     def worker(request):
@@ -483,7 +506,7 @@ def test_audio_proxy_preserves_pcm_metadata_and_adventure_boundary(client, monke
     assert response.headers['X-Audio-Mode'] == 'manual' and response.headers['X-Audio-Dropped'] == '3'
     assert 'X-Private-Worker' not in response.headers
     assert client.get(path, headers={'Origin': 'https://elsewhere.invalid'}).status_code == 403
-    manager.registry.update(adventure['id'], state='stopped')
+    manager.registry.transition(adventure['id'], 'stopped', 'test setup')
     assert client.get(path).status_code == 409
 
 
@@ -492,7 +515,7 @@ def test_palette_changes_live_and_requires_valid_authorized_settings(client, mon
     headers = login(client, manager)
     manager.registry.add_rom('fixture-rom', 'sha1', 'red')
     row = manager.registry.create('Red', 'fixture-rom', {}, identifier())
-    manager.registry.update(row['id'], state='running')
+    manager.registry.transition(row['id'], 'running', 'test setup')
     route = '/api/v1/adventures/' + row['id']
     calls = []
     def push(aid):

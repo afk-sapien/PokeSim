@@ -109,7 +109,7 @@ def test_auto_off_stops_automatic_trades_only(setup):  # noqa: F811
 
 def third_game(setup):  # noqa: F811
     game = setup.registry.create('Third Red', 'rom', {}, identifier())
-    setup.registry.update(game['id'], state='running', desired_state='running')
+    setup.registry.transition(game['id'], 'running', 'test setup', desired_state='running')
     setup.peers[game['id']] = Peer(game['id'], '2')
     return game['id']
 
@@ -223,7 +223,7 @@ def test_trade_tab_lists_their_pokemon_with_hard_limits(owned):
     assert limits['starts_now'] is True
     mine = service.pokemon(left)
     assert [row['key'] for row in mine['pokemon']] == ['0', 'party-0'] and mine['reason'] == ''
-    owned.registry.update(left, state='stopped', desired_state='stopped')
+    owned.registry.transition(left, 'stopped', 'test setup', desired_state='stopped')
     assert service.pokemon(left)['reason'] == 'Start this adventure to trade from it'
 
 

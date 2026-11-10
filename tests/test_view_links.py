@@ -51,7 +51,7 @@ def managed(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, 'start', lambda: None)
     manager.registry.add_rom('fixture', 'sha1', 'red')
     adventure = manager.registry.create('View test', 'fixture', {}, identifier())
-    manager.registry.update(adventure['id'], state='running')
+    manager.registry.transition(adventure['id'], 'running', 'test setup')
     forwarded = []
 
     async def child(request):
@@ -124,7 +124,7 @@ def test_every_library_api_is_refused_under_view(managed):
 
 
 def test_stopped_adventure_view_link_shows_no_library(managed):
-    managed.app.state.manager.registry.update(managed.aid, state='stopped')
+    managed.app.state.manager.registry.transition(managed.aid, 'stopped', 'test setup')
     response = managed.client.get(f'/view/{managed.aid}/')
     assert response.status_code == 409
     assert 'not running' in response.text and 'library' not in response.text.lower()

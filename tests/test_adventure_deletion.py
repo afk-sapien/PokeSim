@@ -40,7 +40,7 @@ def test_delete_preserves_other_adventures_roms_backups_and_is_idempotent(client
 def test_delete_rejects_unstopped_adventure(client, state, desired):
     _, manager = client
     row, path = adventure(manager)
-    manager.registry.update(row['id'], state=state, desired_state=desired)
+    manager.registry.transition(row['id'], state, 'test setup', desired_state=desired)
     with pytest.raises(ValueError, match='stop'):
         delete_adventure(manager, row['id'], row['name'])
     assert path.exists()

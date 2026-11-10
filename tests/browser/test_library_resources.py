@@ -25,7 +25,7 @@ def test_library_usage_updates_without_replacing_cards(page, tmp_path, monkeypat
         monkeypatch.setattr(manager.supervisor, 'resources', lambda aid: usage)
         manager.registry.add_rom('fixture', 'sha1', 'blue')
         row = manager.registry.create('Blue', 'fixture', {}, identifier())
-        manager.registry.update(row['id'], state='running', summary={
+        manager.registry.transition(row['id'], 'running', 'test setup', summary={
             'activity': 'Cerulean Cave', 'league_rewards': {'wins': 52},
             'recent_activity': [{'time': 1790700000, 'message': 'Cerulean Cave'},
                                 {'time': 1790699940, 'message': 'Cerulean City'},
@@ -146,7 +146,7 @@ def test_library_downloads_selected_save_and_reports_busy_game(page, tmp_path, m
         manager.registry.add_rom('fixture', 'sha1', 'blue')
         for name, state in [('Blue', 'running'), ('Red', 'stopped')]:
             row = manager.registry.create(name, 'fixture', {}, identifier())
-            manager.registry.update(row['id'], state=state)
+            manager.registry.transition(row['id'], state, 'test setup')
             games[name] = row['id']
         return create_app(manager)
     def export(route):
@@ -200,7 +200,7 @@ def test_adventure_speed_changes_independently_and_global_controls_are_removed(p
         for name, speed in [('Blue', 0.75 if width == 320 else 4), ('Red', 16)]:
             game = manager.registry.create(name, 'fixture', {'speed': speed}, identifier())
             games.append(game)
-            manager.registry.update(game['id'], state='running')
+            manager.registry.transition(game['id'], 'running', 'test setup')
         return create_app(manager)
     serve_screens(page)
     with serve(factory) as url:
@@ -239,7 +239,7 @@ def test_running_adventure_removal_saves_and_stops_first(page, tmp_path, monkeyp
         monkeypatch.setattr(manager, 'start', lambda: None)
         manager.registry.add_rom('fixture', 'sha1', 'red')
         row = manager.registry.create('Disposable', 'fixture', {}, identifier())
-        manager.registry.update(row['id'], state='running', desired_state='running')
+        manager.registry.transition(row['id'], 'running', 'test setup', desired_state='running')
         path = manager.root / 'adventures' / row['id']
         saved = []
         original = manager.supervisor.stop

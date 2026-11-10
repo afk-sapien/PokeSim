@@ -21,7 +21,7 @@ def managed(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, 'start', lambda: None)
     manager.registry.add_rom('fixture', 'sha1', 'red')
     adventure = manager.registry.create('Security test', 'fixture', {}, identifier())
-    manager.registry.update(adventure['id'], state='running')
+    manager.registry.transition(adventure['id'], 'running', 'test setup')
     forwarded = []
 
     async def worker(request):

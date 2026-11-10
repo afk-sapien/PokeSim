@@ -41,6 +41,7 @@ import time
 
 from ..web.security import LEASE_HEADER
 from . import inbox
+from .loops import Loop
 from .policy import can
 from .supervisor import WorkerError
 
@@ -137,6 +138,7 @@ class Leases:
         # Told whenever a send gets its answer or a send thread ends.
         self.settled = threading.Condition(self.lock)
         self.stop = threading.Event()
+        self.loop = None
 
     @property
     def enforced(self):
@@ -440,6 +442,10 @@ class Leases:
                         warn = desired.refusals == 1
                         desired.retry_at = self.clock() + min(
                             REFUSED_RETRY_LIMIT, REFUSED_RETRY_SECONDS * 2 ** (desired.refusals - 1))
+                elif outcome != 'refused':
+                    # A newer change came in during the send and is what counts, so the page that
+                    # asked hears that control changed hands, even when the worker ran this one.
+                    desired.outcome = 'superseded'
                 self.settled.notify_all()
             if warn:
                 log.warning('Adventure %s refused %s for the control lease with %s: %s',
@@ -478,7 +484,7 @@ class Leases:
     def answer(self, aid, desired, timeout=None):
         """Wait for the worker's answer to `desired`, sending it once more when the first send got
         none, since it may have got there. Returns applied, deferred, refused, unanswered, or
-        superseded when a newer change replaced it before it was sent. The wait is
+        superseded when a newer change replaced it before the worker answered. The wait is
         `ANSWER_SECONDS` unless `timeout` is given, read on each call so a test can shorten it."""
         deadline = time.monotonic() + (ANSWER_SECONDS if timeout is None else timeout)
         outcome = self._answered(aid, desired, 1, deadline)
@@ -675,13 +681,8 @@ class Leases:
                     self._pass_on(aid, lease, 'idle')
 
     def run(self, interval=5):
-        def loop():
-            while not self.stop.wait(interval):
-                try:
-                    self.sweep()
-                except Exception:
-                    log.exception('The control lease sweep failed')
-        threading.Thread(target=loop, name='control-lease', daemon=True).start()
+        self.loop = Loop('control-lease', self.sweep, interval, self.stop.wait, logger=log)
+        self.loop.start()
 
     def close(self):
         self.stop.set()

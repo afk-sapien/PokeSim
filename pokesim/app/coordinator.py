@@ -23,6 +23,7 @@ from ..checkpoints import CheckpointStore
 from ..game_data import VARIANT_ENV
 from . import inbox, trade_settings
 from .assets import portrait_url
+from .loops import Loop
 from .registry import digest, identifier, validate_id
 from pokecore.identity import find, legacy
 from ..trade.preferences import FIRST
@@ -199,6 +200,7 @@ class Coordinator:
         self.execution = threading.Lock()
         self.closed = threading.Event()
         self.scheduler = None
+        self.loop = None
         self.process = None
         self.process_guard = threading.Lock()
         self.previews = {}
@@ -982,7 +984,7 @@ class Coordinator:
                     # recorded the failure on the adventure, as for an owner's own Stop.
                     log.exception('Could not stop adventure %s after exchange %s', aid, tid)
             else:
-                self.registry.update(aid, state='running', error=None)
+                self.registry.transition(aid, 'running', f'exchange {tid} is done', error=None)
         return row
 
     def _prune_interactions(self, keep=KEEP_INTERACTIONS):
@@ -1623,15 +1625,15 @@ class Coordinator:
     def start_scheduler(self):
         if self.scheduler and self.scheduler.is_alive():
             return
-        def run():
-            while not self.closed.wait(10):
-                try:
-                    self.schedule_once()
-                except Exception as error:
-                    self.last_message = 'Trading is waiting and will try again. Your adventures keep their progress.'
-                    log.warning('Automatic Cable Club scheduling failed: %s', error)
-        self.scheduler = threading.Thread(target=run, daemon=True, name='cable-coordinator')
-        self.scheduler.start()
+        self.loop = Loop('cable-coordinator', self._schedule, 10, self.closed.wait, logger=log)
+        self.scheduler = self.loop.start()
+
+    def _schedule(self):
+        try:
+            self.schedule_once()
+        except Exception:
+            self.last_message = 'Trading is waiting and will try again. Your adventures keep their progress.'
+            raise
 
     def preview(self, aid):
         with self.view_guard:

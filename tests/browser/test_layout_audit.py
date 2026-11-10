@@ -170,12 +170,13 @@ def library(tmp_path, monkeypatch):
         for name, version, state in ADVENTURES:
             manager.registry.add_rom(version, 'sha1' + version, version)
             row = manager.registry.create(name, version, {}, identifier())
-            manager.registry.update(row['id'], state=state, error='The cartridge file changed since it was added' if state == 'failed' else None,
-                                    summary={'activity': 'Cerulean Cave Basement Floor Two', 'league_rewards': {'wins': 9_297},
-                                             'recent_activity': [{'time': 1790700000 - i * 60, 'message': message} for i, message in
-                                                                 enumerate(['Caught a wild THUNDERPAW on Route 24',
-                                                                            'Entered the Hall of Fame again',
-                                                                            'Beat Cooltrainer Samantha'])]})
+            manager.registry.transition(row['id'], state, 'test setup',
+                                        error='The cartridge file changed since it was added' if state == 'failed' else None,
+                                        summary={'activity': 'Cerulean Cave Basement Floor Two', 'league_rewards': {'wins': 9_297},
+                                                 'recent_activity': [{'time': 1790700000 - i * 60, 'message': message} for i, message in
+                                                                     enumerate(['Caught a wild THUNDERPAW on Route 24',
+                                                                                'Entered the Hall of Fame again',
+                                                                                'Beat Cooltrainer Samantha'])]})
         from pokesim.app.watchdog import Problem
         # The watchdog list with a long message, so it is audited at every width.
         manager.watchdog.problems = {'stuck:x': Problem(

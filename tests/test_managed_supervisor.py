@@ -397,6 +397,41 @@ def run_monitor_once(supervisor, aid, child, requests):
         supervisor.closed = original
 
 
+def test_one_failing_child_check_is_logged_and_the_next_child_is_still_checked(supervisor, caplog):
+    first, second = adventure(supervisor), adventure(supervisor)
+    supervisor.start(first)
+    supervisor.start(second)
+    broken, healthy = supervisor.child(first), supervisor.child(second)
+
+    def fails(method, path, data=None, timeout=None):
+        raise KeyError('a typo in the monitor')
+
+    def answers(method, path, data=None, timeout=None):
+        return {'speed': 1, 'game': {}, 'frame': 7} if path == '/api/summary' else {'ok': True}
+
+    broken.request, healthy.request = fails, answers
+    for child in (broken, healthy):
+        child.pace = SimpleNamespace(observe=lambda value: None)
+    beats = []
+    supervisor.monitor.clock = lambda: beats.append(1) or 0.0
+    waits = iter([False, False, True])
+    original = supervisor.closed
+    supervisor.closed = SimpleNamespace(wait=lambda seconds: next(waits), is_set=lambda: False)
+    try:
+        with caplog.at_level('ERROR', 'pokesim.app.supervisor'):
+            supervisor._monitor()
+    finally:
+        supervisor.closed = original
+    assert supervisor.registry.adventure(second)['summary']['frame'] == 7
+    assert supervisor.registry.adventure(first)['state'] == 'running'
+    # Two passes failed the same way, and the second one is held back as a repeat.
+    errors = [record for record in caplog.records if record.levelname == 'ERROR']
+    assert [record.getMessage() for record in errors] == [f'The supervisor check of adventure {first} failed']
+    assert errors[0].exc_info[0] is KeyError
+    # A beat after the pass setup, after each child and at the end of each pass.
+    assert len(beats) == 8
+
+
 def test_worker_without_a_palette_is_never_sent_one_and_stays_healthy(supervisor):
     aid = adventure(supervisor)
     supervisor.start(aid)

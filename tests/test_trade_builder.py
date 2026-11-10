@@ -37,7 +37,7 @@ def test_picker_lists_targets_and_hard_limits(built):
     limits = service.limits(left, '0', right)
     assert limits['blocked'] == {'party-1': 'Eggs cannot be traded'}
     assert limits['from']['name'] == 'Ivysaur' and limits['from']['blocked'] == ''
-    built.registry.update(right, state='stopped', desired_state='stopped')
+    built.registry.transition(right, 'stopped', 'test setup', desired_state='stopped')
     assert service.targets(left)['adventures'][0]['reason'] == 'Start this adventure to trade from it'
 
 
@@ -163,7 +163,7 @@ def test_hard_limits_still_refuse_a_trade_with_a_busy_game(built, monkeypatch):
     built.peers[right].pokemon[0]['blocked'] = 'Eggs cannot be traded'
     with pytest.raises(HardLimit, match='Eggs cannot be traded'):
         service.create({'from_id': left, 'from_key': '0', 'to_id': right, 'to_key': '1'})
-    built.registry.update(right, state='stopped', desired_state='stopped')
+    built.registry.transition(right, 'stopped', 'test setup', desired_state='stopped')
     with pytest.raises(ValueError, match='Start this adventure'):
         service.create({'from_id': left, 'from_key': '0', 'to_id': right, 'to_key': 'party-1'})
     assert built.coordinator.manual_statuses()['trades'] == []
@@ -260,7 +260,7 @@ def test_builder_routes_pass_through_and_refuse_view_only(managed, monkeypatch):
     assert client.get(f'/api/v1/interactions/trade-builder/targets?from_id={aid}').status_code == 200
     assert seen == [(aid, 'box-3'), (aid, None)]
     other = manager.registry.create('Other', 'fixture', {}, identifier())
-    manager.registry.update(other['id'], state='running')
+    manager.registry.transition(other['id'], 'running', 'test setup')
     monkeypatch.setattr(config, 'VIEWER_ONLY', True)
     body = {'from_id': aid, 'from_key': 'b', 'to_id': other['id'], 'to_key': 'a'}
     assert client.post('/api/v1/interactions/trade-builder', json=body).status_code == 403

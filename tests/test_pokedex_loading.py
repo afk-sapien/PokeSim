@@ -53,7 +53,7 @@ def test_managed_pokedex_reference_is_revalidated_not_stored(tmp_path, monkeypat
     monkeypatch.setattr(manager, 'start', lambda: None)
     manager.registry.add_rom('fixture', 'sha1', 'red')
     adventure = manager.registry.create('Cache test', 'fixture', {}, identifier())
-    manager.registry.update(adventure['id'], state='running')
+    manager.registry.transition(adventure['id'], 'running', 'test setup')
     seen = []
 
     async def child(request):
@@ -85,7 +85,7 @@ def test_managed_pages_carry_the_portrait_stamp(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, 'start', lambda: None)
     manager.registry.add_rom('fixture', 'sha1', 'red')
     adventure = manager.registry.create('Stamp test', 'fixture', {}, identifier())
-    manager.registry.update(adventure['id'], state='running')
+    manager.registry.transition(adventure['id'], 'running', 'test setup')
     page = render_game_page('pc.html', base_path=f'/games/{adventure["id"]}', adventure_id=adventure['id'])
     assert '<meta name="pokesim-sprites" content="rom-portraits-1">' in page
 

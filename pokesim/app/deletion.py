@@ -83,7 +83,8 @@ def delete_adventure(manager, aid, confirmation, actor=None):
         with manager.registry.lock, manager.registry.db:
             manager.registry.db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
                                         (PREFIX + aid, json.dumps({'complete': False})))
-            manager.registry.db.execute("UPDATE adventures SET state='deleting', archived=1 WHERE id=?", (aid,))
+            manager.registry.db.execute('UPDATE adventures SET archived=1 WHERE id=?', (aid,))
+            manager.registry.move(aid, 'deleting', 'it was deleted')
         return _finish(manager, aid)
 
 

@@ -75,7 +75,7 @@ def test_new_pokedex_entries_outrank_species_variety(setup, monkeypatch):
 
 def test_scheduler_considers_best_exchange_across_all_games(setup, monkeypatch):
     third = setup.registry.create('Third', 'rom', {}, identifier())
-    setup.registry.update(third['id'], state='running', desired_state='running')
+    setup.registry.transition(third['id'], 'running', 'test setup', desired_state='running')
     setup.peers[third['id']] = Peer(third['id'], 'third')
     ids = sorted(game['id'] for game in setup.registry.adventures())
     inventories = {aid: inventory(offer(aid, 25)) for aid in ids}

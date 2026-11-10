@@ -92,7 +92,7 @@ class Supervisor:
         if only_if_stopped and self.registry.adventure(aid)['desired_state'] != 'stopped':
             return None
         self.stops.append(aid)
-        return self.registry.update(aid, state='stopped')
+        return self.registry.transition(aid, 'stopped', 'test setup')
 
 
 def test_collection_requests_work_for_one_or_multiple_adventures(setup):
@@ -112,7 +112,7 @@ def setup(tmp_path):
     registry.add_rom('rom', 'sha', 'red')
     games = [registry.create(name, 'rom', {}, identifier()) for name in ['First Red', 'Second Red']]
     for game in games:
-        registry.update(game['id'], state='running', desired_state='running')
+        registry.transition(game['id'], 'running', 'test setup', desired_state='running')
     peers = {game['id']: Peer(game['id'], str(index)) for index, game in enumerate(games)}
     supervisor = Supervisor(registry, peers)
     manager = SimpleNamespace(root=tmp_path, registry=registry, supervisor=supervisor, suspended=False,
@@ -324,7 +324,7 @@ def test_a_stop_that_fails_after_a_trade_leaves_no_pause_for_the_next_run(setup)
     leases.desired[aid] = Desired('pause', leases.advance(aid), confirmed=True, boot='first')
 
     def failing(aid, **options):
-        setup.registry.update(aid, state='failed', error='Worker exited with code 1')
+        setup.registry.transition(aid, 'failed', 'test setup', error='Worker exited with code 1')
         raise RuntimeError('Worker exited with code 1')
     setup.supervisor.stop = failing
     setup.registry.update(aid, desired_state='stopped')
@@ -341,7 +341,7 @@ def test_a_stop_that_fails_after_a_trade_still_stops_the_other_adventure(setup):
 
     def failing(aid, **options):
         if aid == left:
-            setup.registry.update(aid, state='failed', error='Worker exceeded the shutdown deadline')
+            setup.registry.transition(aid, 'failed', 'test setup', error='Worker exceeded the shutdown deadline')
             raise RuntimeError('Worker exceeded the shutdown deadline')
         return stop(aid, **options)
     setup.supervisor.stop = failing
@@ -600,9 +600,9 @@ def test_a_full_pc_names_its_game_and_stops_automatic_retries(setup, monkeypatch
 def test_new_games_join_automatically_despite_obsolete_group_settings(setup):
     setup.registry.set_setting('trading', {'enabled': False, 'participants': []})
     old_id = setup.data['left_id']
-    setup.registry.update(old_id, state='stopped', desired_state='stopped', archived=True)
+    setup.registry.transition(old_id, 'stopped', 'test setup', desired_state='stopped', archived=True)
     new = setup.registry.create('New Red', 'rom', {}, identifier())
-    setup.registry.update(new['id'], state='running', desired_state='running')
+    setup.registry.transition(new['id'], 'running', 'test setup', desired_state='running')
     setup.peers[new['id']] = Peer(new['id'], 'new-offer')
     status = setup.coordinator.status()
     assert status['enabled']
@@ -641,7 +641,12 @@ def test_failed_automatic_recovery_is_bounded_and_preserves_reservation(setup):
     {'provenance': {'trading_blocked': True}},
 ])
 def test_automatic_scheduler_skips_ineligible_adventures(setup, change):
-    setup.registry.update(setup.data['left_id'], **change)
+    change = dict(change)
+    state = change.pop('state', None)
+    if state:
+        setup.registry.transition(setup.data['left_id'], state, 'test setup', **change)
+    else:
+        setup.registry.update(setup.data['left_id'], **change)
     assert setup.coordinator.schedule_once() is None
     assert setup.cable_calls == []
 
@@ -942,7 +947,7 @@ def test_an_adventure_stopped_meanwhile_cancels_a_slow_proposal(setup):
 
     def stopping(method, path, data=None, timeout=None):
         if path.endswith('/inventory'):
-            setup.registry.update(setup.data['right_id'], state='stopped', desired_state='stopped')
+            setup.registry.transition(setup.data['right_id'], 'stopped', 'test setup', desired_state='stopped')
         return original(method, path, data, timeout)
 
     left.request = stopping
@@ -1175,7 +1180,7 @@ def test_a_waiting_chosen_trade_comes_before_automatic_trades_for_its_adventures
     c, registry = setup.coordinator, setup.registry
     for name in ('Third Red', 'Fourth Red'):
         game = registry.create(name, 'rom', {}, identifier())
-        registry.update(game['id'], state='running', desired_state='running')
+        registry.transition(game['id'], 'running', 'test setup', desired_state='running')
         setup.peers[game['id']] = Peer(game['id'], str(len(setup.peers)))
     others = [aid for aid in setup.peers if aid not in (setup.data['left_id'], setup.data['right_id'])]
     # Second Red's worker still holds it after its last exchange, so the chosen trade must wait.
@@ -1208,7 +1213,7 @@ def test_a_trade_cut_off_while_starting_is_resumed_after_restart(setup):
 
 
 def test_a_hand_picked_trade_needs_both_adventures_running(setup):
-    setup.registry.update(setup.data['right_id'], state='stopped', desired_state='stopped')
+    setup.registry.transition(setup.data['right_id'], 'stopped', 'test setup', desired_state='stopped')
     assert setup.coordinator.manual_game_reason(setup.registry.adventure(setup.data['right_id'])) == 'Start this adventure to trade from it'
     with pytest.raises(ValueError, match='Start this adventure'):
         setup.coordinator.enqueue_manual(manual_request(setup))
