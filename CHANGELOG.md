@@ -112,6 +112,7 @@
 - Tell both sides in their inboxes when an offer ends because an adventure changed hands or was deleted, or its sender lost their share or was deleted. Inbox items about a deleted adventure no longer link to it.
 - Fix Take Control showing control as granted when the game refused it faster than the page could look.
 - Stop a busy server from turning a right password into "Wrong username or password". The password check needs 64 MiB and its own threads, and when it could not get them, the error counted as a wrong password. It now tries 3 times, and then the login says the server is busy and to try again. At most 4 checks run at once, about 256 MiB, and a login that waits over 10 seconds for its turn gets the same busy answer.
+- Cap all local PokeSim work on a developer machine at 12 cores and 22G with systemd user slices in `deploy/systemd`. `sh tools/local_sims.sh install` installs them, and `sh tools/local_sims.sh start` runs a local app in the sims slice (12G). `tools/load_gate.sh` runs test jobs in the tests slice (10G), whose CPU weight beats the sims, and a heavy job may now use `pytest -n 12`.
 
 ## 0.6.2
 
