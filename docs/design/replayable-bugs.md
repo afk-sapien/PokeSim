@@ -1,6 +1,6 @@
 # Replayable bugs
 
-Status: proposal for review. Nothing here is built yet. It was read from main at `63c8427e`. It is phase 1 of the architecture plan of 2026-11-09. It fits [Goal system v2](goal-system.md): game time is PlayClock frames, and v2 PR 6 later builds one supervision ladder on the frame clocks this note puts in place.
+Status: approved on 2026-11-10 with the rulings in section 7. Nothing here is built yet. It was read from main at `63c8427e`. It is phase 1 of the architecture plan of 2026-11-09. It fits [Goal system v2](goal-system.md): game time is PlayClock frames, and v2 PR 6 later builds one supervision ladder on the frame clocks this note puts in place.
 
 A bug is replayable when the same start checkpoint, the same seed and the same outside inputs give the same action log, frame for frame. That must hold in a test and in production, for Gen I and Gen II. Today it holds in neither production loop. A stall cannot be run again, so each bug costs hours of fresh play. 57 stall PRs shipped a test and only 1 shipped a scenario. The live soak found 10 problems when it compared a build with the same build.
 
@@ -277,10 +277,12 @@ That is 38 agent-hours, plus the pyboy session's 5 for the determinism test and 
 
 PRs 3 to 5 can each ship alone. PR 6 needs 3 to 5. PR 7 needs 1 and 6. PR 8 needs 7.
 
-## 7. Open questions for the lead
+## 7. Decided
 
-1. #398 moved pyboy-rs to 0.1.5 between the baseline and the gate run. Should the bisect hold pyboy-rs at 0.1.5 for every commit, and report 0.1.4 against 0.1.5 once as its own result?
-2. Autosave every 3,600 frames writes more often at Max pace, and `KEEP_AUTOSAVES` (20) then covers 20 game minutes. A stuck reload looks 10 game minutes back. Should the interval be 18,000 frames, so 20 saves cover 100 game minutes?
-3. May the Mew event and return seeds come from the adventure seed? A gift claimed again after a rollback would then get the same DVs.
-4. A trace costs about 14,000 records per game hour per adventure, kept with the 20 autosaves and the 5 stall bundles. Is that acceptable in production, or should production trace only the segment before a stall?
-5. This order puts the trace and the bisect tool before the loop, against the plan's order. Is that acceptable?
+The lead ruled on the open questions on 2026-11-10.
+
+1. pyboy-rs: the bisect holds pyboy-rs at 0.1.5 for every commit. It reports 0.1.4 against 0.1.5 once, as its own result.
+2. Autosave: it stays at 3,600 frames with 20 kept saves. That covers 20 game minutes, and the stuck reload looks back only 10. The stall capture keeps its own save from before the stall. PR 5 measures the save cost at Max pace and reports back only when it passes 2% of loop time.
+3. Mew gift seeds: they come from the adventure seed with the kind and the championship count. A gift claimed again after a rollback gets the same DVs, because a rollback must not be a reroll.
+4. Trace in production: the full trace is kept and pruned with its autosave. PR 7 reports the measured bytes per game hour, and reports back only when one adventure's kept traces pass 50 MB.
+5. Order: the trace and the bisect tool come first, then the clock work. PR 1 of this plan starts after the pokecore move has merged, since it lives in `packages/pokecore`. The three cases run as soon as PR 2 lands.
