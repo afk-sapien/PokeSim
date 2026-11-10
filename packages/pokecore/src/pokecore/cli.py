@@ -26,12 +26,17 @@ def _lines(summary):
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ['trace']:
+        from .trace import main as trace_main
+        return trace_main(argv[1:])
     parser = argparse.ArgumentParser(prog='pokecore')
     commands = parser.add_subparsers(dest='command', required=True)
     summary = commands.add_parser('summary', help='print what a cartridge save holds')
     summary.add_argument('save', help='path to a 32 KiB .sav file')
     summary.add_argument('--rom', help='cartridge ROM, for the version and species names')
     summary.add_argument('--json', action='store_true', help='print JSON')
+    commands.add_parser('trace', help='check a trace segment (pokecore trace verify --help)')
     args = parser.parse_args(argv)
     try:
         result = summarize_save(args.save, rom=args.rom)
