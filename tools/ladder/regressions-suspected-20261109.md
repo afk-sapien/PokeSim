@@ -75,4 +75,11 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   it latched went first. A goal that picks up an item ball at most four steps away on the same map now
   goes before a latched heal. The Scope takes 84 frames, and red/badges_4 fell to 12.3%. The baseline
   moved for it.
+- #346, gold/red and crystal/red, 2026-11-10: the boss check heals before Red, and with that heal both
+  runs beat Red inside the window. Their rise is postgame play the 171176e runs never reached. Part of
+  it was the replay audit's: a Pokémon Center visit that makes another box the current one moved no
+  held count, so the whole visit counted as waste. A box change now counts as progress. crystal/red
+  fell to 0.3% and gold/red to 9.7%, and the baseline moved for both.
+- gold/red, still open as a catch strategy item and not a regression: 10424 frames of buying balls. The
+  run throws at a full-HP Tangela that its lead cannot weaken, runs out of balls and buys more.
 - The other rungs are still open.

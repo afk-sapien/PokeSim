@@ -119,6 +119,18 @@ def test_a_pc_swap_that_brings_the_trainee_into_the_party_is_progress_for_its_pr
     assert [event.kind for event in _goal_events('collection_train_pc', full, deposited)] == ['trainee']
 
 
+def test_a_pc_visit_that_changes_the_current_box_is_progress():
+    # With the current box full no catch fits, and the change to a box with room holds the same Pokémon.
+    party = [_mon('Typhlosion')]
+    full, changed = _snapshot(party, []), _snapshot(party, [])
+    full.active_box, changed.active_box = 0, 1
+    assert [(event.kind, event.detail) for event in _goal_events('collection_box', full, changed)] == [('box', 1)]
+    assert _goal_events('collection_box', full, full) == []
+    # A snapshot that cannot be read gains nothing, whatever its box reads.
+    changed.valid = False
+    assert _goal_events('collection_box', full, changed) == []
+
+
 def test_a_battle_fought_under_any_goal_counts_its_experience():
     before, after = _snapshot([_mon('Pidgey')], []), _snapshot([_mon('Pidgey')], [])
     after.party[0].experience = 8200
