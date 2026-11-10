@@ -12,7 +12,8 @@ def policy_with(toward, goal):
     policy.data = SimpleNamespace(map_ids={'ROUTE_36': ROUTE_36, 'OLIVINE_CITY': OLIVINE})
     # The map regions join Route 23 to the goal, so only people or a screen stand in the way.
     policy.nav = SimpleNamespace(toward=toward, explore=lambda snapshot, memory, surf=False: ['up'],
-                                 regions=SimpleNamespace(route=lambda *args, **kwargs: []))
+                                 regions=SimpleNamespace(route=lambda *args, **kwargs: [],
+                                                         memberships=lambda *args, **kwargs: {1}))
     policy.goal = goal
     policy.stranded, policy.unreachable_waits = 0, 0
     policy.collection, policy.decisions, policy.failure = {}, 0, None

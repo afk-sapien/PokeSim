@@ -1,8 +1,9 @@
 """Persistent Championship reward claims, independent of checkpoint rewinds."""
 import hashlib
-import json
 import random
 import secrets
+
+from .state import kv
 
 KEY = 'league-rewards-v1'
 # Mew has its own walking and victory requirement, outside the starter pool.
@@ -40,18 +41,16 @@ def observe_progress(store, snapshot):
     if not snapshot.valid or not snapshot.started:
         return
     observed = progress_unlocks(snapshot)
-    with store.lock, store.db:
+    with store.transaction() as db:
         if 151 in snapshot.owned:
             # Remember acquisition from older rewards or trades across rewinds.
-            row = store.db.execute("SELECT v FROM kv WHERE k='pokesim-mew-v1'").fetchone()
-            if not row or not json.loads(row[0]):
-                store.db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)',
-                                 ('pokesim-mew-v1', json.dumps({'source': 'observed_ownership'})))
-        value = ledger(store.db)
+            if not kv.get(db, 'pokesim-mew-v1'):
+                kv.put(db, 'pokesim-mew-v1', {'source': 'observed_ownership'})
+        value = ledger(db)
         unlocked = set(value.get('unlocks', ())) | observed
         if unlocked != set(value.get('unlocks', ())):
             value['unlocks'] = sorted(unlocked)
-            save(store.db, value)
+            save(db, value)
 
 
 def eligible_pool(value):
@@ -59,12 +58,11 @@ def eligible_pool(value):
 
 
 def ledger(db):
-    row = db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-    return (json.loads(row[0]) if row else None) or {'earned': 0, 'delivered': 0}
+    return kv.get(db, KEY) or {'earned': 0, 'delivered': 0}
 
 
 def save(db, value):
-    db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (KEY, json.dumps(value)))
+    kv.put(db, KEY, value)
 
 
 def championship_count(value):
@@ -82,20 +80,20 @@ def _upgrade(value):
 
 def initialize(store, count):
     """Baseline existing victories without awarding retrospective League gifts."""
-    with store.lock, store.db:
-        value = _upgrade(ledger(store.db))
+    with store.transaction() as db:
+        value = _upgrade(ledger(db))
         value['observed'] = max(value['observed'], count)
-        save(store.db, value)
+        save(db, value)
 
 
 def earn(store, count, *, enabled=True):
-    with store.lock, store.db:
-        value = _upgrade(ledger(store.db))
+    with store.transaction() as db:
+        value = _upgrade(ledger(db))
         value.setdefault('seed', secrets.token_hex(16))
         if enabled:
             value['earned'] += max(0, count - value['observed'])
         value['observed'] = max(value['observed'], count)
-        save(store.db, value)
+        save(db, value)
 
 
 def staged_shiny(seed, generation=1):
@@ -140,13 +138,13 @@ def wasted(policy, snapshot, slot, seed, generation=1):
 
 def skip(store, ordinal):
     """Settle League reward ``ordinal`` without a gift, as rewards earned while they were off are."""
-    with store.lock, store.db:
-        value = ledger(store.db)
+    with store.transaction() as db:
+        value = ledger(db)
         if value['delivered'] + 1 != ordinal or value['earned'] < ordinal:
             raise ValueError('The League gift claim changed')
         value['delivered'] = ordinal
         value['skipped'] = value.get('skipped', 0) + 1
-        save(store.db, value)
+        save(db, value)
 
 
 _MARKS = {}
@@ -189,8 +187,8 @@ def marks(value, generation=1):
 
 
 def status(store):
-    with store.lock:
-        value = ledger(store.db)
+    with store.reading() as db:
+        value = ledger(db)
     return {key: value[key] for key in ('earned', 'delivered')} | {
         'pending': max(0, value['earned'] - value['delivered']),
         'wins': championship_count(value), 'unlocks': sorted(value.get('unlocks', ()))}

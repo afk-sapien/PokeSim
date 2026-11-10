@@ -5,10 +5,10 @@ saved with the policy. This only reads that table and the current goal, so it ne
 Frames are counted between observations and written at most once a minute, so a restart loses less than
 a minute of counting.
 """
-import json
 import time
 
 from .planning.monitor import STAND_DOWNS, STOOD_DOWN
+from .state import kv
 
 KEY = 'goal-time-v1'
 FLUSH_SECONDS = 60
@@ -92,15 +92,15 @@ class GoalTime:
 
 
 def status(store):
-    with store.lock:
-        row = store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-    value = json.loads(row[0]) if row else {}
+    with store.reading() as db:
+        value = kv.get(db, KEY)
+    available, value = value is not None, value or {}
     goals = value.get('goals') or {}
     total = sum(entry['frames'] for entry in goals.values())
     ranked = sorted(goals.items(), key=lambda item: item[1]['frames'], reverse=True)
     shares = [{'key': key, 'label': entry['label'], 'frames': entry['frames'],
                'share': round(entry['frames'] / total, 4)} for key, entry in ranked[:SHOWN_GOALS]] if total else []
     rest = total - sum(row['frames'] for row in shares)
-    return {'available': bool(row), 'since': value.get('since'), 'current': value.get('current'),
+    return {'available': available, 'since': value.get('since'), 'current': value.get('current'),
             'frames': total, 'shares': shares, 'other_frames': rest,
             'stand_downs': list(reversed(value.get('stand_downs') or []))}

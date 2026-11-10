@@ -1169,16 +1169,20 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
     if mid != snapshot.map or not candidates:
         # Only a tile in a region the route reaches will do. A cave's floor outside its walls counts as an
         # encounter tile too, and aiming there walks nowhere.
-        route = policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
-        if route:
-            regions = {route[-1][1][1]}
-        elif route is None:
-            regions = set()
+        regions = policy.nav.regions
+        if regions.between(snapshot, True, True):
+            # Nothing can be judged until the player lands, so the walk aims at the first tile for now.
+            point = points[0]
         else:
-            # Already in a region that has the tiles.
-            regions = policy.nav.regions.memberships(snapshot.map, (snapshot.x, snapshot.y), True, True, arrive=True)
-        point = next((point for point in points
-                      if regions & policy.nav.regions.memberships(mid, point[:2], True, True)), None)
+            route = regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True)
+            if route:
+                wanted = {route[-1][1][1]}
+            elif route is None:
+                wanted = set()
+            else:
+                # Already in a region that has the tiles.
+                wanted = regions.memberships(snapshot.map, (snapshot.x, snapshot.y), True, True, arrive=True)
+            point = next((point for point in points if wanted & regions.memberships(mid, point[:2], True, True)), None)
         if point is None:
             if postgame:
                 return unavailable(policy, snapshot, Goal)

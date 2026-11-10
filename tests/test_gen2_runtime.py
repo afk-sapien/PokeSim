@@ -1502,7 +1502,7 @@ def test_encounter_search_can_leave_and_reenter_a_disconnected_map(real_data, mo
     mid = real_data.map_ids['ROUTE_10_NORTH']
     state = {'target': {'map': mid, 'species': 125, 'method': 'grass', 'time': 'day'}}
     regions = SimpleNamespace(route=lambda *args, **kwargs: [((mid, 0), (mid, 1), [], 'warp')],
-        memberships=lambda *args: {1})
+        memberships=lambda *args: {1}, between=lambda *args: False)
     policy = SimpleNamespace(data=real_data, collection=state, memory=None,
         nav=SimpleNamespace(local=lambda *args, **kwargs: None, regions=regions, visits={}))
     snapshot = SimpleNamespace(map=mid, x=11, y=2)

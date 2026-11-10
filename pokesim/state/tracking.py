@@ -111,6 +111,33 @@ def activity_totals(db):
                             "COALESCE(SUM(CASE WHEN kind='caught' THEN total END), 0) FROM activity_counts").fetchone())
 
 
+# --- activity ledger ---
+def add_activity_receipt(db, kind, fingerprint):
+    """Keep one action receipt. Returns whether it is new, so an action played again counts once."""
+    return bool(db.execute('INSERT OR IGNORE INTO activity_receipts VALUES (?,?)', (kind, fingerprint)).rowcount)
+
+
+def count_activity(db, kind, subject, amount=1):
+    db.execute('INSERT INTO activity_counts VALUES (?,?,?) '
+               'ON CONFLICT(kind,subject) DO UPDATE SET total=total+excluded.total',
+               (kind, subject, amount))
+
+
+def activity_counts(db):
+    """{(kind, subject): total} over every count."""
+    return {(row[0], row[1]): row[2] for row in db.execute('SELECT * FROM activity_counts')}
+
+
+def forget_caught(db):
+    db.execute("DELETE FROM activity_counts WHERE kind='caught'")
+
+
+def receipt_counts(db):
+    """(``caught`` or ``gift``, dex, receipts) for each species in the capture receipts."""
+    return db.execute("SELECT CASE WHEN fingerprint LIKE 'gift-event:%' THEN 'gift' ELSE 'caught' END, "
+                      'dex, COUNT(*) FROM capture_receipts GROUP BY 1,2').fetchall()
+
+
 # --- records ---
 def first_progress(db, column, threshold):
     """When ``column`` of the progress first reached ``threshold``, or None."""

@@ -26,6 +26,19 @@ def at_mr_pokemons_house(data, *party):
     return SimpleNamespace(map=mid, x=door['x'], y=door['y'], badges=0xFF, party=party, stored=(), items=())
 
 
+def mid_jump_outside_silver_cave(data, *party):
+    """Halfway down the left ledge at (21, 20) outside the Silver Cave Pokémon Center.
+
+    In a ledge jump the coordinates read the wall tile jumped over until the player lands. A Crystal
+    postgame run found no route to Mt. Silver from there, ended training, and stood down one trainee
+    after another (#376).
+    """
+    mid = data.map_ids['SILVER_CAVE_OUTSIDE']
+    entry = data.maps[mid]
+    assert entry['collision'][20 * entry['width'] + 21] == 0xA1
+    return SimpleNamespace(map=mid, x=20, y=20, badges=0xFF, party=party, stored=(), items=(), objects=())
+
+
 def policy_for(data):
     from pokesim.gen2.policy import Policy
     policy = Policy(data)
@@ -160,6 +173,33 @@ def test_a_reload_for_lack_of_progress_fails_the_site_of_a_stint_without_experie
     assert {train_key(identity), site_key(data.map_ids['VICTORY_ROAD'])} <= keys
     policy.collection['training']['gained'] = True
     assert site_key(data.map_ids['VICTORY_ROAD']) not in stalled_objectives(policy)['keys']
+
+
+def test_a_trainee_mid_jump_keeps_its_site(data):
+    from pokesim.gen2 import training
+    from pokesim.gen2.policy import Goal
+    policy = policy_for(data)
+    trainee = mon(60)
+    snapshot = mid_jump_outside_silver_cave(data, trainee)
+    assert training.site(policy, snapshot, {}, trainee) == training.SITE
+    goal = training.walk_goal(policy, snapshot, Goal, lambda: 'Train')
+    assert goal is not None and goal.map_name == training.SITE
+    # Once landed, the walk judges the route again.
+    landed = mid_jump_outside_silver_cave(data, trainee)
+    landed.x = 19
+    assert training.walk_points(policy, landed, data.map_ids[training.SITE])
+
+
+def test_a_hunt_mid_jump_aims_at_a_tile_instead_of_giving_up(data):
+    from pokesim.gen2 import collection
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.training import SITE
+    policy = policy_for(data)
+    snapshot = mid_jump_outside_silver_cave(data, SimpleNamespace(**vars(mon(60)), moves=()))
+    # A search of the grass here, and one of the cave floor beyond.
+    for name in ('SILVER_CAVE_OUTSIDE', SITE):
+        goal = collection.hunt(policy, snapshot, Goal, target=dict(rows(data, name)[0], started=0), label='Search')
+        assert goal is not None and goal.key == 'collection_hunt', name
 
 
 def test_gen1_training_sites_have_wild_tables_and_tiles():

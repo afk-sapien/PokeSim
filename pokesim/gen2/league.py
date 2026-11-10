@@ -5,6 +5,7 @@ import json
 import re
 import uuid
 
+from ..state import kv
 from ..trade.preferences import signature as identity
 from .tracking import ancestors, data_cache
 
@@ -12,12 +13,11 @@ KEY = 'gen2-league-partners-v1'
 
 
 def read(db):
-    row = db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-    return (json.loads(row[0]) if row else None) or {'origin': uuid.uuid4().hex, 'victories': [], 'partners': {}}
+    return kv.get(db, KEY) or {'origin': uuid.uuid4().hex, 'victories': [], 'partners': {}}
 
 
 def save(db, value):
-    db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
+    kv.put(db, KEY, value)
 
 
 def family(data, species):
@@ -57,8 +57,8 @@ def resolve(data, value, mons):
 
 
 def record(store, data, snapshot):
-    with store.lock, store.db:
-        value = read(store.db)
+    with store.transaction() as db:
+        value = read(db)
         token = str(snapshot.hall_of_fame_count)
         if token in value['victories']:
             return
@@ -71,15 +71,15 @@ def record(store, data, snapshot):
             if not row['ambiguous']:
                 row['counts'][value['origin']] = row['counts'].get(value['origin'], 0) + 1
         value['victories'].append(token)
-        save(store.db, value)
+        save(db, value)
 
 
 def apply(payload, store, data):
     party = [dict(mon) for mon in payload.get('party', [])]
     storage = payload.get('storage')
     boxed = [dict(mon) for mon in (storage or {}).get('pokemon', [])]
-    with store.lock:
-        value = read(store.db)
+    with store.reading() as db:
+        value = read(db)
     mons = [mon for mon in party + boxed if not mon.get('egg')]
     keys = resolve(data, value, mons)
     for mon, key in zip(mons, keys):
@@ -90,10 +90,10 @@ def apply(payload, store, data):
 
 
 def export(store, data, mon):
-    with store.lock, store.db:
-        value = read(store.db)
+    with store.transaction() as db:
+        value = read(db)
         key = resolve(data, value, [mon])[0]
-        save(store.db, value)
+        save(db, value)
         return {**value['partners'][key], 'key': identity(mon), 'individual': key,
                 'version': 'gen2-1', 'incomplete': bool(value.get('incomplete'))}
 

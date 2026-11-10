@@ -1,13 +1,13 @@
 """Optional GS Ball distribution followed by Crystal's original Celebi quest."""
 import hashlib
 import io
-import json
 import time
 import uuid
 
 from .. import config
 from ..checkpoints import CheckpointStore
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
+from ..state import journal, kv
 from pokecore.gen2.ram import Memory, read_snapshot
 from pokecore.gen2.resets import GS_BALL, set_gs_ball
 
@@ -49,13 +49,11 @@ def activate(emu):
     metadata = {**metadata, 'sha256': hashlib.sha256(raw).hexdigest(), 'reward_id': identifier}
     record = {'id': identifier, 'phase': 'committed', 'decision': 'COMMIT', 'kind': 'gs_ball_event',
               'sha256': metadata['sha256'], 'metadata': metadata, 'trade_id': emu.store.get('trade_barrier')}
-    with emu.store.lock, emu.store.db:
-        emu.store.db.execute('PRAGMA synchronous=FULL')
+    with emu.store.durable() as db:
         for key, value in ((CLAIM, identifier), (PENDING, record), (BARRIER, identifier)):
-            emu.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (key, json.dumps(value)))
-        emu.store.db.execute('INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (?,?,?,?,?,?,?,?)',
-            (time.time(), 'milestone', 'Custom GS Ball distribution unlocked',
-             'Visit Goldenrod Pokémon Center to begin Crystal’s original Celebi quest.', 1, 4, before.map_name, ''))
+            kv.put(db, key, value)
+        journal.add(db, time.time(), 'milestone', 'Custom GS Ball distribution unlocked',
+                    'Visit Goldenrod Pokémon Center to begin Crystal’s original Celebi quest.', 1, 4, before.map_name)
     try:
         emu._load_state_file(recover_storage(emu.store))
     except BaseException:

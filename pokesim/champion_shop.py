@@ -1,8 +1,7 @@
 """Useful Champion supplies and capped walking offers."""
-import json
-
 from .legendary_returns import STEPS
 from .policies.collection import EVOS, champion
+from .state import kv
 from .strategy_data import ITEMS, MOVES
 from .tm_shop import PURCHASE_BAG_LIMIT, RESERVE, signature
 
@@ -45,15 +44,12 @@ def ready(store):
 
 def consume(db, item):
     """Redeem inside the same transaction as cash, checkpoint, and item counts."""
-    def read(key):
-        row = db.execute('SELECT v FROM kv WHERE k=?', (key,)).fetchone()
-        return json.loads(row[0]) if row else {}
-    value, walking = read(KEY), read(STEPS)
+    value, walking = kv.get(db, KEY, {}), kv.get(db, STEPS, {})
     offer = value.get(str(item))
     if not walking.get('available') or not offer or walking.get('total', 0) < offer['next_at']:
         raise ValueError('This Champion shop offer is not ready')
     offer.update(next_at=walking['total'] + INTERVAL, purchased=offer['purchased'] + 1)
-    db.execute('INSERT OR REPLACE INTO kv VALUES (?,?)', (KEY, json.dumps(value)))
+    kv.put(db, KEY, value)
 
 
 def pp_slot(mon):
