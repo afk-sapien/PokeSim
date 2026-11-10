@@ -14,9 +14,9 @@
 # even for a rollback, because an older app refuses newer data. The image carries it as a label.
 # It lists the main commits the commit lacks, and refuses when one of them is over a day old, so a fix
 # on main cannot sit outside production. --behind-main deploys it anyway. A rollback skips this check.
-# The commit must have green `ci gate` and `install gate` checks on GitHub, and a passing report from
-# tools/live_soak.py in LIVE_SOAK_REPORTS, by default data/live-soak/reports, for it or for a commit
-# with the same git tree. The script stops the app,
+# The commit must have green `ci gate` and `install gate` checks on GitHub, and a passing smoke from
+# tools/live_soak.py in LIVE_SOAK_REPORTS/smoke, by default data/live-soak/reports/smoke, for it or for
+# a commit with the same git tree. The script stops the app,
 # takes a cold backup of the folder, tests it with gzip -t, starts the new image with up --wait and runs
 # the smoke check. If any step after the backup fails, it puts .env back and restarts the old image.
 # Beside each backup, a json file names the image that wrote its data, the one running before the
@@ -115,10 +115,11 @@ for gate in 'ci gate' 'install gate'; do
   fi
 done
 
-# Only a commit that played a copy of the live adventures as well as the deployed one is deployed,
-# a rollback too. tools/live_soak.py run writes the report, here or in LIVE_SOAK_REPORTS.
+# Only a commit that booted, played, saved and reloaded a copy of every live adventure is deployed,
+# a rollback too. tools/live_soak.py smoke writes the report, here or in LIVE_SOAK_REPORTS. The check
+# also prints the advisory behaviour comparison from tools/live_soak.py run, which never blocks.
 if ! python3 "$(dirname "$0")/live_soak.py" check "$SHA"; then
-  echo "deploy: $SHORT has no passing live soak, run tools/live_soak.py run --candidate $SHA, refusing" >&2
+  echo "deploy: $SHORT has no passing live soak smoke, run tools/live_soak.py smoke --candidate $SHA, refusing" >&2
   exit 1
 fi
 

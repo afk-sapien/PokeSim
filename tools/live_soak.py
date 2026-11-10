@@ -1,6 +1,7 @@
-"""Play a copy of the live adventures on a candidate commit and on the deployed one, and gate the deploy.
+"""Gate a deploy on a copy of the live adventures, and compare a candidate's play with the deployed commit's.
 
     python tools/live_soak.py prepare BACKUP --roms DIR
+    python tools/live_soak.py smoke --candidate SHA --roms DIR
     python tools/live_soak.py run --candidate SHA --deployed SHA --roms DIR
     python tools/live_soak.py check SHA
 
@@ -9,11 +10,18 @@ each running adventure's latest autosaves and its pokesim.sqlite, with notificat
 out of the copy. It adds three post-game ladder rungs with every box full and a backlog of League gifts,
 and hashes every input into manifest.json.
 
+``smoke`` is the deploy gate. It builds the candidate from a git archive of it and boots every copied
+adventure and rung through the real Manager and worker processes. Each one plays five game minutes,
+saves when it is stopped, and loads that save again. A failed worker, a missing save, an older save on
+reload or an error line in a worker log fails it. Pass or fail is absolute, with no baseline. It writes
+reports/smoke/<candidate>.json, and tools/deploy_host.sh refuses a commit without a passing one.
+
 ``run`` builds each commit from a git archive of it, so each plays its own code, and plays identical
 copies of the inputs through the real Manager and worker processes for two game hours each, at a fixed
 seed, with League gifts and the Mew event on and the coordinator, offers and notifications off. It then
 holds the candidate to the deployed commit per adventure and per game hour (see ``invariants``) and
-writes reports/<candidate>.json. tools/deploy_host.sh refuses a commit without a passing report.
+writes reports/<candidate>.json. This comparison is advisory. ``check`` prints its result and never
+blocks on it.
 
 A commit whose data schema is older than the backup's is refused, since its Manager refuses newer data.
 A newer one migrates its own copy. The inputs are hashed before and after, so a run never edits them.
@@ -45,6 +53,16 @@ PARALLEL = 3
 POLL_SECONDS = 2
 ADVENTURE_TIMEOUT = 40 * 60
 SEED = 7
+# The smoke plays five game minutes per adventure, six at once, and gives each one five minutes in all.
+SMOKE_FRAMES = 5 * 60 * 60
+SMOKE_PARALLEL = 6
+SMOKE_TIMEOUT = 5 * 60
+# Worker log lines a healthy run never writes. The soak's two hour runs write none.
+WORKER_ERROR = re.compile(r' ERROR |^Traceback')
+# The smoke also fails a refused save. Gen 1 logs one as a warning and falls back to an older save.
+SMOKE_ERROR = re.compile(r' ERROR |^Traceback|(?i:cannot restore)')
+# Settings of this shell that would point a played commit at another game or service.
+FOREIGN_ENV = ('VIRTUAL_ENV', 'POKESIM_GEN1_VARIANT', 'RANDOMIZER', 'ROM_PATH', 'TRADING_URL', 'NTFY_URL')
 # Catches under one goal in a row with no improvement that count as churn. Live, Yellow caught 1518
 # and released 1498 in a day with no new best copy and no new entry.
 CHURN_CATCHES = 10
@@ -651,7 +669,8 @@ def _dex_of(version):
     return lambda mon: mon.get('dex') or SPECIES.get(mon.get('species'), {}).get('dex')
 
 
-def _worker_log(folder):
+def _worker_log(folder, problem=WORKER_ERROR):
+    """Reloads by save name, and the lines matching `problem`, in this run's two worker logs."""
     lines = []
     for name in ('worker.previous.log', 'worker.log'):
         path = folder / 'logs' / name
@@ -661,7 +680,7 @@ def _worker_log(folder):
     for line in lines:
         if match := RELOADING.search(line):
             reloads[match.group(1)] = reloads.get(match.group(1), 0) + 1
-        if ' ERROR ' in line or line.startswith('Traceback'):
+        if problem.search(line):
             errors.append(line[:300])
     return reloads, errors
 
@@ -777,6 +796,100 @@ def play_one(manager, aid, frames, progress):
     return result
 
 
+def _game_state(manager, aid, deadline):
+    """The worker's next state that shows a game, or None and the reason there is none."""
+    while time.monotonic() < deadline:
+        try:
+            status = manager.supervisor.child(aid).request('GET', '/api/state')
+        except RuntimeError:
+            row = manager.registry.adventure(aid)
+            if row['state'] == 'failed':
+                return None, f'the worker failed, {row.get("error")}'
+        else:
+            if status.get('game'):
+                return status, None
+        time.sleep(POLL_SECONDS)
+    return None, f'out of time after {SMOKE_TIMEOUT} seconds'
+
+
+def smoke_one(manager, aid, frames, progress):
+    """Boot one adventure, play `frames`, stop it so it saves, and boot it again from that save."""
+    from pokesim.app.registry import identifier
+    from pokesim.checkpoints import CheckpointStore
+    adventure = manager.registry.adventure(aid)
+    folder = manager.registry.root / 'adventures' / aid
+    manager.registry.update(aid, settings={**adventure['settings'], 'speed': 0, 'seed': SEED, 'auto_start': False})
+    result = {'id': aid, 'name': adventure['name'], 'version': adventure['version'], 'failed': None}
+    began = time.monotonic()
+    deadline = began + SMOKE_TIMEOUT
+    running = False
+
+    def start():
+        nonlocal running
+        running = True
+        manager.registry.request_lifecycle(aid, 'start', identifier())
+        manager.start_adventure(aid)
+        return _game_state(manager, aid, deadline)
+
+    def stop():
+        nonlocal running
+        running = False
+        manager.registry.request_lifecycle(aid, 'stop', identifier())
+        manager.supervisor.stop(aid)
+
+    def steps():
+        status, why = start()
+        if why:
+            return f'did not load, {why}'
+        loaded = played = status.get('frame') or 0
+        while played - loaded < frames:
+            time.sleep(POLL_SECONDS)
+            status, why = _game_state(manager, aid, deadline)
+            if why:
+                return f'stopped playing at frame {played}, {why}'
+            played = status.get('frame') or 0
+        result.update(loaded=loaded, played=played)
+        try:
+            stop()
+        except RuntimeError as error:
+            return f'the save on stop failed, {error}'
+        states = CheckpointStore(folder / 'states')
+        newest = states.latest_state()
+        result['saved'] = saved = (states.checkpoint_metadata(newest) or {}).get('frame') if newest else None
+        if saved is None or saved < played:
+            return f'stopped at frame {played} but the newest save is from frame {saved}'
+        status, why = start()
+        if why:
+            return f'did not load its own save, {why}'
+        result['reloaded'] = reloaded = status.get('frame') or 0
+        if reloaded < saved:
+            return f'loaded frame {reloaded}, older than its save at frame {saved}'
+        try:
+            stop()
+        except RuntimeError as error:
+            return f'the second stop failed, {error}'
+        return None
+
+    try:
+        result['failed'] = steps()
+    except Exception as error:
+        result['failed'] = f'{type(error).__name__}: {error}'
+    finally:
+        if running:
+            try:
+                stop()
+            except Exception as error:
+                result['failed'] = result['failed'] or f'did not stop, {error}'
+    errors = _worker_log(folder, SMOKE_ERROR)[1]
+    result.update(wall_seconds=round(time.monotonic() - began, 1), errors=len(errors), error_lines=errors[:5])
+    if errors and not result['failed']:
+        result['failed'] = (f'{len(errors)} error {"line" if len(errors) == 1 else "lines"} in its worker log, '
+                            f'the first {errors[0]}')
+    progress(f'{adventure["name"]}: {result.get("played", 0) - result.get("loaded", 0)} frames in '
+             f'{result["wall_seconds"]}s' + (f', failed: {result["failed"]}' if result['failed'] else ''))
+    return result
+
+
 def add_rung(manager, rung, info, rom):
     """Create a seeded rung as a new adventure with its gift backlog, as the create route would."""
     from pokesim import rewards
@@ -804,6 +917,7 @@ def add_rung(manager, rung, info, rom):
 
 
 def runner(args):
+    """Play every copied adventure and rung with `args.play`, play_one for ``run`` or smoke_one for ``smoke``."""
     from pokesim.app.manager import Manager
     manifest = json.loads((args.inputs / 'manifest.json').read_text(encoding='utf-8'))
     manager = Manager(args.work / 'app', game_data_dir=args.game_data)
@@ -816,7 +930,7 @@ def runner(args):
             ids.append(add_rung(manager, args.work / 'rungs' / name, info, roms[info['rom_sha1']]))
 
         def play(aid):
-            return play_one(manager, aid, args.frames, lambda line: print(line, flush=True))
+            return args.play(manager, aid, args.frames, lambda line: print(line, flush=True))
         with ThreadPoolExecutor(args.parallel) as pool:
             results = list(pool.map(play, ids))
     finally:
@@ -1079,58 +1193,116 @@ def full_sha(sha):
                           capture_output=True, text=True).stdout.strip()
 
 
-def run(args):
-    if os.environ.get('POKESIM_LOAD_GATE_HEAVY') != '1':
-        # The pair plays six workers at once, so nothing else may run beside it.
-        command = ['sh', str(ROOT / 'tools' / 'load_gate.sh'), 'heavy', sys.executable, str(Path(__file__).resolve()),
-                   *args.argv]
-        return subprocess.run(command, check=False).returncode
-    inputs = (args.inputs or max((soak_root() / 'inputs').glob('*/manifest.json'), key=os.path.getmtime).parent).resolve()
+def _under_heavy_gate(args):
+    """Run this command again under the heavy load gate and return its exit code, or None once it holds the gate.
+    Nothing else may run beside six workers."""
+    if os.environ.get('POKESIM_LOAD_GATE_HEAVY') == '1':
+        return None
+    command = ['sh', str(ROOT / 'tools' / 'load_gate.sh'), 'heavy', sys.executable, str(Path(__file__).resolve()),
+               *args.argv]
+    return subprocess.run(command, check=False).returncode
+
+
+def _inputs(folder):
+    """A prepared inputs folder, the newest by default, its manifest and its hashes, checked against the manifest."""
+    inputs = (folder or max((soak_root() / 'inputs').glob('*/manifest.json'), key=os.path.getmtime).parent).resolve()
     manifest = json.loads((inputs / 'manifest.json').read_text(encoding='utf-8'))
     before = hashes(inputs)
     if before != manifest['files']:
         raise SystemExit(f'{inputs} no longer matches its manifest, prepare it again')
+    return inputs, manifest, before
+
+
+def _inputs_info(inputs, manifest):
+    return {'folder': str(inputs), 'backup_sha256': manifest['backup_sha256'],
+            'manifest_sha256': checksum(inputs / 'manifest.json')}
+
+
+def stage(sha, folder, inputs, manifest):
+    """Build a commit's tree in `folder` beside a copy of the inputs, and return the environment it plays in."""
+    tree = build_tree(sha, folder / 'tree')
+    schema = schema_of(tree)
+    if schema < manifest['schema']:
+        raise SystemExit(f'{sha[:7]} has data schema {schema}, older than the backup\'s {manifest["schema"]}, refusing')
+    shutil.copytree(inputs / 'app', folder / 'app')
+    shutil.copytree(inputs / 'rungs', folder / 'rungs')
+    reference = folder / 'app' / 'assets' / 'reference' / reference_revision(tree)
+    return {**{key: value for key, value in os.environ.items() if key not in FOREIGN_ENV},
+            'UV_PROJECT_ENVIRONMENT': str(folder / 'env'), 'POKESIM_REVISION': sha, 'GAME_DATA_DIR': str(reference)}
+
+
+def play_staged(folder, env, inner, inputs, args):
+    """Sync a staged commit's environment and play the inputs there with the `inner` runner command."""
+    sync_environment(folder / 'tree', env, lambda line: print(line, flush=True))
+    command = ['nice', '-n', str(args.nice), 'uv', 'run', '--locked', '--no-dev', '--no-sync', '--project',
+               str(folder / 'tree'), 'python', str(Path(__file__).resolve()), inner, str(inputs), str(folder),
+               str(args.roms), '--frames', str(args.frames), '--parallel', str(args.parallel)]
+    if args.game_data:
+        command += ['--game-data', str(args.game_data)]
+    with open(folder / 'runner.log', 'w', encoding='utf-8') as log:
+        code = subprocess.run(command, env=env, cwd=folder / 'tree', stdout=log, stderr=subprocess.STDOUT,
+                              check=False).returncode
+    if code or not (folder / 'results.json').exists():
+        raise SystemExit(f'the {folder.name} runner exited {code}, see {folder / "runner.log"}')
+    return json.loads((folder / 'results.json').read_text(encoding='utf-8'))
+
+
+def run(args):
+    if (code := _under_heavy_gate(args)) is not None:
+        return code
+    inputs, manifest, before = _inputs(args.inputs)
     candidate, deployed = full_sha(args.candidate), full_sha(args.deployed)
     work = (args.work or soak_root() / 'runs' / f'{candidate[:12]}-{time.strftime("%Y%m%d-%H%M%S")}').resolve()
     work.mkdir(parents=True)
     began = time.monotonic()
     roles = {'candidate': candidate, 'deployed': deployed}
-    for role, sha in roles.items():
-        tree = build_tree(sha, work / role / 'tree')
-        schema = schema_of(tree)
-        if schema < manifest['schema']:
-            raise SystemExit(f'{sha[:7]} has data schema {schema}, older than the backup\'s {manifest["schema"]}, refusing')
-        shutil.copytree(inputs / 'app', work / role / 'app')
-        shutil.copytree(inputs / 'rungs', work / role / 'rungs')
-    env = {key: value for key, value in os.environ.items()
-           if key not in ('VIRTUAL_ENV', 'POKESIM_GEN1_VARIANT', 'RANDOMIZER', 'ROM_PATH', 'TRADING_URL', 'NTFY_URL')}
-
-    def play(role):
-        folder = work / role
-        reference = folder / 'app' / 'assets' / 'reference' / reference_revision(folder / 'tree')
-        role_env = dict(env, UV_PROJECT_ENVIRONMENT=str(folder / 'env'), POKESIM_REVISION=roles[role],
-                        GAME_DATA_DIR=str(reference))
-        sync_environment(folder / 'tree', role_env, lambda line: print(line, flush=True))
-        command = ['nice', '-n', str(args.nice), 'uv', 'run', '--locked', '--no-dev', '--no-sync', '--project',
-                   str(folder / 'tree'), 'python', str(Path(__file__).resolve()), 'runner', str(inputs), str(folder),
-                   str(args.roms), '--frames', str(args.frames), '--parallel', str(args.parallel)]
-        if args.game_data:
-            command += ['--game-data', str(args.game_data)]
-        with open(folder / 'runner.log', 'w', encoding='utf-8') as log:
-            code = subprocess.run(command, env=role_env, cwd=folder / 'tree', stdout=log, stderr=subprocess.STDOUT,
-                                  check=False).returncode
-        if code or not (folder / 'results.json').exists():
-            raise SystemExit(f'the {role} runner exited {code}, see {folder / "runner.log"}')
-        return json.loads((folder / 'results.json').read_text(encoding='utf-8'))
-
+    envs = {role: stage(sha, work / role, inputs, manifest) for role, sha in roles.items()}
     with ThreadPoolExecutor(2) as pool:
-        list(pool.map(play, roles))
+        list(pool.map(lambda role: play_staged(work / role, envs[role], 'runner', inputs, args), roles))
     run_info = {'candidate': candidate, 'deployed': deployed, 'frames': args.frames,
                 'wall_seconds': round(time.monotonic() - began, 1), 'inputs_unchanged': hashes(inputs) == before,
-                'inputs': {'folder': str(inputs), 'backup_sha256': manifest['backup_sha256'],
-                           'manifest_sha256': checksum(inputs / 'manifest.json')}}
+                'inputs': _inputs_info(inputs, manifest)}
     (work / 'run.json').write_text(json.dumps(run_info, indent=1) + '\n', encoding='utf-8')
     return write_report(work)
+
+
+def smoke_line(row):
+    played = row.get('played', 0) - row.get('loaded', 0)
+    return (f'{row["name"]:<28} {played:6d} frames, saved at {row.get("saved")}, reloaded at {row.get("reloaded")}, '
+            f'{row.get("wall_seconds")}s' + (f', failed: {row["failed"]}' if row['failed'] else ''))
+
+
+def smoke(args):
+    """The deploy gate. Every copied adventure and rung boots on the candidate, plays, saves and reloads."""
+    if (code := _under_heavy_gate(args)) is not None:
+        return code
+    inputs, manifest, before = _inputs(args.inputs)
+    candidate = full_sha(args.candidate)
+    work = (args.work or soak_root() / 'runs' / f'smoke-{candidate[:12]}-{time.strftime("%Y%m%d-%H%M%S")}').resolve()
+    work.mkdir(parents=True)
+    began = time.monotonic()
+    env = stage(candidate, work / 'candidate', inputs, manifest)
+    results = play_staged(work / 'candidate', env, 'smoke-runner', inputs, args)
+    problems = [f'{row["name"]}: {row["failed"]}' for row in results if row['failed']]
+    expected = len(manifest['adventures']) + len(manifest['rungs'])
+    if len(results) != expected:
+        problems.append(f'played {len(results)} of {expected} adventures')
+    if hashes(inputs) != before:
+        problems.append(f'the smoke changed its inputs in {inputs}')
+    report = {'commit': candidate, 'frames': args.frames, 'passed': not problems,
+              'wall_seconds': round(time.monotonic() - began, 1),
+              'inputs': {**_inputs_info(inputs, manifest), 'folder': inputs.name},
+              'problems': problems, 'results': results, 'work': str(work)}
+    reports = reports_dir() / 'smoke'
+    reports.mkdir(parents=True, exist_ok=True)
+    path = reports / f'{candidate}.json'
+    path.write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
+    for row in results:
+        print(smoke_line(row))
+    for problem in problems[sum(1 for row in results if row['failed']):]:
+        print(problem)
+    print(f'smoke {"passed" if not problems else "failed"} in {report["wall_seconds"]}s, report in {path}')
+    return 0 if not problems else 1
 
 
 def rejudge(args):
@@ -1208,25 +1380,37 @@ def same_tree_report(reports, sha):
     return None
 
 
-def check(args):
-    """Exit 0 when a passing report names this commit or one with the same git tree.
-    tools/deploy_host.sh runs this with no dependencies."""
-    reports = args.reports or reports_dir()
-    path = reports / f'{args.sha}.json'
+def _read_report(path):
     try:
-        report = json.loads(path.read_text(encoding='utf-8'))
+        return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError):
-        report = None
+        return None
+
+
+def check(args):
+    """Exit 0 when a passing smoke report names this commit or one with the same git tree. Print the
+    behaviour comparison's result when there is one, which never blocks. tools/deploy_host.sh runs this
+    with no dependencies."""
+    reports = args.reports or reports_dir()
+    behaviour = _read_report(reports / f'{args.sha}.json')
+    if behaviour is not None and behaviour.get('commit') == args.sha:
+        found = len(behaviour.get('problems') or [])
+        print(f'behaviour soak, advisory: {args.sha[:7]} '
+              + ('passed' if behaviour.get('passed') is True else f'found {found} problems, see {reports / args.sha}.json'),
+              file=sys.stderr)
+    smokes = reports / 'smoke'
+    path = smokes / f'{args.sha}.json'
+    report = _read_report(path)
     if report is not None and report.get('commit') == args.sha and report.get('passed') is True:
         return 0
-    twin = same_tree_report(reports, args.sha)
+    twin = same_tree_report(smokes, args.sha)
     if twin:
-        print(f'live soak: {args.sha[:7]} has the tree of {twin[:7]}, whose report passed', file=sys.stderr)
+        print(f'live soak: {args.sha[:7]} has the tree of {twin[:7]}, whose smoke passed', file=sys.stderr)
         return 0
     if report is None:
-        print(f'live soak: no report for {args.sha[:7]} in {path.parent}', file=sys.stderr)
+        print(f'live soak: no smoke report for {args.sha[:7]} in {path.parent}', file=sys.stderr)
     else:
-        print(f'live soak: the report for {args.sha[:7]} did not pass ({len(report.get("problems") or [])} problems)',
+        print(f'live soak: the smoke for {args.sha[:7]} did not pass ({len(report.get("problems") or [])} problems)',
               file=sys.stderr)
     return 1
 
@@ -1247,32 +1431,37 @@ def main(argv=None):
     seeding.add_argument('game')
     seeding.add_argument('out', type=Path)
     seeding.set_defaults(action=seed_rung_state)
-    running = commands.add_parser('run', help='play the inputs on both commits and write the report')
-    running.add_argument('--candidate', required=True)
+    smoking = commands.add_parser('smoke', help='boot, play, save and reload the inputs on the candidate, the deploy gate')
+    running = commands.add_parser('run', help='play the inputs on both commits and write the advisory report')
     running.add_argument('--deployed', required=True)
-    running.add_argument('--roms', type=Path, required=True)
-    running.add_argument('--inputs', type=Path, help='a prepared folder, by default the newest')
-    running.add_argument('--game-data', type=Path, help='game data to install when a commit wants a revision the '
-                         'backup does not hold')
-    running.add_argument('--frames', type=int, default=FRAMES)
-    running.add_argument('--parallel', type=int, default=PARALLEL, help='adventures each commit plays at once')
-    running.add_argument('--nice', type=int, default=10)
-    running.add_argument('--work', type=Path)
-    running.set_defaults(action=run)
-    inner = commands.add_parser('runner', help=argparse.SUPPRESS)
-    inner.add_argument('inputs', type=Path)
-    inner.add_argument('work', type=Path)
-    inner.add_argument('roms', type=Path)
-    inner.add_argument('--game-data', type=Path)
-    inner.add_argument('--frames', type=int, default=FRAMES)
-    inner.add_argument('--parallel', type=int, default=PARALLEL)
-    inner.set_defaults(action=runner)
+    for playing, action, frames, parallel in ((smoking, smoke, SMOKE_FRAMES, SMOKE_PARALLEL),
+                                              (running, run, FRAMES, PARALLEL)):
+        playing.add_argument('--candidate', required=True)
+        playing.add_argument('--roms', type=Path, required=True)
+        playing.add_argument('--inputs', type=Path, help='a prepared folder, by default the newest')
+        playing.add_argument('--game-data', type=Path, help='game data to install when a commit wants a revision '
+                             'the backup does not hold')
+        playing.add_argument('--frames', type=int, default=frames)
+        playing.add_argument('--parallel', type=int, default=parallel, help='adventures each commit plays at once')
+        playing.add_argument('--nice', type=int, default=10)
+        playing.add_argument('--work', type=Path)
+        playing.set_defaults(action=action)
+    for name, play, frames, parallel in (('runner', play_one, FRAMES, PARALLEL),
+                                         ('smoke-runner', smoke_one, SMOKE_FRAMES, SMOKE_PARALLEL)):
+        inner = commands.add_parser(name, help=argparse.SUPPRESS)
+        inner.add_argument('inputs', type=Path)
+        inner.add_argument('work', type=Path)
+        inner.add_argument('roms', type=Path)
+        inner.add_argument('--game-data', type=Path)
+        inner.add_argument('--frames', type=int, default=frames)
+        inner.add_argument('--parallel', type=int, default=parallel)
+        inner.set_defaults(action=runner, play=play)
     rating = commands.add_parser('rate-copies', help=argparse.SUPPRESS)
     rating.set_defaults(action=rate_copies)
     judging = commands.add_parser('rejudge', help='judge a finished run folder again and rewrite its report')
     judging.add_argument('work', type=Path)
     judging.set_defaults(action=rejudge)
-    checking = commands.add_parser('check', help='exit 0 when a passing report names the commit')
+    checking = commands.add_parser('check', help='exit 0 when a passing smoke report names the commit')
     checking.add_argument('sha')
     checking.add_argument('--reports', type=Path)
     checking.set_defaults(action=check)

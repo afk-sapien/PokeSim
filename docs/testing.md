@@ -195,23 +195,50 @@ and `ROM_PATH` set to that share code and cartridge.
 `stage_ladder.py gate` writes a `gate-report.json` that records its attempt, the number of gate
 runs for that commit so far, so a pass on the fifth try reads as one.
 
+## Preflight for behaviour changes
+
+CI has no cartridges or private saves, so a pull request that changes bot, planner, policy,
+battle, overworld or game loop code runs the ladder gate and every stuck scenario locally before
+it merges. Push the branch, then run from its clean checkout:
+
+```sh
+uv run --locked --extra dev python tools/preflight.py roms/
+```
+
+It plays the gate and then the replays under the heavy load gate, in about 10 minutes, and posts
+the `preflight` commit status on HEAD with the signed-in `gh` account. A replay named in
+`known-failures.txt` in the scenarios folder is a known failure on `main` and does not fail it. A
+gate failure, or any other replay that fails, raises or is skipped, does. The run also writes
+`data/preflight/<commit>.json`. Pass `--no-post` to try it without a status.
+
 ## Live soak before a deploy
 
-`tools/live_soak.py` plays a candidate commit and the deployed commit side by side on copies of the
-live adventures, with the real Manager and workers, for two game hours each. `prepare` turns a cold
-backup of the app data into inputs: the running adventures, plus one post-game rung for each game
-with a full PC and 30 League gifts waiting. Notifications, trades and stopped adventures are dropped
-from the copy, and the inputs are hashed before and after each run, so a run never changes them.
+`tools/live_soak.py` plays copies of the live adventures with the real Manager and workers. `prepare`
+turns a cold backup of the app data into inputs: the running adventures, plus one post-game rung for
+each game with a full PC and 30 League gifts waiting. Notifications, trades and stopped adventures are
+dropped from the copy, and the inputs are hashed before and after each run, so a run never changes them.
 
 ```sh
 uv run --locked python tools/live_soak.py prepare backup.tar.gz --roms roms --ladders data/ladder --out data/live-soak/inputs/today
+uv run --locked python tools/live_soak.py smoke --candidate HEAD --roms roms
 uv run --locked python tools/live_soak.py run --candidate HEAD --deployed DEPLOYED_SHA --roms roms
 uv run --locked python tools/live_soak.py check HEAD
 ```
 
-`run` builds each commit from its own archive, refuses a commit whose data schema is older than the
-copied data, and takes the heavy load lock. Each adventure is held to the deployed commit on the
-same copy, per game hour:
+`smoke` and `run` build each commit from its own archive, refuse a commit whose data schema is older
+than the copied data, and take the heavy load lock.
+
+`smoke` is the deploy gate. Every adventure and rung loads its newest save on the candidate, plays 5
+game minutes, saves when it is stopped, and loads that save again. It fails on a failed worker or stop,
+a save older than the frame the adventure stopped at, a reload older than that save, or an `ERROR`
+line, a traceback or a refused save in a worker log. Pass or fail does not depend on the deployed
+commit. The report goes to `data/live-soak/reports/smoke/<commit>.json`, and `tools/deploy_host.sh`
+refuses a commit, a rollback included, without a passing one for it or for a commit with the same git
+tree.
+
+`run` compares the candidate with the deployed commit for two game hours each, and it is advisory.
+`check` prints its result beside the smoke's and never blocks on it. Each adventure is held to the
+deployed commit on the same copy, per game hour:
 
 - releases and obtains at most twice the deployed rate, or the deployed rate plus 5
 - at least half the deployed rate of real progress, such as badges, Pokédex entries and goals
@@ -222,8 +249,7 @@ same copy, per game hour:
 - release counts, such as a rarer copy pushed out by a newer one, at most the deployed count on the
   same copy, and none when the deployed run failed
 
-The report goes to `data/live-soak/reports/<commit>.json`, and `tools/deploy_host.sh` refuses a
-commit, a rollback included, that has no passing report there. `rejudge` scores a finished run again.
+Its report goes to `data/live-soak/reports/<commit>.json`. `rejudge` scores a finished run again.
 
 ## Build identity and packages
 

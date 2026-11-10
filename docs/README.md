@@ -56,7 +56,8 @@ This index separates current instructions, future plans, and historical evidence
 ## Keep documentation current
 
 Put each kind of update in its owning document. User-visible changes belong in the
-changelog and future work in the roadmap. Keep routine validation output outside
+pull request description, and the release pull request gathers them into the changelog.
+Future work belongs in the roadmap. Keep routine validation output outside
 Git, and retain selected evidence under the [validation policy](validation/README.md).
 Summarize the latest recorded deployment in `RELEASE_STATUS.md`. Link supporting records
 instead of repeating release narratives across guides.
