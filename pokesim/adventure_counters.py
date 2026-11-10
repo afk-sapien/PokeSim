@@ -4,7 +4,7 @@ Faints, blackouts, trainer wins, evolutions and releases are journal entries, an
 can be pruned. Each one is also counted here, in the transaction that writes it. An adventure
 recorded before these tallies starts from the entries its journal still holds.
 """
-import json
+from .state import kv, tracking
 
 KEY = 'adventure-counters-v1'
 TYPES = {'faint': 'faints', 'blackout': 'blackouts', 'trainer': 'trainers_defeated',
@@ -15,16 +15,13 @@ WILD = ' fighting a '
 
 
 def _load(db):
-    row = db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-    if row:
-        value = json.loads(row[0])
+    value = kv.get(db, KEY)
+    if value is not None:
         value['counts'] = {**dict.fromkeys(NAMES, 0), **value.get('counts', {})}
         return value
-    first, since = db.execute('SELECT MIN(id), MIN(ts) FROM events').fetchone()
-    table = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'").fetchone()
-    issued = table and db.execute("SELECT seq FROM sqlite_sequence WHERE name='events'").fetchone()
+    first, since = tracking.journal_start(db)
     # Ids only grow, so a journal that no longer starts at entry 1 has been pruned.
-    complete = first == 1 or first is None and not (issued and issued[0])
+    complete = first == 1 or first is None and not tracking.issued(db)
     return {'counts': dict.fromkeys(NAMES, 0), 'through': 0, 'complete_history': complete,
             'since': None if complete else since}
 
@@ -35,10 +32,7 @@ def _catch_up(db, value, until):
     Entries written by an older version, or by a stopped adventure's backfill, are counted
     here exactly once, since ``through`` only moves forward.
     """
-    marks = ','.join('?' * len(TYPES))
-    rows = db.execute(f'SELECT type, body FROM events WHERE id > ? AND id < ? AND type IN ({marks})',
-                      (value['through'], until, *TYPES))
-    for kind, body in rows:
+    for kind, body in tracking.entries(db, value['through'], until, TYPES):
         value['counts'][TYPES[kind]] += 1
         if kind == 'blackout' and WILD not in (body or ''):
             # Both generations write the wild foe into the entry when they black out in a wild
@@ -48,14 +42,13 @@ def _catch_up(db, value, until):
 
 
 def _save(db, value):
-    db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
+    kv.put(db, KEY, value)
 
 
 def initialize(db):
     """Bring the tallies up to the newest journal entry. Safe to run on every start."""
     value = _load(db)
-    newest = db.execute('SELECT COALESCE(MAX(id), 0) FROM events').fetchone()[0]
-    _catch_up(db, value, newest + 1)
+    _catch_up(db, value, tracking.newest_entry(db) + 1)
     _save(db, value)
 
 
@@ -72,11 +65,10 @@ def record(db, eid, kind):
 
 
 def status(store):
-    with store.lock:
-        value = _load(store.db)
-        newest = store.db.execute('SELECT COALESCE(MAX(id), 0) FROM events').fetchone()[0]
+    with store.reading() as db:
+        value = _load(db)
         # Read only. A stopped adventure's page never writes, so count any new entries here.
-        _catch_up(store.db, value, newest + 1)
+        _catch_up(db, value, tracking.newest_entry(db) + 1)
     counts = value['counts']
     battles = counts['trainers_defeated'] + counts['trainer_losses']
     return {**counts, 'trainer_battles': battles,

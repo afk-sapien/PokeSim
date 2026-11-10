@@ -1,6 +1,7 @@
 """Observed Gen II activity and collection trends in the shared statistics schema."""
-import json
 import time
+
+from ..state import kv, tracking
 
 KEY = 'adventure-statistics-v1'
 INTERVAL = 30
@@ -78,13 +79,12 @@ class Statistics:
         current = {**self.value['counters'], **(self.gauges or {}),
                    'recorded_hours': round(self.value['counters']['active_frames'] / 216000, 3),
                    'captures': captures.get('total', 0)}
-        with self.store.lock, self.store.db:
+        with self.store.transaction() as db:
             # Johto Marathons finished, from the journal as in Gen I.
-            current['marathons'] = marathons(self.store.db, 'Johto Marathon')
+            current['marathons'] = marathons(db, 'Johto Marathon')
             self.value.setdefault('baseline', {'ts': now, **current})
             self.value.update(current=current, updated_at=now)
-            self.store.db.execute('INSERT OR REPLACE INTO statistics_history VALUES (?, ?, ?)',
-                                  (int(now // 3600), now, json.dumps(current)))
-            compact(self.store.db, self.value, now)
-            self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(self.value)))
+            tracking.add_history(db, now, current)
+            compact(db, self.value, now)
+            kv.put(db, KEY, self.value)
         self.last_flush = now

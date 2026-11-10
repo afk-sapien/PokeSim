@@ -4,13 +4,14 @@ Red, Blue and Yellow keep their receipts under ``KEY``. Gold, Silver and Crystal
 apart under ``GEN2_KEY`` with their own table and the 251-species Pokédex.
 """
 import hashlib
-import json
 import time
+
+from .state import kv, tracking
 
 KEY = 'shiny-statistics-v1'
 GEN2_KEY = 'gen2-shiny-statistics-v1'
 # generation: (kv key, receipt table, Pokédex size)
-LEDGERS = {1: (KEY, 'shiny_receipts', 151), 2: (GEN2_KEY, 'gen2_shiny_receipts', 251)}
+LEDGERS = {1: (KEY, tracking.SHINY_RECEIPTS[1], 151), 2: (GEN2_KEY, tracking.SHINY_RECEIPTS[2], 251)}
 # LoadEnemyMonData.storeDVs writes both DV bytes before loading the enemy level.
 # Scan only the verified English Red/Blue bank, then verify the complete instruction sequence.
 BANK = 15
@@ -40,34 +41,30 @@ def status(store, generation=1):
 
 def initialize(db, generation=1):
     """Open the ledger's counts. The receipt table comes from the schema version (pokesim.state)."""
-    key = LEDGERS[generation][0]
-    db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)', (key, json.dumps(empty())))
+    kv.add(db, LEDGERS[generation][0], empty())
 
 
 def log(db, generation, names, limit=200):
     """The newest shinies seen and acquired, with their dates where known, oldest first. Receipts
     from before dates were kept stay undated."""
-    _, table, _ = LEDGERS[generation]
-    rows = db.execute(f'SELECT kind, dex, ts FROM {table} ORDER BY ts IS NOT NULL DESC, ts DESC, rowid DESC '
-                      'LIMIT ?', (limit,)).fetchall()
+    rows = tracking.shiny_receipts(db, generation, limit)
     return [{'kind': kind, 'dex': dex, 'name': names.get(dex, f'#{dex:03d}'), 'ts': when}
             for kind, dex, when in reversed(rows)]
 
 
 def record(db, kind, fingerprint, dex, *, generation=1):
     """Count one verified shiny once inside the caller transaction. Returns whether it was new."""
-    key, table, size = LEDGERS[generation]
+    key, _, size = LEDGERS[generation]
     if kind not in {'seen', 'acquired'} or type(dex) is not int or not 1 <= dex <= size:
         raise ValueError('Invalid shiny receipt')
     initialize(db, generation)
-    if not db.execute(f'INSERT OR IGNORE INTO {table}(kind, fingerprint, dex, ts) VALUES (?,?,?,?)',
-                      (kind, fingerprint, dex, time.time())).rowcount:
+    if not tracking.add_shiny(db, generation, kind, fingerprint, dex, time.time()):
         return False
-    value = {**empty(), **json.loads(db.execute('SELECT v FROM kv WHERE k=?', (key,)).fetchone()[0])}
+    value = {**empty(), **kv.get(db, key)}
     value[kind] += 1
     value[kind + '_species'] = sorted(set(value[kind + '_species']) | {dex})
     value['started_at'] = value['started_at'] or time.time()
-    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
+    kv.update(db, key, value)
     return True
 
 
@@ -75,11 +72,11 @@ def start(db, generation, *, available, fresh=False):
     """Open a ledger for a cartridge that tracks shinies, keeping any receipts already counted."""
     key = LEDGERS[generation][0]
     initialize(db, generation)
-    value = {**empty(), **json.loads(db.execute('SELECT v FROM kv WHERE k=?', (key,)).fetchone()[0])}
+    value = {**empty(), **kv.get(db, key)}
     if value['started_at'] is None:
         value['complete_history'] = fresh
     value.update(started_at=value['started_at'] or time.time(), available=available)
-    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
+    kv.update(db, key, value)
 
 
 def fresh(available):
@@ -101,11 +98,11 @@ class ShinyTracker:
         self.store = store
         self.signature = YELLOW_SIGNATURE if rom_sha1 == YELLOW else SIGNATURE
         self.supported = rom_sha1 in TRACKED
-        with store.lock, store.db:
-            initialize(store.db)
-            value = {**empty(), **json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])}
+        with store.transaction() as db:
+            initialize(db)
+            value = {**empty(), **kv.get(db, KEY)}
             value.update(started_at=value['started_at'] or time.time(), available=self.supported)
-            store.db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+            kv.update(db, KEY, value)
         from . import fair_dvs
         # The reroll shares this hook so it lands before CalcStats and before the shiny check.
         self.fair_key = fair_dvs.secret(store) if self.supported and fair_dvs.enabled() else None
@@ -128,5 +125,5 @@ class ShinyTracker:
         if species not in SPECIES:
             return
         fingerprint = hashlib.sha256(bytes(mem[0xc000:0xe000])).hexdigest()
-        with self.store.lock, self.store.db:
-            record(self.store.db, 'seen', fingerprint, SPECIES[species]['dex'])
+        with self.store.transaction() as db:
+            record(db, 'seen', fingerprint, SPECIES[species]['dex'])
