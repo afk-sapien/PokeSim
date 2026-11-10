@@ -293,3 +293,12 @@ def gen2_hunt(game, monkeypatch):
 @pytest.mark.parametrize(('gen1', 'gen2'), PAIRS)
 def test_both_hunts_catch_only_a_copy_rarer_than_the_one_held(gen1, gen2, monkeypatch):
     assert gen1_hunt(gen1) == gen2_hunt(gen2, monkeypatch) == [True, False, False]
+
+
+# 6. A help request polled many times, then a loop and a second stall.
+
+def test_both_write_one_help_row_per_request(tmp_path):
+    from test_stall_truth import gen1_game, gen1_help, gen2_game, gen2_help, help_story
+    gen1 = help_story(tmp_path / 'gen1', gen1_game, gen1_help)
+    assert [row['request'] for row in gen1] == ['stall', 'loop', 'stall']
+    assert help_story(tmp_path / 'gen2', gen2_game, gen2_help) == gen1
