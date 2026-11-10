@@ -334,9 +334,12 @@ class Regions:
         return search.find(goals)
 
 
-# The map links a walk crosses, kept per game data as {id: (data, links)}.
-_WALK_LINKS = {}
+# The map links a walk crosses and the field moves its crossings need, kept per game data as
+# {id: (data, links, crossings)}.
+_WALK_FACTS = {}
 WALKED = ('ground', 'room')
+# The field moves the regions model, as each set a player can have.
+FIELD_MOVES = tuple(frozenset(moves) for moves in ((), ('cut',), ('surf',), ('cut', 'surf')))
 
 
 def reachable(data, regions):
@@ -387,6 +390,74 @@ def link_walks(data, regions):
     return kinds
 
 
+def sides(data, regions, cut, surf):
+    """Where each step between two maps lands and leaves, as (landing, leaving) {(map, other map): roots}.
+
+    A root names the ground of one map that its regions join into across ledges, slides and the
+    like. A step from map to other map leaves from ground with a root in leaving, and lands on
+    ground with a root in landing.
+    """
+    parent = {}
+
+    def find(node):
+        while parent.setdefault(node, node) != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    steps = []
+    for mid in data.maps:
+        for region in set(regions.regions(mid, cut, surf).values()):
+            node = (mid, region)
+            find(node)
+            for target, _, _ in regions.edges(node, cut, surf):
+                if target[0] == mid:
+                    parent[find(node)] = find(target)
+                else:
+                    steps.append((node, target))
+    landing, leaving = {}, {}
+    for node, target in steps:
+        leaving.setdefault((node[0], target[0]), set()).add(find(node))
+        landing.setdefault((node[0], target[0]), set()).add(find(target))
+    return landing, leaving
+
+
+def crossings(data, regions):
+    """The field moves a walk needs to cross a map, as {(previous map, map, next map): alternatives}.
+
+    A walk that comes into a map from the previous map lands on some ground, and it goes on to the
+    next map only from ground joined to that. Each alternative is a smallest set of FIELD_MOVES
+    that joins them, so crossing Ilex Forest between its two gates needs Cut. A crossing joined
+    with no field move is left out. So is one joined by none of the sets, since it needs a move
+    the regions do not model, such as Strength.
+    """
+    tables = {moves: sides(data, regions, 'cut' in moves, 'surf' in moves) for moves in FIELD_MOVES}
+    landing, leaving = tables[FIELD_MOVES[-1]]
+    into = {}
+    for previous, mid in landing:
+        into.setdefault(mid, []).append(previous)
+    needs = {}
+    for mid, following in leaving:
+        for previous in into.get(mid, ()):
+            joined = [moves for moves in FIELD_MOVES
+                      if tables[moves][0].get((previous, mid), set()) & tables[moves][1].get((mid, following), set())]
+            if joined and joined[0] and joined[-1] == FIELD_MOVES[-1]:
+                needs[(previous, mid, following)] = tuple(
+                    moves for moves in joined if not any(other < moves for other in joined))
+    return needs
+
+
+def walk_facts(data):
+    """The map links a walk crosses and the field moves its crossings need, for one game data."""
+    entry = _WALK_FACTS.get(id(data))
+    if entry is None or entry[0] is not data:
+        # One Regions serves both, since the regions with Cut and Surf take most of the time.
+        regions = Regions(data)
+        links = frozenset(key for key, kind in link_walks(data, regions).items() if kind in WALKED)
+        entry = _WALK_FACTS[id(data)] = (data, links, crossings(data, regions))
+    return entry
+
+
 def walk_links(data):
     """The map links a walk crosses, as a frozenset of (map, direction, other map), read from the map files.
 
@@ -394,8 +465,12 @@ def walk_links(data):
     Blackthorn City meet that way, and the walk between them is Ice Path. tools/map_audit.py checks
     that the walk router counts no such link.
     """
-    entry = _WALK_LINKS.get(id(data))
-    if entry is None or entry[0] is not data:
-        links = frozenset(key for key, kind in link_walks(data, Regions(data)).items() if kind in WALKED)
-        entry = _WALK_LINKS[id(data)] = (data, links)
-    return entry[1]
+    return walk_facts(data)[1]
+
+
+def walk_crossings(data):
+    """The crossings a walk takes only with a field move, as crossings lists them, read from the map files.
+
+    tools/map_audit.py checks that a walk takes none of them without the move.
+    """
+    return walk_facts(data)[2]

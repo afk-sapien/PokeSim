@@ -410,7 +410,7 @@ def roamers(policy, snapshot, Goal):
                       if data.map_ids[f'ROUTE_{route}'] not in excluded}
     choices = []
     for mid, species in candidates.items():
-        route = policy.nav.walk(snapshot.map, mid)
+        route = policy.nav.walk(snapshot, mid)
         if route is None:
             continue
         width, height = data.maps[mid]['width'], data.maps[mid]['height']

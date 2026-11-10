@@ -122,7 +122,7 @@ def test_sealed_storage_trains_only_the_party_and_never_walks_to_the_pc(data, mo
     party = (trainee(data, 154, 100),) + tuple(trainee(data, 18, 50 + slot, position=slot) for slot in range(1, 6))
     stored = (trainee(data, 61, 99, box=12, position=3, held_item=share),)
     snapshot = SimpleNamespace(party=party, stored=stored, items=(), owned={154, 18, 61, 62, 186}, box_counts=(20,) * 14,
-                               map=data.map_ids['ROUTE_29'], x=1, y=1)
+                               map=data.map_ids['ROUTE_29'], x=1, y=1, badges=0)
     policy.collection.update(training=None, prerequisites=[])
     monkeypatch.setattr(training, 'projects', lambda *args, **kwargs: [])
     monkeypatch.setattr(training, 'site', lambda policy, snapshot, project, mon: training.SITE)

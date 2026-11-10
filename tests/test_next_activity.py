@@ -195,7 +195,7 @@ def test_gen1_loading_a_save_clears_the_pin(tmp_path, monkeypatch):
 
 def gen2_policy(**extra):
     data = SimpleNamespace(map_ids={'HERE': 1})
-    nav = SimpleNamespace(walk=lambda source, target: [])
+    nav = SimpleNamespace(walk=lambda snapshot, target: [])
     return SimpleNamespace(data=data, nav=nav, collection={'target': None}, menu=None, completed={'red': 1},
                            decisions=10, **extra)
 

@@ -11,18 +11,25 @@ Check C covers warps and carpets. A warp must name a real map and warp number, a
 A carpet with no warp on it is plain ground (#244), so a walk must cross it and step off it in its
 own direction.
 
+Check D covers crossings. A walk crosses a map from the map before it to the map after it only
+with the field moves that join the ground it lands on to the ground it leaves from, so before Cut
+no walk goes through Ilex Forest. For each crossing that needs a field move, a walk with each set
+of moves that does not join it must take no crossing those moves do not join.
+
 Each finding that is true of the games today is on ALLOWED with the reason it is there. The audit
 fails on a finding that is not on ALLOWED, and on a row of ALLOWED that no longer matches a
 finding. It reads generated data only and changes nothing.
 """
 import argparse
+import itertools
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.navigation import Navigator
-from pokesim.gen2.routes import CARPETS, DIRECTIONS, OPPOSITE, WALKED, Regions, link_walks, side_wall
+from pokesim.gen2.routes import (CARPETS, DIRECTIONS, FIELD_MOVES, OPPOSITE, WALKED, Regions, link_walks,
+                                 side_wall, walk_crossings)
 
 GAMES = ('gold', 'silver', 'crystal')
 EVERY = frozenset(GAMES)
@@ -153,12 +160,38 @@ def check_carpets(data, regions, navigator, names):
     return found
 
 
+# The badge and move number each field move needs.
+HMS = {'cut': (2, 15), 'surf': (8, 57)}
+
+
+def player(mid, moves):
+    """A player on mid who can use ``moves``, with the badge and a party member for each."""
+    party = (SimpleNamespace(moves=tuple(HMS[move][1] for move in moves)),)
+    return SimpleNamespace(map=mid, badges=sum(HMS[move][0] for move in moves), party=party)
+
+
+def check_crossings(data, navigator, names):
+    """Check D: a walk takes no crossing the player's field moves do not join."""
+    needs = walk_crossings(data)
+    found = {}
+    for previous, _, following in needs:
+        for moves in FIELD_MOVES:
+            for (before, here, _, _), (_, after, _, _) in itertools.pairwise(
+                    navigator.walk(player(previous, moves), following) or ()):
+                alternatives = needs.get((before, here, after))
+                if alternatives and not any(need <= moves for need in alternatives):
+                    have = '+'.join(sorted(moves)) or 'no moves'
+                    need = ' or '.join('+'.join(sorted(one)) for one in alternatives)
+                    found[('crossing', names[before], names[here], names[after], have)] = f'a walk crosses with {have} and needs {need}'
+    return found
+
+
 def audit(data):
     """Every finding for one game, as {finding: detail}."""
     names = {mid: entry['constant'] for mid, entry in data.maps.items()}
     regions, navigator = Regions(data), Navigator(data)
     return {**check_seams(data, regions, navigator, names), **check_warps(data, regions, names),
-            **check_carpets(data, regions, navigator, names)}
+            **check_carpets(data, regions, navigator, names), **check_crossings(data, navigator, names)}
 
 
 def problems(game, findings, allow=None):
