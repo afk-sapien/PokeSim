@@ -150,6 +150,18 @@ def test_a_restock_that_sells_from_the_bag_is_support_and_one_that_changes_nothi
     assert _goal_events('restock', full, sold) == []
 
 
+def test_a_gen2_sale_for_ball_money_is_support_and_one_that_changes_nothing_is_waste():
+    # A Silver run with no ball and too little cash for one sold an item before it went to buy balls.
+    broke = _snapshot([_mon('Totodile')], [])
+    broke.items, broke.money = ((1, 3), (2, 1)), 120
+    sold = _snapshot([_mon('Totodile')], [])
+    sold.items, sold.money = ((1, 3),), 820
+    assert [(event.kind, event.detail) for event in _goal_events('sell_supplies', broke, sold)] == [('sold', 1)]
+    assert _goal_events('sell_supplies', broke, broke) == []
+    sold.valid = False
+    assert _goal_events('sell_supplies', broke, sold) == []
+
+
 def test_a_deposit_that_makes_room_for_a_gift_is_progress_and_a_visit_that_deposits_nothing_is_waste():
     # Red's postgame caught a better Dugtrio copy, and the Eevee gift waited on a deposit.
     dugtrio = _mon('Dugtrio')
