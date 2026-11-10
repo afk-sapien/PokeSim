@@ -125,9 +125,19 @@ def test_trade_first_pokemon_are_used_before_anything_else(setup, monkeypatch): 
     assert third in setup.peers
 
 
-def test_stored_trade_offers_expire_at_the_first_sweep(setup):  # noqa: F811
-    """Offers left from before 0.5.0 hold their Pokémon until the first sweep expires them."""
+def test_stored_trade_offers_are_ignored(setup):  # noqa: F811
+    """Offers left from before 0.5.0 stay in the registry but no longer hold any Pokémon back."""
+    c, left, right = setup.coordinator, setup.data['left_id'], setup.data['right_id']
+    setup.registry.create_trade_offer({'id': identifier(), 'from_id': left, 'from_key': '0',
+                                       'to_id': right, 'to_key': 'party-1', 'display': {'from': {}, 'to': {}}})
+    assert (left, '0') not in c.hand_picked_keys()
+    assert c.schedule_once()['phase'] == 'completed'
+
+
+def test_stored_trade_offers_expire_at_the_first_sweep_with_accounts(setup):  # noqa: F811
+    """With accounts, offers left from before 0.5.0 hold their Pokémon until the first sweep expires them."""
     from pokesim.app.offers import EXPIRE_SECONDS, TradeOffers
+    setup.manager.auth_mode = 'accounts'
     c, left, right = setup.coordinator, setup.data['left_id'], setup.data['right_id']
     setup.registry.create_trade_offer({'id': identifier(), 'from_id': left, 'from_key': '0',
                                        'to_id': right, 'to_key': 'party-1', 'display': {'from': {}, 'to': {}}})

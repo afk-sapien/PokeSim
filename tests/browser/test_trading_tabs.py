@@ -40,7 +40,7 @@ def worker(prefix):
 class Library:
     """The library API the managed Trading page talks to, with the real game worker behind it."""
 
-    def __init__(self, page, url, *, starts_now=True, mine_key='box-1', viewer_only=False, busy=''):
+    def __init__(self, page, url, *, starts_now=True, mine_key='box-1', viewer_only=False, busy='', accounts=False):
         self.page, self.url = page, url
         self.busy = busy
         self.cancelled = []
@@ -59,8 +59,9 @@ class Library:
         # Offers this adventure received and sent, and every answer the page posted.
         self.incoming, self.outgoing, self.answers = [], [], []
         self.changed = None
+        # Offers and the two people switches show only on a Library with accounts.
         trading = render_game_page('adventure-trading.html', base_path=f'/games/{FROM}', adventure_id=FROM,
-                                   adventure_name='Crystal')
+                                   adventure_name='Crystal', accounts=accounts)
         pc = render_game_page('pc.html', base_path=f'/games/{FROM}', adventure_id=FROM, adventure_name='Crystal')
         # Every adventure in this Library is the one synthetic Red worker, so a Gen II shiny portrait is a stand-in.
         for aid in (FROM, RED, BLUE):
@@ -209,24 +210,30 @@ def on_tab(page, name):
     expect(page.locator(f'#panel-{other}')).to_be_hidden()
 
 
+@pytest.mark.parametrize('accounts', [False, True])
 @pytest.mark.parametrize('width', [1280, 390])
-def test_trading_has_the_switch_up_top_then_make_a_trade_and_history_tabs(page, game, width):
+def test_trading_has_the_switch_up_top_then_make_a_trade_and_history_tabs(page, game, width, accounts):
     url = game[0]
-    library = Library(page, url)
+    library = Library(page, url, accounts=accounts)
     page.set_viewport_size({'width': width, 'height': 844})
     library.open()
     overview = page.locator('.trade-overview')
     expect(overview.get_by_role('switch', name=AUTO)).to_be_enabled()
-    # The status box is the switches and nothing else: no headline, no explanation, no wish list.
-    # The owner also sees whether this adventure takes offers and trades with other people.
-    expect(overview.get_by_role('switch')).to_have_text(['Auto trading On', 'Open to offers Off', 'Auto trading with other people Off'])
+    # The status box is the switch and nothing else: no headline, no explanation, no wish list.
+    if accounts:
+        # With accounts the owner also sees whether this adventure takes offers and trades with other people.
+        expect(overview.get_by_role('switch')).to_have_text(['Auto trading On', 'Open to offers Off', 'Auto trading with other people Off'])
+    else:
+        assert overview.inner_text().upper().split() == ['AUTO', 'TRADING', 'ON'], overview.inner_text()
     expect(page.locator('main .trade-help, .page-lede, #trade-status, #trade-activity, [id^="wish"]')).to_have_count(0)
     expect(page.locator('#auto-list, #auto-setting, .trade-setting')).to_have_count(0)
-    # Under the switches, three tabs. Make a trade is the default and the URL keeps no hash for it.
-    expect(tabs(page)).to_have_text(['Make a trade', re.compile(r'^History \(2\)$'), 'Offers'])
+    # Under the switch, two tabs, and Offers too with accounts. Make a trade is the default and
+    # the URL keeps no hash for it.
+    names = ['make', 'history', 'offers'] if accounts else ['make', 'history']
+    expect(tabs(page)).to_have_text(['Make a trade', re.compile(r'^History \(2\)$'), 'Offers'][:len(names)])
     expect(page.locator('#tab-history')).to_have_attribute('title', '1 completed, 1 did not complete')
     order = page.evaluate("""[...document.querySelectorAll('main > *')].map(el => el.id || el.className)""")
-    assert order[1:] == ['trade-overview', 'trade-connection-note', 'trade-tabs', 'panel-make', 'panel-history', 'panel-offers'], order
+    assert order[1:] == ['trade-overview', 'trade-connection-note', 'trade-tabs', *(f'panel-{name}' for name in names)], order
     on_tab(page, 'make')
     expect(page.locator('#make-trade')).to_be_visible()
     expect(page.locator('#trade-history')).to_be_hidden()
@@ -236,7 +243,7 @@ def test_trading_has_the_switch_up_top_then_make_a_trade_and_history_tabs(page, 
     chosen = page.locator('#tab-make').bounding_box()
     assert abs(chosen['y'] + chosen['height'] - (strip['y'] + strip['height'])) <= 1, (chosen, strip)
     assert overview.bounding_box()['y'] + overview.bounding_box()['height'] <= strip['y']
-    shoot(page, f'trading-make-{width}')
+    shoot(page, f'trading-make-{width}{"-accounts" if accounts else ""}')
     # A click shows History alone and writes #history.
     page.locator('#tab-history').click()
     on_tab(page, 'history')
@@ -249,30 +256,27 @@ def test_trading_has_the_switch_up_top_then_make_a_trade_and_history_tabs(page, 
     expect(page.locator('#trade-history').get_by_role('link', name='Second Red')).to_have_attribute(
         'href', f'/games/{RED}/trading#history')
     assert urlparse(page.url).fragment == 'history'
-    shoot(page, f'trading-history-{width}')
+    shoot(page, f'trading-history-{width}{"-accounts" if accounts else ""}')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     # A reload keeps the tab.
     page.reload()
     on_tab(page, 'history')
+
+    def press(key, index):
+        name = names[index % len(names)]
+        page.keyboard.press(key)
+        on_tab(page, name)
+        expect(page.locator(f'#tab-{name}')).to_be_focused()
     # Arrow keys move between the tabs, wrapping around, and Home and End jump.
     page.locator('#tab-history').focus()
-    page.keyboard.press('ArrowRight')
-    on_tab(page, 'offers')
-    page.keyboard.press('ArrowRight')
-    on_tab(page, 'make')
-    expect(page.locator('#tab-make')).to_be_focused()
+    for index in range(2, len(names) + 1):
+        press('ArrowRight', index)
     assert urlparse(page.url).fragment == 'make'
-    page.keyboard.press('ArrowLeft')
-    on_tab(page, 'offers')
-    page.keyboard.press('ArrowLeft')
-    on_tab(page, 'history')
-    expect(page.locator('#tab-history')).to_be_focused()
-    page.keyboard.press('End')
-    on_tab(page, 'offers')
-    page.keyboard.press('Home')
-    on_tab(page, 'make')
-    page.keyboard.press('ArrowRight')
-    on_tab(page, 'history')
+    for index in range(len(names) - 1, 0, -1):
+        press('ArrowLeft', index)
+    press('End', len(names) - 1)
+    press('Home', 0)
+    press('ArrowRight', 1)
     # Only the selected tab is in the Tab order.
     expect(page.locator('#tab-make')).to_have_attribute('tabindex', '-1')
     expect(page.locator('#tab-history')).to_have_attribute('tabindex', '0')
@@ -556,8 +560,7 @@ def test_automatic_trades_run_without_asking(page, game, width):
     expect(page.locator('#trade-lamp')).to_have_attribute('title', 'On')
     expect(page.locator('#auto-switch')).to_be_enabled()
     # There is no Ask me first switch and no suggested trades to accept or dismiss.
-    # The owner's other two switches are Open to offers and Auto trading with other people.
-    expect(page.get_by_role('switch')).to_have_count(3)
+    expect(page.get_by_role('switch')).to_have_count(1)
     expect(page.get_by_text('Ask me first')).to_have_count(0)
     expect(page.locator('#trade-requests-section, .request-card, [data-request-action]')).to_have_count(0)
     shoot(page, f'auto-on-{width}')
@@ -608,7 +611,7 @@ def test_pc_popup_lock_shows_on_the_grid_and_party(page, game, width):
     shoot(page, f'pc-lock-grid-{width}')
 
 
-@pytest.mark.parametrize('tab', ['cable', 'auto'])
+@pytest.mark.parametrize('tab', ['offers', 'cable', 'auto'])
 def test_an_old_tab_link_or_remembered_tab_still_opens_the_page(page, game, tab):
     library = Library(page, game[0])
     page.goto(f'{game[0]}/games/{FROM}/trading')
@@ -650,7 +653,7 @@ def someone_elses(library):
 
 @pytest.mark.parametrize('width', [1280, 390])
 def test_an_offer_to_someone_elses_adventure_is_sent_then_cancelled(page, game, width):
-    library = Library(page, game[0])
+    library = Library(page, game[0], accounts=True)
     someone_elses(library)
     page.set_viewport_size({'width': width, 'height': 844})
     library.open()
@@ -688,7 +691,7 @@ def test_an_offer_to_someone_elses_adventure_is_sent_then_cancelled(page, game, 
 # The first accept answers 409 with changed, which asks for the second confirm.
 @pytest.mark.expected_errors(*refused('/accept', 409))
 def test_an_offer_that_asks_for_nothing_is_accepted_with_a_pick_and_a_second_confirm(page, game):
-    library = Library(page, game[0])
+    library = Library(page, game[0], accounts=True)
     library.incoming.append({
         'id': 'f' * 32, 'status': 'pending', 'reason': '', 'created_at': 3000, 'updated_at': 3000, 'expires_at': 3000 + 86400,
         'manual_id': None, 'trade': None,
@@ -718,7 +721,7 @@ def test_an_offer_that_asks_for_nothing_is_accepted_with_a_pick_and_a_second_con
 
 
 def test_only_the_owner_sees_the_offer_and_across_owner_switches(page, game):
-    library = Library(page, game[0])
+    library = Library(page, game[0], accounts=True)
     library.open()
     offers = page.locator('#offers-switch')
     offers.click()

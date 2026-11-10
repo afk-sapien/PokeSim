@@ -10,13 +10,14 @@
   const owner = String(PokeSim.base || '').startsWith('/games/') && typeof PokeSim.api === 'function'
   const query = new URLSearchParams(location.search)
 
-  // Three tabs under the switches: Make a trade, History and Offers. The hash (#make, #history, #offers) keeps the choice.
+  // Tabs under the switches: Make a trade, History and, with accounts, Offers. The hash (#make, #history, #offers) keeps the choice.
   const tabs = [...document.querySelectorAll('.trade-tabs [role="tab"]')]
   const TABS = {make: 'make', trade: 'make', current: 'make', auto: 'make', history: 'history', offers: 'offers'}
   // A section inside a tab. Picking it shows its tab, then scrolls to it.
   const SECTIONS = {current: '#current-exchange-section'}
   function show(name, {focus = false, hash = true} = {}) {
-    const current = TABS[name] || 'make'
+    // A tab the page leaves out, such as Offers without accounts, opens Make a trade.
+    const current = tabs.some(tab => tab.id === `tab-${TABS[name]}`) ? TABS[name] : 'make'
     for (const tab of tabs) {
       const on = tab.id === `tab-${current}`
       tab.setAttribute('aria-selected', String(on))

@@ -29,6 +29,8 @@ def member(uid, **grants):
 
 @pytest.fixture
 def offers(setup):  # noqa: F811
+    # Trade offers need another person, so they exist only on a Library with accounts.
+    setup.manager.auth_mode = 'accounts'
     setup.manager.coordinator = setup.coordinator
     setup.manager.offers = TradeOffers(setup.manager)
     # These tests answer offers by hand. Offers between two adventures of one owner start at once,

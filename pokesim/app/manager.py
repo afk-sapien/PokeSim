@@ -5,6 +5,7 @@ import argparse
 import asyncio
 from contextlib import asynccontextmanager
 import hmac
+import ipaddress
 import json
 import logging
 from logging.handlers import RotatingFileHandler
@@ -40,7 +41,7 @@ from .assets import Assets
 from .auth import AuthStore, SetupCode
 from . import policy, trade_settings
 from .policy import Actor, can
-from .registry import CREATED_SCHEMA, LIBRARY_OWNER, Registry, identifier, validate_id
+from .registry import LIBRARY_OWNER, Registry, identifier, validate_id
 from .supervisor import AdventureRunning, Supervisor
 
 log = logging.getLogger(__name__)
@@ -89,10 +90,22 @@ def public_game_path(method, path):
                              r'|static/[A-Za-z0-9_.-]+|static/fonts/[A-Za-z0-9_.-]+', path))
 
 
+def loopback(host):
+    """Whether a server listening on this address serves only its own machine."""
+    if host == 'localhost':
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 class Manager:
     def __init__(self, root, public_url='http://127.0.0.1:8000', *, game_data_dir=None,
                  reference_archive=None, child_factory=None, auth='none'):
         self.public_url = public_origin(public_url)
+        # run() sets the address the server listens on. The open notice reads it.
+        self.listen_host = '127.0.0.1'
         self.root = Path(root).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.lock = (self.root / 'application.lock').open('a+b')
@@ -304,8 +317,9 @@ class Manager:
         self.supervisor.run_monitor()
         self.coordinator.start_scheduler()
         self.watchdog.run()
-        self.offers.run()
         if self.auth_mode == 'accounts':
+            # An open Library has no trade offers, so offers stored before 0.5.0 stay as they are.
+            self.offers.run()
             self.leases.run()
             threading.Thread(target=self.resume_orphans, name='resume-manual', daemon=True).start()
 
@@ -374,10 +388,10 @@ class Manager:
 
     # Accounts ---------------------------------------------------------------------------
     def resolve_auth(self, requested):
-        """none or accounts. Upgrades with nothing configured stay open, and new libraries log in.
+        """none or accounts. With AUTH unset a Library stays open until it uses accounts.
 
-        A Library is new when this PokeSim made it, whether the server or `pokesim import` did,
-        and an upgrade when it comes from before accounts, not by whether app.sqlite was there.
+        It uses accounts once it had them (an admin, or the setting a start with accounts keeps),
+        or when the environment sets up a login: OpenID Connect, a trusted proxy or a first admin.
         """
         if requested == 'auto':
             requested = os.environ.get('AUTH', '').strip().lower() or 'auto'
@@ -388,14 +402,21 @@ class Manager:
         # A first admin in the environment asks for accounts too, or bootstrap_admin finds nothing to set up.
         admin = os.environ.get('POKESIM_ADMIN_USER', '').strip() and os.environ.get('POKESIM_ADMIN_PASSWORD')
         configured = os.environ.get('OIDC_ISSUER') or os.environ.get('AUTH_PROXY_HEADER') or admin
-        new = self.registry.setting(CREATED_SCHEMA) is not None
-        if new or configured or self.auth.setup_done() or self.registry.setting('accounts'):
+        if configured or self.auth.setup_done() or self.registry.setting('accounts'):
             return 'accounts'
         return 'none'
 
     @property
     def needs_setup(self):
         return self.auth_mode == 'accounts' and not self.auth.setup_done()
+
+    def open_notice(self):
+        """Whether an open Library tells its visitors that anyone who reaches it controls PokeSim.
+
+        Only a server that listens beyond its own machine says so, and only until an admin
+        dismisses it. The desktop app and a server on 127.0.0.1 never do.
+        """
+        return not loopback(self.listen_host) and not self.registry.setting('open_notice_dismissed')
 
     def announce_setup(self):
         """Log a fresh one-time setup code while the Library has no admin."""
@@ -853,7 +874,7 @@ def create_app(manager, shutdown=lambda: None):
         if manager.auth_mode == 'none':
             current = manager.browser_session(request)
             extra = {'auth': 'none', 'authenticated': True, 'user': None,
-                     'setup_recommended': True}
+                     'setup_recommended': manager.open_notice()}
             if current is not None:
                 return {'csrf_token': current['csrf_token'], 'role': current['role'], **extra}
             session_id, current = manager.anonymous_session('admin', manager.client_address(request))
@@ -875,6 +896,11 @@ def create_app(manager, shutdown=lambda: None):
         response = JSONResponse(session_payload(manager, actor, current))
         manager.set_session_cookie(response, session_id, manager.anonymous_seconds)
         return response
+
+    @app.post('/api/v1/open-notice/dismiss')
+    def dismiss_open_notice():
+        manager.registry.set_setting('open_notice_dismissed', True)
+        return {'setup_recommended': manager.open_notice()}
 
     def api_reference(request):
         """The API reference is for admins. Without accounts it stays off unless API_DOCS turns it on.
@@ -1366,7 +1392,13 @@ def create_app(manager, shutdown=lambda: None):
         require(request, 'adventure.manage', offer[side])
         return offer
 
-    @app.get('/api/v1/interactions/trade-offers')
+    def with_accounts(route):
+        """Register an offer route only on a Library with accounts. An offer goes to another person,
+        so an open Library has none. The picker reads (targets, limits, pokemon) serve Make a
+        trade in both modes."""
+        return route if manager.auth_mode == 'accounts' else (lambda handler: handler)
+
+    @with_accounts(app.get('/api/v1/interactions/trade-offers'))
     async def trade_offers(request: Request, adventure_id: str):
         await run_in_threadpool(require, request, 'adventure.manage', adventure_id)
         return await asyncio.to_thread(manager.offers.for_adventure, validate_id(adventure_id))
@@ -1387,7 +1419,7 @@ def create_app(manager, shutdown=lambda: None):
         await run_in_threadpool(open_to_offers, request, adventure_id)
         return await asyncio.to_thread(manager.offers.pokemon, validate_id(adventure_id))
 
-    @app.post('/api/v1/interactions/trade-offers')
+    @with_accounts(app.post('/api/v1/interactions/trade-offers'))
     async def create_trade_offer(request: Request):
         manager.check_available()
         data = await json_body(request)
@@ -1398,7 +1430,7 @@ def create_app(manager, shutdown=lambda: None):
             manager.background(manager.coordinator.drain_manual)
         return offer
 
-    @app.get('/api/v1/interactions/trade-offers/{oid}')
+    @with_accounts(app.get('/api/v1/interactions/trade-offers/{oid}'))
     async def trade_offer(oid: str, request: Request):
         def read():
             offer = manager.registry.trade_offer(validate_id(oid))
@@ -1409,7 +1441,7 @@ def create_app(manager, shutdown=lambda: None):
             return manager.offers.status(oid)
         return await asyncio.to_thread(read)
 
-    @app.post('/api/v1/interactions/trade-offers/{oid}/accept')
+    @with_accounts(app.post('/api/v1/interactions/trade-offers/{oid}/accept'))
     async def accept_trade_offer(oid: str, request: Request):
         manager.check_available()
         data = await json_body(request)
@@ -1422,12 +1454,12 @@ def create_app(manager, shutdown=lambda: None):
             manager.background(manager.coordinator.drain_manual)
         return offer
 
-    @app.post('/api/v1/interactions/trade-offers/{oid}/decline')
+    @with_accounts(app.post('/api/v1/interactions/trade-offers/{oid}/decline'))
     async def decline_trade_offer(oid: str, request: Request):
         await run_in_threadpool(offer_side, request, oid, 'to_id')
         return await asyncio.to_thread(manager.offers.decline, oid, request.state.actor)
 
-    @app.post('/api/v1/interactions/trade-offers/{oid}/cancel')
+    @with_accounts(app.post('/api/v1/interactions/trade-offers/{oid}/cancel'))
     async def cancel_trade_offer(oid: str, request: Request):
         await run_in_threadpool(offer_side, request, oid, 'from_id')
         return await asyncio.to_thread(manager.offers.withdraw, oid)
@@ -1794,7 +1826,8 @@ def create_app(manager, shutdown=lambda: None):
             from ..web.pages import render_game_page
             return HTMLResponse(render_game_page('adventure-trading.html', base_path=f"/{'view' if viewer else 'games'}/{aid}",
                 adventure_id=aid, adventure_name=adventure['name'], viewer=role in {'viewer', 'player'},
-                sprite_version=await run_in_threadpool(manager.assets.sprite_version, aid)))
+                sprite_version=await run_in_threadpool(manager.assets.sprite_version, aid),
+                accounts=manager.auth_mode == 'accounts'))
         if path == 'api/interactions' and request.method in {'GET', 'HEAD'}:
             return JSONResponse(await run_in_threadpool(manager.coordinator.adventure_status, aid,
                                                         role not in {'manager', 'owner'}))
@@ -2043,6 +2076,7 @@ def main(argv=None):
             if args.desktop and not args.no_browser:
                 webbrowser.open(identity['url'])
             return
+        manager.listen_host = host
         identity = {'url': public_url, 'application_id': manager.registry.setting('application_id')}
         CheckpointStore.atomic_write(manager.root / 'manager.json', json.dumps(identity).encode())
         manager.bootstrap_admin(os.environ.get('POKESIM_ADMIN_USER', '').strip(), os.environ.get('POKESIM_ADMIN_PASSWORD', ''))

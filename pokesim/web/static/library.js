@@ -120,6 +120,9 @@
   $('#logout').onclick = async () => {
     try { await api('/api/v1/auth/logout', {method: 'POST'}) } finally { location.replace('/login') }
   }
+  $('#accounts-banner-dismiss').onclick = async () => {
+    try { $('#accounts-banner').hidden = !(await write('/api/v1/open-notice/dismiss')).setup_recommended } catch (error) { notice(error.message, true) }
+  }
   async function api(path, options = {}, retried = false) {
     const {download, ...fetchOptions} = options
     const response = await fetch(path, {cache: 'no-store', credentials: 'same-origin', ...fetchOptions,

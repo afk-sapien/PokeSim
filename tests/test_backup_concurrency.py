@@ -75,13 +75,16 @@ def test_queued_start_waits_until_backup_finishes_copying(tmp_path, monkeypatch)
         manager.close()
 
 
-@pytest.mark.parametrize('state,expected', [
-    ({'paused': True, 'manual_mode': False}, 'pause'),
-    # A backup ends playing by hand, so the autopilot plays again afterwards.
-    ({'paused': True, 'manual_mode': True}, None),
-    ({'paused': False, 'manual_mode': False}, None),
+@pytest.mark.parametrize('auth,state,expected', [
+    ('none', {'paused': True, 'manual_mode': False}, 'pause'),
+    ('none', {'paused': True, 'manual_mode': True}, 'take_control'),
+    ('none', {'paused': False, 'manual_mode': False}, None),
+    ('accounts', {'paused': True, 'manual_mode': False}, 'pause'),
+    # With accounts a backup ends playing by hand, so the autopilot plays again afterwards.
+    ('accounts', {'paused': True, 'manual_mode': True}, None),
+    ('accounts', {'paused': False, 'manual_mode': False}, None),
 ])
-def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, state, expected):
+def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, auth, state, expected):
     controls = []
 
     class PlaybackChild(FakeChild):
@@ -92,7 +95,7 @@ def test_backup_restores_previous_playback_mode(tmp_path, monkeypatch, state, ex
                 controls.append(body['action'])
             return {}
 
-    manager = Manager(tmp_path, child_factory=PlaybackChild)
+    manager = Manager(tmp_path, child_factory=PlaybackChild, auth=auth)
     manager.registry.add_rom('rom', 'sha1', 'red')
     row = manager.registry.create('Red', 'rom', {'starter': 'random'}, identifier())
     manager.registry.request_lifecycle(row['id'], 'start', identifier())

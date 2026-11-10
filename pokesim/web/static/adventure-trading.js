@@ -193,6 +193,8 @@
     globalThis.Panel?.fitSprites?.($('#trade-offers-section'))
   }
   async function refreshOffers() {
+    // A Library without accounts has no Offers tab, since an offer goes to another person.
+    if (!$('#trade-offers-section')) return
     if (!owner()) {
       if ($('#offers-incoming')) $('#offers-incoming').innerHTML = '<p class="empty-note">Offers are answered from the owner’s page, not from a view link.</p>'
       return
