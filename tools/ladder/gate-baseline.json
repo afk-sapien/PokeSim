@@ -1,5 +1,5 @@
 {
- "commit": "99ec62d6",
+ "commit": "48bf511f",
  "attempt": 1,
  "taken": "2026-11-10",
  "frames": 108000,
@@ -172,7 +172,7 @@
   "red/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 20.8
+   "waste": 12.27
   },
   "red/badges_6": {
    "stall": null,
