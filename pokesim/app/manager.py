@@ -241,7 +241,9 @@ class Manager:
                 self.supervisor.setup_retries.pop(aid, None)
                 if not running:
                     stall_truth.lifecycle(self.root / 'adventures' / aid, 'start', 'owner')
-                return self.supervisor.start(aid)
+            # The start takes its own locks, and it downloads data and boots the worker without the
+            # maintenance lock, so a backup or another adventure's start never waits behind it.
+            return self.supervisor.start(aid)
         except Exception as error:
             row = self.registry.adventure(aid)
             if row['desired_state'] == 'running':

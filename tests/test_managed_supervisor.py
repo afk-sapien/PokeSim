@@ -422,7 +422,8 @@ def test_one_failing_child_check_is_logged_and_the_next_child_is_still_checked(s
             supervisor._monitor()
     finally:
         supervisor.closed = original
-    assert supervisor.registry.adventure(second)['summary']['frame'] == 7
+    assert healthy.watch[1]['frame'] == 7
+    assert supervisor.registry.adventure(second)['summary']['activity'] == 'Adventure in progress'
     assert supervisor.registry.adventure(first)['state'] == 'running'
     # Two passes failed the same way, and the second one is held back as a repeat.
     errors = [record for record in caplog.records if record.levelname == 'ERROR']

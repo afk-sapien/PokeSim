@@ -13,7 +13,7 @@ import tempfile
 import time
 import zipfile
 
-from .errors import Conflict
+from .errors import Conflict, Refused
 from .registry import identifier
 
 MAX_EXPANDED = 16 * 1024**3
@@ -94,14 +94,24 @@ def intended_playback(manager, aid):
     the worker's summary only when the library never sent it a control.
     """
     if not accounts(manager):
-        status = manager.supervisor.child(aid).request('GET', '/api/summary', timeout=5)
+        status = worker_summary(manager, aid)
         return 'take_control' if status.get('manual_mode') else 'pause' if status.get('paused') else None
     leases = getattr(manager, 'leases', None)
     action = leases.intended(aid) if leases is not None else None
     if action is not None:
         return 'pause' if action == 'pause' else None
-    status = manager.supervisor.child(aid).request('GET', '/api/summary', timeout=5)
+    status = worker_summary(manager, aid)
     return 'pause' if status.get('paused') and not status.get('manual_mode') else None
+
+
+def worker_summary(manager, aid):
+    """The worker's summary, or an empty one for a worker that has not booted. A start downloads
+    data and boots outside the maintenance lock, so a backup can find one still starting."""
+    try:
+        child = manager.supervisor.child(aid)
+    except Refused:
+        return {}
+    return child.request('GET', '/api/summary', timeout=5)
 
 
 def _create_backup(manager):
@@ -127,9 +137,10 @@ def _create_backup(manager):
             for name in ('assets', 'adventures', 'interactions', 'legacy_imports'):
                 source = manager.root / name
                 if source.exists():
-                    # A sprite download can publish its staged directory while a backup runs.
-                    # Only completed packs belong in the snapshot.
-                    shutil.copytree(source, staging / name, ignore=shutil.ignore_patterns('*.lock', '*.log', '.install-*'))
+                    # A sprite or game data download can publish its staged files while a backup
+                    # runs. Only completed files belong in the snapshot.
+                    shutil.copytree(source, staging / name, ignore=shutil.ignore_patterns(
+                        '*.lock', '*.log', '.install-*', '.pending-*', '.reference-*'))
             files = {}
             for path in staging.rglob('*'):
                 if path.is_file():
