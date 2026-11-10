@@ -294,6 +294,20 @@ def test_a_catch_that_did_not_improve_the_pc_and_left_at_its_next_visit_is_a_pha
     assert live_soak.measure(result(catches=[catch(72)]))['phantom_catches'] is None
 
 
+def test_a_copy_missing_at_one_poll_of_a_visit_and_back_at_the_next_never_left():
+    # Soak red 80ce734: a poll at the Saffron releases read the gift Eevee in neither the party nor the PC,
+    # and the next poll had it back. The journal released no Eevee.
+    start = [(16, RARE, False), (16, PLAIN, False)]
+    copies = watch(([], [*start, (133, COMMON, False)], False, 1), ([(133, COMMON, False)], start, False, 1),
+                   ([], [(16, RARE, False)], True, 1), ([], [(16, RARE, False), (133, COMMON, False)], True, 1),
+                   ([], [(16, RARE, False), (133, COMMON, False)], False, 1))
+    assert not copies.from_party and not copies.only_copy and not release_problems(copies)
+    # A copy that stays gone still counts.
+    gone = watch(([], start, False, 1), ([(133, COMMON, False)], start, False, 1), ([], start, True, 1),
+                 ([], start, False, 1))
+    assert gone.from_party == [{'dex': 133, 'dvs': list(COMMON), 'tail': 0.9}]
+
+
 def test_a_release_of_a_species_best_copy_fails():
     copies = watch(([], [(16, RARE, False), (16, PLAIN, False)], False, 1), ([], [(16, PLAIN, False)], True, 1))
     assert copies.best_copy == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'kept': 0.6}]
