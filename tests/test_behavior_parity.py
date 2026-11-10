@@ -25,7 +25,6 @@ from test_strategy import mon
 PAIRS = [('red', 'gold'), ('blue', 'silver'), ('yellow', 'crystal')]
 GEN1_ROMS = {'red': 'ea9bcae617fdf159b045185467ae58b2e4a48b9a', 'blue': 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2',
              'yellow': 'cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1'}
-PR2 = 'goal system v2 PR 2: progress_events'
 PR6 = 'goal system v2 PR 6: runtime/supervision.py with one ladder'
 
 
@@ -35,11 +34,8 @@ def even(value):
 
 
 def progress_rows(store, kind):
-    """The progress_events rows of ``kind``. Main has no such table yet, so it has none."""
-    try:
-        return store.db.execute('SELECT species FROM progress_events WHERE kind=?', (kind,)).fetchall()
-    except sqlite3.OperationalError:
-        return []
+    """The progress_events rows of ``kind``."""
+    return store.db.execute('SELECT species FROM progress_events WHERE kind=?', (kind,)).fetchall()
 
 
 @pytest.fixture(params=['gold', 'silver', 'crystal'])
@@ -204,8 +200,6 @@ def test_both_marathons_count_the_first_checkpoint(gen2_data, monkeypatch):
     assert gen1_checkpoint()[0] == gen2_checkpoint(gen2_data, monkeypatch)[0] == 1
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason=f'{PR2}. Neither marathon queues anything for a checkpoint between start and finish')
 def test_both_marathons_write_a_progress_row_for_a_checkpoint(gen2_data, monkeypatch):
     _, first = gen1_checkpoint()
     _, second = gen2_checkpoint(gen2_data, monkeypatch)
@@ -261,8 +255,6 @@ def test_both_record_a_receipt_for_a_duplicate_catch(tmp_path, gen1, gen2):
         second.close()
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason=f'{PR2}. A catch writes a capture receipt but no progress row')
 @pytest.mark.parametrize(('gen1', 'gen2'), PAIRS)
 def test_both_write_a_catch_row_for_a_duplicate_catch(tmp_path, gen1, gen2):
     first, second = gen1_catches(tmp_path, gen1), gen2_catches(tmp_path, gen2)

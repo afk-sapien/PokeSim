@@ -6,6 +6,8 @@ import json
 import re
 import time
 
+from . import progress_events
+
 KEY = 'capture-statistics-v1'
 SUPPORTED = {
     'ea9bcae617fdf159b045185467ae58b2e4a48b9a',
@@ -50,6 +52,7 @@ class CatchTracker:
     def reset(self):
         with self.store.lock, self.store.db:
             self.store.db.execute('DELETE FROM capture_receipts')
+            progress_events.clear(self.store.db)
             self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)',
                                  (KEY, json.dumps(self.empty(True))))
 
@@ -72,23 +75,34 @@ class CatchTracker:
         # WRAM includes the individual, destination, game clock and random state.
         fingerprint = hashlib.sha256(bytes(memory[0xc000:0xe000])).hexdigest()
         from .shiny import shiny_bytes
-        self.record(fingerprint, dex, shiny=shiny_bytes(bytes(memory[0xcff1:0xcff3])), perfect=bytes(memory[0xcff1:0xcff3]) == b'\xff\xff',
-                    species=species, trainer_id=int.from_bytes(bytes(memory[0xd359:0xd35b]), 'big'))
+        dvs = bytes(memory[0xcff1:0xcff3])
+        trainer_id = int.from_bytes(bytes(memory[0xd359:0xd35b]), 'big')
+        self.record(fingerprint, dex, shiny=shiny_bytes(dvs), perfect=dvs == b'\xff\xff',
+                    species=species, trainer_id=trainer_id, identity=progress_events.identity(trainer_id, dvs, dex))
 
-    def record(self, fingerprint, dex, *, perfect=False, shiny=False, species=None, trainer_id=None):
+    def record(self, fingerprint, dex, *, perfect=False, shiny=False, species=None, trainer_id=None, identity=None):
         with self.store.lock, self.store.db:
             record_receipt(self.store.db, fingerprint, dex, perfect=perfect, shiny=shiny,
-                           species=species, trainer_id=trainer_id)
+                           species=species, trainer_id=trainer_id, frame=progress_events.frame(self.store),
+                           identity=identity)
 
 
-def record_receipt(db, fingerprint, dex, *, perfect=False, shiny=False, species=None, trainer_id=None):
-    """Record once inside the caller transaction."""
+def record_receipt(db, fingerprint, dex, *, perfect=False, shiny=False, species=None, trainer_id=None,
+                   frame=None, identity=None, progress=True):
+    """Record once inside the caller transaction.
+
+    A new receipt also writes its progress row, a ``receive`` for a custom gift and a ``catch``
+    otherwise. ``progress`` False skips it for a gift found again in an older journal.
+    """
     if not 1 <= dex <= 151:
         raise ValueError('Capture has an invalid Pokédex number')
     inserted = db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
                           (fingerprint, dex, time.time())).rowcount
     if not inserted:
         return
+    if progress:
+        progress_events.record(db, 'receive' if fingerprint.startswith('gift-event:') else 'catch',
+                               frame=frame, species=dex, identity=identity)
     from .activity_ledger import increment
     increment(db, 'gift' if fingerprint.startswith('gift-event:') else 'caught', dex)
     value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
@@ -115,16 +129,18 @@ def initialize(db):
                                  'complete_history': False, 'available': False})))
 
 
-def record_gift(db, event_id, species, slot=None):
+def record_gift(db, event_id, species, slot=None, *, frame=None, progress=True):
     """Count a committed custom gift using its durable journal identity."""
     from .strategy_data import SPECIES
     initialize(db)
     from .shiny import shiny_bytes
-    record_receipt(db, f'gift-event:{event_id}', SPECIES[species]['dex'],
+    dex = SPECIES[species]['dex']
+    trainer_id = int.from_bytes(slot.struct[12:14], 'big') if slot else None
+    record_receipt(db, f'gift-event:{event_id}', dex,
                    shiny=bool(slot and shiny_bytes(slot.struct[27:29])),
                    perfect=bool(slot and slot.struct[27:29] == bytes((255, 255))),
-                   species=species,
-                   trainer_id=int.from_bytes(slot.struct[12:14], 'big') if slot else None)
+                   species=species, trainer_id=trainer_id, frame=frame, progress=progress,
+                   identity=progress_events.identity(trainer_id, slot.struct[27:29], dex) if slot else None)
 
 
 def backfill_gifts(db):
@@ -143,5 +159,5 @@ def backfill_gifts(db):
                      'Received Mew for defeating the final rival'):
             species = names.get('mew')
         if species is not None:
-            record_gift(db, event_id, species)
+            record_gift(db, event_id, species, progress=False)
     db.execute('INSERT INTO kv VALUES (?, ?)', (marker, 'true'))

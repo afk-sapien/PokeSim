@@ -4,7 +4,7 @@ import hashlib
 import json
 import time
 
-from .. import shiny
+from .. import progress_events, shiny
 from pokecore.gen2.hooks import capture_hooks, contest_hook, encounter_hook, hatch_hook
 from pokecore.gen2.ram import Memory
 
@@ -59,6 +59,7 @@ class Tracker:
     def reset(self):
         with self.store.lock, self.store.db:
             self.store.db.execute('DELETE FROM capture_receipts')
+            progress_events.clear(self.store.db)
             self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (CAPTURES, json.dumps({
                 'counts': {}, 'total': 0, 'started_at': time.time(), 'complete_history': True, 'available': True})))
             self.store.db.execute('DELETE FROM kv WHERE k=?', (MILESTONES,))
@@ -133,6 +134,7 @@ class Tracker:
             if not db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
                               (fingerprint, species, time.time())).rowcount:
                 return
+            progress_events.record(db, 'catch', frame=progress_events.frame(self.store), species=species)
             from ..activity_ledger import increment
             increment(db, 'caught', species)
             value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()[0])
@@ -154,6 +156,9 @@ class Tracker:
             if not db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
                               (fingerprint, species, time.time())).rowcount:
                 return
+            trainer = mem.word('wPlayerID') if 'wPlayerID' in self.data.symbols else None
+            progress_events.record(db, 'catch', frame=progress_events.frame(self.store), species=species,
+                                   identity=progress_events.identity(trainer, dvs, species))
             from ..activity_ledger import increment
             increment(db, 'caught', species)
             from .returns import consume
@@ -217,15 +222,17 @@ def contest_keep_hook(memory, data):
     return bank, address
 
 
-def record_gift(db, event_id, species):
+def record_gift(db, event_id, species, *, frame=None):
     """Count a committed custom gift toward Total caught, as Red, Blue and Yellow do.
 
-    Keyed by its journal entry, so the recent catch counts date it the same way."""
+    Keyed by its journal entry, so the recent catch counts date it the same way. A new receipt
+    writes its ``receive`` row."""
     row = db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()
     if row is None or not 1 <= species <= 251 or not db.execute(
             'INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
             (f'gift-event:{event_id}', species, time.time())).rowcount:
         return
+    progress_events.record(db, 'receive', frame=frame, species=species)
     value = json.loads(row[0])
     value['counts'][str(species)] = value['counts'].get(str(species), 0) + 1
     value['total'] += 1

@@ -102,6 +102,8 @@ def _promote(store, record):
             store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime,detail)
                 VALUES (?,?,?,?,?,?,?,?,?)''', (time.time(), 'trade', title, body, 1, 4, location, '',
                 json.dumps(detail) if detail else None))
+            from ..progress_events import journal
+            journal(store.db, 'trade')
             store.db.execute('INSERT INTO kv VALUES (?, ?)', (marker, 'true'))
     return path
 

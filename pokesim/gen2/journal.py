@@ -148,4 +148,4 @@ class Releases:
         quote = f' PC value: {self.value}.' if self.value else ''
         return [event('release', release_title(name),
                       f'Storage was nearly full, so a duplicate {name} Lv {mon.level} was let go on {snapshot.map_name}.{quote}',
-                      priority=MINIMAL, notable=False)]
+                      priority=MINIMAL, notable=False, species=mon.species)]
