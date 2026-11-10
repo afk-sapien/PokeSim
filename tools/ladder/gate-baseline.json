@@ -1,5 +1,5 @@
 {
- "commit": "f02cf43f",
+ "commit": "28991087",
  "attempt": 1,
  "taken": "2026-11-10",
  "frames": 108000,
@@ -37,7 +37,7 @@
   "blue/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 6.03
+   "waste": 5.24
   },
   "crystal/new_game": {
    "stall": null,
@@ -192,7 +192,7 @@
   "red/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 11.92
+   "waste": 5.95
   },
   "red-randomized/new_game": {
    "stall": null,
@@ -297,7 +297,7 @@
   "yellow/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 13.68
+   "waste": 3.7
   }
  }
 }

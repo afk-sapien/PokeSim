@@ -90,4 +90,15 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   fell to 13.1% and red/badges_6 to 11.5%. blue/badges_8, red/badges_8, red-randomized/badges_8 and
   yellow/badges_8 fell to 0.1%. The baseline moved for all six. yellow/badges_4 keeps 1520 frames of two
   restock spans that a battle and the hideout elevator cut short before the sale.
+- #358, red/post_game and blue/badges_6, 2026-11-10: a bisect names #358 for both. In red/post_game
+  the run now catches a better Dugtrio copy in Diglett's Cave, so the party is full when the Eevee gift
+  comes, and a deposit at the Vermilion Pokémon Center makes room. A deposit keeps the held count, so
+  the audit counted the whole visit as waste. A deposit under the party space goal now counts as
+  progress. red/post_game fell to 6.0%, yellow/post_game to 3.7% and blue/post_game to 5.2%, and the
+  baseline moved for all three.
+- blue/badges_6 and yellow/badges_6, still open as a strategy item and not a regression: with #358 the
+  blue run throws a ball where it fought, and from there both runs reach Route 15 with a 19-entry bag
+  and no cure. A poison or sleep then sends the run back to a Pokémon Center, and the heal cuts a long
+  surf walk short before any event. The shop skips a new item kind at 18 entries or more, a rule older
+  than 171176e.
 - The other rungs are still open.
