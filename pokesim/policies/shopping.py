@@ -1,7 +1,7 @@
 """Shop interaction state, independent of the strategic policy's PC and battle state."""
 from dataclasses import dataclass, replace
 
-from .battle import BALLS, HEALING, shopping_item
+from .battle import BALLS, CURES, HEALING, shopping_item
 from .progression import Goal
 from .collection import legendary_project
 from .menus import MenuDecision, tap
@@ -39,6 +39,20 @@ def unfunded(snapshot, balls):
     return snapshot.money - cash_reserve(snapshot) < (BALL_RESERVE - balls) * PRICES[ITEMS['POKE_BALL']]
 
 
+def cure_room(snapshot):
+    """Whether a bag with no cure takes one past the 18 entries a new kind needs.
+
+    With no cure a status sends the party to a Pokémon Center (ledger.battle_room). A Yellow run reached
+    Route 15 with 19 entries and no cure, and walked to Fuchsia four times for poison. The cure may fill
+    the bag only while the ledger could still sell an entry for a story item."""
+    if len(snapshot.items) >= 20 or any(qty and item in CURES and item not in HEALING for item, qty in snapshot.items):
+        return False
+    if len(snapshot.items) < 19:
+        return True
+    after = replace(snapshot, items=snapshot.items + ((ITEMS['FULL_HEAL'], 1),))
+    return first_sale(after, 'items', 'sale') is not None
+
+
 def entry_fee(snapshot, goal_key):
     """Cash the current objective needs at a gate before it can make any progress."""
     return SAFARI_FEE if goal_key in SAFARI_GOALS and snapshot.map not in SAFARI_INTERIOR else 0
@@ -68,7 +82,8 @@ class ShoppingController:
         return shopping_item(snapshot.items, stock, snapshot.money,
                              snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=True,
                              legendary=legendary_project(project), reserve=cash_reserve(snapshot),
-                             hunt_reserve=funds_needed(snapshot) if hunting(project) else None)
+                             hunt_reserve=funds_needed(snapshot) if hunting(project) else None,
+                             cure_room=cure_room(snapshot))
 
     @staticmethod
     def fund_index(snapshot):
