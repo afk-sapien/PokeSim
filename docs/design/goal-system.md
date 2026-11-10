@@ -623,3 +623,7 @@ Cases that fail today are marked xfail with the PR that fixes them. PR 7 then re
 6. The churn flag uses N = 10 catches, because every hunt catch must improve by construction. The two-week replay may raise it.
 7. A share code carries a fixed map only when the owner picked one. Auto stays auto, so a code works across versions of the data.
 8. The report holds the live goals plus the last 20 ended ones.
+
+## 15. Open questions
+
+1. Should a non-League goal run between two League tries? After a Crystal League loss, main walks a collection training goal and heals for about 10 game minutes before the next try, and that took one try more than going straight back on 2 seeds of 2. The goal tree work decides it.

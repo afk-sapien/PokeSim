@@ -209,6 +209,8 @@ class Emulator:
         self.data = GameData.load(directory(), self.profile.game)
         from ..planning.cost import gen2_cartridge_rows
         self.data.encounters = gen2_cartridge_rows(self.rom, self.profile.game, self.data.encounters)
+        from .readiness import boss_parties
+        self.data.boss_parties = boss_parties(self.rom, self.profile.game)
         self.isolated_ram = isolated_ram
         self.preparation = None
         self.options_applied = False
