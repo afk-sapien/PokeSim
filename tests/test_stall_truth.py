@@ -185,6 +185,10 @@ def test_library_start_and_stop_are_owner_restarts_and_a_crash_restart_is_not(su
         supervisor._monitor()
     finally:
         supervisor.closed = original
+    # The monitor schedules the restart after a short wait, and a later pass starts it.
+    assert aid not in supervisor.children
+    supervisor.restarts[aid][1] = time.monotonic() - 1
+    supervisor.run_restarts()
     assert supervisor.children[aid] is not child
     supervisor.registry.request_lifecycle(aid, 'stop', identifier())
     Manager.start_adventure(manager, aid)
