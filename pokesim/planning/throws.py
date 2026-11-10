@@ -13,6 +13,23 @@ SLEEP_OR_FREEZE = 0b100111
 # What Gold, Silver and Crystal multiply a catch rate by for each ball. The other Apricorn balls have
 # conditions, so they count as a Poké Ball here.
 GEN2_BALLS = {'ULTRA BALL': 2, 'GREAT BALL': 1.5, 'PARK BALL': 1.5}
+# What Red, Blue and Yellow draw a ball's first random number below, and the HP divisor of its second.
+GEN1_BALLS = {'POKE_BALL': (256, 12), 'GREAT_BALL': (201, 8), 'ULTRA_BALL': (151, 12), 'SAFARI_BALL': (151, 12)}
+
+
+def gen1_throw(rate, ball, hp, max_hp, status):
+    """The chance one ball catches in Red, Blue and Yellow.
+
+    A first random number under the ball's range catches at once below the status bonus, 25 for sleep
+    or freeze and 12 for any other status, and otherwise must be at most the catch rate past that
+    bonus. A second, from 0 to 255, must then be at most 255 max HP over the ball's divisor, divided
+    by a quarter of the HP left.
+    """
+    span, divisor = GEN1_BALLS[ball]
+    bonus = 25 if status & SLEEP_OR_FREEZE else 12 if status else 0
+    shake = max_hp * 255 // divisor // max(1, hp // 4)
+    second = 1 if shake >= 255 else (shake + 1) / 256
+    return (min(bonus, span) + max(0, min(span - bonus, rate + 1)) * second) / span
 
 
 def gen2_throw(rate, multiplier, hp, max_hp, status):
