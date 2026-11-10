@@ -1,9 +1,12 @@
 """A request's own errors keep their status codes quietly, and an untyped builtin is a logged 500."""
+import ast
 import logging
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 import pytest
 
+from pokesim.app import auth, cable_sessions, coordinator
 from pokesim.app.errors import Conflict, NotFound, Refused
 from pokesim.app.manager import UNEXPECTED, Manager, create_app
 from pokesim.app.offers import LimitReached
@@ -66,6 +69,22 @@ def test_the_watchdog_counts_an_untyped_builtin_as_an_unexpected_error(client, m
     finally:
         logging.getLogger().removeHandler(handler)
     assert [signature.split(' in ')[0] for _, signature, _ in errors.since(0)] == ['ValueError']
+
+
+BUILTINS = {'ValueError', 'KeyError', 'RuntimeError'}
+
+
+@pytest.mark.parametrize('module', [auth, coordinator, cable_sessions], ids=lambda module: module.__name__)
+def test_sign_in_and_trade_modules_raise_only_typed_errors(module):
+    """A bad sign-in, invite or cable request answers 404 or 409, never an unexpected 500."""
+    path = Path(module.__file__)
+    found = []
+    for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
+        if isinstance(node, ast.Raise) and node.exc is not None:
+            raised = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
+            if isinstance(raised, ast.Name) and raised.id in BUILTINS:
+                found.append(f'{path.name}:{node.lineno} raises a bare {raised.id}')
+    assert not found, 'Raise NotFound, Conflict or Refused from pokesim.app.errors instead:\n' + '\n'.join(found)
 
 
 def test_a_named_error_keeps_its_own_answer_over_its_typed_base(client, monkeypatch, caplog):

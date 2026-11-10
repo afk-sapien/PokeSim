@@ -279,7 +279,7 @@ class CableSessions:
         CheckpointStore.atomic_write(plan_path, json.dumps(session_plan, sort_keys=True).encode())
         output = directory / 'outputs'
         if output.exists():
-            raise ValueError('This cable attempt already has output. Recovery cannot run it a second time.')
+            raise Conflict('This cable attempt already has output. Recovery cannot run it a second time.')
         command = ([sys.executable, '--cable-session'] if getattr(sys, 'frozen', False)
                    else [sys.executable, '-m', 'pokesim.gen2.manual_session'])
         command += ['--plan', str(plan_path), '--out', str(output)]
@@ -387,7 +387,7 @@ class CableSessions:
             data = self.game_data(row)
             verify_parties(before, after, trades, lambda raw: evolved_species(raw, data))
         except (CableError, KeyError, TypeError, AttributeError) as error:
-            raise ValueError(f'Cable session result failed verification: {error}') from error
+            raise Conflict(f'Cable session result failed verification: {error}') from error
 
     def game_data(self, row):
         """The Gen II game data for this session. Every Gen II cartridge numbers items the same."""
@@ -396,4 +396,4 @@ class CableSessions:
         try:
             return GameData.load(self.coordinator.manager.assets.game_data_dir, version)
         except (OSError, ValueError) as error:
-            raise ValueError(f'Cable session result could not be checked without game data: {error}') from error
+            raise Conflict(f'Cable session result could not be checked without game data: {error}') from error
