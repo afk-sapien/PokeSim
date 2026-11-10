@@ -204,6 +204,18 @@ def test_capabilities_and_static_objects_change_actual_edges(terrain):
     assert ('right', (FIELD, 5, 2)) in nav.neighbors((FIELD, 4, 2), 0)
 
 
+def test_a_step_seen_through_a_cut_tree_needs_cut_again(terrain):
+    # Yellow's Route 2 walk paced between two trees it had cut before, after no partner knew Cut.
+    nav = navigation.Navigator()
+    nav.edges[(FIELD, 2, 1)] = {'right': (FIELD, 3, 1)}
+    nav.edges[(FIELD, 3, 1)] = {'left': (FIELD, 2, 1), 'right': (FIELD, 4, 1)}
+    assert ('right', (FIELD, 3, 1)) not in nav.neighbors((FIELD, 2, 1), 0)
+    assert ('left', (FIELD, 2, 1)) in nav.neighbors((FIELD, 3, 1), 0)
+    nav.can_cut = True
+    assert ('right', (FIELD, 3, 1)) in nav.neighbors((FIELD, 2, 1), 0)
+    assert_graph_parity(nav, terrain['WORLD'], 0)
+
+
 def test_geometry_mutation_and_world_replacement_never_return_stale_neighbors(terrain, monkeypatch):
     nav = navigation.Navigator()
     source = (ROOM, 0, 0)
