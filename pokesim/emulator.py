@@ -22,7 +22,7 @@ from .audio import AudioFeed, enable_checkpoint_sound
 from .build_info import build_info
 from .checkpoints import open_state
 from .events import HIGH, LOW, Event, RunMemory, diff
-from . import progress_events, rewards
+from . import progress_events, rewards, stall_truth
 from .legendary import LegendaryRecovery
 from .loop_errors import loop_failed
 from .play_clock import PlayClock
@@ -274,7 +274,8 @@ class Emulator:
             # Yellow renders its own Game Boy Color palettes, so like Generation II it reports none.
             "palette": None if self._color_cartridge() else getattr(self, 'palette', 'original'),
             "fair_wild_dvs": getattr(config, 'FAIR_WILD_DVS', False) is True,
-            "manual_mode": self.manual_mode, "help_request": self.help_request(strategy),
+            "manual_mode": self.manual_mode,
+            "help_request": stall_truth.observe_help(self, self.help_request(strategy)),
             # Why the PC cannot rate or release, for the library watchdog (investment.rating_problem).
             "rating_problem": rating_problem(),
             "play_clock": self.play_clock.status(),

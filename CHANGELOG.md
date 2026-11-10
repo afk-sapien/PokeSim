@@ -81,6 +81,7 @@
 - Test that Red, Blue and Yellow do the same thing as Gold, Silver and Crystal in five scripted situations: a gift with a full PC, a stall, a marathon checkpoint, a duplicate catch and a DV hunt. Gifts and hunts already match. The stall ladders differ, and neither generation writes a progress row for a checkpoint or a catch yet. Each gap is marked with the goal system v2 change that fixes it.
 - Keep a quiet log of progress in all six games: each catch, received Pokémon, release, marathon checkpoint and finished goal, with the game time it happened. Only a checkpoint counts as progress, so catching the same Pokémon again or trading one in counts as nothing. Nothing acts on the log yet, so a stall is still judged the way it was.
 - Add `tools/replay_progress.py`, which replays a copy of each adventure's journal through today's stall checks and the new progress model side by side, and reports the stalls each one caught, missed and raised in error. The first run on two weeks of play did not meet the bar, so stalls are still judged the old way.
+- Keep a lasting record of each stall bundle, help request and restart in the adventure's database, for the progress replay. The row for a stall bundle stays after its folder is pruned, and a new game keeps every row. A restart says whether the owner, the supervisor or the app's start caused it. Nothing reads the rows during play.
 
 ## 0.6.2
 

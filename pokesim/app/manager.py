@@ -28,6 +28,7 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 
+from .. import stall_truth
 from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
@@ -160,11 +161,19 @@ class Manager:
             self.check_available()
             with self.maintenance, self.supervisor._lock(aid):
                 row = self.registry.adventure(aid)
+                # Only the Start and Stop buttons come here. The rows are written while no worker holds the
+                # adventure's database, after a stop and before a start.
+                running = aid in getattr(self.supervisor, 'children', {})
                 if row['desired_state'] == 'stopped':
                     if self.coordinator.reserved(aid):
                         return row
-                    return self.supervisor.stop(aid, preserve_desired=True)
+                    result = self.supervisor.stop(aid, preserve_desired=True)
+                    if running:
+                        stall_truth.lifecycle(self.root / 'adventures' / aid, 'stop', 'owner')
+                    return result
                 self.supervisor.setup_retries.pop(aid, None)
+                if not running:
+                    stall_truth.lifecycle(self.root / 'adventures' / aid, 'start', 'owner')
                 return self.supervisor.start(aid)
         except Exception as error:
             row = self.registry.adventure(aid)
@@ -191,6 +200,7 @@ class Manager:
                     and (adventure['desired_state'] == 'running' or adventure['settings'].get('auto_start'))):
                 try:
                     self.registry.update(adventure['id'], desired_state='running')
+                    stall_truth.lifecycle(self.root / 'adventures' / adventure['id'], 'start', 'boot')
                     self.supervisor.start(adventure['id'])
                 except Exception as error:
                     self.registry.update(adventure['id'], state='failed', error=str(error))

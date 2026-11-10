@@ -1262,6 +1262,7 @@ class Emulator:
         from .. import rewards
         from ..pcvalue import BOXES_FULL, boxes_full
         from ..randomized import status as randomizer_status
+        from ..stall_truth import observe_help
         from .release import room
         achievement = self.last_achievement
         if achievement:
@@ -1284,10 +1285,11 @@ class Emulator:
                 'uptime': int(time.time() - self.started_at), 'stuck_seconds': int(time.time() - self.stuck_since),
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,
-                'help_request': {'reason': f'The run is caught in a loop. {loop}' if loop else 'The policy has stopped making game progress',
-                                 'action': self.policy.mode} if stalled else
-                                {'reason': BOXES_FULL, 'action': self.policy.mode} if live and boxes_full(
-                                    getattr(self.policy, 'boxes_full', False), room(self.snapshot) if self.snapshot else None) else None,
+                'help_request': observe_help(self, {
+                    'reason': f'The run is caught in a loop. {loop}' if loop else 'The policy has stopped making game progress',
+                    'action': self.policy.mode} if stalled else
+                    {'reason': BOXES_FULL, 'action': self.policy.mode} if live and boxes_full(
+                        getattr(self.policy, 'boxes_full', False), room(self.snapshot) if self.snapshot else None) else None),
                 'progress': {'state': 'stalled' if stalled else 'waiting' if waiting else 'recovering' if recovering
                              else 'making_progress',
                              'last_achievement': achievement, 'quiet_game_minutes': round(quiet_minutes, 1)},

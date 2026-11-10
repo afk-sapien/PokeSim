@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Literal
 
-from .. import config
+from .. import config, stall_truth
 from ..capability import CAPABILITY_ERRORS
 from .event_page import render_event
 from .feed import render_feed
@@ -585,6 +585,9 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                 raise HTTPException(400, "Unknown game button")
             emu.press(str(c.value))
         elif c.action in ("pause", "resume", "take_control", "save", "restart"):
+            if c.action == "restart":
+                # Written before the new game starts, so the frame is where the owner gave up on the run.
+                stall_truth.write(store, "restart", source="owner", action="new_game")
             emu.command(c.action)
         elif c.action == "speed":
             if base_path:
@@ -602,6 +605,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             refusal = rewind_refusal(store, c.value)
             if refusal:
                 raise HTTPException(409, refusal)
+            stall_truth.write(store, "restart", source="owner", action="rewind", state=str(c.value))
             emu.command("load_state", str(c.value))
         elif c.action == "pin_goal":
             if not isinstance(c.value, str) or not c.value.strip():
