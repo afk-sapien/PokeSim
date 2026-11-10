@@ -1,10 +1,10 @@
 """Durable Pokédex goals, independent of emulator checkpoints and box positions."""
 from collections import Counter
 from functools import lru_cache
-import json
 import time
 
 from . import progress
+from .state import kv
 from .shiny import is_shiny, status as shiny_status
 from pokecore.dvs import is_perfect  # noqa: F401  (re-exported)
 from .game_data import load
@@ -63,13 +63,12 @@ def status(store):
 
 def record_capture(db, species, trainer_id):
     """Called in the same transaction as a new verified perfect capture receipt."""
-    row = db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-    value = json.loads(row[0]) if row else empty()
+    value = kv.get(db, KEY, empty())
     group = perfect_group({'species': species, 'trainer_id': trainer_id})
     value['perfect_groups'][group] = value['perfect_groups'].get(group, 0) + 1
     value['perfect_catches'] += 1
     value['perfect_species'] = sorted(set(value['perfect_species']) | {SPECIES[species]['dex']})
-    db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
+    kv.put(db, KEY, value)
     progress.goals_changed(db, time.time())
 
 
@@ -138,9 +137,8 @@ class MilestoneTracker:
         if token == self.confirmed:
             return
         maxed, perfect_species, groups, high_quality_species, shiny_species = token
-        with self.store.lock, self.store.db:
-            row = self.store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-            value = json.loads(row[0]) if row else empty()
+        with self.store.transaction() as db:
+            value = kv.get(db, KEY, empty())
             value['level_100'] = sorted(set(value['level_100']) | set(maxed))
             value['perfect_species'] = sorted(set(value['perfect_species']) | set(perfect_species))
             value['shiny_species'] = sorted(set(value.get('shiny_species', ())) | set(shiny_species))
@@ -148,8 +146,8 @@ class MilestoneTracker:
                                                    | set(high_quality_species) | set(value['perfect_species']))
             for group, count in groups:
                 value['perfect_groups'][group] = max(count, value['perfect_groups'].get(group, 0))
-            self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
-            progress.goals_changed(self.store.db, time.time())
+            kv.put(db, KEY, value)
+            progress.goals_changed(db, time.time())
         self.confirmed = token
 
 

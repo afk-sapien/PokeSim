@@ -3,9 +3,8 @@
 Catches per hour divides the catches counted by the simulated playtime. Wild encounters per
 catch divides the wild battles the activity ledger counted by the catches it counted.
 """
-import json
-
 from .activity_ledger import KEY
+from .state import kv, tracking
 
 
 def per_catch(wild, caught):
@@ -14,12 +13,9 @@ def per_catch(wild, caught):
 
 def status(store, catches, play_clock):
     """``catches`` is the catch counter the Stats page shows and ``play_clock`` the app clock."""
-    with store.lock:
-        row = store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-        started = bool(row) and json.loads(row[0]).get('started_at') is not None
-        wild, caught = (0, 0) if not started else store.db.execute(
-            "SELECT COALESCE(SUM(CASE WHEN kind='wild' THEN total END), 0), "
-            "COALESCE(SUM(CASE WHEN kind='caught' THEN total END), 0) FROM activity_counts").fetchone()
+    with store.reading() as db:
+        started = kv.get(db, KEY, {}).get('started_at') is not None
+        wild, caught = tracking.activity_totals(db) if started else (0, 0)
     total = catches.get('total') if catches.get('available') or catches.get('started_at') else None
     seconds = (play_clock or {}).get('seconds')
     hours = seconds / 3600 if seconds else None

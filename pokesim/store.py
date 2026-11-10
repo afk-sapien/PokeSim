@@ -218,6 +218,21 @@ class Store:
             self.db.execute("INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)", (k, json.dumps(v)))
 
     @contextmanager
+    def transaction(self):
+        """The store's lock and one transaction, for repository calls that commit together.
+
+        The functions in ``pokesim.state`` take the handle it yields. An exception rolls it back.
+        """
+        with self.lock, self.db:
+            yield self.db
+
+    @contextmanager
+    def reading(self):
+        """The store's lock, for repository reads that must agree with each other."""
+        with self.lock:
+            yield self.db
+
+    @contextmanager
     def durable(self):
         """One write transaction that is on the disk when it ends.
 
