@@ -115,6 +115,7 @@
 - Move to PyBoy RS 0.1.5. The window's line counter now starts again at the top of every frame, so the first frame after loading a save in a new process draws menus and text boxes on the right line instead of one line low. The save format is unchanged. The wheels, the lock and the image's emulator source archive all point at the 0.1.5 release.
 - Stop the main page from raising "an unexpected error" when a game is too busy to list its Pokémon for trading within 30 seconds. Its worker now answers busy, and trading skips that game for the round as before.
 - Cap all local PokeSim work on a developer machine at 12 cores and 22G with systemd user slices in `deploy/systemd`. `sh tools/local_sims.sh install` installs them, and `sh tools/local_sims.sh start` runs a local app in the sims slice (12G). `tools/load_gate.sh` runs test jobs in the tests slice (10G), whose CPU weight beats the sims, and a heavy job may now use `pytest -n 12`.
+- Test pull requests on Python 3.12 and Linux x86 only. Tags, a nightly run and manual runs test every Python and platform, which the release gate still requires for the tagged commit. A new push to a pull request cancels its older run, and push, tag and nightly runs always finish. The browser and Windows shards split by recorded module times in `tests/durations.json`, which `tools/record_durations.py` rewrites from the JUnit reports CI uploads. Local pytest runs on 12 workers.
 
 ## 0.6.2
 

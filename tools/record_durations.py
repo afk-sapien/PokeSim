@@ -48,6 +48,12 @@ def merge(old, new, root=ROOT):
     return {name: {'seconds': round(entry['seconds'], 1), 'tests': entry['tests']} for name, entry in sorted(merged.items())}
 
 
+def render(modules):
+    """The file's text, one module to a line so a rewrite shows as a short diff."""
+    lines = ',\n'.join(f'  {json.dumps(name)}: {json.dumps(entry)}' for name, entry in modules.items())
+    return '{\n "about": ' + json.dumps(ABOUT) + ',\n "modules": {\n' + lines + '\n }\n}\n'
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('reports', nargs='+', type=Path)
@@ -59,7 +65,7 @@ def main(argv=None):
     new = measure(arguments.reports)
     if not new:
         sys.exit('No test times found in the reports')
-    OUT.write_text(json.dumps({'about': ABOUT, 'modules': merge(old, new)}, indent=1) + '\n', encoding='utf-8')
+    OUT.write_text(render(merge(old, new)), encoding='utf-8')
     print(f'Recorded {len(new)} modules into {OUT.relative_to(ROOT)}')
 
 

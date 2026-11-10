@@ -41,4 +41,6 @@ def test_merge_replaces_measured_modules_keeps_the_rest_and_drops_deleted_files(
            'tests/test_deleted.py': {'seconds': 5, 'tests': 1}}
     merged = record_durations.merge(old, {'tests/test_x.py': {'seconds': 3.46, 'tests': 2}}, root)
     assert merged == {'tests/test_kept.py': {'seconds': 7, 'tests': 2}, 'tests/test_x.py': {'seconds': 3.5, 'tests': 2}}
-    json.dumps(merged)
+    text = record_durations.render(merged)
+    assert json.loads(text) == {'about': record_durations.ABOUT, 'modules': merged}
+    assert text.count('\n') == 7
