@@ -1,9 +1,11 @@
 # Shared game core
 
-[PokeSim Core](https://github.com/afk-sapien/pokesim-core) is the Python package
-shared by PokeSim and PokeAgent Bench. Its distribution and import name is
-`pokecore`. Core 0.9.0 dropped the old `pokesim-core` distribution and the
-`pokesim_core` import name.
+PokeSim Core is the Python package shared by PokeSim and PokeAgent Bench. Its
+distribution and import name is `pokecore`. Its source lives in this repository in
+[`packages/pokecore`](../packages/pokecore), merged with its full history from the
+[pokesim-core repository](https://github.com/afk-sapien/pokesim-core), which stays
+archived as the readable history before the move. Core 0.9.0 dropped the old
+`pokesim-core` distribution and the `pokesim_core` import name.
 
 PokeSim uses `pokecore.gen1` for Red, Blue and Yellow WRAM addresses, text and numeric
 decoding, individual Pokémon fields, party reads, and bag reads. Its known ROM
@@ -28,8 +30,8 @@ Every adventure runs on Core's emulator adapter (`pokecore.emulator`) over PyBoy
 
 ## Where fixes belong
 
-Fix shared ROM facts and memory decoding in the Core repository, with regression
-coverage there. PokeSim's compatibility tests check the boundary between those
+Fix shared ROM facts and memory decoding in `packages/pokecore`, with regression
+coverage in `packages/pokecore/tests`. PokeSim's compatibility tests check the boundary between those
 shared values and its existing application types. Keep gameplay decisions, Power
 ranking, UI copy, trading, and save recovery in PokeSim.
 
@@ -44,37 +46,28 @@ PokeSim uses `update_flags` after its existing scheduling and unloaded-room
 checks. It preserves durable claim history and never resets a game simply
 because Core offers a reset function. Benchmark agents never receive these APIs.
 
-PokeSim pins Core 0.7.1. Each consumer records its reviewed dependency version. Publish a compatible Core release, then
-update and validate each consumer's dependency pin. Core improvements reach both
-applications through those reviewed package updates.
+PokeBench pins a released pokecore wheel. A Core change reaches it only through a
+pokecore release and a reviewed pin update in PokeBench.
 
 ## Installing and updating
 
-Normal PokeSim installation installs the shared package automatically.
-The dependency in `pyproject.toml` references a versioned GitHub release wheel
-with its SHA256 hash. `uv.lock` also records the artifact hash. A wheel works
-with the existing container build and hash-checked dependency export without
-requiring Git during installation.
+`[tool.uv.sources]` in `pyproject.toml` makes `pokecore` a workspace member. A
+checkout and the container build install it from
+`packages/pokecore`, and `uv.lock` records no wheel for it. A Core change is live
+in PokeSim on the next `uv sync`, with no release.
 
-To update the core, release and validate it first, replace the dependency URL
-and SHA256 hash, and run `uv lock`. Review the lockfile changes and run:
+pip and pipx users install the PokeSim wheel, whose metadata keeps the
+`pokecore` dependency as a versioned GitHub release wheel with its SHA256 hash.
+`tools/check_release_pins.py` fails when that pin names another version than
+`packages/pokecore/pyproject.toml`. With `--remote` it also downloads the wheel
+and fails when its files differ from the workspace source. So a PokeSim release
+that ships a Core change needs a pokecore release of the same source first.
+
+Test a Core change from the checkout:
 
 ```sh
 uv sync --locked --extra dev
-uv run --locked pytest --ignore=tests/test_rom.py -q
+(cd packages/pokecore && uv run pytest -q)
+uv run --locked pytest tests/test_shared_core.py -q
 uv run --locked python tools/check_docs.py
-uv build
-uv run --locked python tools/check_package.py
 ```
-
-Use a separate development environment to test an unpublished core checkout:
-
-```sh
-uv venv /tmp/pokesim-core-dev
-uv pip install --python /tmp/pokesim-core-dev/bin/python -e '.[dev]'
-uv pip install --python /tmp/pokesim-core-dev/bin/python --reinstall -e ../pokesim-core
-/tmp/pokesim-core-dev/bin/python -m pytest tests/test_shared_core.py -q
-```
-
-Keep local editable overrides out of committed dependency files. Promote a
-core update only after compatibility checks pass in both consuming projects.

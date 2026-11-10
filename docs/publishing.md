@@ -127,12 +127,17 @@ nothing is installed from either name, and the installers and the application sa
 `install.sh` refuses it up front. PyPI names must never be relied on: `pip install pokesim` installs an
 unrelated project, and the docs and installers never suggest it.
 
+The `pokecore` source lives in `packages/pokecore` as a uv workspace member, so `uv.lock`, a checkout and
+the container build use that source and the lock holds no pokecore wheel. The URL pin is what pip users
+get. The pin check requires it to name the member's version and, with `--remote`, to serve a wheel whose
+files equal the member's source. See [Shared game core](shared-core.md).
+
 Before tagging PokeSim, both upstream releases must exist with their wheels attached, and the pyboy-rs
 release must also carry its source archive, which the Dockerfile fetches with a required
 `EMULATOR_SOURCE_SHA256`. The upstream release workflows should refuse `--clobber` on a release that is
 already public, so a published asset can never change under a recorded hash. That belongs to the pyboy-rs
-and Core repositories. PokeSim's own check is that every asset hash in `uv.lock` equals the hash of the
-file the release serves.
+and Core repositories. PokeSim's own check is that every asset hash in `uv.lock`, and the pokecore pin's fragment, equals the
+hash of the file the release serves.
 
 ### Temporary pins and how they are finalized
 

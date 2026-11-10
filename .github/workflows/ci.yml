@@ -46,7 +46,76 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
         with:
           version: '0.12.18'
-      - run: uvx ruff==0.16.9 check pokesim tests tools
+      # packages/pokecore keeps its own ruff settings in its pyproject.toml, at this same ruff version.
+      - run: uvx ruff==0.16.9 check pokesim tests tools conftest.py packages/pokecore
+  pokecore:
+    # pokecore's own suite from packages/pokecore, with the locked emulator and no silent skips. Then its
+    # wheel alone in a clean environment, the surface PokeBench imports without an emulator.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && '["3.11", "3.12", "3.14"]' || '["3.12"]') }}
+    name: pokecore (py${{ matrix.python }})
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+        with:
+          version: '0.12.18'
+          enable-cache: false
+      - uses: ./.github/actions/uv-sync
+        with:
+          args: --extra dev
+      - name: Run the pokecore suite without silent skips
+        working-directory: packages/pokecore
+        run: |
+          uv run pytest -rs -q -p no:cacheprovider --ignore=tests/test_snapshot_native.py --ignore=tests/test_real_roms.py | tee "$RUNNER_TEMP/pokecore.log"
+          if grep -Eq '[0-9]+ skipped' "$RUNNER_TEMP/pokecore.log"; then echo "Unexpected skips"; exit 1; fi
+      - name: Install the built pokecore wheel alone
+        run: |
+          uv build --package pokecore --wheel --out-dir "$RUNNER_TEMP/pokecore-dist"
+          python -m venv "$RUNNER_TEMP/clean"
+          "$RUNNER_TEMP/clean/bin/python" -m pip install "$RUNNER_TEMP"/pokecore-dist/pokecore-*.whl pytest
+          "$RUNNER_TEMP/clean/bin/python" -c "import importlib.util as u; assert u.find_spec('pyboy_rs') is None and u.find_spec('pyboy') is None"
+      - name: Import the surface PokeBench uses and run the tests that need no emulator
+        working-directory: packages/pokecore
+        run: |
+          "$RUNNER_TEMP/clean/bin/python" tools/check_legacy_surface.py
+          "$RUNNER_TEMP/clean/bin/python" -m pytest -q -p no:cacheprovider
+  pokecore-native:
+    # The experimental Rust decoders in packages/pokecore/native, held to the Python decoders' results.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+        with:
+          version: '0.12.18'
+          enable-cache: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - run: cargo fmt --manifest-path packages/pokecore/native/Cargo.toml --check
+      - run: cargo clippy --manifest-path packages/pokecore/native/Cargo.toml -- -D warnings
+      - uses: ./.github/actions/uv-sync
+        with:
+          args: --extra dev
+      - name: Build and install the decoder wheel
+        run: |
+          uvx --from 'maturin>=1.9,<2' maturin build --release --manifest-path packages/pokecore/native/Cargo.toml --out "$RUNNER_TEMP/native-dist"
+          uv pip install "$RUNNER_TEMP"/native-dist/pokesim_core_native-*.whl
+      - name: Run the decoder tests against the Rust decoder without silent skips
+        working-directory: packages/pokecore
+        run: |
+          POKESIM_CORE_DECODER=rust uv run pytest -rs -q -p no:cacheprovider tests/test_snapshot_native.py | tee "$RUNNER_TEMP/native.log"
+          if grep -Eq '[0-9]+ skipped' "$RUNNER_TEMP/native.log"; then echo "Unexpected skips"; exit 1; fi
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -190,12 +259,17 @@ jobs:
         run: |
           docker run --rm -i -v pokesim-ci-data:/data --entrypoint python pokesim:ci <<'PYCODE'
           import os
+          import json
+          import importlib.metadata
           import pyboy_rs
           import pokecore.emulator
           import pokesim.strategy_data
           import pokesim.web.app
           import pokesim.healthcheck
           assert os.getuid() != 0
+          # pokecore is built from the workspace copy in packages/pokecore, not from a release wheel.
+          origin = json.loads(importlib.metadata.distribution('pokecore').read_text('direct_url.json'))
+          assert origin['url'] == 'file:///app/packages/pokecore', origin
           from pathlib import Path
           assert not (Path(pokesim.__file__).parent / 'data/strategy.json').exists()
           assert list(Path('/usr/share/pokesim/sources').glob('pyboy-rs-*.tar.gz'))
@@ -216,7 +290,7 @@ jobs:
     # The one check the branch ruleset requires, so a new or renamed job above cannot be skipped by accident.
     name: ci gate
     if: always()
-    needs: [dependency-audit, lint, tests, browser, container]
+    needs: [dependency-audit, lint, pokecore, pokecore-native, tests, browser, container]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

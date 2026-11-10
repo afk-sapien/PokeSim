@@ -14,14 +14,15 @@ dependencies = []
 
 [project.optional-dependencies]
 emulator = ["pyboy-rs>=0.1.2,<0.2", "pillow>=10,<14"]
-dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
+# ruff runs from the PokeSim workspace root, at the one version its CI pins.
+dev = ["pytest>=8,<10"]
 
 [project.scripts]
 pokecore = "pokecore.cli:main"
 
 [project.urls]
-Repository = "https://github.com/afk-sapien/pokesim-core"
-Issues = "https://github.com/afk-sapien/pokesim-core/issues"
+Repository = "https://github.com/afk-sapien/PokeSim/tree/main/packages/pokecore"
+Issues = "https://github.com/afk-sapien/PokeSim/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -29,9 +30,6 @@ where = ["src"]
 [tool.setuptools.package-data]
 pokecore = ["py.typed"]
 
-[tool.uv]
-# PyBoy RS is not on PyPI. Its GitHub release lists a wheel per platform.
-find-links = ["https://github.com/afk-sapien/pyboy-rs/releases/expanded_assets/v0.1.5"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

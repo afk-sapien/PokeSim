@@ -16,6 +16,9 @@ dependencies = [
   # exactly the platforms that have a pyboy-rs wheel. Core must carry the marker too: its own requirement on
   # pyboy-rs would otherwise send pip to look that name up on PyPI where the platform has no wheel (Windows ARM64,
   # 32-bit ARM, FreeBSD). Neither name is a PyPI project of ours, so no install may ever depend on PyPI for them.
+  # pokecore's source is the packages/pokecore workspace member, and uv, CI and the container install it from
+  # there (tool.uv.sources below). This URL is the released copy that pip and pipx users get, so
+  # tools/release_pins.py fails when its version differs from the member's.
   "pokecore[emulator] @ https://github.com/afk-sapien/pokesim-core/releases/download/v0.11.0/pokecore-0.11.0-py3-none-any.whl#sha256=0a083118b5542a4ea1e148ae52133a3126f07a2e10fbb34d706291ce17d85ec2 ; (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and (platform_machine == 'x86_64' or platform_machine == 'arm64')) or (sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64'))",
   "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=85d000b9d6607f449b6a945bed7923ca3e1adb5bb97dc1606508501eef1da89d ; sys_platform == 'linux' and platform_machine == 'x86_64'",
   "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl#sha256=b332de4bec17fbd4c9f5bca3c399923c98df382344d9394174a2474cd5056759 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
@@ -51,6 +54,8 @@ pokesim-desktop = "pokesim.desktop:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+# pokecore's tests run from packages/pokecore with its own settings.
+testpaths = ["tests"]
 # Tests run on twelve workers, the cores of the local tests slice, so a full run leaves the machine
 # usable. loadgroup spreads single tests and keeps each xdist_group on one worker. Pass -n 0 to run in
 # one process.
@@ -85,3 +90,10 @@ environments = [
   "sys_platform == 'darwin' and platform_machine == 'arm64'",
   "sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
 ]
+
+[tool.uv.workspace]
+# pokecore lives here and is still published as its own package, because PokeBench installs it alone.
+members = ["packages/pokecore"]
+
+[tool.uv.sources]
+pokecore = { workspace = true }

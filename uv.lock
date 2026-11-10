@@ -26,6 +26,12 @@ supported-markers = [
     "(platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')",
 ]
 
+[manifest]
+members = [
+    "pokecore",
+    "pokesim",
+]
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -814,12 +820,12 @@ wheels = [
 [[package]]
 name = "pokecore"
 version = "0.11.0"
-source = { url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.11.0/pokecore-0.11.0-py3-none-any.whl" }
-wheels = [
-    { url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.11.0/pokecore-0.11.0-py3-none-any.whl", hash = "sha256:0a083118b5542a4ea1e148ae52133a3126f07a2e10fbb34d706291ce17d85ec2" },
-]
+source = { editable = "packages/pokecore" }
 
 [package.optional-dependencies]
+dev = [
+    { name = "pytest", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
+]
 emulator = [
     { name = "pillow", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')" },
     { name = "pyboy-rs", version = "0.1.5", source = { url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
@@ -834,7 +840,6 @@ requires-dist = [
     { name = "pillow", marker = "extra == 'emulator'", specifier = ">=10,<14" },
     { name = "pyboy-rs", marker = "extra == 'emulator'", specifier = ">=0.1.2,<0.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11,<1" },
 ]
 provides-extras = ["emulator", "dev"]
 
@@ -882,7 +887,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "pillow", specifier = ">=10" },
     { name = "playwright", marker = "extra == 'browser-test'", specifier = ">=1.50" },
-    { name = "pokecore", extras = ["emulator"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", url = "https://github.com/afk-sapien/pokesim-core/releases/download/v0.11.0/pokecore-0.11.0-py3-none-any.whl" },
+    { name = "pokecore", extras = ["emulator"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32')", editable = "packages/pokecore" },
     { name = "psutil", specifier = ">=7,<8" },
     { name = "pyboy-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-macosx_11_0_arm64.whl" },
     { name = "pyboy-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-macosx_10_12_x86_64.whl" },
