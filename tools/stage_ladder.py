@@ -58,7 +58,10 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-# Policy modules load in ``prepare``, after the cartridge has set the Gen I variant and the randomizer.
+# Policy modules load after ``prepare``, once the cartridge has set the Gen I variant and the randomizer.
+# The gate's rung runner and its comparison live in pokesim.replay.rung, which the replay bisect shares.
+from pokesim.replay.rung import (GATE_FRAMES, GATE_QUIET, GATE_TIMEOUT, GATE_WASTE_POINTS, _bundle, _cartridges, compare,
+                                 gate_rung, prepare)
 
 GEN1_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'post_game')
 GEN2_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'champion_first',
@@ -80,14 +83,9 @@ GEN1_MAIN_END = 0xDA80
 ROLLING_GAME_MINUTES = 10
 REPLAY_GAME_MINUTES = 120
 REPLAY_QUIET_MINUTES = 90
-# The gate plays 30 game minutes from every rung, ten rungs at once, and fails on a new stall, more
-# errors, or a wasted share up by more than two points. Its stall watch is shorter than the snapshot's
-# to fit the batch. The environment variable marks a gate that already holds the load gate's heavy lock.
-GATE_FRAMES = 108000
+# The gate plays ten rungs at once. The environment variable marks a gate that already holds the load
+# gate's heavy lock.
 GATE_JOBS = 10
-GATE_QUIET = 20
-GATE_WASTE_POINTS = 2.0
-GATE_TIMEOUT = 1800
 GATE_HELD = 'POKESIM_LADDER_GATE_HELD'
 # The baseline is tracked, so it moves only in a pull request, and a branch compares with its own base.
 GATE_BASELINE = ROOT / 'tools' / 'ladder' / 'gate-baseline.json'
@@ -96,26 +94,6 @@ GATE_BASELINE = ROOT / 'tools' / 'ladder' / 'gate-baseline.json'
 def private(path):
     path = path.resolve()
     return not path.is_relative_to(ROOT) or path.is_relative_to(ROOT / 'data')
-
-
-def prepare(rom, code):
-    """Set the environment the policy modules read at import and return (cartridge, share code)."""
-    from pokesim.cartridges import identify
-    cartridge = identify(Path(rom).read_bytes())
-    if cartridge is None:
-        raise SystemExit(f'{rom} is not a verified cartridge')
-    if cartridge.generation == 1:
-        from pokesim.game_data import VARIANT_ENV
-        wanted = 'yellow' if cartridge.version == 'yellow' else 'red'
-        if os.environ.get(VARIANT_ENV, wanted) != wanted or 'pokesim.policies' in sys.modules:
-            raise SystemExit(f'{cartridge.version} needs {VARIANT_ENV}={wanted}')
-        os.environ[VARIANT_ENV] = wanted
-    if code:
-        from pokesim.randomized import ENV, validate
-        code = validate(code, cartridge.version)
-        os.environ[ENV] = code
-        os.environ['ROM_PATH'] = str(Path(rom).resolve())
-    return cartridge, code or ''
 
 
 def rungs_for(generation, randomized):
@@ -329,29 +307,6 @@ def _prune(rolling, progress_frame):
         path.with_suffix('.json').unlink(missing_ok=True)
 
 
-def _bundle(run, snap, folder, before, reason, missing, game_minute, marks):
-    """Keep a stall the way the application does, in a folder tools/stuck_scenarios.py add accepts."""
-    # A stall noticed again in the same game minute after a reload gets its own folder.
-    bundle = folder / 'stalls' / f'stall-{game_minute:05d}m'
-    repeat = 1
-    while bundle.exists():
-        repeat += 1
-        bundle = folder / 'stalls' / f'stall-{game_minute:05d}m-{repeat}'
-    bundle.mkdir(parents=True)
-    run.save(bundle / 'noticed.state', compress=True)
-    if before is not None:
-        for suffix in ('.state', '.json'):
-            shutil.copyfile(before[1].with_suffix(suffix), bundle / f'before{suffix}')
-    goal = getattr(run.policy, 'goal', None)
-    details = run.policy.details()
-    report = {'reason': reason, 'game_minute': game_minute, 'next_rungs': missing[:2],
-              'map': getattr(snap, 'map_name', None) or hex(snap.map), 'goal': getattr(goal, 'key', None),
-              'objective': (details.get('objective') or {}).get('title'), 'policy_reason': details.get('reason'),
-              'marks': [title for _, _, title in marks][-5:], 'has_before': before is not None}
-    (bundle / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    return {'bundle': bundle.relative_to(folder).as_posix(), **report}
-
-
 def adopt(args):
     folder = args.ladder
     if not private(folder):
@@ -452,12 +407,6 @@ def rung_save(rom, info, state):
         emulator.stop(save=False)
 
 
-def _cartridges(folder):
-    """Every file in a folder by its SHA-1, so a ladder finds its clean cartridge whatever it is named."""
-    return {hashlib.sha1(path.read_bytes()).hexdigest(): path for path in sorted(folder.iterdir())
-            if path.is_file() and path.stat().st_size <= 0x800000}
-
-
 def check(args):
     from pokecore.save_summary import SaveError, summarize_save
     from pokesim.checkpoints import open_state
@@ -488,80 +437,6 @@ def check(args):
                 print(f'{ladder.name}/{rung}: the save reads as {stage}, not {wanted}')
     print(f'checked {checked} rungs, {failures} problems')
     return 1 if failures else 0
-
-
-class GateWatch:
-    """Ends a gate run at its first stall: nothing achieved for ``quiet`` game minutes, one battle running
-    ``battle`` game minutes, or a retry loop. The stall keeps a bundle under ``folder`` whose save from
-    before is the rung itself, so the bundle replays the whole run."""
-
-    def __init__(self, folder, rung_state, quiet, battle):
-        from pokesim.scenarios import Gen1Watch, Gen2Watch
-        from pokesim.stalls import FRAMES_PER_GAME_MINUTE
-        self.kinds, self.minute = (Gen1Watch, Gen2Watch), FRAMES_PER_GAME_MINUTE
-        self.folder, self.before, self.quiet, self.battle = folder, (0, rung_state), quiet, battle
-        self.watch = self.progress = self.since = self.stall = None
-
-    def __call__(self, run, snap):
-        if self.watch is None:
-            self.watch, self.progress = self.kinds[run.generation - 1](run), run.frame
-        gained, earned = self.watch.observe(snap)
-        if gained or earned or run.generation == 2 and snap.started and run.waiting(snap):
-            self.progress = run.frame
-        marks = self.watch.marks(snap)
-        self.since = self.watch.battle_clock(snap, self.since, run.frame)
-        quiet = run.frame - self.progress >= self.quiet * self.minute
-        hung = self.since is not None and run.frame - self.since >= self.battle * self.minute
-        if not (quiet or hung or self.watch.loop):
-            return False
-        reason = (f'a retry loop: {self.watch.loop}' if self.watch.loop else
-                  f'nothing achieved for {self.quiet} game minutes' if quiet else
-                  f'a battle ran for {self.battle} game minutes')
-        self.stall = _bundle(run, snap, self.folder, self.before, reason, [], run.frame // self.minute, marks)
-        return True
-
-
-def gate_rung(args):
-    """Play one rung for the gate. Each rung runs in its own process, since the cartridge and the share
-    code pick the policy modules' tables at import."""
-    info = json.loads((args.ladder / 'ladder.json').read_text(encoding='utf-8'))
-    rom = _cartridges(args.roms).get(info['rom_sha1'])
-    if rom is None:
-        raise SystemExit(f'no cartridge in {args.roms} has SHA-1 {info["rom_sha1"]}')
-    _, code = prepare(rom, info['randomizer'])
-    from pokesim.scenarios import gen2_data_root
-    from tools import replay_audit
-    args.out.mkdir(parents=True, exist_ok=True)
-    state = args.ladder / args.rung / 'start.state'
-    data_root = args.data_root or (gen2_data_root() if info['generation'] == 2 else None)
-    watch = GateWatch(args.out, state, args.quiet, args.battle_minutes)
-    audit = argparse.Namespace(rom=rom, state=state, frames=args.frames, out=args.out / 'run.json', data_root=data_root,
-                               seed=7, reseed_goals=True, lead_in=0, randomizer=code, fair_wild_dvs=None)
-    result = replay_audit.run_one(audit, watch)
-    summary = {'ladder': args.ladder.name, 'rung': args.rung, 'randomizer': code, 'frames': result['frames'],
-               'errors': result['errors'], 'stall': watch.stall,
-               'waste': round(100 * sum(result['wasted'].values()) / max(result['frames'], 1), 2)}
-    (args.out / 'summary.json').write_text(json.dumps(summary, indent=1) + '\n', encoding='utf-8')
-    return 0
-
-
-def compare(results, baseline, points=GATE_WASTE_POINTS):
-    """What a gate run did worse than the baseline: a run that failed, a stall on a rung that had none, more
-    errors, or a wasted share up by more than ``points``. A rung the baseline lacks is only reported."""
-    problems = []
-    for result in results:
-        name = f'{result["ladder"]}/{result["rung"]}'
-        base = baseline.get(name)
-        if result.get('failed'):
-            problems.append(f'{name}: the run failed, {result["failed"]}')
-        elif base is not None:
-            if result['stall'] and not base['stall']:
-                problems.append(f'{name}: a new stall, {result["stall"]["reason"]}')
-            if result['errors'] > base['errors']:
-                problems.append(f'{name}: {result["errors"]} errors, {base["errors"]} before')
-            if result['waste'] - base['waste'] > points:
-                problems.append(f'{name}: {result["waste"]:.1f}% wasted, {base["waste"]:.1f}% before')
-    return problems
 
 
 def _gate_line(result, base):

@@ -1124,7 +1124,7 @@ def _dexes(rows):
 
 
 def gate_shape(result):
-    """One result in the shape stage_ladder.compare reads."""
+    """One result in the shape pokesim.replay.rung.compare reads."""
     if result.get('failed'):
         return {'ladder': 'soak', 'rung': result['name'], 'failed': result['failed']}
     return {'ladder': 'soak', 'rung': result['name'], 'stall': {'reason': result['help']} if result['help'] else None,
@@ -1132,7 +1132,7 @@ def gate_shape(result):
 
 
 def judge(candidate, deployed):
-    from tools.stage_ladder import compare
+    from pokesim.replay.rung import compare
     base = {item['id']: item for item in deployed}
     problems = compare([gate_shape(item) for item in candidate],
                        {f'soak/{item["name"]}': gate_shape(item) for item in deployed if not item.get('failed')})

@@ -201,6 +201,28 @@ the pull request that carries it names the behaviour change it accepts. A rung t
 record in a dated list beside the baseline before the move, such as
 `tools/ladder/regressions-suspected-20261109.md`.
 
+## Bisecting a rung
+
+`python -m pokesim.replay` finds the pull request that made a rung worse. It plays the rung as the
+gate does, with each commit's own code and lock, and keeps an action trace of every run.
+
+```sh
+uv run --locked python -m pokesim.replay record --rung silver/badges_6 --at main --roms roms --twice
+uv run --locked python -m pokesim.replay diverge 171176e main --rung silver/badges_6 --roms roms
+uv run --locked python -m pokesim.replay bisect --rung silver/badges_6 --good 171176e --bad main --suspects 344,346 --roms roms
+```
+
+`record --twice` checks that the rung plays the same way twice. `diverge` names the first record,
+the first action and the first goal change where two runs part, each with the goal and position
+before it. `bisect` records each end twice, then tests the suspects in merge order, four at a time,
+and the parent of the first bad one. When that parent is bad too, it searches the commits between.
+`--predicate` is `waste`, `stall` or `both`, and `--stall-key` makes a stall bad only when its
+reason names that key.
+
+pyboy-rs stays at this checkout's version for every commit. `--pyboy own` uses each commit's own.
+Checkouts and environments are kept in `data/replay-cache`, and runs and reports in
+`data/ladder/replay`, since ladders hold private game data. Run a bisect under the heavy load gate.
+
 ## Preflight for behaviour changes
 
 CI has no cartridges or private saves, so a pull request that changes bot, planner, policy,

@@ -362,7 +362,7 @@ class Recorder:
         self._deferred = []
         self._reason = "load"
         self._originals = {}
-        self._classes = []
+        self._classes = {}
         self._attached = True
         self._attach()
 
@@ -370,23 +370,8 @@ class Recorder:
 
     def _attach(self):
         emulator = self.emulator
-        memory = _core_memory(emulator)
-        recorder = self
-
-        def set_memory(self, key, value):
-            cls.__setitem__(self, key, value)
-            recorder._wrote(key, value)
-
-        cls = _swap_class(memory, "__setitem__", set_memory)
-        self._classes.append((memory, cls))
-        registers = emulator.register_file
-
-        def set_register(self, name, value):
-            register_class.__setattr__(self, name, value)
-            recorder._hook_or_record(name, value)
-
-        register_class = _swap_class(registers, "__setattr__", set_register)
-        self._classes.append((registers, register_class))
+        self._swap_memory(_core_memory(emulator))
+        self._swap_registers(emulator.register_file)
         patches = {"press": self._press, "button_press": self._press, "release": self._release,
                    "button_release": self._release, "tick": self._tick, "tick_read": self._tick_read,
                    "load": self._load, "load_state": self._load_state, "hook_register": self._hook_register,
@@ -401,6 +386,40 @@ class Recorder:
             self._originals[name] = getattr(emulator, name)
             setattr(emulator, name, function)
 
+    def _swap_memory(self, memory):
+        recorder = self
+
+        def set_memory(self, key, value):
+            cls.__setitem__(self, key, value)
+            recorder._wrote(key, value)
+
+        cls = _swap_class(memory, "__setitem__", set_memory)
+        self._classes["memory"] = (memory, cls)
+
+    def _swap_registers(self, registers):
+        recorder = self
+
+        def set_register(self, name, value):
+            register_class.__setattr__(self, name, value)
+            recorder._hook_or_record(name, value)
+
+        register_class = _swap_class(registers, "__setattr__", set_register)
+        self._classes["registers"] = (registers, register_class)
+
+    def _rebind(self):
+        """Follow a memory or register object the emulator built again after attaching.
+
+        A subclass can replace the Core memory object once ``Emulator.__init__`` returns, as the
+        snapshot emulator does, and writes through the new object would otherwise go unlogged.
+        """
+        current = {"memory": (_core_memory(self.emulator), self._swap_memory),
+                   "registers": (self.emulator.register_file, self._swap_registers)}
+        for role, (obj, swap) in current.items():
+            old, cls = self._classes[role]
+            if obj is not old:
+                object.__setattr__(old, "__class__", cls)
+                swap(obj)
+
     def detach(self):
         """Close the open segment and put the emulator back as it was."""
         self.close()
@@ -409,7 +428,7 @@ class Recorder:
             with contextlib.suppress(AttributeError):
                 delattr(self.emulator, name)
         self._originals.clear()
-        for obj, cls in self._classes:
+        for obj, cls in self._classes.values():
             object.__setattr__(obj, "__class__", cls)
         self._classes.clear()
 
@@ -433,6 +452,7 @@ class Recorder:
         clash = RESERVED.intersection(fields)
         if clash:
             raise ValueError(f"reserved trace header fields: {', '.join(sorted(clash))}")
+        self._rebind()
         emulator = self.emulator
         state = emulator.save() if state is None else bytes(state)
         previous = fields.pop("previous_head", None)

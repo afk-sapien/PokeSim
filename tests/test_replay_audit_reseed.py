@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tools.replay_audit import DIVIDER, GEN1_RANDOM, VBLANK, GoalSeeds, idle, random_bytes
+from pokesim.replay.rung import DIVIDER, GEN1_RANDOM, VBLANK, GoalSeeds, idle, random_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS = Path(os.environ.get('DATA_DIR', ROOT / 'data')) / 'scenarios'
