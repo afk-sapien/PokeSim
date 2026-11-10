@@ -145,7 +145,9 @@ def journal(root, transaction):
                 db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', ('trade_barrier', json.dumps(transaction)))
                 db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'trade',?,?,1,4,'Trade exchange','')", (title, body))
                 from ..progress_events import journal
-                journal(db, 'trade')
+                from ..strategy_data import SPECIES
+                received = SPECIES.get(moved['received'].get('species'), {}).get('dex')
+                journal(db, 'trade', species=received)
 
 
 def main():
