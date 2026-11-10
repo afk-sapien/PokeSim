@@ -47,5 +47,14 @@ These merges between the two points change play:
 #375 also keyed the replay audit's goal seeds by `--seed` as well as the save, so the two runs did not
 meet the same goal rolls. Part of a rise can come from that change and not from play.
 
-None of these rungs has been investigated yet. The worst ones are the first cases for the replay tooling
-in the phase 1 design note.
+The worst ones are the first cases for the replay tooling in the phase 1 design note.
+
+## Causes found
+
+- #389, 2026-11-10: in a Gen II ledge jump the coordinates read the wall tile jumped over, which is in
+  no map region, so the walk recorded a missing route and looked around for 150 decisions. With that
+  fixed, gold/new_game, silver/badges_6, gold/badges_6, silver/new_game, gold-randomized/new_game,
+  crystal/new_game, crystal/badges_2, gold/badges_2, crystal/kanto_entry, gold-randomized/badges_8,
+  silver/red and silver/kanto_entry are back at or below their 171176e values, and the baseline moved
+  for them. silver/post_game fell to 2.3% and crystal/red to 6.3%, still above 171176e.
+- The other rungs are still open.
