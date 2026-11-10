@@ -201,6 +201,22 @@ the pull request that carries it names the behaviour change it accepts. A rung t
 record in a dated list beside the baseline before the move, such as
 `tools/ladder/regressions-suspected-20261109.md`.
 
+## Preflight for behaviour changes
+
+CI has no cartridges or private saves, so a pull request that changes bot, planner, policy,
+battle, overworld or game loop code runs the ladder gate and every stuck scenario locally before
+it merges. Push the branch, then run from its clean checkout:
+
+```sh
+uv run --locked --extra dev python tools/preflight.py roms/
+```
+
+It plays the gate and then the replays under the heavy load gate, in about 10 minutes, and posts
+the `preflight` commit status on HEAD with the signed-in `gh` account. A replay named in
+`known-failures.txt` in the scenarios folder is a known failure on `main` and does not fail it. A
+gate failure, or any other replay that fails, raises or is skipped, does. The run also writes
+`data/preflight/<commit>.json`. Pass `--no-post` to try it without a status.
+
 ## Live soak before a deploy
 
 `tools/live_soak.py` plays copies of the live adventures with the real Manager and workers. `prepare`
