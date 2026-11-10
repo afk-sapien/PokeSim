@@ -185,7 +185,8 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
             'An optional custom PokeSim gift joined the PC. This is separate from Cable Club trading.',
             1, 4, before.map_name, ''))
         from ..catches import record_gift
-        record_gift(emu.store.db, event.lastrowid, species, gift)
+        from ..progress_events import frame
+        record_gift(emu.store.db, event.lastrowid, species, gift, frame=frame(emu.store))
     try:
         path = recover_storage(emu.store)
         emu._load_state_file(path)

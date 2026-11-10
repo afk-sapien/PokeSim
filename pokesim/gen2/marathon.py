@@ -13,6 +13,7 @@ Every leg walks both ways without Surf and without a one-way ledge in its way. I
 and Route 36 needs Sudowoodo out of the way, so a race waits for both. Neither Fly nor Surf is used past the
 starting line. The untimed way to New Bark Town may use both, which a player in Kanto needs.
 """
+from .. import progress_events
 from ..policies import marathon as engine
 
 NAME = 'Johto Marathon'
@@ -104,6 +105,7 @@ def observe(policy, snapshot, activity):
         activity['progress_frame'] = snapshot.frame
     if before == 0 and activity['checkpoint'] == 1:
         events(policy).append(engine.start_event(course(policy.data)))
+    events(policy).extend(progress_events.checkpoints(before, activity['checkpoint'], 'marathon'))
 
 
 def done(policy, snapshot, activity):

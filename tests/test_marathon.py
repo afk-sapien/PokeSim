@@ -21,6 +21,11 @@ def race():
     return collection
 
 
+def journal(events):
+    """The journal entries, without the progress rows queued with them for each checkpoint."""
+    return [event for event in events if not isinstance(event, dict)]
+
+
 def checkpoint(index, frame=0, **kwargs):
     map_id, x, y = marathon.COURSE[index]
     return state(map=map_id, x=x, y=y, frame=frame, **kwargs)
@@ -77,7 +82,7 @@ def test_finish_report_and_personal_best_are_saved_and_journaled(tmp_path):
     assert c.marathon_records['completed'] == 1
     assert c.marathon_records['best_frames'] == 660
     assert c.marathon_records['last']['checkpoints'] == 11
-    events = c.take_activity_events()
+    events = journal(c.take_activity_events())
     assert len(events) == 2
     assert events[-1].title == 'Kanto Marathon finished!'
     assert '11/11 checkpoints' in events[-1].body
@@ -134,7 +139,7 @@ def test_restart_preserves_race_and_does_not_count_a_gap_or_repeat_start():
     restored.observe(checkpoint(1, 300, in_battle=1))
     assert restored.project['gains']['battles'] == 0
     assert restored.project['race_frames'] == 60
-    assert not restored.take_activity_events()
+    assert not journal(restored.take_activity_events())
     assert restored.goal(checkpoint(1)).targets == (marathon.COURSE[2],)
     assert restored.goal(checkpoint(1)).title == 'Kanto Marathon'
     assert 'Pewter City' in restored.goal(checkpoint(1)).reason

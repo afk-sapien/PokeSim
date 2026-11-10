@@ -9,32 +9,35 @@ ROUTE_36, OLIVINE = 36, 99
 
 def policy_with(toward, goal):
     policy = Policy.__new__(Policy)
-    policy.data = SimpleNamespace(map_ids={'ROUTE_36': ROUTE_36})
-    policy.nav = SimpleNamespace(toward=toward, explore=lambda snapshot, memory, surf=False: ['up'])
+    policy.data = SimpleNamespace(map_ids={'ROUTE_36': ROUTE_36, 'OLIVINE_CITY': OLIVINE})
+    # The map regions join Route 23 to the goal, so only people or a screen stand in the way.
+    policy.nav = SimpleNamespace(toward=toward, explore=lambda snapshot, memory, surf=False: ['up'],
+                                 regions=SimpleNamespace(route=lambda *args, **kwargs: []))
     policy.goal = goal
     policy.stranded, policy.unreachable_waits = 0, 0
+    policy.collection, policy.decisions, policy.failure = {}, 0, None
     policy.walk = lambda snapshot, memory, path: SimpleNamespace(button=path[0])
     return policy
 
 
 def where(**events):
-    return SimpleNamespace(map=1, map_name='Route 23', event=lambda name: events.get(name, False))
+    return SimpleNamespace(map=1, map_name='Route 23', x=3, y=3, badges=0, party=[],
+                           event=lambda name: events.get(name, False))
 
 
 def test_a_door_bounce_does_not_restart_the_stranded_count_and_the_policy_reports_it():
     """A Crystal run spent 11 hours on Route 23. The stranded search walked into the Indigo Plateau door,
     walking back out counted as progress, and the count never reached its limit."""
     policy = policy_with(lambda *args, **kwargs: None, Goal('olivine', 'Travel to Olivine', 'OLIVINE_CITY', 5, 6))
-    failures = []
-    policy.fail = failures.append
     for _ in range(Policy.STRANDED_LIMIT - 1):
         # Outside: no route and no waypoint, so the search explores into the door.
         assert policy.follow(where(), None, None, False, False).button == 'up'
         # Inside: the only path leads back out to a waypoint.
         assert policy.follow(where(), None, ['down'], True, False).button == 'down'
-    assert not failures
+    assert not policy.no_route_waiting(policy.goal)
     policy.follow(where(), None, None, False, False)
-    assert failures == ['no route to Travel to Olivine from Route 23']
+    # The walk records a failed attempt on its goal and asks for no reload.
+    assert policy.no_route_waiting(policy.goal) and policy.take_failure() is None
 
 
 def test_a_real_route_still_restarts_the_count():
@@ -43,7 +46,6 @@ def test_a_real_route_still_restarts_the_count():
     assert policy.follow(where(), None, ['left'], False, False).button == 'left'
     assert policy.stranded == 0
     # Standing on a waypoint that Fly did not leave from counts as stranded.
-    policy.fail = lambda reason: None
     policy.follow(where(), None, [], True, False)
     assert policy.stranded == 1
 

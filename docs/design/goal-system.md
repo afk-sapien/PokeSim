@@ -550,9 +550,9 @@ In the goal tree it is the `done` precondition of each boss goal. HEAL spawns a 
 
 It is the soak gate for every PR below from PR 2 on. After PR 3 switches the readers to `net`, its invariants read `progress_events` instead of titles. During PR 2's shadow mode it reads titles as today and also reports where the shadow rows disagree. That closes its blind spot where duplicate catches write no event. Its other blind spots stay listed in its report.
 
-## 12. Two-week journal replay on the deploy host
+## 12. Two-week journal replay on the desktop
 
-This checks the progress model on real history before the stall tiers switch to it. It is described here and not run yet.
+This checks the progress model on real history before the stall tiers switch to it. It runs on the desktop, never on the deploy host.
 
 ### Tool
 
@@ -563,7 +563,7 @@ replay_progress.py run STORES_DIR --days 14 --out REPORT_JSON [--labels LABELS_J
 replay_progress.py report REPORT_JSON
 ```
 
-1. Input is a read-only copy of each adventure's store taken on the deploy host. It reads `events`, `capture_receipts`, `progress`, `kv` and the stall bundle reports. It never reads save state.
+1. Input is two read-only copies on the desktop. The main one is the hosted app's newest cold backup, extracted outside the repo, for two weeks of real play. The second is a copy of the local dev instance's data folder, for the stall hunt games and their fresh stall events. The tool never opens a live data folder. It reads `events`, `capture_receipts`, `progress`, `kv` and the stall bundle reports. It never reads save state.
 2. It rebuilds `progress_events` rows from the journal and receipts, as the new writers would have written them.
 3. It runs the old checks (StallWatch, LoopGuard and the watchdog fingerprint) and the new model side by side over the same rows.
 4. Ground truth is each stall bundle, help request, give-up, owner restart and the optional labels file.
@@ -579,7 +579,17 @@ replay_progress.py report REPORT_JSON
 | Time to detect | PlayClock frames and wall minutes from stall start to flag, median and worst |
 | Old model | the same columns for today's checks |
 
-The bar to switch: every labeled stall caught, at most one false alarm per adventure per week, and median time to detect no worse than today. Agent time is about 3 hours to build, plus about an hour of run time on the deploy host.
+The bar to switch: every labeled stall caught, at most one false alarm per adventure per week, and median time to detect no worse than today. Agent time is about 3 hours to build, plus about an hour of run time on the desktop.
+
+### First run, November 2026
+
+The first run did not meet the bar, so the switch to `net` is held.
+
+1. Every adventure with real play time failed. The `net` model raised 23 to 168 false alarms in 14 days, where the old checks raised 6 to 40. It also missed more stalls on four of them.
+2. Most false alarms are a gap in the input, not in the model. Training and marathon progress count only through `improve` rows a goal writes and RACE `checkpoint` rows. Old journals have neither, so the replay cannot rebuild them, and the hours before each false alarm show only level-ups, rematches, evolutions and races. The net kinds stay as they are, since counting level-ups would count churn as progress again.
+3. The ground truth was weak. It was the old StallWatch's own alerts plus 14 stall bundles, since each adventure keeps only its newest 5. Help requests and owner restarts were not stored.
+
+The switch decision moves to after PR 7. Then the replay runs on the dev instance's own shadow rows, which will have real `improve`, `checkpoint` and `encounter_counts` rows, with a backup copy of the hosted app as a second check. The bar stays the same.
 
 ## 13. PR sequence
 
@@ -589,7 +599,7 @@ Each PR is proved by the live soak gate and by behavioral parity tests. The soak
 |---|---|---|---|
 | 1 | Behavioral parity tests | 3 hours | the new tests pass on main, with known gaps marked xfail and named |
 | 2 | `progress_events` and `encounter_counts` tables and kinds, in shadow mode. Catches, receives, releases, marathon checkpoints and goal ends write rows. Nothing reads them for decisions yet | 4 hours | parity tests, soak, a test that a marathon checkpoint and a duplicate catch each write a row and that a catch and a receive are net 0 |
-| 3 | `tools/replay_progress.py` and the two-week replay. Once the report meets its bar, the five definitions, LoopGuard and the watchdog switch to `net`, with the stall rule's healthy-rate exception | 4 hours plus 1 hour run | the report in section 12 meets its bar, parity tests, soak |
+| 3 | `tools/replay_progress.py` and the two-week replay. The first run missed its bar, so the switch of the five definitions, LoopGuard and the watchdog to `net` moves to after PR 7 (section 12) | 4 hours plus 1 hour run | the tool's tests, the report in section 12 |
 | 4 | Worth oracle with locks, family demand and the `full_locked` state. Every call site in section 5 moves to it | 6 hours | parity tests, soak, the bred Squirtle case as a test, a full box of locked mons parks producers and fires one alert |
 | 5 | Claims ledger and shared gift pipeline, with idempotent delivery | 6 hours | parity tests, soak, staged and delivered claims reopen after a rewind, a second delivery of a held mon writes nothing |
 | 6 | `runtime/supervision.py`, one ladder, the rewind event, frame clocks, the liveness check in the supervisor and the watchdog, Gen II stall bundles | 6 hours | parity tests, soak, both generations give the same ladder for the same scripted stall, a frozen PlayClock raises one liveness alert after 15 real minutes |

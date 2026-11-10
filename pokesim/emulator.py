@@ -22,7 +22,7 @@ from .audio import AudioFeed, enable_checkpoint_sound
 from .build_info import build_info
 from .checkpoints import open_state
 from .events import HIGH, LOW, Event, RunMemory, diff
-from . import rewards
+from . import progress_events, rewards, stall_truth
 from .legendary import LegendaryRecovery
 from .loop_errors import loop_failed
 from .play_clock import PlayClock
@@ -102,6 +102,9 @@ class Emulator:
         self.frame = 0
         self.executed_frames = 0
         self.play_clock = PlayClock(store.get("play_clock", {}))
+        # A reset replaces the clock, so the store asks for the current one each time.
+        store.clock = lambda: self.play_clock.frames
+        self.goal_watch = progress_events.GoalWatch()
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
         self.mem = RunMemory.from_dict(store.get("run_memory", {}))
@@ -298,7 +301,8 @@ class Emulator:
             # Yellow renders its own Game Boy Color palettes, so like Generation II it reports none.
             "palette": None if self._color_cartridge() else getattr(self, 'palette', 'original'),
             "fair_wild_dvs": getattr(config, 'FAIR_WILD_DVS', False) is True,
-            "manual_mode": self.manual_mode, "help_request": self.help_request(strategy),
+            "manual_mode": self.manual_mode,
+            "help_request": stall_truth.observe_help(self, self.help_request(strategy)),
             # Why the PC cannot rate or release, for the library watchdog (investment.rating_problem).
             "rating_problem": rating_problem(),
             "play_clock": self.play_clock.status(),
@@ -1274,7 +1278,12 @@ class Emulator:
                     preparation = getattr(self, 'preparation', None)
                     pending = list(preparation.step(ctx) if preparation else self.policy.step(ctx))
                     if not preparation and hasattr(self.policy, 'collection'):
-                        activity_events = self.policy.collection.take_activity_events()
+                        activity_events = progress_events.drain(
+                            self.store, self.policy.collection.take_activity_events())
+                        if watch := getattr(self, 'goal_watch', None):
+                            collection = self.policy.collection
+                            tier = 'RACE' if (collection.project or {}).get('method') == 'marathon' else ''
+                            watch.observe(self.store, collection.project_key, tier)
                         if activity_events:
                             self._handle_events(activity_events, snap)
                     if self.paused:

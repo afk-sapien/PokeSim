@@ -17,6 +17,7 @@ import time
 import httpx
 import psutil
 
+from .. import stall_truth
 from ..downloads import DataDownloadError
 from .registry import digest, identifier
 from .resources import ObservedSpeed, ProcessUsage, recent_activity
@@ -601,6 +602,8 @@ class Supervisor:
                     unresolved = any(aid in row['plan'].get('participants', []) for row in self.registry.transactions(True))
                     if adventure['desired_state'] == 'running' and len(recent) < 3 and not unresolved:
                         recent.append(time.monotonic())
+                        stall_truth.lifecycle(self.registry.root / 'adventures' / aid, 'start', 'supervisor',
+                                              why='worker exited')
                         try:
                             self.start(aid)
                         except Exception:

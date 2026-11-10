@@ -230,8 +230,11 @@ The watchdog writes its current problems to `watchdog-problems.json` in the data
 folder. `tools/alert_watch.sh` reads that file over SSH every 5 minutes and runs
 `POKESIM_WATCH_ALERT_COMMAND` once per new problem. A host it cannot reach, a stopped
 container or a file it cannot read becomes one "app down" alert. `tools/overnight_watch.sh`
-runs nightly. It runs the real-cartridge tests at the commit the app was built from and
-the smoke check inside the container. Install both as systemd user units with
+runs nightly. It runs the real-cartridge tests and the Gen II quality hunt check on a dev
+instance on the watch's own machine, and only the health and smoke checks on the hosted
+app. The dev instance is the systemd user unit named by `POKESIM_WATCH_DEV_UNIT`
+(`pokesim-local-sims` by default). The watch reads its commit from `POKESIM_REVISION` and
+its data folder from `--data-dir`, and tests origin/main when it is not running. Install both as systemd user units with
 `sh tools/install_watch.sh`, after writing `~/.config/pokesim-watch.env` with
 `POKESIM_WATCH_HOST`, `POKESIM_WATCH_APP_DIR` (the app folder on that host),
 `POKESIM_WATCH_ALERT_COMMAND` and `POKESIM_WATCH_NTFY`, an ntfy topic URL that hears about a failed watch. The units run

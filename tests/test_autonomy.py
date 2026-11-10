@@ -45,6 +45,8 @@ def test_stalled_goal_recovers_without_waiting_for_a_person():
     policy.goal = Goal('blocked', 'Cross the obstacle', 'Explore', ((255, 1, 1),))
     policy.progress_goal, policy.progress_targets = 'blocked', frozenset(policy.goal.targets)
     policy.progress_frame = 0
+    # A route exists but the walk makes no progress. A walk with no route records the attempt instead (test_no_route.py).
+    policy.nav.guided = lambda *args, **kwargs: 'up'
     s = snap(frame=3000, party=(mon(),))
     action = policy._overworld(s, bytearray(65536))[0]
     assert action.button in ('a', 'up', 'down', 'left', 'right')

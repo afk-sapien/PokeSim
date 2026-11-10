@@ -13,7 +13,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import adventure_counters, progress
+from . import adventure_counters, progress, progress_events, stall_truth
 from .checkpoints import CheckpointStore, compress_state
 
 log = logging.getLogger(__name__)
@@ -61,6 +61,8 @@ class Store:
         # of the database in memory, so what the emulator records while it restores a save,
         # and the setup every tracker runs, never reaches the disk.
         self.read_only = read_only
+        # The running emulator's PlayClock frames, which dates progress rows. None where none runs.
+        self.clock = None
         self.lock = threading.Lock()
         self._read_local = threading.local()
         self._read_cache = {}
@@ -102,6 +104,8 @@ class Store:
             from .trade_statistics import initialize as initialize_trade_statistics
             initialize_trade_statistics(self.db)
             adventure_counters.initialize(self.db)
+            progress_events.initialize(self.db)
+            stall_truth.initialize(self.db)
 
     def _migrate(self):
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(events)")}
@@ -144,6 +148,8 @@ class Store:
                         won = record(self.db, snapshot, ev.title, eid)
                     progress.record(self.db, ts, snapshot, won)
                     adventure_counters.record(self.db, eid, ev.type)
+                    progress_events.journal(self.db, ev.type, frame=progress_events.frame(self),
+                                            species=getattr(ev, 'species', None))
                     shot = f"{eid}.png" if shot_png else None
                     state = f"event-{eid}.state" if state_bytes else None
                     # A save state is about 167 KB of mostly zeroed RAM and compresses
@@ -395,8 +401,12 @@ class Store:
     def held(self, path: Path, replaced: str):
         return self.checkpoints.held(path, replaced)
 
-    def write_stall_bundle(self, *args, **kwargs) -> Path:
-        return self.checkpoints.write_stall_bundle(*args, **kwargs)
+    def write_stall_bundle(self, state: bytes, metadata: dict, report: dict, png: bytes | None,
+                           before: Path | None, keep: int) -> Path:
+        """Keep a stall bundle, and a row for it that stays when the folder is pruned."""
+        folder = self.checkpoints.write_stall_bundle(state, metadata, report, png, before, keep)
+        stall_truth.bundle(self, folder, report)
+        return folder
 
     def prune_events(self, days: int) -> int:
         if days <= 0:

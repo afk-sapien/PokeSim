@@ -126,6 +126,8 @@ class Event:
     body: str = ''
     priority: int = 3
     notable: bool = True
+    # The Pokédex number of the Pokémon a receive or release is about, for its progress row.
+    species: int | None = None
 
 
 def settled(metadata):
@@ -231,6 +233,10 @@ class Emulator:
         self.snapshot = self.previous = None
         self.audio = AudioFeed()
         self.play_clock = PlayClock(store.get('play_clock', {}))
+        # A reset replaces the clock, so the store asks for the current one each time.
+        store.clock = lambda: self.play_clock.frames
+        from ..progress_events import GoalWatch
+        self.goal_watch = GoalWatch()
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.commands = queue.Queue()
@@ -643,11 +649,18 @@ class Emulator:
         self._publish_frame()
 
     def _report_marathon(self, snapshot):
-        """Write the Johto Marathon's start and finish to the journal, each with a screenshot."""
+        """Write the Johto Marathon's start and finish to the journal, each with a screenshot.
+
+        Checkpoint rows in the same queue go to progress_events instead.
+        """
         from ..events import Event
+        from ..progress_events import drain
         from .marathon import take_events
-        for row in take_events(self.policy):
+        for row in drain(self.store, take_events(self.policy)):
             self._event(Event(**row), snapshot)
+        if watch := getattr(self, 'goal_watch', None):
+            from .standdown import goal_key
+            watch.observe(self.store, *goal_key(self.policy))
 
     def _event(self, event, snapshot):
         shot = self._shot_png()
@@ -754,7 +767,7 @@ class Emulator:
             npc_trade(self.store, trade)
             self._event(Event('trade', f'Traded {self.data.species[trade.request]["name"]} to {trade.npc} for '
                               f'{self.data.species[trade.give]["name"]}', 'An in-game trade completed on this cartridge.',
-                              priority=4), snapshot)
+                              priority=4, species=trade.give), snapshot)
         for i, badge in enumerate(BADGES):
             if snapshot.badges & (1 << i) and not self.history['badges'] & (1 << i):
                 self.history['badges'] |= 1 << i
@@ -786,7 +799,7 @@ class Emulator:
                     continue
                 old = matches[0]
                 if old.egg and not mon.egg:
-                    self._event(Event('hatch', f'{mon.name} hatched from its Egg', priority=4), snapshot)
+                    self._event(Event('hatch', f'{mon.name} hatched from its Egg', priority=4, species=mon.species), snapshot)
                 elif old.species != mon.species and any(row['species'] == mon.species
                                                        for row in self.data.species[old.species]['evolutions']):
                     self._event(Event('evolve', f'{old.name} evolved into {mon.name}', priority=4), snapshot)
@@ -1294,6 +1307,7 @@ class Emulator:
         from .. import rewards
         from ..pcvalue import BOXES_FULL, boxes_full
         from ..randomized import status as randomizer_status
+        from ..stall_truth import observe_help
         from .release import room
         achievement = self.last_achievement
         if achievement:
@@ -1316,10 +1330,11 @@ class Emulator:
                 'uptime': int(time.time() - self.started_at), 'stuck_seconds': int(time.time() - self.stuck_since),
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,
-                'help_request': {'reason': f'The run is caught in a loop. {loop}' if loop else 'The policy has stopped making game progress',
-                                 'action': self.policy.mode} if stalled else
-                                {'reason': BOXES_FULL, 'action': self.policy.mode} if live and boxes_full(
-                                    getattr(self.policy, 'boxes_full', False), room(self.snapshot) if self.snapshot else None) else None,
+                'help_request': observe_help(self, {
+                    'reason': f'The run is caught in a loop. {loop}' if loop else 'The policy has stopped making game progress',
+                    'action': self.policy.mode} if stalled else
+                    {'reason': BOXES_FULL, 'action': self.policy.mode} if live and boxes_full(
+                        getattr(self.policy, 'boxes_full', False), room(self.snapshot) if self.snapshot else None) else None),
                 'progress': {'state': 'stalled' if stalled else 'waiting' if waiting else 'recovering' if recovering
                              else 'making_progress',
                              'last_achievement': achievement, 'quiet_game_minutes': round(quiet_minutes, 1)},
