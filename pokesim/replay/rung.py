@@ -212,8 +212,10 @@ def _goal_events(key, previous, current):
     # A restock sells only to free an entry in a crowded bag or to raise cash it lacks. A full bag picks up
     # no item ball and a short purse buys nothing, so a sale is support for the goal behind it, though it
     # gains no item. A Yellow restock after the Silph Scope sold one item at the Lavender Mart on the way
-    # to the tower. The entry and the cash can change on different reads, so either one counts.
-    if key == 'restock' and previous is not None and current is not None and not found \
+    # to the tower. The entry and the cash can change on different reads, so either one counts. In Gold,
+    # Silver and Crystal a run with no ball and less cash than one costs sells its least valuable item under
+    # its own goal, and the ball it buys next waits on that sale.
+    if key in ('restock', 'sell_supplies') and previous is not None and current is not None and not found \
             and getattr(current, 'valid', True) and getattr(previous, 'valid', True):
         freed = len(previous.items) - len(current.items)
         if freed > 0 or getattr(current, 'money', 0) > getattr(previous, 'money', 0):
