@@ -98,7 +98,7 @@ class Supervisor:
 
     def stop(self, aid, **options):
         self.stops.append(aid)
-        self.registry.update(aid, state='stopped')
+        self.registry.transition(aid, 'stopped', 'test setup')
 
 
 @pytest.fixture
@@ -129,7 +129,7 @@ def matrix(tmp_path):
         games = []
         for index, version in enumerate((left, right)):
             game = registry.create(f'{version.title()} {index}', version + '-rom', {}, identifier())
-            registry.update(game['id'], state='running', desired_state='running')
+            registry.transition(game['id'], 'running', 'test setup', desired_state='running')
             peers[game['id']] = GamePeer(game['id'], f'{version}-{index}', version)
             games.append(game['id'])
         request = {'left_id': games[0], 'right_id': games[1], 'left_key': f'{left}-0', 'right_key': f'{right}-1',

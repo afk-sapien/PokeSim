@@ -59,7 +59,8 @@ def import_directory(manager, source, *, rom=None, name=None, stopped=False, own
                 try:
                     shutil.copytree(stage, target, dirs_exist_ok=True)
                 except Exception as error:
-                    manager.registry.update(adventure['id'], state='failed', error='Import failed: ' + str(error))
+                    manager.registry.transition(adventure['id'], 'failed', f'its import did not copy: {error}',
+                                                error='Import failed: ' + str(error))
                     raise
                 return manager.registry.update(adventure['id'], provenance={
                     'imported_from': source.name, 'legacy_trade_barrier': values.get('trade_barrier'),

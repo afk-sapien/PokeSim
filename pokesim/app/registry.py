@@ -13,10 +13,14 @@ import time
 import uuid
 
 from ..checkpoints import CheckpointStore
+from . import lifecycle
 
 log = logging.getLogger(__name__)
 
 SCHEMA = 2
+# The adventure fields `update` and `transition` change. The state changes only by transition.
+UPDATABLE = frozenset({'name', 'settings', 'desired_state', 'generation', 'archived', 'error', 'summary',
+                       'campaign_id', 'provenance'})
 # Adventures from before accounts belong to this placeholder user until setup names the first
 # admin, and so do adventures whose owner no longer exists.
 LIBRARY_OWNER = '0' * 32
@@ -296,17 +300,54 @@ class Registry:
         return True
 
     def update(self, aid, **values):
-        allowed = {'name', 'settings', 'desired_state', 'state', 'generation', 'archived', 'error', 'summary', 'campaign_id', 'provenance'}
-        if not values or not set(values) <= allowed:
+        """Change an adventure's fields other than its state, which only `transition` changes."""
+        if 'state' in values:
+            raise ValueError('Change an adventure state with transition')
+        if not values:
+            raise ValueError('Unsupported registry update')
+        return self._write(aid, values)
+
+    def transition(self, aid, to, reason, **values):
+        """Move an adventure to state `to` for `reason`, writing any other fields in `values` with
+        it. A move the lifecycle does not allow is logged as an error and still written."""
+        if 'state' in values:
+            raise ValueError('Unsupported registry update')
+        return self._write(aid, values, to, reason)
+
+    def _write(self, aid, values, to=None, reason=None):
+        if not set(values) <= UPDATABLE:
             raise ValueError('Unsupported registry update')
         self.adventure(aid)
         encoded = {key: json.dumps(value) if key in {'settings', 'summary', 'provenance'} else value for key, value in values.items()}
         with self.lock, self.db:
-            self.db.execute('UPDATE adventures SET ' + ','.join(f'{key}=?' for key in encoded) + ' WHERE id=?',
-                            (*encoded.values(), aid))
+            if to is not None:
+                self.move(aid, to, reason)
+            if encoded:
+                self.db.execute('UPDATE adventures SET ' + ','.join(f'{key}=?' for key in encoded) + ' WHERE id=?',
+                                (*encoded.values(), aid))
         result = self.adventure(aid)
         self.write_manifest(result)
         return result
+
+    def move(self, aid, to, reason):
+        """Record a state move and log it. Call it with `lock` held inside a write, so the check and
+        the change are one step. `transition` calls it, and so does a write that must change other
+        tables in the same step."""
+        if to not in lifecycle.STATES:
+            raise ValueError(f'Unknown adventure state {to}')
+        row = self.db.execute('SELECT state FROM adventures WHERE id=?', (aid,)).fetchone()
+        if row is None:
+            raise KeyError('Adventure not found')
+        before = row['state']
+        self.db.execute('UPDATE adventures SET state=? WHERE id=?', (to, aid))
+        if before == to:
+            return before
+        if lifecycle.allowed(before, to):
+            log.info('Adventure %s went from %s to %s: %s', aid, before, to, reason)
+        else:
+            log.error('Adventure %s went from %s to %s, a move the lifecycle does not allow: %s',
+                      aid, before, to, reason)
+        return before
 
     def write_manifest(self, adventure):
         root = self.root / 'adventures' / adventure['id']

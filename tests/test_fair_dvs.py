@@ -93,7 +93,7 @@ def test_chosen_at_creation_and_changed_while_running_but_the_randomizer_stays_l
                           json={'name': 'Red', 'rom_id': 'red-rom', 'fair_wild_dvs': True, 'randomizer': 'PSR1-RED-W-5'}).json()
         assert red['settings']['fair_wild_dvs'] is True and red['settings']['randomizer'] == 'PSR1-RED-W-5'
         route = f"/api/v1/adventures/{red['id']}"
-        manager.registry.update(red['id'], state='running')
+        manager.registry.transition(red['id'], 'running', 'test setup')
         off = client.patch(route, headers=headers, json={'settings': {'fair_wild_dvs': False}})
         assert off.status_code == 200 and 'fair_wild_dvs' not in off.json()['settings']
         assert off.json()['fair_wild_dvs_pending'] is False and pushed == [red['id']]

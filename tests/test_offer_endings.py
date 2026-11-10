@@ -121,7 +121,7 @@ def test_deleting_a_user_hands_each_adventure_on_in_one_hold_of_the_offers_guard
 
 def test_deleting_an_adventure_ends_its_offers_and_unlinks_its_inbox_items(quiet, people):  # noqa: F811
     manager = quiet.manager
-    manager.registry.update(people.red, state='stopped', desired_state='stopped')
+    manager.registry.transition(people.red, 'stopped', 'test setup', desired_state='stopped')
     sent = offer(quiet, people.blue, people.red, sender=people.bob['id'])
     manager.auth.notify(people.alice['id'], 'share.added', 'Older news about Red.', adventure_id=people.red,
                         link=f'/games/{people.red}/')

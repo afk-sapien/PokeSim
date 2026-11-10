@@ -244,7 +244,7 @@ class Manager:
         except Exception as error:
             row = self.registry.adventure(aid)
             if row['desired_state'] == 'running':
-                self.registry.update(aid, state='failed', error=str(error))
+                self.registry.transition(aid, 'failed', f'it did not start: {error}', error=str(error))
             raise
 
     def check_available(self):
@@ -307,13 +307,16 @@ class Manager:
                             try:
                                 self.check_running_cap(adventure['id'])
                             except CapReached as error:
-                                self.registry.update(adventure['id'], state='stopped', error=str(error))
+                                self.registry.transition(adventure['id'], 'stopped',
+                                                         'it starts with PokeSim but the running cap is full',
+                                                         error=str(error))
                                 continue
                             self.registry.update(adventure['id'], desired_state='running')
                     stall_truth.lifecycle(self.root / 'adventures' / adventure['id'], 'start', 'boot')
                     self.supervisor.start(adventure['id'])
                 except Exception as error:
-                    self.registry.update(adventure['id'], state='failed', error=str(error))
+                    self.registry.transition(adventure['id'], 'failed', f'it did not start with PokeSim: {error}',
+                                             error=str(error))
         self.supervisor.run_monitor()
         self.coordinator.start_scheduler()
         self.watchdog.run()
@@ -1046,7 +1049,7 @@ def create_app(manager, shutdown=lambda: None):
                 return manager.registry.request_lifecycle(aid, 'start', data.get('request_id', identifier()),
                                                           owner=owner_of(request))
         if await run_in_threadpool(admit):
-            manager.registry.update(aid, state='starting', error=None)
+            manager.registry.transition(aid, 'starting', 'its owner pressed Start', error=None)
             manager.background(manager.start_adventure, aid)
         return manager.registry.adventure(aid)
 

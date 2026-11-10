@@ -19,6 +19,7 @@ import psutil
 
 from .. import stall_truth
 from ..downloads import DataDownloadError
+from . import lifecycle
 from .loops import Loop
 from .registry import digest, identifier
 from .resources import ObservedSpeed, ProcessUsage, recent_activity
@@ -306,7 +307,8 @@ class Supervisor:
             with self.guard:
                 existing = self.children.get(aid)
                 if existing and existing.process and existing.process.poll() is None:
-                    return self.registry.update(aid, state='running' if existing.url else 'starting', error=None)
+                    return self.registry.transition(aid, 'running' if existing.url else 'starting',
+                                                    'its worker is already running', error=None)
                 generation = identifier()
                 settings = self._settings(aid, adventure)
                 bootstrap = dict(protocol=1, adventure_id=aid, generation=generation,
@@ -317,7 +319,8 @@ class Supervisor:
                 # The worker starts with these play settings, so only later changes are sent.
                 child.play_settings = {name: settings.get(name, default) for name, default in PLAY_SETTINGS.items()}
                 self.children[aid] = child
-                self.registry.update(aid, state='starting', generation=generation, error=None)
+                self.registry.transition(aid, 'starting', 'recovering a trade' if recovery else 'starting its worker',
+                                         generation=generation, error=None)
             try:
                 report = lambda message: self.registry.update(aid, summary={'setup': message})
                 if adventure['version'] in GEN2_VERSIONS:
@@ -334,11 +337,12 @@ class Supervisor:
                 except Exception:
                     log.warning('Adventure %s will receive notification settings when it reconnects', aid)
                 self.setup_retries.pop(aid, None)
-                return self.registry.update(aid, state='recovering' if recovery else 'running', error=None)
+                return self.registry.transition(aid, 'recovering' if recovery else 'running',
+                                                'its worker started', error=None)
             except Exception as error:
                 with self.guard:
                     self.children.pop(aid, None)
-                self.registry.update(aid, state='failed', error=str(error))
+                self.registry.transition(aid, 'failed', f'its worker did not start: {error}', error=str(error))
                 self.schedule_setup_retry(aid, error)
                 raise
 
@@ -398,17 +402,17 @@ class Supervisor:
             with self.guard:
                 child = self.children.get(aid)
             if child is None:
-                return self.registry.update(aid, state='stopped')
-            self.registry.update(aid, state='stopping')
+                return self.registry.transition(aid, 'stopped', 'stopped with no worker running')
+            self.registry.transition(aid, 'stopping', 'stopping its worker')
             try:
                 child.stop()
             except Exception as error:
-                self.registry.update(aid, state='failed', error=str(error))
+                self.registry.transition(aid, 'failed', f'its worker did not stop: {error}', error=str(error))
                 raise
             finally:
                 with self.guard:
                     self.children.pop(aid, None)
-            return self.registry.update(aid, state='stopped', error=None)
+            return self.registry.transition(aid, 'stopped', 'its worker stopped', error=None)
 
     def push_speed(self, aid):
         with self.admission:
@@ -606,6 +610,27 @@ class Supervisor:
             with self.monitor.guard(f'The supervisor check of adventure {aid}'):
                 self.check(aid, child)
             self.monitor.beat()
+        with self.monitor.guard('Failing adventures with no worker'):
+            self.fail_missing_workers()
+
+    def fail_missing_workers(self):
+        """Fail an adventure the registry records as running when no worker runs for it, so the
+        library never shows Running for a game that is not there. It is read again under the locks
+        a start and a stop take, so a worker that is starting or stopping is left alone."""
+        for adventure in self.registry.adventures():
+            aid = adventure['id']
+            if adventure['state'] not in lifecycle.LIVE or self.closed.is_set():
+                continue
+            with self.guard:
+                if aid in self.children:
+                    continue
+            with self.admission, self._lock(aid):
+                with self.guard:
+                    if aid in self.children:
+                        continue
+                if self.registry.adventure(aid)['state'] in lifecycle.LIVE:
+                    self.registry.transition(aid, 'failed', 'the registry said it ran but no worker was running',
+                                             error='Adventure worker was not running')
 
     def check(self, aid, child):
         """Restart a worker that exited, read a live one's summary, and fail one that stays silent."""
@@ -617,7 +642,8 @@ class Supervisor:
                     if self.children.get(aid) is not child:
                         return
                     self.children.pop(aid)
-                adventure = self.registry.update(aid, state='failed', error='Adventure worker exited unexpectedly')
+                adventure = self.registry.transition(aid, 'failed', 'its worker exited',
+                                                     error='Adventure worker exited unexpectedly')
             recent = [t for t in self.retries.get(aid, []) if time.monotonic() - t < 300]
             self.retries[aid] = recent
             unresolved = any(aid in row['plan'].get('participants', []) for row in self.registry.transactions(True))
@@ -666,8 +692,8 @@ class Supervisor:
             if time.monotonic() - since >= STALE_SECONDS and not self.closed.is_set():
                 with self.admission, self._lock(aid):
                     if self.children.get(aid) is child:
-                        self.registry.update(aid, state='failed',
-                                             error=f'Adventure health remained stale for {STALE_SECONDS} seconds')
+                        self.registry.transition(aid, 'failed', 'its worker stopped answering',
+                                                 error=f'Adventure health remained stale for {STALE_SECONDS} seconds')
                         try:
                             child.stop(timeout=5)
                         except RuntimeError:

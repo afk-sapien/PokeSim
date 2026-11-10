@@ -984,7 +984,7 @@ class Coordinator:
                     # recorded the failure on the adventure, as for an owner's own Stop.
                     log.exception('Could not stop adventure %s after exchange %s', aid, tid)
             else:
-                self.registry.update(aid, state='running', error=None)
+                self.registry.transition(aid, 'running', f'exchange {tid} is done', error=None)
         return row
 
     def _prune_interactions(self, keep=KEEP_INTERACTIONS):

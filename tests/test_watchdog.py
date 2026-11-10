@@ -446,7 +446,7 @@ def test_the_manager_sends_watchdog_alerts_through_notifications(client, monkeyp
     clock = Clock()
     manager.watchdog.clock = clock
     manager.watchdog.started = clock.now - Limits().grace - 1
-    manager.registry.update(red, desired_state='running', state='failed')
+    manager.registry.transition(red, 'failed', 'test setup', desired_state='running')
     manager.watchdog.tick()
     clock.now += Limits().down
     manager.watchdog.tick()

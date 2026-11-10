@@ -65,7 +65,7 @@ def test_an_old_owner_cannot_delete_the_adventure(quiet, people, meanwhile):  # 
     manager = quiet.manager
     admin = manager.actor_for(people.admin)
     for aid in (people.red,):
-        manager.registry.update(aid, state='stopped', desired_state='stopped')
+        manager.registry.transition(aid, 'stopped', 'test setup', desired_state='stopped')
     name = manager.registry.adventure(people.red)['name']
     alice = quiet.login('alice')
     meanwhile(lambda: ownership.transfer(manager, people.red, people.bob['id'], admin))
@@ -74,7 +74,7 @@ def test_an_old_owner_cannot_delete_the_adventure(quiet, people, meanwhile):  # 
     assert manager.registry.adventure(people.red)['owner_id'] == people.bob['id']
     # A deletion that read its rights before a transfer checks again once it holds its locks.
     green = quiet.adventure('Green', people.alice)
-    manager.registry.update(green, state='stopped', desired_state='stopped')
+    manager.registry.transition(green, 'stopped', 'test setup', desired_state='stopped')
     stale = manager.actor_for(people.alice)
     ownership.transfer(manager, green, people.bob['id'], admin)
     with pytest.raises(NoLongerOwner):
