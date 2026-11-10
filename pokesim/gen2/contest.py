@@ -104,7 +104,10 @@ def journey(policy, snapshot, Goal, *, force=False):
         if choices:
             point = min(choices)[2]
             return Goal('contest_search', 'Find a strong contest Pokémon', name, *point[:2])
-        return Goal('contest_search', 'Enter the contest grass', name, 10, 30)
+        # No step path reaches the grass nearby. A patch the map regions join comes before the park's default tile.
+        point = next((point for point in points
+                      if policy.nav.regions.route(snapshot, snapshot.map, [point[:2]]) is not None), (10, 30))
+        return Goal('contest_search', 'Enter the contest grass', name, *point[:2])
     if state['entered']:
         if mem.byte('wScriptRunning') or '┌' in snapshot.tiles[12]:
             return Goal('contest_results', 'Hear the contest results', name, snapshot.x, snapshot.y)

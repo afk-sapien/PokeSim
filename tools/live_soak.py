@@ -451,6 +451,9 @@ class Copies:
     (Keep) and ``from_party`` each of a copy in the party at the poll before, at any poll of the
     visit or since the player entered its map, as a team member, trainee or League partner deposited
     there is. A Gen II spare withdrawn only to take its item off is no team member (_errands).
+
+    A poll can read the party and the PC while a copy moves between them, so a copy missing at one poll
+    and back at a later one never left. Its rows are withdrawn and it is no new arrival.
     """
 
     def __init__(self, rarity):
@@ -460,6 +463,8 @@ class Copies:
         self.best_copy, self.only_copy, self.locked, self.from_party = [], [], [], []
         self.party, self.locks, self.where, self.carrying, self.errands = set(), set(), None, set(), set()
         self.first_wave, self.wave_over = None, False
+        # Each judged copy's count before it went and the rows it added, until it comes back.
+        self.gone = {}
 
     def rarest(self):
         """The rarest copy held of each species at the last poll."""
@@ -508,9 +513,13 @@ class Copies:
             self.held, self.party, self.locks, self.where = current, party, locks, (game or {}).get('map')
             self.carrying, self.errands = set(carrying), set()
             return {}
+        back = {key for key, (count, _) in self.gone.items() if current.get(key, 0) >= count}
+        for key in back:
+            for rows, row in self.gone.pop(key)[1]:
+                rows.remove(row)
         arrivals = {}
         for key in current:
-            if key not in self.held:
+            if key not in self.held and key not in back:
                 self.arrived.setdefault(key, self.polls)
                 # Its rarity and the rarest copy of its species held before it, for Catches.
                 held = [self.tail(other) for other in self.held if self.dex.get(other) == self.dex.get(key)]
@@ -522,7 +531,11 @@ class Copies:
                 self.visiting = set(self.held)
             for key, count in self.held.items():
                 if current.get(key, 0) < count:
+                    lists = (self.first_visit, self.pushed_out, self.best_copy, self.only_copy, self.locked,
+                             self.from_party)
+                    sizes = [len(rows) for rows in lists]
                     self._judge(key, current)
+                    self.gone[key] = (count, [(rows, row) for rows, size in zip(lists, sizes) for row in rows[size:]])
         elif self.visiting is not None:
             for key in current:
                 if key in self.visiting:

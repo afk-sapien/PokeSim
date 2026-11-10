@@ -696,6 +696,11 @@ class Ladder:
         self.asked.add(name)
         before = self.save()
         goal = build()
+        waiting = getattr(self.policy, 'no_route_waiting', None)
+        if goal is not None and name != self.pin_rung and waiting is not None and waiting(goal):
+            # The walk to this goal found no route lately (policy.no_route), so another rung runs first.
+            self.load(before)
+            return
         if goal is None:
             # A rung that offers nothing but asks for League prize money, as the Game Corner prize
             # partner does, ends the ladder: the League run starts in this decision.

@@ -155,7 +155,7 @@ class Preparation:
         log = getattr(self.emu, '_event', None)
         if log is not None:
             from .emulator import Event
-            log(Event('release', title, body, priority=3), snapshot)
+            log(Event('release', title, body, priority=3, species=spare.species), snapshot)
 
     def heal(self, snapshot, mem):
         """Walk to the nurse and talk to her until the party is healed."""

@@ -63,6 +63,25 @@ def train_key(identity):
     return 'train:' + json.dumps(identity)
 
 
+def goal_key(policy):
+    """The running goal's key and tier, for the goal rows in progress_events.
+
+    A postgame activity goes by its kind, a hunt by its species and training by its Pokémon. A
+    marathon is the RACE tier.
+    """
+    collection = getattr(policy, 'collection', None)
+    if not isinstance(collection, dict):
+        return None, ''
+    activity = (collection.get('postgame') or {}).get('activity')
+    if activity:
+        return activity['kind'], 'RACE' if activity['kind'] == 'marathon' else ''
+    if target := collection.get('target'):
+        return hunt_key(target['species']), ''
+    if training := collection.get('training'):
+        return train_key(training['identity']), ''
+    return None, ''
+
+
 def site_key(mid):
     """A training site that gave a whole stint without experience."""
     return f'site:{int(mid)}'

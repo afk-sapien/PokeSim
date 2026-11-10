@@ -117,8 +117,9 @@ def deliver(emu):
                            (time.time(), 'obtain', gift_title(emu.data.species[species]['name']),
                             'An optional custom gift joined the PC. This is separate from Cable Club trading.',
                             1, 4, before.map_name, ''))
+        from ..progress_events import frame
         from .tracking import record_gift
-        record_gift(db, entry.lastrowid, species)
+        record_gift(db, entry.lastrowid, species, frame=frame(emu.store))
     try:
         emu._load_state_file(recover_storage(emu.store))
     except BaseException:

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Hand each new main-page alert of the hosted app to POKESIM_WATCH_ALERT_COMMAND, which reads the
-# alert text on stdin. Run it from a timer every few minutes, and from overnight_watch.sh.
+# alert text on stdin. Run it from a timer every few minutes.
 # Settings come from the same POKESIM_WATCH_* variables as overnight_watch.sh. HOST and APP_DIR have no default.
 # A host that cannot be reached, a stopped container or an alerts file that cannot be read is handed
 # over as one "app down" alert. While tools/deploy_host.sh holds the deploy lock, the check waits,

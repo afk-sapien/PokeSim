@@ -413,14 +413,17 @@ def roamers(policy, snapshot, Goal):
         route = policy.nav.route(snapshot.map, mid)
         if route is None:
             continue
-        points = encounter_points(policy, snapshot, mid, 'grass')
-        if points:
-            choices.append((len(route), mid, species, points))
+        width, height = data.maps[mid]['width'], data.maps[mid]['height']
+        # The grass nearest the map's edge, where the beasts move on. Only a patch the map regions join is walked.
+        points = sorted(encounter_points(policy, snapshot, mid, 'grass'),
+                        key=lambda p: min(p[0], width - 1 - p[0], p[1], height - 1 - p[1]))
+        point = next((p for p in points[:12] if policy.nav.regions.route(
+            snapshot, mid, [p[:2]], cut=bool(snapshot.badges & 2), surf=bool(snapshot.badges & 8)) is not None), None)
+        if point is not None:
+            choices.append((len(route), mid, species, point))
     if not choices:
         return None
-    _, mid, species, points = min(choices, key=lambda row: row[:2])
-    width = data.maps[mid]['width']
-    x, y, _ = min(points, key=lambda p: min(p[0], width - 1 - p[0], p[1], data.maps[mid]['height'] - 1 - p[1]))
+    _, mid, species, (x, y, _) = min(choices, key=lambda row: row[:2])
     return Goal('collection_roam_shift', f'Head where {data.species[species]["name"]} may roam next',
                 data.maps[mid]['constant'], x, y)
 
