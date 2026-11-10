@@ -82,4 +82,12 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   fell to 0.3% and gold/red to 9.7%, and the baseline moved for both.
 - gold/red, still open as a catch strategy item and not a regression: 10424 frames of buying balls. The
   run throws at a full-HP Tangela that its lead cannot weaken, runs out of balls and buys more.
+- yellow/badges_4 and red/badges_6, 2026-11-10: the rest of their rise was the replay audit's. Both runs
+  fill the bag to 20 entries, and a restock sells one item. A sale gains no item, so the trip counted as
+  waste. In Yellow the run picks up one more item ball in the Rocket Hideout than at 171176e, the Silph
+  Scope made 20 entries, and the sale at the Lavender Mart was on the way to the tower. In Red the Surf HM
+  and the Gold Teeth each filled the bag in the Safari Zone, and the sales were at the Fuchsia Mart. A restock that sells now counts as progress. yellow/badges_4
+  fell to 13.1% and red/badges_6 to 11.5%. blue/badges_8, red/badges_8, red-randomized/badges_8 and
+  yellow/badges_8 fell to 0.1%. The baseline moved for all six. yellow/badges_4 keeps 1520 frames of two
+  restock spans that a battle and the hideout elevator cut short before the sale.
 - The other rungs are still open.

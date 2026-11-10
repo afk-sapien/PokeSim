@@ -1,5 +1,5 @@
 {
- "commit": "cc258e0b",
+ "commit": "f02cf43f",
  "attempt": 1,
  "taken": "2026-11-10",
  "frames": 108000,
@@ -27,7 +27,7 @@
   "blue/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 1.86
+   "waste": 0.06
   },
   "blue/league_first": {
    "stall": null,
@@ -177,12 +177,12 @@
   "red/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 14.79
+   "waste": 11.46
   },
   "red/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 3.29
+   "waste": 0.06
   },
   "red/league_first": {
    "stall": null,
@@ -207,7 +207,7 @@
   "red-randomized/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 3.29
+   "waste": 0.06
   },
   "red-randomized/league_first": {
    "stall": null,
@@ -277,7 +277,7 @@
   "yellow/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 19.76
+   "waste": 13.14
   },
   "yellow/badges_6": {
    "stall": null,
@@ -287,7 +287,7 @@
   "yellow/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 1.97
+   "waste": 0.06
   },
   "yellow/league_first": {
    "stall": null,
