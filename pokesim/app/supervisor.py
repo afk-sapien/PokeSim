@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import deque
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import nullcontext
 import json
 import logging
@@ -37,6 +38,11 @@ VIEWER_IDLE = 300   # seconds before an unwatched stopped-adventure viewer close
 MONITOR_SECONDS = 3
 STALE_SECONDS = 60
 MONITOR_STALE = 180   # seconds without monitor progress before /health/ready fails
+# The monitor checks this many workers at once. A pass waits this long for each check, then goes on
+# without one that is still running. Read on each pass, so a test can shorten the wait.
+CHECK_WORKERS = 4
+CHECK_SECONDS = 30
+SETUP_REPORT_WAIT = 1   # seconds a download's progress line waits for the registry before it is dropped
 # A worker that exits or goes unhealthy restarts after 10 seconds, then 20, 40 and so on up to 30
 # minutes. Ten healthy minutes in a row put the wait back to 10 seconds.
 RESTART_FIRST_SECONDS = 10
@@ -222,6 +228,9 @@ class Supervisor:
         self.worker_output = None   # installed by the watchdog: aid, stderr line -> None
         self.closed = threading.Event()
         self.thread = None
+        self.check_pool = None   # made on the first pass with a worker to check
+        self.checks = {}   # aid -> the future of its latest check, read and written by the monitor only
+        self.check_started = {}   # aid -> perf_counter time its running check began
         # Tests swap `closed` for a stand-in and shorten MONITOR_SECONDS, so both are looked up each pass.
         self.monitor = Loop('adventure-supervisor', self.monitor_once, lambda: MONITOR_SECONDS,
                             lambda seconds: self.closed.wait(seconds), stale=MONITOR_STALE, logger=log)
@@ -305,6 +314,14 @@ class Supervisor:
                 self.close_viewer(aid)
 
     def start(self, aid, recovery=False):
+        """Start the adventure's worker.
+
+        Admission and the adventure's lock are held only to register the worker and to commit its
+        start. The data download runs under neither, and the worker boots under the adventure's
+        lock alone, so a backup, a trade or another adventure's start never waits behind them. A
+        stop or a backup that lands meanwhile wins, and this start then returns the adventure as
+        that left it.
+        """
         with self.admission, self._lock(aid):
             adventure = self.registry.adventure(aid)
             if self.closed.is_set():
@@ -317,7 +334,8 @@ class Supervisor:
                 raise Conflict('Restore this adventure from the archive before starting')
             with self.guard:
                 existing = self.children.get(aid)
-                if existing and existing.process and existing.process.poll() is None:
+                # A worker another start is still downloading data for has no process yet.
+                if existing is not None and (existing.process is None or existing.process.poll() is None):
                     return self.registry.transition(aid, 'running' if existing.url else 'starting',
                                                     'its worker is already running', error=None)
                 generation = identifier()
@@ -332,30 +350,66 @@ class Supervisor:
                 self.children[aid] = child
                 self.registry.transition(aid, 'starting', 'recovering a trade' if recovery else 'starting its worker',
                                          generation=generation, error=None)
-            try:
-                report = lambda message: self.registry.update(aid, summary={'setup': message})
-                if adventure['version'] in GEN2_VERSIONS:
-                    self.assets.prepare_gen2(adventure['version'], report)
-                elif adventure['version'] == 'yellow':
-                    self.assets.prepare(report, 'yellow')
-                else:
-                    self.assets.prepare(report)
-                self.assets.install_portraits(Path(settings['rom_path']).read_bytes())
-                child.start()
-                try:
-                    self.sync_notifications(aid, child)
-                    self.sync_nicknames(child)
-                except Exception:
-                    log.warning('Adventure %s will receive notification settings when it reconnects', aid)
-                self.setup_retries.pop(aid, None)
-                return self.registry.transition(aid, 'recovering' if recovery else 'running',
-                                                'its worker started', error=None)
-            except Exception as error:
+        try:
+            self.prepare(aid, adventure, settings)
+            # The boot takes no other lock. A backup holds the registry's lock while it waits for
+            # this one to stop the worker, so the boot must never wait for the registry.
+            with self._lock(aid):
+                if self.closed.is_set():
+                    raise Refused('PokeSim is shutting down')
+                if self.owns(aid, child):
+                    child.start()
+            with self.admission, self._lock(aid):
+                if self.owns(aid, child):
+                    try:
+                        self.sync_notifications(aid, child)
+                        self.sync_nicknames(child)
+                    except Exception:
+                        log.warning('Adventure %s will receive notification settings when it reconnects', aid)
+                    self.setup_retries.pop(aid, None)
+                    return self.registry.transition(aid, 'recovering' if recovery else 'running',
+                                                    'its worker started', error=None)
+        except Exception as error:
+            with self.admission, self._lock(aid):
                 with self.guard:
-                    self.children.pop(aid, None)
-                self.registry.transition(aid, 'failed', f'its worker did not start: {error}', error=str(error))
-                self.schedule_setup_retry(aid, error)
+                    owned = self.children.get(aid) is child
+                    if owned:
+                        self.children.pop(aid)
+                if owned:
+                    self.registry.transition(aid, 'failed', f'its worker did not start: {error}', error=str(error))
+                    self.schedule_setup_retry(aid, error)
+            if owned:
                 raise
+        # A stop or a backup took the adventure over while this start ran, and stopped the worker
+        # if it had one. Stopping it again only makes sure no second worker is left on its save.
+        try:
+            child.stop(timeout=5)
+        except RuntimeError:
+            pass
+        return self.registry.adventure(aid)
+
+    def owns(self, aid, child):
+        """Whether `child` is still the adventure's worker, so its start goes on."""
+        with self.guard:
+            return self.children.get(aid) is child
+
+    def prepare(self, aid, adventure, settings):
+        """Download the game data the adventure needs and extract its cartridge's portraits."""
+        def report(message):
+            # A progress line is best effort. A backup holds the registry's lock while its restart
+            # waits for the data lock this download holds, so a line never waits long for it.
+            if self.registry.lock.acquire(timeout=SETUP_REPORT_WAIT):
+                try:
+                    self.registry.update(aid, summary={'setup': message})
+                finally:
+                    self.registry.lock.release()
+        if adventure['version'] in GEN2_VERSIONS:
+            self.assets.prepare_gen2(adventure['version'], report)
+        elif adventure['version'] == 'yellow':
+            self.assets.prepare(report, 'yellow')
+        else:
+            self.assets.prepare(report)
+        self.assets.install_portraits(Path(settings['rom_path']).read_bytes())
 
     def schedule_setup_retry(self, aid, error, manual=False):
         """After a failed download, try again later a few times so a brief outage heals itself."""
@@ -663,14 +717,64 @@ class Supervisor:
         self.monitor.beat()
         with self.guard:
             children = list(self.children.items())
-        for aid, child in children:
-            if self.closed.is_set():
-                break
-            with self.monitor.guard(f'The supervisor check of adventure {aid}'):
-                self.check(aid, child)
-            self.monitor.beat()
+        self.check_all(children)
         with self.monitor.guard('Failing adventures with no worker'):
             self.fail_missing_workers()
+
+    def check_all(self, children):
+        """Check the workers on a small pool, each with CHECK_SECONDS of its own. A check that runs
+        longer goes on by itself while the pass moves on, and its adventure is skipped until it
+        ends, so one stuck worker never holds up the others or the pass."""
+        live = {aid for aid, _ in children}
+        for aid in [aid for aid, future in self.checks.items() if future.done() and aid not in live]:
+            del self.checks[aid]
+        if not children or self.closed.is_set():
+            return
+        if self.check_pool is None:
+            self.check_pool = ThreadPoolExecutor(CHECK_WORKERS, thread_name_prefix='adventure-check')
+        pending = {}
+        for aid, child in children:
+            earlier = self.checks.get(aid)
+            if earlier is not None and not earlier.done():
+                continue
+            try:
+                future = self.check_pool.submit(self.check_one, aid, child)
+            except RuntimeError:
+                break   # close() shut the pool down while this pass queued its checks
+            self.checks[aid] = future
+            pending[future] = aid
+        while pending and not self.closed.is_set():
+            done, _ = wait(pending, timeout=1, return_when=FIRST_COMPLETED)
+            for future in done:
+                del pending[future]
+                self.monitor.beat()
+            now = time.perf_counter()
+            for future, aid in list(pending.items()):
+                if now - self.check_started.get(aid, now) >= CHECK_SECONDS:
+                    del pending[future]
+                    log.warning('The supervisor check of adventure %s has run for %d seconds, '
+                                'so this pass goes on without it', aid, CHECK_SECONDS)
+            if pending and self.overrun(now) >= CHECK_WORKERS:
+                # Every pool thread holds a check past its time, so the checks still queued could
+                # not start. They are dropped, and the next pass queues them again.
+                for future in pending:
+                    future.cancel()
+                log.warning('Every supervisor check thread is busy past its time, so %d adventures '
+                            'wait for the next pass', len(pending))
+                break
+
+    def overrun(self, now):
+        """How many checks are running past CHECK_SECONDS."""
+        return sum(1 for aid, future in self.checks.items()
+                   if not future.done() and now - self.check_started.get(aid, now) >= CHECK_SECONDS)
+
+    def check_one(self, aid, child):
+        self.check_started[aid] = time.perf_counter()
+        try:
+            with self.monitor.guard(f'The supervisor check of adventure {aid}'):
+                self.check(aid, child)
+        finally:
+            self.check_started.pop(aid, None)
 
     def fail_missing_workers(self):
         """Fail an adventure the registry records as running when no worker runs for it, so the
@@ -734,17 +838,18 @@ class Supervisor:
             else:
                 self.unhealthy_since.pop(aid, None)
                 self.healthy(aid, child)
+            # The stored summary holds only what the Library shows, and it is written only when that
+            # changes. The frame and play time change on every pass and live in child.watch.
             summary = {'activity': game.get('map_name') or 'Adventure in progress',
                        'paused': status.get('paused', False),
                        'manual_mode': bool(status.get('manual_mode')), 'trading': trading,
-                       'frame': status.get('frame'), 'playtime': game.get('playtime'),
-                       'last_response': time.time(), 'league_rewards': status.get('league_rewards'),
+                       'league_rewards': status.get('league_rewards'),
                        'stalled': (status.get('progress') or {}).get('state') == 'stalled',
                        'settings_errors': settings_errors}
             current = self.registry.adventure(aid)
-            summary['recent_activity'] = recent_activity(
-                current.get('summary') or {}, summary['activity'], summary['last_response'])
-            if current['generation'] == child.generation:
+            stored = current.get('summary') or {}
+            summary['recent_activity'] = recent_activity(stored, summary['activity'], child.watch[0])
+            if current['generation'] == child.generation and summary != stored:
                 self.registry.update(aid, summary=summary)
             try:
                 self.sync_notifications(aid, child)
@@ -790,6 +895,9 @@ class Supervisor:
     def close(self):
         self.closed.set()
         self.assets.cancelled.set()
+        if self.check_pool is not None:
+            # A check that is running ends by itself. Queued ones never start.
+            self.check_pool.shutdown(wait=False, cancel_futures=True)
         with self.guard:
             ids = list(self.children)
             viewers = list(self.viewers)
