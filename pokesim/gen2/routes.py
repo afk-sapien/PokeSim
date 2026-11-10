@@ -248,6 +248,13 @@ class Regions:
         return {labels[neighbor] for dx, dy in directions
                 if (neighbor := (x + dx, y + dy)) in labels}
 
+    def between(self, snapshot, cut, surf):
+        """Whether the player stands in no region, so no route can be judged from where they are.
+
+        In a ledge jump the coordinates read the wall tile jumped over until the player lands.
+        """
+        return not self.memberships(snapshot.map, (snapshot.x, snapshot.y), cut, surf, arrive=True)
+
     def edges(self, node, cut, surf):
         mid, region = node
         cached = self.edge_cache.setdefault(mid, {})

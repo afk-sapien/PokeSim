@@ -40,6 +40,10 @@ def walk_points(policy, snapshot, mid):
         return []
     regions = policy.nav.regions
     cut, surf = bool(snapshot.badges & 2), bool(snapshot.badges & 8)
+    if regions.between(snapshot, cut, surf):
+        # Nothing can be judged until the player lands, so every tile counts for now. A Crystal run judged
+        # from a ledge jump outside the Silver Cave, ended training and stood down one trainee after another.
+        return points
     if snapshot.map == mid:
         wanted = regions.memberships(mid, (snapshot.x, snapshot.y), cut, surf, arrive=True)
     else:

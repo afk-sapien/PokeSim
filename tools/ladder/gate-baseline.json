@@ -1,5 +1,5 @@
 {
- "commit": "4a45e86b",
+ "commit": "a8f72291",
  "attempt": 1,
  "taken": "2026-11-10",
  "frames": 108000,
@@ -87,7 +87,7 @@
   "crystal/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 32.14
+   "waste": 0.0
   },
   "gold/new_game": {
    "stall": null,
@@ -137,7 +137,7 @@
   "gold/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 2.7
+   "waste": 0.0
   },
   "gold-randomized/new_game": {
    "stall": null,
@@ -262,7 +262,7 @@
   "silver/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 2.27
+   "waste": 0.0
   },
   "yellow/new_game": {
    "stall": null,
