@@ -87,17 +87,21 @@ def test_a_gen2_restart_sends_the_mythical_gift_only_to_a_game_without_mew(store
     assert rewards.ledger(store.db)['delivered'] == 0
 
 
-@pytest.mark.parametrize(('owned', 'events', 'gift'), [
-    ({251}, (), False),
-    (set(), ('EVENT_GOT_GS_BALL_FROM_GOLDENROD_POKEMON_CENTER',), False),
-    (set(), (), True),
+@pytest.mark.parametrize(('owned', 'events', 'flag', 'gift'), [
+    ({251}, (), 0, False),
+    (set(), ('EVENT_GOT_GS_BALL_FROM_GOLDENROD_POKEMON_CENTER',), 0, False),
+    # A save from before the restart that turned the flag on but never collected the ball.
+    (set(), (), 0x0b, False),
+    (set(), (), 0, True),
 ])
-def test_a_gen2_restart_sends_the_gs_ball_only_to_a_game_without_it_or_celebi(store, monkeypatch, owned, events, gift):
+def test_a_gen2_restart_sends_the_gs_ball_only_to_a_game_without_it_or_celebi(
+        store, monkeypatch, owned, events, flag, gift):
     from pokesim.gen2 import celebi
     restart_after_a_gift(store, 2, celebi.CLAIM, 'first-ball')
     monkeypatch.setattr(config, 'CELEBI_EVENT', True, raising=False)
     monkeypatch.setattr(celebi, 'read_snapshot', lambda *_: gen2_snapshot(owned, *events))
-    monkeypatch.setattr(celebi, 'Memory', lambda *_: SimpleNamespace(byte=lambda _: 0))
+    monkeypatch.setattr(celebi, 'Memory',
+                        lambda *_: SimpleNamespace(byte=lambda name: flag if name == 'sGSBallFlag' else 0))
     emu = gen2_emu(store, SimpleNamespace(game='crystal'))
     if gift:
         with pytest.raises(Sent):

@@ -9,7 +9,7 @@ from .. import config
 from ..checkpoints import CheckpointStore
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
 from pokecore.gen2.ram import Memory, read_snapshot
-from pokecore.gen2.resets import set_gs_ball
+from pokecore.gen2.resets import GS_BALL, set_gs_ball
 
 CLAIM = 'gen2-gs-ball-distribution-v1'
 
@@ -24,7 +24,9 @@ def activate(emu):
     if (not before.hall_of_fame_count or before.in_battle or mem.byte('wScriptRunning')
             or '┌' in before.tiles[12] or emu.policy.menu):
         return None
-    if before.event('EVENT_GOT_GS_BALL_FROM_GOLDENROD_POKEMON_CENTER') or 251 in before.owned:
+    # A save from before a restart can hold the flag with the ball still waiting in Goldenrod.
+    if (before.event('EVENT_GOT_GS_BALL_FROM_GOLDENROD_POKEMON_CENTER') or 251 in before.owned
+            or mem.byte('sGSBallFlag') == GS_BALL):
         emu.store.set(CLAIM, 'already_available')
         return None
     source = emu._autosave()
