@@ -58,14 +58,6 @@ def clock_control_supported(backend=None):
     return all(hasattr(backend, name) for name in _CLOCK_METHODS)
 
 
-class ReplayDivergence(RuntimeError):
-    """Replay failed at a checked interval. details contains detached diagnostics."""
-
-    def __init__(self, details):
-        self.details = deepcopy(details)
-        super().__init__(f"Replay diverged at checkpoint {details['first_failed_offset']}")
-
-
 class Memory:
     """Live byte and bank access. Slices return detached lists of bytes."""
 
@@ -219,7 +211,6 @@ class Emulator:
         self.screen = Screen(self)
         self.sound = Audio(self, sound_sample_rate)
         self._pending = []
-        self._recording_initial = None
 
     def _ensure_open(self):
         if self._closed:
@@ -386,6 +377,10 @@ class Emulator:
         """
         return self._rtc_method('clock_lock_state')()
 
+    def set_clock_lock_state(self, lock):
+        """Apply a lock read from clock_lock_state(), or release the lock with None, without shifting the clock."""
+        self._rtc_method('set_clock_lock_state')(lock)
+
     def start_sequence(self, steps):
         if self._pending:
             raise RuntimeError('Advance pending Core inputs before starting a sequence')
@@ -403,46 +398,6 @@ class Emulator:
 
     def cancel_sequence(self):
         return self._execution_method('cancel_sequence')()
-
-    def start_recording(self, max_frames=100000, *, diagnostic_interval=0, diagnostic_ranges=((0xc000, 0xe000),)):
-        method = self._execution_method('start_recording')
-        initial = self.checkpoint()
-        if diagnostic_interval or diagnostic_ranges != ((0xc000, 0xe000),):
-            method(max_frames, diagnostic_interval=diagnostic_interval, diagnostic_ranges=diagnostic_ranges)
-        else:
-            method(max_frames)
-        self._recording_initial = initial
-
-    def stop_recording(self):
-        try:
-            backend = self._execution_method('stop_recording')()
-        finally:
-            initial, self._recording_initial = self._recording_initial, None
-        return {'format': 1, 'initial': initial, 'final': self.checkpoint(), 'backend': backend}
-
-    def replay(self, recording):
-        method = self._execution_method('replay')
-        if self._recording_initial is not None:
-            raise RuntimeError('Stop recording before replay')
-        if recording.get('format') != 1:
-            raise ValueError('Unsupported Core recording')
-        for name in ('initial', 'final'):
-            checkpoint = recording[name]
-            self._validate_checkpoint(checkpoint)
-            if checkpoint.get('execution') != recording['backend'][name]:
-                raise ValueError('Core and backend recording state mismatch')
-        validate = getattr(self._backend, 'validate_recording', None)
-        if validate is not None:
-            validate(recording['backend'])
-        self.restore_checkpoint(recording['initial'])
-        try:
-            result = method(recording['backend'])
-        except RuntimeError as error:
-            if hasattr(error, 'details'):
-                raise ReplayDivergence(error.details) from error
-            raise
-        self.restore_checkpoint(recording['final'])
-        return result
 
     def start_profiling(self):
         return self._execution_method('start_profiling')()
@@ -578,15 +533,13 @@ class Emulator:
             raise ValueError("match must be 'version', 'state_format' or 'exact'")
         checkpoint = deepcopy(checkpoint)
         self._validate_checkpoint(checkpoint, match)
-        if self._recording_initial is not None:
-            raise RuntimeError('Stop recording before restoring')
         if checkpoint['format'] == 2:
             self._execution_method('restore_execution')(checkpoint['execution'])
         else:
             self.load(checkpoint['state'])
         if self._has_rtc_cartridge():
             # A missing key means no lock, the same as None: restore never keeps a stale lock.
-            self._rtc_method('set_clock_lock_state')(checkpoint.get('rtc_clock'))
+            self.set_clock_lock_state(checkpoint.get('rtc_clock'))
         self._pending = list(checkpoint.get('pending_inputs', ()))
         self._frame_offset = checkpoint['frames'] - self._backend.frame_count
 

@@ -39,7 +39,7 @@ the sequence finishes or is cancelled. Hooks still execute synchronously and
 Core flushes hook-generated pending inputs before the following frame.
 
 Core frame_count reflects completed frames during hooks and cancellation
-callbacks, including batched ticks and replay. Checkpoint restoration preserves
+callbacks, including batched ticks. Checkpoint restoration preserves
 the logical Core timeline even when it differs from the backend frame counter.
 
 The first implementation schedules sequences in the Python binding around
@@ -53,42 +53,40 @@ an empty-button wait step. Pass only the remaining consumer budget to
 run_sequence and count result['frames']. Reobserve the menu after each
 bounded action. Do not replace adaptive menu checks with a long fixed script.
 
-Recording and replay
---------------------
+Traces
+------
 
-Example::
+pokecore.trace records a run as hash-chained gzip JSON-lines segments::
 
-    emulator.start_recording(max_frames=10000)
+    from pokecore.trace import Recorder, Segment, verify
+
+    recorder = Recorder(emulator)
+    recorder.begin(Segment('run/0001.jsonl.gz', keep_start=True), seed=7)
     emulator.press('a')
     emulator.tick(8, render=False, sound=False)
-    emulator.release('a')
-    emulator.tick(24, render=False, sound=False)
-    recording = emulator.stop_recording()
-    result = another_emulator.replay(recording)
-    assert result['verified']
+    recorder.decide('walk', 1, 0, 0)
+    recorder.detach()
+    result = verify('run/0001.jsonl.gz', another_emulator)
 
-Recordings contain starting and ending checkpoints, the button events
-actually applied per frame, rendering and sound flags, and a final hardware
-checksum. Replay validates ROM and build identities, advances the recorded
-frames, and verifies hardware, supplementary runtime state and ROM overlays.
-It then restores final input queues and sequence progress so execution can
-continue. A recording is a detached Python data structure containing bytes.
-There is no automatic file I/O or unsafe object deserialization API.
+The recorder logs every press, release, tick with its render and sound flags,
+memory and register write, load, hook registration and clock call. Writes a
+hook makes during a tick stay in that tick's record. The caller adds decide
+and input records. The header names the ROM, the start state, the emulator
+build and settings, the queued inputs and the clock lock. States a segment
+loads are kept beside it by hash.
 
-The frame limit bounds normal recording growth. A tick that would exceed it
-fails before advancing. Recording while paused is rejected. A hook exception
-invalidates the recording because the last frame may be incomplete.
+verify replays a segment with no policy and checks the chain, each write and
+the periodic state digests. redecide runs a policy again from the same start
+and stops at the first record that differs, ticking with the logged flags so
+a headless replay matches a game that had a viewer. Both return 0 for a match,
+1 for a divergence and 2 for a harness failure such as a missing state, a
+broken chain or another ROM. ``pokecore trace verify SEGMENT --rom ROM`` runs
+verify from the shell.
 
-Replay requires the same deterministic hooks and caller-owned callback
-context. Install matching hook addresses and reset external callback state
-before replay. Arbitrary memory edits, changing hooks, external link activity,
-and other host side effects are not an input recording format. Divergence
-raises an error and leaves the machine at the divergent state for inspection.
-Cartridges with a live wall clock are rejected when starting a recording.
-This API does not virtualize RTC time.
-
-Recordings and checkpoints are private local artifacts. They contain game
-state and potentially small ROM overlays. Do not commit or distribute them.
+A live wall clock cannot be replayed. Lock the clock before recording a Gen II
+cartridge. Sequences and checkpoint restores are refused while a recorder is
+attached. Traces and kept states are private local artifacts. Do not commit or
+distribute them.
 
 Execution checkpoints
 ---------------------
@@ -109,8 +107,8 @@ the receiving machine's callback and context objects.
 
 Legacy save and load methods retain the upstream format-15 hardware bytes.
 They do not preserve pending inputs or all runtime fields. Use the execution
-checkpoint API for exact resume. Raw loads are rejected while a recording or
-sequence is active. Older Core format-1 checkpoints retain their historical
+checkpoint API for exact resume. Raw loads are rejected while a sequence is
+active. Older Core format-1 checkpoints retain their historical
 hardware-only backend behavior.
 
 Profiling procedure
@@ -141,10 +139,11 @@ Hook instruction stepping and Python boundary overhead are not included in
 the component sample totals. These counters do not form a full wall-time sum.
 
 Run tools/check_execution.py from the Core checkout with the experimental
-packages installed to verify all four procedures with the redistributable demo.
-It accepts --rom, --state, --frames, --render and --audio for local fixtures.
+packages installed to verify sequence resume and profiling with the
+redistributable demo. It accepts --rom, --state, --frames, --render and --audio
+for local fixtures.
 
 Profile the same checkpoint and input trace separately from speed benchmarks.
 Use counters to find expensive components. Measure final throughput with
-profiling and recording off, with the same render and sound settings, and
+profiling and tracing off, with the same render and sound settings, and
 compare state hashes. Instrumentation is not a speed improvement.

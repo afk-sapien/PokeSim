@@ -1,8 +1,6 @@
-from copy import deepcopy
-
 import pytest
 
-from pokecore.emulator import Emulator, ReplayDivergence, demo_rom
+from pokecore.emulator import Emulator, demo_rom
 
 pytest.importorskip('pyboy_rs')
 
@@ -40,53 +38,6 @@ def test_cancellation_exception_preserves_resumable_progress():
         assert emulator.checkpoint() == reference.checkpoint()
 
 
-@pytest.mark.parametrize('logical_start', [0, 1000])
-@pytest.mark.parametrize('diagnostic_interval', [0, 7])
-def test_replay_failure_keeps_logical_timeline_and_can_be_retried(logical_start, diagnostic_interval):
-    with Emulator(demo_rom()) as source, Emulator(demo_rom()) as target:
-        values = [19, 20]
-        for index, emulator in enumerate((source, target)):
-            def hook(_, emulator=emulator, index=index):
-                emulator.memory[0xc123] = values[index]
-            emulator.hook_register(0, 0x100, hook, None)
-        initial = source.checkpoint()
-        initial['frames'] = logical_start
-        source.restore_checkpoint(initial)
-        source.start_recording(90, diagnostic_interval=diagnostic_interval)
-        source.tick(90)
-        recording = source.stop_recording()
-        with pytest.raises(ReplayDivergence) as caught:
-            target.replay(recording)
-        report = caught.value.details
-        assert target.frame_count == logical_start + report['first_failed_offset']
-        assert target.memory[0xc123] == 20
-        if diagnostic_interval:
-            assert report['last_verified_offset'] > 0
-            assert report['resolution_frames'] == 7
-        values[1] = values[0]
-        assert target.replay(recording)['verified']
-        assert target.checkpoint() == source.checkpoint()
-        assert recording['initial']['frames'] == logical_start
-
-
-@pytest.mark.parametrize('interval', [0, 3])
-def test_zero_frame_recording_preserves_pending_inputs_and_offset(interval):
-    with Emulator(demo_rom()) as source, Emulator(demo_rom()) as target:
-        source.tick(10)
-        checkpoint = source.checkpoint()
-        checkpoint['frames'] = 100
-        source.restore_checkpoint(checkpoint)
-        source.press('a')
-        source.start_recording(3, diagnostic_interval=interval)
-        recording = source.stop_recording()
-        assert target.replay(recording)['frames'] == 0
-        assert target.frame_count == 100
-        assert target.pending_inputs == (('a', True),)
-        source.tick(2)
-        target.tick(2)
-        assert target.checkpoint() == source.checkpoint()
-
-
 def test_hook_can_advance_another_machine_without_double_counting_rejected_recursion():
     with Emulator(demo_rom()) as primary, Emulator(demo_rom()) as secondary:
         seen = []
@@ -103,20 +54,3 @@ def test_hook_can_advance_another_machine_without_double_counting_rejected_recur
         assert seen[0][0] == seen[0][1]
         assert seen[0][2] == secondary.frame_count == 3
         assert primary.frame_count == 90
-
-
-@pytest.mark.parametrize('endpoint', ['initial', 'final'])
-def test_invalid_hook_state_is_rejected_before_core_replay_mutates_machine(endpoint):
-    with Emulator(demo_rom()) as emulator:
-        emulator.hook_register(0, 0x100, lambda _: None, None)
-        emulator.start_recording(2)
-        emulator.tick(2)
-        recording = emulator.stop_recording()
-        invalid = deepcopy(recording)
-        for checkpoint in (invalid[endpoint]['execution'], invalid['backend'][endpoint]):
-            checkpoint['hook_opcodes'] = []
-        emulator.press('b')
-        before = emulator.checkpoint()
-        with pytest.raises(ValueError, match='Hook instructions'):
-            emulator.replay(invalid)
-        assert emulator.checkpoint() == before

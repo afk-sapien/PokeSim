@@ -52,36 +52,6 @@ Do not resubmit the action. The helper does not retry irreversible effects.
 Existing use_item and switch_pokemon remain available with their established
 contracts. These new helpers do not choose which item or Pokemon to use.
 
-Replay diagnostics
-------------------
-
-Enable diagnostics explicitly when recording::
-
-    emulator.start_recording(
-        max_frames=6000,
-        diagnostic_interval=30,
-        diagnostic_ranges=[(0xc000, 0xe000)],
-    )
-    emulator.tick(6000, render=False, sound=False)
-    recording = emulator.stop_recording()
-
-Core raises pokecore.emulator.ReplayDivergence on mismatch. Its details
-dictionary identifies the last verified offset and first failed checkpoint,
-absolute frame, expected and actual hashes, nearby input events, and up to
-64 changed RAM bytes with addresses and expected/actual values. The emulator
-stops at that first failed checkpoint for inspection. It does not claim to
-identify the exact instruction or first bad frame within the interval.
-
-Checkpoints hash hardware, extra runtime fields and ROM overlays. Memory
-windows are restricted to WRAM C000:E000 so diagnostic reads do not touch
-side-effecting peripheral registers. Windows cannot overlap. There can be at
-most 4096 checkpoints. A final partial interval is included. Diagnostics are
-off by default and add time and memory costs when enabled.
-
-The existing deterministic-hook and external-side-effect restrictions still
-apply. Final-only recordings retain their previous behavior. Captured RAM
-and replay reports are private game artifacts and must stay outside Git.
-
 Permanent compatibility suite
 -----------------------------
 

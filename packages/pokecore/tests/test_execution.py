@@ -1,5 +1,3 @@
-from copy import deepcopy
-
 import pytest
 
 from pokecore.emulator import Emulator, demo_rom
@@ -7,10 +5,9 @@ from pokecore.emulator import Emulator, demo_rom
 pyboy_rs = pytest.importorskip('pyboy_rs')
 
 
-def test_core_sequence_recording_checkpoint_and_profile():
-    with Emulator(demo_rom()) as first, Emulator(demo_rom()) as resumed, Emulator(demo_rom()) as replayed:
+def test_core_sequence_checkpoint_and_profile():
+    with Emulator(demo_rom()) as first, Emulator(demo_rom()) as resumed:
         first.tick(90)
-        first.start_recording(20)
         profiling = pyboy_rs.has_feature('profiling')
         if profiling:
             first.start_profiling()
@@ -30,72 +27,22 @@ def test_core_sequence_recording_checkpoint_and_profile():
         else:
             with pytest.raises(RuntimeError, match='not compiled'):
                 first.start_profiling()
-        recording = first.stop_recording()
-        assert replayed.replay(recording)['verified']
-        assert replayed.checkpoint() == first.checkpoint()
-        first.run_sequence(100)
-        replayed.run_sequence(100)
-        assert replayed.checkpoint() == first.checkpoint()
 
 
-def test_pending_core_inputs_and_hook_inputs_are_preserved():
+def test_hook_inputs_in_a_sequence_and_pending_inputs_block_a_new_one():
     with Emulator(demo_rom()) as first, Emulator(demo_rom()) as second:
         for emulator in (first, second):
             def hook(_, emulator=emulator):
                 emulator.press('b')
             emulator.hook_register(0, 0x100, hook, None)
-        first.start_recording()
         first.start_sequence([(('a',), 90)])
         first.run_sequence(90)
-        recording = first.stop_recording()
-        second.replay(recording)
+        second.start_sequence([(('a',), 90)])
+        second.run_sequence(90)
         assert first.checkpoint() == second.checkpoint()
         first.press('a')
         with pytest.raises(RuntimeError, match='pending Core'):
             first.start_sequence([((), 1)])
-
-
-def test_core_recording_with_initial_and_final_pending_inputs():
-    with Emulator(demo_rom()) as first, Emulator(demo_rom()) as second:
-        first.tick(90)
-        first.press('a')
-        first.start_recording()
-        first.tick(4)
-        first.release('a')
-        recording = first.stop_recording()
-        second.replay(recording)
-        assert first.pending_inputs == second.pending_inputs
-        first.tick()
-        second.tick()
-        assert first.checkpoint() == second.checkpoint()
-
-
-def test_invalid_core_recording_does_not_advance():
-    with Emulator(demo_rom()) as emulator:
-        emulator.start_recording()
-        emulator.tick(2)
-        recording = emulator.stop_recording()
-        before = emulator.checkpoint()
-        bad = deepcopy(recording)
-        bad['final']['frames'] = -1
-        with pytest.raises(ValueError):
-            emulator.replay(bad)
-        assert emulator.checkpoint() == before
-
-
-def test_failed_recording_can_be_discarded_and_core_restored():
-    with Emulator(demo_rom()) as emulator:
-        def fail(_):
-            raise LookupError('hook failure')
-        emulator.hook_register(0, 0x100, fail, None)
-        initial = emulator.checkpoint()
-        emulator.start_recording()
-        with pytest.raises(LookupError):
-            emulator.tick(90)
-        with pytest.raises(RuntimeError, match='interrupted'):
-            emulator.stop_recording()
-        emulator.restore_checkpoint(initial)
-        assert emulator.checkpoint() == initial
 
 
 def test_sequence_cancellation_observes_live_core_frames_after_restore():
@@ -120,18 +67,16 @@ def test_sequence_cancellation_observes_live_core_frames_after_restore():
 
 
 @pytest.mark.parametrize('advance', ['tick', 'tick_read', 'sequence'])
-def test_frame_dependent_hooks_match_single_frames_and_replay(advance):
-    with Emulator(demo_rom()) as recorded, Emulator(demo_rom()) as batched:
+def test_frame_dependent_hooks_match_single_frames(advance):
+    with Emulator(demo_rom()) as single, Emulator(demo_rom()) as batched:
         seen = [[], []]
-        for index, emulator in enumerate((recorded, batched)):
+        for index, emulator in enumerate((single, batched)):
             def hook(_, emulator=emulator, index=index):
                 seen[index].append(emulator.frame_count)
                 emulator.memory[0xc123] = emulator.frame_count & 255
             emulator.hook_register(0, 0x100, hook, None)
-        recorded.start_recording(90, diagnostic_interval=1)
         for _ in range(90):
-            recorded.tick(1)
-        recording = recorded.stop_recording()
+            single.tick(1)
         if advance == 'sequence':
             batched.start_sequence([((), 90)])
             batched.run_sequence(90)
@@ -141,11 +86,8 @@ def test_frame_dependent_hooks_match_single_frames_and_replay(advance):
             batched.tick(90)
         assert seen[0] and seen[0][0] > 0
         assert seen[1] == seen[0]
-        expected = list(seen[0])
-        seen[0].clear()
-        assert recorded.replay(recording)['verified']
-        assert seen[0] == expected
-        assert recorded.frame_count == 90
+        assert single.memory[0xc123] == batched.memory[0xc123]
+        assert single.frame_count == batched.frame_count == 90
 
 
 def test_frame_count_survives_hook_failure_and_legacy_restore():

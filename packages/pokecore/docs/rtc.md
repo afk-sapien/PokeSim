@@ -46,8 +46,9 @@ A locked checkpoint written by a different backend version, accepted only with
 `match="state_format"`, is refused unless this machine already has the
 identical lock applied, because the raw state cannot carry it. A checkpoint
 with no clock data (no key, or `None`) releases any lock without shifting the
-clock. Checkpoints of other cartridges carry no clock data. Execution recording
-and replay work with a locked clock and reject a live one.
+clock. Checkpoints of other cartridges carry no clock data. A trace from
+`pokecore.trace` keeps the lock in its header and logs every clock call, so it
+replays on an unlocked machine. A trace of a live clock is refused at replay.
 
 ## Gen II clock helpers
 

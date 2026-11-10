@@ -83,10 +83,28 @@ def test_checkpoint_from_a_rebuilt_wheel_restores(match):
             second.restore_checkpoint(checkpoint, match="exact")
 
 
-def test_recording_with_a_locked_clock_replays_in_core():
-    with locked() as first, locked() as second:
+def test_a_trace_with_a_locked_clock_verifies_on_an_unlocked_machine(tmp_path):
+    from pokecore.trace import HARNESS, OK, Recorder, Segment, Trace, verify
+    path = tmp_path / "a.jsonl.gz"
+    with locked() as first:
         first.tick(10, render=False, sound=False)
-        first.start_recording(50)
+        recorder = Recorder(first, check_every=10)
+        recorder.begin(Segment(path, keep_start=True))
         first.tick(20, render=False, sound=False)
-        recording = first.stop_recording()
-        assert second.replay(recording)["verified"]
+        first.advance_clock(HOUR)
+        first.tick(5, render=False, sound=False)
+        recorder.detach()
+    trace = Trace.read(path)
+    assert trace.header["clock"] is not None
+    assert any(record.get("source") == "clock" for record in trace.records)
+    with machine(rtc_file=rtc_file(0)) as second:
+        result = verify(trace, second)
+        assert result.code == OK, result.message
+    with machine(rtc_file=rtc_file(0)) as host:
+        recorder = Recorder(host)
+        recorder.begin(Segment(tmp_path / "host.jsonl.gz", keep_start=True))
+        host.tick(2, render=False, sound=False)
+        recorder.detach()
+    with machine(rtc_file=rtc_file(0)) as third:
+        result = verify(tmp_path / "host.jsonl.gz", third)
+        assert result.code == HARNESS and "host clock" in result.message
