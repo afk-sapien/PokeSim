@@ -25,8 +25,8 @@ def build(tmp_path, monkeypatch, states):
         manager.registry.add_rom('fixture', 'sha1', 'silver')
         for name, (state, error, desired) in states.items():
             row = manager.registry.create(name, 'fixture', {}, identifier())
-            manager.registry.update(row['id'], state=state, error=error, desired_state=desired,
-                                    summary={'setup': 'Preparing Pokémon Silver maps and game data'} if state == 'failed' else {})
+            manager.registry.transition(row['id'], state, 'test setup', error=error, desired_state=desired,
+                                        summary={'setup': 'Preparing Pokémon Silver maps and game data'} if state == 'failed' else {})
             ids[name] = row['id']
         factory.manager = manager
         return create_app(manager)

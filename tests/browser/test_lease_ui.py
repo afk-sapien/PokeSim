@@ -42,7 +42,7 @@ def adventure(tmp_path, monkeypatch):
             auth = manager.auth
             alice, bob, carol = (auth.create_user(name, PASSWORD) for name in ('alice', 'bob', 'carol'))
             aid = manager.registry.create('Red', 'fixture', {}, identifier(), owner=alice['id'])['id']
-            manager.registry.update(aid, state='running')
+            manager.registry.transition(aid, 'running', 'test setup')
             for person in (bob, carol):
                 auth.grant(aid, person['id'], 'player', alice['id'])
             game = create_app(emu, store, base_path=f'/games/{aid}', adventure_id=aid, adventure_name='Red')

@@ -1298,7 +1298,7 @@ def test_deleting_an_adventure_ends_its_lease_and_tells_its_line(game, people): 
     lease(game.bob, game.red, 'request')
     lease(game.carol, game.red, 'request')
     # Stopped, inside the sweep's window, so the lease is still there.
-    manager.registry.update(game.red, state='stopped', desired_state='stopped')
+    manager.registry.transition(game.red, 'stopped', 'test setup', desired_state='stopped')
     delete_adventure(manager, game.red, 'Red', manager.actor_for(manager.auth.user(people.alice['id'])))
     assert leases.holder(game.red) is None
     assert leases.dropped[game.red, game.ids.carol] == 'ended'
@@ -1392,11 +1392,11 @@ def test_a_stopped_adventure_starts_without_its_old_pause(game, monkeypatch):
     lease(game.bob, game.red, 'request')
     assert control(game.alice, game.red, 'pause').status_code == 200
     assert leases.desired[game.red].confirmed
-    monkeypatch.setattr(manager.supervisor, 'stop', lambda aid, **options: manager.registry.update(aid, state='stopped'))
+    monkeypatch.setattr(manager.supervisor, 'stop', lambda aid, **options: manager.registry.transition(aid, 'stopped', 'test setup'))
     manager.registry.update(game.red, desired_state='stopped')
     manager.start_adventure(game.red)
     # The owner starts it again, and the new run reports its own boot.
-    manager.registry.update(game.red, state='running', desired_state='running')
+    manager.registry.transition(game.red, 'running', 'test setup', desired_state='running')
     monkeypatch.setitem(manager.supervisor.children, game.red, SimpleNamespace(watch=(0, {'boot': 'second'})))
     sent = len(game.calls)
     leases.sweep()
@@ -1413,14 +1413,14 @@ def test_a_stop_that_fails_leaves_no_old_pause_for_the_next_start(game, monkeypa
     assert leases.desired[game.red].confirmed
 
     def failing(aid, **options):
-        manager.registry.update(aid, state='failed', error='Worker exited with code 1')
+        manager.registry.transition(aid, 'failed', 'test setup', error='Worker exited with code 1')
         raise RuntimeError('Worker exited with code 1')
     monkeypatch.setattr(manager.supervisor, 'stop', failing)
     manager.registry.update(game.red, desired_state='stopped')
     with pytest.raises(RuntimeError):
         manager.start_adventure(game.red)
     # The owner starts it again, and the new run reports its own boot.
-    manager.registry.update(game.red, state='running', desired_state='running')
+    manager.registry.transition(game.red, 'running', 'test setup', desired_state='running')
     monkeypatch.setitem(manager.supervisor.children, game.red, SimpleNamespace(watch=(0, {'boot': 'second'})))
     sent = len(game.calls)
     leases.sweep()

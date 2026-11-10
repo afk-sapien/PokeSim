@@ -150,7 +150,8 @@ def _create_backup(manager):
                 if playback.get(aid):
                     manager.supervisor.child(aid).request('POST', '/api/control', {'action': playback[aid]})
             except Exception as error:
-                manager.registry.update(aid, state='failed', error=str(error))
+                manager.registry.transition(aid, 'failed', f'it did not start again after a backup: {error}',
+                                            error=str(error))
 
 
 def restore_backup(archive, destination):
