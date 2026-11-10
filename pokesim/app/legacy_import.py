@@ -15,6 +15,7 @@ from pokecore.emulator_state import same_runtime_or_recorded_migration
 from ..checkpoints import CheckpointStore
 from ..platform_io import lock_file, sync_directory
 from ..runtime.simulation import AdventureLock
+from ..state import schema
 from .errors import Conflict
 from .registry import digest, identifier, validate_id
 
@@ -28,7 +29,7 @@ def _database(path):
         raise Conflict('A retained legacy peer database is missing')
     db = None
     try:
-        db = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)
+        db = schema.connect(path, read_only=True)
         yield db
     except sqlite3.DatabaseError as error:
         raise Conflict('A legacy peer database could not be validated') from error

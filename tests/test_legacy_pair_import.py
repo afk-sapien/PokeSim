@@ -32,7 +32,6 @@ def legacy(tmp_path):
         store = Store(source)
         store.set('trade_barrier', '12345')
         with store.lock, store.db:
-            store.db.execute('CREATE TABLE completed_trades (id TEXT PRIMARY KEY)')
             store.db.execute('INSERT INTO completed_trades VALUES (?)', ('trade:12345',))
         store.close()
         before = Store(work / 'before' / name)
@@ -175,7 +174,6 @@ def test_reward_barrier_lineage_is_preserved(legacy, kind):
         store = Store(source)
         with store.lock, store.db:
             store.db.execute('DELETE FROM completed_trades')
-            store.db.execute('CREATE TABLE completed_events (id TEXT PRIMARY KEY)')
             store.db.execute('INSERT INTO completed_events VALUES (?)', ('12345',))
         store.set('league_rewards', {'earned': 3, 'delivered': 2})
         store.close()

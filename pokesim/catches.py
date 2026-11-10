@@ -122,8 +122,7 @@ def record_receipt(db, fingerprint, dex, *, perfect=False, shiny=False, species=
 
 
 def initialize(db):
-    db.execute('CREATE TABLE IF NOT EXISTS capture_receipts '
-               '(fingerprint TEXT PRIMARY KEY, dex INTEGER NOT NULL, recorded_at REAL NOT NULL)')
+    """Open the catch counts. The receipt table comes from the schema version (pokesim.state)."""
     db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)',
                (KEY, json.dumps({'counts': {}, 'total': 0, 'started_at': time.time(),
                                  'complete_history': False, 'available': False})))

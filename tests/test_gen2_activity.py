@@ -229,8 +229,6 @@ def test_the_contest_pokemon_kept_counts_as_caught_once_beside_other_catches(tmp
     # An adventure that starts counting later counts it from its receipt, once.
     later = Store(tmp_path / 'later')
     with later.lock, later.db:
-        later.db.execute('CREATE TABLE capture_receipts '
-                         '(fingerprint TEXT PRIMARY KEY, dex INTEGER NOT NULL, recorded_at REAL NOT NULL)')
         later.db.executemany('INSERT INTO capture_receipts VALUES (?,?,?)',
                              store.db.execute('SELECT * FROM capture_receipts').fetchall())
     activity.start(later, fresh=False)
@@ -280,8 +278,6 @@ def test_gen2_cable_trades_are_recorded_by_national_number(tmp_path):
 def test_an_adventure_under_way_counts_from_now_and_keeps_its_history(tmp_path):
     store = Store(tmp_path)
     with store.lock, store.db:
-        store.db.execute('CREATE TABLE capture_receipts '
-                         '(fingerprint TEXT PRIMARY KEY, dex INTEGER NOT NULL, recorded_at REAL NOT NULL)')
         for index, dex in enumerate((19, 19, 41)):
             store.db.execute('INSERT INTO capture_receipts VALUES (?,?,?)', (f'catch-{index}', dex, 1.0))
         store.db.execute('INSERT INTO capture_receipts VALUES (?,?,?)', ('gift-event:x', 151, 1.0))
