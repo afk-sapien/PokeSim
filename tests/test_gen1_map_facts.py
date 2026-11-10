@@ -9,7 +9,8 @@ from pokesim.data_tools.strategy import opened_blocks
 from pokesim.game_data import SOURCE_REVISION, YELLOW_REVISION
 from pokesim.mapfacts import gen1
 from pokesim.policies.navigation import HIDEOUT_DOOR, HIDEOUT_DOOR_FLAG, Navigator
-from pokesim.strategy_data import MAPS
+from pokesim.policies.travel import TravelNavigator
+from pokesim.strategy_data import MAPS, WORLD
 from test_events import snap
 from test_gen1_gates import checkout
 from test_strategy import flags
@@ -65,6 +66,19 @@ def test_navigation_shuts_the_hideout_door_it_shut_by_hand():
         nav.update_story(snap(map=MAPS['ROCKET_HIDEOUT_B1F'], event_flags=flags(*names)))
         assert (FORMER_DOOR <= nav.story_blocks) == (not beaten)
         assert not beaten or not FORMER_DOOR & nav.story_blocks
+
+
+@pytest.mark.parametrize('navigator', [Navigator, TravelNavigator])
+@pytest.mark.parametrize('room', ['LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM'])
+def test_an_elite_four_exit_is_shut_until_the_trainer_is_beaten(room, navigator):
+    # Lorelei's map file draws her exit shut. Bruno's and Agatha's draw theirs open, and the scripts shut them.
+    world, flag = WORLD[MAPS[room]], f'EVENT_BEAT_{room}_TRAINER_0'
+    exits = [(4, 0), (5, 0)]
+    assert set(exits) <= {(x, y) for x, y, *_ in world['warps']}
+    nav = navigator()
+    for beaten in (False, True):
+        nav.update_story(snap(map=MAPS[room], event_flags=flags(*[flag][:beaten])))
+        assert [nav.active_tile(world, x, y) in world['passable'] for x, y in exits] == [beaten, beaten]
 
 
 @pytest.mark.parametrize('name, env, revision', SOURCES)

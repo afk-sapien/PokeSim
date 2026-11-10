@@ -14,3 +14,14 @@ SWAPS = (
     ('VICTORY_ROAD_2F', 11, 7, 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2', 0x1D, None),
     ('VICTORY_ROAD_3F', 3, 5, 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1', 0x1D, None),
 )
+
+# (map, x, y, flag, tile): until the flag is set, the script draws this collision tile where the
+# map file draws another. Navigation reads the map files, so it draws these itself.
+SHUT = (
+    ('AGATHAS_ROOM', 4, 0, 'EVENT_BEAT_AGATHAS_ROOM_TRAINER_0', 0x17),
+    ('AGATHAS_ROOM', 5, 0, 'EVENT_BEAT_AGATHAS_ROOM_TRAINER_0', 0x17),
+    ('BRUNOS_ROOM', 4, 0, 'EVENT_BEAT_BRUNOS_ROOM_TRAINER_0', 0x30),
+    ('BRUNOS_ROOM', 5, 0, 'EVENT_BEAT_BRUNOS_ROOM_TRAINER_0', 0x30),
+    ('ROCKET_HIDEOUT_B1F', 24, 16, 'EVENT_BEAT_ROCKET_HIDEOUT_1_TRAINER_4', 0x18),
+    ('ROCKET_HIDEOUT_B1F', 25, 16, 'EVENT_BEAT_ROCKET_HIDEOUT_1_TRAINER_4', 0x18),
+)

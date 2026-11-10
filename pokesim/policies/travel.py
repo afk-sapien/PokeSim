@@ -1,5 +1,5 @@
 """Directed journeys reuse ordinary battle, menu, and field-move controls."""
-from .navigation import Navigator
+from .navigation import Navigator, shut_tiles
 from .progression import Goal
 from .puzzles import MANSION_MAPS, VICTORY_MAPS
 from .strategic import FACING, W_FACING, StrategicPolicy, tap, wait
@@ -14,9 +14,10 @@ class TravelNavigator(Navigator):
 
     def update_story(self, snapshot):
         super().update_story(snapshot)
-        self.tile_overrides = {(m, x, y): tile for m, world in WORLD.items()
-                               for flag, x, y, tile in world.get('opened_tiles', [])
-                               if event_set(snapshot.event_flags, flag)}
+        self.tile_overrides = shut_tiles(snapshot.event_flags)
+        self.tile_overrides.update(((m, x, y), tile) for m, world in WORLD.items()
+                                   for flag, x, y, tile in world.get('opened_tiles', [])
+                                   if event_set(snapshot.event_flags, flag))
         self.closed_passages = {(m, x, y) for m, world in WORLD.items()
                                 for _, x, y, _ in world.get('opened_tiles', [])
                                 if self.active_tile(world, x, y) not in world['passable']}
