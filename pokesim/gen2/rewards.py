@@ -1,7 +1,6 @@
 """Optional Gen II gifts with durable claims and verified checkpoint delivery."""
 import hashlib
 import io
-import json
 import random
 import time
 import uuid
@@ -10,6 +9,7 @@ from .. import config, rewards
 from ..checkpoints import CheckpointStore
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
 from ..seeds import gift_seed
+from ..state import journal, kv
 from pokecore.gen2.ram import Memory, read_snapshot
 from pokecore.gen2.resets import box_gift
 from .steps import RETURNS, consume, ready
@@ -44,8 +44,8 @@ def deliver(emu):
     if (not before.valid or not before.started or before.in_battle or mem.byte('wScriptRunning')
             or '┌' in before.tiles[12] or emu.policy.menu):
         return None
-    with emu.store.lock:
-        ledger = rewards.ledger(emu.store.db)
+    with emu.store.reading() as db:
+        ledger = rewards.ledger(db)
     species = None
     ordinal = ledger['delivered'] + 1
     if league and ordinal <= ledger['earned']:
@@ -92,9 +92,7 @@ def deliver(emu):
     record = {'id': identifier, 'phase': 'committed', 'decision': 'COMMIT', 'kind': kind,
               'species': species, 'ordinal': ordinal, 'sha256': metadata['sha256'],
               'metadata': metadata, 'trade_id': emu.store.get('trade_barrier')}
-    with emu.store.lock, emu.store.db:
-        db = emu.store.db
-        db.execute('PRAGMA synchronous=FULL')
+    with emu.store.durable() as db:
         if kind == 'league_reward':
             current = rewards.ledger(db)
             if current['delivered'] + 1 != ordinal or current['earned'] < ordinal:
@@ -102,26 +100,24 @@ def deliver(emu):
             current['delivered'] = ordinal
             rewards.save(db, current)
         elif kind == 'mew_return':
-            row = db.execute('SELECT v FROM kv WHERE k=?', (RETURNS,)).fetchone()
-            if not ready(json.loads(row[0]) if row else None, rewards.championship_count(rewards.ledger(db))):
+            if not ready(kv.get(db, RETURNS), rewards.championship_count(rewards.ledger(db))):
                 raise ValueError('The repeat Mew claim changed')
             consume(db, emu.steps.value['total'])
         else:
-            db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (MYTHICAL, json.dumps(identifier)))
+            kv.put(db, MYTHICAL, identifier)
         if shiny_gift:
             from ..shiny import record as record_shiny
             record_shiny(db, 'acquired', f'gift-event:{identifier}', species, generation=2)
         from .activity import gift as count_gift
         count_gift(db, identifier, species)
         for key, value in ((PENDING, record), (BARRIER, identifier)):
-            db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (key, json.dumps(value)))
-        entry = db.execute('INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (?,?,?,?,?,?,?,?)',
-                           (time.time(), 'obtain', gift_title(emu.data.species[species]['name']),
+            kv.put(db, key, value)
+        entry = journal.add(db, time.time(), 'obtain', gift_title(emu.data.species[species]['name']),
                             'An optional custom gift joined the PC. This is separate from Cable Club trading.',
-                            1, 4, before.map_name, ''))
+                            1, 4, before.map_name)
         from ..progress_events import frame
         from .tracking import record_gift
-        record_gift(db, entry.lastrowid, species, frame=frame(emu.store))
+        record_gift(db, entry, species, frame=frame(emu.store))
     try:
         emu._load_state_file(recover_storage(emu.store))
     except BaseException:

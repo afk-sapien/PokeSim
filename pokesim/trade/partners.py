@@ -8,7 +8,7 @@ Two sources fill the list, and it only grows. A completed exchange records the o
 Pokémon that arrived. The coordinator also passes every linked adventure's own trainer id with its
 collection requests, which covers copies traded before this list existed.
 """
-import json
+from ..state import kv
 
 KEY = 'trade_partners'
 # A trainer id is two bytes in every game. The cap keeps a bad request from growing the row without end.
@@ -20,9 +20,8 @@ def valid(value):
 
 
 def read(db):
-    row = db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
     try:
-        ids = json.loads(row[0]) if row else []
+        ids = kv.get(db, KEY, [])
     except ValueError:
         return frozenset()
     return frozenset(value for value in ids if valid(value)) if isinstance(ids, list) else frozenset()
@@ -33,7 +32,7 @@ def add(db, ids):
     known = read(db)
     merged = known | {value for value in ids if valid(value)}
     if merged != known and len(merged) <= LIMIT:
-        db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (KEY, json.dumps(sorted(merged))))
+        kv.put(db, KEY, sorted(merged))
         return frozenset(merged)
     return known
 

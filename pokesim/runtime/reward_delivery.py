@@ -10,6 +10,7 @@ import uuid
 from ..checkpoints import CheckpointStore
 from .. import rewards
 from ..seeds import gift_seed
+from ..state import journal, kv
 
 PENDING = 'custom-reward-pending-v1'
 BARRIER = 'custom-reward-barrier-v1'
@@ -34,10 +35,6 @@ def schedule(emu, delivered):
     """A battle or menu should not postpone a pending gift for a whole spacing interval."""
     emu._reward_frame = emu.frame
     emu._reward_wait = SPACING_FRAMES if delivered else RETRY_FRAMES
-
-
-def _put(db, key, value):
-    db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (key, json.dumps(value)))
 
 
 def select_reward(snapshot, ledger, mew_received, *, league_rewards=False, mew_event=False, seed=None):
@@ -99,8 +96,8 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
     if space is None:
         return None
     rewards.observe_progress(emu.store, before)
-    with emu.store.lock:
-        value = rewards.ledger(emu.store.db)
+    with emu.store.reading() as db:
+        value = rewards.ledger(db)
     selected = select_reward(before, value, emu.store.get(EVENT_KEY),
                              league_rewards=league_rewards, mew_event=mew_event, seed=emu.adventure_seed)
     from .. import mew_returns
@@ -164,31 +161,29 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
               'ordinal': ordinal, 'species': species, 'sha256': metadata['sha256'],
               'metadata': metadata, 'trade_id': emu.store.get('trade_barrier')}
     emu.store.set(PENDING, record)
-    with emu.store.lock, emu.store.db:
-        emu.store.db.execute('PRAGMA synchronous=FULL')
+    with emu.store.durable() as db:
         if kind == 'league_reward':
-            current = rewards.ledger(emu.store.db)
+            current = rewards.ledger(db)
             if current['delivered'] + 1 != ordinal or current['earned'] < ordinal:
                 raise ValueError('Custom reward ownership changed before commitment')
             current['delivered'] = ordinal
-            rewards.save(emu.store.db, current)
+            rewards.save(db, current)
             title = gift_title(gift.nick, species, ordinal)
         else:
-            if kind == 'mew_return' and not mew_returns.ready_db(emu.store.db, rewards.championship_count(rewards.ledger(emu.store.db))):
+            if kind == 'mew_return' and not mew_returns.ready_db(db, rewards.championship_count(rewards.ledger(db))):
                 raise ValueError('The Mew walking opportunity is no longer available')
-            mew_returns.consume(emu.store.db)
-            _put(emu.store.db, EVENT_KEY, identifier)
+            mew_returns.consume(db)
+            kv.put(db, EVENT_KEY, identifier)
             title = ('Received Mew after walking and winning the League' if kind == 'mew_return'
                      else 'Received Mew from the custom PokeSim event')
-        _put(emu.store.db, BARRIER, identifier)
-        _put(emu.store.db, PENDING, {**record, 'decision': 'COMMIT', 'phase': 'committed'})
-        event = emu.store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime)
-            VALUES (?,?,?,?,?,?,?,?)''', (time.time(), 'obtain', title,
-            'An optional custom PokeSim gift joined the PC. This is separate from Cable Club trading.',
-            1, 4, before.map_name, ''))
+        kv.put(db, BARRIER, identifier)
+        kv.put(db, PENDING, {**record, 'decision': 'COMMIT', 'phase': 'committed'})
+        entry = journal.add(db, time.time(), 'obtain', title,
+                            'An optional custom PokeSim gift joined the PC. This is separate from Cable Club trading.',
+                            1, 4, before.map_name)
         from ..catches import record_gift
         from ..progress_events import frame
-        record_gift(emu.store.db, event.lastrowid, species, gift, frame=frame(emu.store))
+        record_gift(db, entry, species, gift, frame=frame(emu.store))
     try:
         path = recover_storage(emu.store)
         emu._load_state_file(path)
