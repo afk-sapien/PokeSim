@@ -22,7 +22,8 @@ def gen2_walk():
     policy = Policy.__new__(Policy)
     policy.data = SimpleNamespace(map_ids={'OLIVINE_CITY': OLIVINE})
     explored = []
-    policy.nav = SimpleNamespace(regions=SimpleNamespace(route=lambda *args, **kwargs: None),
+    policy.nav = SimpleNamespace(regions=SimpleNamespace(route=lambda *args, **kwargs: None,
+                                                         memberships=lambda *args, **kwargs: {1}),
                                  explore=lambda *args, **kwargs: explored.append(1) or ['up'])
     policy.goal = Goal('olivine', 'Travel to Olivine', 'OLIVINE_CITY', 5, 6)
     policy.collection, policy.decisions = {}, 100

@@ -1728,10 +1728,18 @@ class Policy:
         return Action(None, 0, 24)
 
     def joined(self, snapshot, surf):
-        """Whether the map regions join the player to the goal's tile, people and screens aside."""
+        """Whether the map regions join the player to the goal's tile, people and screens aside.
+
+        A player in no region is between tiles. In a ledge jump the coordinates read the wall tile jumped
+        over until the player lands. The regions say nothing about the route from there, so the walk looks
+        around and counts as stranded rather than record a missing route that is there one step later.
+        """
         cut = bool(snapshot.badges & 2) and any(15 in mon.moves for mon in snapshot.party)
-        return self.nav.regions.route(snapshot, self.data.map_ids[self.goal.map_name], [(self.goal.x, self.goal.y)],
-                                      cut=cut, surf=surf) is not None
+        regions = self.nav.regions
+        if not regions.memberships(snapshot.map, (snapshot.x, snapshot.y), cut, surf, arrive=True):
+            return True
+        return regions.route(snapshot, self.data.map_ids[self.goal.map_name], [(self.goal.x, self.goal.y)],
+                             cut=cut, surf=surf) is not None
 
     def unreachable(self):
         """The walks that found no route lately (planning/unreachable.py), kept with the collection state."""
