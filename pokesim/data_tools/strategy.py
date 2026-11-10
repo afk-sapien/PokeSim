@@ -5,7 +5,18 @@ Only map geometry and game constants are exported, never ROM images.
 """
 import re
 
-DEBUG_BLOCK = re.compile(r"^IF DEF\(_DEBUG\)\n.*?^(?:ELSE\n(.*?)^)?ENDC\n", re.M | re.S)
+from ..mapfacts.gen1 import SWAPS
+
+DEBUG_BLOCK =re.compile(r"^IF DEF\(_DEBUG\)\n.*?^(?:ELSE\n(.*?)^)?ENDC\n", re.M | re.S)
+
+
+def opened_blocks(symbol):
+    """(block x, block y, block, flag) for each block the map's script draws once the flag is set.
+
+    Navigation shuts the Rocket Hideout B1F door from the facts itself, so that swap opens nothing here.
+    """
+    return [(bx, by, block, flag) for name, bx, by, flag, block, _ in SWAPS
+            if name == symbol and name != "ROCKET_HIDEOUT_B1F" and block is not None]
 
 
 def release_source(text):
@@ -130,16 +141,8 @@ def generate(src, revision):
             r"connection (\w+), \w+, (\w+), (-?\d+)", header.read_text(encoding="utf-8"))]
         objects = [[int(x), int(y), sprite, movement, text] for x, y, sprite, movement, text in re.findall(
             r"object_event\s+(\d+),\s*(\d+),\s*(\w+),\s*(\w+),\s*\w+,\s*(\w+)", obj)]
-        opened_blocks = {
-            "LoreleisRoom": [(2, 0, 0x05, "EVENT_BEAT_LORELEIS_ROOM_TRAINER_0")],
-            "BrunosRoom": [(2, 0, 0x05, "EVENT_BEAT_BRUNOS_ROOM_TRAINER_0")],
-            "AgathasRoom": [(2, 0, 0x0E, "EVENT_BEAT_AGATHAS_ROOM_TRAINER_0")],
-            "VictoryRoad1F": [(4, 6, 0x1D, "EVENT_VICTORY_ROAD_1_BOULDER_ON_SWITCH")],
-            "VictoryRoad2F": [(3, 4, 0x15, "EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1"), (11, 7, 0x1D, "EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2")],
-            "VictoryRoad3F": [(3, 5, 0x1D, "EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1")],
-        }.get(name, [])
         opened_tiles = [[flag, bx * 2 + dx, by * 2 + dy, bst[block * 16 + dy * 8 + dx * 2 + 4]]
-                        for bx, by, block, flag in opened_blocks for dx in range(2) for dy in range(2)]
+                        for bx, by, block, flag in opened_blocks(match[2]) for dx in range(2) for dy in range(2)]
         switch_blocks = {
             "PokemonMansion1F": [(12, 6, 0x0E, 0x2D), (8, 3, 0x2D, 0x0E), (10, 8, 0x2D, 0x0E), (13, 13, 0x2D, 0x0E)],
             "PokemonMansion2F": [(4, 2, 0x0E, 0x5F), (9, 4, 0x54, 0x0E), (3, 11, 0x5F, 0x0E)],
