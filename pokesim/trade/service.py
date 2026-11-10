@@ -12,7 +12,7 @@ import urllib.request
 
 from ..platform_io import lock_file, replace_file, sync_directory
 from ..rewards import mew_enabled
-from ..state import schema
+from ..state import connect, kv
 
 
 def atomic(path, data):
@@ -60,9 +60,8 @@ class Coordinator:
         from . import pair
         if action == 'stage':
             for peer in self.peers.values():
-                with schema.connect(Path(peer['data']) / 'pokesim.sqlite') as db:
-                    row = db.execute("SELECT v FROM kv WHERE k='trade_hold'").fetchone()
-                hold = json.loads(row[0]) if row else None
+                with connect(Path(peer['data']) / 'pokesim.sqlite') as db:
+                    hold = kv.get(db, 'trade_hold')
                 if not hold or hold['id'] != transaction or hold['phase'] != 'prepared':
                     raise ValueError('Both games must hold this prepared transaction')
         kind = (json.loads(self.active_path.read_text(encoding='utf-8')).get('kind') if action == 'stage'

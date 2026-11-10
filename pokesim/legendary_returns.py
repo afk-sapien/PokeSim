@@ -1,5 +1,4 @@
 """Durable walking milestones and repeat legendary encounter claims."""
-import json
 import time
 from pokecore.resets import Flag, update_flags
 
@@ -8,6 +7,7 @@ from .catches import TRACKED, YELLOW, site
 from .events import Event
 from .legendary import ENCOUNTERS
 from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
+from .state import kv
 from .strategy_data import DATA, EVENTS, SPECIES
 
 KEY = 'legendary-returns-v1'
@@ -71,14 +71,13 @@ class StepTracker:
 
 def consume(db, dex):
     """Consume a return in the same transaction as its verified capture receipt."""
-    row = db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-    if not row:
+    value = kv.get(db, KEY)
+    if value is None:
         return
-    value = json.loads(row[0])
     ticket = value.get('tickets', {}).get(str(dex))
     if ticket and ticket['state'] == 'available':
         ticket['state'] = 'caught'
-        db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+        kv.update(db, KEY, value)
 
 
 def decline(store, dex):

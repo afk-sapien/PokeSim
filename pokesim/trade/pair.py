@@ -4,11 +4,13 @@ import hashlib
 import json
 from pokecore.emulator_state import validate_runtime
 from pathlib import Path
+import time
 
 from ..broker import inventory, routine
 from ..checkpoints import CheckpointStore
 from ..ram import read_snapshot
-from ..state import schema
+from ..state import connect, kv, ledgers, schema
+from ..state.journal import add as add_entry
 from ..web.pokedex import live_status
 from . import boxes
 from . import preferences
@@ -67,7 +69,7 @@ def stage(root, transaction):
         policy = json.loads((root / 'policy.json').read_text(encoding='utf-8'))
         protected += policy.get('protected_species', {}).get(name, [])
         payload = live_status(snapshot.to_dict())
-        with schema.connect(data / 'pokesim.sqlite') as db:
+        with connect(data / 'pokesim.sqlite') as db:
             payload = preferences.apply(payload, preferences.read(db))
         inv = inventory.normalise(name, '', payload, protected)
         inventories.append(inv)
@@ -129,19 +131,19 @@ def journal(root, transaction):
         if moved['received']['evolved_from']:
             body += ' The incoming partner evolved during the exchange.'
         # The journal row and idempotency marker commit together.
-        with schema.connect(data / 'pokesim.sqlite') as db:
+        with connect(data / 'pokesim.sqlite') as db:
             from ..activity_ledger import initialize as initialize_activity
             from ..trade_statistics import initialize as initialize_trades, record
             initialize_activity(db)
             initialize_trades(db)
-            cursor = db.execute('INSERT OR IGNORE INTO completed_trades(id) VALUES (?)', (key,))
+            fresh = ledgers.complete_pair_trade(db, key)
             record(db, 'legacy:' + transaction, moved['sent'].get('species'), moved['received'].get('species'))
-            if cursor.rowcount:
+            if fresh:
                 for side in result.get('proposal', {}).values():
                     if isinstance(side, dict) and side.get('instance') == name and side.get('trade_key'):
-                        db.execute('DELETE FROM kv WHERE k=?', (preferences.PREFIX + side['trade_key'],))
-                db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', ('trade_barrier', json.dumps(transaction)))
-                db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'trade',?,?,1,4,'Trade exchange','')", (title, body))
+                        kv.delete(db, preferences.PREFIX + side['trade_key'])
+                kv.put(db, 'trade_barrier', transaction)
+                add_entry(db, int(time.time()), 'trade', title, body, 1, 4, 'Trade exchange')
                 from ..progress_events import journal
                 from ..strategy_data import SPECIES
                 received = SPECIES.get(moved['received'].get('species'), {}).get('dex')

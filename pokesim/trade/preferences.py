@@ -5,6 +5,7 @@ from collections import defaultdict
 
 from pokecore import identity as individual
 from ..shiny import is_shiny
+from ..state import kv
 from pokecore.dvs import is_perfect
 
 PREFIX = 'trade_offer:'
@@ -43,10 +44,10 @@ def migrate(db):
     Idempotent: a marker row records the run, and a second run changes nothing
     even without the marker because only 'withdrawn' rows are rewritten.
     """
-    if db.execute('SELECT 1 FROM kv WHERE k=?', (MIGRATED,)).fetchone():
+    if kv.exists(db, MIGRATED):
         return 0
     changed = 0
-    for key, raw in db.execute('SELECT k,v FROM kv WHERE k LIKE ?', (PREFIX + '%',)).fetchall():
+    for key, raw in kv.starting(db, PREFIX):
         try:
             value = json.loads(raw)
         except ValueError:
@@ -54,9 +55,9 @@ def migrate(db):
         if not isinstance(value, dict) or value.get('state') not in ('withdrawn', 'unlocked'):
             continue
         value['state'] = KEEP if value['state'] == 'withdrawn' else AUTO
-        db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
+        kv.update(db, key, value)
         changed += 1
-    db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (MIGRATED, json.dumps(True)))
+    kv.put(db, MIGRATED, True)
     return changed
 
 
@@ -108,23 +109,20 @@ def sync_legacy(db, old, force=False):
     if not old or not individual.is_legacy(old):
         return
     target = PREFIX + old
-    current = db.execute('SELECT v FROM kv WHERE k=?', (target,)).fetchone()
-    if current and not force and not is_mirror(_value(current[0])):
+    current = kv.text(db, target)
+    if current is not None and not force and not is_mirror(_value(current)):
         return
-    start = PREFIX + old + '-'
-    values = [value for (raw,) in db.execute('SELECT v FROM kv WHERE substr(k, 1, ?) = ?', (len(start), start))
-              if isinstance(value := _value(raw), dict)]
+    values = [value for _, raw in kv.starting(db, PREFIX + old + '-') if isinstance(value := _value(raw), dict)]
     states = [LEGACY.get(value.get('state'), value.get('state')) for value in values]
     if KEEP in states:
         source = values[states.index(KEEP)]
     elif states and len(set(states)) == 1 and states[0] != AUTO:
         source = values[0]
     else:
-        db.execute('DELETE FROM kv WHERE k=?', (target,))
+        kv.delete(db, target)
         return
     state = KEEP if KEEP in states else states[0]
-    db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)',
-               (target, json.dumps({**source, 'state': state, MIRROR: True})))
+    kv.put(db, target, {**source, 'state': state, MIRROR: True})
 
 
 def upgrade(db, mons):
@@ -135,9 +133,9 @@ def upgrade(db, mons):
     a copy for a rollback to 0.4.x (see sync_legacy). Returns False when the collection is not
     fully readable yet, so the caller tries again later.
     """
-    rows = [(k, raw) for k, raw in db.execute("SELECT k,v FROM kv WHERE k LIKE ? AND k NOT LIKE ?",
-                                              (PREFIX + '%', PREFIX + '%-%')).fetchall()
-            if not is_mirror(_value(raw))]
+    # Family keys hold a dash after the trainer and DV signature. These rows are under the older key alone.
+    rows = [(k, raw) for k, raw in kv.starting(db, PREFIX)
+            if '-' not in k[len(PREFIX):] and not is_mirror(_value(raw))]
     if not rows:
         return True
     if not mons or any(signature(mon) is None for mon in mons):
@@ -152,13 +150,14 @@ def upgrade(db, mons):
         if len(new) != 1 or None in new:
             continue
         target = PREFIX + next(iter(new))
-        existing = db.execute('SELECT v FROM kv WHERE k=?', (target,)).fetchone()
+        existing = kv.exists(db, target)
         value = _value(raw)
         locked = isinstance(value, dict) and value.get('state') in ('locked', 'withdrawn')
         # A family key already set wins, except over a lock written since, by 0.4.x after a rollback.
-        if not existing or locked:
-            db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)',
-                       (target, json.dumps({**value, 'state': KEEP}) if existing else raw))
+        if existing and locked:
+            kv.put(db, target, {**value, 'state': KEEP})
+        elif not existing:
+            kv.put_text(db, target, raw)
         sync_legacy(db, old, force=True)
     return True
 
@@ -188,8 +187,7 @@ def ambiguity(mon, twins):
 
 def read(db):
     """Saved settings by key, without the copies kept for 0.4.x."""
-    saved = {row[0][len(PREFIX):]: json.loads(row[1])
-             for row in db.execute('SELECT k,v FROM kv WHERE k LIKE ?', (PREFIX + '%',))}
+    saved = {key[len(PREFIX):]: json.loads(raw) for key, raw in kv.starting(db, PREFIX)}
     return {key: value for key, value in saved.items() if not is_mirror(value)}
 
 

@@ -431,9 +431,8 @@ class Emulator:
             announced = getattr(self, 'mem', RunMemory()).playtime_milestones.copy()
             announced.update(self.store.get('run_memory', {}).get('playtime_milestones', []))
             self.mem = RunMemory.from_dict(metadata["run_memory"])
-            with self.store.lock:
-                self.mem.championships = max(self.mem.championships,
-                                            rewards.championship_count(rewards.ledger(self.store.db)))
+            with self.store.reading() as db:
+                self.mem.championships = max(self.mem.championships, rewards.championship_count(rewards.ledger(db)))
             self.mem.playtime_milestones.update(announced)
             self.store.set('run_memory', self.mem.to_dict())
             self.frame = metadata.get("frame", self.frame)

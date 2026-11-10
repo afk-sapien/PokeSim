@@ -1,12 +1,14 @@
 """Custom Pokémon rewards delivered through held checkpoint transactions."""
 import hashlib
 import json
+import time
 
 from . import boxes, pair
 from .pair import verified
 from .execute import _boot, _publish, _state_bytes, register_arrival
 from ..policies.collection import champion
-from ..state import schema
+from ..state import connect, kv, ledgers, schema
+from ..state.journal import add as add_entry
 from ..strategy_data import MOVES, SPECIES
 from .. import rewards
 
@@ -50,9 +52,8 @@ def gift_slot(seed, species=MEW, *, random_name=False):
 
 
 def received(data):
-    with schema.connect(data / 'pokesim.sqlite') as db:
-        row = db.execute('SELECT v FROM kv WHERE k=?', (EVENT_KEY,)).fetchone()
-    return bool(row and json.loads(row[0]))
+    with connect(data / 'pokesim.sqlite') as db:
+        return bool(kv.get(db, EVENT_KEY))
 
 
 def stage(root, transaction, league_rewards=False):
@@ -68,7 +69,7 @@ def stage(root, transaction, league_rewards=False):
         space = next(((box, count + 1) for box, count in enumerate(snapshot.box_counts, 1)
                       if count < boxes.BOX_CAPACITY), None)
         if league_rewards:
-            with schema.connect(data / 'pokesim.sqlite') as db:
+            with connect(data / 'pokesim.sqlite') as db:
                 claims[name] = rewards.ledger(db)
             eligible[name] = space if claims[name]['earned'] > claims[name]['delivered'] else None
         else:
@@ -143,10 +144,9 @@ def journal(root, transaction):
     result = json.loads((root / 'transactions' / transaction / 'result.json').read_text(encoding='utf-8'))
     recipients = {gift['instance'] for gift in result['gifts']}
     for name in result['states']:
-        with schema.connect(pair.PAIR_ROOT / name / 'pokesim.sqlite') as db:
-            cursor = db.execute('INSERT OR IGNORE INTO completed_events(id) VALUES (?)', (transaction,))
-            if cursor.rowcount:
-                db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', ('trade_barrier', json.dumps(transaction)))
+        with connect(pair.PAIR_ROOT / name / 'pokesim.sqlite') as db:
+            if ledgers.complete_pair_event(db, transaction):
+                kv.put(db, 'trade_barrier', transaction)
                 if name in recipients and result.get('kind') == 'league_reward':
                     gift = next(g for g in result['gifts'] if g['instance'] == name)
                     value = rewards.ledger(db)
@@ -154,14 +154,15 @@ def journal(root, transaction):
                         raise ValueError('Reward claim is out of order')
                     value['delivered'] = gift['ordinal']
                     rewards.save(db, value)
-                    entry = db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'obtain',?,?,1,4,'Championship reward','')",
-                               (f"Received {gift['name']} for Championship #{gift['ordinal']}",
-                                f"A level-5 {gift['name']} joined the PC. Each League victory earns a random PokeSim reward."))
+                    entry = add_entry(db, int(time.time()), 'obtain',
+                                      f"Received {gift['name']} for Championship #{gift['ordinal']}",
+                                      f"A level-5 {gift['name']} joined the PC. Each League victory earns a random PokeSim reward.",
+                                      1, 4, 'Championship reward')
                 elif name in recipients:
-                    db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (EVENT_KEY, json.dumps(transaction)))
-                    entry = db.execute("INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (strftime('%s','now'),'obtain',?,?,1,4,'Final rival reward','')",
-                               ('Received Mew for defeating the final rival',
-                                'A one-time level-5 Mew joined the PC after defeating the rival who held the Champion title. Rematches do not award another Mew.'))
+                    kv.put(db, EVENT_KEY, transaction)
+                    entry = add_entry(db, int(time.time()), 'obtain', 'Received Mew for defeating the final rival',
+                                      'A one-time level-5 Mew joined the PC after defeating the rival who held the Champion title. Rematches do not award another Mew.',
+                                      1, 4, 'Final rival reward')
                 if name in recipients:
                     from ..catches import initialize, record_receipt
                     gift = next(g for g in result['gifts'] if g['instance'] == name)
@@ -170,6 +171,6 @@ def journal(root, transaction):
                         species = next(sid for sid, mon in SPECIES.items()
                                        if mon['name'].casefold() == gift['name'].casefold())
                     initialize(db)
-                    record_receipt(db, f'gift-event:{entry.lastrowid}', SPECIES[species]['dex'],
+                    record_receipt(db, f'gift-event:{entry}', SPECIES[species]['dex'],
                                    species=species, trainer_id=gift.get('trainer_id'),
                                    perfect=gift.get('dvs') == [255, 255])
