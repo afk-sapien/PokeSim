@@ -10,6 +10,10 @@ facts whenever a checkout is present and fails when the checked-in file has drif
 
 The same walk lists every flag-gated swap in the scripts. Each one is a fact or sits on a map in
 ALLOWED with the reason the facts leave it out, which is the coverage check of the map audit.
+
+Navigation reads the map files, and some draw a door open that the script shuts until its flag is
+set: the Rocket Hideout B1F door and the exits of Bruno's and Agatha's rooms. SHUT lists each square
+of a swap whose tile until the flag differs from the map file's, read from the block and blockset files.
 """
 import itertools
 import re
@@ -240,6 +244,61 @@ def facts(src):
                  for (x, y), cases in sorted(sites.items()))
 
 
+def _labelled(text, label, value):
+    """{label: value} where each value line follows one or more label lines."""
+    out, pending = {}, []
+    for line in text.splitlines():
+        if found := re.match(label, line):
+            pending.append(found[1])
+        if (found := re.search(value, line)) and pending:
+            out.update(dict.fromkeys(pending, found[1]))
+            pending = []
+    return out
+
+
+def _blocks(src):
+    """map constant -> (width in blocks, map file blocks, blockset) for every map with a block file."""
+    blocksets = _labelled(_read(src, 'gfx/tilesets.asm'), r'(\w+)_Block::', r'INCBIN "([^"]+\.bst)"')
+    headers = re.findall(r'^\s*tileset (\w+),', _read(src, 'data/tilesets/tileset_headers.asm'), re.M)
+    order = re.findall(r'^\s*const (\w+)', _read(src, 'constants/tileset_constants.asm'), re.M)
+    widths = {name: int(width) for name, width in
+              re.findall(r'map_const (\w+),\s*(\d+),', _read(src, 'constants/map_constants.asm'))}
+    files = _labelled(_read(src, 'maps.asm'), r'(\w+)_Blocks:', r'INCBIN "([^"]+\.blk)"')
+    out = {}
+    for header in sorted((Path(src) / 'data/maps/headers').glob('*.asm')):
+        found = re.search(r'map_header (\w+), (\w+), (\w+)', header.read_text(encoding='utf-8'))
+        if found and found[1] in files:
+            name, constant, tileset = found.groups()
+            blockset = blocksets[headers[order.index(tileset)]]
+            out[constant] = (widths[constant], _read_bytes(src, files[name]), _read_bytes(src, blockset))
+    return out
+
+
+def _read_bytes(src, path):
+    return (Path(src) / path).read_bytes()
+
+
+def _square(blockset, block, dx, dy):
+    """The collision tile of one square of a block, as data_tools/strategy.py reads it."""
+    return blockset[block * 16 + dy * 8 + dx * 2 + 4]
+
+
+def shut(src, rows):
+    """(map, x, y, flag, tile) for each square drawn until the flag is set where the map file draws another tile."""
+    maps = _blocks(src)
+    out = []
+    for name, bx, by, flag, _, until in rows:
+        if until is None:
+            continue
+        width, blocks, blockset = maps[name]
+        drawn = blocks[by * width + bx]
+        for dy, dx in itertools.product(range(2), range(2)):
+            tile = _square(blockset, until, dx, dy)
+            if tile != _square(blockset, drawn, dx, dy):
+                out.append((name, bx * 2 + dx, by * 2 + dy, flag, tile))
+    return tuple(out)
+
+
 def uncovered(src, rows):
     """The coverage check: flag-gated swaps with no fact and no allowed map, and allowed maps with no swap."""
     found = swaps(src)
@@ -273,11 +332,18 @@ def _row(row):
 
 def body(src):
     """The facts without their header, the same for every source that agrees on them."""
+    rows = facts(src)
     lines = [
         '# (map, block x, block y, flag, block once set, block until set): when the map loads, its script',
         '# redraws the block by the flag. None draws nothing, so the map file block stays.',
         'SWAPS = (',
-        *(_row(row) for row in facts(src)),
+        *(_row(row) for row in rows),
+        ')',
+        '',
+        '# (map, x, y, flag, tile): until the flag is set, the script draws this collision tile where the',
+        '# map file draws another. Navigation reads the map files, so it draws these itself.',
+        'SHUT = (',
+        *(f'    ({name!r}, {x}, {y}, {flag!r}, 0x{tile:02X}),' for name, x, y, flag, tile in shut(src, rows)),
         ')',
     ]
     return '\n'.join(lines) + '\n'

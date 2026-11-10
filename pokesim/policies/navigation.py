@@ -4,7 +4,7 @@ from copy import deepcopy
 from itertools import count
 import os
 
-from ..mapfacts.gen1 import SWAPS
+from ..mapfacts.gen1 import SHUT, SWAPS
 from ..planning.conditions import AnyOf, Badge, Event, Item
 from ..strategy_data import DATA, ITEMS, MAPS, WORLD, event_set
 from . import gates
@@ -33,6 +33,13 @@ def _hideout_door():
 
 
 HIDEOUT_DOOR_FLAG, HIDEOUT_DOOR = _hideout_door()
+# (flag, square, tile) for each square a map file draws open that its script shuts until the flag is set.
+SHUT_TILES = tuple((flag, (MAPS[name], x, y), tile) for name, x, y, flag, tile in SHUT if MAPS.get(name) in WORLD)
+
+
+def shut_tiles(event_flags):
+    """The tiles the map scripts draw over the map files while their flags are unset."""
+    return {square: tile for flag, square, tile in SHUT_TILES if not event_set(event_flags, flag)}
 
 # Stands for the bit the Saffron guards set once they have had a drink, read from the snapshot.
 SAFFRON_OPEN = 'saffron_open'
@@ -299,9 +306,11 @@ class Navigator:
 
     def _rebuild_story(self, snapshot, *, allow_remote_puzzles=True):
         can_strength = any(70 in p.moves for p in snapshot.party)
-        self.tile_overrides = {(m, x, y): tile for m, w in WORLD.items() for flag, x, y, tile in w.get("opened_tiles", [])
-                               if event_set(snapshot.event_flags, flag)
-                               or (allow_remote_puzzles and m != snapshot.map and can_strength)}
+        # The Elite Four exits the map files draw open stay shut until the room's trainer is beaten.
+        self.tile_overrides = shut_tiles(snapshot.event_flags)
+        self.tile_overrides.update(((m, x, y), tile) for m, w in WORLD.items() for flag, x, y, tile in w.get("opened_tiles", [])
+                                   if event_set(snapshot.event_flags, flag)
+                                   or (allow_remote_puzzles and m != snapshot.map and can_strength))
         world = StoryWorld(snapshot)
         gym = MAPS.get('CINNABAR_GYM')
         if gym in WORLD:
