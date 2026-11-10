@@ -19,6 +19,7 @@ import psutil
 
 from .. import stall_truth
 from ..downloads import DataDownloadError
+from .loops import Loop
 from .registry import digest, identifier
 from .resources import ObservedSpeed, ProcessUsage, recent_activity
 from ..runtime.settings import PLAY_SETTINGS
@@ -33,6 +34,7 @@ VIEWER_IDLE = 300   # seconds before an unwatched stopped-adventure viewer close
 # Both are read on each pass, so a test can shorten them.
 MONITOR_SECONDS = 3
 STALE_SECONDS = 60
+MONITOR_STALE = 180   # seconds without monitor progress before /health/ready fails
 
 
 class WorkerError(RuntimeError):
@@ -208,6 +210,9 @@ class Supervisor:
         self.worker_output = None   # installed by the watchdog: aid, stderr line -> None
         self.closed = threading.Event()
         self.thread = None
+        # Tests swap `closed` for a stand-in and shorten MONITOR_SECONDS, so both are looked up each pass.
+        self.monitor = Loop('adventure-supervisor', self.monitor_once, lambda: MONITOR_SECONDS,
+                            lambda seconds: self.closed.wait(seconds), stale=MONITOR_STALE, logger=log)
 
     def _lock(self, aid):
         with self.guard:
@@ -580,82 +585,94 @@ class Supervisor:
         return pending
 
     def run_monitor(self):
-        self.thread = threading.Thread(target=self._monitor, name='adventure-supervisor', daemon=True)
-        self.thread.start()
+        self.thread = self.monitor.start()
 
     def _monitor(self):
-        while not self.closed.wait(MONITOR_SECONDS):
+        self.monitor.run()
+
+    def monitor_once(self):
+        """One pass of the monitor. Each step and each child has its own guard, so a failure is
+        logged and the rest of the pass still runs."""
+        with self.monitor.guard('Retrying game data downloads'):
             self.run_setup_retries()
+        with self.monitor.guard('Closing idle stopped views'):
             self.close_idle_viewers()
-            with self.guard:
-                children = list(self.children.items())
-            for aid, child in children:
-                if self.closed.is_set():
-                    break
-                if child.process is None or not child.url:
-                    continue
-                if child.process.poll() is not None:
-                    with self.admission, self._lock(aid):
-                        with self.guard:
-                            if self.children.get(aid) is not child:
-                                continue
-                            self.children.pop(aid)
-                        adventure = self.registry.update(aid, state='failed', error='Adventure worker exited unexpectedly')
-                    recent = [t for t in self.retries.get(aid, []) if time.monotonic() - t < 300]
-                    self.retries[aid] = recent
-                    unresolved = any(aid in row['plan'].get('participants', []) for row in self.registry.transactions(True))
-                    if adventure['desired_state'] == 'running' and len(recent) < 3 and not unresolved:
-                        recent.append(time.monotonic())
-                        stall_truth.lifecycle(self.registry.root / 'adventures' / aid, 'start', 'supervisor',
-                                              why='worker exited')
-                        try:
-                            self.start(aid)
-                        except Exception:
-                            log.exception('Could not restart adventure %s', aid)
-                    continue
+        self.monitor.beat()
+        with self.guard:
+            children = list(self.children.items())
+        for aid, child in children:
+            if self.closed.is_set():
+                break
+            with self.monitor.guard(f'The supervisor check of adventure {aid}'):
+                self.check(aid, child)
+            self.monitor.beat()
+
+    def check(self, aid, child):
+        """Restart a worker that exited, read a live one's summary, and fail one that stays silent."""
+        if child.process is None or not child.url:
+            return
+        if child.process.poll() is not None:
+            with self.admission, self._lock(aid):
+                with self.guard:
+                    if self.children.get(aid) is not child:
+                        return
+                    self.children.pop(aid)
+                adventure = self.registry.update(aid, state='failed', error='Adventure worker exited unexpectedly')
+            recent = [t for t in self.retries.get(aid, []) if time.monotonic() - t < 300]
+            self.retries[aid] = recent
+            unresolved = any(aid in row['plan'].get('participants', []) for row in self.registry.transactions(True))
+            if adventure['desired_state'] == 'running' and len(recent) < 3 and not unresolved:
+                recent.append(time.monotonic())
+                stall_truth.lifecycle(self.registry.root / 'adventures' / aid, 'start', 'supervisor',
+                                      why='worker exited')
                 try:
-                    child.request('GET', '/healthz', timeout=3)
-                    status = child.request('GET', '/api/summary', timeout=3)
-                    child.pace.observe(status.get('performance'))
-                    child.watch = (time.time(), status)
-                    settings_errors = self.sync_optional(aid, child, status)
-                    self.unhealthy_since.pop(aid, None)
-                    game = status.get('game') or {}
-                    # A worker pauses itself for a cable trade or for manual play, so the library
-                    # says which rather than showing Running beside a speed that reads Paused.
-                    trading = bool(self.registry.transactions(True, adventure_id=aid))
-                    summary = {'activity': game.get('map_name') or 'Adventure in progress',
-                               'paused': status.get('paused', False),
-                               'manual_mode': bool(status.get('manual_mode')), 'trading': trading,
-                               'frame': status.get('frame'), 'playtime': game.get('playtime'),
-                               'last_response': time.time(), 'league_rewards': status.get('league_rewards'),
-                               'stalled': (status.get('progress') or {}).get('state') == 'stalled',
-                               'settings_errors': settings_errors}
-                    current = self.registry.adventure(aid)
-                    summary['recent_activity'] = recent_activity(
-                        current.get('summary') or {}, summary['activity'], summary['last_response'])
-                    if current['generation'] == child.generation:
-                        self.registry.update(aid, summary=summary)
-                    try:
-                        self.sync_notifications(aid, child)
-                        self.sync_nicknames(child)
-                        self.sync_play(aid, child)
-                    except (RuntimeError, OSError, KeyError, httpx.HTTPError):
-                        # Undelivered notification settings never make a healthy game look stale.
-                        log.warning('Adventure %s has not accepted its notification settings yet', aid)
-                except (RuntimeError, OSError, httpx.HTTPError):
-                    since = self.unhealthy_since.setdefault(aid, time.monotonic())
-                    log.warning('Adventure %s is not responding', aid)
-                    if time.monotonic() - since >= STALE_SECONDS and not self.closed.is_set():
-                        with self.admission, self._lock(aid):
-                            if self.children.get(aid) is child:
-                                self.registry.update(aid, state='failed',
-                                                     error=f'Adventure health remained stale for {STALE_SECONDS} seconds')
-                                try:
-                                    child.stop(timeout=5)
-                                except RuntimeError:
-                                    pass
-                        self.unhealthy_since.pop(aid, None)
+                    self.start(aid)
+                except Exception:
+                    log.exception('Could not restart adventure %s', aid)
+            return
+        try:
+            child.request('GET', '/healthz', timeout=3)
+            status = child.request('GET', '/api/summary', timeout=3)
+            child.pace.observe(status.get('performance'))
+            child.watch = (time.time(), status)
+            settings_errors = self.sync_optional(aid, child, status)
+            self.unhealthy_since.pop(aid, None)
+            game = status.get('game') or {}
+            # A worker pauses itself for a cable trade or for manual play, so the library
+            # says which rather than showing Running beside a speed that reads Paused.
+            trading = bool(self.registry.transactions(True, adventure_id=aid))
+            summary = {'activity': game.get('map_name') or 'Adventure in progress',
+                       'paused': status.get('paused', False),
+                       'manual_mode': bool(status.get('manual_mode')), 'trading': trading,
+                       'frame': status.get('frame'), 'playtime': game.get('playtime'),
+                       'last_response': time.time(), 'league_rewards': status.get('league_rewards'),
+                       'stalled': (status.get('progress') or {}).get('state') == 'stalled',
+                       'settings_errors': settings_errors}
+            current = self.registry.adventure(aid)
+            summary['recent_activity'] = recent_activity(
+                current.get('summary') or {}, summary['activity'], summary['last_response'])
+            if current['generation'] == child.generation:
+                self.registry.update(aid, summary=summary)
+            try:
+                self.sync_notifications(aid, child)
+                self.sync_nicknames(child)
+                self.sync_play(aid, child)
+            except (RuntimeError, OSError, KeyError, httpx.HTTPError):
+                # Undelivered notification settings never make a healthy game look stale.
+                log.warning('Adventure %s has not accepted its notification settings yet', aid)
+        except (RuntimeError, OSError, httpx.HTTPError):
+            since = self.unhealthy_since.setdefault(aid, time.monotonic())
+            log.warning('Adventure %s is not responding', aid)
+            if time.monotonic() - since >= STALE_SECONDS and not self.closed.is_set():
+                with self.admission, self._lock(aid):
+                    if self.children.get(aid) is child:
+                        self.registry.update(aid, state='failed',
+                                             error=f'Adventure health remained stale for {STALE_SECONDS} seconds')
+                        try:
+                            child.stop(timeout=5)
+                        except RuntimeError:
+                            pass
+                self.unhealthy_since.pop(aid, None)
 
     def close(self):
         self.closed.set()

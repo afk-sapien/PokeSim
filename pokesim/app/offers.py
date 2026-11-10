@@ -21,6 +21,7 @@ import time
 from pokecore.identity import find
 
 from . import inbox
+from .loops import Loop
 from .policy import adventure_role, can
 from .registry import LIBRARY_OWNER, identifier, validate_id
 from .trade_builder import Gone, HardLimit, TradeBuilder, ViewOnlyError
@@ -75,6 +76,7 @@ class TradeOffers(TradeBuilder):
         # game answers: accept reads both Pokémon first and takes it only to claim the offer.
         self.guard = threading.RLock()
         self.stop = threading.Event()
+        self.loop = None
         self.clock = time.time
 
     # Checks
@@ -359,15 +361,8 @@ class TradeOffers(TradeBuilder):
 
     def run(self, interval=300):
         # The first sweep runs at once, so offers that ran out while the app was stopped free their Pokémon.
-        def loop():
-            while True:
-                try:
-                    self.refresh()
-                except Exception:
-                    log.exception('The trade offer sweep failed')
-                if self.stop.wait(interval):
-                    return
-        threading.Thread(target=loop, name='trade-offers', daemon=True).start()
+        self.loop = Loop('trade-offers', self.refresh, interval, self.stop.wait, first=True, logger=log)
+        self.loop.start()
 
     def close(self):
         self.stop.set()

@@ -41,6 +41,7 @@ import time
 
 from ..web.security import LEASE_HEADER
 from . import inbox
+from .loops import Loop
 from .policy import can
 from .supervisor import WorkerError
 
@@ -137,6 +138,7 @@ class Leases:
         # Told whenever a send gets its answer or a send thread ends.
         self.settled = threading.Condition(self.lock)
         self.stop = threading.Event()
+        self.loop = None
 
     @property
     def enforced(self):
@@ -675,13 +677,8 @@ class Leases:
                     self._pass_on(aid, lease, 'idle')
 
     def run(self, interval=5):
-        def loop():
-            while not self.stop.wait(interval):
-                try:
-                    self.sweep()
-                except Exception:
-                    log.exception('The control lease sweep failed')
-        threading.Thread(target=loop, name='control-lease', daemon=True).start()
+        self.loop = Loop('control-lease', self.sweep, interval, self.stop.wait, logger=log)
+        self.loop.start()
 
     def close(self):
         self.stop.set()
