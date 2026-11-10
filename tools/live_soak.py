@@ -1169,19 +1169,51 @@ def write_report(work):
     return 0 if not problems else 1
 
 
+def git_tree(sha):
+    done = subprocess.run(['git', 'rev-parse', '--verify', '-q', f'{sha}^{{tree}}'], cwd=ROOT,
+                          capture_output=True, text=True)
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+def same_tree_report(reports, sha):
+    """A passing report for another commit with this commit's git tree, such as the soaked head of a
+    merge commit that changed nothing. The tree comes from git, never from the report."""
+    tree = git_tree(sha)
+    if not tree:
+        return None
+    for path in sorted(reports.glob('*.json')):
+        try:
+            report = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        commit = report.get('commit')
+        if (report.get('passed') is True and isinstance(commit, str) and commit != sha
+                and path.stem == commit and git_tree(commit) == tree):
+            return commit
+    return None
+
+
 def check(args):
-    """Exit 0 when a passing report names this commit. tools/deploy_host.sh runs this with no dependencies."""
-    path = (args.reports or reports_dir()) / f'{args.sha}.json'
+    """Exit 0 when a passing report names this commit or one with the same git tree.
+    tools/deploy_host.sh runs this with no dependencies."""
+    reports = args.reports or reports_dir()
+    path = reports / f'{args.sha}.json'
     try:
         report = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError):
+        report = None
+    if report is not None and report.get('commit') == args.sha and report.get('passed') is True:
+        return 0
+    twin = same_tree_report(reports, args.sha)
+    if twin:
+        print(f'live soak: {args.sha[:7]} has the tree of {twin[:7]}, whose report passed', file=sys.stderr)
+        return 0
+    if report is None:
         print(f'live soak: no report for {args.sha[:7]} in {path.parent}', file=sys.stderr)
-        return 1
-    if report.get('commit') != args.sha or report.get('passed') is not True:
+    else:
         print(f'live soak: the report for {args.sha[:7]} did not pass ({len(report.get("problems") or [])} problems)',
               file=sys.stderr)
-        return 1
-    return 0
+    return 1
 
 
 def main(argv=None):
