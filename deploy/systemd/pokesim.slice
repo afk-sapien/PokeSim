@@ -1,0 +1,8 @@
+[Unit]
+Description=Local PokeSim work, sims and test runs together, capped at 12 cores and 22G
+
+[Slice]
+# The hard cap for everything PokeSim runs on this machine. Sims in pokesim-sims.slice and
+# tools/load_gate.sh runs in pokesim-tests.slice share it.
+CPUQuota=1200%
+MemoryMax=22G

@@ -60,7 +60,8 @@ checkouts that might not load this file automatically.
 
 ## Local runs
 
-- Local pytest and replay pools use at most 10 processes. Run one heavy job at a time under `tools/load_gate.sh`, which runs every command at nice 10 or lower priority.
+- All local PokeSim work shares `pokesim.slice`, capped at 12 cores and 22G. Install the slices once per machine with `sh tools/local_sims.sh install`.
+- Run one heavy job at a time under `tools/load_gate.sh`, at most `pytest -n 12`. The gate runs every command at nice 10 or lower priority, in `pokesim-tests.slice` (10G), whose CPU weight beats the sims.
 - Before a PR, run locally only the tests for the files you touched, plus lint. CI runs the full suite on 3 Pythons and the browsers, so do not repeat it locally.
 - Run the scenario suite and the 3-run batches only when a change can alter planner or bot behavior: planning, strategy, battle or overworld code. Storage, UI, tooling and docs changes skip them.
 - A scenario that also fails on main gets logged once, and the work goes on. Do not rerun it to prove it.
@@ -69,7 +70,7 @@ checkouts that might not load this file automatically.
 - For a behavior change, the gate replaces long full-sim batches. Run full-sim batches only when the change targets late-game play the 30 game minutes from each rung cannot reach.
 - Store a new gate baseline with `--write-baseline` on main after a merge that changes play on purpose, so the next gate compares against it.
 - The hosted app is for viewing and playing. Tests, soaks and temporary sims, such as fresh games for a stall hunt, run locally, never on the hosted app.
-- A temporary sim runs as one long-lived local app with its own data root, outside the checkout and the live soak root, in a capped user slice: `systemd-run --user --unit <name> -p Nice=19 -p CPUQuota=400% -p MemoryMax=8G`, with `AUTH=none` on 127.0.0.1, auto trading off for each adventure and no notification integration. Soaks and pytest stay the one heavy job and win the CPU.
+- A temporary sim runs as one long-lived local app with its own data root, outside the checkout and the live soak root, in `pokesim-sims.slice` (12G), started with `sh tools/local_sims.sh start <unit> <env> <code> <data> <port> <revision>`. That runs it at nice 19 with `AUTH=none` on 127.0.0.1. Turn auto trading off for each adventure and add no notification integration. Soaks and pytest stay the one heavy job and win the CPU.
 
 ## Gen 1 vs Gen 2 parity
 
