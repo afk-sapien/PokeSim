@@ -13,11 +13,11 @@ from pokesim.store import Store
 @pytest.mark.parametrize('generation', [1, 2])
 def test_old_shiny_receipts_stay_undated_and_new_ones_are_dated(tmp_path, generation):
     _, table, _ = shiny.LEDGERS[generation]
-    with closing(Store(tmp_path)) as store, store.lock, store.db:
-        # A receipt table from before dates were kept.
-        store.db.execute(f'CREATE TABLE {table} (kind TEXT NOT NULL, fingerprint TEXT NOT NULL, '
-                         'dex INTEGER NOT NULL, PRIMARY KEY(kind,fingerprint))')
-        store.db.execute(f"INSERT INTO {table} VALUES ('seen', 'old', 25)")
+    # A receipt table from before dates were kept, in a database from before schema versions.
+    with closing(sqlite3.connect(tmp_path / 'pokesim.sqlite')) as db, db:
+        db.execute(f'CREATE TABLE {table} (kind TEXT NOT NULL, fingerprint TEXT NOT NULL, '
+                   'dex INTEGER NOT NULL, PRIMARY KEY(kind,fingerprint))')
+        db.execute(f"INSERT INTO {table} VALUES ('seen', 'old', 25)")
     with closing(Store(tmp_path)) as store:
         with store.lock, store.db:
             assert shiny.log(store.db, generation, {}) == [{'kind': 'seen', 'dex': 25, 'name': '#025', 'ts': None}]

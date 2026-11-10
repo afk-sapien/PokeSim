@@ -8,27 +8,9 @@ milestone tracker; a row follows each change to them, in the transaction that st
 import json
 import re
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS progress (
-  ts REAL NOT NULL,
-  badges INTEGER NOT NULL,
-  owned INTEGER NOT NULL,
-  seen INTEGER,
-  league INTEGER NOT NULL,
-  level100 INTEGER,
-  perfect INTEGER
-);
-"""
+# The progress table comes from the schema version (pokesim.state).
 FIELDS = ('badges', 'owned', 'seen', 'league', 'level100', 'perfect')
 COLUMNS = ', '.join(FIELDS)
-
-
-def migrate(db):
-    # 0.4.0 tables predate the long goals; their rows keep none, so those lines start at upgrade.
-    columns = {row[1] for row in db.execute('PRAGMA table_info(progress)')}
-    for name in ('level100', 'perfect'):
-        if name not in columns:
-            db.execute(f'ALTER TABLE progress ADD COLUMN {name} INTEGER')
 
 
 def _last(db):

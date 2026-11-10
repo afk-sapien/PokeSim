@@ -5,7 +5,6 @@ import json
 import os
 from pathlib import Path
 import shutil
-import sqlite3
 import tempfile
 import time
 from urllib.error import HTTPError
@@ -13,6 +12,7 @@ import urllib.request
 
 from ..platform_io import lock_file, replace_file, sync_directory
 from ..rewards import mew_enabled
+from ..state import schema
 
 
 def atomic(path, data):
@@ -60,7 +60,7 @@ class Coordinator:
         from . import pair
         if action == 'stage':
             for peer in self.peers.values():
-                with sqlite3.connect(Path(peer['data']) / 'pokesim.sqlite') as db:
+                with schema.connect(Path(peer['data']) / 'pokesim.sqlite') as db:
                     row = db.execute("SELECT v FROM kv WHERE k='trade_hold'").fetchone()
                 hold = json.loads(row[0]) if row else None
                 if not hold or hold['id'] != transaction or hold['phase'] != 'prepared':

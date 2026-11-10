@@ -23,6 +23,8 @@ import sqlite3
 import sys
 import time
 
+from ..state import schema
+
 FLOOR = 3 * 3600
 POSTGAME = 24 * 3600
 # Seconds, by (generation, badges, League won at least once). The slowest gap between two progress
@@ -89,7 +91,7 @@ def read(path, gen):
     path = Path(path)
     if not path.is_file():
         return None
-    with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=0.5)) as db:
+    with closing(schema.connect(path, read_only=True, timeout=0.5)) as db:
         rows = db.execute('SELECT ts, badges, owned, seen, league, level100, perfect FROM progress '
                           'ORDER BY rowid DESC LIMIT ?', (ROWS,)).fetchall()
         if not rows:

@@ -109,8 +109,7 @@ def _history(db):
 
 
 def initialize(db):
-    db.execute('CREATE TABLE IF NOT EXISTS pokemon_trade_receipts ('
-               'id TEXT PRIMARY KEY, sent INTEGER NOT NULL, received INTEGER NOT NULL)')
+    """Start the counts once. The receipt table comes from the schema version (pokesim.state)."""
     if db.execute('SELECT 1 FROM kv WHERE k=?', (KEY,)).fetchone():
         return
     db.execute('INSERT INTO kv VALUES (?,?)', (KEY, json.dumps({'npc_since': None, 'missing_history': _history(db)})))

@@ -6,12 +6,12 @@ from contextlib import closing
 import json
 from pathlib import Path
 import shutil
-import sqlite3
 import tempfile
 
 from ..runtime.simulation import AdventureLock
 from .registry import identifier
 from .backup import extract_archive
+from ..state import schema
 from .errors import Conflict
 
 
@@ -31,7 +31,7 @@ def import_directory(manager, source, *, rom=None, name=None, stopped=False, own
             raise Conflict('Another maintenance operation is running')
         manager.suspended = True
         try:
-            with closing(sqlite3.connect(f'file:{data / "pokesim.sqlite"}?mode=ro', uri=True)) as db:
+            with closing(schema.connect(data / 'pokesim.sqlite', read_only=True)) as db:
                 values = {row[0]: json.loads(row[1]) for row in db.execute('SELECT k,v FROM kv')}
                 if values.get('trade_hold'):
                     raise Conflict('Resolve the old coordinator transaction before importing')
@@ -47,9 +47,8 @@ def import_directory(manager, source, *, rom=None, name=None, stopped=False, own
             with tempfile.TemporaryDirectory(prefix='.pokesim-import-', dir=manager.root) as temporary:
                 stage = Path(temporary) / 'adventure'
                 shutil.copytree(data, stage, ignore=shutil.ignore_patterns('runtime.lock', 'desktop.lock'))
-                with closing(sqlite3.connect(stage / 'pokesim.sqlite')) as db:
-                    if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
-                        raise Conflict('The copied adventure database failed validation')
+                if not schema.intact(stage / 'pokesim.sqlite'):
+                    raise Conflict('The copied adventure database failed validation')
                 from ..checkpoints import CheckpointStore
                 checkpoints = CheckpointStore(stage / 'states')
                 for path in checkpoints.autosaves():

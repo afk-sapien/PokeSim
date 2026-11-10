@@ -15,6 +15,7 @@ from pathlib import Path
 
 from . import adventure_counters, progress, progress_events, stall_truth
 from .checkpoints import CheckpointStore, compress_state
+from .state import schema
 
 log = logging.getLogger(__name__)
 
@@ -31,26 +32,6 @@ OBSERVATION_READ_KEYS = frozenset({
     'cartridge-steps-v1', 'mew-returns-v1', 'pokesim-mew-v1', 'legendary-returns-v1',
     'step-events-v1', 'pokedex-milestones-v1', 'shiny-statistics-v1',
 })
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  ts REAL NOT NULL,
-  type TEXT NOT NULL,
-  title TEXT NOT NULL,
-  body TEXT NOT NULL DEFAULT '',
-  notable INTEGER NOT NULL DEFAULT 1,
-  priority INTEGER NOT NULL DEFAULT 3,
-  map TEXT NOT NULL DEFAULT '',
-  playtime TEXT NOT NULL DEFAULT '',
-  shot TEXT,
-  state TEXT,
-  detail TEXT
-);
-CREATE INDEX IF NOT EXISTS events_ts ON events(ts);
-CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
-"""
-
 
 class Store:
     def __init__(self, data_dir: Path, *, read_only=False):
@@ -73,12 +54,14 @@ class Store:
             if not all(path.exists() for path in (database, self.shots, self.states)):
                 raise FileNotFoundError(f"{self.dir} has no adventure to show")
             self.checkpoints = CheckpointStore(self.states)
-            source = sqlite3.connect(database.resolve().as_uri() + '?mode=ro', uri=True)
+            source = schema.connect(database, read_only=True)
             try:
                 self.db = sqlite3.connect(':memory:', check_same_thread=False)
                 source.backup(self.db)
             finally:
                 source.close()
+            # An older file is read in today's shape, which the copy gains here and the file never does.
+            schema.migrate(self.db)
             self.db.row_factory = sqlite3.Row
             return
         for d in (self.dir, self.shots, self.states):
@@ -89,44 +72,17 @@ class Store:
             except OSError as error:
                 raise OSError(f"DATA_DIR must be writable, including {d}. Check volume ownership.") from error
         self.checkpoints = CheckpointStore(self.states)
-        self.db = sqlite3.connect(self.dir / "pokesim.sqlite", check_same_thread=False)
+        self.db = schema.connect(self.dir / "pokesim.sqlite", check_same_thread=False)
         self.db.row_factory = sqlite3.Row
-        self.db.executescript(SCHEMA)
-        self._migrate()
+        # The tables come from the schema version. These fill what an older journal never stored,
+        # and each is safe to run on every start.
         with self.db:
-            self.db.executescript(progress.SCHEMA)
-            progress.migrate(self.db)
             progress.backfill(self.db)
-            from .statistics import initialize
-            initialize(self.db)
             from .activity_ledger import initialize as initialize_activity
             initialize_activity(self.db)
             from .trade_statistics import initialize as initialize_trade_statistics
             initialize_trade_statistics(self.db)
             adventure_counters.initialize(self.db)
-            progress_events.initialize(self.db)
-            stall_truth.initialize(self.db)
-
-    def _migrate(self):
-        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(events)")}
-        if "detail" not in cols:
-            # older databases: entries written before events could carry structured detail keep
-            # their text and simply have none of it.
-            self.db.execute("ALTER TABLE events ADD COLUMN detail TEXT")
-            self.db.commit()
-        if "priority" not in cols:
-            # older databases: add the column and backfill from the priorities events used to have
-            self.db.execute("ALTER TABLE events ADD COLUMN priority INTEGER NOT NULL DEFAULT 3")
-            self.db.execute("""UPDATE events SET priority = CASE
-                WHEN notable = 0 THEN 1
-                WHEN type IN ('badge', 'champion') THEN 5
-                WHEN type IN ('catch', 'evolve', 'obtain', 'item') THEN 4
-                WHEN type IN ('map', 'blackout', 'playtime') THEN 2
-                ELSE 3 END""")
-            self.db.commit()
-        from .trade.preferences import migrate as migrate_trade_settings
-        with self.db:
-            migrate_trade_settings(self.db)
 
     # --- events ---
     def add_event(self, ev, snapshot, shot_png: bytes | None, state_bytes: bytes | None) -> int:
