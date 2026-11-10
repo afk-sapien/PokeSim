@@ -117,6 +117,8 @@ GOAL_KINDS = (('heal', 'heal'), ('party_collection', 'collection'), ('party_leag
 ERRANDS = frozenset(('heal', 'party', 'moves', 'supplies', 'pickup', 'passage', 'trash'))
 # Goals that pick the party members they need, so no party upgrade cuts into them.
 OWNS_PARTY = frozenset(('collection', 'catch', 'plan'))
+# An item ball the goal picks up this many steps away comes before a heal, so the trip does not return for it.
+BALL_STEPS = 4
 
 
 def goal_kind(key):
@@ -146,6 +148,22 @@ def goal_candidate(goal, collection, kind=None):
         return Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal=kind)
     tier = Tier.PROGRESS if collection.completed_champion else Tier.STORY
     return Candidate(key, tier, values.NEW_ENTRY, EXPECTED_FRAMES['other'], goal=kind)
+
+
+def ball_at_hand(s, goal, nav):
+    """Whether ``goal`` picks up an item ball on this map at most ``BALL_STEPS`` steps away.
+
+    Giovanni leaves the Silph Scope one step from where his battle ends, and a heal latched by that
+    battle took the run to Celadon and back down the hideout for it.
+    """
+    world = WORLD.get(s.map)
+    if world is None or goal is None or not goal.interact:
+        return False
+    balls = {(o[0], o[1]) for o in world['objects'] if o[2] == 'SPRITE_POKE_BALL'}
+    tiles = [(m, x, y) for m, x, y, facing in goal.approaches
+             if m == s.map and (x + DIRS[facing][0], y + DIRS[facing][1]) in balls]
+    steps = nav.distance_lookup((s.map, s.x, s.y), s.frame)(tiles) if tiles else None
+    return steps is not None and steps <= BALL_STEPS
 
 
 class Choice:
@@ -610,7 +628,7 @@ class StrategicPolicy(Policy):
         if kind == 'overworld' and not s.in_battle:
             self._boss_check(s, self.pick, s.map in league_rooms)
             self._update_heal_latch(s)
-        if self.heal_latch and s.map not in league_rooms:
+        if self.heal_latch and s.map not in league_rooms and not ball_at_hand(s, choice.goal, self.nav):
             # The heal under way is the goal of every step, not only the overworld ones. Otherwise each
             # dialogue box, battle and poison tick on the way to the nurse ran under the story goal.
             self.goal = choice.replace(healing_goal(s), choice.errand_candidate('heal', 'heal'))
@@ -920,7 +938,7 @@ class StrategicPolicy(Policy):
         if choice is None or choice.goal is not self.goal:
             choice = Choice(self.goal, goal_candidate(self.goal, self.collection))
         self.choice = None
-        if self.heal_latch and not in_league:
+        if self.heal_latch and not in_league and not ball_at_hand(s, choice.goal, self.nav):
             choice.replace(healing_goal(s), choice.errand_candidate('heal', 'heal'))
         swap = choice.errand_candidate('party_upgrade', 'party')
         if (not s.box_full and not self.heal_latch and not choice.owns_party and choice.wins(swap)
