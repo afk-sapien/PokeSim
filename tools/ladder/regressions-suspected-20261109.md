@@ -70,5 +70,9 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   Fuji at frame 96970 of the rung, not 102510. Its whole rise is one 8422-frame trip back to the
   hideout for the Silph Scope. Before the fix that trip took 18066 frames, with a missing route and a
   trainer blocking every side again. That trainer's battle gave experience, so the audit counted the
-  detour as progress. The trip back itself is still open.
+  detour as progress.
+- The Silph Scope trip back, 2026-11-10: Giovanni's battle ends one step from the Scope, and the heal
+  it latched went first. A goal that picks up an item ball at most four steps away on the same map now
+  goes before a latched heal. The Scope takes 84 frames, and red/badges_4 fell to 12.3%. The baseline
+  moved for it.
 - The other rungs are still open.
