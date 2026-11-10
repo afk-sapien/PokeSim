@@ -194,6 +194,12 @@ def _goal_events(key, previous, current):
                             or sum(getattr(after, 'pp', ())) > sum(getattr(before, 'pp', ()))))
         if restored:
             found.append(ProgressEvent('healed', restored))
+    # A PC visit that makes another box the current one keeps the held count, so no other event shows it,
+    # yet a full current box stops every catch until that visit.
+    box_before, box_after = getattr(previous, 'active_box', None), getattr(current, 'active_box', None)
+    if not found and box_before is not None and box_after is not None and box_after != box_before \
+            and getattr(current, 'valid', True) and getattr(previous, 'valid', True):
+        found.append(ProgressEvent('box', box_after))
     # A PC visit that swaps the trainee into the party keeps the held count, so no other event shows it,
     # yet it is the whole of the preparation goal. A goal cut short between the deposit and the withdrawal
     # leaves two spans, so each half of the swap counts.
