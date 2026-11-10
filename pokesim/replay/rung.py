@@ -185,6 +185,15 @@ def _goal_events(key, previous, current):
                      if before.species == after.species and after.experience > before.experience)
         if gained:
             found.append(ProgressEvent('experience', gained))
+    # A taught move changes only the party member's moves. An HM stays in the bag, so no other event
+    # shows it, yet the move is the whole of the goal. A Yellow run taught Surf at the Fuchsia Pokémon
+    # Center, and all 2502 frames of it read as wasted.
+    if previous is not None and current is not None and not found and getattr(current, 'valid', True) \
+            and getattr(previous, 'valid', True):
+        learned = sum(len(set(getattr(after, 'moves', ())) - set(getattr(before, 'moves', ())) - {0})
+                      for before, after in zip(previous.party, current.party) if before.species == after.species)
+        if learned:
+            found.append(ProgressEvent('move', learned))
     # A heal that restores HP, status or PP was needed, so its trip is support for the goal behind it.
     # A heal that loops or repeats with nothing to restore gains nothing and stays wasted.
     if key == 'heal' and previous is not None and current is not None and not found \

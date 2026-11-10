@@ -173,6 +173,24 @@ def test_a_battle_fought_under_any_goal_counts_its_experience():
     assert _goal_events('surf', before, _snapshot([_mon('Pidgey')], [])) == []
 
 
+def test_a_taught_move_is_progress_and_a_lesson_that_changes_no_move_is_waste():
+    # A Yellow run taught HM03 to Lapras at the Fuchsia Pokémon Center. The HM stays in the bag.
+    before, after = _snapshot([_mon('Lapras')], []), _snapshot([_mon('Lapras')], [])
+    before.party[0].moves, after.party[0].moves = (55, 34, 0, 0), (55, 34, 57, 0)
+    assert [(event.kind, event.detail) for event in _goal_events('teach_surf', before, after)] == [('move', 1)]
+    # A move that takes the place of another counts too.
+    after.party[0].moves = (57, 34, 0, 0)
+    assert [(event.kind, event.detail) for event in _goal_events('teach_surf', before, after)] == [('move', 1)]
+    # Moves in a new order, or a new party member in the slot, are no lesson.
+    after.party[0].moves = (34, 55, 0, 0)
+    assert _goal_events('teach_surf', before, after) == []
+    other = _snapshot([_mon('Seel')], [])
+    other.party[0].moves = (57, 29, 0, 0)
+    assert _goal_events('teach_surf', before, other) == []
+    after.party[0].moves, after.valid = (55, 34, 57, 0), False
+    assert _goal_events('teach_surf', before, after) == []
+
+
 def _hurt(hp=10, status=0, pp=(5, 0, 0, 0)):
     mon = _mon('Pidgey')
     mon.hp, mon.max_hp, mon.status, mon.pp = hp, 40, status, pp
