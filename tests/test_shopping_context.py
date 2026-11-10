@@ -44,7 +44,7 @@ def test_pc_upgrade_destination_stays_at_center_during_shop_detour():
     p.observed_map = MAPS['LAVENDER_MART']
     s = replace(shopping_state(), frame=100, textbox=True, boxed_pokemon=((17, 22),))
     memory = menu({1: '  BUY', 3: '  SELL', 5: '  QUIT'}, (1, 1), top=(1, 1))
-    p.step(PolicyContext(s, 0, 0, memory))
+    p.step(PolicyContext(s, 0, memory))
     assert p.goal.targets == ((MAPS['LAVENDER_POKECENTER'], 13, 4),)
     assert p.menu_context == 'shop'
 

@@ -530,7 +530,7 @@ def storage_menu(index=0):
 
 
 def step(controller, snap, memory):
-    return controller.step(PolicyContext(snap, 0, 0, memory))[0]
+    return controller.step(PolicyContext(snap, 0, memory))[0]
 
 
 def hm_party(*moves):
@@ -594,7 +594,7 @@ def test_gen1_full_pc_with_nothing_to_release_fails_and_says_why(gen1):
     candidate = stored(0, trainer_id=101, box=11)
     controller, _, snap = gen1.start(candidate, party=hm_party(33, 33, 33, 33, 33),
                                      box_counts=(20,) * 12, boxed_pokemon=((153, 20),) * 20)
-    assert controller.step(PolicyContext(snap, 0, 0, storage_menu()))[0].button is None
+    assert controller.step(PolicyContext(snap, 0, storage_menu()))[0].button is None
     assert 'Every PC box is full' in gen1.emu.store.get(preparation.KEY)['error']
 
 
@@ -633,7 +633,7 @@ def test_gen1_party_of_unique_fly_and_flash_users_cannot_make_room(gen1):
     controller, _, snap = gen1.start(candidate, party=hm_party(19, 148, 33, 33, 33))
     for member in snap.party[3:]:
         gen1.emu.store.set_trade_preference(identity(asdict(member)), {'state': 'locked'})
-    assert controller.step(PolicyContext(snap, 0, 0, storage_menu(1)))[0].button is None
+    assert controller.step(PolicyContext(snap, 0, storage_menu(1)))[0].button is None
     assert 'No safe unprotected reserve' in gen1.emu.store.get(preparation.KEY)['error']
 
 
@@ -689,7 +689,7 @@ def test_gen1_five_trades_in_a_row_keep_a_locked_party_of_field_move_holders(gen
         assert 15 in held.moves                       # The sole Cut holder waits in the PC.
         offered = transfer(emu.preparation, 'withdraw_pokemon')
         x, y = rendezvous[1:]
-        assert emu.preparation.step(PolicyContext(view(x=x, y=y), 0, 0, bytearray(65536))) == []
+        assert emu.preparation.step(PolicyContext(view(x=x, y=y), 0, bytearray(65536))) == []
         prepared = emu.store.get(preparation.KEY)
         assert prepared['phase'] == 'ready' and prepared['stored_holder'] == identity(asdict(held))
 
@@ -701,7 +701,7 @@ def test_gen1_five_trades_in_a_row_keep_a_locked_party_of_field_move_holders(gen
         received = transfer(emu.preparation, 'deposit_pokemon')
         assert received.trainer_id == 300 + n
         assert transfer(emu.preparation, 'withdraw_pokemon') == joined(held)
-        emu.preparation.step(PolicyContext(view(), 0, 0, bytearray(65536)))
+        emu.preparation.step(PolicyContext(view(), 0, bytearray(65536)))
         assert emu.preparation is None and emu.store.get(preparation.KEY) is None
 
         assert keys(party) == start_party

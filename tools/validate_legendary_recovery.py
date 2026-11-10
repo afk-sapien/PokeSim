@@ -98,7 +98,7 @@ def run(rom, checkpoint, failure, frames, revisit=False):
                                 knockout.start(ChooseMove(3), ('knockout', emu.frame), emu.frame, emu.pb.memory))
                                or [Action(None, 0, 12)])
                 else:
-                    actions = emu.policy.step(PolicyContext(s, 0, 0, emu.pb.memory, sp=stack_pointer(emu.pb)))
+                    actions = emu.policy.step(PolicyContext(s, emu.frame, emu.pb.memory, sp=stack_pointer(emu.pb)))
                 for action in actions:
                     if action.button:
                         emu.pb.button_press(action.button)

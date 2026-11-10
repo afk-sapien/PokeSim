@@ -1,6 +1,5 @@
 """Bounded collecting expeditions and evolution projects for a continuing adventure."""
 import random
-import time
 from collections import Counter
 from dataclasses import asdict, replace
 from ..duplicates import quality
@@ -495,6 +494,10 @@ def training_family(sid):
     return sorted(family)
 
 
+# Another adventure's partner requests last 3 game minutes. The coordinator sends them again sooner.
+DEMAND_FRAMES = 10_800
+
+
 class Collection:
     def __init__(self):
         self.version = 'red'
@@ -527,6 +530,8 @@ class Collection:
         self.quality_searches = {}
         self.peer_demand = {}
         self.demand_until = 0
+        # The policy context clock at the last step, in game frames that never rewind. Never saved.
+        self.clock = 0
         self.next_marathon = 0
         self.marathon_records = {}
         self.activity_events = []
@@ -537,11 +542,14 @@ class Collection:
         self.pin = None
 
     def demand(self):
-        return self.peer_demand if time.monotonic() < self.demand_until else {}
+        return self.peer_demand if self.clock < self.demand_until else {}
 
-    def set_demand(self, requests):
+    def set_demand(self, requests, clock=None):
+        """Keep the partners other adventures ask for until DEMAND_FRAMES pass on the clock that
+        never rewinds. ``clock`` is the host's reading when the request arrives between steps."""
+        self.clock = max(self.clock, clock or 0)
         self.peer_demand = dict(requests)
-        self.demand_until = time.monotonic() + 180
+        self.demand_until = self.clock + DEMAND_FRAMES
 
     def repeat_target(self, species, map_id=None, snapshot=None, dvs=None, rated=None):
         """The species a wild battle should catch as a repeat, or None.

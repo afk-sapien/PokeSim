@@ -172,7 +172,7 @@ def test_visible_menu_states_and_one_action_per_decision():
     assert Screen(mem).kind(s) == 'battle'
     # The strategic controller never emits a blind sequence of menu commands.
     pol = StrategicPolicy(1)
-    actions = pol.step(PolicyContext(s, 0, 0, mem))
+    actions = pol.step(PolicyContext(s, 0, mem))
     assert len(actions) == 1
     pol.intent = Decision('switch', 1)
     pol.on_restore()
@@ -201,7 +201,7 @@ def test_map_transition_does_not_record_mismatched_coordinates():
     pol = StrategicPolicy(1)
     mem = fake_mem({})
     s = snap(map=MAPS['VIRIDIAN_FOREST_NORTH_GATE'], x=3, y=43, frame=100)
-    action = pol.step(PolicyContext(s, 0, 0, mem))[0]
+    action = pol.step(PolicyContext(s, 0, mem))[0]
     assert action.button is None
     assert not pol.nav.visits and not pol.nav.edges
 
@@ -212,15 +212,15 @@ def test_faint_dialogue_at_map_edge_does_not_deadlock_transition():
     state = snap(map=MAPS['ROUTE_15'], x=255, y=9, frame=100, textbox=True,
                  party=(mon(hp=0), mon()), playtime=(10, 0, 0))
     # Still allow the usual brief settling period after a map change.
-    assert pol.step(PolicyContext(state, 0, 0, mem))[0].button is None
+    assert pol.step(PolicyContext(state, 0, mem))[0].button is None
     state = replace(state, frame=160)
-    action = pol.step(PolicyContext(state, 0, 0, mem))[0]
+    action = pol.step(PolicyContext(state, 0, mem))[0]
     assert action.button == 'b'
     assert pol.mode == 'dialogue'
     assert not pol.nav.visits and not pol.nav.edges
     # Without text, an out-of-bounds transition must still receive no movement input.
     state = replace(state, frame=190, textbox=False)
-    assert pol.step(PolicyContext(state, 0, 0, fake_mem({})))[0].button is None
+    assert pol.step(PolicyContext(state, 0, fake_mem({})))[0].button is None
     assert not pol.nav.visits and not pol.nav.edges
 
 
@@ -289,12 +289,12 @@ def test_strength_is_only_used_when_a_boulder_push_is_actually_planned():
 
     # No push available: the run must not use Strength.
     with patch.object(type(p.boulders), 'route', return_value=None):
-        p.step(PolicyContext(s, 0, 0, memory))
+        p.step(PolicyContext(s, 0, memory))
     assert not recorder.started
 
     # A push is available: Strength is activated so the boulder can be moved.
     with patch.object(type(p.boulders), 'route', return_value='left'):
-        p.step(PolicyContext(s, 0, 0, memory))
+        p.step(PolicyContext(s, 0, memory))
     assert recorder.last.kind == 'use_field_move' and recorder.last.move == 'STRENGTH'
     assert p.mode == 'shortcut: use_field_move'
 

@@ -21,7 +21,7 @@ def walk(policy, **changes):
     mem[W_WALK_COUNTER] = 8
     s = snap(**{**dict(map=MAPS['ROUTE_8'], x=10, y=9, frame=1000, party=(mon(),)), **changes})
     policy.observed_map = s.map
-    policy.step(PolicyContext(s, 0, 0, mem))
+    policy.step(PolicyContext(s, 0, mem))
     return policy.goal
 
 

@@ -21,7 +21,7 @@ def test_pc_withdrawal_cannot_complete_training_using_the_previous_slot_level():
     transient = state(frame=100, map=MAPS['INDIGO_PLATEAU_LOBBY'], x=15, y=8,
                       party=(mon(species=sid(75), nick='TRUFFLE', level=100, experience=71833),))
     memory = menu({0: ' WITHDRAW', 2: ' DEPOSIT', 4: ' RELEASE', 6: ' CHANGE BOX'}, (0, 0))
-    policy.step(PolicyContext(transient, 0, 0, memory))
+    policy.step(PolicyContext(transient, 0, memory))
     assert policy.collection.project is not None
     assert 'gains' not in policy.collection.project
     assert not policy.collection.director.completed

@@ -160,11 +160,12 @@ def test_the_coordinators_partner_ids_are_merged_and_kept(tmp_path):
 
 def test_gen1_collection_requests_merge_the_partner_ids(tmp_path):
     from types import SimpleNamespace
+    from pokesim.play_clock import PlayClock
     from pokesim.policies.collection import Collection
     store = Store(tmp_path)
     try:
         participant = object.__new__(Participant)
-        participant.emu = SimpleNamespace(policy=SimpleNamespace(collection=Collection()))
+        participant.emu = SimpleNamespace(policy=SimpleNamespace(collection=Collection()), play_clock=PlayClock())
         participant.store = store
         participant.collection_demand({'requests': {}, 'partners': [SILVER]})
         assert store.trade_partners() == {SILVER}

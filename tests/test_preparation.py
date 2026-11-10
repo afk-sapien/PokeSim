@@ -60,7 +60,7 @@ def test_withdrawn_hp_overflow_visits_nurse_before_trade(participant, monkeypatc
     monkeypatch.setattr(preparation.Screen, 'kind', lambda *args: 'overworld')
     controller._walk = Mock(return_value=[Action('left', 8, 12)])
     memory = bytes(emu.pb.memory)
-    assert controller.step(PolicyContext(invalid, 0, 0, emu.pb.memory)) == [Action('left', 8, 12)]
+    assert controller.step(PolicyContext(invalid, 0, emu.pb.memory)) == [Action('left', 8, 12)]
     assert controller._walk.call_args.args[1] == ((89, 3, 3),)
     assert bytes(emu.pb.memory) == memory
     assert emu.store.get('trade_hold') is None
@@ -72,8 +72,8 @@ def test_unrelated_invalid_party_does_not_get_healing_grace(participant):
     controller = emu.preparation
     invalid = replace(snap, frame=snap.frame + 1,
                       party=(replace(snap.party[0], level=101),))
-    controller.step(PolicyContext(invalid, 0, 0, emu.pb.memory))
-    controller.step(PolicyContext(replace(invalid, frame=invalid.frame + 181), 0, 0, emu.pb.memory))
+    controller.step(PolicyContext(invalid, 0, emu.pb.memory))
+    controller.step(PolicyContext(replace(invalid, frame=invalid.frame + 181), 0, emu.pb.memory))
     assert emu.store.get(preparation.KEY)['phase'] == 'failed'
     assert emu.store.get('trade_hold') is None
 
@@ -83,7 +83,7 @@ def test_protection_change_cancels_before_pc_input(participant):
     key = identity(asdict(candidate))
     preparation.begin(emu, key, 'transaction-1')
     emu.store.set_trade_preference(key, {'state': 'locked'})
-    actions = emu.preparation.step(PolicyContext(snap, 0, 0, emu.pb.memory))
+    actions = emu.preparation.step(PolicyContext(snap, 0, emu.pb.memory))
     assert all(action.button is None for action in actions)
     assert emu.store.get(preparation.KEY)['phase'] == 'failed'
     assert emu.preparation is None
@@ -114,7 +114,7 @@ def test_arrival_holds_exact_withdrawn_partner_before_export(participant):
         emu.paused = True
 
     emu._trade = hold
-    assert emu.preparation.step(PolicyContext(arrived, 0, 0, emu.pb.memory)) == []
+    assert emu.preparation.step(PolicyContext(arrived, 0, emu.pb.memory)) == []
     assert calls == [('prepare', 'transaction-1')]
     assert emu.store.get(preparation.KEY)['party_slot'] == 1
     assert emu.store.get(preparation.KEY)['phase'] == 'ready'
@@ -135,14 +135,14 @@ def test_preparation_waits_for_natural_safe_point(participant, monkeypatch, busy
     assert emu.input_epoch == 0
     assert not emu.paused
     controller = emu.preparation
-    assert controller.step(PolicyContext(active, 0, 0, emu.pb.memory)) == ordinary_actions
+    assert controller.step(PolicyContext(active, 0, emu.pb.memory)) == ordinary_actions
     later = replace(active, frame=active.frame + 4000)
     emu.frame = later.frame
-    assert controller.step(PolicyContext(later, 0, 0, emu.pb.memory)) == ordinary_actions
+    assert controller.step(PolicyContext(later, 0, emu.pb.memory)) == ordinary_actions
     assert emu.store.get(preparation.KEY)['waiting_for'] == 'overworld'
     safe = replace(snap, frame=later.frame + 1)
     emu.frame = safe.frame
-    actions = controller.step(PolicyContext(safe, 0, 0, emu.pb.memory))
+    actions = controller.step(PolicyContext(safe, 0, emu.pb.memory))
     assert actions == [Action('up', 4, 8)]
     assert emu.policy.step.call_count == 2
     assert 'waiting_for' not in emu.store.get(preparation.KEY)
@@ -157,7 +157,7 @@ def test_safe_point_wait_has_a_frame_deadline(participant, monkeypatch):
     monkeypatch.setattr(preparation, 'read_snapshot', lambda *args: active)
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1', max_frames=60)
     expired = replace(active, frame=active.frame + 61)
-    actions = emu.preparation.step(PolicyContext(expired, 0, 0, emu.pb.memory))
+    actions = emu.preparation.step(PolicyContext(expired, 0, emu.pb.memory))
     assert all(action.button is None for action in actions)
     assert emu.store.get(preparation.KEY)['phase'] == 'failed'
     assert 'deadline' in emu.store.get(preparation.KEY)['error']
@@ -172,7 +172,7 @@ def test_safe_point_wait_rechecks_protection_before_policy_input(participant, mo
     key = identity(asdict(candidate))
     preparation.begin(emu, key, 'transaction-1')
     emu.store.set_trade_preference(key, {'state': 'locked'})
-    actions = emu.preparation.step(PolicyContext(active, 0, 0, emu.pb.memory))
+    actions = emu.preparation.step(PolicyContext(active, 0, emu.pb.memory))
     assert all(action.button is None for action in actions)
     assert emu.store.get(preparation.KEY)['phase'] == 'failed'
     emu.policy.step.assert_not_called()
@@ -213,7 +213,7 @@ def test_waiting_does_not_adopt_an_unplanned_party_member(participant, monkeypat
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     partner = mon(trainer_id=candidate.trainer_id, dvs=candidate.dvs)
     moved = replace(snapshot([], party=(snap.party[0], partner)), map=89, x=11, y=3)
-    actions = emu.preparation.step(PolicyContext(moved, 0, 0, emu.pb.memory))
+    actions = emu.preparation.step(PolicyContext(moved, 0, emu.pb.memory))
     assert all(action.button is None for action in actions)
     assert emu.store.get(preparation.KEY)['phase'] == 'failed'
     assert 'moved before' in emu.store.get(preparation.KEY)['error']
@@ -227,7 +227,7 @@ def test_safe_point_wait_has_a_wall_clock_deadline(participant, monkeypatch):
     monkeypatch.setattr(preparation, 'read_snapshot', lambda *args: active)
     state = preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     monkeypatch.setattr(preparation.time, 'time', lambda: state['deadline'] + 1)
-    actions = emu.preparation.step(PolicyContext(active, 0, 0, emu.pb.memory))
+    actions = emu.preparation.step(PolicyContext(active, 0, emu.pb.memory))
     assert all(action.button is None for action in actions)
     assert emu.store.get(preparation.KEY)['phase'] == 'failed'
     assert 'deadline' in emu.store.get(preparation.KEY)['error']
@@ -246,7 +246,7 @@ def storage_menu(index=0):
 
 
 def storage_step(controller, snap, memory):
-    return controller.step(PolicyContext(snap, 0, 0, memory))[0].button
+    return controller.step(PolicyContext(snap, 0, memory))[0].button
 
 
 def test_full_active_box_deposits_elsewhere_before_switching_to_offer(participant):
@@ -273,7 +273,7 @@ def test_full_active_box_deposits_elsewhere_before_switching_to_offer(participan
     assert storage_step(controller, full, memory) == 'a'
 
     available = replace(full, active_box=2, boxed_pokemon=((153, 20),) * 19)
-    assert controller.step(PolicyContext(available, 0, 0, storage_menu(1)))[0] == PRESS
+    assert controller.step(PolicyContext(available, 0, storage_menu(1)))[0] == PRESS
     assert controller.operation == 'deposit'
     assert controller.deposit_key == identity(asdict(party[1]))
     assert recorder.last.kind == 'deposit_pokemon' and recorder.last.slot == 1
@@ -285,7 +285,7 @@ def test_full_active_box_deposits_elsewhere_before_switching_to_offer(participan
     assert controller.operation == 'change_box'
     assert controller.target_box == candidate.box
     opened = replace(deposited, active_box=candidate.box)
-    assert controller.step(PolicyContext(opened, 0, 0, storage_menu()))[0] == PRESS
+    assert controller.step(PolicyContext(opened, 0, storage_menu()))[0] == PRESS
     assert controller.operation == 'withdraw'
     assert recorder.last.kind == 'withdraw_pokemon' and recorder.last.position == candidate.position
     assert emu.store.get(preparation.KEY)['phase'] == 'storage'
@@ -360,7 +360,7 @@ def test_withdraw_uses_refreshed_identity_position_and_rejects_wrong_box(partici
     recorder = Recorder(controller.shortcut)
     candidate = replace(candidate, position=5)
     moved = replace(snapshot([candidate], party=snap.party), map=89, x=13, y=4, textbox=True)
-    assert controller.step(PolicyContext(moved, 0, 0, storage_menu()))[0] == PRESS
+    assert controller.step(PolicyContext(moved, 0, storage_menu()))[0] == PRESS
     assert recorder.last.kind == 'withdraw_pokemon' and recorder.last.position == 5
     controller.shortcut.cancel()
     assert storage_step(controller, replace(moved, active_box=1), storage_menu()) == 'a'
@@ -463,7 +463,7 @@ def test_encounter_during_travel_uses_the_same_traveller(participant):
     controller.traveller = Mock()
     controller.traveller.step.return_value = actions
     encounter = replace(snap, map=12, in_battle=True)
-    ctx = PolicyContext(encounter, 0, 0, emu.pb.memory)
+    ctx = PolicyContext(encounter, 0, emu.pb.memory)
     assert controller.step(ctx) == actions
     controller.traveller.step.assert_called_once_with(ctx)
     emu.policy.step.assert_not_called()
@@ -550,14 +550,14 @@ def test_long_travel_battle_with_health_or_move_progress_does_not_time_out(parti
         battle = replace(snap, map=12, in_battle=True, frame=snap.frame + turn * 2000,
                          party=(partner,))
         emu.frame = battle.frame
-        assert controller.step(PolicyContext(battle, 0, 0, emu.pb.memory)) == actions
+        assert controller.step(PolicyContext(battle, 0, emu.pb.memory)) == actions
         assert emu.preparation is controller
         assert controller.state['phase'] == 'travelling'
     assert controller.traveller.step.call_count == 4
     stalled = replace(battle, frame=battle.frame + 3601)
     emu.frame = stalled.frame
     assert all(action.button is None for action in controller.step(
-        PolicyContext(stalled, 0, 0, emu.pb.memory)))
+        PolicyContext(stalled, 0, emu.pb.memory)))
     assert emu.preparation is None
     assert 'stopped making progress' in controller.state['error']
 
@@ -582,7 +582,7 @@ def test_center_walking_waits_for_map_transition_before_failing(participant):
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
     controller.nav.route = Mock(side_effect=[None, 'right'])
-    ctx = PolicyContext(snap, 0, 0, emu.pb.memory)
+    ctx = PolicyContext(snap, 0, emu.pb.memory)
     assert controller._walk(ctx, ((89, 11, 3),))[0].button is None
     assert controller._walk(ctx, ((89, 11, 3),))[0].button == 'right'
     assert controller.walk_wait_since is None
@@ -593,10 +593,10 @@ def test_center_walking_cannot_wait_forever_on_an_impossible_route(participant):
     preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
     controller = emu.preparation
     controller.nav.route = Mock(return_value=None)
-    controller._walk(PolicyContext(snap, 0, 0, emu.pb.memory), ((89, 11, 3),))
+    controller._walk(PolicyContext(snap, 0, emu.pb.memory), ((89, 11, 3),))
     later = replace(snap, frame=snap.frame + 600)
     with pytest.raises(ValueError, match='No supported walking route'):
-        controller._walk(PolicyContext(later, 0, 0, emu.pb.memory), ((89, 11, 3),))
+        controller._walk(PolicyContext(later, 0, emu.pb.memory), ((89, 11, 3),))
 
 
 @pytest.mark.parametrize('league_map', sorted(preparation.LEAGUE))
@@ -610,11 +610,11 @@ def test_trade_preparation_finishes_league_before_taking_over(participant, monke
     assert result['waiting_for'] == 'overworld'
     assert 'League run' in result['waiting_reason']
     controller = emu.preparation
-    assert controller.step(PolicyContext(active, 0, 0, emu.pb.memory)) == ordinary_actions
+    assert controller.step(PolicyContext(active, 0, emu.pb.memory)) == ordinary_actions
     assert emu.input_epoch == 0
     safe = replace(snap, map=174, x=15, y=8, frame=active.frame + 100)
     emu.frame = safe.frame
-    controller.step(PolicyContext(safe, 0, 0, emu.pb.memory))
+    controller.step(PolicyContext(safe, 0, emu.pb.memory))
     assert 'waiting_for' not in controller.state
     assert controller.state['phase'] == 'storage'
 
@@ -675,7 +675,7 @@ def test_manual_trade_may_pick_party_and_locked_pokemon(participant):
     with pytest.raises(ValueError):
         preparation.begin(emu, key, 'automatic')
     assert preparation.begin(emu, key, 'manual-box', manual=True)['from_party'] is False
-    emu.preparation.step(PolicyContext(snap, 0, 0, emu.pb.memory))
+    emu.preparation.step(PolicyContext(snap, 0, emu.pb.memory))
     assert emu.store.get(preparation.KEY)['phase'] != 'failed'
 
 
@@ -686,7 +686,7 @@ def test_manual_party_pick_travels_to_a_center_first(participant):
     controller.traveller = Mock()
     controller.traveller.step.return_value = [Action('up', 8, 12)]
     away = replace(snap, map=0, x=5, y=5)
-    assert controller.step(PolicyContext(away, 0, 0, emu.pb.memory)) == [Action('up', 8, 12)]
+    assert controller.step(PolicyContext(away, 0, emu.pb.memory)) == [Action('up', 8, 12)]
     assert emu.store.get(preparation.KEY)['phase'] == 'travelling'
 
 

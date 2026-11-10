@@ -257,8 +257,6 @@ def simulate(fixture_path, frames, capture):
         start_frame = metadata.get('frame', 0)
         frame = start_frame
         stop_frame = start_frame + frames
-        last_pos = None
-        stuck_frame = frame
         action_count = 0
         try:
             with checkpoint.open('rb') as stream:
@@ -266,12 +264,8 @@ def simulate(fixture_path, frames, capture):
             with timings.routes():
                 while frame < stop_frame:
                     snap = read_snapshot(pb.memory, frame)
-                    pos = (snap.map, snap.x, snap.y)
-                    if pos != last_pos or snap.in_battle or not snap.started:
-                        stuck_frame = frame
-                        last_pos = pos
                     # Decision time comes only from emulated frames, never CPU speed.
-                    ctx = PolicyContext(snap, (frame - stuck_frame) / 60, frame / 60, pb.memory, stack_pointer(pb))
+                    ctx = PolicyContext(snap, frame, pb.memory, stack_pointer(pb))
                     memory = bytes(pb.memory[0:65536]) if capture else None
                     routes_before = len(timings.route_wall)
                     actions = timings.step(policy, ctx)
@@ -282,7 +276,7 @@ def simulate(fixture_path, frames, capture):
                     trace.append(row)
                     if capture:
                         workload.append({'snapshot': snap, 'memory': memory,
-                            'stuck_seconds': ctx.stuck_seconds, 'real_time': ctx.real_time, 'expected': row})
+                            'clock': ctx.clock, 'expected': row})
                     for action in actions or [Action(None, 0, 12)]:
                         if frame >= stop_frame:
                             break
@@ -350,7 +344,9 @@ def replay(path, repeats, warmups, decisions):
                 for number, record in enumerate(workload):
                     # Restore each original input. Policy and RNG evolve sequentially.
                     memory = bytearray(record['memory'])
-                    ctx = PolicyContext(record['snapshot'], record['stuck_seconds'], record['real_time'], memory)
+                    # A corpus from before the clock kept real_time as frame / 60.
+                    clock = record['clock'] if 'clock' in record else round(record['real_time'] * 60)
+                    ctx = PolicyContext(record['snapshot'], clock, memory)
                     before = len(timings.route_wall)
                     actions = timings.step(policy, ctx)
                     expected = record['expected']
