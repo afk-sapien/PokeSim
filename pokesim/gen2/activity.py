@@ -18,13 +18,13 @@ not this adventure's actions. Each receipt is the WRAM at the hook, so a reload 
 same moment counts nothing.
 """
 import hashlib
-import json
 import logging
 import time
 
 from pokecore.gen2.ram import Memory
 
 from ..activity_ledger import KEY, increment
+from ..state import kv, tracking
 
 log = logging.getLogger(__name__)
 DEBUG, TUTORIAL = 2, 3
@@ -106,30 +106,28 @@ def vended(memory, mem):
 
 def start(store, fresh):
     """Begin counting once, from now. Catches already kept as receipts are counted again from them."""
-    with store.lock, store.db:
-        db = store.db
-        value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
+    from .. import trade_statistics
+    with store.transaction() as db:
+        value = kv.get(db, KEY)
         value['available'] = True
         if value['started_at'] is None:
             value.update(started_at=time.time(), complete_history=fresh)
             # A store that predates the ledger may hold catches seeded from part of these receipts.
-            db.execute("DELETE FROM activity_counts WHERE kind='caught'")
-            if db.execute("SELECT 1 FROM sqlite_master WHERE name='capture_receipts'").fetchone():
-                for dex, total in db.execute("SELECT dex, COUNT(*) FROM capture_receipts WHERE fingerprint "
-                                             "NOT LIKE 'gift-event:%' GROUP BY dex").fetchall():
-                    increment(db, 'caught', dex, total)
-            from ..trade_statistics import backfill_gen2
-            backfill_gen2(db)
-        from ..trade_statistics import tracking
-        tracking(db)
-        db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+            tracking.forget_caught(db)
+            if tracking.has_capture_receipts(db):
+                for kind, dex, total in tracking.receipt_counts(db):
+                    if kind == 'caught':
+                        increment(db, 'caught', dex, total)
+            trade_statistics.backfill_gen2(db)
+        trade_statistics.tracking(db)
+        kv.update(db, KEY, value)
 
 
 def unavailable(store):
-    with store.lock, store.db:
-        value = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
+    with store.transaction() as db:
+        value = kv.get(db, KEY)
         value['available'] = False
-        store.db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+        kv.update(db, KEY, value)
 
 
 class Ledger:
@@ -150,10 +148,9 @@ class Ledger:
 
     def _record(self, pb, kind, subject, amount=1):
         fingerprint = hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).digest()
-        with self.store.lock, self.store.db:
-            if self.store.db.execute('INSERT OR IGNORE INTO activity_receipts VALUES (?,?)',
-                                     (kind, fingerprint)).rowcount:
-                increment(self.store.db, kind, subject, amount)
+        with self.store.transaction() as db:
+            if tracking.add_activity_receipt(db, kind, fingerprint):
+                increment(db, kind, subject, amount)
 
     def completed(self, context):
         kind, pb = context
@@ -196,16 +193,15 @@ class Ledger:
 
 def gift(db, identifier, species):
     """Count a custom gift once inside the transaction that commits it."""
-    if 1 <= species <= 251 and db.execute('INSERT OR IGNORE INTO activity_receipts VALUES (?,?)',
-                                          ('gift', f'gen2-gift:{identifier}'.encode())).rowcount:
+    if 1 <= species <= 251 and tracking.add_activity_receipt(db, 'gift', f'gen2-gift:{identifier}'.encode()):
         increment(db, 'gift', species)
 
 
 def npc_trade(store, trade):
     """Count a completed in-game trade. Each one has its own flag, so it can happen only once."""
     from ..trade_statistics import record_gen2
-    with store.lock, store.db:
-        record_gen2(store.db, f'gen2-npc:{trade.index}', trade.request, trade.give)
+    with store.transaction() as db:
+        record_gen2(db, f'gen2-npc:{trade.index}', trade.request, trade.give)
 
 
 def real_items(data):

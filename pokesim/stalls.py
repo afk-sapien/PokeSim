@@ -1,11 +1,11 @@
 """Notice a run that keeps playing without achieving anything."""
 from __future__ import annotations
 
-import json
 import logging
 import re
-import sqlite3
 import threading
+
+from .state import Error, journal, kv
 
 log = logging.getLogger(__name__)
 
@@ -177,8 +177,8 @@ class LoopGuard:
     def hold(self, store):
         """Note where real progress stood as a boss attempt starts (stalls.boss_attempt)."""
         with self.lock:
-            with store.lock:
-                self._advance(store)
+            with store.reading() as db:
+                self._advance(db)
             self.held = (self.since, dict(self.reloads))
 
     def settle(self):
@@ -192,8 +192,8 @@ class LoopGuard:
         with self.lock:
             if self.held is None:
                 return
-            with store.lock:
-                self._advance(store)
+            with store.reading() as db:
+                self._advance(db)
             self.since, reloads = self.held
             for name, count in reloads.items():
                 self.reloads[name] = max(self.reloads.get(name, 0), count)
@@ -209,11 +209,10 @@ class LoopGuard:
             if self.checked is not None and 0 <= now - self.checked < self.every:
                 return self.reason
             self.checked = now
-            with store.lock:
-                self._advance(store)
-                self._save(store)
-                rows = store.db.execute("SELECT type, title FROM events WHERE id > ? AND type IN ('obtain', 'release') "
-                                        'ORDER BY id DESC LIMIT ?', (self.since or 0, LOOP_EVENTS)).fetchall()
+            with store.reading() as db:
+                self._advance(db)
+                rows = journal.turnover(db, self.since or 0, LOOP_EVENTS)
+            self._save(store)
             received, released, names = {}, {}, {}
             for kind, title in rows:
                 match = (_RECEIVED if kind == 'obtain' else _RELEASED).match(title)
@@ -239,14 +238,14 @@ class LoopGuard:
         if self.reloads == self.saved:
             return
         try:
-            with store.db:
-                store.db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (RELOADS_KEY, json.dumps(self.reloads)))
-        except sqlite3.Error:
+            with store.transaction() as db:
+                kv.put(db, RELOADS_KEY, self.reloads)
+        except Error:
             log.warning('Could not keep the loop guard reload counts', exc_info=True)
             return
         self.saved = dict(self.reloads)
 
-    def _advance(self, store):
+    def _advance(self, db):
         """Move ``since`` to the newest real progress entry. Only entries after the last scan are read,
         and after a reload one that repeats a recent entry is the replay, not progress.
 
@@ -254,21 +253,16 @@ class LoopGuard:
         releases straight away, as Sudowoodo was 11 seconds after its return, is not progress.
         """
         kinds = (*REAL_PROGRESS, 'release')
-        marks = ','.join('?' * len(kinds))
         if self.scanned is None:
-            row = store.db.execute('SELECT v FROM kv WHERE k = ?', (RELOADS_KEY,)).fetchone()
-            saved = json.loads(row[0]) if row and row[0] else {}
+            saved = kv.get(db, RELOADS_KEY) or {}
             self.saved = dict(saved)
             for name, count in saved.items():
                 self.reloads[name] = self.reloads.get(name, 0) + int(count)
             # A release already in the journal is scanned past, but only real progress moves ``since``.
-            self.since, self.scanned = store.db.execute(
-                f"SELECT MAX(CASE WHEN type != 'release' THEN id END), MAX(id) FROM events WHERE type IN ({marks})",
-                kinds).fetchone()
+            self.since, self.scanned = journal.marked(db, kinds)
             self.since, self.scanned = self.since or 0, self.scanned or 0
             return
-        fresh = store.db.execute(f'SELECT id, type, title FROM events WHERE id > ? AND type IN ({marks}) ORDER BY id',
-                                 (self.scanned, *kinds)).fetchall()
+        fresh = journal.marked_after(db, self.scanned, kinds)
         now = self.clock()
         for row_id, kind, title in fresh:
             self.scanned = row_id
@@ -277,9 +271,7 @@ class LoopGuard:
                 if match:
                     self.returned.pop(species_key(match.group(1)), None)
                 continue
-            if self.reloads and store.db.execute(
-                    'SELECT 1 FROM events WHERE id BETWEEN ? AND ? AND type = ? AND title = ? LIMIT 1',
-                    (row_id - REPLAY_EVENTS, row_id - 1, kind, title)).fetchone():
+            if self.reloads and journal.repeats(db, row_id - REPLAY_EVENTS, row_id - 1, kind, title):
                 continue
             if kind == 'event_return':
                 match = _RETURNED.match(title)

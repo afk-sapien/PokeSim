@@ -14,6 +14,7 @@ A label with "stall": false clears any true stall it overlaps.
 import argparse
 from bisect import bisect_right
 from collections import Counter, deque, namedtuple
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
@@ -357,6 +358,16 @@ class Journal:
     def add(self, entry):
         if entry.type in self.KINDS:
             self.db.execute('INSERT INTO events VALUES (?, ?, ?)', (entry.id, entry.type, entry.title))
+
+    @contextmanager
+    def transaction(self):
+        with self.lock, self.db:
+            yield self.db
+
+    @contextmanager
+    def reading(self):
+        with self.lock:
+            yield self.db
 
 
 class Status:

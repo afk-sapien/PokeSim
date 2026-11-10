@@ -18,7 +18,7 @@ from contextlib import closing
 from pathlib import Path
 
 from . import progress_events
-from .state import schema
+from .state import connect, journal, kv
 
 log = logging.getLogger(__name__)
 
@@ -32,15 +32,14 @@ def record(db, kind, *, frame=None, source='', **detail):
     (pokesim.state)."""
     if kind not in KINDS:
         raise ValueError(f'Unknown stall truth kind {kind!r}')
-    row = (frame, time.time(), kind, source or '', json.dumps(detail, sort_keys=True, default=str))
-    db.execute('INSERT INTO stall_truth(frame, ts, kind, source, detail_json) VALUES (?, ?, ?, ?, ?)', row)
+    journal.add_stall_truth(db, frame, time.time(), kind, source or '', json.dumps(detail, sort_keys=True, default=str))
 
 
 def write(store, kind, *, source='', **detail):
     """Write one row in a transaction of its own, at the adventure's PlayClock frame."""
     try:
-        with store.lock, store.db:
-            record(store.db, kind, frame=progress_events.frame(store), source=source, **detail)
+        with store.transaction() as db:
+            record(db, kind, frame=progress_events.frame(store), source=source, **detail)
     except Exception:
         # A label for the replay must never cost the adventure its stall bundle or its status.
         log.exception('Cannot record the %s row for the progress replay', kind)
@@ -102,9 +101,8 @@ def lifecycle(folder, action, source, **detail):
     if not path.is_file():
         return
     try:
-        with closing(schema.connect(path, timeout=5)) as db, db:
-            row = db.execute("SELECT v FROM kv WHERE k='play_clock'").fetchone()
-            clock = json.loads(row[0]) if row else None
+        with closing(connect(path, timeout=5)) as db, db:
+            clock = kv.get(db, 'play_clock')
             frame = clock.get('frames') if isinstance(clock, dict) else None
             record(db, 'restart', frame=frame, source=source, action=action, **detail)
     except Exception:
@@ -113,6 +111,5 @@ def lifecycle(folder, action, source, **detail):
 
 def rows(db, kind=None):
     """Every row, oldest first, with its detail decoded, as the replay reads them."""
-    sql = 'SELECT id, frame, ts, kind, source, detail_json FROM stall_truth'
-    query = db.execute(sql + ' WHERE kind=? ORDER BY id', (kind,)) if kind else db.execute(sql + ' ORDER BY id')
-    return [{'id': r[0], 'frame': r[1], 'ts': r[2], 'kind': r[3], 'source': r[4], **json.loads(r[5])} for r in query]
+    return [{'id': r[0], 'frame': r[1], 'ts': r[2], 'kind': r[3], 'source': r[4], **json.loads(r[5])}
+            for r in journal.stall_truth(db, kind)]

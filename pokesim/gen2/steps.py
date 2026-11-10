@@ -1,8 +1,8 @@
 """Cartridge walking counts and repeat Mew claims independent of save rewinds."""
-import json
 import time
 
 from .. import config, rewards
+from ..state import kv
 from pokecore.gen2.hooks import step_hook
 from pokecore.gen2.ram import Memory
 
@@ -42,8 +42,8 @@ def observe_mew(store, snapshot, total):
     if value['interval'] != every:
         value.update(interval=every, next_at=total + every, armed_after_win=None)
     if every and value['armed_after_win'] is None and total >= value['next_at']:
-        with store.lock:
-            value['armed_after_win'] = rewards.championship_count(rewards.ledger(store.db))
+        with store.reading() as db:
+            value['armed_after_win'] = rewards.championship_count(rewards.ledger(db))
     if value != store.get(RETURNS):
         store.set(RETURNS, value)
 
@@ -54,10 +54,9 @@ def ready(value, wins):
 
 
 def consume(db, total):
-    row = db.execute('SELECT v FROM kv WHERE k=?', (RETURNS,)).fetchone()
-    value = json.loads(row[0])
+    value = kv.get(db, RETURNS)
     value.update(next_at=total + config.MEW_RETURN_STEPS, armed_after_win=None, delivered=value['delivered'] + 1)
-    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), RETURNS))
+    kv.update(db, RETURNS, value)
 
 
 def status(store):

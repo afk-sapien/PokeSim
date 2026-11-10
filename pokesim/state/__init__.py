@@ -3,6 +3,9 @@
 Outside the worker's Store, ``state.connect(path, read_only=...)`` is the one way to open the file.
 See docs/design/adventure-state-store.md.
 """
+from sqlite3 import Error
+
 from .schema import connect
 
-__all__ = ['connect']
+# Error is what a failed statement raises, for a caller that keeps going without it.
+__all__ = ['Error', 'connect']
