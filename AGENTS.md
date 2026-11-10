@@ -71,6 +71,7 @@ checkouts that might not load this file automatically.
 - Run every long local job in the background under `timeout`, and look at it when it runs past twice its usual time. A full gate takes about 3 minutes, so run it under `timeout 30m`. A job at 0% CPU for that long is stuck, so report it.
 - For a behavior change, the gate replaces long full-sim batches. Run full-sim batches only when the change targets late-game play the 30 game minutes from each rung cannot reach.
 - Store a new gate baseline with `--write-baseline` on main after a merge that changes play on purpose, so the next gate compares against it.
+- A deploy needs a passing `tools/live_soak.py smoke --candidate <commit>`. It boots every soak save, plays 5 game minutes, saves, reloads and fails on any error log line, in about 3 minutes under the heavy lock. The two game hour `run` comparison only reports and never blocks a deploy.
 - The hosted app is for viewing and playing. Tests, soaks and temporary sims, such as fresh games for a stall hunt, run locally, never on the hosted app.
 - A temporary sim runs as one long-lived local app with its own data root, outside the checkout and the live soak root, in `pokesim-sims.slice` (12G), started with `sh tools/local_sims.sh start <unit> <env> <code> <data> <port> <revision>`. That runs it at nice 19 with `AUTH=none` on 127.0.0.1. Turn auto trading off for each adventure and add no notification integration. Soaks and pytest stay the one heavy job and win the CPU.
 
