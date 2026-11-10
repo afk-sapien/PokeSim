@@ -8,7 +8,7 @@ import time
 
 from . import progress_events
 
-KEY ='capture-statistics-v1'
+KEY = 'capture-statistics-v1'
 SUPPORTED = {
     'ea9bcae617fdf159b045185467ae58b2e4a48b9a',
     'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2',

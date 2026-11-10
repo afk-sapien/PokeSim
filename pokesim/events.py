@@ -17,7 +17,7 @@ EVOLUTION_PAIRS = {(int(parent), row['species'])
 
 SPECIES_DEX = {sid: row['dex'] for sid, row in SPECIES.items()}
 
-MONEY_MILESTONES =(10_000, 50_000, 100_000, 250_000, 500_000, 999_999)
+MONEY_MILESTONES = (10_000, 50_000, 100_000, 250_000, 500_000, 999_999)
 PLAYTIME_MILESTONE_HOURS = 10
 
 # Priority scale (same as ntfy's): 5 urgent, 4 high, 3 normal, 2 low, 1 minimal.

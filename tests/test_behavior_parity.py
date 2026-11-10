@@ -34,11 +34,8 @@ def even(value):
 
 
 def progress_rows(store, kind):
-    """The progress_events rows of ``kind``. Main has no such table yet, so it has none."""
-    try:
-        return store.db.execute('SELECT species FROM progress_events WHERE kind=?', (kind,)).fetchall()
-    except sqlite3.OperationalError:
-        return []
+    """The progress_events rows of ``kind``."""
+    return store.db.execute('SELECT species FROM progress_events WHERE kind=?', (kind,)).fetchall()
 
 
 @pytest.fixture(params=['gold', 'silver', 'crystal'])
