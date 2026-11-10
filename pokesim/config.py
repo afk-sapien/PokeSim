@@ -48,6 +48,8 @@ STALL_ALERT_REAL_MINUTES = int(_env("STALL_ALERT_REAL_MINUTES", "15"))
 STALL_ALERT_REPEAT_HOURS = int(_env("STALL_ALERT_REPEAT_HOURS", "6"))
 # Each stall keeps the moment it was noticed and the save from before it began. 0 = keep none.
 KEEP_STALL_BUNDLES = int(_env("KEEP_STALL_BUNDLES", "5"))
+# Record every press, tick and policy step in the adventure's states/trace folder, kept as long as the autosaves.
+TRACE = _env("TRACE", "1") == "1"
 STREAM_FPS = int(_env("STREAM_FPS", "15"))
 FEED_TITLE = _env("FEED_TITLE", "pokesim")
 

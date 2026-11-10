@@ -6,6 +6,7 @@ import uuid
 
 from .. import config
 from ..checkpoints import CheckpointStore
+from ..runtime import trace
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
 from ..state import journal, kv
 from pokecore.gen2.ram import Memory, read_snapshot
@@ -55,7 +56,8 @@ def activate(emu):
         journal.add(db, time.time(), 'milestone', 'Custom GS Ball distribution unlocked',
                     'Visit Goldenrod Pokémon Center to begin Crystal’s original Celebi quest.', 1, 4, before.map_name)
     try:
-        emu._load_state_file(recover_storage(emu.store))
+        with trace.reason(emu, 'gift'):
+            emu._load_state_file(recover_storage(emu.store))
     except BaseException:
         emu.fatal_error = 'A committed GS Ball event needs recovery. Restart this adventure.'
         raise

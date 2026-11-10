@@ -94,7 +94,12 @@ class GameLoop:
         """Ask ``policy``, the host's own by default, for the next actions and queue them."""
         pb = self.host.pb
         self.decider.options(pb)
-        self.pending = self.decider.ask(policy or self.host.policy, snapshot, pb)
+        policy = policy or self.host.policy
+        self.pending = self.decider.ask(policy, snapshot, pb)
+        tracer = getattr(self.host, 'tracer', None)
+        if tracer is not None:
+            # After the policy chose, so the record names the goal behind the inputs that follow.
+            tracer.decide(policy, snapshot)
         return self.pending
 
     def act(self):

@@ -17,12 +17,14 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
+from ..runtime import trace
 from ..runtime.game_loop import GameLoop, Gen2
+from ..runtime.manifest import checkpoint_manifest
 from ..runtime.reload import FRAMES_PER_SECOND, reload_target
 from ..runtime.restart import restart
 from ..stalls import LoopGuard, StallWatch, boss_attempt, stalled_state
-from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
-from pokecore.emulator_state import checkpoint_metadata, validate_runtime
+from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
+from pokecore.emulator_state import validate_runtime
 from .data import GameData
 from . import journal
 from .policy import Action, Policy
@@ -257,13 +259,19 @@ class Emulator:
         self.legendary_recovery = Recovery()
         from .steps import StepTracker
         self.steps = StepTracker(store, self.data)
-        self.pb = self._boot()
+        self.tracer = trace.for_store(store, 2)
+        self.pb = self._boot(tracer=self.tracer)
         self.thread = threading.Thread(target=self._run, name='gen2-emulator', daemon=True)
 
-    def _boot(self):
+    def _boot(self, tracer=None):
+        """Boot the cartridge with the trackers attached. The game's own boots pass its ``tracer``, so
+        a clone booted for a trade or reward check never joins the trace."""
         # Save states own both SRAM and RTC. Shared ROM assets never own save files.
         from ..randomized import rom_stream
         pb = boot(rom_stream(self.rom), sound=True)
+        if tracer is not None:
+            # Before the trackers register their hooks, so the trace knows every hook.
+            tracer.attach(pb)
         # Game time from the first frame. The reading belongs to no adventure yet: a loaded state
         # or _sync_clock sets it before the policy plays.
         follow_game_time(pb)
@@ -419,9 +427,11 @@ class Emulator:
 
     def pin_goal(self, key):
         """Set the next activity. A ValueError says why the planner cannot take it now."""
+        trace.note(self, 'pin', {'key': key})
         return self.policy.pin_goal(self.snapshot, key).to_dict()
 
     def unpin_goal(self):
+        trace.note(self, 'pin', {'key': None})
         self.policy.unpin_goal()
 
     def _drop_pin(self, reason):
@@ -515,17 +525,9 @@ class Emulator:
         return output.getvalue()
 
     def _manifest(self):
-        # Gen II saves with the clock locked to game time, which PyBoy 2.7.0 cannot reproduce, so the
-        # lock goes into the manifest and Core leaves off the legacy pyboy_version tag.
-        lock = clock_lock_state(self.pb)
-        return {'app_version': __version__, **checkpoint_metadata(rtc_clock=lock), 'rtc_clock': lock, 'generation': 2,
-                'rom_sha1': self.rom_sha1, 'frame': self.frame, 'policy': config.POLICY,
-                'policy_state': self.policy.state_dict(), 'run_memory': {}, 'play_clock': self.play_clock.state_dict(),
-                'gen2_history': self.history, 'legendary_recovery': self.legendary_recovery.state_dict(),
-                'trade_id': self.store.get('trade_barrier'),
-                'reward_id': self.store.get('custom-reward-barrier-v1'),
-                'rtc_elapsed': clock_elapsed(self.pb),
-                'settled': self.policy.menu is None and not getattr(self.policy, 'backing_out', False)}
+        return checkpoint_manifest(self.pb, self.policy, rom_sha1=self.rom_sha1, frame=self.frame, generation=2,
+                                   play_clock=self.play_clock, store=self.store,
+                                   legendary_recovery=self.legendary_recovery, history=self.history)
 
     def _checkpoint_before(self, name):
         """Keep the game as it is now under `name` before a rewind or restart replaces it."""
@@ -555,11 +557,17 @@ class Emulator:
             return
         self.steps.flush(force=True)
         self.statistics.flush(self.snapshot)
-        path = self.store.write_checkpoint(self._state_bytes(), self._manifest())
+        state, manifest = self._state_bytes(), self._manifest()
+        path = self.store.write_checkpoint(state, manifest)
+        tracer = getattr(self, 'tracer', None)
+        if tracer is not None:
+            tracer.begin(path.stem, state, manifest, kept=path)
         self.store.set('policy_state', self.policy.state_dict())
         self.store.set('gen2-history', self.history)
         self.store.set('play_clock', self.play_clock.state_dict())
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
+        if tracer is not None:
+            tracer.prune(self.store.autosaves())
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
         self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
         self.store.prune_reward_results()
@@ -984,7 +992,8 @@ class Emulator:
                 guard.reloaded(target.name)
             for path in [target] + [path for path in reversed(saves) if path != target]:
                 try:
-                    self._load_state_file(path)
+                    with trace.reason(self, 'reload'):
+                        self._load_state_file(path)
                     restored = path
                     break
                 except (ValueError, OSError, EOFError):
@@ -1009,7 +1018,7 @@ class Emulator:
         else:
             log.warning('%s and no save state to go back to, power-cycling', why)
             self.pb.stop(save=False)
-            self.pb = self._boot()
+            self.pb = self._boot(tracer=getattr(self, 'tracer', None))
             self._sync_clock()
             self.options_applied = False
             self.previous = self.snapshot = None
@@ -1156,7 +1165,8 @@ class Emulator:
                 with self.store.held(path, BEFORE_LOAD_CHECKPOINT) as source:
                     self._checkpoint_before(BEFORE_LOAD_CHECKPOINT)
                     try:
-                        self._load_state_file(source)
+                        with trace.reason(self, 'rewind'):
+                            self._load_state_file(source)
                     except (ValueError, OSError, EOFError) as error:
                         # A refused rewind (ownership barrier, other cartridge) must never end the adventure.
                         log.warning('Rewind to %s refused: %s', path.name, error)
@@ -1189,7 +1199,7 @@ class Emulator:
         self.statistics = Statistics(self.store, clock=lambda: self.play_clock.status())
         self.goal_time = GoalTime(self.store)
         self.legendary_recovery = Recovery()
-        self.pb = self._boot()
+        self.pb = self._boot(tracer=getattr(self, 'tracer', None))
         self._sync_clock()
         self.options_applied = False
         self.frame = 0
@@ -1220,12 +1230,17 @@ class Emulator:
         loop = GameLoop(self, Gen2(), self._tick, guards=self._check_guards, autosave=self._autosave,
                         ready=lambda: not getattr(self.policy, 'backing_out', False))
         self.consecutive_errors = 0
+        tracer = getattr(self, 'tracer', None)
         try:
             running = True
             while running:
                 try:
+                    if tracer is not None:
+                        # A run that has not saved since power-on or a reboot begins a start segment.
+                        tracer.ensure(self._manifest)
                     while not self.commands.empty():
                         name, arg = self.commands.get_nowait()
+                        trace.note(self, 'command', trace.command(name, arg))
                         running = self._handle_command(name, arg)
                         if not running:
                             break
@@ -1271,6 +1286,8 @@ class Emulator:
             except Exception as error:
                 self.fatal_error = f'The final save failed: {error}'
                 log.exception('Gen II final save failed')
+            if tracer is not None:
+                tracer.close()
             self.pb.stop(save=False)
             self.stopping = True
 

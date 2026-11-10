@@ -7,6 +7,7 @@ import uuid
 
 from .. import config, rewards
 from ..checkpoints import CheckpointStore
+from ..runtime import trace
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
 from ..seeds import gift_seed
 from ..state import journal, kv
@@ -119,7 +120,8 @@ def deliver(emu):
         from .tracking import record_gift
         record_gift(db, entry, species, frame=frame(emu.store))
     try:
-        emu._load_state_file(recover_storage(emu.store))
+        with trace.reason(emu, 'gift'):
+            emu._load_state_file(recover_storage(emu.store))
     except BaseException:
         emu.fatal_error = 'A committed Gen II gift needs recovery. Restart this adventure.'
         raise

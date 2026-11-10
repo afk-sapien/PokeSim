@@ -11,6 +11,7 @@ from ..checkpoints import CheckpointStore
 from .. import rewards
 from ..seeds import gift_seed
 from ..state import journal, kv
+from . import trace
 
 PENDING = 'custom-reward-pending-v1'
 BARRIER = 'custom-reward-barrier-v1'
@@ -186,7 +187,8 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
         record_gift(db, entry, species, gift, frame=frame(emu.store))
     try:
         path = recover_storage(emu.store)
-        emu._load_state_file(path)
+        with trace.reason(emu, 'gift'):
+            emu._load_state_file(path)
         emu.policy.on_restore()
         emu.input_epoch += 1
     except BaseException:
