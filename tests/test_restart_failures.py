@@ -60,7 +60,7 @@ def test_a_failure_after_the_commit_stops_the_run_and_the_store_opens_on_the_new
     emu.store.close()
     reopened = Store(tmp_path)
     try:
-        assert reopened.get('policy_state') == {} and reopened.get(domains.RESTART_PENDING) is None
+        assert reopened.get('policy_state') is None and reopened.get(domains.RESTART_PENDING) is None
         assert reopened.autosaves() == []
     finally:
         reopened.close()
@@ -72,5 +72,5 @@ def test_a_failure_to_boot_the_new_game_stops_the_run(emu):
     with pytest.raises(OSError):
         emu._handle_command('restart', None)
     assert emu.fatal_error == UNFINISHED and stops_the_run(emu)
-    assert emu.store.get('policy_state') == {} and emu.store.get(domains.RESTART_PENDING) is None
+    assert emu.store.get('policy_state') is None and emu.store.get(domains.RESTART_PENDING) is None
     assert emu.store.autosaves() == []

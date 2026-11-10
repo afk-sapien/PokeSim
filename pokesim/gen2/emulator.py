@@ -199,8 +199,8 @@ class Emulator:
         self.preparation = None
         self.options_applied = False
         self.adventure_seed = seeds.adventure_seed(store)
+        # The newest autosave's manifest gives the policy its state, and the journal its history, when it loads.
         self.policy = Policy(self.data, seed=self.adventure_seed, starter=config.STARTER)
-        self.policy.load_state_dict(store.get('policy_state', {}))
         store.attach(self.policy, 2)
         self.speed = config.SPEED
         self.paused = False
@@ -244,7 +244,8 @@ class Emulator:
         self.last_reload_frame = -10 ** 9
         self.guard_frame = 0
         self._watch_until = self._last_publish = 0.0
-        self.history = store.get('gen2-history', new_history())
+        self.history = new_history()
+        self.history_loaded = False
         self.last_achievement = next(iter(store.events(limit=1)), None)
         from .tracking import Tracker
         self.tracker = Tracker(store, self.data, fresh=not bool(store.autosaves()))
@@ -562,8 +563,6 @@ class Emulator:
         tracer = getattr(self, 'tracer', None)
         if tracer is not None:
             tracer.begin(path.stem, state, manifest, kept=path)
-        self.store.set('policy_state', self.policy.state_dict())
-        self.store.set('gen2-history', self.history)
         self.store.set('play_clock', self.play_clock.state_dict())
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
         if tracer is not None:
@@ -615,10 +614,16 @@ class Emulator:
         if 'gen2_history' in metadata:
             self.history = metadata['gen2_history']
         else:
+            if not getattr(self, 'history_loaded', True):
+                # A manifest from before 2026-10-16 carries no history. A rewind keeps the current game's,
+                # and a boot takes the last copy the autosaves kept in kv, so the journal does not announce
+                # every map, catch and badge again.
+                self.history = self.store.get('gen2-history', new_history())
             # Without its own history the save's League count cannot be matched to the wins kept
             # past the cartridge's cap, and adding them to an older count would invent victories.
             self.history.pop('capped_wins', None)
             self.history.pop('league_attempt', None)
+        self.history_loaded = True
         self.previous = None
         self.statistics.previous = None
         from .legendary import Recovery
@@ -1184,8 +1189,7 @@ class Emulator:
         The cartridge clock row goes, so the new game starts a new clock."""
         from .. import adventure_records, shiny
         from .tracking import CAPTURES, new_ledger
-        return {'play_clock': PlayClock().state_dict(), 'policy_state': {}, 'gen2-history': new_history(),
-                CAPTURES: new_ledger(True), shiny.GEN2_KEY: shiny.fresh(True),
+        return {'play_clock': PlayClock().state_dict(), CAPTURES: new_ledger(True), shiny.GEN2_KEY: shiny.fresh(True),
                 adventure_records.KEY: adventure_records.fresh()}
 
     def _start_new_game(self):

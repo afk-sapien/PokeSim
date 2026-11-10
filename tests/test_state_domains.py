@@ -418,11 +418,12 @@ def test_the_lives_are_what_each_restart_does():
             'pokedex-milestones-v1', 'adventure-records-v1', 'trade_offer:', 'loop-guard-reloads-v1',
             'goal-time-v1', 'adventure-seed-v1'}
     assert keys(domains.RESETS_ON_RESTART, 1) == both | {
-        'shiny-statistics-v1', 'league-partners-v2', 'league-partners-v1', 'mew-returns-v1', 'pokesim-mew-v1'}
+        'shiny-statistics-v1', 'league-partners-v2', 'league-partners-v1', 'mew-returns-v1', 'pokesim-mew-v1',
+        'playtime-milestones-v1'}
     assert keys(domains.RESETS_ON_RESTART, 2) == both | {
         'gen2-shiny-statistics-v1', 'gen2-mythical-gift-v1', 'gen2-gs-ball-distribution-v1',
         'gen2-league-partners-v1', 'gen2-mew-returns-v1', 'gen2-clock-v1'}
-    assert keys(domains.REWINDS, 1) == {'policy_state', 'run_memory'}
+    assert keys(domains.REWINDS, 1) == {'policy_state'}
     assert keys(domains.REWINDS, 2) == {'policy_state', 'gen2-history'}
     assert domains.KEYS['league-rewards-v1'].policy_reads and 'trade_hold' in domains.POLICY_READS
 

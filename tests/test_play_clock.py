@@ -127,7 +127,7 @@ def test_checkpoint_reload_preserves_announced_playtime(tmp_path, monkeypatch):
     emu = Emulator.__new__(Emulator)
     emu.store = Store(tmp_path)
     emu.mem = RunMemory(playtime_milestones={250})
-    emu.store.set('run_memory', RunMemory(playtime_milestones={240}).to_dict())
+    emu.store.set('playtime-milestones-v1', [240])
     emu.pb = Mock()
     emu.policy = Mock()
     emu.rom_sha1 = 'rom'
@@ -143,5 +143,6 @@ def test_checkpoint_reload_preserves_announced_playtime(tmp_path, monkeypatch):
     monkeypatch.setattr('pokesim.emulator.read_snapshot', lambda memory, frame: snap())
     emu._load_state_file(path)
     assert emu.mem.playtime_milestones == {240, 250}
-    assert emu.store.get('run_memory')['playtime_milestones'] == [240, 250]
+    # The reload reads the manifest and the announced hours, and writes no kv copy of the run memory.
+    assert emu.store.get('run_memory') is None
     emu.store.close()
