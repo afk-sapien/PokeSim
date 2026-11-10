@@ -49,7 +49,7 @@ def bundle(store, folder, report):
     """The row for a stall bundle just written to ``folder``."""
     objective = report.get('objective') or {}
     goal = (objective.get('key') or objective.get('id') or '') if isinstance(objective, dict) else ''
-    # The quiet check of StallWatch is the only one that keeps a bundle today, so it is the default kind.
+    # A bundle from before captures named their trigger was kept by the quiet check of StallWatch.
     write(store, 'bundle', folder=Path(folder).name, reason=report.get('reason') or '',
           stall=report.get('kind') or report.get('rung') or 'quiet', goal=goal,
           quiet_game_minutes=report.get('quiet_game_minutes'), map=report.get('map') or '')

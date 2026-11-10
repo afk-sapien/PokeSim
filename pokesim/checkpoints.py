@@ -134,6 +134,53 @@ def compress_event_states(adventures: Path, guard, stop=lambda: False) -> int:
     return saved
 
 
+def fresh_folder(folder: Path) -> Path:
+    """``folder``, or the first of ``folder-2``, ``folder-3`` and on that does not exist yet, so two
+    bundles kept in the same second or game minute each get their own."""
+    folder, found, repeat = Path(folder), Path(folder), 1
+    while found.exists():
+        repeat += 1
+        found = folder.with_name(f'{folder.name}-{repeat}')
+    return found
+
+
+def _link_or_copy(source: Path, target: Path):
+    try:
+        os.link(source, target)
+    except OSError:
+        shutil.copyfile(source, target)
+
+
+def write_bundle(folder: Path, state: bytes, metadata: dict, report: dict, png: bytes | None, before: Path | None,
+                 segments=(), compress=False) -> Path:
+    """Write a stall bundle into the new folder ``folder``.
+
+    It holds ``noticed.state`` with its manifest, ``before.state`` copied from ``before``, ``noticed.png``,
+    each closed trace segment of ``segments`` linked under ``trace/``, and ``report.json``. The running
+    adventures, the ladder tools and tools/find_stalls.py all write it, and ``python -m pokesim.replay
+    capture`` turns one into a scenario.
+    """
+    folder.mkdir(parents=True)
+    CheckpointStore(folder).write_checkpoint(state, metadata, name='noticed.state', compress=compress)
+    if before is not None:
+        for suffix in ('.state', '.json'):
+            shutil.copyfile(before.with_suffix(suffix), folder / f'before{suffix}')
+    if png:
+        CheckpointStore.atomic_write(folder / 'noticed.png', png)
+    extra = {'has_before': before is not None}
+    if segments:
+        # A closed segment is never written again, so a link to its files costs no space until it is pruned.
+        for segment in segments:
+            target = folder / 'trace' / segment.name
+            target.mkdir(parents=True)
+            for path in segment.iterdir():
+                if path.is_file():
+                    _link_or_copy(path, target / path.name)
+        extra['trace'] = [segment.name for segment in segments]
+    CheckpointStore.atomic_write(folder / 'report.json', json.dumps(dict(report, **extra), indent=2).encode())
+    return folder
+
+
 class CheckpointStore:
     def __init__(self, states: Path):
         self.states = Path(states)
@@ -249,20 +296,11 @@ class CheckpointStore:
         return self.states.parent / 'stalls'
 
     def write_stall_bundle(self, state: bytes, metadata: dict, report: dict, png: bytes | None,
-                           before: Path | None, keep: int) -> Path:
-        """Keep the moment a stall was noticed beside the save from before it began.
-
-        tools/find_stalls.py writes the same layout, so tools/stuck_scenarios.py accepts either."""
-        folder = self.stalls / f'stall-{time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())}'
-        folder.mkdir(parents=True, exist_ok=True)
-        bundle = CheckpointStore(folder)
-        bundle.write_checkpoint(state, metadata, name='noticed.state')
-        if before is not None:
-            for suffix in ('.state', '.json'):
-                shutil.copyfile(before.with_suffix(suffix), folder / f'before{suffix}')
-        if png:
-            self.atomic_write(folder / 'noticed.png', png)
-        self.atomic_write(folder / 'report.json', json.dumps(dict(report, has_before=before is not None), indent=2).encode())
+                           before: Path | None, keep: int, segments=()) -> Path:
+        """Keep the moment a stall was noticed beside the save from before it began, and drop all but
+        the newest ``keep`` bundles. The layout is write_bundle's."""
+        folder = fresh_folder(self.stalls / f'stall-{time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())}')
+        write_bundle(folder, state, metadata, report, png, before, segments)
         for old in sorted(self.stalls.glob('stall-*'))[:-keep] if keep > 0 else []:
             shutil.rmtree(old, ignore_errors=True)
         return folder

@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import io
 from pokecore.emulator_state import validate_runtime
-import json
 
 from pokecore.emulator import Emulator as CoreEmulator
 
@@ -112,20 +111,17 @@ class HeadlessRun:
         return checkpoint_manifest(self.policy, rom_sha1=self.rom_sha1, frame=self.frame,
                                    policy_name='strategic', run_memory=self.memory)
 
+    def state(self):
+        """The save state of this moment."""
+        stream = io.BytesIO()
+        self.pb.save_state(stream)
+        return stream.getvalue()
+
     def save(self, path, compress=False):
         """Write a checkpoint the application and the replay tools both accept. ``compress`` writes
         the state and its manifest gzipped, as the library keeps journal saves."""
-        manifest = self.manifest()
-        if compress:
-            stream = io.BytesIO()
-            self.pb.save_state(stream)
-            return CheckpointStore(path.parent).write_checkpoint(stream.getvalue(), manifest, name=path.name,
-                                                                 compress=True)
-        with path.open('wb') as stream:
-            self.pb.save_state(stream)
-        manifest = {'format': 1, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), **manifest}
-        path.with_suffix('.json').write_text(json.dumps(manifest), encoding='utf-8')
-        return path
+        return CheckpointStore(path.parent).write_checkpoint(self.state(), self.manifest(), name=path.name,
+                                                             compress=compress)
 
     def tick(self, frames):
         if frames > 0:

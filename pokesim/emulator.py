@@ -31,18 +31,17 @@ from .policies import make_policy
 from .policies.base import BUTTONS, Action
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
 from .runtime.game_loop import GameLoop, Gen1, gen1_options
-from .runtime import trace
+from .runtime import capture, trace
 from .runtime.manifest import checkpoint_manifest
 from .runtime.reload import FRAMES_PER_SECOND, reload_target
 from .runtime.restart import restart
 from .screen import W_OPTIONS
-from .stalls import PROGRESS_EVENTS, LoopGuard, StallWatch, advanced, boss_attempt
+from .stalls import BEFORE_STALL_CHECKPOINT, PROGRESS_EVENTS, LoopGuard, StallWatch, advanced, boss_attempt  # noqa: F401
 from .strategy_data import MAPS
 
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
 LEAGUE_ENTRY = MAPS['LORELEIS_ROOM']
 LEAGUE_CHECKPOINT = 'league-entry.state'
-BEFORE_STALL_CHECKPOINT = 'before-stall.state'
 # Kept by name, so a wrong rewind or restart can be undone from the saves list.
 BEFORE_LOAD_CHECKPOINT = 'before-load.state'
 BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
@@ -855,18 +854,10 @@ class Emulator:
         tracer = getattr(self, 'tracer', None)
         if tracer is not None:
             tracer.begin(path.stem, state, manifest, kept=path)
-        stall = getattr(self, 'stall', None)
-        if stall and stall.fresh and config.KEEP_STALL_BUNDLES and not (snap is not None and snap.in_battle):
-            # The first save after an achievement is the last one known to be from before any stall.
-            # Autosaves rotate out long before a stall is noticed, so keep it under its own name.
-            try:
-                self.store.keep_as(path, BEFORE_STALL_CHECKPOINT)
-                stall.fresh = False
-            except OSError:
-                log.exception("cannot keep the save from before a stall")
+        # The first save after an achievement is the last one known to be from before any stall.
+        capture.keep_before(self, path, snap)
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
-        if tracer is not None:
-            tracer.prune(self.store.autosaves())
+        capture.prune_trace(self)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
         self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
         self.store.prune_reward_results()
@@ -899,6 +890,7 @@ class Emulator:
             return False
         goal = getattr(policy, 'goal', None)
         label = goal.title if goal is not None else 'the current project'
+        capture.keep(self, 'give_up', why)
         collection.abandon(f'{why.capitalize()} and {self.unstick_streak} reloads did not help')
         log.error('%s and %d reloads did not help, giving up on %s for now', why, self.unstick_streak, label)
         self._handle_events([Event('stall', f'Gave up on “{label}” for now',
@@ -978,6 +970,8 @@ class Emulator:
         """
         if guard := getattr(self, 'loop_guard', None):
             guard.looping(self.store)
+            if why := guard.take_trip():
+                capture.keep(self, 'loop', why)
         frame = self.frame
         if frame - self.last_reload_frame < RELOAD_QUIET_FRAMES:
             return
@@ -1016,25 +1010,15 @@ class Emulator:
             return
         stall = getattr(self, 'stall', None)
         quiet = stall.check(self.frame, now) if stall else None
+        if stall and stall.capture_due(self.frame):
+            # Kept as soon as game time says it is a stall. The alert waits for real time as well.
+            capture.keep(self, 'quiet', f'no progress for {stall.game_minutes(self.frame)} game minutes', now)
         if quiet is None:
             return
         details = self.policy.details() if hasattr(self.policy, 'details') else {}
         objective = (details.get('objective') or {}).get('title') or 'no objective'
         hours = quiet[0] / 60
         log.warning('no progress for %.1f game hours at %s: %s', hours, snap.map_name, objective)
-        if config.KEEP_STALL_BUNDLES:
-            try:
-                report = {'quiet_game_minutes': quiet[0], 'quiet_real_minutes': quiet[1], 'frame': self.frame,
-                          'map': snap.map_name, 'position': [snap.x, snap.y], 'in_battle': bool(snap.in_battle),
-                          'objective': details.get('objective'), 'action': details.get('action'),
-                          'reason': details.get('reason'), 'recoveries': details.get('recoveries', 0),
-                          'reloads': self.reloads, 'party': [[mon.name, mon.level, mon.hp, mon.status] for mon in snap.party]}
-                folder = self.store.write_stall_bundle(self._state_bytes(), self._manifest(), report, self._shot_png(),
-                                                       self.store.state_path(BEFORE_STALL_CHECKPOINT),
-                                                       config.KEEP_STALL_BUNDLES)
-                log.warning('kept the stall and the save from before it in %s', folder)
-            except Exception:
-                log.exception('cannot keep the stall bundle')
         self._handle_events([Event('stall', f'Stuck? {hours:.0f} game hours without progress',
                                    f'Objective: {objective}. On {snap.map_name} after {quiet[1]} real minutes '
                                    f'and {details.get("recoveries", 0)} recoveries. The saved moment is attached '

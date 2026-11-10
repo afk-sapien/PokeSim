@@ -10,6 +10,8 @@ from .state import Error, journal, kv
 log = logging.getLogger(__name__)
 
 FRAMES_PER_GAME_MINUTE = 3600
+# The first autosave after progress, kept under this name so a capture can start from before the stall.
+BEFORE_STALL_CHECKPOINT = 'before-stall.state'
 # A managed trade is arranged by the coordinator, so it says nothing about the run's own progress.
 PROGRESS_EVENTS = ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map')
 
@@ -27,9 +29,11 @@ class StallWatch:
         self.fresh = True
         # The clocks from before a boss attempt under way, which a loss to the boss puts back.
         self.held = None
+        # The start frame of the quiet stretch that already has a capture.
+        self.captured = None
 
     def progress(self, frame, now):
-        self.frame, self.since, self.alerted, self.fresh = frame, now, None, True
+        self.frame, self.since, self.alerted, self.fresh, self.captured = frame, now, None, True, None
 
     def attempt(self):
         """Start holding the clocks for a boss attempt. True when this starts a new attempt."""
@@ -79,6 +83,15 @@ class StallWatch:
             return None
         self.alerted = now
         return quiet
+
+    def capture_due(self, frame):
+        """True once for each quiet stretch past the game-minute limit, so its capture never waits
+        for the real-minute pacing of the alert. Call it after ``check``, which restarts the clocks
+        on a reload, so the stretch after a reload gets its own capture."""
+        if not self.stalled(frame) or self.captured == self.frame:
+            return False
+        self.captured = self.frame
+        return True
 
 
 def held(snapshot):
@@ -167,6 +180,8 @@ class LoopGuard:
         self.reason, self.checked, self.saved = None, None, {}
         # The last real progress and the reload counts from before a boss attempt under way.
         self.held = None
+        # A new loop reason that the emulator has not kept a capture of yet (take_trip).
+        self.tripped = None
         self.lock = threading.Lock()
 
     def reloaded(self, name):
@@ -231,8 +246,16 @@ class LoopGuard:
                 reason = f'It reloaded {name} {count} times without progress'
             if reason and reason != self.reason:
                 log.error('Loop guard: %s', reason)
+                self.tripped = reason
             self.reason = reason
             return reason
+
+    def take_trip(self):
+        """The reason of a loop noticed since the last call, or None, so each new loop keeps one capture.
+        A loop noticed by a reward check waits here for the emulator's next guard check."""
+        with self.lock:
+            tripped, self.tripped = self.tripped, None
+            return tripped
 
     def _save(self, store):
         if self.reloads == self.saved:

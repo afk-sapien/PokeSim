@@ -5,7 +5,8 @@ private saves on this machine. Push the branch first, then from its clean checko
   uv run --locked --extra dev python tools/preflight.py <cartridge folder> [--no-post]
 It plays `tools/stage_ladder.py gate` (about 3 minutes) and then every replay under the heavy load gate
 (about 7 minutes), and posts the `preflight` commit status on HEAD. A replay named in the scenarios folder's
-known-failures.txt that fails is the known baseline. A gate failure, or any other failed, raised or skipped
+known-failures.txt, or in a scenarios/index.toml row that expects stuck, that fails is the known baseline.
+A gate failure, or any other failed, raised or skipped
 replay, fails the preflight. The result also goes to the data folder's preflight/<commit>.json.
 Gold, Silver and Crystal need GEN2_DATA_DIR, or the script prepares that data in .release-local/gen2-data.
 """
@@ -16,10 +17,12 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+INDEX = ROOT / 'scenarios' / 'index.toml'
 CONTEXT = 'preflight'
 REPLAY = 'test_the_player_gets_going_again'
 GATE_TIMEOUT = '30m'
@@ -49,6 +52,14 @@ def known_failures(path):
     if not path.exists():
         return set()
     return {line.split('#', 1)[0].strip() for line in path.read_text(encoding='utf-8').splitlines()} - {''}
+
+
+def expected_stuck(index=INDEX):
+    """The scenarios the tracked index expects to stay stuck, since their stall is still open."""
+    if not index.exists():
+        return set()
+    rows = tomllib.loads(index.read_text(encoding='utf-8')).get('scenario', [])
+    return {row['name'] for row in rows if row.get('expect') == 'stuck'}
 
 
 def replay_outcomes(junit):
@@ -143,7 +154,9 @@ def main(argv=None):
     sha = head()
     if not args.no_post and not pushed(sha):
         raise SystemExit(f'{sha[:7]} is not on GitHub, so push it first or pass --no-post')
-    known = known_failures(scenarios_dir() / 'known-failures.txt')
+    listed = known_failures(scenarios_dir() / 'known-failures.txt')
+    stuck = expected_stuck()
+    known = listed | stuck
     began = time.monotonic()
     if not args.no_post:
         post(sha, 'pending', 'playing the ladder gate and the private replays')
@@ -168,7 +181,8 @@ def main(argv=None):
     for problem in problems:
         print(problem)
     for name in fixed:
-        print(f'{name} now passes, so take it off known-failures.txt once it passes on main')
+        print(f'{name} now passes, so set its row in scenarios/index.toml to expect passes' if name in stuck
+              else f'{name} now passes, so take it off known-failures.txt once it passes on main')
     print(f'preflight {"passed" if not problems else "failed"} in {report["wall_seconds"]}s: {summary}. '
           f'Report in {out}')
     if not args.no_post:

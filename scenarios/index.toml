@@ -1,0 +1,13 @@
+# Stuck scenarios kept from stall captures, one [[scenario]] row each. python -m pokesim.replay capture
+# writes a row and rewrites the rows below this comment, so keep notes in the issue.
+#
+# name          the scenario folder under the private scenarios folder
+# rom_sha1      the cartridge it plays
+# state_sha256  the save it starts from, unpacked, as a trace names it
+# frames        the frame of that save and the frame the stall was noticed at
+# expect        stuck while the stall is open, passes once a fix lands
+# kind          what noticed the stall: quiet, give_up, loop, gate or ladder
+# issue         the issue or pull request
+#
+# The saves are private and stay out of the repository. The preflight replays every scenario it has a
+# save for, and a row that expects stuck is a known failure there.

@@ -24,6 +24,14 @@ def test_the_known_failures_file_skips_blank_lines_and_comments(tmp_path):
     assert preflight.known_failures(tmp_path / 'missing.txt') == set()
 
 
+def test_index_rows_that_expect_stuck_are_known_failures(tmp_path):
+    index = tmp_path / 'index.toml'
+    assert preflight.expected_stuck(index) == set()
+    index.write_text('# header\n\n[[scenario]]\nname = "gold-b"\nexpect = "stuck"\n\n'
+                     '[[scenario]]\nname = "red-a"\nexpect = "passes"\n')
+    assert preflight.expected_stuck(index) == {'gold-b'}
+
+
 def test_each_replay_outcome_is_read_from_the_junit_report(tmp_path):
     junit = tmp_path / 'replays.xml'
     junit.write_text(JUNIT)
@@ -105,6 +113,14 @@ def test_a_passing_run_posts_pending_then_success(fake_run):
     assert posted == [('pending', 'playing the ladder gate and the private replays'),
                       ('success', 'gate passed, 3 replays passed, 1 known failures')]
     assert report['passed'] and report['replays']['gold-b'] == 'failed'
+
+
+def test_an_index_row_that_expects_stuck_is_a_known_failure(fake_run, monkeypatch, capsys):
+    monkeypatch.setattr(preflight, 'expected_stuck', lambda: {'silver-c', 'red-a'})
+    code, _, report = fake_run(junit=JUNIT.replace('<skipped message="no cartridge"/>', ''))
+    assert code == 0 and report['known_failures'] == ['gold-b', 'red-a', 'silver-c']
+    out = capsys.readouterr().out
+    assert 'red-a now passes, so set its row in scenarios/index.toml to expect passes' in out
 
 
 def test_a_failing_run_posts_failure_with_the_first_problem(fake_run):

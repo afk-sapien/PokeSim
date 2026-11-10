@@ -1,8 +1,10 @@
-"""Keep and replay stuck scenarios: saved moments the player once could not get out of.
+"""Replay stuck scenarios: saved moments the player once could not get out of.
 
-  add   copy a checkpoint (or a stall bundle's before.state) into a scenario folder, with edits
   run   replay every scenario in parallel and report which ones still get stuck
   show  describe the party, bag and place a checkpoint holds, after the scenario's edits
+
+python -m pokesim.replay capture keeps a stall bundle or a checkpoint as a scenario, with edits, and
+lists it in scenarios/index.toml.
 
 Red, Blue, Yellow, Gold, Silver and Crystal checkpoints all replay, each on the cartridge its manifest
 names. The party and money edits work in all six games, and so does taking a species out of the Pokédex
@@ -18,7 +20,6 @@ from functools import partial
 import json
 import os
 from pathlib import Path
-import shutil
 import sys
 import time
 
@@ -26,66 +27,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from pokesim.ram import ITEM_NAMES, read_snapshot
-from pokesim.scenarios import STATUS, Scenario, WorkerDied, discover, open_run, play, replay_all
+from pokesim.scenarios import Scenario, WorkerDied, discover, open_run, play, replay_all
 
 DEFAULT_ROOT = ROOT / 'data' / 'scenarios'
-
-
-def private(path):
-    path = path.resolve()
-    return not path.is_relative_to(ROOT) or path.is_relative_to(ROOT / 'data')
-
-
-def parse_party(values):
-    """slot:key=value,key=value, for example 0:status=frozen,hp=12 or all:pp=0."""
-    changes = []
-    for value in values or ():
-        slot, _, fields = value.partition(':')
-        change = {'slot': 'all' if slot == 'all' else int(slot)}
-        for pair in fields.split(','):
-            key, _, raw = pair.partition('=')
-            if key == 'status':
-                if raw not in STATUS:
-                    raise SystemExit(f'Unknown status {raw}. Choose from {", ".join(STATUS)}.')
-                change[key] = raw
-            elif key == 'hp':
-                change[key] = float(raw) if '.' in raw else int(raw)
-            elif key == 'pp':
-                change[key] = int(raw)
-            else:
-                raise SystemExit(f'Unknown party field {key}. Use status, hp or pp.')
-        changes.append(change)
-    return changes
-
-
-def add(args):
-    folder = args.root / args.name
-    if not private(folder):
-        raise SystemExit('Scenarios contain private game data. Choose a folder outside the checkout or under data/.')
-    source = args.checkpoint / 'before.state' if args.checkpoint.is_dir() else args.checkpoint
-    if not source.with_suffix('.json').exists():
-        raise SystemExit(f'{source} has no manifest beside it')
-    folder.mkdir(parents=True, exist_ok=args.force)
-    for suffix in ('.state', '.json'):
-        shutil.copyfile(source.with_suffix(suffix), folder / f'start{suffix}')
-    edits = {}
-    if args.party:
-        edits['party'] = parse_party(args.party)
-    if args.item:
-        edits['items'] = {name: int(quantity) for name, _, quantity in (value.partition('=') for value in args.item)}
-    if args.money is not None:
-        edits['money'] = args.money
-    scenario = {'name': args.name, 'description': args.description, 'checkpoint': 'start.state', 'edits': edits,
-                'budget_game_minutes': args.budget, 'max_quiet_game_minutes': args.quiet, 'seed': args.seed}
-    if args.until:
-        scenario['until'] = args.until
-    if args.fallback:
-        for suffix in ('.state', '.json'):
-            shutil.copyfile(args.fallback.with_suffix(suffix), folder / f'fallback{suffix}')
-        scenario['fallback'] = 'fallback.state'
-    (folder / 'scenario.json').write_text(json.dumps(scenario, indent=2) + '\n', encoding='utf-8')
-    print(f'wrote {folder}')
-    show(argparse.Namespace(rom=args.rom, scenario=folder))
 
 
 def show(args):
@@ -155,20 +99,6 @@ def main():
                              'YELLOW_ROM_PATH and the cartridges in GEN2_CARTRIDGE_DIR, chosen by the checkpoint ROM hash')
     parser.add_argument('--root', type=Path, default=Path(os.environ.get('POKESIM_SCENARIOS', DEFAULT_ROOT)))
     commands = parser.add_subparsers(dest='command', required=True)
-    adding = commands.add_parser('add', help='keep a checkpoint as a scenario')
-    adding.add_argument('name')
-    adding.add_argument('checkpoint', type=Path, help='a .state file with its manifest, or a stall bundle folder')
-    adding.add_argument('--description', default='')
-    adding.add_argument('--party', action='append', help='slot:status=frozen,hp=12,pp=0 (slot may be all)')
-    adding.add_argument('--item', action='append', help='FULL_HEAL=0 removes an item, REVIVE=3 sets its quantity')
-    adding.add_argument('--money', type=int)
-    adding.add_argument('--until', help='an event type that must happen, such as badge, trainer or champion')
-    adding.add_argument('--fallback', type=Path, help='unedited save the second reload goes to, such as league-entry.state')
-    adding.add_argument('--budget', type=int, default=240, help='game minutes to play')
-    adding.add_argument('--quiet', type=int, default=90, help='game minutes without an achievement that count as stuck')
-    adding.add_argument('--seed', type=int, default=7)
-    adding.add_argument('--force', action='store_true', help='replace an existing scenario')
-    adding.set_defaults(action=add)
     showing = commands.add_parser('show', help='describe a scenario after its edits')
     showing.add_argument('scenario', type=Path)
     showing.set_defaults(action=show)
