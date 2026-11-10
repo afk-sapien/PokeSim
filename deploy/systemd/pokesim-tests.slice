@@ -2,5 +2,7 @@
 Description=Local PokeSim test runs from tools/load_gate.sh, inside pokesim.slice
 
 [Slice]
+# The local nightly (tools/nightly_tests.sh) runs here too, under the same heavy lock as other test runs.
+# Turn it off with systemctl --user disable --now pokesim-nightly.timer.
 CPUWeight=100
 MemoryMax=10G
