@@ -247,7 +247,7 @@ settings in the browser.
 | `NTFY_MIN_PRIORITY` | `2` | only push events at or above this priority (1–5, see below) |
 | `NTFY_MUTE` | | comma-separated event types never pushed, e.g. `map,blackout` |
 | `PUBLIC_URL` | `http://localhost:8000` | absolute links in the feed / ntfy click actions |
-| `AUTOSAVE_SECONDS` / `KEEP_AUTOSAVES` | `60` / `20` | save-state rotation, counted in game seconds at 60 frames each, so it saves at the same points at any pace |
+| `AUTOSAVE_SECONDS` / `KEEP_AUTOSAVES` | `300` / `20` | save-state rotation, counted in game seconds at 60 frames each, so it saves at the same points at any pace |
 | `STUCK_RELOAD_SECONDS` | `600` | stationary timeout in game seconds, valid strategic overworld play replans while other cases can reload an autosave |
 | `STALL_ALERT_GAME_MINUTES` | `120` | game time without an achievement before a `stall` journal entry is recorded, `0` turns it off |
 | `STALL_ALERT_REAL_MINUTES` | `15` | real time that must also pass, so Max pace does not report brief lulls |
