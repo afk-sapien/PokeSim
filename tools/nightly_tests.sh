@@ -3,6 +3,7 @@
 # slow tests on. Usage:
 #   bash tools/nightly_tests.sh install   write the systemd user units. It enables nothing.
 #   bash tools/nightly_tests.sh run       update the nightly clone and run the suite in it
+#   bash tools/nightly_tests.sh notify    hand today's verdict line to POKESIM_NIGHTLY_NOTIFY_COMMAND
 # The run uses its own clone, apart from any working checkout, and takes the heavy lock of
 # tools/load_gate.sh, so it never runs beside a replay batch or an agent's tests.
 # Each run writes <date>.txt and <date>.log to the results folder and keeps the newest 30 of each.
@@ -17,6 +18,11 @@
 #   POKESIM_NIGHTLY_ROMS        red.gb, blue.gb, yellow.gb and the Gen II cartridges
 #   POKESIM_NIGHTLY_DATA        the private data folder
 #   POKESIM_NIGHTLY_SCENARIOS   the stuck scenarios, by default the scenarios folder in the data folder
+#   POKESIM_NIGHTLY_NOTIFY_COMMAND  optional, a shell command that reads one verdict line on stdin
+# The service exits nonzero on a new failure or a broken run, and its OnFailure unit runs notify. So a
+# night with only the known failures, or none, sends nothing. Without a notify command the line stays in
+# the journal.
+# Turn the nightly off with systemctl --user disable --now pokesim-nightly.timer.
 # The whole script is one function, so bash has read all of it before the clone changes under it.
 set -uo pipefail
 main() {
@@ -62,6 +68,8 @@ case ${1:-} in
 [Unit]
 Description=PokeSim local nightly tests: the full suite on origin/main with the replays and the slow tests
 After=network-online.target
+# A new failure, a broken run or a timeout hands today's verdict line on.
+OnFailure=pokesim-nightly-failed.service
 
 [Service]
 Type=oneshot
@@ -77,6 +85,18 @@ Environment=POKESIM_LOAD_GATE_SLICE=
 ExecStart=/bin/bash "$CLONE/tools/nightly_tests.sh" run
 TimeoutStartSec=4h
 EOF
+    cat >"$UNITS/pokesim-nightly-failed.service" <<EOF
+[Unit]
+Description=Hand a failed PokeSim nightly verdict to POKESIM_NIGHTLY_NOTIFY_COMMAND
+
+[Service]
+Type=oneshot
+Environment="PATH=$(dirname "$uv"):/usr/local/bin:/usr/bin:/bin"
+Environment="POKESIM_NIGHTLY_ENV=$ENV_FILE"
+Environment="POKESIM_NIGHTLY_RESULTS=$RESULTS"
+ExecStart=/bin/bash "$CLONE/tools/nightly_tests.sh" notify
+TimeoutStartSec=5min
+EOF
     cat >"$UNITS/pokesim-nightly.timer" <<EOF
 [Unit]
 Description=Run the PokeSim local nightly tests at 02:00
@@ -89,9 +109,25 @@ Persistent=false
 [Install]
 WantedBy=timers.target
 EOF
-    echo "nightly: wrote pokesim-nightly.service and pokesim-nightly.timer to $UNITS"
+    echo "nightly: wrote pokesim-nightly.service, pokesim-nightly-failed.service and pokesim-nightly.timer to $UNITS"
     echo "nightly: enable it with systemctl --user daemon-reload && systemctl --user enable --now pokesim-nightly.timer"
+    echo "nightly: turn it off with systemctl --user disable --now pokesim-nightly.timer"
     echo "nightly: each run writes $RESULTS/<date>.txt"
+    [ -n "${POKESIM_NIGHTLY_NOTIFY_COMMAND:-}" ] \
+      || echo "nightly: no POKESIM_NIGHTLY_NOTIFY_COMMAND in $ENV_FILE, so a failed night shows only in the journal" >&2
+    ;;
+  notify)
+    if [ -f "$txt" ]; then
+      line=$(head -1 "$txt")
+    else
+      line="nightly $DAY: NEW FAILURES (the run broke before it wrote a verdict, see journalctl --user -u pokesim-nightly)"
+    fi
+    if [ -z "${POKESIM_NIGHTLY_NOTIFY_COMMAND:-}" ]; then
+      echo "nightly: $line"
+      echo "nightly: no POKESIM_NIGHTLY_NOTIFY_COMMAND in $ENV_FILE, so this line stays in the journal"
+      exit 0
+    fi
+    printf '%s\n' "$line" | sh -c "$POKESIM_NIGHTLY_NOTIFY_COMMAND"
     ;;
   run)
     mkdir -p "$RESULTS"
@@ -191,7 +227,7 @@ EOF
     [ ${#new[@]} -eq 0 ]
     ;;
   *)
-    echo "usage: bash tools/nightly_tests.sh install | run" >&2
+    echo "usage: bash tools/nightly_tests.sh install | run | notify" >&2
     exit 2
     ;;
 esac
