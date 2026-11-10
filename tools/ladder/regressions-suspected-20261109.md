@@ -110,4 +110,12 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   Zone too late to get Surf inside the window. Training ends only on a level or 2400 frames without
   experience, and a level 41 partner on level 15 grass gains a little in every battle. That stall is
   older than 171176e and is still open.
+- The training skip, 2026-11-10: a partner whose next level would take more than ten wild battles on the
+  map is not trained there. Training waste fell from 9420 to 880 frames in yellow/badges_6 and from 9260
+  to 3480 in red/badges_6. Both runs now get Surf, the Gold Teeth and Strength and teach both HMs, and
+  Yellow starts on the Secret Key. yellow/badges_6 rose to 26.6% on goals the old window never reached.
+  teach_surf is wasted in full in both runs, 2502 frames in Yellow and 3480 in Red, and the restock after
+  Surf wastes 5688 in Yellow. The lead accepted the rise for this rung alone and its baseline moved up.
+  red/badges_6 is 9.5%, inside the gate. The teach_surf and restock waste are open, and each fix brings
+  the baseline back down.
 - The other rungs are still open.
