@@ -203,6 +203,23 @@ def first_bad(items, is_bad, jobs=1, pool=None):
     return hi, results, inversions
 
 
+def twice(first, second):
+    """Whether two runs of one commit played the same way, with why.
+
+    The same head passes. So do two traces whose records differ only in the time their clock
+    inputs read, since commits before the frame clock work read the wall clock in Gen II.
+    """
+    out = {'same_head': first.ok and second.ok and first.head == second.head}
+    if out['same_head']:
+        return out | {'same': True, 'reason': 'same head'}
+    if not (first.ok and second.ok):
+        return out | {'same': False, 'reason': 'a run failed'}
+    out['diverge'] = diverge.compare(first.folder, second.folder)
+    if out['diverge']['clock_only']:
+        return out | {'same': True, 'reason': 'only wall-clock readings differ'}
+    return out | {'same': False, 'reason': 'heads differ'}
+
+
 def predicate(kind, base, stall_key=None, points=GATE_WASTE_POINTS):
     """Whether a run is bad against the good end's run ``base``. A failed run is bad under each kind."""
     if kind == WASTE:
@@ -238,12 +255,8 @@ class Bisect:
         passed = True
         for name, sha in (('good', self.good), ('bad', self.bad)):
             first, second = self.run(sha, 1), self.run(sha, 2)
-            same = first.ok and second.ok and first.head == second.head
-            details[name] = {'commit': sha, 'same_head': same, 'runs': [first.brief(), second.brief()]}
-            if not same:
-                passed = False
-                if first.ok and second.ok:
-                    details[name]['diverge'] = diverge.compare(first.folder, second.folder)
+            details[name] = {'commit': sha, 'runs': [first.brief(), second.brief()]} | twice(first, second)
+            passed = passed and details[name]['same']
         return passed, details
 
     def search(self, kind):
@@ -328,6 +341,15 @@ def _run_line(name, brief):
     return f'- {name}: {brief["commit"][:12]} {state}, {brief["waste"]}% wasted, stall {stall}.'
 
 
+def _check_line(check):
+    if check.get('same_head'):
+        return 'same head twice'
+    if check.get('same'):
+        count = check['diverge']['clock_readings']
+        return f'same play twice, only wall-clock readings differ in {count} clock inputs'
+    return check.get('reason') or 'heads differ'
+
+
 def markdown(report):
     lines = [f'# Bisect {report["rung"]}', '',
              f'- Good {report["good"][:12]}, bad {report["bad"][:12]}, pyboy-rs held at {report["pyboy"]}, '
@@ -338,11 +360,11 @@ def markdown(report):
     check = report.get('self_check')
     if check:
         for name in ('good', 'bad'):
-            lines.append(f'- Self check, {name} end: {"same head twice" if check[name]["same_head"] else "heads differ"}.')
+            lines.append(f'- Self check, {name} end: {_check_line(check[name])}.')
     if report.get('stopped'):
         lines.append(f'- Stopped: {report["stopped"]}.')
         for name in ('good', 'bad'):
-            if check and 'diverge' in check[name]:
+            if check and 'diverge' in check[name] and not check[name].get('same'):
                 lines += ['', diverge.markdown(check[name]['diverge'], f'The {name} end against itself')]
         return '\n'.join(lines) + '\n'
     for found in report['searches']:
