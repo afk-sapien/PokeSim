@@ -132,12 +132,40 @@ the container build use that source and the lock holds no pokecore wheel. The UR
 get. The pin check requires it to name the member's version and, with `--remote`, to serve a wheel whose
 files equal the member's source. See [Shared game core](shared-core.md).
 
-Before tagging PokeSim, both upstream releases must exist with their wheels attached, and the pyboy-rs
-release must also carry its source archive, which the Dockerfile fetches with a required
-`EMULATOR_SOURCE_SHA256`. The upstream release workflows should refuse `--clobber` on a release that is
-already public, so a published asset can never change under a recorded hash. That belongs to the pyboy-rs
-and Core repositories. PokeSim's own check is that every asset hash in `uv.lock`, and the pokecore pin's fragment, equals the
+Before tagging PokeSim, the pyboy-rs release and the pokecore release it pins must exist with their wheels
+attached. The pyboy-rs release must also carry its source archive, which the Dockerfile fetches with a
+required `EMULATOR_SOURCE_SHA256`. The pokecore release workflow never modifies a published release, and the
+pyboy-rs one should refuse `--clobber` the same way, so a published asset can never change under a recorded
+hash. PokeSim's own check is that every asset hash in `uv.lock`, and the pokecore pin's fragment, equals the
 hash of the file the release serves.
+
+### pokecore releases
+
+A PokeSim release that ships a Core change first cuts a pokecore release of this repository from
+`packages/pokecore`. Its tag is `pokecore-v<version>`, it carries the wheel, the sdist and `SHA256SUMS.txt`,
+and it never becomes the latest release, so `/releases/latest/` keeps serving PokeSim.
+
+1. In a pull request, bump `version` in `packages/pokecore/pyproject.toml` and `__version__` in
+   `packages/pokecore/src/pokecore/__init__.py`, and add a `## <version>` section to
+   `packages/pokecore/CHANGELOG.md`. Merge it.
+2. Tag that commit on `main` and start the workflow. Add `-f dry_run=true` to do everything except the release.
+
+   ```sh
+   version=0.11.1
+   git tag "pokecore-v$version"
+   git push origin "pokecore-v$version"
+   gh workflow run pokecore-release.yml --ref main -f tag="pokecore-v$version"
+   ```
+
+3. The workflow checks the tag against both versions, the changelog section and that `main` holds the commit.
+   It runs the pokecore suite on Python 3.11, 3.12 and 3.14 with no skips, builds both files, installs each
+   alone, and compares the wheel with the member source. It publishes the draft only after the attached files
+   download with the hashes in `SHA256SUMS.txt`.
+4. In the PokeSim release pull request, run `python tools/pin_pokecore.py <version>`. It refuses a wheel whose
+   hash is not the listed one or whose files differ from `packages/pokecore/src/pokecore`, and rewrites only
+   the pin's URL and fragment. `uv.lock` does not change.
+5. The release workflow's `tools/check_release_pins.py --remote` repeats that comparison, so a PokeSim tag
+   cannot ship a pin whose wheel differs from `packages/pokecore`.
 
 ### Temporary pins and how they are finalized
 

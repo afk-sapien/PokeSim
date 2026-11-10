@@ -1,0 +1,177 @@
+name: Publish pokecore release
+# Publishes the packages/pokecore workspace member as the GitHub release pokecore-vX.Y.Z of this repository, with
+# its wheel, its sdist and SHA256SUMS.txt, for pip users of PokeSim and for projects that install pokecore alone.
+# Nothing goes to PyPI. Push the tag on main first, then dispatch this workflow with it. A dry run checks, tests
+# and builds, and keeps the files as a workflow artifact only. A published release is never modified. A pokecore
+# release never becomes the repository's latest release, which stays the newest PokeSim release.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag on main, for example pokecore-v0.11.1
+        required: true
+        type: string
+      dry_run:
+        description: Check, test and build, but create, upload and edit no release
+        required: false
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: pokecore-release-${{ inputs.tag }}${{ inputs.dry_run && '-dry-run' || '' }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      revision: ${{ steps.check.outputs.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          # Every branch, so the tagged commit can be checked against main.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - name: Check the tag, the versions, the changelog section and that main holds the commit
+        id: check
+        env:
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python tools/pokecore_release.py "$TAG" >> "$GITHUB_OUTPUT"
+          revision=$(git rev-parse HEAD)
+          git merge-base --is-ancestor "$revision" origin/main || { echo "::error::$TAG is not a commit on main"; exit 1; }
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          # This job cannot see drafts, so a release it finds is a published one.
+          if gh release view "$TAG" --json tagName > /dev/null 2>&1; then
+            echo "::error::release $TAG is already published and is never modified. Release a new version."
+            exit 1
+          fi
+  test:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python: ['3.11', '3.12', '3.14']
+    name: test (${{ matrix.python }})
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.validate.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+        with:
+          version: '0.12.18'
+          enable-cache: false
+      - uses: ./.github/actions/uv-sync
+        with:
+          args: --extra dev
+      - name: Run the pokecore suite without silent skips
+        working-directory: packages/pokecore
+        run: |
+          uv run pytest -rs -q -p no:cacheprovider --ignore=tests/test_snapshot_native.py --ignore=tests/test_real_roms.py | tee "$RUNNER_TEMP/pokecore.log"
+          if grep -Eq '[0-9]+ skipped' "$RUNNER_TEMP/pokecore.log"; then echo "Unexpected skips"; exit 1; fi
+  package:
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.validate.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+        with:
+          version: '0.12.18'
+          enable-cache: false
+      - run: uvx ruff==0.16.9 check packages/pokecore
+      - name: Build the wheel and the sdist, install each alone, and write SHA256SUMS.txt
+        env:
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          uv build --package pokecore --wheel --sdist --out-dir dist
+          printf '%s\n' "pokecore-$VERSION-py3-none-any.whl" "pokecore-$VERSION.tar.gz" | sort > "$RUNNER_TEMP/expected.txt"
+          ls dist | sort > "$RUNNER_TEMP/built.txt"
+          diff "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/built.txt" || { echo "::error::unexpected build output"; exit 1; }
+          python tools/pokecore_release.py "$TAG" --notes "$RUNNER_TEMP/notes.md" --wheel "dist/pokecore-$VERSION-py3-none-any.whl"
+          for file in dist/*; do
+            venv="$RUNNER_TEMP/clean-$(basename "$file")"
+            python -m venv "$venv"
+            "$venv/bin/python" -m pip install -q "$file"
+            "$venv/bin/python" -c "import pokecore, sys; assert pokecore.__version__ == sys.argv[1], pokecore.__version__" "$VERSION"
+          done
+          (cd dist && sha256sum pokecore-* > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+          mv "$RUNNER_TEMP/notes.md" dist/notes.md
+          { echo '### SHA-256'; echo '```'; cat dist/SHA256SUMS.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: pokecore-release
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    # The only job that may write. A dry run never reaches it.
+    needs: [validate, package]
+    if: ${{ inputs.dry_run != true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      REVISION: ${{ needs.validate.outputs.revision }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: pokecore-release
+          path: files
+      - name: Create the draft, attach and verify the files, then publish it without making it the latest release
+        run: |
+          set -euo pipefail
+          mv files/notes.md notes.md
+          (cd files && sha256sum -c SHA256SUMS.txt)
+          ls files | sort > wanted.txt
+          test "$(wc -l < wanted.txt)" -eq 3
+          case "$VERSION" in *rc*) prerelease=true ;; *) prerelease=false ;; esac
+          test "$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)" = "$REVISION" || { echo "::error::$TAG moved during this run"; exit 1; }
+          # Only a draft, or one this run creates as a draft, may be modified.
+          if gh release view "$TAG" --json isDraft --jq .isDraft > state.txt 2>/dev/null; then
+            if [ "$(cat state.txt)" != true ]; then
+              echo "::error::release $TAG is already published and is never modified"
+              exit 1
+            fi
+            gh release edit "$TAG" --title "PokeSim Core $VERSION" --notes-file notes.md --prerelease="$prerelease" --latest=false
+            gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r name; do
+              grep -qxF "$name" wanted.txt || gh release delete-asset "$TAG" "$name" --yes
+            done
+          else
+            gh release create "$TAG" --draft --verify-tag --title "PokeSim Core $VERSION" --notes-file notes.md --prerelease="$prerelease" --latest=false
+          fi
+          gh release upload "$TAG" files/* --clobber
+          gh release view "$TAG" --json assets --jq '.assets[].name' | sort > uploaded.txt
+          diff wanted.txt uploaded.txt || { echo "::error::the release asset set is wrong"; exit 1; }
+          # Download what is attached and check it against SHA256SUMS.txt before publishing.
+          mkdir check
+          gh release download "$TAG" --dir check
+          (cd check && sha256sum -c SHA256SUMS.txt)
+          gh release edit "$TAG" --draft=false --prerelease="$prerelease" --latest=false
+          gh release view "$TAG" --json url,isDraft,isPrerelease,tagName
