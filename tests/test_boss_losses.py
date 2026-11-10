@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 
 from pokesim.planning.losses import Losses, best_level
+from pokesim.play_clock import PlayClock
 from pokesim.policies.progression import boss_training, gym_goal
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.store import Store
@@ -72,7 +73,8 @@ def test_a_gen1_stall_reload_inside_a_boss_battle_counts_as_a_loss_and_the_team_
     game = SimpleNamespace(store=SimpleNamespace(autosaves=saves.autosaves, state_path=saves.state_path), reloads=0,
                            policy=policy, snapshot=snap(map=MAPS['CERULEAN_GYM'], badges=1, in_battle=2,
                                                         party=(mon(level=24, hp=30),)),
-                           _restore_first_valid=lambda paths: restored.append(paths[0].name), _tick=lambda n: None)
+                           _restore_first_valid=lambda paths: restored.append(paths[0].name), _tick=lambda n: None,
+                           play_clock=PlayClock(), adventure_seed=7)
     Emulator._unstick(game, 0, 'battle never ended')
     assert restored and policy.losses.levels() == {'cascade': 24}
     # The reload builds a new policy from the store, and its next goal trains before Misty.
@@ -101,7 +103,8 @@ def test_a_gen1_stall_reload_in_a_rival_battle_counts_against_the_goal_under_way
     rival = snap(map=MAPS['SS_ANNE_2F'], badges=3, in_battle=2, opponent=200 + 42, enemy_level=20,
                  party=(mon(level=18, hp=30),))
     game = SimpleNamespace(store=SimpleNamespace(autosaves=saves.autosaves, state_path=saves.state_path), reloads=0,
-                           policy=policy, snapshot=rival, _restore_first_valid=lambda paths: None, _tick=lambda n: None)
+                           policy=policy, snapshot=rival, _restore_first_valid=lambda paths: None, _tick=lambda n: None,
+                           play_clock=PlayClock(), adventure_seed=7)
     Emulator._unstick(game, 0, 'battle never ended')
     assert policy.losses.levels() == {'cut': 18} and policy.losses.aces() == {'cut': 20}
     # The next goal trains on the route before Lt. Surge, the next gym, until the best fighter is Lv 20.

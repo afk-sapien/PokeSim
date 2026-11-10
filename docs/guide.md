@@ -241,7 +241,7 @@ settings in the browser.
 | `POLICY` | `strategic` | objective-driven play with verified menu actions, navigation, battle estimates, and resource management. `smart_random` and `guided_random` remain available as baselines |
 | `FAST_TEXT` | `1` | force the in-game text speed to FAST |
 | `BATTLE_ANIMATIONS` | `1` | `0` turns battle animations off (faster) |
-| `SEED` | random | RNG seed for the policy, starter choice, and random names |
+| `SEED` | random | RNG seed for the policy, starter choice, and random names. Unset, each adventure draws its own seed once and keeps it, and a restart draws a new one |
 | `STARTER` | `random` | new strategic adventures choose among all three starters. Set `bulbasaur`, `charmander`, or `squirtle` for a fixed choice. Saved adventures retain their choice |
 | `NTFY_URL` / `NTFY_TOKEN` | off | push notable events (with screenshot) to an ntfy topic, such as `https://ntfy.sh/my-topic`. Optional defaults for the Library's [Notifications](#notifications) page |
 | `NTFY_MIN_PRIORITY` | `2` | only push events at or above this priority (1–5, see below) |
@@ -322,7 +322,7 @@ from readable word lists in `pokesim/policies/naming.py`, with separate pools fo
 and Pokémon. The controller types through the normal naming grid, so catches sent to the
 PC follow the same naming flow. Trainer names fit the seven-character limit and Pokémon
 nicknames fit the ten-character limit. Choices avoid repeats until their pool runs out.
-`SEED` makes the name sequence repeatable, and naming state is included in policy saves.
+The adventure's seed makes the name sequence repeatable, and naming state is included in policy saves.
 Existing names are kept when resuming a game. Player and rival names are chosen on a new run.
 
 Each adventure has a Nicknames switch in its settings, on by default. Off, the bot answers

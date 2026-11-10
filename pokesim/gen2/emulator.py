@@ -6,11 +6,10 @@ import io
 import logging
 from pathlib import Path
 import queue
-import secrets
 import threading
 import time
 
-from .. import __version__, config
+from .. import __version__, config, seeds
 from ..audio import AudioFeed
 from ..build_info import build_info
 from ..checkpoints import open_state
@@ -224,7 +223,8 @@ class Emulator:
         self.isolated_ram = isolated_ram
         self.preparation = None
         self.options_applied = False
-        self.policy = Policy(self.data, seed=config.SEED, starter=config.STARTER)
+        self.adventure_seed = seeds.adventure_seed(store)
+        self.policy = Policy(self.data, seed=self.adventure_seed, starter=config.STARTER)
         self.policy.load_state_dict(store.get('policy_state', {}))
         store.attach(self.policy, 2)
         self.speed = config.SPEED
@@ -996,6 +996,7 @@ class Emulator:
                               f'{why.capitalize()} at {self.snapshot.map_name} and a reload did not help. '
                               f'{self.policy.recoveries} recoveries so far.', priority=HIGH), self.snapshot)
         restored = None
+        clock = self.play_clock.frames
         from .standdown import carry_over, stalled_objectives
         if self.snapshot is not None and (why == CANNOT_END or getattr(self.snapshot, 'in_battle', 0) == 2):
             # A boss battle the reload leaves is lost, though not everyone fainted, so the team trains
@@ -1024,8 +1025,9 @@ class Emulator:
                 if call_off and call_off_league(self.policy):
                     log.warning('the League attempt restarted %d times, leaving to prepare the team', LEAGUE_RESTARTS)
             # The emulator is deterministic, so the same save and choices would replay the same
-            # trouble. Idling a random moment moves the game's random numbers along.
-            self._tick(1 + secrets.randbelow(180))
+            # trouble. Idling a moment drawn from the reload stream moves the game's random numbers
+            # along, the same way in a replay.
+            self._tick(seeds.reload_idle(self.adventure_seed, clock))
         elif all_saves and not saves:
             # Every save predates the trade or reward. Power-cycling falls back on the cartridge's own
             # save, which can predate it too, so keep playing from here instead.
@@ -1221,7 +1223,9 @@ class Emulator:
         self.frame = 0
         self.previous = self.snapshot = None
         self.history = new_history()
-        self.policy = Policy(self.data, seed=config.SEED, starter=config.STARTER)
+        # The restart's transaction dropped the old seed, so the new game draws its own starter and choices.
+        self.adventure_seed = seeds.adventure_seed(self.store)
+        self.policy = Policy(self.data, seed=self.adventure_seed, starter=config.STARTER)
         self.store.attach(self.policy, 2)
         self.play_clock = PlayClock()
         self.paused = self.manual_mode = False

@@ -47,7 +47,7 @@ def test_a_gen1_restart_sends_mew_only_to_a_game_that_has_none(store, monkeypatc
     state = snap(hall_of_fame_count=1, owned=frozenset(owned), box_counts=(0,) * 12)
     monkeypatch.setattr(ram, 'read_snapshot', lambda *_: state)
     emu = SimpleNamespace(store=store, paused=False, manual_mode=False, pb=SimpleNamespace(memory=None),
-                          frame=100, _state_bytes=sent)
+                          frame=100, _state_bytes=sent, adventure_seed=7)
     if gift:
         with pytest.raises(Sent):
             deliver(emu, mew_event=True)
@@ -59,7 +59,8 @@ def test_a_gen1_restart_sends_mew_only_to_a_game_that_has_none(store, monkeypatc
 def gen2_emu(store, data=None):
     policy = SimpleNamespace(menu=None, collection={})
     return SimpleNamespace(store=store, paused=False, manual_mode=False, preparation=None, policy=policy,
-                           pb=SimpleNamespace(memory='live'), data=data, frame=100, _autosave=sent)
+                           pb=SimpleNamespace(memory='live'), data=data, frame=100, _autosave=sent,
+                           adventure_seed=7)
 
 
 def gen2_snapshot(owned, *events):

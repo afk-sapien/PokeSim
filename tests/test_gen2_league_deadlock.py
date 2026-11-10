@@ -15,6 +15,7 @@ from pokesim.gen2 import collection
 from pokesim.gen2 import policy as policy_module
 from pokesim.gen2.emulator import CANNOT_END, LEAGUE_CHECKPOINT, LEAGUE_RESTARTS, Emulator
 from pokesim.gen2.policy import SUBSTATUS_TRANSFORMED, Policy, transformed
+from pokesim.play_clock import PlayClock
 
 HYDRO_PUMP, WATERFALL, REST, GROWL, PECK, SURF, TRANSFORM = 56, 127, 156, 45, 64, 57, 144
 DITTO, GYARADOS = 132, 130
@@ -163,6 +164,7 @@ def unstick(why, *, streak=0, in_league=True, entry=True):
                             state_path=lambda name: league if entry and name == LEAGUE_CHECKPOINT else None)
     emu = SimpleNamespace(unstick_streak=streak, snapshot=SimpleNamespace(valid=True, started=True, map_name="Lance's Room"),
                           store=store, frame=100000, reloads=0, last_reload=0, _behind_barrier=lambda metadata: False,
+                          play_clock=PlayClock(), adventure_seed=7,
                           policy=SimpleNamespace(recoveries=0, menu=None, collection={}, goal=None, decisions=0,
                                                  in_league=lambda snapshot: in_league),
                           _load_state_file=loaded.append, _tick=lambda frames: None, _reset_watch=lambda: None,
@@ -180,6 +182,7 @@ def test_a_league_attempt_restarted_again_and_again_is_called_off(monkeypatch):
                             state_path=lambda name: league if name == LEAGUE_CHECKPOINT else None)
     run = SimpleNamespace(recoveries=0, menu=None, collection={}, goal=None, decisions=0, in_league=lambda snapshot: True)
     emu = SimpleNamespace(unstick_streak=0, store=store, frame=100000, reloads=0, last_reload=0,
+                          play_clock=PlayClock(), adventure_seed=7,
                           _behind_barrier=lambda metadata: False, policy=run,
                           _tick=lambda frames: None, _reset_watch=lambda: None, _event=lambda event, snapshot: None)
 

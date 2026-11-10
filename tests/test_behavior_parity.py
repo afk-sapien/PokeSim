@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim import rewards
+from pokesim.play_clock import PlayClock
 from pokesim.policies.collection import Collection
 from pokesim.store import Store
 from pokesim.strategy_data import MAPS
@@ -129,6 +130,7 @@ def gen1_ladder():
     policy = SimpleNamespace(collection=SimpleNamespace(project={'method': 'grass'}, abandon=lambda reason: True),
                              goal=SimpleNamespace(title='Catch a better Pidgey'), on_restore=lambda: None)
     emu = SimpleNamespace(policy=policy, unstick_streak=0, reloads=0, input_epoch=0, loop_guard=None,
+                          play_clock=PlayClock(), adventure_seed=7,
                           snapshot=SimpleNamespace(started=True, map_name='Route 1', map=12, in_battle=0, valid=True),
                           store=SimpleNamespace(autosaves=lambda: [save()], state_path=lambda key: None),
                           _restore_first_valid=lambda candidates: steps.append('reload'), _tick=lambda frames: None,
@@ -148,6 +150,7 @@ def gen2_ladder():
                              ladder_rung='quality', goal=Goal('collection_quality', 'Catch a better Pidgey', 'X', 0, 0),
                              in_league=lambda snap: False, on_restore=lambda: None)
     emu = SimpleNamespace(policy=policy, unstick_streak=0, reloads=0, loop_guard=None, frame=10 ** 6,
+                          play_clock=PlayClock(), adventure_seed=7,
                           snapshot=SimpleNamespace(started=True, valid=True, map_name='Route 1', in_battle=0,
                                                    hall_of_fame_count=0),
                           store=SimpleNamespace(autosaves=lambda: [save()], checkpoint_metadata=lambda path: {'frame': 0},

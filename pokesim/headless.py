@@ -9,7 +9,6 @@ import hashlib
 import io
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 import json
-import secrets
 
 from pokecore.emulator import Emulator as CoreEmulator
 
@@ -22,6 +21,7 @@ from .policies.base import BUTTONS, PolicyContext, stack_pointer
 from .policies.progression import YELLOW
 from .policies.strategic import StrategicPolicy
 from .screen import W_OPTIONS
+from .seeds import RELOAD_IDLE, reload_idle
 
 BLUE_SHA1 = 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2'
 
@@ -87,9 +87,12 @@ class HeadlessRun:
 
     def reload(self, path):
         """Go back to a checkpoint as the application does after a battle that never ends."""
+        frame = self.frame
         self._load(path)
-        # The same save and the same choices would replay the same trouble.
-        self.pb.tick(1 + (self.rng.randrange(180) if self.rng else secrets.randbelow(180)), render=False)
+        # The same save and the same choices would replay the same trouble. A scenario's own
+        # generator picks the idle, and otherwise the reload stream does, so a rerun idles the same.
+        idle = 1 + self.rng.randrange(RELOAD_IDLE) if self.rng else reload_idle(self.seed, frame)
+        self.pb.tick(idle, render=False)
 
     def save(self, path, compress=False):
         """Write a checkpoint the application and the replay tools both accept. ``compress`` writes

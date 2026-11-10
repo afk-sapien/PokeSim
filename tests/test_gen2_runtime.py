@@ -15,6 +15,7 @@ from pokesim.gen2.navigation import Navigator
 from pokecore.gen2.ram import calculated_stats, experience_at, experience_progress
 from pokesim.gen2.sprites import portrait
 from pokesim.gen2.web import Reference
+from pokesim.play_clock import PlayClock
 
 
 @pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
@@ -2711,7 +2712,7 @@ def test_a_stall_reload_inside_a_boss_battle_counts_as_a_loss_and_the_team_train
     saves = SimpleNamespace(autosaves=lambda: [Path('auto-v1-1.state')], state_path=lambda name: None,
                             checkpoint_metadata=lambda path: {'frame': 1, 'settled': True})
     emu = SimpleNamespace(unstick_streak=0, snapshot=battle, store=saves, frame=100000, reloads=0, last_reload=0,
-                          policy=policy, _behind_barrier=lambda metadata: False, _load_state_file=loaded.append,
+                          play_clock=PlayClock(), adventure_seed=7, policy=policy, _behind_barrier=lambda metadata: False, _load_state_file=loaded.append,
                           _tick=lambda frames: None, _reset_watch=lambda: None, _event=lambda event, snapshot: None)
     Emulator._unstick(emu, 100000, 'battle never ended')
     assert loaded and policy.boss_bar('zephyr') == 17
@@ -2747,7 +2748,7 @@ def test_a_stall_reload_in_the_burned_tower_rival_battle_counts_against_the_goal
     saves = SimpleNamespace(autosaves=lambda: [Path('auto-v1-1.state')], state_path=lambda name: None,
                             checkpoint_metadata=lambda path: {'frame': 1, 'settled': True})
     emu = SimpleNamespace(unstick_streak=0, snapshot=rival, store=saves, frame=100000, reloads=0, last_reload=0,
-                          policy=policy, _behind_barrier=lambda metadata: False, _load_state_file=lambda path: None,
+                          play_clock=PlayClock(), adventure_seed=7, policy=policy, _behind_barrier=lambda metadata: False, _load_state_file=lambda path: None,
                           _tick=lambda frames: None, _reset_watch=lambda: None, _event=lambda event, snapshot: None)
     Emulator._unstick(emu, 100000, 'battle never ended')
     assert policy.losses.levels() == {'burned_tower': 28} and policy.losses.aces() == {'burned_tower': 22}

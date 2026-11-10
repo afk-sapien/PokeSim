@@ -51,7 +51,7 @@ def test_retroactive_mew_waits_for_safe_play_and_storage(tmp_path, monkeypatch, 
     state = snap(hall_of_fame_count=10, **changes)
     monkeypatch.setattr(ram, 'read_snapshot', lambda *_: state)
     emu = SimpleNamespace(store=store, paused=False, manual_mode=False,
-                          pb=SimpleNamespace(memory=None), frame=100)
+                          pb=SimpleNamespace(memory=None), frame=100, adventure_seed=7)
     try:
         assert deliver(emu, mew_event=True, league_rewards=True) is None
         assert store.get(PENDING) is None
@@ -155,7 +155,7 @@ def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, f
         emu = SimpleNamespace(store=store, paused=False, manual_mode=False, pb=SimpleNamespace(memory=memory),
                               frame=100, _state_bytes=lambda: b'source', _autosave=lambda: None,
                               _boot=lambda: clone, _load_state_file=lambda _: None,
-                              policy=SimpleNamespace(on_restore=lambda: None), input_epoch=0)
+                              policy=SimpleNamespace(on_restore=lambda: None), input_epoch=0, adventure_seed=7)
         if fail_receipt:
             store.db.execute("CREATE TRIGGER reject_gift BEFORE INSERT ON capture_receipts "
                              "BEGIN SELECT RAISE(ABORT, 'receipt failed')" + chr(59) + " END")
@@ -208,7 +208,7 @@ def test_a_league_gift_the_pc_would_release_is_settled_without_sending_it(tmp_pa
         saves = []
         emu = SimpleNamespace(store=store, paused=False, manual_mode=False, pb=SimpleNamespace(memory=memory),
                               frame=100, _state_bytes=lambda: b'source', _autosave=lambda: saves.append(1),
-                              _boot=lambda: clone, _load_state_file=lambda _: None,
+                              _boot=lambda: clone, _load_state_file=lambda _: None, adventure_seed=7,
                               policy=spare_at((0, 0)), input_epoch=0)
         monkeypatch.setattr(rewards, 'staged_shiny', lambda *_: shiny)
         if shiny:

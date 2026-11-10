@@ -9,6 +9,7 @@ import uuid
 
 from ..checkpoints import CheckpointStore
 from .. import rewards
+from ..seeds import gift_seed
 
 PENDING = 'custom-reward-pending-v1'
 BARRIER = 'custom-reward-barrier-v1'
@@ -39,14 +40,14 @@ def _put(db, key, value):
     db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (key, json.dumps(value)))
 
 
-def select_reward(snapshot, ledger, mew_received, *, league_rewards=False, mew_event=False):
-    """Catch up a missed Mew before draining repeatable League rewards."""
+def select_reward(snapshot, ledger, mew_received, *, league_rewards=False, mew_event=False, seed=None):
+    """Catch up a missed Mew before draining repeatable League rewards. ``seed`` is the adventure seed."""
     from ..policies.collection import champion
     from ..trade.event import MEW
 
     # Eligibility is persistent progress, so enabling the event after victory works too.
     if mew_event and champion(snapshot) and 151 not in snapshot.owned and not mew_received:
-        return 'mew_event', None, MEW, str(uuid.uuid4())
+        return 'mew_event', None, MEW, gift_seed(seed, 'mew_event', rewards.championship_count(ledger))
     if league_rewards and ledger['earned'] > ledger['delivered']:
         ordinal, species, seed = rewards.selection(ledger)
         return 'league_reward', ordinal, species, seed
@@ -101,11 +102,12 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
     with emu.store.lock:
         value = rewards.ledger(emu.store.db)
     selected = select_reward(before, value, emu.store.get(EVENT_KEY),
-                             league_rewards=league_rewards, mew_event=mew_event)
+                             league_rewards=league_rewards, mew_event=mew_event, seed=emu.adventure_seed)
     from .. import mew_returns
-    if mew_event and mew_returns.ready(emu.store, rewards.championship_count(value)):
+    championships = rewards.championship_count(value)
+    if mew_event and mew_returns.ready(emu.store, championships):
         from ..trade.event import MEW
-        selected = ('mew_return', None, MEW, str(uuid.uuid4()))
+        selected = ('mew_return', None, MEW, gift_seed(emu.adventure_seed, 'mew_return', championships))
     if selected is None:
         return None
     kind, ordinal, species, seed = selected

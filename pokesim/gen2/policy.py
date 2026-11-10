@@ -147,7 +147,7 @@ class Policy:
         self.shadow = Shadow()
 
     def state_dict(self):
-        return {'starter': self.starter, 'completed': self.completed, 'collection': self.collection, 'demand': self.demand, 'decisions': self.decisions,
+        return {'starter': self.starter, 'rng': self.rng.getstate(), 'completed': self.completed, 'collection': self.collection, 'demand': self.demand, 'decisions': self.decisions,
                 'naming': self.naming.state_dict(), 'learning': self.learning, 'partner_move': self.partner_move,
                 'menu': {'kind': type(self.menu).__name__, 'state': asdict(self.menu)} if self.menu else None,
                 'shopping': self.shopping, 'shop_location': self.shop_location, 'healing_map': self.healing_map,
@@ -160,6 +160,11 @@ class Policy:
         from .npc_trades import Trade
         self.pin = None
         self.starter = state.get('starter', self.starter)
+        if 'rng' in state:
+            # Saved as JSON lists, so the tuples the generator wants are rebuilt.
+            def tuples(value):
+                return tuple(tuples(item) for item in value) if isinstance(value, (list, tuple)) else value
+            self.rng.setstate(tuples(state['rng']))
         self.completed = state.get('completed', {})
         self.collection = state.get('collection', {'target': None})
         from .standdown import migrate
