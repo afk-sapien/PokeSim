@@ -6,7 +6,8 @@ object of the same shape). The submodules ``memory_map`` and ``charmap`` hold th
 per-version tables (``memory_map.symbols(version)`` and ``charmap.charmap(version)``). The table-free readers in :mod:`pokecore.gen2.state` need
 only a version name. The submodules ``clock`` and ``save`` drive the cartridge clock and the
 Save menu on a Core emulator and need the emulator extra when called. :mod:`pokecore.gen2.maps`
-decodes live map collision and ice slides. :mod:`pokecore.gen2.hooks` finds verified ROM code
+decodes live map collision and ice slides, and :mod:`pokecore.gen2.mapfacts` holds the block swaps
+and warp carpets generated from the disassembly. :mod:`pokecore.gen2.hooks` finds verified ROM code
 addresses for emulator hooks and :mod:`pokecore.gen2.resets` holds trusted setup writes.
 :mod:`pokecore.gen2.cable` drives Cable Club and Time Capsule trades on Core emulators.
 :mod:`pokecore.gen2.puzzles` reads and solves the Ruins of Alph picture boards.
@@ -19,8 +20,9 @@ from .breeding import (DITTO, TYROGUE, ancestors, branch_parents, breeding_stock
 from .clock import (clock_elapsed, clock_lock_state, export_clock, follow_game_time, host_elapsed, lock_clock,
                     rebase_to_host, stop_with_clock)
 from .hooks import bcd, capture_hooks, contest_hook, encounter_hook, hatch_hook, mart_hooks, step_hook
-from .maps import (CHANGES, DIRS, DOORS, ICE, OPPOSITE, OUTSIDE, WALLS, collision, flyer, has_ice, ice_solids, move,
-                   passable, side_blocked, slide, travel_collision)
+from .mapfacts import CARPETS, SWAPS
+from .maps import (DIRS, ICE, OPPOSITE, OUTSIDE, WALLS, collision, flyer, has_ice, ice_solids, move, passable,
+                   side_blocked, slide, travel_collision)
 from .memory_map import CRYSTAL_ONLY, VERSIONS, symbols, version_of
 from .ram import (BADGES, STAT_NAMES, TIMES_OF_DAY, Mon, Snapshot, calculated_stats, caught_details, clear_region_cache,
                   decode_mon, dex_flags, experience_at, experience_progress, individual, landmark_name, read_snapshot,
@@ -37,10 +39,10 @@ from .status import DEFAULT_VERSION, live_status
 from .tables import FIELD_MOVES, NPC_TRADES, PRIZES, GameTables, NpcTrade, decode_text, npc_trades, pretty, prizes
 
 __all__ = [
-    'BADGES', 'CHANGES', 'CONTEST_STATS', 'CRYSTAL_ONLY', 'DEFAULT_VERSION', 'DESTINATIONS', 'DIRS', 'DITTO', 'DOORS',
+    'BADGES', 'CARPETS', 'CONTEST_STATS', 'CRYSTAL_ONLY', 'DEFAULT_VERSION', 'DESTINATIONS', 'DIRS', 'DITTO',
     'FIELD_MOVES', 'GameTables', 'ICE', 'Mon', 'NPC_TRADES', 'NpcTrade', 'OPPOSITE', 'OUTSIDE', 'PRIZES', 'PUZZLES',
-    'STAT_NAMES', 'ScreenText', 'Snapshot', 'TIMES_OF_DAY', 'TYROGUE', 'VERSIONS', 'WALLS', 'ancestors', 'battle_power',
-    'bcd', 'box_gift', 'branch_parents', 'breeding_stock', 'cable', 'calculated_stats', 'capture_hooks', 'caught_data',
+    'STAT_NAMES', 'SWAPS', 'ScreenText', 'Snapshot', 'TIMES_OF_DAY', 'TYROGUE', 'VERSIONS', 'WALLS', 'ancestors',
+    'battle_power', 'bcd', 'box_gift', 'branch_parents', 'breeding_stock', 'cable', 'calculated_stats', 'capture_hooks', 'caught_data',
     'caught_details', 'clear_region_cache', 'clock', 'clock_archive', 'clock_elapsed', 'clock_lock_state', 'collision',
     'contest_hook', 'contest_score', 'decode_mon', 'decode_struct', 'decode_text', 'descendants_wanted', 'dex_flags',
     'egg_lines', 'encounter_hook', 'experience_at', 'experience_progress', 'export_clock', 'export_with_clock',

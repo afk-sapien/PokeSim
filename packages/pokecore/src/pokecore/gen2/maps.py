@@ -7,6 +7,7 @@ with the consumer: these helpers only say what the game itself would let the pla
 """
 from __future__ import annotations
 
+from .mapfacts import SWAPS
 from .ram import Memory
 
 ICE = frozenset((0x23, 0x2B))
@@ -18,32 +19,6 @@ OPPOSITE = {'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'}
 # The map environments Fly can be used from.
 OUTSIDE = frozenset({'TOWN', 'ROUTE'})
 
-# Event flag, map and the (x, y, block) blocks the game swaps in while the flag is set.
-CHANGES = (
-    ('EVENT_LANCES_ROOM_ENTRANCE_CLOSED', 'LANCES_ROOM', ((4, 22, 0x34),)),
-    ('EVENT_LANCES_ROOM_EXIT_OPEN', 'LANCES_ROOM', ((4, 0, 0x0B),)),
-    ('EVENT_USED_BASEMENT_KEY', 'GOLDENROD_UNDERGROUND', ((18, 6, 0x2E),)),
-    ('EVENT_USED_THE_CARD_KEY_IN_THE_RADIO_TOWER', 'RADIO_TOWER_3F', ((14, 2, 0x2A), (14, 4, 1))),
-    ('EVENT_UNCOVERED_STAIRCASE_IN_MAHOGANY_MART', 'MAHOGANY_MART_1F', ((6, 2, 0x1E),)),
-    ('EVENT_OPENED_DOOR_TO_GIOVANNIS_OFFICE', 'TEAM_ROCKET_BASE_B3F', ((10, 8, 7),)),
-    ('EVENT_OPENED_DOOR_TO_ROCKET_HIDEOUT_TRANSMITTER', 'TEAM_ROCKET_BASE_B2F', ((14, 12, 7),)),
-    ('EVENT_RECEIVED_CARD_KEY', 'GOLDENROD_DEPT_STORE_B1F', ((16, 4, 0x0D),)),
-    ('EVENT_BOULDER_IN_BLACKTHORN_GYM_1', 'BLACKTHORN_GYM_1F', ((8, 2, 0x3B),)),
-    ('EVENT_BOULDER_IN_BLACKTHORN_GYM_2', 'BLACKTHORN_GYM_1F', ((2, 4, 0x3A),)),
-    ('EVENT_BOULDER_IN_BLACKTHORN_GYM_3', 'BLACKTHORN_GYM_1F', ((8, 6, 0x3B),)),
-)
-# The blocks each EVENT_DOOR_<n>_OPEN flag opens in the Goldenrod Underground switch room.
-DOORS = (
-    ((16, 6, 0x2D),), ((10, 6, 0x2D),), ((2, 6, 0x2D),),
-    ((2, 10, 0x2D),), ((10, 10, 0x2D),), ((16, 10, 0x2D),),
-    ((12, 6, 0x2A), (12, 8, 0x2D)), ((6, 6, 0x2A), (6, 8, 0x2D)),
-    ((12, 10, 0x2A), (12, 12, 0x2D)), ((6, 10, 0x2A), (6, 12, 0x2D)),
-    ((18, 10, 0x2A), (18, 12, 0x2D)),
-)
-# The Elite Four rooms close behind the player and open ahead once the member is beaten.
-LEAGUE = tuple((f'EVENT_{name}_ROOM_{event}', f'{name}_ROOM', ((4, y, block),))
-               for name in ('WILLS', 'KOGAS', 'BRUNOS', 'KARENS')
-               for event, y, block in [('ENTRANCE_CLOSED', 14, 0x2A), ('EXIT_OPEN', 2, 0x16)])
 # Maps whose collision travel_collision changes, whether or not they are loaded.
 TRAVEL_MAPS = ('ROUTE_16_GATE', 'ROUTE_17_ROUTE_18_GATE', 'VERMILION_CITY', 'ROUTE_19', 'ROUTE_36',
                'VICTORY_ROAD_GATE')
@@ -161,16 +136,15 @@ def travel_collision(data, snapshot, mid, grid):
 def event_changes(data, snapshot, live=None):
     """Collision grids of maps other than the loaded one, as their event flags leave them.
 
-    Returns {map id: grid} for every map in :data:`CHANGES`, :data:`LEAGUE`, the switch room
-    doors and :data:`TRAVEL_MAPS`. ``live`` maps a map id to the last grid seen there, used as
-    the base for flag edits. The loaded map is skipped by flag edits, since its live grid from
-    :func:`collision` already shows them. Events missing from ``data.events`` are skipped.
+    Returns {map id: grid} for every map in :data:`pokecore.gen2.mapfacts.SWAPS` and
+    :data:`TRAVEL_MAPS`. ``live`` maps a map id to the last grid seen there, used as the base for
+    flag edits. Each swapped block is drawn as its map callback draws it for the flag, or from the
+    map file where the callback draws nothing. The loaded map is skipped by flag edits, since its
+    live grid from :func:`collision` already shows them. Events missing from ``data.events`` are skipped.
     """
     live = live or {}
     edits = {}
-    doors = tuple((f'EVENT_DOOR_{i}_OPEN', 'GOLDENROD_UNDERGROUND_SWITCH_ROOM_ENTRANCES', blocks)
-                  for i, blocks in enumerate(DOORS, 1))
-    for event, name, blocks in CHANGES + LEAGUE + doors:
+    for name, x, y, event, once, until in SWAPS:
         if event not in data.events:
             continue
         mid = data.map_ids[name]
@@ -178,12 +152,12 @@ def event_changes(data, snapshot, live=None):
             continue
         entry = data.maps[mid]
         grid = edits.setdefault(mid, list(live.get(mid, entry['collision'])))
-        opened = snapshot.event(event)
-        for x, y, block in blocks:
-            for dy in range(2):
-                for dx in range(2):
-                    offset = (y + dy) * entry['width'] + x + dx
-                    grid[offset] = entry['block_collision'][block][dy * 2 + dx] if opened else entry['collision'][offset]
+        block = once if snapshot.event(event) else until
+        for dy in range(2):
+            for dx in range(2):
+                offset = (y + dy) * entry['width'] + x + dx
+                grid[offset] = (entry['collision'][offset] if block is None
+                                else entry['block_collision'][block][dy * 2 + dx])
     for name in TRAVEL_MAPS:
         mid = data.map_ids[name]
         edits[mid] = list(travel_collision(data, snapshot, mid, data.maps[mid]['collision']))
