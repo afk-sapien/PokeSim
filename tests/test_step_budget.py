@@ -185,7 +185,7 @@ def test_gen1_step_stays_within_budget_on_a_large_state():
         snapshot = replace(snapshot, frame=100 + step * 16)
         references.append(reference.time())
         start = clock()
-        actions = policy.step(PolicyContext(snapshot, 0, step / 4, memory))
+        actions = policy.step(PolicyContext(snapshot, 0, memory))
         times.append(clock() - start)
         if actions and actions[0].button:
             snapshot = walk(policy, snapshot, actions[0])

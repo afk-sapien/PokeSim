@@ -235,7 +235,7 @@ def test_npc_project_does_not_steal_field_move_party_selection_during_travel():
     mem = menu({1: '  CUT USER', 3: '  POLIWHIRL'}, (1, 1), top=(1, 1))
     p.collection.observe = lambda *args, **kwargs: None
     p.shortcut.start(Scripted('use_field_move', ['a', 'a']), 'cut', s.frame, mem)
-    assert p.step(PolicyContext(s, 0, 0, mem))[0].button == 'a'
+    assert p.step(PolicyContext(s, 0, mem))[0].button == 'a'
     assert p.shortcut.active and not getattr(p, 'pending_trade_key', None)
 
 

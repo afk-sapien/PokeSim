@@ -14,7 +14,7 @@ from collections import deque
 
 from ..ram import MAP_NAMES, MOVES, Snapshot
 from ..screen import Screen, W_ENEMY_HP, W_ENEMY_MAX_HP, W_PLAYER_MON_NUMBER
-from .base import Action, Policy, PolicyContext
+from .base import Action, Policy, PolicyContext, Stillness
 from .naming import NamingController
 
 log = logging.getLogger("pokesim.policy")
@@ -28,6 +28,7 @@ EPSILON = 0.04                        # chance of a completely random press on a
 LONG_BATTLE_TURNS = 25                # after this many menu visits in one battle, get increasingly random
 BURST_LEN = 12
 BLOCKED_TTL = 3000                    # decisions a wall is remembered for (NPCs move, so not forever)
+STUCK_FRAMES = 5400                   # 90 game seconds on one tile outside battle -> try harder to leave
 
 
 def tap(b, hold=6, gap=6):
@@ -59,6 +60,8 @@ class SmartRandomPolicy(Policy):
         self.battle_turns = 0
         self.heal_target: int | None = None
         self.path: deque = deque()
+        self.stillness = Stillness()
+        self.still = 0
 
     # ---------------- persistence ----------------
     def state_dict(self) -> dict:
@@ -89,6 +92,7 @@ class SmartRandomPolicy(Policy):
         s = ctx.snapshot
         mem = ctx.mem
         self.n += 1
+        self.still = self.stillness.frames(ctx)
         scr = Screen(mem)
         naming_action = self.naming.step(scr, s)
         if naming_action is not None:
@@ -276,7 +280,7 @@ class SmartRandomPolicy(Policy):
                 return [tap("a", 6, 10)]
         else:
             self.mode = "exploring"
-        if ctx.stuck_seconds > 90:
+        if self.still > STUCK_FRAMES:
             self.mode = "unstick"
             d = r.choice([d for d in DIRS if d != self.last_dir])
             self.last_move = (pos, d)

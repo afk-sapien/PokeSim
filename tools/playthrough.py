@@ -63,7 +63,7 @@ def main():
             if milestones(s)['champion'] and not args.stop_position and not args.stop_event:
                 print('CHAMPION', frame, flush=True)
                 break
-            actions = policy.step(PolicyContext(s, 0, time.monotonic(), pb.memory, stack_pointer(pb)))
+            actions = policy.step(PolicyContext(s, frame, pb.memory, stack_pointer(pb)))
             marker = (policy.goal.key, s.badges, s.items)
             if marker != last:
                 checkpoint(f'{frame:08d}-{policy.goal.key}')

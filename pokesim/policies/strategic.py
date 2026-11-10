@@ -455,6 +455,7 @@ class StrategicPolicy(Policy):
 
     def _step(self, ctx):
         s, mem = ctx.snapshot, ctx.mem
+        self.collection.clock = ctx.clock
         scr = Screen(mem)
         kind = scr.kind(s)
         frame = s.frame

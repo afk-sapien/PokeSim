@@ -8,7 +8,7 @@ from test_strategy import mon
 
 def step(policy, s):
     policy.observed_map = s.map
-    policy.step(PolicyContext(s, 0, 0, bytearray(65536)))
+    policy.step(PolicyContext(s, 0, bytearray(65536)))
     return policy.goal.key
 
 

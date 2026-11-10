@@ -81,7 +81,7 @@ def postgame_policy(**changes):
 def test_an_empty_postgame_plan_does_not_start_an_accidental_league_attempt():
     p, s = postgame_policy()
     for frame in range(100, 1100, 12):
-        p.step(PolicyContext(replace(s, frame=frame), 0, frame / 60, bytearray(65536)))
+        p.step(PolicyContext(replace(s, frame=frame), frame, bytearray(65536)))
         # It wanders the lobby between expeditions and never heads for Lorelei.
         assert p.goal.key == 'collect_plan' and p.mode == 'exploring between expeditions'
     assert p.recoveries == 0
@@ -90,7 +90,7 @@ def test_an_empty_postgame_plan_does_not_start_an_accidental_league_attempt():
 def test_postgame_planning_still_selects_the_next_expedition():
     p, s = postgame_policy()
     del p.collection.choose
-    p.step(PolicyContext(s, 0, 0, bytearray(65536)))
+    p.step(PolicyContext(s, 0, bytearray(65536)))
     assert p.collection.project is not None
     assert p.goal.key != 'collect_plan'
 
@@ -99,7 +99,7 @@ def test_explicit_postgame_rematch_can_still_enter_the_league():
     p, s = postgame_policy()
     p.collection.project = {'method': 'rematch', 'hof_count': 6, 'key': 'rematch'}
     p.collection.remaining = 300000
-    p.step(PolicyContext(s, 0, 0, bytearray(65536)))
+    p.step(PolicyContext(s, 0, bytearray(65536)))
     assert p.goal.key == 'league_lorelei'
 
 
@@ -107,7 +107,7 @@ def test_postgame_policy_finishes_a_league_attempt_already_in_progress():
     p, s = postgame_policy()
     s = replace(s, map=MAPS['AGATHAS_ROOM'], event_flags=flags('EVENT_GOT_POKEDEX'))
     p.observed_map = s.map
-    p.step(PolicyContext(s, 0, 0, bytearray(65536)))
+    p.step(PolicyContext(s, 0, bytearray(65536)))
     assert p.goal.key == 'league_agatha'
 
 
@@ -115,7 +115,7 @@ def test_empty_plateau_planner_returns_through_victory_road():
     p, s = postgame_policy()
     s = replace(s, map=MAPS['INDIGO_PLATEAU'], x=9, y=7)
     p.observed_map = s.map
-    p.step(PolicyContext(s, 0, 0, bytearray(65536)))
+    p.step(PolicyContext(s, 0, bytearray(65536)))
     assert p.goal.key == 'collect_passage'
     assert p.goal.targets == ((MAPS['ROUTE_23'], 8, 138),)
     assert p.mode != 'planning the next expedition'
@@ -125,5 +125,5 @@ def test_empty_planner_leaves_the_isolated_east_patch_of_route_23():
     p, s = postgame_policy()
     s = replace(s, map=MAPS['ROUTE_23'], x=19, y=32)
     p.observed_map = s.map
-    p.step(PolicyContext(s, 0, 0, bytearray(65536)))
+    p.step(PolicyContext(s, 0, bytearray(65536)))
     assert p.goal.key == 'collect_passage'

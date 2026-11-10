@@ -162,7 +162,7 @@ Anything the policy does not decide from the cartridge is an `input` record. Inp
 
 1. Owner commands: pins, the Next activity picker, pause and manual play. A manual button is a press with source `manual`. A pause runs no frames.
 2. The external director from the v2 addendum. Its choice is logged with goal kind and parameters, and `redecide` hands the policy the same choice at the same frame.
-3. Trade demand from a partner (`runtime/participant.py:455`). Today it sets `collection.set_demand` straight from the HTTP thread. It moves onto the command queue.
+3. Trade demand from a partner (`runtime/participant.py:455`). It already reaches the game thread through `Emulator.call` (`runtime/participant.py:739`), so it applies between steps. Since PR 4 it reads the PlayClock there, and PR 7 logs it.
 4. Trade results, League gifts and Mew gifts. Each is a `load` with the new state kept beside the segment.
 5. The Gen II clock reading from `_sync_clock`, and `Stop.real_seconds` when it fires (goal system section 3).
 

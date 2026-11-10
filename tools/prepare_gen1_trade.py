@@ -2,7 +2,6 @@
 import argparse
 import json
 from pathlib import Path
-import time
 from types import SimpleNamespace
 
 from pokesim.runtime.settings import SimulationSettings
@@ -54,7 +53,7 @@ def main():
         receipt = participant.prepare(request)
         for step in range(12000):
             snapshot = read_snapshot(emu.pb.memory, emu.frame)
-            actions = emu.preparation.step(PolicyContext(snapshot, 0, time.monotonic(), emu.pb.memory, stack_pointer(emu.pb)))
+            actions = emu.preparation.step(PolicyContext(snapshot, emu.frame, emu.pb.memory, stack_pointer(emu.pb)))
             for action in actions:
                 if action.button:
                     emu.pb.button_press(action.button)

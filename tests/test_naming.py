@@ -39,7 +39,7 @@ def test_all_policies_accept_nicknames_during_battle(policy_name):
     mem = fake_mem({8: "               YES", 9: "               NO", 14: "Give a NICKNAME"})
     mem[W_TILEMAP + 9 * 20 + 14] = 0xED
     mem[W_CURRENT_MENU_ITEM] = 1
-    ctx = PolicyContext(snap(in_battle=1), 100, 0, mem)
+    ctx = PolicyContext(snap(in_battle=1), 0, mem)
     assert policy.step(ctx)[0].button == "up"
     mem[W_CURRENT_MENU_ITEM] = 0
     assert policy.step(ctx)[0].button == "a"
@@ -52,7 +52,7 @@ def test_all_policies_accept_nicknames_during_battle(policy_name):
 @pytest.mark.parametrize("policy_name", POLICIES)
 def test_policy_save_restore_preserves_name_in_progress(policy_name):
     policy = make_policy(policy_name, 1)
-    ctx = PolicyContext(snap(), 0, 0, grid())
+    ctx = PolicyContext(snap(), 0, grid())
     policy.step(ctx)
     chosen = policy.naming.target
     state = json.loads(json.dumps(policy.state_dict()))

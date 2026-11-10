@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import random
 
-from .base import Action, Policy, PolicyContext
+from .base import Action, Policy, PolicyContext, Stillness
 from .naming import NamingController
 from ..screen import Screen
 
 DIRS = ("up", "down", "left", "right")
 OPPOSITE = {"up": "down", "down": "up", "left": "right", "right": "left"}
+STUCK_FRAMES = 3600     # 60 game seconds on one tile outside battle -> try harder to leave
 
 
 class GuidedRandomPolicy(Policy):
@@ -20,6 +21,8 @@ class GuidedRandomPolicy(Policy):
         self.naming = NamingController(seed)
         self.last_dir = "down"
         self.mode = "boot"
+        self.stillness = Stillness()
+        self.still = 0
 
     def describe(self) -> str:
         return f"guided_random ({self.mode})"
@@ -35,7 +38,7 @@ class GuidedRandomPolicy(Policy):
 
     def _walk(self, ctx: PolicyContext) -> list[Action]:
         r = self.rng
-        if ctx.stuck_seconds > 60:
+        if self.still > STUCK_FRAMES:
             # try harder to leave: long holds in fresh directions, close whatever might be open
             self.mode = "unstick"
             d = r.choice([d for d in DIRS if d != self.last_dir])
@@ -59,6 +62,7 @@ class GuidedRandomPolicy(Policy):
     def step(self, ctx: PolicyContext) -> list[Action]:
         r = self.rng
         s = ctx.snapshot
+        self.still = self.stillness.frames(ctx)
         if ctx.mem is not None:
             naming_action = self.naming.step(Screen(ctx.mem), s)
             if naming_action is not None:

@@ -71,14 +71,14 @@ def test_compact_and_complete_box_views_do_not_double_count():
     assert held_count(replace(s, stored_pokemon=()), target) == 1
 
 
-def test_peer_requests_expire_and_are_not_checkpoint_state(monkeypatch):
+def test_peer_requests_expire_and_are_not_checkpoint_state():
     c = Collection()
     c.set_demand({69: 2})
     assert c.demand() == {69: 2}
     restored = Collection()
     restored.load(c.state_dict())
     assert restored.demand() == {}
-    monkeypatch.setattr('pokesim.policies.collection.time.monotonic', lambda: c.demand_until + 1)
+    c.clock = c.demand_until
     assert c.demand() == {}
 
 

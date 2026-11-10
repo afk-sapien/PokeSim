@@ -113,7 +113,7 @@ def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None
                 last_pos = None
                 stuck_frame = battle_frame = invalid_frame = None
                 continue
-            ctx = PolicyContext(snapshot, (frame - (stuck_frame or 0)) / 60, frame / 60, pb.memory, stack_pointer(pb))
+            ctx = PolicyContext(snapshot, frame, pb.memory, stack_pointer(pb))
             actions = policy.step(ctx)
             mode = getattr(policy, "mode", policy_name)
             signature = (pos, snapshot.in_battle, mode, tuple(p.level for p in snapshot.party), snapshot.items, Screen(pb.memory).text)

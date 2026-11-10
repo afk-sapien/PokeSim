@@ -3,6 +3,7 @@ from dataclasses import replace
 from unittest.mock import Mock
 
 from pokesim.emulator import Emulator
+from pokesim.play_clock import PlayClock
 from pokesim.policies.base import Action, PolicyContext
 from pokesim.policies.progression import Goal, story_goal
 from pokesim.policies.strategic import StrategicPolicy
@@ -19,7 +20,7 @@ def test_policy_help_signal_cannot_take_over_the_emulator(monkeypatch):
     emu.manual = queue.Queue()
     emu.paused = emu.manual_mode = False
     emu.frame = 0
-    emu.stuck_since = 0
+    emu.play_clock = PlayClock()
     emu.policy = Mock()
     emu.policy.needs_help = 'Legacy request that must not pause the simulator'
     emu.policy.step.return_value = [Action('right', 8, 2)]
@@ -88,7 +89,7 @@ def test_battles_refresh_navigation_stall_timer():
     policy.progress_frame = 0
     policy.observed_map = 1
     s = snap(frame=6000, in_battle=1, party=(mon(),))
-    policy.step(PolicyContext(s, 100, 100, bytearray(65536)))
+    policy.step(PolicyContext(s, 100, bytearray(65536)))
     assert policy.progress_frame == 6000
 
 
@@ -123,9 +124,9 @@ def test_active_shortcut_keeps_control_until_it_is_done():
     policy.mem = memory
     s = snap(frame=118, party=(mon(),))
     assert policy.shortcut.start(Machine(), 'cut', s.frame, memory)[0].button == 'start'
-    assert policy.step(PolicyContext(s, 0, 0, memory))[0].button is None
+    assert policy.step(PolicyContext(s, 0, memory))[0].button is None
     assert policy.mode == 'shortcut: use_field_move'
-    policy.step(PolicyContext(s, 0, 0, memory))
+    policy.step(PolicyContext(s, 0, memory))
     assert not policy.shortcut.active and policy.shortcut.last.completed
 
 
@@ -140,10 +141,10 @@ def test_battle_turn_after_the_game_takes_the_decision_is_not_a_recovery():
     policy.intent, policy.intent_since = Decision('fight', 0), 0
     policy.observed_map = snap().map
     policy.shortcut.start(Scripted('choose_move', ['a', Done('Chose the move.', True)]), 'move', 0, memory)
-    policy.step(PolicyContext(snap(frame=118, in_battle=1, party=(mon(),)), 0, 0, memory))
+    policy.step(PolicyContext(snap(frame=118, in_battle=1, party=(mon(),)), 0, memory))
     assert not policy.shortcut.active and policy.intent_since is None
     # A knockout, a forced switch and a level up can keep the turn going well past the pending limit.
-    policy.step(PolicyContext(snap(frame=1500, in_battle=1, party=(mon(),), textbox=True), 0, 0, memory))
+    policy.step(PolicyContext(snap(frame=1500, in_battle=1, party=(mon(),), textbox=True), 0, memory))
     assert policy.recoveries == 0
 
 
@@ -155,7 +156,7 @@ def test_battle_decision_the_game_never_took_is_still_recovered():
     policy.intent, policy.intent_since = Decision('fight', 0), 0
     s = snap(frame=1000, in_battle=1, party=(mon(),), textbox=True)
     policy.observed_map = s.map
-    policy.step(PolicyContext(s, 0, 0, memory))
+    policy.step(PolicyContext(s, 0, memory))
     assert policy.recoveries == 1 and policy.intent is None
 
 

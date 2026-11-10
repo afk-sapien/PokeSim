@@ -1,5 +1,5 @@
 """Play until a condition, then print the decoded screen text after a scripted input sequence."""
-import os, sys, time
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pokecore.emulator import Emulator as PyBoy
 from pokesim.ram import read_snapshot, decode_text, W_TILEMAP
@@ -33,7 +33,7 @@ while True:
         print("...", f, s.map_name, (s.x, s.y), "battle", s.in_battle, "party", len(s.party), pol.mode, flush=True)
     if f > int(os.environ.get("MAXF", "400000")):
         print("gave up"); print(screen_text(pb.memory)); sys.exit(1)
-    for a in pol.step(PolicyContext(s, 0, time.time())):
+    for a in pol.step(PolicyContext(s, f)):
         press(a.button, a.hold, a.gap)
 print("frame", f, "party", [(p.name, p.hp) for p in s.party], "enemy", s.enemy_species)
 # advance text until the main battle menu shows

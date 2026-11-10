@@ -452,7 +452,7 @@ class Participant:
             cleaned[int(key)] = count
         collection = getattr(self.emu.policy, 'collection', None)
         if collection is not None:
-            collection.set_demand(cleaned)
+            collection.set_demand(cleaned, self.emu.play_clock.frames)
         merge_partners(self.store, data)
         return {'requests': cleaned}
 

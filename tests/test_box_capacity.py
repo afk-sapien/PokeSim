@@ -65,7 +65,7 @@ def test_full_box_routes_to_pc_and_overrides_pending_upgrade():
     s = full_box(textbox=True)
     p.observed_map = s.map
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
-    action = p.step(PolicyContext(s, 0, 0, memory))[0]
+    action = p.step(PolicyContext(s, 0, memory))[0]
     assert p.goal.key == 'party_box'
     assert p.pc.species is None
     assert all(m != MAPS['LAVENDER_MART'] for m, x, y in p.goal.targets)
@@ -153,7 +153,7 @@ def test_full_source_box_allows_withdrawal_instead_of_switching_away():
     shortcuts = Recorder.on(p)
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'},
                   (1, 1), top=(1, 1))
-    action = p.step(PolicyContext(s, 0, 0, memory))[0]
+    action = p.step(PolicyContext(s, 0, memory))[0]
     assert p.goal.key == 'party_collection'
     assert p.pc.operation == 'withdraw'
     assert action == PRESS and (shortcuts.last.kind, shortcuts.last.position) == ('withdraw_pokemon', 0)
@@ -162,7 +162,7 @@ def test_full_source_box_allows_withdrawal_instead_of_switching_away():
 
     s = replace(s, frame=s.frame + 100, party=s.party + (mon(species=124, level=8),),
                 boxed_pokemon=s.boxed_pokemon[1:], box_counts=(19,) + (0,) * 11)
-    action = p.step(PolicyContext(s, 0, 0, memory))[0]
+    action = p.step(PolicyContext(s, 0, memory))[0]
     assert p.goal.key == 'collect_train'
     assert action.button == 'b'
 
@@ -171,7 +171,7 @@ def test_full_party_still_makes_deposit_space_before_retrieving_partner():
     p, s = collection_with_full_box(party_size=6)
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'},
                   (1, 1), top=(1, 1))
-    p.step(PolicyContext(s, 0, 0, memory))
+    p.step(PolicyContext(s, 0, memory))
     assert p.goal.key == 'party_box'
 
 
@@ -180,7 +180,7 @@ def test_full_box_without_requested_partner_still_switches_to_free_space():
     s = replace(s, boxed_pokemon=((165, 3),) * 20)
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'},
                   (1, 1), top=(1, 1))
-    p.step(PolicyContext(s, 0, 0, memory))
+    p.step(PolicyContext(s, 0, memory))
     assert p.goal.key == 'party_box'
 
 
@@ -195,7 +195,7 @@ def test_full_box_can_reach_the_indigo_plateau_pc_from_route_23():
     p = StrategicPolicy(7)
     s = full_box(map=MAPS['ROUTE_23'], x=18, y=20, badges=255)
     p.observed_map = s.map
-    p.step(PolicyContext(s, 0, 0, bytearray(65536)))
+    p.step(PolicyContext(s, 0, bytearray(65536)))
     target = (MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8)
     assert target in p.goal.targets
     assert p.nav.route((s.map, s.x, s.y), p.goal.targets, s.frame) is not None
@@ -210,7 +210,7 @@ def test_completely_full_storage_abandons_a_withdrawal_instead_of_reopening_the_
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'},
                   (1, 1), top=(1, 1))
     p.observed_map = s.map
-    p.step(PolicyContext(s, 0, 0, memory))
+    p.step(PolicyContext(s, 0, memory))
     assert p.goal.key not in ('party_collection', 'party_collection_space', 'party_box')
 
 
@@ -292,7 +292,7 @@ def test_storage_buffer_sends_the_run_to_a_pc_to_free_slots():
     s = stuffed(textbox=True)
     p.observed_map = s.map
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
-    p.step(PolicyContext(s, 0, 0, memory))
+    p.step(PolicyContext(s, 0, memory))
     assert p.goal.key == 'party_release'
     # Trading reads the spare it is about to let go, so it never offers that one.
     assert p.release_spare == release_target(s) is not None
@@ -302,7 +302,7 @@ def test_storage_buffer_sends_the_run_to_a_pc_to_free_slots():
     assert storage_headroom(roomy) >= 5
     p2 = StrategicPolicy(7)
     p2.observed_map = roomy.map
-    p2.step(PolicyContext(roomy, 0, 0, memory))
+    p2.step(PolicyContext(roomy, 0, memory))
     assert p2.goal.key != 'party_release'
     assert p2.release_spare is None
 
@@ -317,10 +317,10 @@ def test_a_release_visit_frees_slots_to_the_refill_mark_in_one_go():
     assert storage_headroom(s) == 6
     p.observed_map = s.map
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
-    p.step(PolicyContext(s, 0, 0, memory))
+    p.step(PolicyContext(s, 0, memory))
     assert p.goal.key != 'party_release'
     p.release_spare = release_target(s)
-    p.step(PolicyContext(s, 0, 0, memory))
+    p.step(PolicyContext(s, 0, memory))
     assert p.goal.key == 'party_release'
 
 

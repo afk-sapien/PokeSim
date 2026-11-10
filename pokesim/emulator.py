@@ -1290,8 +1290,7 @@ class Emulator:
                 if not pending:
                     snap = read_snapshot(self.pb.memory, self.frame)
                     self._report_uncatchable_shiny(snap)
-                    ctx = PolicyContext(snap, time.time() - self.stuck_since, time.time(), self.pb.memory,
-                                        stack_pointer(self.pb))
+                    ctx = PolicyContext(snap, self.play_clock.frames, self.pb.memory, stack_pointer(self.pb))
                     preparation = getattr(self, 'preparation', None)
                     pending = list(preparation.step(ctx) if preparation else self.policy.step(ctx))
                     if not preparation and hasattr(self.policy, 'collection'):
