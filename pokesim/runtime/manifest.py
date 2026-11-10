@@ -11,12 +11,13 @@ from pokecore.emulator_state import checkpoint_metadata
 from .. import __version__, config
 
 
-def checkpoint_manifest(pb, policy, *, rom_sha1, frame, generation=1, policy_name=None, run_memory=None,
+def checkpoint_manifest(policy, *, rom_sha1, frame, generation=1, pb=None, policy_name=None, run_memory=None,
                         play_clock=None, store=None, legendary_recovery=None, history=None):
-    """The manifest for the game ``pb`` holds now.
+    """The manifest for the game as it is now.
 
-    Gen II saves with the clock locked to game time, so the lock goes into the manifest and Core
-    leaves off the legacy PyBoy tag. The optional parts are left out when a writer has none.
+    Gen II saves with the clock locked to game time, so it passes the emulator ``pb``, the lock goes
+    into the manifest and Core leaves off the legacy PyBoy tag. The optional parts are left out when
+    a writer has none.
     """
     manifest = {'app_version': __version__}
     if generation == 2:

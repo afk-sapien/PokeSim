@@ -109,7 +109,7 @@ class HeadlessRun:
 
     def manifest(self):
         """The manifest a checkpoint of this moment carries."""
-        return checkpoint_manifest(self.pb, self.policy, rom_sha1=self.rom_sha1, frame=self.frame,
+        return checkpoint_manifest(self.policy, rom_sha1=self.rom_sha1, frame=self.frame,
                                    policy_name='strategic', run_memory=self.memory)
 
     def save(self, path, compress=False):

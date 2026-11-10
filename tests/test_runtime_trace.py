@@ -139,7 +139,7 @@ def test_a_host_with_no_tracer_ignores_notes_and_reasons():
 def test_a_gen1_manifest_carries_the_fields_a_replay_reads():
     policy = SimpleNamespace(state_dict=lambda: {'steps': 1})
     store = {'trade_barrier': 'trade-1', 'custom-reward-barrier-v1': 'reward-1'}
-    manifest = checkpoint_manifest(None, policy, rom_sha1='abc', frame=5, store=store,
+    manifest = checkpoint_manifest(policy, rom_sha1='abc', frame=5, store=store,
                                    play_clock=SimpleNamespace(state_dict=lambda: {'frames': 5}))
     assert manifest['rom_sha1'] == 'abc' and manifest['frame'] == 5 and manifest['policy'] == config.POLICY
     assert manifest['policy_state'] == {'steps': 1} and manifest['run_memory'] == {}

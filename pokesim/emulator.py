@@ -820,7 +820,7 @@ class Emulator:
             self.pb.memory[W_OPTIONS] = want
 
     def _manifest(self):
-        return checkpoint_manifest(self.pb, self.policy, rom_sha1=self.rom_sha1, frame=self.frame,
+        return checkpoint_manifest(self.policy, rom_sha1=self.rom_sha1, frame=self.frame,
                                    run_memory=self.mem, play_clock=self.play_clock, store=self.store,
                                    legendary_recovery=self.legendary_recovery)
 
