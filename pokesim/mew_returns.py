@@ -1,8 +1,7 @@
 """Walking earns one Mew opportunity, redeemed by a later League victory."""
-import json
-
 from . import config, rewards
 from .legendary_returns import STEPS
+from .state import kv
 
 KEY = 'mew-returns-v1'
 
@@ -24,8 +23,8 @@ def observe(store, snapshot):
     elif value['interval'] != every:
         value.update(interval=every, next_at=total + every, armed_after_win=None)
     if every and eligible and value['armed_after_win'] is None and total >= value['next_at']:
-        with store.lock:
-            value['armed_after_win'] = rewards.championship_count(rewards.ledger(store.db))
+        with store.reading() as db:
+            value['armed_after_win'] = rewards.championship_count(rewards.ledger(db))
     if value != store.get(KEY):
         store.set(KEY, value)
 
@@ -35,8 +34,7 @@ def ready(store, wins):
 
 
 def ready_db(db, wins):
-    row = db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-    return ready_value(json.loads(row[0]) if row else {}, wins)
+    return ready_value(kv.get(db, KEY, {}), wins)
 
 
 def ready_value(value, wins):
@@ -45,14 +43,12 @@ def ready_value(value, wins):
 
 
 def consume(db):
-    row = db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-    walking = db.execute('SELECT v FROM kv WHERE k=?', (STEPS,)).fetchone()
-    total = json.loads(walking[0]).get('total', 0) if walking else 0
-    value = json.loads(row[0]) if row else {'delivered': 0}
+    total = kv.get(db, STEPS, {}).get('total', 0)
+    value = kv.get(db, KEY, {'delivered': 0})
     every = getattr(config, 'MEW_RETURN_STEPS', 1000000)
     value.update(interval=every, next_at=total + every, armed_after_win=None,
                  delivered=value['delivered'] + 1)
-    db.execute('INSERT OR REPLACE INTO kv VALUES (?,?)', (KEY, json.dumps(value)))
+    kv.put(db, KEY, value)
 
 
 def status(store):

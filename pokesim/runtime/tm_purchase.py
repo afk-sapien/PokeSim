@@ -8,7 +8,8 @@ from dataclasses import replace
 from .. import champion_shop, tm_shop
 from ..checkpoints import CheckpointStore, sync_directory
 from ..ram import W_BAG_ITEMS, W_CUR_MAP, W_MONEY, W_NUM_BAG_ITEMS, W_X, W_Y, read_snapshot
-from .reward_delivery import BARRIER, PENDING, _put, recover_storage
+from ..state import journal, kv
+from .reward_delivery import BARRIER, PENDING, recover_storage
 
 
 def purchase(emu):
@@ -74,24 +75,22 @@ def purchase(emu):
               'item': item, 'quantity': quantity, 'price': price, 'recipient': list(plan['signature']),
               'sha256': metadata['sha256'], 'metadata': metadata, 'trade_id': emu.store.get('trade_barrier')}
     emu.store.set(PENDING, record)
-    with emu.store.lock, emu.store.db:
-        emu.store.db.execute('PRAGMA synchronous=FULL')
+    with emu.store.durable() as db:
         from ..activity_ledger import increment
-        increment(emu.store.db, 'bought', item, quantity)
+        increment(db, 'bought', item, quantity)
         if supply and item in champion_shop.OFFERS:
-            champion_shop.consume(emu.store.db, item)
-        _put(emu.store.db, BARRIER, identifier)
-        _put(emu.store.db, PENDING, {**record, 'decision': 'COMMIT', 'phase': 'committed'})
+            champion_shop.consume(db, item)
+        kv.put(db, BARRIER, identifier)
+        kv.put(db, PENDING, {**record, 'decision': 'COMMIT', 'phase': 'committed'})
         name = champion_shop.NAMES[item] if supply else tm_shop.label(item, policy.tm_moves)
         if quantity > 1:
             name = f'{quantity} × {name}'
         recipient = before.party[target].nick or before.party[target].name
         title = f'Bought {name}' if supply else f'Bought {name} for {recipient}'
-        emu.store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime)
-            VALUES (?,?,?,?,?,?,?,?)''', (time.time(), 'item', title,
-            f'Spent ₽{price:,} at the PokeSim Champion counter in Celadon. '
-            'The purchase entered the bag for use through the normal game menus.',
-            1, 3, before.map_name, ''))
+        journal.add(db, time.time(), 'item', title,
+                    f'Spent ₽{price:,} at the PokeSim Champion counter in Celadon. '
+                    'The purchase entered the bag for use through the normal game menus.',
+                    1, 3, before.map_name)
     try:
         path = recover_storage(emu.store)
         emu._load_state_file(path)

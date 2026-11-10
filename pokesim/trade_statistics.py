@@ -4,6 +4,7 @@ import json
 import time
 
 from .activity_ledger import increment
+from .state import kv, ledgers
 from .strategy_data import SPECIES
 
 KEY = 'trade-statistics-v1'
@@ -25,8 +26,7 @@ def record(db, identity, sent, received, generation=1):
         if sent not in SPECIES or received not in SPECIES:
             return False
         outgoing, incoming = SPECIES[sent]['dex'], SPECIES[received]['dex']
-    if db.execute('INSERT OR IGNORE INTO pokemon_trade_receipts VALUES (?,?,?)',
-                  (identity, outgoing, incoming)).rowcount:
+    if ledgers.add_trade_receipt(db, identity, outgoing, incoming):
         increment(db, 'traded_out', outgoing)
         increment(db, 'traded_in', incoming)
     return True
@@ -95,31 +95,24 @@ def _history(db):
     missing = 0
     # Extract only the verified species and identity. Historical rows can contain
     # large policy snapshots, which must not be loaded to recover these counts.
-    for identity, raw, received, sent_list, received_list in db.execute(
-            "SELECT json_extract(v, '$.id'), json_extract(v, '$.outgoing.struct'), "
-            "json_extract(v, '$.staged.evidence.received_species'), json_extract(v, '$.staged.evidence.sent_species'), "
-            "json_extract(v, '$.staged.evidence.received') FROM kv "
-            "WHERE k LIKE 'managed_interaction:%' AND json_extract(v, '$.decision')='COMMIT' "
-            "AND json_extract(v, '$.phase')='released'").fetchall():
+    for identity, raw, received, sent_list, received_list in ledgers.released_trades(db):
         if not _managed(db, identity, raw, received, _array(sent_list), _array(received_list)):
             missing += 1
-    if db.execute("SELECT 1 FROM sqlite_master WHERE name='completed_trades'").fetchone():
-        missing += db.execute('SELECT COUNT(*) FROM completed_trades').fetchone()[0]
-    return missing
+    return missing + ledgers.legacy_trades(db)
 
 
 def initialize(db):
     """Start the counts once. The receipt table comes from the schema version (pokesim.state)."""
-    if db.execute('SELECT 1 FROM kv WHERE k=?', (KEY,)).fetchone():
+    if kv.exists(db, KEY):
         return
-    db.execute('INSERT INTO kv VALUES (?,?)', (KEY, json.dumps({'npc_since': None, 'missing_history': _history(db)})))
+    kv.add(db, KEY, {'npc_since': None, 'missing_history': _history(db)})
 
 
 def backfill_gen2(db):
     """Count the Gold, Silver and Crystal cable trades released before they could be counted."""
-    value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
+    value = kv.get(db, KEY)
     value['missing_history'] = _history(db)
-    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+    kv.update(db, KEY, value)
 
 
 def npc(store, memory):
@@ -130,12 +123,12 @@ def npc(store, memory):
     sent = memory[0xcd0f]
     received = memory[0xd16b + (count - 1) * 44]
     identity = 'npc:' + hashlib.sha256(bytes(memory[0xc000:0xe000])).hexdigest()
-    with store.lock, store.db:
-        record(store.db, identity, sent, received)
+    with store.transaction() as db:
+        record(db, identity, sent, received)
 
 
 def tracking(db):
-    value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
+    value = kv.get(db, KEY)
     if value['npc_since'] is None:
         value['npc_since'] = time.time()
-        db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+        kv.update(db, KEY, value)

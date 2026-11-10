@@ -7,6 +7,7 @@ import json
 import re
 import uuid
 
+from .state import kv
 from .trade.preferences import signature as identity
 from .ram import HALL_OF_FAME_MAP
 from .milestones import ancestors
@@ -17,8 +18,7 @@ LEGACY_KEY = 'league-partners-v1'
 
 
 def _read(db, key):
-    row = db.execute('SELECT v FROM kv WHERE k=?', (key,)).fetchone()
-    return json.loads(row[0]) if row else None
+    return kv.get(db, key)
 
 
 def read(db):
@@ -28,7 +28,7 @@ def read(db):
 
 
 def save(db, value):
-    db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (KEY, json.dumps(value)))
+    kv.put(db, KEY, value)
 
 
 @lru_cache(maxsize=None)
@@ -134,8 +134,8 @@ def record(db, snapshot, title, event_id, *, allow_rename=True):
 
 
 def export(store, key, mon=None):
-    with store.lock:
-        value = read(store.db)
+    with store.transaction() as db:
+        value = read(db)
         if mon is not None:
             resolved = resolve(value, [mon])[0]
         else:
@@ -144,9 +144,8 @@ def export(store, key, mon=None):
             resolved = matches[0] if len(matches) == 1 else None
         entry = value['partners'].get(resolved)
         if entry is not None:
-            with store.db:
-                save(store.db, value)
-            counts, incomplete = totals(value, entry, _read(store.db, LEGACY_KEY) or {})
+            save(db, value)
+            counts, incomplete = totals(value, entry, _read(db, LEGACY_KEY) or {})
             return {'key': key, 'version': 2, 'individual': resolved, **entry,
                     'counts': counts, 'incomplete': incomplete}
         return {'key': key, 'counts': {}, 'ambiguous': False}
@@ -192,7 +191,7 @@ def merge(db, incoming):
         legacy = _read(db, LEGACY_KEY) or {'origin': uuid.uuid4().hex, 'victories': [], 'partners': {}}
         entry = legacy['partners'].setdefault(incoming['key'], {'counts': {}, 'ambiguous': False})
         _merge_counts(entry, incoming)
-        db.execute('INSERT OR REPLACE INTO kv VALUES (?,?)', (LEGACY_KEY, json.dumps(legacy)))
+        kv.put(db, LEGACY_KEY, legacy)
         return
     value = read(db)
     matches = [key for key, entry in value['partners'].items()
@@ -236,9 +235,9 @@ def totals(value, entry, legacy):
 
 
 def apply(payload, store):
-    with store.lock:
-        value = read(store.db)
-        legacy = _read(store.db, LEGACY_KEY) or {}
+    with store.reading() as db:
+        value = read(db)
+        legacy = _read(db, LEGACY_KEY) or {}
     party = [dict(mon) for mon in payload.get('party', ())]
     storage = payload.get('storage')
     boxed = [dict(mon) for mon in (storage or {}).get('pokemon', ())]

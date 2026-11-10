@@ -15,9 +15,9 @@ from fastapi import HTTPException, Request
 from ..checkpoints import CheckpointStore
 from pokecore.identity import find, legacy, same
 from ..app.registry import digest, validate_id
+from ..state import journal, kv, ledgers
 
-PREFIX = 'managed_interaction:'
-FINAL = ('released', 'aborted')
+PREFIX = ledgers.INTERACTIONS
 KEEP_FINISHED = 20
 RECLAIM_BYTES = 32 * 2 ** 20
 # A trade hold lasts while the adventure walks to a Pokémon Center, trades and saves.
@@ -32,11 +32,9 @@ def _records(store):
     that has traded for days holds hundreds of megabytes of finished exchanges here.
     Parsing those on every startup is what the released filter avoids.
     """
-    with store.lock:
-        rows = store.db.execute("SELECT v FROM kv WHERE k LIKE ? AND "
-                                "COALESCE(json_extract(v, '$.phase'), '') <> 'released'",
-                                (PREFIX + '%',)).fetchall()
-    return [json.loads(row[0]) for row in rows]
+    with store.reading() as db:
+        rows = ledgers.unreleased(db)
+    return [json.loads(row) for row in rows]
 
 
 def _record(store, tid):
@@ -73,38 +71,36 @@ def _promote(store, record):
     elif hashlib.sha256(path.read_bytes()).hexdigest() != stage['checkpoint_sha256']:
         raise ValueError('The committed checkpoint is damaged')
     CheckpointStore.atomic_write(path.with_suffix('.json'), json.dumps(metadata).encode())
-    with store.lock, store.db:
+    with store.durable() as db:
         if record.get('cartridge_generation') != 2:
             from ..league_partners import merge
         else:
             from ..gen2.league import merge
-        merge(store.db, record.get('incoming_league_record'))
+        merge(db, record.get('incoming_league_record'))
         # The Pokémon that arrived names the linked adventure's trainer, so its copies may be released later.
         from ..trade.partners import add as add_partners
-        add_partners(store.db, [value for value in record.get('incoming_trainers') or () if value is not None])
+        add_partners(db, [value for value in record.get('incoming_trainers') or () if value is not None])
         # Store.trade_partners reads the row again after this commit.
         store._trade_partners = None
         if record.get('cartridge_generation') == 2:
             # Only the receiving side counts a shiny, once per exchange however often this commit is retried.
             from ..shiny import record as record_shiny
             for index, dex in enumerate(record.get('incoming_shiny') or ()):
-                record_shiny(store.db, 'acquired', f"trade:{record['id']}:{index}", dex, generation=2)
-        store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', ('trade_barrier', json.dumps(record['id'])))
-        hold = {'id': record['id'], 'source': record['source_name'], 'phase': 'prepared'}
-        store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', ('trade_hold', json.dumps(hold)))
+                record_shiny(db, 'acquired', f"trade:{record['id']}:{index}", dex, generation=2)
+        kv.put(db, 'trade_barrier', record['id'])
+        kv.put(db, 'trade_hold', {'id': record['id'], 'source': record['source_name'], 'phase': 'prepared'})
         marker = 'managed_journal:' + record['id']
-        if not store.db.execute('SELECT 1 FROM kv WHERE k=?', (marker,)).fetchone():
+        if not kv.exists(db, marker):
             location = 'Pokémon Center'
             if record.get('cartridge_generation') != 2:
                 from pokecore.centers import CENTERS
                 location = CENTERS.get(record.get('source_center_map'), {}).get('name', location)
             title, body, detail = _trade_story(record)
-            store.db.execute('''INSERT INTO events(ts,type,title,body,notable,priority,map,playtime,detail)
-                VALUES (?,?,?,?,?,?,?,?,?)''', (time.time(), 'trade', title, body, 1, 4, location, '',
-                json.dumps(detail) if detail else None))
-            from ..progress_events import journal
-            journal(store.db, 'trade')
-            store.db.execute('INSERT INTO kv VALUES (?, ?)', (marker, 'true'))
+            journal.add(db, time.time(), 'trade', title, body, 1, 4, location,
+                        detail=json.dumps(detail) if detail else None)
+            from ..progress_events import journal as count_entry
+            count_entry(db, 'trade')
+            kv.add(db, marker, True)
     return path
 
 
@@ -169,13 +165,8 @@ def _compact_released(store):
     the rows itself, so a backlog of finished exchanges never has to be parsed. The batch
     is capped because each row carries a whole policy snapshot.
     """
-    with store.lock, store.db:
-        store.db.execute(
-            "UPDATE kv SET v = json_remove(v, '$.source_metadata') WHERE k IN ("
-            "  SELECT k FROM kv WHERE k LIKE ?"
-            "   AND json_extract(v, '$.phase') IN (?, ?)"
-            "   AND json_extract(v, '$.source_metadata') IS NOT NULL"
-            "   LIMIT ?)", (PREFIX + '%', *FINAL, COMPACT_PER_START))
+    with store.transaction() as db:
+        ledgers.compact_finished(db, COMPACT_PER_START)
 
 
 def _prune_finished(store, keep=KEEP_FINISHED):
@@ -188,10 +179,8 @@ def _prune_finished(store, keep=KEEP_FINISHED):
     root = store.dir / 'interactions'
     if not root.is_dir():
         return 0
-    with store.lock:
-        finished = {row[0][len(PREFIX):] for row in store.db.execute(
-            "SELECT k FROM kv WHERE k LIKE ? AND json_extract(v, '$.phase') IN (?, ?)",
-            (PREFIX + '%', *FINAL))}
+    with store.reading() as db:
+        finished = ledgers.finished(db)
     folders = sorted((path for path in root.iterdir() if path.is_dir() and path.name in finished),
                      key=lambda path: path.stat().st_mtime)
     removed = 0
@@ -213,18 +202,17 @@ def _reclaim(store, threshold=RECLAIM_BYTES):
     hundreds of finished snapshots stays that size. Rebuilding it takes about as long
     as copying the live data, which is a few megabytes, and only happens past the threshold.
     """
-    with store.lock:
-        free, size = (store.db.execute(f'PRAGMA {name}').fetchone()[0]
-                      for name in ('freelist_count', 'page_size'))
-        if free * size < threshold:
+    with store.reading() as db:
+        free = ledgers.free_bytes(db)
+        if free < threshold:
             return 0
         try:
-            store.db.execute('VACUUM')
+            ledgers.vacuum(db)
         except Exception:
             log.exception('Cannot reclaim free space in the adventure database')
             return 0
-    log.info('reclaimed %d MB of free database space', free * size // 2 ** 20)
-    return free * size
+    log.info('reclaimed %d MB of free database space', free // 2 ** 20)
+    return free
 
 
 def keeps(data):
@@ -305,9 +293,10 @@ def merge_partners(store, data):
 
 
 def recover_storage(store):
-    """Reconcile committed files before the emulator chooses its startup checkpoint."""
-    with store.lock:
-        store.db.execute('PRAGMA synchronous=FULL')
+    """Reconcile committed files before the emulator chooses its startup checkpoint.
+
+    Each promotion commits in ``store.durable()``, so it is on the disk before the emulator loads it.
+    """
     _compact_released(store)
     _prune_finished(store)
     _reclaim(store)
@@ -647,13 +636,12 @@ class Participant:
         # the rest of the record, so a released exchange has no reason to carry it.
         record.pop('source_metadata', None)
         prepared = self.store.get('interaction_preparation') or {}
-        with self.store.lock, self.store.db:
+        with self.store.transaction() as db:
             from ..trade_statistics import managed
-            managed(self.store.db, record)
-            self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?,?)',
-                                  (PREFIX + record['id'], json.dumps(record)))
+            managed(db, record)
+            kv.put(db, PREFIX + record['id'], record)
             for key in ('interaction_preparation', 'trade_hold'):
-                self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?,?)', (key, 'null'))
+                kv.put(db, key, None)
         self.emu.paused = False
         if getattr(self.emu, 'generation', 1) == 1 and (pb := getattr(self.emu, 'pb', None)):
             # The game copies a received nickname byte for byte, damage included.

@@ -12,10 +12,10 @@ random DVs, and the same saved moment always gives the same Pokémon, as it does
 """
 import hashlib
 import hmac
-import json
 import secrets
 
 from . import config
+from .state import kv
 
 KEY = 'fair-wild-dvs-v1'
 # Red addresses. A Yellow emulator translates them through its memory view.
@@ -30,12 +30,11 @@ def enabled():
 
 def secret(store):
     """Return this adventure's key, creating it once."""
-    with store.lock, store.db:
-        row = store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-        value = json.loads(row[0]) if row else {}
+    with store.transaction() as db:
+        value = kv.get(db, KEY, {})
         if not value.get('seed'):
             value['seed'] = secrets.token_hex(32)
-            store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
+            kv.put(db, KEY, value)
     return bytes.fromhex(value['seed'])
 
 
