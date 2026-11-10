@@ -84,7 +84,7 @@ def test_entries_with_only_a_screenshot_count_as_routine(store):
 
 def test_finished_custom_reward_saves_are_removed_and_the_pending_one_stays(store):
     from pokesim.runtime.reward_delivery import PENDING
-    from pokesim.store import PENDING_REWARD
+    from pokesim.state.domains import PENDING_REWARD
     assert PENDING_REWARD == PENDING
     root = store.dir / 'custom-rewards'
     for name in ('done', 'pending', 'staging'):

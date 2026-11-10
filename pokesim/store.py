@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import adventure_counters, progress, progress_events, stall_truth
 from .checkpoints import CheckpointStore, compress_state
-from .state import schema
+from .state import domains, schema
 
 log = logging.getLogger(__name__)
 
@@ -25,13 +25,6 @@ TRADE_KEY_RETRY_SECONDS = 30
 # evolutions, hatches, key items, the Elite Four and similar. It keeps its screenshot and save forever.
 MILESTONE_PRIORITY = 4
 ATTACHMENT_ROUND = 500
-# The custom reward that is staged or committed but not yet recovered, from runtime.reward_delivery.
-PENDING_REWARD = 'custom-reward-pending-v1'
-
-OBSERVATION_READ_KEYS = frozenset({
-    'cartridge-steps-v1', 'mew-returns-v1', 'pokesim-mew-v1', 'legendary-returns-v1',
-    'step-events-v1', 'pokedex-milestones-v1', 'shiny-statistics-v1',
-})
 
 class Store:
     def __init__(self, data_dir: Path, *, read_only=False):
@@ -199,7 +192,7 @@ class Store:
 
     def get(self, k, default=None):
         with self.lock:
-            cached = (self._cache_reads and k in OBSERVATION_READ_KEYS and getattr(self._read_local, 'depth', 0)
+            cached = (self._cache_reads and k in domains.CACHED and getattr(self._read_local, 'depth', 0)
                       and not self.db.in_transaction)
             if cached:
                 epoch = (self._read_epoch[0], self.db.total_changes)
@@ -430,7 +423,7 @@ class Store:
         root = self.dir / "custom-rewards"
         if not root.is_dir():
             return 0
-        pending = self.get(PENDING_REWARD) or {}
+        pending = self.get(domains.PENDING_REWARD) or {}
         keep = pending.get("id") if pending.get("phase") != "complete" else None
         cutoff = time.time() - min_age
         removed = 0
