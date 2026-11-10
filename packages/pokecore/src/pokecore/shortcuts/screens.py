@@ -11,7 +11,7 @@ title is told apart by the play time flag only a started game sets: bit 0 of
 first, so Oak's speech before a new game is ``dialogue``.
 
 ``continue_ready`` recognizes the cartridge's continue-only text wait from live
-stack words, the same check PokeBench uses, so callers never press A on a menu.
+stack words, so callers never press A on a menu.
 """
 from __future__ import annotations
 

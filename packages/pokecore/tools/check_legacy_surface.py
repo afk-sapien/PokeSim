@@ -1,7 +1,7 @@
-"""Check that the Core 0.1.x names used by the PokeBench benchmark still import and behave.
+"""Check that the Core 0.1.x names a downstream benchmark uses still import and behave.
 
 Needs no emulator. Run it in an environment that has only pokecore installed.
-The list is the set of imports PokeBench makes from Core, plus the GameBoy compatibility
+The list is the set of imports that benchmark makes from Core, plus the GameBoy compatibility
 shims that its engine relies on. Extend it when a consumer adds an import.
 """
 import importlib
@@ -36,7 +36,7 @@ def main():
     if missing:
         raise SystemExit("Missing 0.1.x names: " + ", ".join(missing))
     from pokecore.emulator import GameBoy
-    # PokeBench subclasses GameBoy and calls tick(frames, render=...), so these stay compatible.
+    # The benchmark subclasses GameBoy and calls tick(frames, render=...), so these stay compatible.
     parameters = inspect.signature(GameBoy.tick).parameters
     assert list(parameters)[:3] == ["self", "frames", "render"], list(parameters)
     assert parameters["frames"].default == 1

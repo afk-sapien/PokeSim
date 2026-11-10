@@ -50,7 +50,7 @@ jobs:
       - run: uvx ruff==0.16.9 check pokesim tests tools conftest.py packages/pokecore
   pokecore:
     # pokecore's own suite from packages/pokecore, with the locked emulator and no silent skips. Then its
-    # wheel alone in a clean environment, the surface PokeBench imports without an emulator.
+    # wheel alone in a clean environment, the surface other projects import without an emulator.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -80,7 +80,7 @@ jobs:
           python -m venv "$RUNNER_TEMP/clean"
           "$RUNNER_TEMP/clean/bin/python" -m pip install "$RUNNER_TEMP"/pokecore-dist/pokecore-*.whl pytest
           "$RUNNER_TEMP/clean/bin/python" -c "import importlib.util as u; assert u.find_spec('pyboy_rs') is None and u.find_spec('pyboy') is None"
-      - name: Import the surface PokeBench uses and run the tests that need no emulator
+      - name: Import the legacy surface and run the tests that need no emulator
         working-directory: packages/pokecore
         run: |
           "$RUNNER_TEMP/clean/bin/python" tools/check_legacy_surface.py

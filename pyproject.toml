@@ -92,7 +92,7 @@ environments = [
 ]
 
 [tool.uv.workspace]
-# pokecore lives here and is still published as its own package, because PokeBench installs it alone.
+# pokecore lives here and is still published as its own package, because other projects install it alone.
 members = ["packages/pokecore"]
 
 [tool.uv.sources]

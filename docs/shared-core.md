@@ -46,8 +46,8 @@ PokeSim uses `update_flags` after its existing scheduling and unloaded-room
 checks. It preserves durable claim history and never resets a game simply
 because Core offers a reset function. Benchmark agents never receive these APIs.
 
-PokeBench pins a released pokecore wheel. A Core change reaches it only through a
-pokecore release and a reviewed pin update in PokeBench.
+Other projects pin a released pokecore wheel. A Core change reaches them only through a
+pokecore release and a reviewed pin update in each project.
 
 ## Installing and updating
 

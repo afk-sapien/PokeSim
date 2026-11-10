@@ -66,7 +66,7 @@ def test_header_checks_and_refusals():
     assert not read_header(bytes(raw)).header_checksum_ok
     assert not cartridges.header_matches(bytes(raw), by_version('red'))
     assert cartridges.refusal_reason(b'\0' * 0x200) == cartridges.unsupported_message()
-    assert cartridges.unsupported_message('PokeBench').startswith('This file is not a game PokeBench can play.')
+    assert cartridges.unsupported_message('Example App').startswith('This file is not a game Example App can play.')
 
 
 def test_zip_rules():

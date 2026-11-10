@@ -62,7 +62,7 @@ checkouts that might not load this file automatically.
 ## pokecore
 
 - `pokecore` lives in `packages/pokecore` as a uv workspace member. A checkout, the dev instance and the container build all run that source, so a change there is live on the next sync.
-- pip users and PokeBench get pokecore only from a pokecore release. `tools/check_release_pins.py` fails when the URL pin in `pyproject.toml` names another version than `packages/pokecore`, so bump the member version and cut its release with the PokeSim release that ships the change.
+- pip users and other projects get pokecore only from a pokecore release. `tools/check_release_pins.py` fails when the URL pin in `pyproject.toml` names another version than `packages/pokecore`, so bump the member version and cut its release with the PokeSim release that ships the change.
 - Run its suite from `packages/pokecore` with `uv run pytest -q`. It keeps its own ruff settings, at the root's ruff version.
 
 ## Local runs
