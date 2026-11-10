@@ -15,7 +15,8 @@
 # It lists the main commits the commit lacks, and refuses when one of them is over a day old, so a fix
 # on main cannot sit outside production. --behind-main deploys it anyway. A rollback skips this check.
 # The commit must have green `ci gate` and `install gate` checks on GitHub, and a passing report from
-# tools/live_soak.py in LIVE_SOAK_REPORTS, by default data/live-soak/reports. The script stops the app,
+# tools/live_soak.py in LIVE_SOAK_REPORTS, by default data/live-soak/reports, for it or for a commit
+# with the same git tree. The script stops the app,
 # takes a cold backup of the folder, tests it with gzip -t, starts the new image with up --wait and runs
 # the smoke check. If any step after the backup fails, it puts .env back and restarts the old image.
 # Beside each backup, a json file names the image that wrote its data, the one running before the
