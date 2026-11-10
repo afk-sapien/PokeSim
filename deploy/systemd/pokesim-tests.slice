@@ -1,0 +1,6 @@
+[Unit]
+Description=Local PokeSim test runs from tools/load_gate.sh, inside pokesim.slice
+
+[Slice]
+CPUWeight=100
+MemoryMax=10G

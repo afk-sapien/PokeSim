@@ -305,6 +305,7 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
 def test_a_load_gate_inside_a_heavy_run_runs_at_once(tmp_path, monkeypatch):
     # A gate run under the heavy lock once waited 14 hours on the lock its own parent held.
     monkeypatch.setenv('POKESIM_LOAD_GATE', str(tmp_path))
+    monkeypatch.setenv('POKESIM_LOAD_GATE_SLICE', '')
     monkeypatch.delenv('POKESIM_LOAD_GATE_HEAVY', raising=False)
     gate = str(stage_ladder.ROOT / 'tools' / 'load_gate.sh')
     nested = ['sh', gate, 'heavy', 'sh', gate, 'heavy', 'sh', gate, 'pytest', 'echo', 'ran']
@@ -317,6 +318,7 @@ def test_a_load_gate_inside_a_heavy_run_runs_at_once(tmp_path, monkeypatch):
 def test_a_load_gate_runs_its_command_at_nice_10_or_lower_priority(tmp_path, monkeypatch, mode):
     # The local runs rule asked agents to add nice -n 10 by hand, and a full suite once ran at nice 0.
     monkeypatch.setenv('POKESIM_LOAD_GATE', str(tmp_path))
+    monkeypatch.setenv('POKESIM_LOAD_GATE_SLICE', '')
     monkeypatch.delenv('POKESIM_LOAD_GATE_HEAVY', raising=False)
     gate = str(stage_ladder.ROOT / 'tools' / 'load_gate.sh')
     probe = [gate, mode, 'sh', '-c', 'ps -o nice= -p $$']
@@ -324,3 +326,59 @@ def test_a_load_gate_runs_its_command_at_nice_10_or_lower_priority(tmp_path, mon
     for prefix, expected in (([], max(own, 10)), (['nice', '-n', '12'], min(own + 12, 19))):
         done = subprocess.run(prefix + ['sh', *probe], capture_output=True, text=True, timeout=30, check=True)
         assert int(done.stdout) == expected
+
+
+def fake_systemd(tmp_path, fragment):
+    """Put a systemctl that reports the slice's unit file, or fails like a missing user manager when
+    `fragment` is None, and a systemd-run that logs and runs its command on PATH."""
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir()
+    log = tmp_path / 'systemd-run.log'
+    answer = 'exit 1' if fragment is None else f"echo '{fragment}'"
+    (bin_dir / 'systemctl').write_text(f'#!/bin/sh\n{answer}\n', encoding='utf-8')
+    (bin_dir / 'systemd-run').write_text(
+        '#!/bin/sh\necho "$@" >> "$FAKE_SYSTEMD_RUN_LOG"\n'
+        'while [ $# -gt 0 ]; do case $1 in --*) shift ;; *) break ;; esac; done\nexec "$@"\n',
+        encoding='utf-8')
+    for tool in bin_dir.iterdir():
+        tool.chmod(0o755)
+    return bin_dir, log
+
+
+@pytest.mark.skipif(shutil.which('flock') is None, reason='needs flock')
+@pytest.mark.parametrize('mode', ['pytest', 'heavy'])
+def test_a_load_gate_runs_its_command_in_the_tests_slice_once(tmp_path, monkeypatch, mode):
+    # The owner caps all local PokeSim work at 12 cores, so test runs go in the slice the sims share.
+    bin_dir, log = fake_systemd(tmp_path, '/units/pokesim-tests.slice')
+    monkeypatch.setenv('PATH', f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv('FAKE_SYSTEMD_RUN_LOG', str(log))
+    monkeypatch.setenv('POKESIM_LOAD_GATE', str(tmp_path))
+    monkeypatch.delenv('POKESIM_LOAD_GATE_SLICE', raising=False)
+    monkeypatch.delenv('POKESIM_LOAD_GATE_HEAVY', raising=False)
+    gate = str(stage_ladder.ROOT / 'tools' / 'load_gate.sh')
+    done = subprocess.run(['sh', gate, mode, 'sh', gate, 'pytest', 'echo', 'ran'],
+                          capture_output=True, text=True, timeout=30, check=True)
+    assert done.stdout == 'ran\n'
+    scopes = log.read_text(encoding='utf-8').splitlines()
+    # A gate inside a heavy run runs at once, inside its parent's scope.
+    assert len(scopes) == (1 if mode == 'heavy' else 2)
+    assert scopes[0].startswith('--user --scope --quiet --collect --slice=pokesim-tests.slice sh ')
+
+
+@pytest.mark.skipif(shutil.which('flock') is None, reason='needs flock')
+@pytest.mark.parametrize('fragment', ['', None])
+def test_a_load_gate_without_the_slices_runs_uncapped(tmp_path, monkeypatch, fragment):
+    # systemd calls a slice with no unit file loaded too, so the gate looks for the file. A machine
+    # with a user manager but no slices hears about it, and one with no user manager (CI) does not.
+    bin_dir, log = fake_systemd(tmp_path, fragment)
+    monkeypatch.setenv('PATH', f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv('FAKE_SYSTEMD_RUN_LOG', str(log))
+    monkeypatch.setenv('POKESIM_LOAD_GATE', str(tmp_path))
+    monkeypatch.delenv('POKESIM_LOAD_GATE_SLICE', raising=False)
+    monkeypatch.delenv('POKESIM_LOAD_GATE_HEAVY', raising=False)
+    gate = str(stage_ladder.ROOT / 'tools' / 'load_gate.sh')
+    done = subprocess.run(['sh', gate, 'pytest', 'echo', 'ran'], capture_output=True, text=True, timeout=30, check=True)
+    assert done.stdout == 'ran\n'
+    warned = 'pokesim-tests.slice is not installed' in done.stderr and 'local_sims.sh install' in done.stderr
+    assert warned is (fragment == '')
+    assert not log.exists()

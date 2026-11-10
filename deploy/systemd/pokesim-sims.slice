@@ -1,0 +1,8 @@
+[Unit]
+Description=Local PokeSim sims, the dev instance and temporary sims, inside pokesim.slice
+
+[Slice]
+# Nice only orders processes inside one cgroup, so the weight is what lets a test run win the CPU:
+# when both are busy, test runs get 100 shares to the sims' 20.
+CPUWeight=20
+MemoryMax=12G
