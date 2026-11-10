@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77,<85"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pokecore"
+version = "0.11.0"
+description = "Shared read-only decoding and emulator primitives for Pokemon Red, Blue, Yellow, Gold, Silver and Crystal"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+dependencies = []
+
+[project.optional-dependencies]
+emulator = ["pyboy-rs>=0.1.2,<0.2", "pillow>=10,<14"]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
+
+[project.scripts]
+pokecore = "pokecore.cli:main"
+
+[project.urls]
+Repository = "https://github.com/afk-sapien/pokesim-core"
+Issues = "https://github.com/afk-sapien/pokesim-core/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pokecore = ["py.typed"]
+
+[tool.uv]
+# PyBoy RS is not on PyPI. Its GitHub release lists a wheel per platform.
+find-links = ["https://github.com/afk-sapien/pyboy-rs/releases/expanded_assets/v0.1.5"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E9", "F"]

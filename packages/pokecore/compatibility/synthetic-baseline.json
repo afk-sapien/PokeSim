@@ -1,0 +1,343 @@
+{
+  "format": 1,
+  "manifest_sha256": "6456cf264aaeebb4d8030e1e54d972671b717310c831cf053791fb211fb10018",
+  "cases": [
+    {
+      "status": "passed",
+      "fingerprint": [
+        {
+          "offset": 0,
+          "hardware": "0dba0696383cb4c9ce21776c2dc713823372084264e795bd6a42f95c120391f1",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 8,
+          "hardware": "c94a8db5e4c16e4b8215b3cf20123ddb5045ca0402863864333e8353591f5eb9",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 16,
+          "hardware": "2b0c79490b13fdf3db80a0ac7bd65b7e58d07202f487a651fec9ad15ab1dd47a",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 24,
+          "hardware": "e6c9f904bad762e0652351b206d33db6ec5a7c992c20d4fe67b1a14d7b32e0dd",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 32,
+          "hardware": "efdc9f3dc6b91e42378fbc785d098c26e3802f56471a908198cd4ea342ed5a7b",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 40,
+          "hardware": "617f483f17c05faebd5d027e3aba72a717ba68dfcb851f37bb4c35778bf411aa",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 48,
+          "hardware": "a406bea6c7dde9044468c3388b81f35387c53a681c476c6edec92d03ee78e3e8",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        }
+      ],
+      "frames": 48,
+      "seconds": 0.009611063986085355,
+      "frames_per_second": 4979.070273886363,
+      "emulator": {
+        "backend": "pyboy-rs",
+        "version": "0.1.0",
+        "state_format": "pyboy-format-15",
+        "native_sha256": "4ee647bc38040ab224175abd83ba0474daa9da912fb4c71e6d9d667306236236",
+        "binding_sha256": "0cff49f24a303e8d66ba7766ae72fbe5f1cd0a744c03fd0426ccf037ae967507"
+      },
+      "rom_sha256": "d2c2627aa7167d58e5e0b0072d9173714de146821f43a9f45102dded191987f9",
+      "state_sha256": null,
+      "peak_rss_mib": 23.96484375,
+      "id": "demo-movement",
+      "scope": "synthetic",
+      "categories": [
+        "movement"
+      ]
+    },
+    {
+      "status": "passed",
+      "fingerprint": [
+        {
+          "offset": 0,
+          "hardware": "0dba0696383cb4c9ce21776c2dc713823372084264e795bd6a42f95c120391f1",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 30,
+          "hardware": "408c75636f9d0b00ff9ee22aadb0ff8398a6877c332c68676bfd46240b7c4b5d",
+          "screen": "6101d4f3d3769d232b07a2e1a45b7514d53a8385314050d17b1a749ef153f49b",
+          "audio": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 60,
+          "hardware": "6a5bda0ff51b0f8f1af82573ed961ec51c4b3a70aff4a811d08f04142e02e864",
+          "screen": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+          "audio": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 90,
+          "hardware": "b54b2b8a20136547d8146af5d4558e7c6278c54400f67d543d814932b2e8ea30",
+          "screen": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+          "audio": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 120,
+          "hardware": "95c1e54af326a6ca4b6cb77aa941418a844ac88abea595029cf013595f58b5d4",
+          "screen": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+          "audio": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        }
+      ],
+      "frames": 120,
+      "seconds": 0.020129097974859178,
+      "frames_per_second": 5742.6283167874335,
+      "emulator": {
+        "backend": "pyboy-rs",
+        "version": "0.1.0",
+        "state_format": "pyboy-format-15",
+        "native_sha256": "4ee647bc38040ab224175abd83ba0474daa9da912fb4c71e6d9d667306236236",
+        "binding_sha256": "0cff49f24a303e8d66ba7766ae72fbe5f1cd0a744c03fd0426ccf037ae967507"
+      },
+      "rom_sha256": "d2c2627aa7167d58e5e0b0072d9173714de146821f43a9f45102dded191987f9",
+      "state_sha256": null,
+      "peak_rss_mib": 23.96484375,
+      "id": "demo-audio",
+      "scope": "synthetic",
+      "categories": [
+        "audio"
+      ]
+    },
+    {
+      "status": "passed",
+      "fingerprint": [
+        {
+          "offset": 0,
+          "hardware": "0dba0696383cb4c9ce21776c2dc713823372084264e795bd6a42f95c120391f1",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 12,
+          "hardware": "607660ff7aa4324b9bf4ef7cb07aefde45cc42d2c1d27ca6c4d7f4ffe621a717",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 24,
+          "hardware": "e6c9f904bad762e0652351b206d33db6ec5a7c992c20d4fe67b1a14d7b32e0dd",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 36,
+          "hardware": "ead984179f9f033d9f356293fc17c356034800890d22d6c3c7215822828b9e4e",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 48,
+          "hardware": "a406bea6c7dde9044468c3388b81f35387c53a681c476c6edec92d03ee78e3e8",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 60,
+          "hardware": "ce6a0284d137e7c26e700c12a9f68de6905283199b4f219a87be5800417d57ad",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 72,
+          "hardware": "9a9563fffe5d4307dc08df26d73ab0bb42b2a0ec9e1ad4af9910c75b03bf6e0b",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 84,
+          "hardware": "df20d90d5ff6db0aec6903d920e27ad80985f03ff51dd97e0656e617212fa9e5",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 96,
+          "hardware": "c7b9e1950e709848266074efcbd9c3f3a5453315a091ea2830a3d6890abbacb8",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 108,
+          "hardware": "25109705d430505b84357a12d7c1120b7dc94fbf057847fd112d603b5c96483d",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        },
+        {
+          "offset": 120,
+          "hardware": "50e84ff01d605d3c91b7a653206c3159c2aa0e2ea96ec828307e3203ebce165c",
+          "screen": "e98217e87506a9442d17e66f5a72de4e6b1b9810edcef67f5e78aef6c76a31fb",
+          "audio": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "wram": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47"
+        }
+      ],
+      "frames": 120,
+      "seconds": 0.031111832009628415,
+      "frames_per_second": 3876.4183604587956,
+      "emulator": {
+        "backend": "pyboy-rs",
+        "version": "0.1.0",
+        "state_format": "pyboy-format-15",
+        "native_sha256": "4ee647bc38040ab224175abd83ba0474daa9da912fb4c71e6d9d667306236236",
+        "binding_sha256": "0cff49f24a303e8d66ba7766ae72fbe5f1cd0a744c03fd0426ccf037ae967507"
+      },
+      "rom_sha256": "d2c2627aa7167d58e5e0b0072d9173714de146821f43a9f45102dded191987f9",
+      "state_sha256": null,
+      "peak_rss_mib": 24.3984375,
+      "id": "demo-resume",
+      "scope": "synthetic",
+      "categories": [
+        "save_load"
+      ]
+    },
+    {
+      "status": "passed",
+      "seconds": 0.09979090600972995,
+      "fingerprint": {
+        "passed": 7,
+        "skipped": 0,
+        "failed": 0
+      },
+      "peak_rss_mib": 34.5859375,
+      "id": "menu-contracts",
+      "scope": "synthetic",
+      "categories": [
+        "menus"
+      ]
+    },
+    {
+      "status": "passed",
+      "seconds": 0.09182166500249878,
+      "fingerprint": {
+        "passed": 5,
+        "skipped": 0,
+        "failed": 0
+      },
+      "peak_rss_mib": 34.7109375,
+      "id": "battle-contracts",
+      "scope": "synthetic",
+      "categories": [
+        "battles"
+      ]
+    },
+    {
+      "status": "passed",
+      "seconds": 0.0871217510139104,
+      "fingerprint": {
+        "passed": 5,
+        "skipped": 0,
+        "failed": 0
+      },
+      "peak_rss_mib": 34.5859375,
+      "id": "storage-contracts",
+      "scope": "synthetic",
+      "categories": [
+        "storage"
+      ]
+    },
+    {
+      "status": "passed",
+      "seconds": 0.08030255301855505,
+      "fingerprint": {
+        "passed": 2,
+        "skipped": 0,
+        "failed": 0
+      },
+      "peak_rss_mib": 34.5859375,
+      "id": "trading-contracts",
+      "scope": "synthetic",
+      "categories": [
+        "trading"
+      ]
+    }
+  ],
+  "coverage": {
+    "movement": {
+      "synthetic": [
+        "demo-movement"
+      ],
+      "private": []
+    },
+    "menus": {
+      "synthetic": [
+        "menu-contracts"
+      ],
+      "private": []
+    },
+    "battles": {
+      "synthetic": [
+        "battle-contracts"
+      ],
+      "private": []
+    },
+    "storage": {
+      "synthetic": [
+        "storage-contracts"
+      ],
+      "private": []
+    },
+    "save_load": {
+      "synthetic": [
+        "demo-resume"
+      ],
+      "private": []
+    },
+    "audio": {
+      "synthetic": [
+        "demo-audio"
+      ],
+      "private": []
+    },
+    "trading": {
+      "synthetic": [
+        "trading-contracts"
+      ],
+      "private": []
+    }
+  },
+  "missing_categories": [],
+  "status": "passed",
+  "failures": []
+}

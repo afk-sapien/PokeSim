@@ -1,0 +1,6 @@
+include CHANGELOG.md
+recursive-include docs *.md
+include EXECUTION.rst
+include tools/check_execution.py
+recursive-include compatibility *.json
+include COMPATIBILITY.rst

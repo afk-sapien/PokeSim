@@ -1,0 +1,136 @@
+{
+  "format": 1,
+  "cases": [
+    {
+      "id": "demo-movement",
+      "kind": "trace",
+      "scope": "synthetic",
+      "categories": [
+        "movement"
+      ],
+      "rom": "demo",
+      "steps": [
+        [
+          [
+            "right"
+          ],
+          16
+        ],
+        [
+          [],
+          8
+        ],
+        [
+          [
+            "down"
+          ],
+          16
+        ],
+        [
+          [],
+          8
+        ]
+      ],
+      "check_interval": 8
+    },
+    {
+      "id": "demo-audio",
+      "kind": "trace",
+      "scope": "synthetic",
+      "categories": [
+        "audio"
+      ],
+      "rom": "demo",
+      "steps": [
+        [
+          [
+            "a"
+          ],
+          16
+        ],
+        [
+          [],
+          104
+        ]
+      ],
+      "render": true,
+      "sound": true,
+      "check_interval": 30
+    },
+    {
+      "id": "demo-resume",
+      "kind": "trace",
+      "scope": "synthetic",
+      "categories": [
+        "save_load"
+      ],
+      "rom": "demo",
+      "steps": [
+        [
+          [
+            "a"
+          ],
+          16
+        ],
+        [
+          [],
+          104
+        ]
+      ],
+      "restore_at": [
+        12,
+        52,
+        83
+      ],
+      "check_interval": 12
+    },
+    {
+      "id": "menu-contracts",
+      "kind": "contracts",
+      "scope": "synthetic",
+      "categories": [
+        "menus"
+      ],
+      "tests": [
+        "../tests/test_state_actions.py"
+      ]
+    },
+    {
+      "id": "battle-contracts",
+      "kind": "contracts",
+      "scope": "synthetic",
+      "categories": [
+        "battles"
+      ],
+      "tests": [
+        "../tests/test_controls.py::test_item_is_selected_once_and_consumption_verified",
+        "../tests/test_controls.py::test_switch_selects_explicit_party_member",
+        "../tests/test_gen1_ui.py::test_battler_reads_active_hp_and_pp_without_writes"
+      ]
+    },
+    {
+      "id": "storage-contracts",
+      "kind": "contracts",
+      "scope": "synthetic",
+      "categories": [
+        "storage"
+      ],
+      "tests": [
+        "../tests/test_storage_cache.py",
+        "../tests/test_gen1_ui.py::test_storage_does_not_guess_unavailable_banks"
+      ]
+    },
+    {
+      "id": "trading-contracts",
+      "kind": "contracts",
+      "scope": "synthetic",
+      "categories": [
+        "trading"
+      ],
+      "tests": [
+        "../tests/test_compatibility_contracts.py::test_trading_transport_exchanges_once_and_restores_parked_cpu",
+        "../tests/test_compatibility_contracts.py::test_trading_overflow_and_pending_checkpoint_boundary_are_rejected"
+      ]
+    }
+  ]
+}

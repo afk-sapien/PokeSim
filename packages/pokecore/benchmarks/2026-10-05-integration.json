@@ -1,0 +1,22 @@
+{
+  "pokesim_tests": 1726,
+  "pokesim_skipped": 50,
+  "benchmark_tests": 429,
+  "benchmark_skipped_without_private_paths": 2,
+  "core_tests": 74,
+  "rust_python_tests": 711,
+  "rust_tests": 7,
+  "gameplay_comparison_trials": 90,
+  "red_red_trade_clock_roles": 2,
+  "red_blue_trade_verified": false,
+  "cartridge_export_verified": true,
+  "benchmark_real_recovery_tests": 2,
+  "isolated_pokesim_wheel_install": true,
+  "github_repository_created": false,
+  "github_blocker": "Required afk-sapien authentication unavailable",
+  "published_releases": false,
+  "isolated_benchmark_wheel_install": true,
+  "base_core_import_without_native_dependencies": true,
+  "trade_provenance_regression_tests": 64,
+  "native_wheel_platform": "Linux x86_64, Python 3.11+ ABI3"
+}

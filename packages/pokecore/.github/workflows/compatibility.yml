@@ -1,0 +1,42 @@
+name: Experimental compatibility
+on:
+  workflow_dispatch:
+    inputs:
+      pyboy_rs_ref:
+        description: Published PyBoy RS revision with the experimental execution APIs
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pokesim-core
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          path: pokesim-core
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          repository: afk-sapien/pyboy-rs
+          ref: ${{ inputs.pyboy_rs_ref }}
+          path: pyboy-rs
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d  # stable branch
+        with:
+          toolchain: stable
+      - name: Build and install PyBoy RS
+        run: |
+          uv venv --python 3.12
+          uv pip install maturin
+          uv run --no-sync bash -c 'cd ../pyboy-rs && maturin build --release --locked --out "$OLDPWD/dist"'
+          uv pip install dist/pyboy_rs-*.whl pillow numpy -e ".[dev]"
+      - run: uv run --no-sync pytest
+      - run: uv run --no-sync python -m pokecore.compatibility compatibility/synthetic.json --baseline compatibility/synthetic-baseline.json --output compatibility-result.json --repeats 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        if: always()
+        with:
+          name: synthetic-compatibility
+          path: pokesim-core/compatibility-result.json

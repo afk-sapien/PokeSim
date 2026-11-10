@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "pokesim-core-native"
+version = "0.1.0.dev0"
+description = "Experimental read-only Rust decoders for PokeSim Core"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+
+[tool.maturin]
+module-name = "pokesim_core_native"
