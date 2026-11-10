@@ -145,22 +145,32 @@ regression test. It passes when the player achieves something again within its b
 Scenarios hold private game data, so they live under `data/scenarios` or a folder named by
 `POKESIM_SCENARIOS`, never in the repository.
 
-Stalls come from two places, in the same layout. A running adventure keeps the last
-`KEEP_STALL_BUNDLES` (default 5) in its `stalls/` folder: `noticed.state` from the moment the
-stall was reported and `before.state`, the first autosave after the last achievement.
-`tools/find_stalls.py` plays an isolated adventure at full speed and writes the same bundles.
+Every stall keeps a capture, in one layout. A running adventure in any of the six games keeps the
+last `KEEP_STALL_BUNDLES` (default 5) in its `stalls/` folder. One is kept when no achievement
+comes for `STALL_ALERT_GAME_MINUTES` of game time, when the player gives up on an objective, and
+when a retry loop trips. A bundle holds `noticed.state` from the moment the stall was noticed,
+`before.state`, the first autosave after the last achievement outside a battle, the trace segments
+from that save on under `trace/`, a screenshot and `report.json`, whose `kind` says what noticed
+it. `tools/find_stalls.py` plays an isolated adventure at full speed and writes the same bundles,
+and so do the stage ladder and its gate.
+
+`python -m pokesim.replay capture` keeps a bundle as a scenario. The save goes to the private
+scenarios folder and a row goes to the tracked `scenarios/index.toml` with the cartridge, the save's
+hash, the frames from the save to the notice, `--expect` (`stuck` by default) and `--issue`. The
+preflight counts a row that expects `stuck` as a known failure. The pull request that fixes the
+stall flips the row to `passes`, so the stall becomes a test.
 
 ```sh
 uv run --locked python tools/find_stalls.py --rom roms/pokered.gb --output data/operations/stall-hunt/run-1 --until-champion
-uv run --locked python tools/stuck_scenarios.py add seafoam-boulders data/operations/stall-hunt/run-1/stall-01
+uv run --locked python -m pokesim.replay capture data/operations/stall-hunt/run-1/stall-01 --name seafoam-boulders
 uv run --locked python tools/stuck_scenarios.py run
 POKESIM_SCENARIO_TESTS=1 uv run --locked --extra dev pytest tests/test_scenarios.py -q
 ```
 
-`add` also edits the copied save into a situation that is hard to reach by playing:
+`capture` also edits the copied save into a situation that is hard to reach by playing:
 
 ```sh
-uv run --locked python tools/stuck_scenarios.py add league-everyone-frozen league-entry.state \
+uv run --locked python -m pokesim.replay capture league-entry.state --name league-everyone-frozen \
   --party all:status=frozen --item FULL_RESTORE=0 --item REVIVE=0 \
   --fallback league-entry.state --until champion --budget 300
 ```
@@ -178,7 +188,7 @@ place a scenario starts from.
 A stage ladder is a set of scenarios, one for each stage of a game, so a change can be replayed at
 every stage rather than only where a player once got stuck. `tools/stage_ladder.py snapshot` plays
 a fresh game headless and keeps a save the first time it reaches each rung. A stall on the way keeps
-a bundle under the ladder's `stalls/` folder, in the layout `add` accepts, and the run goes back to
+a bundle under the ladder's `stalls/` folder, in the layout `capture` accepts, and the run goes back to
 the save from before it. `adopt` keeps an existing save as a rung, and `show` lists what each ladder
 holds.
 

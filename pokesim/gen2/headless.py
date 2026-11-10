@@ -120,14 +120,18 @@ class HeadlessRun:
         # A scenario's own generator picks the idle, and otherwise the reload stream does.
         self.tick(1 + self.rng.randrange(RELOAD_IDLE) if self.rng else reload_idle(self.seed, frame))
 
-    def save(self, path, compress=False):
-        """Write a checkpoint the application and the replay tools both accept, with the manifest
-        fields the managed runtime writes that a replay reads back."""
-        # As the runtime does, so a copy opened with an unlocked clock never reads it running backward.
+    def state(self):
+        """The save state of this moment, its clock rebased on the host clock as the runtime does, so a
+        copy opened with an unlocked clock never reads it running backward."""
         rebase_to_host(self.pb)
         stream = io.BytesIO()
         self.pb.save_state(stream)
-        return CheckpointStore(path.parent).write_checkpoint(stream.getvalue(), self.manifest(), name=path.name,
+        return stream.getvalue()
+
+    def save(self, path, compress=False):
+        """Write a checkpoint the application and the replay tools both accept, with the manifest
+        fields the managed runtime writes that a replay reads back."""
+        return CheckpointStore(path.parent).write_checkpoint(self.state(), self.manifest(), name=path.name,
                                                              compress=compress)
 
     def manifest(self):

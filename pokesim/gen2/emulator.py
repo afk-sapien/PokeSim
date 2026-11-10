@@ -17,7 +17,7 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
-from ..runtime import trace
+from ..runtime import capture, trace
 from ..runtime.game_loop import GameLoop, Gen2
 from ..runtime.manifest import checkpoint_manifest
 from ..runtime.reload import FRAMES_PER_SECOND, reload_target
@@ -562,12 +562,13 @@ class Emulator:
         tracer = getattr(self, 'tracer', None)
         if tracer is not None:
             tracer.begin(path.stem, state, manifest, kept=path)
+        # The first save after an achievement is the last one known to be from before any stall.
+        capture.keep_before(self, path, self.snapshot)
         self.store.set('policy_state', self.policy.state_dict())
         self.store.set('gen2-history', self.history)
         self.store.set('play_clock', self.play_clock.state_dict())
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
-        if tracer is not None:
-            tracer.prune(self.store.autosaves())
+        capture.prune_trace(self)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
         self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
         self.store.prune_reward_results()
@@ -918,6 +919,7 @@ class Emulator:
         rung, goal = getattr(policy, 'ladder_rung', None), getattr(policy, 'goal', None)
         if rung is None or not getattr(snapshot, 'started', False):
             return False
+        capture.keep(self, 'give_up', why)
         for key in [rung_key(rung), *stalled_objectives(policy)['keys']]:
             stand_down(policy, key)
         label = goal.label if goal is not None else rung
@@ -1037,6 +1039,8 @@ class Emulator:
             return
         if guard := getattr(self, 'loop_guard', None):
             guard.looping(self.store)
+            if why := guard.take_trip():
+                capture.keep(self, 'loop', why)
         snapshot = self.snapshot
         if snapshot is None or self.frame - self.last_reload_frame < 3600:
             return
@@ -1083,7 +1087,11 @@ class Emulator:
         snapshot = self.snapshot
         if snapshot is None or not snapshot.valid or not snapshot.started:
             return
-        quiet = self.stall.check(self.frame, time.time())
+        now = time.time()
+        quiet = self.stall.check(self.frame, now)
+        if self.stall.capture_due(self.frame):
+            # Kept as soon as game time says it is a stall. The alert waits for real time as well.
+            capture.keep(self, 'quiet', f'no progress for {self.stall.game_minutes(self.frame)} game minutes', now)
         if quiet is None:
             return
         details = self.policy.details()

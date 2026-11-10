@@ -15,7 +15,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import sys
 
 # hRandomAdd and hRandomSub in pret/pokered, which Yellow keeps. Gold, Silver and Crystal read theirs from the symbols.
@@ -380,27 +379,20 @@ def prepare(rom, code):
     return cartridge, code or ''
 
 
-def _bundle(run, snap, folder, before, reason, missing, game_minute, marks):
-    """Keep a stall the way the application does, in a folder tools/stuck_scenarios.py add accepts."""
-    # A stall noticed again in the same game minute after a reload gets its own folder.
-    bundle = folder / 'stalls' / f'stall-{game_minute:05d}m'
-    repeat = 1
-    while bundle.exists():
-        repeat += 1
-        bundle = folder / 'stalls' / f'stall-{game_minute:05d}m-{repeat}'
-    bundle.mkdir(parents=True)
-    run.save(bundle / 'noticed.state', compress=True)
-    if before is not None:
-        for suffix in ('.state', '.json'):
-            shutil.copyfile(before[1].with_suffix(suffix), bundle / f'before{suffix}')
+def _bundle(run, snap, folder, before, reason, missing, game_minute, marks, kind='ladder'):
+    """Keep a stall the way the application does, with the shared capture that ``python -m pokesim.replay
+    capture`` turns into a scenario. A stall noticed again in the same game minute after a reload gets its
+    own folder."""
+    from pokesim.runtime.capture import keep_run
     goal = getattr(run.policy, 'goal', None)
     details = run.policy.details()
-    report = {'reason': reason, 'game_minute': game_minute, 'next_rungs': missing[:2],
+    report = {'kind': kind, 'reason': reason, 'game_minute': game_minute, 'next_rungs': missing[:2],
               'map': getattr(snap, 'map_name', None) or hex(snap.map), 'goal': getattr(goal, 'key', None),
               'objective': (details.get('objective') or {}).get('title'), 'policy_reason': details.get('reason'),
-              'marks': [title for _, _, title in marks][-5:], 'has_before': before is not None}
-    (bundle / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    return {'bundle': bundle.relative_to(folder).as_posix(), **report}
+              'marks': [title for _, _, title in marks][-5:]}
+    bundle = keep_run(run, folder / 'stalls' / f'stall-{game_minute:05d}m', report,
+                      before=None if before is None else before[1], compress=True)
+    return {'bundle': bundle.relative_to(folder).as_posix(), **report, 'has_before': before is not None}
 
 
 def _cartridges(folder):
@@ -436,7 +428,8 @@ class GateWatch:
         reason = (f'a retry loop: {self.watch.loop}' if self.watch.loop else
                   f'nothing achieved for {self.quiet} game minutes' if quiet else
                   f'a battle ran for {self.battle} game minutes')
-        self.stall = _bundle(run, snap, self.folder, self.before, reason, [], run.frame // self.minute, marks)
+        self.stall = _bundle(run, snap, self.folder, self.before, reason, [], run.frame // self.minute, marks,
+                             kind='gate')
         return True
 
 

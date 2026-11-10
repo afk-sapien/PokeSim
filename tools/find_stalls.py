@@ -9,6 +9,7 @@ private game data and must remain outside the checkout.
 import argparse
 from collections import Counter, deque
 from pokecore.emulator_state import runtime_provenance
+import io
 import json
 from pathlib import Path
 import sys
@@ -20,6 +21,7 @@ from pokesim.events import diff
 from pokesim.headless import HeadlessRun
 from pokesim.policies.progression import milestones
 from pokesim.ram import read_snapshot
+from pokesim.runtime.capture import keep_run
 from pokesim.screen import Screen
 from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, advanced
 from pokesim.strategy_data import MAPS
@@ -107,19 +109,16 @@ def main():
                 break
             quiet = run.frame - progress_frame
             if snapshot.started and snapshot.valid and not open_stall and quiet >= args.stall_minutes * MINUTE:
-                folder = args.output / f'stall-{len(stalls) + 1:02d}'
-                folder.mkdir(exist_ok=True)
-                run.save(folder / 'noticed.state')
-                run.pb.screen.image.save(folder / 'noticed.png')
                 before = next((path for frame, path, _ in recent if frame <= progress_frame), recent[0][1] if recent else None)
                 # A checkpoint inside a battle that cannot end is no way out of it.
                 calm = next((path for _, path, fighting in reversed(recent) if not fighting), None)
-                if before:
-                    for suffix in ('.state', '.json'):
-                        (folder / f'before{suffix}').write_bytes(before.with_suffix(suffix).read_bytes())
-                open_stall = {'folder': folder.name, 'noticed_frame': run.frame, 'quiet_minutes': quiet // MINUTE,
-                              'has_before': bool(before), **report(snapshot)}
-                (folder / 'report.json').write_text(json.dumps(open_stall, indent=2), encoding='utf-8')
+                png = io.BytesIO()
+                run.pb.screen.image.save(png, format='PNG')
+                open_stall = {'kind': 'quiet', 'noticed_frame': run.frame, 'quiet_minutes': quiet // MINUTE,
+                              **report(snapshot)}
+                folder = keep_run(run, args.output / f'stall-{len(stalls) + 1:02d}', open_stall, before=before,
+                                  png=png.getvalue())
+                open_stall = {'folder': folder.name, **open_stall, 'has_before': bool(before)}
                 stalls.append(open_stall)
                 objective = (open_stall['objective'] or {}).get('title')
                 print(f'{clock(run.frame - start)} STALL {folder.name}: {quiet // MINUTE} quiet minutes on '
@@ -132,7 +131,9 @@ def main():
                     restart = escapes >= 2 and snapshot.map in LEAGUE and league_entry.exists()
                     run.reload(league_entry if restart else calm or folder / 'before.state')
                     open_stall['escape'] = 'restarted the League attempt' if restart else 'reloaded a checkpoint from before the battle'
-                    (folder / 'report.json').write_text(json.dumps(open_stall, indent=2), encoding='utf-8')
+                    kept = json.loads((folder / 'report.json').read_text(encoding='utf-8'))
+                    kept['escape'] = open_stall['escape']
+                    (folder / 'report.json').write_text(json.dumps(kept, indent=2), encoding='utf-8')
                     print(f'  battle could not end, {open_stall["escape"]}', flush=True)
                     # Watch again from here, so a second dead end is noticed instead of waited out.
                     previous, pending, open_stall, progress_frame = None, [], None, run.frame

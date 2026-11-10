@@ -1,4 +1,5 @@
 """An adventure's trace folder: segments per autosave, pruning, and failures that never stop a game."""
+import gzip
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,7 +11,7 @@ from pokecore import trace as core  # noqa: E402
 from pokecore.emulator import Emulator, demo_rom  # noqa: E402
 
 from pokesim import config  # noqa: E402
-from pokesim.runtime import trace  # noqa: E402
+from pokesim.runtime import capture, trace  # noqa: E402
 from pokesim.runtime.manifest import checkpoint_manifest  # noqa: E402
 
 
@@ -83,6 +84,23 @@ def test_prune_follows_the_autosaves_and_keeps_the_open_segment(tracer, game):
     # The segment still being written stays, even past the oldest autosave.
     tracer.prune([Path('auto-v1-9.state')])
     assert [path.name for path in trace.segments(tracer.folder)] == ['auto-v1-3']
+
+
+def test_a_capture_closes_the_open_segment_and_links_those_from_the_held_save(tmp_path, tracer, game):
+    held = tmp_path / 'before-stall.state'
+    for name in ('auto-v1-1', 'auto-v1-2', 'auto-v1-3'):
+        game.tick(30)
+        assert tracer.begin(name, game.save(), {})
+        if name == 'auto-v1-2':
+            # A ladder rung keeps its save gzipped.
+            held.write_bytes(gzip.compress(game.save()))
+    game.tick(30)
+    found = capture._segments(tracer, game.save(), {'frame': 90}, held)
+    assert [path.name for path in found] == ['auto-v1-2', 'auto-v1-3']
+    first = tracer.name
+    assert first.startswith('capture-') and tracer.recording
+    found = capture._segments(tracer, game.save(), {'frame': 90}, None)
+    assert [path.name for path in found] == ['auto-v1-1', 'auto-v1-2', 'auto-v1-3', first]
 
 
 def test_a_segment_that_cannot_begin_stops_recording_and_waits_to_try_again(tmp_path, tracer, game, monkeypatch):

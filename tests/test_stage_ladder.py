@@ -57,9 +57,15 @@ class FakeRun:
         self.policy = SimpleNamespace(details=lambda: {'reason': 'Walking in circles'}, goal=None)
         self.pb = SimpleNamespace(tick=lambda frames, render: None)
 
+    def state(self):
+        return b'state'
+
+    def manifest(self):
+        return {'frame': self.frame}
+
     def save(self, path, compress=False):
-        path.write_bytes(b'state')
-        path.with_suffix('.json').write_text(json.dumps({'frame': self.frame}), encoding='utf-8')
+        path.write_bytes(self.state())
+        path.with_suffix('.json').write_text(json.dumps(self.manifest()), encoding='utf-8')
         return path
 
     def step(self, snapshot):

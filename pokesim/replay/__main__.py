@@ -3,10 +3,12 @@
     python -m pokesim.replay record --rung silver/badges_6 --at main --roms ROMS [--twice]
     python -m pokesim.replay diverge A B --rung silver/badges_6 --roms ROMS [--a-pyboy own]
     python -m pokesim.replay bisect --rung silver/badges_6 --good A --bad B --suspects 344,346 --roms ROMS
+    python -m pokesim.replay capture BUNDLE --name seafoam-boulders [--issue N]
 
 Each run plays the rung as the ladder gate does, with the commit's own code and lock, and keeps
 its trace. pyboy-rs is held at the running checkout's version unless ``--pyboy own`` asks for
-each commit's own. Reports go beside the runs as JSON and Markdown.
+each commit's own. Reports go beside the runs as JSON and Markdown. ``capture`` keeps a stall
+bundle as a stuck scenario with its row in scenarios/index.toml.
 """
 from __future__ import annotations
 
@@ -16,7 +18,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import diverge
+from . import capture, diverge
 from .envs import CURRENT, DEFAULT_CACHE, OWN, ROOT, resolve
 from .rung import GATE_FRAMES, GATE_WASTE_POINTS
 from .search import BOTH, STALL, WASTE, Options, bisect, markdown, record, twice
@@ -127,6 +129,7 @@ def parse(argv=None):
                         help='wasted share points over the good end that make a run bad')
     search.add_argument('--no-self-check', action='store_true', help='skip recording each end twice')
     search.set_defaults(action=cmd_bisect)
+    capture.arguments(commands.add_parser('capture', help='keep a stall bundle as a stuck scenario in scenarios/index.toml'))
     return parser.parse_args(argv)
 
 

@@ -12,6 +12,7 @@ segment again from its start state. docs/design/replayable-bugs.md section 4.
 from __future__ import annotations
 
 import contextlib
+import gzip
 import hashlib
 import json
 import logging
@@ -34,6 +35,9 @@ FOLDER = 'trace'
 SEGMENT = 'segment.jsonl.gz'
 # After a segment cannot begin, wait this long before a start segment tries again.
 RETRY_SECONDS = 600
+# The most segments kept for the save from before a stall, about two and a half game hours at the
+# default autosave pace. A stall is noticed after two.
+HELD_SEGMENTS = 30
 
 
 def stamp(name):
@@ -48,6 +52,19 @@ def segments(folder):
     if not folder.is_dir():
         return []
     return sorted((path for path in folder.iterdir() if path.is_dir()), key=lambda path: (stamp(path.name), path.name))
+
+
+def held_segment(folder, save):
+    """The oldest segment under ``folder`` that starts from the save state at ``save``, or None. A gzipped
+    save, as a ladder rung keeps, is unpacked first, since a segment names its start by the unpacked bytes."""
+    if save is None:
+        return None
+    try:
+        raw = Path(save).read_bytes()
+        sha = hashlib.sha256(gzip.decompress(raw) if raw[:2] == b'\x1f\x8b' else raw).hexdigest()
+    except (OSError, EOFError, gzip.BadGzipFile):
+        return None
+    return next((segment for segment in segments(folder) if (segment / f'{sha}.state').exists()), None)
 
 
 def digest(value):
@@ -206,14 +223,31 @@ class Tracer:
         if self.recorder is not None:
             self.recorder.close()
 
-    def prune(self, autosaves):
-        """Remove segments that began before the oldest of ``autosaves``, never the open one."""
+    def prune(self, autosaves, hold=None):
+        """Remove segments that began before the oldest of ``autosaves``, never the open one.
+
+        ``hold`` is the save kept from before a stall. The segments from the one that starts at it stay
+        too, up to the newest HELD_SEGMENTS, so a stall noticed after its autosaves rotate out still has
+        the trace that led to it."""
         if not autosaves:
             return
         oldest = min(stamp(Path(path).stem) for path in autosaves)
-        for folder in segments(self.folder):
+        found = segments(self.folder)
+        held = held_segment(self.folder, hold)
+        if held is not None:
+            oldest = min(oldest, max(stamp(held.name), stamp(found[-HELD_SEGMENTS:][0].name)))
+        for folder in found:
             if stamp(folder.name) < oldest and folder.name != self.name:
                 shutil.rmtree(folder, ignore_errors=True)
+
+    def closed(self, hold=None):
+        """The closed segments from the one that starts at the save ``hold`` on, or every closed segment
+        when none starts there, at most the newest HELD_SEGMENTS."""
+        found = [folder for folder in segments(self.folder) if not (self.recording and folder.name == self.name)]
+        held = held_segment(self.folder, hold)
+        if held is not None:
+            found = [folder for folder in found if stamp(folder.name) >= stamp(held.name)]
+        return found[-HELD_SEGMENTS:]
 
 
 def for_store(store, generation):
