@@ -1,6 +1,6 @@
 # Adventure state store
 
-Status: proposed, waiting on the lead's ruling. Nothing here is built. It was read from main at `d37693fa`. It is phase 4 item 2 of the architecture plan of 2026-11-09, budgeted at 16 to 20 agent-hours. It shares files with phase 1, [Replayable bugs](replayable-bugs.md). Section 6 lists them and says how each slice stays out of phase 1's way.
+Status: approved by the lead on 2026-11-10, with the rulings in section 8. Nothing here is built yet. It was read from main at `d37693fa`. It is phase 4 item 2 of the architecture plan of 2026-11-09, budgeted at 16 to 20 agent-hours. It shares files with phase 1, [Replayable bugs](replayable-bugs.md). Section 6 lists them and says how each slice stays out of phase 1's way.
 
 An adventure's state is its checkpoints plus `pokesim.sqlite`. This note gives that database three things it lacks.
 
@@ -155,8 +155,11 @@ Phase 1 files the state store never touches: `runtime/game_loop.py` and `runtime
 2. `app.sqlite` and `adventure.json`. The registry already has its own version.
 3. Loading a named checkpoint from before a restart. Today `rewards.initialize` guards the gift ledger after such a load (`emulator.py:428-430`, `gen2/emulator.py:642-645`). Other `resets_on_restart` domains stay reset, as they do today.
 
-## 8. For the lead to rule
+## 8. Rulings
 
-1. The five rows of section 4.
-2. Who writes the slices that edit the pokesim session's files: S3, S4 and R1 to R3 touch the emulators, `pokesim/gen2` and the trackers. Proposed: pokesim-app writes them in the order of section 6, and tells the pokesim session before each PR.
-3. The legacy two-container pair trade (`trade/service.py`, `trade/pair.py`, `trade/event.py`, `deploy/compose.trading.yaml`). Proposed: it keeps working through `state.connect`. Retiring it is a product call, not part of this work.
+The lead approved this note on 2026-11-10 with these rulings.
+
+1. **Section 4.** All five rows reset on restart, as proposed. S3 carries one condition. A test proves that resetting the Mew, mythical gift and GS Ball markers cannot hand out a second gift while the first one survives in the adventure's storage or its collection. If it can, S3 stops and the case goes to the lead before Gen I changes.
+2. **Who writes the slices.** pokesim-app writes every slice, including those in the emulators, `pokesim/gen2` and the trackers. Before each PR that touches a file in table 6.1, it tells the pokesim session in one line. Rule 4 of section 6.2 holds: the state store slice waits and rebases, and phase 1 never does.
+3. **The legacy pair trade** (`trade/service.py`, `trade/pair.py`, `trade/event.py`, `deploy/compose.trading.yaml`) keeps working through `state.connect`. Retiring it is not part of this work.
+4. **Preflight.** A slice that changes behaviour carries the `preflight` commit status before it merges. S3 is one. The others say in their PR whether they change behaviour.

@@ -44,7 +44,7 @@ This index separates current instructions, future plans, and historical evidence
 - [Planner systems](design/planner-systems.md): the shared planner systems S1 to S5 that replaced special-case fixes, as proposed and as built, with the parked mastery credit step.
 - [Goal system v2](design/goal-system.md): proposal for a goal tree with hunt templates, typed progress events, one worth oracle, shared supervision and a report button, with the PR order to build it.
 - [Replayable bugs](design/replayable-bugs.md): approved design for phase 1, with frame clocks, seeded randomness, an action trace with a replay verifier, a bisect tool and automatic stall capture, with the PR order to build it.
-- [Adventure state store](design/adventure-state-store.md): proposal for one owner of each adventure's database, a schema version and atomic restart resets, with the PR order to build it beside phase 1.
+- [Adventure state store](design/adventure-state-store.md): approved design for one owner of each adventure's database, a schema version and atomic restart resets, with the PR order to build it beside phase 1.
 - [Distribution readiness](distribution-readiness.md): historical release-process review.
 
 - [Multi-adventure application plan](multi-adventure-app-plan.md) and
