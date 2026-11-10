@@ -17,14 +17,14 @@ from ..events import HIGH, LOW
 from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
-from ..runtime.reload import FRAMES_PER_SECOND, Cadence, reload_target
+from ..runtime.game_loop import GameLoop, Gen2
+from ..runtime.reload import FRAMES_PER_SECOND, reload_target
 from ..runtime.restart import restart
 from ..stalls import LoopGuard, StallWatch, boss_attempt, stalled_state
 from pokecore.gen2.clock import boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 from .data import GameData
 from . import journal
-from .menus import stack_pointer
 from .policy import Action, Policy
 from pokecore.gen2.ram import BADGES, read_snapshot
 from .store_stock import StoreStock
@@ -240,7 +240,7 @@ class Emulator:
         self.screen_key = None
         self.screen_frame = self.stuck_frame = 0
         self.last_reload_frame = -10 ** 9
-        self._guard_frame = 0
+        self.guard_frame = 0
         self._watch_until = self._last_publish = 0.0
         self.history = store.get('gen2-history', new_history())
         self.last_achievement = next(iter(store.events(limit=1)), None)
@@ -894,7 +894,7 @@ class Emulator:
         # A reload rewinds the frame counter, so the next guard check must be due from the restored
         # frame. Left at the old frame, the guards slept until the run caught up, a clock wait was
         # never seen and its progress clock never restarted, and the first check then reloaded it.
-        self._guard_frame = self.frame
+        self.guard_frame = self.frame
         self.waiting = False
         self.stall.frame = None
 
@@ -1215,9 +1215,10 @@ class Emulator:
         self._autosave()
 
     def _run(self):
-        # Game time, so a replay saves on the same frames at any pace. A reload rewinds the frame and
-        # the cadence counts again from there.
-        autosave = Cadence(config.AUTOSAVE_SECONDS * FRAMES_PER_SECOND, self.frame)
+        # The autosave counts game time, so a replay saves on the same frames at any pace. A reload
+        # rewinds the frame and the cadence counts again from there.
+        loop = GameLoop(self, Gen2(), self._tick, guards=self._check_guards, autosave=self._autosave,
+                        ready=lambda: not getattr(self.policy, 'backing_out', False))
         self.consecutive_errors = 0
         try:
             running = True
@@ -1241,12 +1242,11 @@ class Emulator:
                         if activate(self) or deliver(self):
                             continue
                     if self.preparation and not self.paused:
-                        snapshot = self._read()
-                        action = self.preparation.step(snapshot)
+                        loop.pending = [self.preparation.step(self._read())]
                     elif not self.manual.empty():
-                        action = self.manual.get_nowait()
+                        loop.pending = [self.manual.get_nowait()]
                     elif self.manual_mode:
-                        action = Action(None, 0, 4)
+                        loop.pending = [Action(None, 0, 4)]
                     elif self.paused:
                         self.last_activity = time.monotonic()
                         self.consecutive_errors = 0
@@ -1254,23 +1254,11 @@ class Emulator:
                         continue
                     else:
                         snapshot = self._read()
-                        action = self.policy.step(snapshot, self.pb.memory, stack_pointer(self.pb))
+                        loop.decide(snapshot)
                         self._report_missed_shiny(snapshot)
                         self._report_marathon(snapshot)
                         self._report_pin(snapshot)
-                    if action.button:
-                        self.pb.button_press(action.button)
-                    try:
-                        self._tick(action.hold)
-                    finally:
-                        if action.button:
-                            self.pb.button_release(action.button)
-                    self._tick(action.gap)
-                    if self.frame >= self._guard_frame:
-                        self._guard_frame = self.frame + 60
-                        self._check_guards()
-                    if not getattr(self.policy, 'backing_out', False) and autosave.due(self.frame):
-                        self._autosave()
+                    loop.act()
                     self.consecutive_errors = 0
                 except Exception:
                     if loop_failed(self, log):

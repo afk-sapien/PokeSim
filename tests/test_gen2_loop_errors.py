@@ -6,6 +6,7 @@ import pytest
 
 from pokesim.gen2.emulator import Emulator
 from pokesim.gen2.policy import Action
+from pokesim.runtime.game_loop import GUARD_FRAMES
 
 
 @pytest.fixture
@@ -15,7 +16,8 @@ def emu(monkeypatch):
     emu.commands, emu.manual = queue.Queue(), queue.Queue()
     emu.store = Mock(get=Mock(return_value=None))
     emu.frame = emu._reward_check_frame = 0
-    emu._guard_frame = 10 ** 9
+    # The frame never moves here, so the guards stay one check away.
+    emu.guard_frame = GUARD_FRAMES
     emu.preparation, emu.paused, emu.manual_mode = None, False, False
     emu.fatal_error, emu.stopping = None, False
     emu.pb, emu.steps, emu.policy = Mock(), Mock(), Mock(backing_out=False)

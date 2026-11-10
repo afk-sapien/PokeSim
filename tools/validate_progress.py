@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sys
 import time
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -14,9 +15,9 @@ from pokecore.emulator import Emulator as PyBoy
 from pokesim.benchmark import policy_fingerprint
 from pokesim.checkpoints import CheckpointStore
 from pokesim.events import RunMemory, diff
-from pokesim.policies.base import PolicyContext, stack_pointer
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.ram import read_snapshot
+from pokesim.runtime.game_loop import GameLoop, Gen1
 
 
 def run(rom, checkpoint, frames):
@@ -44,6 +45,15 @@ def run(rom, checkpoint, frames):
     pending = []
     progress_samples = []
     next_sample = 36000
+    host = SimpleNamespace(pb=pb, policy=policy, frame=frame)
+
+    def tick(count):
+        if count > 0:
+            pb.tick(count, render=False)
+            host.frame += count
+            counts[policy.mode] += count
+
+    loop = GameLoop(host, Gen1(lambda: host.frame), tick)
     try:
         with checkpoint.open('rb') as stream:
             pb.load_state(stream)
@@ -61,17 +71,8 @@ def run(rom, checkpoint, frames):
             achievements.extend({'frame': frame - start, 'type': event.type, 'title': event.title}
                                 for event in events if event.type not in ('playtime', 'release', 'blackout', 'seen'))
             previous = snapshot
-            for action in policy.step(PolicyContext(snapshot, frame, pb.memory, stack_pointer(pb))):
-                if action.button:
-                    pb.button_press(action.button)
-                if action.hold:
-                    pb.tick(action.hold, render=False)
-                if action.button:
-                    pb.button_release(action.button)
-                if action.gap:
-                    pb.tick(action.gap, render=False)
-                frame += action.hold + action.gap
-                counts[policy.mode] += action.hold + action.gap
+            loop.step(snapshot)
+            frame = host.frame
             if frame - start >= next_sample:
                 project = policy.collection.project or {}
                 progress_samples.append({

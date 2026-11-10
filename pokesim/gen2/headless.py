@@ -18,16 +18,18 @@ from pokecore.gen2.ram import read_snapshot
 from .. import __version__, config
 from ..checkpoints import CheckpointStore, open_state
 from ..experimental.gen2 import identify
+from ..runtime.game_loop import GameLoop, Gen2
 from ..seeds import RELOAD_IDLE, reload_idle
 from .data import GameData
 from .emulator import BUTTONS, SCREEN_FRAMES, count_league
-from .menus import stack_pointer
 from .policy import Policy
 from .store_stock import StoreStock
 
 
 class HeadlessRun:
     generation = 2
+    # A tool that saves screenshots renders every frame.
+    render = False
 
     def __init__(self, rom, checkpoint=None, seed=7, rng=None, data_root=None):
         rom = Path(rom)
@@ -50,6 +52,7 @@ class HeadlessRun:
         self.frame = self.screen_frame = 0
         self.screen_key = None
         self.clock = None
+        self.loop = GameLoop(self, Gen2(), self.tick)
         if checkpoint:
             self._load(Path(checkpoint))
         else:
@@ -129,20 +132,13 @@ class HeadlessRun:
 
     def tick(self, frames):
         if frames > 0:
-            self.pb.tick(frames, render=False)
+            self.pb.tick(frames, render=self.render)
             self.frame += frames
 
     def step(self, snapshot):
-        action = self.policy.step(snapshot, self.pb.memory, stack_pointer(self.pb))
-        if action.button:
-            self.pb.button_press(action.button)
-        try:
-            self.tick(action.hold)
-        finally:
-            if action.button:
-                self.pb.button_release(action.button)
-        self.tick(action.gap)
-        screen = hash((snapshot.tiles, snapshot.map, snapshot.x, snapshot.y, snapshot.in_battle))
+        """One decision and its action, through the loop the application plays."""
+        self.loop.step(snapshot)
+        screen =hash((snapshot.tiles, snapshot.map, snapshot.x, snapshot.y, snapshot.in_battle))
         if screen != self.screen_key:
             self.screen_key, self.screen_frame = screen, self.frame
         elif self.frame - self.screen_frame >= SCREEN_FRAMES:

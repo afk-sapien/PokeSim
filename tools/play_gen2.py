@@ -4,11 +4,13 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 import time
+from types import SimpleNamespace
 
 from pokecore.gen2.clock import boot, follow_game_time, lock_clock
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
+from pokesim.runtime.game_loop import GameLoop, Gen2
 from pokecore.gen2.ram import Memory, read_snapshot
 
 
@@ -162,6 +164,14 @@ def main():
     last_progress, progress_frame, stopped = None, 0, None
     visited = set()
     start = time.monotonic()
+
+    def tick(count):
+        nonlocal frame
+        if count > 0:
+            pb.tick(count, True)
+            frame += count
+
+    loop = GameLoop(SimpleNamespace(pb=pb, policy=policy, frame=frame), Gen2(), tick)
     try:
         if args.load:
             with args.load.open('rb') as source:
@@ -219,7 +229,7 @@ def main():
                 elif frame - progress_frame > args.stall_frames * (3 if snapshot.in_battle else 1):
                     stopped = 'No game progress within the scenario stall limit'
                     break
-                action = policy.step(snapshot, pb.memory)
+                action = loop.decide(snapshot)[0]
                 summary = (snapshot.map, snapshot.x, snapshot.y, snapshot.in_battle, len(snapshot.party),
                            snapshot.badges, policy.mode)
                 if summary != previous or policy.decisions % 100 == 0:
@@ -238,15 +248,7 @@ def main():
                         and not snapshot.in_battle and not Memory(pb.memory, data).byte('wScriptRunning')
                         and '┌' not in snapshot.tiles[12]):
                     break
-                if action.button:
-                    pb.button_press(action.button)
-                if action.hold > 0:
-                    pb.tick(action.hold, True)
-                if action.button:
-                    pb.button_release(action.button)
-                if action.gap > 0:
-                    pb.tick(action.gap, True)
-                frame += action.hold + action.gap
+                loop.act()
                 if frame % 10000 < action.hold + action.gap:
                     pb.screen.image.save(args.output / 'latest.png')
                     with (args.output / 'latest.state').open('wb') as output:

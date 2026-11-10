@@ -51,10 +51,10 @@ def test_a_rewinding_reload_keeps_the_guards_watching_the_clock_wait():
     # A reload rewinds the frame counter. The guards must run again from the restored frame, or a
     # clock patrol after the reload is never seen as waiting and its progress clock never restarts.
     from pokesim.gen2.emulator import Emulator
-    emu = SimpleNamespace(frame=369_120_000, _guard_frame=369_120_060, stall=SimpleNamespace(frame=5), waiting=True)
+    emu = SimpleNamespace(frame=369_120_000, guard_frame=369_120_060, stall=SimpleNamespace(frame=5), waiting=True)
     emu.frame = 368_994_723
     Emulator._reset_watch(emu)
-    assert emu.frame >= emu._guard_frame and not emu.waiting
+    assert emu.frame >= emu.guard_frame and not emu.waiting
     # The patrol then counts as waiting at the first check, 60 frames after the reload grace ends.
     emu.frame += 3600
     policy = SimpleNamespace(recoveries=0, take_failure=lambda: None, idle=lambda snapshot: False,
@@ -64,7 +64,7 @@ def test_a_rewinding_reload_keeps_the_guards_watching_the_clock_wait():
                         snapshot=SimpleNamespace(valid=True, started=True), policy=policy, failure_streak=0)
     emu._unstick = lambda since, why: reloads.append((since, why))
     emu._check_stall = lambda: None
-    assert emu.frame >= emu._guard_frame
+    assert emu.frame >= emu.guard_frame
     Emulator._check_guards(emu)
     assert emu.waiting and emu.progress_frame == emu.frame and not reloads
 

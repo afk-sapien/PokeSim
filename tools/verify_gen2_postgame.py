@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from pokecore.gen2.clock import boot, follow_game_time
 from pokecore.gen2.ram import Memory, read_snapshot
@@ -17,6 +18,7 @@ from pokesim.gen2 import postgame
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
 from pokesim.gen2.world import update
+from pokesim.runtime.game_loop import GameLoop, Gen2
 
 
 def main():
@@ -67,6 +69,15 @@ def main():
     pb = open_game(args.load)
     policy = make_policy()
     frame, restarted, outing_done = 0, False, False
+
+    def tick(count):
+        nonlocal frame
+        if count > 0:
+            pb.tick(count, True)
+            frame += count
+
+    host = SimpleNamespace(pb=pb, policy=policy, frame=frame)
+    loop = GameLoop(host, Gen2(), tick)
     transitions, training = [], []
     receipt = {'game': args.game, 'scope': 'focused postgame director with collection errands bypassed',
                'source_sha256': hashlib.sha256(args.load.read_bytes()).hexdigest()}
@@ -97,7 +108,7 @@ def main():
                 postgame.state(policy)['activity'] = first
                 initialized = True
             before = postgame.state(policy)['activity']
-            action = policy.step(snapshot, pb.memory)
+            loop.decide(snapshot)
             activity = postgame.state(policy)['activity']
             marker = ((activity or {}).get('kind'), repr(activity and activity.get('identity')),
                       (activity or {}).get('started'), (activity or {}).get('level_goal'))
@@ -140,6 +151,7 @@ def main():
                 pb.stop(save=False)
                 pb = open_game(path)
                 policy = make_policy(saved)
+                host.pb, host.policy = pb, policy
                 first = postgame.state(policy)['activity']
                 restored = read_snapshot(pb.memory, data, frame)
                 count = first['encounters']
@@ -150,15 +162,7 @@ def main():
                                       'party_preserved': True}
                 restarted = True
                 continue
-            if action.button:
-                pb.button_press(action.button)
-            if action.hold:
-                pb.tick(action.hold, True)
-            if action.button:
-                pb.button_release(action.button)
-            if action.gap:
-                pb.tick(action.gap, True)
-            frame += action.hold + action.gap
+            loop.act()
         receipt.update(frames=frame, transitions=transitions, training=training,
                        restart_passed=restarted, first_outing_finished=outing_done)
         search = receipt.get('first_search', {})

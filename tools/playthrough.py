@@ -4,14 +4,16 @@ import json
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pokecore.emulator import Emulator as PyBoy
-from pokesim.policies.base import PolicyContext, stack_pointer
+from pokesim import config
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.policies.progression import milestones
 from pokesim.ram import read_snapshot
-from pokesim.screen import Screen, W_OPTIONS
+from pokesim.runtime.game_loop import GameLoop, Gen1
+from pokesim.screen import Screen
 from pokesim.strategy_data import event_set
 
 
@@ -50,10 +52,19 @@ def main():
         path.with_suffix('.json').write_text(json.dumps(detail, indent=2), encoding='utf-8')
         pb.screen.image.save(path.with_suffix('.png'))
         return detail
+    # This campaign has always played without battle animations, whatever the setting says.
+    config.BATTLE_ANIMATIONS = False
+
+    def tick(count):
+        nonlocal frame
+        if count > 0:
+            pb.tick(count, render=True)
+            frame += count
+
+    loop = GameLoop(SimpleNamespace(pb=pb, policy=policy, frame=frame), Gen1(lambda: frame), tick)
     try:
         while frame < args.frames:
             s = read_snapshot(pb.memory, frame)
-            pb.memory[W_OPTIONS] = (pb.memory[W_OPTIONS] & ~7) | 129
             if args.stop_event and event_set(s.event_flags, args.stop_event):
                 print('REACHED', args.stop_event, 'at', frame, flush=True)
                 break
@@ -63,7 +74,7 @@ def main():
             if milestones(s)['champion'] and not args.stop_position and not args.stop_event:
                 print('CHAMPION', frame, flush=True)
                 break
-            actions = policy.step(PolicyContext(s, frame, pb.memory, stack_pointer(pb)))
+            loop.decide(s)
             marker = (policy.goal.key, s.badges, s.items)
             if marker != last:
                 checkpoint(f'{frame:08d}-{policy.goal.key}')
@@ -76,17 +87,8 @@ def main():
                       'battle', s.in_battle, 'recoveries', policy.recoveries,
                       repr(detail['screen'][-105:]), flush=True)
                 last_report = frame
-            for action in actions:
-                if action.button:
-                    pb.button_press(action.button)
-                if action.hold:
-                    pb.tick(action.hold, render=True)
-                    frame += action.hold
-                if action.button:
-                    pb.button_release(action.button)
-                if action.gap:
-                    pb.tick(action.gap, render=True)
-                    frame += action.gap
+            while loop.pending:
+                loop.act()
         checkpoint('latest')
     finally:
         pb.stop(save=False)
