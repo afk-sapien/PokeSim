@@ -1,28 +1,28 @@
 {
- "commit": "171176e",
- "attempt": 2,
- "taken": "2026-11-08",
+ "commit": "63c8427e",
+ "attempt": 1,
+ "taken": "2026-11-09",
  "frames": 108000,
  "rungs": {
   "blue/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.99
+   "waste": 1.11
   },
   "blue/badges_2": {
-   "stall": null,
+   "stall": "a retry loop: route:bill:88 stood down 4 times in a row",
    "errors": 0,
-   "waste": 12.96
+   "waste": 16.16
   },
   "blue/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 24.44
+   "waste": 25.62
   },
   "blue/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 7.34
+   "waste": 11.77
   },
   "blue/badges_8": {
    "stall": null,
@@ -37,22 +37,22 @@
   "blue/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 6.14
+   "waste": 14.97
   },
   "crystal/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 3.93
+   "waste": 15.65
   },
   "crystal/badges_2": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 8.54
   },
   "crystal/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.13
   },
   "crystal/badges_6": {
    "stall": null,
@@ -77,27 +77,27 @@
   "crystal/kanto_entry": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 4.51
   },
   "crystal/red": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 8.18
   },
   "crystal/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 32.14
   },
   "gold/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 5.71
+   "waste": 23.69
   },
   "gold/badges_2": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 8.54
   },
   "gold/badges_4": {
    "stall": null,
@@ -107,7 +107,7 @@
   "gold/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 17.28
   },
   "gold/badges_8": {
    "stall": null,
@@ -127,22 +127,22 @@
   "gold/kanto_entry": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 1.57
   },
   "gold/red": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 15.48
   },
   "gold/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 2.7
   },
   "gold-randomized/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.24
+   "waste": 12.22
   },
   "gold-randomized/badges_4": {
    "stall": null,
@@ -152,7 +152,7 @@
   "gold-randomized/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 3.44
   },
   "gold-randomized/league_first": {
    "stall": null,
@@ -162,22 +162,22 @@
   "red/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.99
+   "waste": 1.11
   },
   "red/badges_2": {
    "stall": null,
    "errors": 0,
-   "waste": 2.91
+   "waste": 3.53
   },
   "red/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 24.44
+   "waste": 13.75
   },
   "red/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 12.6
+   "waste": 14.79
   },
   "red/badges_8": {
    "stall": null,
@@ -192,17 +192,17 @@
   "red/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 9.12
+   "waste": 17.75
   },
   "red-randomized/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 1.46
+   "waste": 1.86
   },
   "red-randomized/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 10.21
+   "waste": 10.43
   },
   "red-randomized/badges_8": {
    "stall": null,
@@ -217,7 +217,7 @@
   "silver/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.27
+   "waste": 12.45
   },
   "silver/badges_2": {
    "stall": null,
@@ -230,9 +230,9 @@
    "waste": 0.0
   },
   "silver/badges_6": {
-   "stall": null,
+   "stall": "a retry loop: route:red_gyarados:LAKE_OF_RAGE:18,23 stood down 4 times in a row",
    "errors": 0,
-   "waste": 1.3
+   "waste": 25.87
   },
   "silver/badges_8": {
    "stall": null,
@@ -252,37 +252,37 @@
   "silver/kanto_entry": {
    "stall": null,
    "errors": 0,
-   "waste": 5.99
+   "waste": 8.75
   },
   "silver/red": {
    "stall": null,
    "errors": 0,
-   "waste": 12.56
+   "waste": 17.33
   },
   "silver/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 11.02
   },
   "yellow/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 7.38
+   "waste": 1.78
   },
   "yellow/badges_2": {
-   "stall": null,
+   "stall": "a retry loop: route:bill:88 stood down 4 times in a row",
    "errors": 0,
-   "waste": 3.87
+   "waste": 6.13
   },
   "yellow/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 11.84
+   "waste": 23.63
   },
   "yellow/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 13.37
+   "waste": 21.5
   },
   "yellow/badges_8": {
    "stall": null,
@@ -292,12 +292,12 @@
   "yellow/league_first": {
    "stall": null,
    "errors": 0,
-   "waste": 0.07
+   "waste": 0.0
   },
   "yellow/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 14.97
+   "waste": 24.32
   }
  }
 }
