@@ -61,4 +61,14 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   no route, and ended training. A Crystal postgame run outside the Silver Cave stood down one trainee
   after another. They now wait for the jump to land. crystal/post_game, gold/post_game and
   silver/post_game are back at 0.0%, and the baseline moved for them.
+- #389, Gen I, 2026-11-10: a trainer who spots the player holds them still until the battle starts. Each
+  step tried then counted as a wall, so on Route 25 every side got blocked while a trainer walked up,
+  and the walk to Bill found no route four times in a row. A step tried while a trainer engages no
+  longer counts. The blue/badges_2 and yellow/badges_2 stalls are gone, and the baseline moved for
+  blue/badges_2, yellow/badges_2, blue/post_game, red/post_game, yellow/badges_4, yellow/post_game and
+  red-randomized/badges_4. red/badges_4 moved up to 20.8%, although it plays better. It reaches Mr.
+  Fuji at frame 96970 of the rung, not 102510. Its whole rise is one 8422-frame trip back to the
+  hideout for the Silph Scope. Before the fix that trip took 18066 frames, with a missing route and a
+  trainer blocking every side again. That trainer's battle gave experience, so the audit counted the
+  detour as progress. The trip back itself is still open.
 - The other rungs are still open.
