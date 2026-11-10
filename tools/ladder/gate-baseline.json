@@ -1,5 +1,5 @@
 {
- "commit": "48bf511f",
+ "commit": "cc258e0b",
  "attempt": 1,
  "taken": "2026-11-10",
  "frames": 108000,
@@ -82,7 +82,7 @@
   "crystal/red": {
    "stall": null,
    "errors": 0,
-   "waste": 6.28
+   "waste": 0.28
   },
   "crystal/post_game": {
    "stall": null,
@@ -132,7 +132,7 @@
   "gold/red": {
    "stall": null,
    "errors": 0,
-   "waste": 15.48
+   "waste": 9.65
   },
   "gold/post_game": {
    "stall": null,
