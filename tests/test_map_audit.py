@@ -1,4 +1,4 @@
-"""The Gen II map audit passes on every game, and still catches the map facts behind #254 and #241, and a walk through Ilex Forest before Cut."""
+"""The Gen II map audit passes on every game, and still catches the map facts behind #254 and #241, and walks through Ilex Forest or over a gate link without the field move."""
 import importlib.util
 import os
 from pathlib import Path
@@ -96,6 +96,23 @@ def test_a_walk_through_ilex_forest_needs_cut(game):
         assert 'ILEX_FOREST' not in walk('ROUTE_34', 'AZALEA_TOWN', *moves)
     assert walk('ROUTE_34', 'AZALEA_TOWN', 'cut') == [
         'ROUTE_34_ILEX_FOREST_GATE', 'ILEX_FOREST', 'ILEX_FOREST_AZALEA_GATE', 'AZALEA_TOWN']
+
+
+def test_a_walk_over_a_gate_link_lands_at_the_gate(game):
+    # Ecruteak City meets Route 42 only through its gate, whose door opens west of the water. A walk
+    # over that link once landed nowhere, so it reached Mahogany Town in two maps before Surf.
+    _, data, _ = game
+    ids = {entry['constant']: mid for mid, entry in data.maps.items()}
+    needs = walk_crossings(data)
+    for crossing, move in ((('ECRUTEAK_CITY', 'ROUTE_42', 'MAHOGANY_TOWN'), 'surf'),
+                           (('GOLDENROD_CITY', 'ROUTE_35', 'ROUTE_36'), 'cut')):
+        key = tuple(ids[name] for name in crossing)
+        assert needs[key] == needs[key[::-1]] == (frozenset({move}),)
+    walk = walker(data)
+    assert walk('ECRUTEAK_CITY', 'MAHOGANY_TOWN') == ['ROUTE_42', 'MOUNT_MORTAR_1F_OUTSIDE', 'ROUTE_42', 'MAHOGANY_TOWN']
+    assert walk('ECRUTEAK_CITY', 'MAHOGANY_TOWN', 'surf') == ['ROUTE_42', 'MAHOGANY_TOWN']
+    assert 'NATIONAL_PARK' in walk('GOLDENROD_CITY', 'ROUTE_36')
+    assert walk('GOLDENROD_CITY', 'ROUTE_36', 'cut') == ['ROUTE_35', 'ROUTE_36']
 
 
 class FieldMovesIgnored(Navigator):
