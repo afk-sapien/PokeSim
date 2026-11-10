@@ -35,6 +35,12 @@ def status(store, generation=1):
         for key, label in milestones(generation)]}
 
 
+def fresh(now=None):
+    """The records of a new game, which has achieved nothing yet. A restart writes it, so the tracker
+    never fills a new game's records from the old game's progress rows."""
+    return {'records': {}, 'baseline_pending': False, 'started_at': now or time.time()}
+
+
 class RecordTracker:
     def __init__(self, store, *, generation=1):
         self.store = store
@@ -65,11 +71,6 @@ class RecordTracker:
                                 pass
             self.value = {'records': records, 'baseline_pending': True, 'started_at': time.time()}
             store.set(KEY, self.value)
-
-    def reset(self, *, now=None):
-        self.value = {'records': {}, 'baseline_pending': False, 'started_at': now or time.time()}
-        self.previous = None
-        self.store.set(KEY, self.value)
 
     def observe(self, snapshot, clock=None, *, now=None):
         if not snapshot.valid or not snapshot.started or self.store.get('trade_hold'):

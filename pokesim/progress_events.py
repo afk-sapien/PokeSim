@@ -21,12 +21,6 @@ JOURNAL = {'obtain': 'receive', 'trade': 'receive', 'hatch': 'receive', 'release
 HOUR = 216000
 
 
-def clear(db):
-    """Forget every row when the adventure restarts from a new game."""
-    for table in ('progress_events', 'encounter_counts'):
-        db.execute(f'DELETE FROM {table}')
-
-
 def frame(store):
     """The adventure's PlayClock frame, or None where no emulator runs, as for a page or a trade worker."""
     clock = getattr(store, 'clock', None)

@@ -109,6 +109,8 @@ The streams are policy, adventure-choices, reload (with the PlayClock frame), na
 
 `config.SEED` stays as a test override for the adventure seed. An existing adventure gets its seed on the first boot after the change. Its Gen I generator state is already in its checkpoints.
 
+As built in PR 3, the seed lives under `adventure-seed-v1` and an owner restart clears it, as it clears the reward ledger. So each new game from power-on draws its own starter and choices. Gen II names keep their own generator, seeded from the adventure seed and saved with the naming state, as Gen I names do. A name stream picked different names under a fixed seed, and that alone sent a stuck-scenario replay into a retry loop.
+
 ### 4.2 One loop
 
 `pokesim/runtime/game_loop.py` adds `GameLoop`. One step reads the snapshot, asks the decider, runs the action (press, hold, release, gap), writes W_OPTIONS, runs guards every 60 frames, autosaves every 3,600 frames and writes the trace. The decider is the only part per generation. Gen I builds a `PolicyContext`. Gen II calls `step(snapshot, mem, sp)`. Phase 3 widens the decider into the full GameAdapter.

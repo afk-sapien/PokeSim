@@ -6,7 +6,6 @@ import hashlib
 import io
 import logging
 import queue
-import secrets
 import threading
 from pokecore.emulator_state import checkpoint_metadata, validate_runtime
 import time
@@ -22,7 +21,7 @@ from .audio import AudioFeed, enable_checkpoint_sound
 from .build_info import build_info
 from .checkpoints import open_state
 from .events import HIGH, LOW, Event, RunMemory, diff
-from . import progress_events, rewards, stall_truth
+from . import progress_events, rewards, seeds, stall_truth
 from .legendary import LegendaryRecovery
 from .loop_errors import loop_failed
 from .play_clock import PlayClock
@@ -31,6 +30,7 @@ from .planning import pin
 from .policies import make_policy
 from .policies.base import BUTTONS, Action, PolicyContext, stack_pointer
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
+from .runtime.restart import restart
 from .screen import W_OPTIONS
 from .stalls import PROGRESS_EVENTS, LoopGuard, StallWatch, advanced, boss_attempt
 from .strategy_data import MAPS
@@ -92,7 +92,8 @@ class Emulator:
         self.paused = False
         self.frozen = False
         self.manual_mode = False
-        self.policy = make_policy(config.POLICY, config.SEED)
+        self.adventure_seed = seeds.adventure_seed(store)
+        self.policy = make_policy(config.POLICY, self.adventure_seed)
         store.attach(self.policy, 1)
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
@@ -918,10 +919,12 @@ class Emulator:
             if guard:
                 guard.reloaded(target.name)
             candidates = [target] + [p for p in reversed(saves) if p != target]
+            clock = self.play_clock.frames
             self._restore_first_valid(candidates)
             # The emulator is deterministic, so the same save and the same choices would replay the
-            # same trouble. Idling a random moment moves the game's random numbers along.
-            self._tick(1 + secrets.randbelow(180))
+            # same trouble. Idling a moment drawn from the reload stream moves the game's random
+            # numbers along, the same way in a replay.
+            self._tick(seeds.reload_idle(self.adventure_seed, clock))
         else:
             log.warning("%s and no save state to go back to; power-cycling", why)
             self.pb.stop(save=False)
@@ -1203,44 +1206,58 @@ class Emulator:
                         log.info("loaded %s", p.name)
         elif name == "restart":
             log.warning("restarting run from power-on")
+            # The restart removes every autosave, so the game from before it stays as a named checkpoint.
             self._checkpoint_before(BEFORE_RESTART_CHECKPOINT)
             if hasattr(self, 'statistics'):
                 self.statistics.flush()
-                self.statistics.reset_baseline()
-            self.pb.stop(save=False)
-            if getattr(self, 'catch_tracker', None) is not None:
-                self.catch_tracker.reset()
-                if hasattr(self, 'statistics'):
-                    self.statistics.flush()
-            for p in self.store.states.glob("auto-*.state"):
-                p.unlink()
-                p.with_suffix(".json").unlink(missing_ok=True)
-            if hasattr(self, 'shiny_tracker'):
-                self.shiny_tracker.reset()
-            self.mem = RunMemory()
-            self.legendary_recovery = LegendaryRecovery()
-            self.last_achievement = None
-            # The trade and reward barriers stay. Named checkpoints from before them survive a restart,
-            # and loading one would undo a trade the partner keeps, or a reward.
-            self.store.clear_trade_preferences()
-            self.store.set("custom-reward-pending-v1", None)
-            if hasattr(self, 'milestones'):
-                self.milestones.reset()
-            self.store.set(rewards.KEY, None)
-            if hasattr(self, 'statistics'):
-                self.statistics.records.reset()
-            self.play_clock = PlayClock()
-            self.store.set("play_clock", self.play_clock.state_dict())
-            self.snapshot = None
-            self.store.set("run_memory", self.mem.to_dict())
-            self.policy.reset()
-            self.store.set("policy_state", {})
-            self.pb = self._boot()
-            self._audio_enabled = False
-            self.frame = 0
-            self.paused = self.manual_mode = False
-            self._reset_transient(clear_observation=True)
+            restart(self, 1, self._new_game(), self._start_new_game)
         return True
+
+    def _new_game(self):
+        """The rows the new game starts with, which the restart's transaction writes. The trade and
+        reward barriers stay, so a named checkpoint from before a trade or a gift still cannot load."""
+        from . import adventure_records, catches, milestones, shiny
+        values = {'play_clock': PlayClock().state_dict(), 'run_memory': RunMemory().to_dict(), 'policy_state': {},
+                  milestones.KEY: milestones.empty(), adventure_records.KEY: adventure_records.fresh()}
+        if getattr(self, 'catch_tracker', None) is not None:
+            values[catches.KEY] = self.catch_tracker.empty(True)
+        if getattr(self, 'shiny_tracker', None) is not None:
+            values[shiny.KEY] = shiny.fresh(self.shiny_tracker.supported)
+        return values
+
+    def _start_new_game(self):
+        """Boot the committed new game, with trackers that hold nothing of the old one in memory."""
+        from .goal_time import GoalTime
+        self.pb.stop(save=False)
+        self.loop_guard = LoopGuard()
+        self.goal_time = GoalTime(self.store)
+        if hasattr(self, 'milestones'):
+            from .milestones import MilestoneTracker
+            self.milestones = MilestoneTracker(self.store)
+        if getattr(self, 'catch_tracker', None) is not None:
+            from .catches import CatchTracker
+            self.catch_tracker = CatchTracker(self.store, self.rom_sha1, fresh=True)
+        if getattr(self, 'shiny_tracker', None) is not None:
+            from .shiny import ShinyTracker
+            self.shiny_tracker = ShinyTracker(self.store, self.rom_sha1)
+        if hasattr(self, 'statistics'):
+            from .statistics import StatisticsTracker
+            self.statistics = StatisticsTracker(self.store)
+            # The capture baseline moves to the new game's empty count.
+            self.statistics.flush()
+        self.mem = RunMemory()
+        self.legendary_recovery = LegendaryRecovery()
+        self.last_achievement = None
+        self.play_clock = PlayClock()
+        self.snapshot = None
+        # The restart's transaction dropped the old seed, so the new game draws its own starter and choices.
+        self.adventure_seed = self.policy.seed = seeds.adventure_seed(self.store)
+        self.policy.reset()
+        self.pb = self._boot()
+        self._audio_enabled = False
+        self.frame = 0
+        self.paused = self.manual_mode = False
+        self._reset_transient(clear_observation=True)
 
     def _run(self):
         pending: list[Action] = []

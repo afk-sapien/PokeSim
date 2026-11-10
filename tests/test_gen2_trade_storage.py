@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from pokesim.play_clock import PlayClock
+
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
 def data(request):
@@ -62,6 +64,7 @@ def unstick_emulator(saves, barrier='trade-2'):
 
     emu = SimpleNamespace(
         unstick_streak=0, reloads=0, last_reload=0, frame=500000, snapshot=None, history={},
+        play_clock=PlayClock(), adventure_seed=7,
         store=SimpleNamespace(autosaves=lambda: list(saves), checkpoint_metadata=lambda path: saves[path],
                               get=lambda key: barrier if key == 'trade_barrier' else None),
         policy=SimpleNamespace(recoveries=0, menu=None, on_restore=lambda: None, collection={}, goal=None, decisions=0),

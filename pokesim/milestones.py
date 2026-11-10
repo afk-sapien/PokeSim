@@ -122,11 +122,6 @@ class MilestoneTracker:
         self._inputs = None
         self._token = None
 
-    def reset(self):
-        self.store.set(KEY, empty())
-        self.previous = self.confirmed = None
-        self._inputs = self._token = None
-
     def observe(self, snapshot):
         if not snapshot.started or not snapshot.valid or self.store.get('trade_hold'):
             self.previous = None

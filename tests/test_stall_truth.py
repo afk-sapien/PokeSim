@@ -113,8 +113,7 @@ def test_a_new_game_keeps_the_rows_and_a_reopened_store_keeps_them_too(tmp_path)
         stall_truth.write(store, 'help', request='stall')
         with store.lock, store.db:
             progress_events.record(store.db, 'catch', species=1)
-            # Both generations' trackers forget the progress rows this way when a new game starts.
-            progress_events.clear(store.db)
+        store.restart(1, {})
         assert store.db.execute('SELECT COUNT(*) FROM progress_events').fetchone()[0] == 0
     finally:
         store.close()

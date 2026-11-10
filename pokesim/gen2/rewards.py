@@ -9,6 +9,7 @@ import uuid
 from .. import config, rewards
 from ..checkpoints import CheckpointStore
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
+from ..seeds import gift_seed
 from pokecore.gen2.ram import Memory, read_snapshot
 from pokecore.gen2.resets import box_gift
 from .steps import RETURNS, consume, ready
@@ -51,10 +52,11 @@ def deliver(emu):
         seed = f'{ledger["seed"]}:{ordinal}'
         species = random.Random(seed).choice((152, 155, 158))
         kind = 'league_reward'
+    championships = rewards.championship_count(ledger)
     if mythical and before.hall_of_fame_count and 151 not in before.owned and not emu.store.get(MYTHICAL):
-        kind, species, seed = 'mew_event', 151, uuid.uuid4().hex
-    if ready(emu.store.get(RETURNS), rewards.championship_count(ledger)):
-        kind, species, seed = 'mew_return', 151, uuid.uuid4().hex
+        kind, species, seed = 'mew_event', 151, gift_seed(emu.adventure_seed, 'mew_event', championships)
+    if ready(emu.store.get(RETURNS), championships):
+        kind, species, seed = 'mew_return', 151, gift_seed(emu.adventure_seed, 'mew_return', championships)
     space = next(((box, count) for box, count in enumerate(before.box_counts) if count < 20), None)
     if species is None or space is None:
         return None

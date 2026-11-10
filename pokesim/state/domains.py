@@ -6,9 +6,9 @@ The lives (docs/design/adventure-state-store.md section 3.3):
 - ``resets_on_restart``: a reload keeps it, and an owner restart resets it.
 - ``survives``: a reload and a restart both keep it.
 
-Each life here is what the code does today. Gen I and Gen II restart through their own emulator
-loops (``emulator.py`` and ``gen2/emulator.py``, the ``restart`` command), so a key that only one
-generation resets names only that generation.
+An owner restart (the ``restart`` command in ``emulator.py`` and ``gen2/emulator.py``) calls
+``Store.restart``, which empties every domain ``restarted`` names for that generation in one
+transaction. A key that only one generation keeps names only that generation.
 
 ``policy_reads`` marks the keys a policy decision can read: through what ``Store.attach`` hands the
 policy, through a value an emulator sets on the policy, or because the key decides whether and how
@@ -30,6 +30,8 @@ TABLE = 'table'
 
 # The custom reward that is staged or committed but not yet recovered, from runtime.reward_delivery.
 PENDING_REWARD = 'custom-reward-pending-v1'
+# Set by the restart's transaction and cleared once the old game's autosaves are gone.
+RESTART_PENDING = 'restart-pending-v1'
 
 
 @dataclass(frozen=True)
@@ -78,12 +80,20 @@ DOMAINS = (
     Domain('gen2-mew-returns-v1', 'pokesim.gen2.steps', RESETS_ON_RESTART, GEN2, policy_reads=True),
     Domain('gen2-clock-v1', 'pokesim.gen2.emulator', RESETS_ON_RESTART, GEN2),
 
-    # Kept by both restarts today. Section 4 of the note moves the next five to resets_on_restart.
-    Domain('league-partners-v2', 'pokesim.league_partners', SURVIVES, GEN1),
-    Domain('mew-returns-v1', 'pokesim.mew_returns', SURVIVES, GEN1, policy_reads=True, cached=True),
-    Domain('pokesim-mew-v1', 'pokesim.runtime.reward_delivery', SURVIVES, GEN1, cached=True),
-    Domain('loop-guard-reloads-v1', 'pokesim.stalls', SURVIVES),
-    Domain('goal-time-v1', 'pokesim.goal_time', SURVIVES),
+    # Reset only by the Gen I restart, as the Gen II restart resets its own copies.
+    Domain('league-partners-v2', 'pokesim.league_partners', RESETS_ON_RESTART, GEN1),
+    # Read once, to move a Gen I file from before league-partners-v2. A new game must not inherit
+    # its partners through that move.
+    Domain('league-partners-v1', 'pokesim.league_partners', RESETS_ON_RESTART, GEN1),
+    Domain('mew-returns-v1', 'pokesim.mew_returns', RESETS_ON_RESTART, GEN1, policy_reads=True, cached=True),
+    # The Mew gift's marker. The Pokedex of the new game sets it again once Mew is owned.
+    Domain('pokesim-mew-v1', 'pokesim.runtime.reward_delivery', RESETS_ON_RESTART, GEN1, cached=True),
+
+    # Reset by both restarts, so the new game's stall counts and goal times start empty.
+    Domain('loop-guard-reloads-v1', 'pokesim.stalls', RESETS_ON_RESTART),
+    Domain('goal-time-v1', 'pokesim.goal_time', RESETS_ON_RESTART),
+
+    Domain(RESTART_PENDING, 'pokesim.store', SURVIVES),
 
     # The trade and reward barriers, and the trade journal.
     Domain('trade_hold', 'pokesim.runtime.participant', SURVIVES, policy_reads=True),
@@ -103,6 +113,8 @@ DOMAINS = (
     Domain('boss_losses', 'pokesim.planning.losses', SURVIVES, policy_reads=True),
     Domain('boss_aces', 'pokesim.planning.losses', SURVIVES, policy_reads=True),
     Domain('fair-wild-dvs-v1', 'pokesim.fair_dvs', SURVIVES),
+    # The seed every bot choice is drawn from. A restart draws a new one for the new game.
+    Domain('adventure-seed-v1', 'pokesim.seeds', RESETS_ON_RESTART, policy_reads=True),
 
     # Walking, returns and the Champion shops.
     Domain('cartridge-steps-v1', 'pokesim.gen2.steps', SURVIVES, policy_reads=True, cached=True),
@@ -120,8 +132,6 @@ DOMAINS = (
     Domain('adventure-statistics-v1', 'pokesim.statistics', SURVIVES),
     Domain('trade-statistics-v1', 'pokesim.trade_statistics', SURVIVES),
     Domain('capture-gift-backfill-v1', 'pokesim.catches', SURVIVES, GEN1),
-    # Read once, to move a Gen I file from before league-partners-v2.
-    Domain('league-partners-v1', 'pokesim.league_partners', SURVIVES, GEN1),
 
     # Tables. The restart empties the capture and shiny receipts and the encounter rows.
     _table('capture_receipts', 'pokesim.catches', RESETS_ON_RESTART),
@@ -146,6 +156,12 @@ PREFIXES = {domain.key: domain for domain in DOMAINS if domain.kind == PREFIX}
 TABLES = {domain.key: domain for domain in DOMAINS if domain.kind == TABLE}
 CACHED = frozenset(key for key, domain in KEYS.items() if domain.cached)
 POLICY_READS = tuple(domain.key for domain in DOMAINS if domain.policy_reads)
+
+
+def restarted(generation):
+    """The domains a restart of this generation empties: the ones it resets and the ones a reload rewinds."""
+    return tuple(domain for domain in DOMAINS if generation in domain.generations
+                 and domain.life in (REWINDS, RESETS_ON_RESTART))
 
 
 def find(key):

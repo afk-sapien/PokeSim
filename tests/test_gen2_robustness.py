@@ -10,6 +10,7 @@ from pokesim import config
 from pokesim.gen2.data import GameData
 from pokecore.gen2.screens import mask_hud, mask_roster
 from pokesim.nicknames import MENU_WORDS, name_pool, validate_parts
+from pokesim.play_clock import PlayClock
 from pokecore.textmatch import ScreenText, has_word
 
 # Words the Gen 2 policy, menus and Gen 1 screen classifiers search for. A mon nicknamed with
@@ -411,7 +412,7 @@ def test_second_consecutive_unstick_raises_a_stuck_event():
     events = []
     saves = []
     emu = SimpleNamespace(unstick_streak=1, snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'),
-                          store=SimpleNamespace(autosaves=lambda: saves),
+                          store=SimpleNamespace(autosaves=lambda: saves), play_clock=PlayClock(), adventure_seed=7,
                           policy=SimpleNamespace(recoveries=4, menu=None, on_restore=lambda: None,
                                                  collection={}, goal=None, decisions=0, in_league=lambda snapshot: False),
                           reloads=0, last_reload=0, audio=SimpleNamespace(clear=lambda: None),

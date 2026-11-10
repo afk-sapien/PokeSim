@@ -196,8 +196,38 @@ class Module:
                 values += items if index is None else [found for module, item in items for found in module.unpack(item, index)]
         return values
 
+    def declarations(self, node):
+        """Whether a node is the domain declarations or a call that picks from them."""
+        if isinstance(node, ast.Call):
+            node = node.func
+        if isinstance(node, ast.Attribute):
+            node = node.value
+        if not isinstance(node, ast.Name):
+            return False
+        module, attr = self.imported(node.id)
+        if module is not None and module.name == 'pokesim.state.domains':
+            return True
+        scope = self.scope(node)
+        values = self.bindings(scope, node.id) if scope is not None and attr is None and module is None else None
+        return bool(values) and all(module.declarations(value) for module, value in values)
+
+    def declared(self, node):
+        """Whether ``name.key`` reads a declaration a loop runs over. Such a key is declared by construction."""
+        if not (isinstance(node, ast.Attribute) and node.attr == 'key' and isinstance(node.value, ast.Name)):
+            return False
+        scope = self.scope(node)
+        while scope is not None:
+            for loop in own(scope):
+                if (isinstance(loop, (ast.For, ast.comprehension)) and isinstance(loop.target, ast.Name)
+                        and loop.target.id == node.value.id):
+                    return self.declarations(loop.iter)
+            scope = self.scope(scope)
+        return False
+
     def resolve(self, node, seen=frozenset()):
         """Each kv key a node can be, as ('key', text), or ('prefix', text) for a key built on a string."""
+        if self.declared(node):
+            return []
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             return [('key', node.value)]
         if isinstance(node, ast.JoinedStr) and node.values and isinstance(node.values[0], ast.Constant):
@@ -367,14 +397,16 @@ def test_the_store_caches_the_same_keys_as_before():
         'step-events-v1', 'pokedex-milestones-v1', 'shiny-statistics-v1'}
 
 
-def test_the_lives_are_what_each_restart_does_today():
+def test_the_lives_are_what_each_restart_does():
     def keys(life, generation):
         return {domain.key for domain in domains.DOMAINS if domain.life == life and generation in domain.generations
                 and domain.kind != domains.TABLE}
-    # emulator.py and gen2/emulator.py, the restart command, and the tracker resets they call.
+    # Section 4 of docs/design/adventure-state-store.md, as ruled in section 8.
     both = {'custom-reward-pending-v1', 'league-rewards-v1', 'play_clock', 'capture-statistics-v1',
-            'pokedex-milestones-v1', 'adventure-records-v1', 'trade_offer:'}
-    assert keys(domains.RESETS_ON_RESTART, 1) == both | {'shiny-statistics-v1'}
+            'pokedex-milestones-v1', 'adventure-records-v1', 'trade_offer:', 'loop-guard-reloads-v1',
+            'goal-time-v1', 'adventure-seed-v1'}
+    assert keys(domains.RESETS_ON_RESTART, 1) == both | {
+        'shiny-statistics-v1', 'league-partners-v2', 'league-partners-v1', 'mew-returns-v1', 'pokesim-mew-v1'}
     assert keys(domains.RESETS_ON_RESTART, 2) == both | {
         'gen2-shiny-statistics-v1', 'gen2-mythical-gift-v1', 'gen2-gs-ball-distribution-v1',
         'gen2-league-partners-v1', 'gen2-mew-returns-v1', 'gen2-clock-v1'}
@@ -389,8 +421,12 @@ def test_the_scan_follows_each_way_a_key_is_named(tmp_path):
     (root / '__init__.py').write_text('')
     (root / 'sub' / '__init__.py').write_text('')
     (root / 'keys.py').write_text("KEY = 'imported'\nTABLE = {1: (KEY, 'x'), 2: ('second', 'y')}\n")
+    (root / 'state').mkdir()
+    (root / 'state' / '__init__.py').write_text('')
+    (root / 'state' / 'domains.py').write_text('def restarted(generation):\n    return ()\n')
     (root / 'sub' / 'user.py').write_text('''
 from .. import keys
+from ..state import domains
 from ..keys import KEY as renamed
 LOCAL = 'module'
 
@@ -421,6 +457,11 @@ def pairs(store, db, generation):
     store.get(name)
     for row, raw in db.execute('SELECT k,v FROM kv WHERE k LIKE ?', ('rows:%',)).fetchall():
         db.execute('UPDATE kv SET v=? WHERE k=?', (raw, row))
+
+def declared(db):
+    chosen = domains.restarted(1)
+    for domain in chosen:
+        db.execute('DELETE FROM kv WHERE k=?', (domain.key,))
 
 def unknown(store, value):
     store.get(value.name)

@@ -67,6 +67,10 @@ class Store:
         self.checkpoints = CheckpointStore(self.states)
         self.db = schema.connect(self.dir / "pokesim.sqlite", check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        # A restart committed its new game but stopped before the old game's autosaves were gone.
+        # Finish it before anything restores, so the new game starts and the old one never resumes.
+        if self.db.execute('SELECT 1 FROM kv WHERE k=?', (domains.RESTART_PENDING,)).fetchone():
+            self._finish_restart()
         # The tables come from the schema version. These fill what an older journal never stored,
         # and each is safe to run on every start.
         with self.db:
@@ -213,6 +217,63 @@ class Store:
         with self.lock, self.db:
             self.db.execute("INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)", (k, json.dumps(v)))
 
+    @contextmanager
+    def durable(self):
+        """One write transaction that is on the disk when it ends.
+
+        It starts with ``BEGIN IMMEDIATE``, so no other writer can come between its reads and its
+        writes, and commits under ``synchronous=FULL``. The connection's own setting comes back after.
+        An exception rolls the whole transaction back.
+        """
+        with self.lock:
+            previous = self.db.execute('PRAGMA synchronous').fetchone()[0]
+            self.db.execute('PRAGMA synchronous=FULL')
+            try:
+                self.db.execute('BEGIN IMMEDIATE')
+                try:
+                    yield self.db
+                except BaseException:
+                    self.db.rollback()
+                    raise
+                self.db.commit()
+            finally:
+                self.db.execute(f'PRAGMA synchronous={int(previous)}')
+
+    def restart(self, generation, values):
+        """Start the adventure's next game, all of it or none of it.
+
+        One durable transaction empties every domain a restart of this generation resets and every
+        domain a reload rewinds, and writes ``values`` in their place: the fresh rows the trackers
+        and the emulator start the new game with. A reset row with no value in ``values`` is deleted,
+        as a new adventure never had it. The same transaction sets ``restart-pending-v1``. After the
+        commit the old game's autosaves go and the marker clears. A crash before the commit leaves
+        the old game whole, and one after it starts the new game whole when the store opens again.
+        """
+        if self.read_only:
+            raise PermissionError('A stopped adventure is read only')
+        reset = domains.restarted(generation)
+        unknown = set(values) - {domain.key for domain in reset if domain.kind == domains.KEY}
+        if unknown:
+            raise ValueError(f'A restart does not reset {sorted(unknown)}')
+        with self.durable() as db:
+            for domain in reset:
+                if domain.kind == domains.TABLE:
+                    db.execute(f'DELETE FROM {domain.key}')
+                elif domain.kind == domains.PREFIX:
+                    db.execute('DELETE FROM kv WHERE substr(k, 1, ?) = ?', (len(domain.key), domain.key))
+                elif domain.key in values:
+                    db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (domain.key, json.dumps(values[domain.key])))
+                else:
+                    db.execute('DELETE FROM kv WHERE k=?', (domain.key,))
+            db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)', (domains.RESTART_PENDING, json.dumps(True)))
+        self._finish_restart()
+
+    def _finish_restart(self):
+        """Drop the old game's autosaves, then clear the marker the restart left for this step."""
+        self.checkpoints.drop_autosaves()
+        with self.lock, self.db:
+            self.db.execute('DELETE FROM kv WHERE k=?', (domains.RESTART_PENDING,))
+
     def trade_preferences(self):
         from .trade.preferences import read
         with self.lock:
@@ -312,11 +373,6 @@ class Store:
                             (PREFIX + key, json.dumps(value)))
             if key != legacy(key):
                 sync_legacy(self.db, legacy(key))
-
-    def clear_trade_preferences(self):
-        from .trade.preferences import PREFIX
-        with self.lock, self.db:
-            self.db.execute('DELETE FROM kv WHERE k LIKE ?', (PREFIX + '%',))
 
     # --- save states ---
     def autosave_path(self) -> Path:

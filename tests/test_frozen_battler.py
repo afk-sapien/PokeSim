@@ -60,6 +60,7 @@ def test_a_league_attempt_is_checkpointed_on_entry_and_restarted_when_a_battle_r
     from types import SimpleNamespace
     from pokesim import emulator
     from pokesim.checkpoints import CheckpointStore
+    from pokesim.play_clock import PlayClock
     store = CheckpointStore(tmp_path)
     store.write_checkpoint(b'entry', {'policy_state': {}, 'run_memory': {}}, name=emulator.LEAGUE_CHECKPOINT)
     assert store.autosaves() == [], 'the entry checkpoint is not a rotating autosave'
@@ -68,6 +69,7 @@ def test_a_league_attempt_is_checkpointed_on_entry_and_restarted_when_a_battle_r
     restored = []
     game = SimpleNamespace(store=SimpleNamespace(autosaves=store.autosaves, state_path=store.state_path),
                            snapshot=SimpleNamespace(map=emulator.MAPS['LANCES_ROOM']), reloads=0,
+                           play_clock=PlayClock(), adventure_seed=7,
                            _restore_first_valid=lambda paths: restored.append(paths[0].name), _tick=lambda n: None)
     emulator.Emulator._unstick(game, time.time() + 3600, 'battle never ended')
     emulator.Emulator._unstick(game, time.time() + 3600, 'battle never ended')

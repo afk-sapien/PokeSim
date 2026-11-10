@@ -155,10 +155,19 @@ class CheckpointStore:
         saves = self.autosaves()
         return saves[-1] if saves else None
 
-    def prune_autosaves(self, keep: int):
-        for p in self.autosaves()[:-keep] if keep > 0 else []:
+    @staticmethod
+    def _remove_autosaves(paths):
+        """Remove each autosave and its manifest."""
+        for p in paths:
             p.unlink(missing_ok=True)
             p.with_suffix(".json").unlink(missing_ok=True)
+
+    def prune_autosaves(self, keep: int):
+        self._remove_autosaves(self.autosaves()[:-keep] if keep > 0 else [])
+
+    def drop_autosaves(self):
+        """Remove every autosave. A restart's new game must never resume the old one."""
+        self._remove_autosaves(self.autosaves())
 
     def state_path(self, name: str) -> Path | None:
         if Path(name).name != name or "\\" in name or not name.endswith(".state"):

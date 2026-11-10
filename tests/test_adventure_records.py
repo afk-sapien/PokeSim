@@ -1,7 +1,7 @@
 """First records distinguish new achievements from incomplete historical evidence."""
 from dataclasses import replace
 
-from pokesim.adventure_records import RecordTracker, status
+from pokesim.adventure_records import KEY, RecordTracker, fresh, status
 from pokesim.events import Event
 from pokesim.store import Store
 from pokesim import shiny, statistics
@@ -58,8 +58,9 @@ def test_existing_current_achievement_without_history_has_unknown_time(tmp_path)
 def test_new_run_resets_records_without_reimporting_old_progress(tmp_path):
     store = Store(tmp_path)
     store.add_event(Event('badge', 'Badge'), snap(badges=255), None, None)
+    RecordTracker(store)
+    store.restart(1, {KEY: fresh(100)})
     tracker = RecordTracker(store)
-    tracker.reset(now=100)
     confirm(tracker, snap())
     tracker = RecordTracker(store)
     assert not records(store)['all_badges']['achieved']

@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pokesim.catches import CatchTracker, SUPPORTED
-from pokesim.milestones import KEY, MilestoneTracker, apply, is_perfect, level_credit, status
+from pokesim.milestones import KEY, MilestoneTracker, apply, empty, is_perfect, level_credit, status
 from pokesim.policies.collection import candidate
 from pokesim.policies.director import AdventureDirector
 from pokesim.store import Store
@@ -127,7 +127,7 @@ def test_history_survives_reopen_checkpoint_rewind_and_event_pruning(tmp_path):
         store.set('policy_state', {})
         assert status(store)['level_100'] == [1, 2, 3]
         assert status(store)['perfect_found'] == 1
-        tracker.reset()
+        store.restart(1, {KEY: empty()})
         assert status(store)['level_100'] == []
         assert status(store)['perfect_found'] == 0
     finally:
@@ -281,7 +281,7 @@ def test_three_star_history_is_durable_but_held_count_tracks_inventory(tracking)
     value = apply(live_status(s.to_dict()), store)['milestones']
     assert value['three_star_held'] == 0
     assert value['high_quality_species'] == [1, 2, 3]
-    tracker.reset()
+    store.restart(1, {KEY: empty()})
     assert status(store)['high_quality_species'] == []
 
 
@@ -328,7 +328,8 @@ def test_battle_changes_reuse_goals_but_new_levels_and_dvs_recalculate(tracking,
     settle(tracker, perfect)
     assert calculate.call_count == 3
     assert status(store)['perfect_found'] == 1
-    tracker.reset()
+    store.restart(1, {KEY: empty()})
+    tracker = MilestoneTracker(store)
     settle(tracker, perfect)
     assert status(store)['perfect_found'] == 1
     assert calculate.call_count == 4

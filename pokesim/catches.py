@@ -49,13 +49,6 @@ class CatchTracker:
         return {'counts': {}, 'total': 0, 'started_at': time.time(),
                 'complete_history': fresh, 'available': self.supported}
 
-    def reset(self):
-        with self.store.lock, self.store.db:
-            self.store.db.execute('DELETE FROM capture_receipts')
-            progress_events.clear(self.store.db)
-            self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)',
-                                 (KEY, json.dumps(self.empty(True))))
-
     def attach(self, pb):
         if not self.supported:
             return
