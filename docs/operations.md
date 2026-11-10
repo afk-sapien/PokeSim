@@ -244,7 +244,8 @@ from the watch's own clone, never a working checkout. Add `--enable` to start th
 
 `DEPLOY_HOST=<ssh alias> DEPLOY_DIR=<app folder> sh tools/deploy_host.sh <full commit sha>` builds that commit,
 takes a cold backup and starts the new image. It refuses a commit without green `ci gate`
-and `install gate` checks, or a host short of space. It also refuses a commit that does
+and `install gate` checks, a commit without a passing `tools/live_soak.py smoke` (see
+[testing](testing.md#live-soak-before-a-deploy)), or a host short of space. It also refuses a commit that does
 not contain the one the host runs, read from the running image's revision label, so a
 deploy never drops work. Use `--rollback-to <full commit sha>` to deploy an older commit
 on purpose. It always refuses a commit whose data schema is older than the live

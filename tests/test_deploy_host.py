@@ -96,10 +96,11 @@ def soaked(tmp_path, repo, revision, sha, report, *args):
     for tool in ('ssh', 'gh', 'docker'):
         (bin_dir / tool).chmod(0o755)
     reports = tmp_path / 'reports'
-    reports.mkdir(exist_ok=True)
+    (reports / 'smoke').mkdir(parents=True, exist_ok=True)
+    (reports / 'smoke' / f'{sha}.json').unlink(missing_ok=True)
     if report is not None:
         import json
-        (reports / f'{sha}.json').write_text(json.dumps(report))
+        (reports / 'smoke' / f'{sha}.json').write_text(json.dumps(report))
     env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}', 'DEPLOY_HOST': 'host',
            'DEPLOY_DIR': '/srv/app', 'LIVE_SOAK_REPORTS': str(reports), 'MIN_FREE_GB': '0'}
     return subprocess.run(['sh', str(SCRIPT), *args, sha], cwd=repo, env=env, capture_output=True, text=True)
