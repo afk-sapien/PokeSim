@@ -3,6 +3,7 @@ import time
 
 from .milestones import status as goals_status
 from .shiny import status as shiny_status
+from .state import tracking
 
 KEY = 'adventure-records-v1'
 GEN2_GOALS = 'pokedex-milestones-v1'
@@ -54,16 +55,15 @@ class RecordTracker:
             thresholds = {'first_badge': ('badges', 1), 'all_badges': ('badges', badges),
                           'champion': ('league', 1), 'pokedex': ('owned', dex),
                           'level100': ('level100', 1), 'perfect': ('perfect', 1)}
-            with store.lock:
+            with store.reading() as db:
                 for key, (column, threshold) in thresholds.items():
-                    row = store.db.execute(f'SELECT ts FROM progress WHERE {column} >= ? ORDER BY rowid LIMIT 1',
-                                           (threshold,)).fetchone()
-                    if row:
-                        records[key] = {'at': row[0], 'seconds': None, 'source': 'first_recorded'}
-                        event = store.db.execute('SELECT playtime FROM events WHERE ts=? ORDER BY id LIMIT 1', (row[0],)).fetchone()
-                        if event:
+                    at = tracking.first_progress(db, column, threshold)
+                    if at is not None:
+                        records[key] = {'at': at, 'seconds': None, 'source': 'first_recorded'}
+                        playtime = tracking.playtime_at(db, at)
+                        if playtime is not None:
                             try:
-                                hours, minutes, seconds = map(int, event[0].split(':'))
+                                hours, minutes, seconds = map(int, playtime.split(':'))
                                 if 0 <= hours < 255 and 0 <= minutes < 60 and 0 <= seconds < 60:
                                     records[key].update(seconds=hours * 3600 + minutes * 60 + seconds,
                                                         clock_source='cartridge')

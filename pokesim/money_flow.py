@@ -5,7 +5,7 @@ battle is prize money, Pay Day included. Any other rise is a sale, a gift or a w
 soon after the whole party fainted is the blackout penalty. Any other drop is a shop or a fee.
 The counts live with the adventure statistics, so they start when this version first runs.
 """
-import json
+from .state import kv
 
 # The adventure statistics record both generations keep.
 KEY = 'adventure-statistics-v1'
@@ -39,9 +39,8 @@ class MoneyFlow:
 
 
 def status(store):
-    with store.lock:
-        row = store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-    value = json.loads(row[0]) if row else {}
+    with store.reading() as db:
+        value = kv.get(db, KEY, {})
     flow = value.get('money')
     if not flow:
         return {'available': False, 'since': None, 'complete_history': False, 'earned': None, 'spent': None,

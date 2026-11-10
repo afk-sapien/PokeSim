@@ -1,7 +1,8 @@
 """Durable adventure totals and compact collection trends."""
 from dataclasses import asdict
-import json
 import time
+
+from .state import kv, tracking
 
 
 KEY = 'adventure-statistics-v1'
@@ -14,11 +15,8 @@ GAUGES = ('held', 'collection_power', 'strongest_six_power', 'average_power',
 
 def marathons(db, course='Kanto Marathon'):
     """Races finished on ``course``, counted from the journal, which outlasts checkpoint restores."""
-    if course == 'Johto Marathon':
-        query = "SELECT COUNT(*) FROM events WHERE type='marathon' AND title='Johto Marathon finished!'"
-    else:
-        query = "SELECT COUNT(*) FROM events WHERE type='marathon' AND title='Kanto Marathon finished!'"
-    return db.execute(query).fetchone()[0]
+    title = 'Johto Marathon finished!' if course == 'Johto Marathon' else 'Kanto Marathon finished!'
+    return tracking.marathons(db, title)
 
 
 def collection(snapshot):
@@ -44,29 +42,14 @@ def compact(db, value, now):
     if int(now // DAY) == value.get('compacted_day'):
         return
     # Retain hourly endpoints for 30 days, then one endpoint per day indefinitely.
-    db.execute('DELETE FROM statistics_history WHERE ts < ? AND bucket NOT IN ('
-               'SELECT MAX(bucket) FROM statistics_history GROUP BY CAST(ts / ? AS INTEGER))',
-               (now - 30 * DAY, DAY))
+    tracking.thin_history(db, now - 30 * DAY, DAY)
     value['compacted_day'] = int(now // DAY)
 
 
-def history(db, limit=600):
-    # Select in SQL so an old adventure never sends an unbounded history to the browser.
-    bounds = db.execute('SELECT MIN(ts), MAX(ts) FROM statistics_history').fetchone()
-    if bounds[0] is None:
-        return []
-    width = max(1, (bounds[1] - bounds[0]) / (limit - 2))
-    rows = db.execute('SELECT ts, data FROM statistics_history WHERE bucket IN ('
-                      'SELECT MAX(bucket) FROM statistics_history GROUP BY CAST((ts - ?) / ? AS INTEGER)'
-                      ' UNION SELECT MIN(bucket) FROM statistics_history) ORDER BY ts', (bounds[0], width))
-    return [{'ts': row[0], **json.loads(row[1])} for row in rows]
-
-
 def status(store):
-    with store.lock:
-        row = store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-        value = json.loads(row[0]) if row else {}
-        rows = history(store.db, limit=599)
+    with store.reading() as db:
+        value = kv.get(db, KEY, {})
+        rows = tracking.history(db, 599)
         baseline = value.get('baseline')
         if baseline and rows and baseline['ts'] < rows[0]['ts']:
             rows.insert(0, baseline)
@@ -158,15 +141,14 @@ class StatisticsTracker:
         current = {**value['counters'], **(self.gauges or {}),
                    'recorded_hours': round(value['counters']['active_frames'] / 216000, 3),
                    'captures': value['captures'] if captures['available'] else None}
-        with self.store.lock, self.store.db:
+        with self.store.transaction() as db:
             # The journal is durable across checkpoint restores and includes pre-upgrade races.
-            current['marathons'] = marathons(self.store.db)
+            current['marathons'] = marathons(db)
             value.setdefault('baseline', {'ts': now, **current})
             value.update(current=current, updated_at=now)
-            self.store.db.execute('INSERT OR REPLACE INTO statistics_history VALUES (?, ?, ?)',
-                                  (int(now // 3600), now, json.dumps(current)))
-            compact(self.store.db, value, now)
-            self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
+            tracking.add_history(db, now, current)
+            compact(db, value, now)
+            kv.put(db, KEY, value)
         self.value = value
         self.last_flush = now
 
@@ -177,29 +159,21 @@ def recent(store, *, now=None):
     now = time.time() if now is None else now
     catches = catches_status(store)
     periods = {}
-    with store.lock:
-        receipts = store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='capture_receipts'").fetchone()
-        unknown_gifts = bool(receipts and store.db.execute(
-            "SELECT 1 FROM capture_receipts c WHERE c.fingerprint LIKE 'gift-event:%' "
-            "AND NOT EXISTS (SELECT 1 FROM events e WHERE e.id = CAST(SUBSTR(c.fingerprint, 12) AS INTEGER)) LIMIT 1").fetchone())
-        latest = store.db.execute('SELECT ts, league, owned, level100 FROM progress ORDER BY rowid DESC LIMIT 1').fetchone()
+    with store.reading() as db:
+        receipts = tracking.has_capture_receipts(db)
+        unknown_gifts = bool(receipts and tracking.undated_gifts(db))
+        latest = tracking.latest_progress(db)
         for key, seconds in [('day', DAY), ('week', 7 * DAY)]:
             cutoff = now - seconds
-            first = store.db.execute('SELECT ts, league, owned, level100 FROM progress WHERE ts >= ? ORDER BY rowid LIMIT 1',
-                                     (cutoff,)).fetchone()
+            first = tracking.progress_from(db, cutoff)
             # If nothing changed during the window, its last earlier record is a valid baseline.
-            prior = store.db.execute('SELECT ts, league, owned, level100 FROM progress WHERE ts <= ? ORDER BY rowid DESC LIMIT 1',
-                                     (cutoff,)).fetchone()
+            prior = tracking.progress_until(db, cutoff)
             baseline = prior or first
             capture_since = max(cutoff, catches.get('started_at') or now)
             captured = None
             if receipts and catches['available']:
                 # Gift backfills carry an import timestamp. Use the original event date instead.
-                captured = store.db.execute(
-                    "SELECT COUNT(*) FROM capture_receipts c LEFT JOIN events e "
-                    "ON c.fingerprint LIKE 'gift-event:%' AND e.id = CAST(SUBSTR(c.fingerprint, 12) AS INTEGER) WHERE "
-                    "CASE WHEN c.fingerprint LIKE 'gift-event:%' THEN e.ts ELSE c.recorded_at END BETWEEN ? AND ?",
-                    (capture_since, now)).fetchone()[0]
+                captured = tracking.captures_between(db, capture_since, now)
             result = {'since': cutoff, 'until': now, 'catches': captured, 'catches_since': capture_since,
                       'progress_since': max(cutoff, baseline[0]) if baseline else None, 'undated_gifts': unknown_gifts}
             for index, metric in enumerate(('league', 'registered', 'level100'), 1):

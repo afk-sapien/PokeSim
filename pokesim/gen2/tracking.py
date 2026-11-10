@@ -1,10 +1,10 @@
 """Durable captures and collection achievements for the 251-species cartridges."""
 from collections import Counter
 import hashlib
-import json
 import time
 
 from .. import progress_events, shiny
+from ..state import kv, tracking
 from pokecore.gen2.hooks import capture_hooks, contest_hook, encounter_hook, hatch_hook
 from pokecore.gen2.ram import Memory
 
@@ -51,13 +51,21 @@ def new_ledger(complete_history):
             'available': True}
 
 
+def count_capture(db, species):
+    """Add one capture of ``species`` to the ledger, inside the transaction that kept its receipt."""
+    value = kv.get(db, CAPTURES)
+    value['counts'][str(species)] = value['counts'].get(str(species), 0) + 1
+    value['total'] += 1
+    kv.update(db, CAPTURES, value)
+
+
 class Tracker:
     def __init__(self, store, data, *, fresh):
         self.store, self.data = store, data
         self.candidate = self.confirmed = None
-        with store.lock, store.db:
-            store.db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)', (CAPTURES, json.dumps(new_ledger(fresh))))
-            shiny.start(store.db, 2, available=True, fresh=fresh)
+        with store.transaction() as db:
+            kv.add(db, CAPTURES, new_ledger(fresh))
+            shiny.start(db, 2, available=True, fresh=fresh)
 
     def attach(self, pb):
         for bank, address in capture_hooks(pb.memory, self.data):
@@ -85,9 +93,9 @@ class Tracker:
         if not hatching:
             return
         ram = hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).hexdigest()
-        with self.store.lock, self.store.db:
+        with self.store.transaction() as db:
             for slot, dex in hatching:
-                shiny.record(self.store.db, 'acquired', f'hatch:{slot}:{ram}', dex, generation=2)
+                shiny.record(db, 'acquired', f'hatch:{slot}:{ram}', dex, generation=2)
 
     def encountered(self, pb):
         """A wild battle opens. Count it once when the opponent is shiny."""
@@ -98,8 +106,8 @@ class Tracker:
                 or not shiny.shiny_bytes(mem.read('wEnemyMonDVs', 2))):
             return
         fingerprint = hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).hexdigest()
-        with self.store.lock, self.store.db:
-            shiny.record(self.store.db, 'seen', fingerprint, species, generation=2)
+        with self.store.transaction() as db:
+            shiny.record(db, 'seen', fingerprint, species, generation=2)
 
     def contest_caught(self, pb):
         """A Bug-Catching Contest catch is kept. Count a shiny one as acquired, once."""
@@ -109,8 +117,8 @@ class Tracker:
                 or not shiny.shiny_bytes(mem.read('wEnemyMonDVs', 2))):
             return
         fingerprint = hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).hexdigest()
-        with self.store.lock, self.store.db:
-            shiny.record(self.store.db, 'acquired', fingerprint, species, generation=2)
+        with self.store.transaction() as db:
+            shiny.record(db, 'acquired', fingerprint, species, generation=2)
 
     def contest_kept(self, pb):
         """The contest is over and the Pokémon the player held at the end goes to the party or box.
@@ -122,18 +130,13 @@ class Tracker:
         if not 1 <= species <= 251:
             return
         fingerprint = 'contest:' + hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).hexdigest()
-        with self.store.lock, self.store.db:
-            db = self.store.db
-            if not db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
-                              (fingerprint, species, time.time())).rowcount:
+        with self.store.transaction() as db:
+            if not tracking.add_capture(db, fingerprint, species, time.time()):
                 return
             progress_events.record(db, 'catch', frame=progress_events.frame(self.store), species=species)
             from ..activity_ledger import increment
             increment(db, 'caught', species)
-            value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()[0])
-            value['counts'][str(species)] = value['counts'].get(str(species), 0) + 1
-            value['total'] += 1
-            db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), CAPTURES))
+            count_capture(db, species)
 
     def captured(self, pb):
         mem = Memory(pb.memory, self.data)
@@ -144,10 +147,8 @@ class Tracker:
         # The capture routine has already restored a transformed Ditto's own DVs here.
         dvs = mem.read('wEnemyMonDVs', 2)
         perfect = dvs == b'\xff\xff'
-        with self.store.lock, self.store.db:
-            db = self.store.db
-            if not db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
-                              (fingerprint, species, time.time())).rowcount:
+        with self.store.transaction() as db:
+            if not tracking.add_capture(db, fingerprint, species, time.time()):
                 return
             trainer = mem.word('wPlayerID') if 'wPlayerID' in self.data.symbols else None
             progress_events.record(db, 'catch', frame=progress_events.frame(self.store), species=species,
@@ -156,18 +157,14 @@ class Tracker:
             increment(db, 'caught', species)
             from .returns import consume
             consume(db, species)
-            value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()[0])
-            value['counts'][str(species)] = value['counts'].get(str(species), 0) + 1
-            value['total'] += 1
-            db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), CAPTURES))
+            count_capture(db, species)
             if shiny.shiny_bytes(dvs):
                 shiny.record(db, 'acquired', fingerprint, species, generation=2)
             if perfect:
-                row = db.execute('SELECT v FROM kv WHERE k=?', (MILESTONES,)).fetchone()
-                goals = {**empty_goals(), **(json.loads(row[0]) if row else {})}
+                goals = {**empty_goals(), **kv.get(db, MILESTONES, {})}
                 goals['perfect_catches'] += 1
                 goals['perfect_species'] = sorted(set(goals['perfect_species']) | {species})
-                db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (MILESTONES, json.dumps(goals)))
+                kv.put(db, MILESTONES, goals)
 
     def observe(self, snapshot):
         if not snapshot.valid or not snapshot.started or self.store.get('trade_hold'):
@@ -197,10 +194,10 @@ class Tracker:
             goals['perfect_groups'][group] = max(count, goals['perfect_groups'].get(group, 0))
         goals.update(level_100=sorted(maxed), perfect_species=sorted(perfect), high_quality_species=sorted(quality))
         from .. import progress
-        with self.store.lock, self.store.db:
-            self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (MILESTONES, json.dumps(goals)))
+        with self.store.transaction() as db:
+            kv.put(db, MILESTONES, goals)
             # The progress lines for level 100 species and perfect finds follow each change.
-            progress.goals_changed(self.store.db, time.time())
+            progress.goals_changed(db, time.time())
         self.confirmed = token
 
 
@@ -220,16 +217,11 @@ def record_gift(db, event_id, species, *, frame=None):
 
     Keyed by its journal entry, so the recent catch counts date it the same way. A new receipt
     writes its ``receive`` row."""
-    row = db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()
-    if row is None or not 1 <= species <= 251 or not db.execute(
-            'INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
-            (f'gift-event:{event_id}', species, time.time())).rowcount:
+    if (not kv.exists(db, CAPTURES) or not 1 <= species <= 251
+            or not tracking.add_capture(db, f'gift-event:{event_id}', species, time.time())):
         return
     progress_events.record(db, 'receive', frame=frame, species=species)
-    value = json.loads(row[0])
-    value['counts'][str(species)] = value['counts'].get(str(species), 0) + 1
-    value['total'] += 1
-    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), CAPTURES))
+    count_capture(db, species)
 
 
 def apply(payload, store, data=None):

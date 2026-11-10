@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import time
 
 from . import progress_events
+from .state import kv, tracking
 
 KEY = 'capture-statistics-v1'
 SUPPORTED = {
@@ -37,13 +37,12 @@ class CatchTracker:
         self.store = store
         self.rom_sha1 = rom_sha1
         self.supported = rom_sha1 in TRACKED
-        with store.lock, store.db:
-            row = store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()
-            value = json.loads(row[0]) if row else self.empty(fresh)
-            initialize(store.db)
+        with store.transaction() as db:
+            value = kv.get(db, KEY, self.empty(fresh))
+            initialize(db)
             value['available'] = self.supported
-            store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (KEY, json.dumps(value)))
-            backfill_gifts(store.db)
+            kv.put(db, KEY, value)
+            backfill_gifts(db)
 
     def empty(self, fresh):
         return {'counts': {}, 'total': 0, 'started_at': time.time(),
@@ -74,8 +73,8 @@ class CatchTracker:
                     species=species, trainer_id=trainer_id, identity=progress_events.identity(trainer_id, dvs, dex))
 
     def record(self, fingerprint, dex, *, perfect=False, shiny=False, species=None, trainer_id=None, identity=None):
-        with self.store.lock, self.store.db:
-            record_receipt(self.store.db, fingerprint, dex, perfect=perfect, shiny=shiny,
+        with self.store.transaction() as db:
+            record_receipt(db, fingerprint, dex, perfect=perfect, shiny=shiny,
                            species=species, trainer_id=trainer_id, frame=progress_events.frame(self.store),
                            identity=identity)
 
@@ -89,16 +88,14 @@ def record_receipt(db, fingerprint, dex, *, perfect=False, shiny=False, species=
     """
     if not 1 <= dex <= 151:
         raise ValueError('Capture has an invalid Pokédex number')
-    inserted = db.execute('INSERT OR IGNORE INTO capture_receipts VALUES (?, ?, ?)',
-                          (fingerprint, dex, time.time())).rowcount
-    if not inserted:
+    if not tracking.add_capture(db, fingerprint, dex, time.time()):
         return
     if progress:
         progress_events.record(db, 'receive' if fingerprint.startswith('gift-event:') else 'catch',
                                frame=frame, species=dex, identity=identity)
     from .activity_ledger import increment
     increment(db, 'gift' if fingerprint.startswith('gift-event:') else 'caught', dex)
-    value = json.loads(db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
+    value = kv.get(db, KEY)
     key = str(dex)
     value['counts'][key] = value['counts'].get(key, 0) + 1
     value['total'] += 1
@@ -111,14 +108,13 @@ def record_receipt(db, fingerprint, dex, *, perfect=False, shiny=False, species=
     if perfect:
         from .milestones import record_capture
         record_capture(db, species, trainer_id)
-    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+    kv.update(db, KEY, value)
 
 
 def initialize(db):
     """Open the catch counts. The receipt table comes from the schema version (pokesim.state)."""
-    db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)',
-               (KEY, json.dumps({'counts': {}, 'total': 0, 'started_at': time.time(),
-                                 'complete_history': False, 'available': False})))
+    kv.add(db, KEY, {'counts': {}, 'total': 0, 'started_at': time.time(),
+                     'complete_history': False, 'available': False})
 
 
 def record_gift(db, event_id, species, slot=None, *, frame=None, progress=True):
@@ -139,10 +135,10 @@ def backfill_gifts(db):
     """Recover verified journal gifts once, without guessing from current ownership."""
     from .strategy_data import SPECIES
     marker = 'capture-gift-backfill-v1'
-    if db.execute('SELECT 1 FROM kv WHERE k=?', (marker,)).fetchone():
+    if kv.exists(db, marker):
         return
     names = {mon['name'].casefold(): sid for sid, mon in SPECIES.items()}
-    for event_id, title in db.execute("SELECT id, title FROM events WHERE type='obtain'"):
+    for event_id, title in tracking.obtained(db):
         match = re.fullmatch(r'Received .+ \(([^()]+)\) for League reward #\d+', title)
         if not match:
             match = re.fullmatch(r'Received (.+) for Championship #\d+', title)
@@ -152,4 +148,4 @@ def backfill_gifts(db):
             species = names.get('mew')
         if species is not None:
             record_gift(db, event_id, species, progress=False)
-    db.execute('INSERT INTO kv VALUES (?, ?)', (marker, 'true'))
+    kv.put(db, marker, True)
