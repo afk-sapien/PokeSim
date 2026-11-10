@@ -85,7 +85,7 @@ The trade and reward barriers are `survives`, as the comment at `emulator.py:122
 
 ### 3.5 The rewinding state lives once
 
-`policy_state`, `gen2-history` and `run_memory` leave kv. Boot and reload read the manifest only. `run_memory` keeps one field across a reload today, the announced playtime milestones. That field becomes its own `survives` key. `play_clock` stays in kv as `survives`.
+`policy_state`, `gen2-history` and `run_memory` leave kv. Boot and reload read the manifest only. `run_memory` keeps one field across a reload today, the announced playtime milestones. That field becomes its own `survives` key. `play_clock` stays in kv as `resets_on_restart`: a reload keeps the larger count, and a restart writes an empty clock.
 
 A Gen I save with no manifest loads today, and `_load_state_file` skips the manifest steps for it (`emulator.py:392`, `:409`). For that case only, the last kv copy of `policy_state` stays readable. A later migration drops it.
 
