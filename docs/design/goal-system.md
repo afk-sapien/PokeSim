@@ -546,7 +546,7 @@ In the goal tree it is the `done` precondition of each boss goal. HEAL spawns a 
 
 ### Live soak (Step 3)
 
-`tools/live_soak.py` runs the real Manager on the cold backup and three seeded post-game rungs for 2 game hours. It checks releases, receipts, churn, real progress, reloads, journal growth and repeated titles per game hour against a baseline. `deploy_host.sh` refuses a commit without a passing report.
+`tools/live_soak.py` runs the real Manager on the cold backup and three seeded post-game rungs for 2 game hours. It checks releases, receipts, churn, real progress, reloads, journal growth and repeated titles per game hour against a baseline. That comparison is advisory. `deploy_host.sh` refuses a commit without a passing boot and load smoke, which plays each copy for 5 game minutes, saves and reloads it.
 
 It is the soak gate for every PR below from PR 2 on. After PR 3 switches the readers to `net`, its invariants read `progress_events` instead of titles. During PR 2's shadow mode it reads titles as today and also reports where the shadow rows disagree. That closes its blind spot where duplicate catches write no event. Its other blind spots stay listed in its report.
 

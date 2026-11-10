@@ -509,17 +509,112 @@ def test_a_failed_run_fails_the_gate():
     assert live_soak.invariants(result(failed='the worker failed'), result()) == ['Red: the run failed, the worker failed']
 
 
-def test_check_needs_a_passing_report_for_that_commit(tmp_path, capsys):
+def test_check_needs_a_passing_smoke_for_that_commit(tmp_path, capsys):
     sha = 'a' * 40
     args = SimpleNamespace(sha=sha, reports=tmp_path)
+    smokes = tmp_path / 'smoke'
+    smokes.mkdir()
     assert live_soak.check(args) == 1
-    (tmp_path / f'{sha}.json').write_text(json.dumps({'commit': sha, 'passed': False, 'problems': ['x']}))
+    (smokes / f'{sha}.json').write_text(json.dumps({'commit': sha, 'passed': False, 'problems': ['x']}))
     assert live_soak.check(args) == 1
-    (tmp_path / f'{sha}.json').write_text(json.dumps({'commit': 'b' * 40, 'passed': True}))
+    (smokes / f'{sha}.json').write_text(json.dumps({'commit': 'b' * 40, 'passed': True}))
     assert live_soak.check(args) == 1
-    (tmp_path / f'{sha}.json').write_text(json.dumps({'commit': sha, 'passed': True}))
+    (smokes / f'{sha}.json').write_text(json.dumps({'commit': sha, 'passed': True}))
     assert live_soak.check(args) == 0
-    assert 'no report' in capsys.readouterr().err
+    assert 'no smoke report' in capsys.readouterr().err
+
+
+def test_the_behaviour_comparison_is_printed_and_never_decides(tmp_path, capsys):
+    sha = 'a' * 40
+    args = SimpleNamespace(sha=sha, reports=tmp_path)
+    (tmp_path / 'smoke').mkdir()
+    (tmp_path / f'{sha}.json').write_text(json.dumps({'commit': sha, 'passed': True}))
+    assert live_soak.check(args) == 1
+    assert 'behaviour soak, advisory: aaaaaaa passed' in capsys.readouterr().err
+    (tmp_path / 'smoke' / f'{sha}.json').write_text(json.dumps({'commit': sha, 'passed': True}))
+    (tmp_path / f'{sha}.json').write_text(json.dumps({'commit': sha, 'passed': False, 'problems': ['x', 'y']}))
+    assert live_soak.check(args) == 0
+    assert 'found 2 problems' in capsys.readouterr().err
+
+
+class SmokeWorkers:
+    """A Manager with one adventure that plays 10000 frames a poll, saves its frame when stopped and loads
+    its newest save on start. `save`, `reload_from` and `log` change what the worker does."""
+
+    def __init__(self, root, save=True, reload_from=None, log='', stop_error=None):
+        from pokesim.checkpoints import CheckpointStore
+        self.root, self.save, self.reload_from, self.log, self.stop_error = root, save, reload_from, log, stop_error
+        self.folder = root / 'adventures' / 'aid'
+        self.states = CheckpointStore(self.folder / 'states')
+        self.write(1000)
+        self.frame, self.running, self.starts = None, False, 0
+        self.registry = SimpleNamespace(
+            root=root, adventure=lambda aid: {'name': 'Red', 'version': 'red', 'settings': {}, 'state': 'running'},
+            update=lambda aid, **changes: None, request_lifecycle=lambda aid, kind, who: None)
+        self.supervisor = SimpleNamespace(child=self.child, stop=self.stop)
+
+    def write(self, frame):
+        self.states.write_checkpoint(b'state', {'frame': frame, 'policy_state': {}, 'run_memory': {}})
+
+    def start_adventure(self, aid):
+        self.starts += 1
+        newest = self.states.latest_state()
+        self.frame = self.states.checkpoint_metadata(newest)['frame']
+        if self.starts == 2 and self.reload_from is not None:
+            self.frame = self.reload_from
+        self.running = True
+        logs = self.folder / 'logs'
+        logs.mkdir(exist_ok=True)
+        if (logs / 'worker.log').exists():
+            (logs / 'worker.log').replace(logs / 'worker.previous.log')
+        (logs / 'worker.log').write_text(f'12:00:00 INFO worker resumed\n{self.log if self.starts == 1 else ""}')
+
+    def child(self, aid):
+        if not self.running:
+            raise RuntimeError('not running')
+        frame, self.frame = self.frame, self.frame + 10000
+        return SimpleNamespace(request=lambda method, path: {'frame': frame, 'game': {'party': []}})
+
+    def stop(self, aid):
+        if not self.running:
+            return
+        self.running = False
+        if self.stop_error:
+            raise RuntimeError(self.stop_error)
+        if self.save:
+            self.write(self.frame)
+
+
+def smoke_once(tmp_path, monkeypatch, **changes):
+    monkeypatch.setattr(live_soak, 'POLL_SECONDS', 0)
+    return live_soak.smoke_one(SmokeWorkers(tmp_path, **changes), 'aid', live_soak.SMOKE_FRAMES, lambda line: None)
+
+
+def test_the_smoke_passes_an_adventure_that_plays_saves_and_reloads(tmp_path, monkeypatch):
+    outcome = smoke_once(tmp_path, monkeypatch)
+    assert outcome['failed'] is None
+    assert outcome['played'] - outcome['loaded'] >= live_soak.SMOKE_FRAMES
+    assert outcome['saved'] >= outcome['played'] and outcome['reloaded'] == outcome['saved']
+
+
+def test_the_smoke_fails_a_stop_that_writes_no_save(tmp_path, monkeypatch):
+    assert 'the newest save is from frame 1000' in smoke_once(tmp_path, monkeypatch, save=False)['failed']
+
+
+def test_the_smoke_fails_a_failed_stop(tmp_path, monkeypatch):
+    outcome = smoke_once(tmp_path, monkeypatch, stop_error='The final save failed')
+    assert outcome['failed'] == 'the save on stop failed, The final save failed'
+
+
+def test_the_smoke_fails_a_reload_of_an_older_save(tmp_path, monkeypatch):
+    assert 'older than its save' in smoke_once(tmp_path, monkeypatch, reload_from=1000)['failed']
+
+
+@pytest.mark.parametrize('line', ['12:00:01 ERROR worker step failed', 'Traceback (most recent call last):',
+                                  '12:00:01 WARNING pokesim.emulator cannot restore auto-v1-1.state: bad'])
+def test_the_smoke_fails_an_error_or_a_refused_save_in_the_worker_log(tmp_path, monkeypatch, line):
+    outcome = smoke_once(tmp_path, monkeypatch, log=line + '\n')
+    assert outcome['failed'] == f'1 error line in its worker log, the first {line}'
 
 
 def test_check_takes_a_passing_report_for_a_commit_with_the_same_tree(tmp_path, monkeypatch, capsys):
@@ -541,11 +636,13 @@ def test_check_takes_a_passing_report_for_a_commit_with_the_same_tree(tmp_path, 
     git('commit', '-q', '-am', 'changed')
     changed = git('rev-parse', 'HEAD')
     monkeypatch.setattr(live_soak, 'ROOT', repo)
-    (reports / f'{soaked}.json').write_text(json.dumps({'commit': soaked, 'passed': True}))
+    smokes = reports / 'smoke'
+    smokes.mkdir()
+    (smokes / f'{soaked}.json').write_text(json.dumps({'commit': soaked, 'passed': True}))
     assert live_soak.check(SimpleNamespace(sha=twin, reports=reports)) == 0
     assert f'tree of {soaked[:7]}' in capsys.readouterr().err
     assert live_soak.check(SimpleNamespace(sha=changed, reports=reports)) == 1
-    (reports / f'{soaked}.json').write_text(json.dumps({'commit': soaked, 'passed': False}))
+    (smokes / f'{soaked}.json').write_text(json.dumps({'commit': soaked, 'passed': False}))
     assert live_soak.check(SimpleNamespace(sha=twin, reports=reports)) == 1
 
 
