@@ -112,6 +112,7 @@
 - Tell both sides in their inboxes when an offer ends because an adventure changed hands or was deleted, or its sender lost their share or was deleted. Inbox items about a deleted adventure no longer link to it.
 - Fix Take Control showing control as granted when the game refused it faster than the page could look.
 - Stop a busy server from turning a right password into "Wrong username or password". The password check needs 64 MiB and its own threads, and when it could not get them, the error counted as a wrong password. It now tries 3 times, and then the login says the server is busy and to try again. At most 4 checks run at once, about 256 MiB, and a login that waits over 10 seconds for its turn gets the same busy answer.
+- Move to PyBoy RS 0.1.5. The window's line counter now starts again at the top of every frame, so the first frame after loading a save in a new process draws menus and text boxes on the right line instead of one line low. The save format is unchanged. The wheels, the lock and the image's emulator source archive all point at the 0.1.5 release.
 
 ## 0.6.2
 
