@@ -1,0 +1,303 @@
+{
+ "commit": "171176e",
+ "attempt": 2,
+ "taken": "2026-11-08",
+ "frames": 108000,
+ "rungs": {
+  "blue/new_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.99
+  },
+  "blue/badges_2": {
+   "stall": null,
+   "errors": 0,
+   "waste": 12.96
+  },
+  "blue/badges_4": {
+   "stall": null,
+   "errors": 0,
+   "waste": 24.44
+  },
+  "blue/badges_6": {
+   "stall": null,
+   "errors": 0,
+   "waste": 7.34
+  },
+  "blue/badges_8": {
+   "stall": null,
+   "errors": 0,
+   "waste": 1.86
+  },
+  "blue/league_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "blue/post_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 6.14
+  },
+  "crystal/new_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 3.93
+  },
+  "crystal/badges_2": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "crystal/badges_4": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "crystal/badges_6": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "crystal/badges_8": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "crystal/league_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "crystal/champion_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 1.05
+  },
+  "crystal/kanto_entry": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "crystal/red": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "crystal/post_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold/new_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 5.71
+  },
+  "gold/badges_2": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold/badges_4": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold/badges_6": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold/badges_8": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold/league_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold/champion_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 6.49
+  },
+  "gold/kanto_entry": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold/red": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold/post_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold-randomized/new_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.24
+  },
+  "gold-randomized/badges_4": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold-randomized/badges_8": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "gold-randomized/league_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "red/new_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.99
+  },
+  "red/badges_2": {
+   "stall": null,
+   "errors": 0,
+   "waste": 2.91
+  },
+  "red/badges_4": {
+   "stall": null,
+   "errors": 0,
+   "waste": 24.44
+  },
+  "red/badges_6": {
+   "stall": null,
+   "errors": 0,
+   "waste": 12.6
+  },
+  "red/badges_8": {
+   "stall": null,
+   "errors": 0,
+   "waste": 3.29
+  },
+  "red/league_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "red/post_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 9.12
+  },
+  "red-randomized/new_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 1.46
+  },
+  "red-randomized/badges_4": {
+   "stall": null,
+   "errors": 0,
+   "waste": 10.21
+  },
+  "red-randomized/badges_8": {
+   "stall": null,
+   "errors": 0,
+   "waste": 3.29
+  },
+  "red-randomized/league_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "silver/new_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.27
+  },
+  "silver/badges_2": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "silver/badges_4": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "silver/badges_6": {
+   "stall": null,
+   "errors": 0,
+   "waste": 1.3
+  },
+  "silver/badges_8": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "silver/league_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "silver/champion_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 6.43
+  },
+  "silver/kanto_entry": {
+   "stall": null,
+   "errors": 0,
+   "waste": 5.99
+  },
+  "silver/red": {
+   "stall": null,
+   "errors": 0,
+   "waste": 12.56
+  },
+  "silver/post_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.0
+  },
+  "yellow/new_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 7.38
+  },
+  "yellow/badges_2": {
+   "stall": null,
+   "errors": 0,
+   "waste": 3.87
+  },
+  "yellow/badges_4": {
+   "stall": null,
+   "errors": 0,
+   "waste": 11.84
+  },
+  "yellow/badges_6": {
+   "stall": null,
+   "errors": 0,
+   "waste": 13.37
+  },
+  "yellow/badges_8": {
+   "stall": null,
+   "errors": 0,
+   "waste": 1.97
+  },
+  "yellow/league_first": {
+   "stall": null,
+   "errors": 0,
+   "waste": 0.07
+  },
+  "yellow/post_game": {
+   "stall": null,
+   "errors": 0,
+   "waste": 14.97
+  }
+ }
+}

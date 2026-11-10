@@ -32,9 +32,10 @@ rungs at once at niceness 10, and takes the load gate's heavy lock first. A rand
 its own share code. Goals are reseeded as in ``replay_audit.py run --reseed-goals``, so two code versions
 meet the same rolls. A run ends at its first stall, nothing achieved for 20 game minutes, one battle
 running 20 game minutes or a retry loop, and keeps a bundle. The gate compares each rung's stall, errors
-and wasted share with ROOT/gate-baseline.json and exits 1 on a stall the baseline lacks, more errors, or
-a wasted share more than two points higher. ``--write-baseline`` stores the run as the baseline. The runs,
-bundles and gate-report.json go under ROOT/gate/<time>.
+and wasted share with the tracked tools/ladder/gate-baseline.json and exits 1 on a stall the baseline
+lacks, more errors, or a wasted share more than two points higher. ``--write-baseline`` stores the run
+there, for a pull request that names the play change it accepts. The runs, bundles and gate-report.json
+go under ROOT/gate/<time>.
 
 Red, Blue and Yellow pick their game data from the cartridge, so no POKESIM_GEN1_VARIANT is needed.
 Gold, Silver and Crystal need --data-root or GEN2_DATA_DIR. Ladder folders hold private game data and
@@ -88,6 +89,8 @@ GATE_QUIET = 20
 GATE_WASTE_POINTS = 2.0
 GATE_TIMEOUT = 1800
 GATE_HELD = 'POKESIM_LADDER_GATE_HELD'
+# The baseline is tracked, so it moves only in a pull request, and a branch compares with its own base.
+GATE_BASELINE = ROOT / 'tools' / 'ladder' / 'gate-baseline.json'
 
 
 def private(path):
@@ -588,7 +591,7 @@ def gate(args):
         command = ['sh', str(ROOT / 'tools' / 'load_gate.sh'), 'heavy', sys.executable, str(Path(__file__).resolve()),
                    *args.argv]
         return subprocess.run(command, env=dict(os.environ, **{GATE_HELD: '1'}), check=False).returncode
-    baseline_path = args.baseline or args.root / 'gate-baseline.json'
+    baseline_path = args.baseline or GATE_BASELINE
     stored = json.loads(baseline_path.read_text(encoding='utf-8')) if baseline_path.exists() else None
     if stored is not None and stored['frames'] != args.frames and not args.write_baseline:
         raise SystemExit(f'{baseline_path} was taken at {stored["frames"]} frames a rung, not {args.frames}')
@@ -706,7 +709,7 @@ def main(argv=None):
     gating.add_argument('--battle-minutes', type=int, default=GATE_QUIET, help='game minutes one battle may run')
     gating.add_argument('--waste-points', type=float, default=GATE_WASTE_POINTS,
                         help='how many points a rung\'s wasted share may grow before the gate fails')
-    gating.add_argument('--baseline', type=Path, help='the baseline file, by default ROOT/gate-baseline.json')
+    gating.add_argument('--baseline', type=Path, help='the baseline file, by default tools/ladder/gate-baseline.json')
     gating.add_argument('--write-baseline', action='store_true', help='store this run as the baseline')
     gating.add_argument('--out', type=Path, help='where the runs and stall bundles go, by default ROOT/gate/<time>')
     gating.add_argument('--data-root', type=Path, help='Gen II game data, by default GEN2_DATA_DIR')
