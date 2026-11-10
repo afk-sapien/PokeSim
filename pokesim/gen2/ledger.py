@@ -10,6 +10,7 @@ The shop restocks what ``supplies`` lists, keeping balls to catch with before th
 run sells valuables and spare TMs only when it has no ball and no money for one.
 """
 from collections import Counter
+from dataclasses import replace
 import math
 
 from ..planning import boss
@@ -171,6 +172,53 @@ def walk_spent(data, snapshot, goal='walk'):
     from ..planning.stance import budget_spent
     books = battle_ledger(data)
     return budget_spent(books, goal, books.snapshot(snapshot))
+
+
+# The field cures by the status bits each clears. A Pokémon holds one status at a time, so the one cure
+# for it comes before a Full Heal, which costs more.
+CURES = (('ANTIDOTE', 8), ('AWAKENING', 7), ('PARLYZ_HEAL', 64), ('BURN_HEAL', 16), ('ICE_HEAL', 32),
+         ('FULL_HEAL', 255))
+# The cures the shop adds by preference, and how many (cure_wanted).
+CURE_NAMES, CURE_STOCK = ('ANTIDOTE', 'FULL_HEAL'), 2
+
+
+def field_cure(data, items, mon):
+    """The cure in ``items`` to use on ``mon`` outside battle, or None. A Full Restore is kept for the HP
+    it restores, so only the League spends one on a status (policy.remedy)."""
+    if mon.egg or not mon.hp or not mon.status:
+        return None
+    return next((name for name, bits in CURES if mon.status & bits and items.get(data.items[name], 0) > 0), None)
+
+
+def cured(data, snapshot):
+    """``snapshot`` once the field cures in the bag clear what they can, one cure a Pokémon.
+
+    Any status leaves the walk no HP budget (battle_room), so the heal check reads this view: a status
+    the run can cure where it stands (policy.field_cure) no longer sends it to a Pokémon Center.
+    """
+    if not any(getattr(mon, 'status', 0) for mon in snapshot.party):
+        return snapshot
+    stock = dict(snapshot.items)
+    party = []
+    for mon in snapshot.party:
+        name = field_cure(data, stock, mon)
+        if name is not None:
+            stock[data.items[name]] -= 1
+            mon = replace(mon, status=0)
+        party.append(mon)
+    return replace(snapshot, party=tuple(party))
+
+
+def cure_wanted(data, snapshot):
+    """Whether the shop adds field cures: the bag holds none and has a free items entry, and the player
+    stands in a map whose clerk sells one, so no trip is made for cures alone."""
+    if len(snapshot.pockets.get('items', ())) >= POCKET_SLOTS['items']:
+        return False
+    inventory = dict(snapshot.items)
+    if any(inventory.get(data.items[name], 0) for name, _ in CURES):
+        return False
+    sold = {data.items[name] for name in CURE_NAMES}
+    return any(sold.intersection(shop['items']) for shop in data.maps.get(snapshot.map, {}).get('shops', ()))
 
 
 # Worth of a boxed spare: its PC score (pcvalue.py) plus this, and more for one holding an item. An
@@ -532,6 +580,8 @@ def supplies(policy, snapshot):
         revives = inventory.get(data.items['REVIVE'], 0)
         if revives < REVIVE_LOW:
             rows.append(('revives', ('REVIVE',), REVIVE_FULL - revives))
+    if cure_wanted(data, snapshot):
+        rows.append(('cures', CURE_NAMES, CURE_STOCK))
     return rows
 
 
