@@ -94,10 +94,22 @@ def test_the_facts_are_what_the_tool_generates_from_the_pinned_source(name, env,
 @pytest.mark.parametrize('name, env, revision', SOURCES)
 def test_every_swap_on_a_flag_is_a_fact_or_allowed(name, env, revision):
     src = pinned(name, env, revision)
-    assert tool.uncovered(src, gen1.SWAPS) == []
+    assert tool.uncovered(src, gen1.SWAPS + gen1.SWITCHES) == []
 
 
 def test_the_check_names_the_hideout_door_without_its_fact():
     src = pinned(*SOURCES[0])
-    rows = tuple(row for row in gen1.SWAPS if row[0] != 'ROCKET_HIDEOUT_B1F')
+    rows = tuple(row for row in gen1.SWAPS if row[0] != 'ROCKET_HIDEOUT_B1F') + gen1.SWITCHES
     assert tool.uncovered(src, rows) == ['ROCKET_HIDEOUT_B1F block (12, 8) swaps on a flag and has no fact']
+
+
+def test_the_check_names_a_mansion_switch_without_its_fact():
+    src = pinned(*SOURCES[0])
+    rows = gen1.SWAPS + tuple(row for row in gen1.SWITCHES if row[0] != 'POKEMON_MANSION_3F')
+    assert tool.uncovered(src, rows) == [f'POKEMON_MANSION_3F block (7, {y}) swaps on a flag and has no fact'
+                                         for y in (2, 5)]
+
+
+def test_only_the_mansion_switch_flips_both_ways():
+    assert {row[3] for row in gen1.SWITCHES} == {'EVENT_MANSION_SWITCH_ON'}
+    assert not {row[3] for row in gen1.SWAPS} & {row[3] for row in gen1.SWITCHES}
