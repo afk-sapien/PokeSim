@@ -6,7 +6,17 @@ from pokecore.gen2.maps import (DIRS, OPPOSITE, WALLS, blocked_side, decode_bloc
                                     passable, travel_collision)
 
 from pokecore.gen2.ram import Memory, Snapshot
-from .routes import CARPETS, Regions, Search, walk_links
+from .routes import CARPETS, Regions, Search, walk_crossings, walk_links
+
+
+def field_moves(snapshot):
+    """The field moves the player can use, as a frozenset of 'cut' and 'surf'."""
+    moves = set()
+    if snapshot.badges & 2 and any(15 in mon.moves for mon in snapshot.party):
+        moves.add('cut')
+    if snapshot.badges & 8 and any(57 in mon.moves for mon in snapshot.party):
+        moves.add('surf')
+    return frozenset(moves)
 
 
 class Navigator:
@@ -19,6 +29,7 @@ class Navigator:
         self.exploring = None
         self.failed_edges = {}
         self.searches = {}
+        self.arriving = None
         self.objects = {}
         self.regions = Regions(data)
         self.region_failures = {}
@@ -209,20 +220,50 @@ class Navigator:
             if links is None or kind == 'warp' or (mid, kind, destination) in links:
                 yield destination, points, kind
 
-    def walk(self, start, target):
-        """The map route a walk takes from start to target, or None.
+    def walk(self, snapshot, target):
+        """The map route a walk takes from the player's map to target, or None.
 
         The storage, heal, shop, roamer, postgame and collection choices rank places by its length.
+        A walk crosses a map only with the field moves walk_crossings lists for that crossing, so
+        before Cut no walk goes through Ilex Forest. Its search nodes are (map, map the walk came
+        from), and the walk leaves the player's own map by any way out.
         """
-        return self.route(start, target, walk=True)
+        moves, failed = field_moves(snapshot), frozenset(self.failed_edges)
+        key = ('walk', snapshot.map, failed, moves)
+        search = self.searches.get(key)
+        if search is None:
+            needs = walk_crossings(self.data)
 
-    def route(self, start, target, excluded=(), *, walk=False):
+            def expand(node):
+                mid, previous = node
+                for destination, points, kind in self.steps(mid, walk=True):
+                    if (mid, destination) in failed:
+                        continue
+                    alternatives = needs.get((previous, mid, destination))
+                    if alternatives is None or any(need <= moves for need in alternatives):
+                        yield (destination, mid), (mid, destination, points, kind)
+            if len(self.searches) > 512:
+                self.searches = {}
+            search = self.searches[key] = Search([(snapshot.map, None)], expand)
+        return search.find(self.arrivals(target))
+
+    def arrivals(self, target):
+        """The walk search nodes on target, one for each map a walk can come from and one for the start."""
+        if self.arriving is None:
+            arriving = {}
+            for mid in self.data.maps:
+                for destination, _, _ in self.steps(mid, walk=True):
+                    arriving.setdefault(destination, {(destination, None)}).add((destination, mid))
+            self.arriving = arriving
+        return self.arriving.get(target, {(target, None)})
+
+    def route(self, start, target, excluded=()):
         excluded, failed = frozenset(excluded), frozenset(self.failed_edges)
-        key = (start, excluded, failed, walk)
+        key = (start, excluded, failed)
         search = self.searches.get(key)
         if search is None:
             def expand(mid):
-                for destination, points, kind in self.steps(mid, walk):
+                for destination, points, kind in self.steps(mid):
                     if destination not in excluded and (mid, destination) not in failed:
                         yield destination, (mid, destination, points, kind)
             if len(self.searches) > 512:

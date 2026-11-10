@@ -1,4 +1,4 @@
-"""The Gen II map audit passes on every game, and still catches the map facts behind #254 and #241."""
+"""The Gen II map audit passes on every game, and still catches the map facts behind #254 and #241, and a walk through Ilex Forest before Cut."""
 import importlib.util
 import os
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from pokesim.gen2.navigation import Navigator
-from pokesim.gen2.routes import CARPETS, Regions
+from pokesim.gen2.routes import CARPETS, Regions, walk_crossings
 
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location('map_audit_tool', ROOT / 'tools' / 'map_audit.py')
@@ -58,20 +58,60 @@ def test_a_router_that_counts_every_link_fails_on_the_seams(game):
     assert set(every) == SEAMS
 
 
-def test_a_walk_goes_through_the_cave_or_forest_between_two_seam_maps(game):
-    _, data, _ = game
+def walker(data):
+    """A walk between two maps by name, with the field moves given, as the names of the maps it enters."""
     ids = {entry['constant']: mid for mid, entry in data.maps.items()}
     names = {mid: entry['constant'] for mid, entry in data.maps.items()}
     navigator = Navigator(data)
 
-    def walk(start, target):
-        return [names[step[1]] for step in navigator.walk(ids[start], ids[target])]
+    def walk(start, target, *moves):
+        route = navigator.walk(tool.player(ids[start], moves), ids[target])
+        return None if route is None else [names[step[1]] for step in route]
+    return walk
 
+
+def test_a_walk_goes_through_the_cave_or_forest_between_two_seam_maps(game):
+    _, data, _ = game
+    walk = walker(data)
     assert walk('ROUTE_44', 'BLACKTHORN_CITY') == ['ICE_PATH_1F', 'BLACKTHORN_CITY']
     assert walk('ROUTE_10_NORTH', 'ROUTE_10_SOUTH') == ['ROUTE_9', 'ROCK_TUNNEL_1F', 'ROUTE_10_SOUTH']
-    assert walk('AZALEA_TOWN', 'ROUTE_34') == [
+    assert walk('AZALEA_TOWN', 'ROUTE_34', 'cut') == [
         'ILEX_FOREST_AZALEA_GATE', 'ILEX_FOREST', 'ROUTE_34_ILEX_FOREST_GATE', 'ROUTE_34']
     assert walk('ROUTE_34', 'GOLDENROD_CITY') == ['GOLDENROD_CITY']
+
+
+def test_a_walk_through_ilex_forest_needs_cut(game):
+    # The tree in Ilex Forest splits its two gates, so before Cut the walk from Azalea Town to
+    # Route 34 is not the four maps through the forest.
+    _, data, findings = game
+    assert not any(key[0] == 'crossing' for key in findings)
+    ids = {entry['constant']: mid for mid, entry in data.maps.items()}
+    forest = (ids['ILEX_FOREST_AZALEA_GATE'], ids['ILEX_FOREST'], ids['ROUTE_34_ILEX_FOREST_GATE'])
+    assert walk_crossings(data)[forest] == (frozenset({'cut'}),)
+    assert walk_crossings(data)[forest[::-1]] == (frozenset({'cut'}),)
+    walk = walker(data)
+    for moves in ((), ('surf',)):
+        route = walk('AZALEA_TOWN', 'ROUTE_34', *moves)
+        assert route is not None and 'ILEX_FOREST' not in route and len(route) > 4
+        assert 'ILEX_FOREST' not in walk('ROUTE_34', 'AZALEA_TOWN', *moves)
+    assert walk('ROUTE_34', 'AZALEA_TOWN', 'cut') == [
+        'ROUTE_34_ILEX_FOREST_GATE', 'ILEX_FOREST', 'ILEX_FOREST_AZALEA_GATE', 'AZALEA_TOWN']
+
+
+class FieldMovesIgnored(Navigator):
+    """A navigator that walks as if the player had every field move, as walks did before they read them."""
+    def walk(self, snapshot, target):
+        return super().walk(tool.player(snapshot.map, ('cut', 'surf')), target)
+
+
+def test_a_walk_that_ignores_field_moves_fails_the_crossing_check(game):
+    _, data, _ = game
+    names = {mid: entry['constant'] for mid, entry in data.maps.items()}
+    found = tool.check_crossings(data, FieldMovesIgnored(data), names)
+    forest = ('crossing', 'ILEX_FOREST_AZALEA_GATE', 'ILEX_FOREST', 'ROUTE_34_ILEX_FOREST_GATE')
+    assert forest + ('no moves',) in found
+    assert forest + ('surf',) in found
+    assert not any(key[-1] == 'cut+surf' for key in found)
 
 
 class CarpetDoors:
