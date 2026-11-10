@@ -1,0 +1,140 @@
+{
+  "format": 1,
+  "cases": [
+    {
+      "id": "red-movement",
+      "kind": "trace",
+      "scope": "private",
+      "categories": [
+        "movement"
+      ],
+      "rom": "fixtures/red.gb",
+      "state": "fixtures/movement.state",
+      "steps": [
+        [
+          [],
+          60
+        ]
+      ],
+      "initial_memory": [],
+      "final_memory": [],
+      "render": true,
+      "sound": false
+    },
+    {
+      "id": "red-menus",
+      "kind": "trace",
+      "scope": "private",
+      "categories": [
+        "menus"
+      ],
+      "rom": "fixtures/red.gb",
+      "state": "fixtures/menus.state",
+      "steps": [
+        [
+          [],
+          60
+        ]
+      ],
+      "initial_memory": [],
+      "final_memory": [],
+      "render": true,
+      "sound": false
+    },
+    {
+      "id": "red-battles",
+      "kind": "trace",
+      "scope": "private",
+      "categories": [
+        "battles"
+      ],
+      "rom": "fixtures/red.gb",
+      "state": "fixtures/battles.state",
+      "steps": [
+        [
+          [],
+          60
+        ]
+      ],
+      "initial_memory": [],
+      "final_memory": [],
+      "render": true,
+      "sound": false
+    },
+    {
+      "id": "red-storage",
+      "kind": "trace",
+      "scope": "private",
+      "categories": [
+        "storage"
+      ],
+      "rom": "fixtures/red.gb",
+      "state": "fixtures/storage.state",
+      "steps": [
+        [
+          [],
+          60
+        ]
+      ],
+      "initial_memory": [],
+      "final_memory": [],
+      "render": true,
+      "sound": false
+    },
+    {
+      "id": "red-save_load",
+      "kind": "trace",
+      "scope": "private",
+      "categories": [
+        "save_load"
+      ],
+      "rom": "fixtures/red.gb",
+      "state": "fixtures/save_load.state",
+      "steps": [
+        [
+          [],
+          60
+        ]
+      ],
+      "initial_memory": [],
+      "final_memory": [],
+      "render": true,
+      "sound": false,
+      "restore_at": [
+        30
+      ]
+    },
+    {
+      "id": "red-audio",
+      "kind": "trace",
+      "scope": "private",
+      "categories": [
+        "audio"
+      ],
+      "rom": "fixtures/red.gb",
+      "state": "fixtures/audio.state",
+      "steps": [
+        [
+          [],
+          60
+        ]
+      ],
+      "initial_memory": [],
+      "final_memory": [],
+      "render": true,
+      "sound": true
+    },
+    {
+      "id": "trading-pair",
+      "kind": "contracts",
+      "scope": "private",
+      "categories": [
+        "trading"
+      ],
+      "tests": [
+        "../../pokesim/tests/test_managed_cable_integration.py"
+      ],
+      "cwd": "../../pokesim"
+    }
+  ]
+}

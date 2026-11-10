@@ -8,6 +8,17 @@
 !pokesim/**
 pokesim/**/__pycache__/
 pokesim/**/*.pyc
+!packages/
+!packages/pokecore/
+!packages/pokecore/pyproject.toml
+!packages/pokecore/README.md
+!packages/pokecore/LICENSE
+!packages/pokecore/THIRD_PARTY_NOTICES.md
+!packages/pokecore/src/
+!packages/pokecore/src/**
+packages/**/__pycache__/
+packages/**/*.pyc
+packages/**/*.egg-info/
 !LICENSE
 !licenses/
 !licenses/**

@@ -104,7 +104,7 @@ def test_required_jobs_are_exactly_the_jobs_of_the_workflow(workflow):
 
 
 FAST = {
-    'ci.yml': ['dependency-audit', 'lint', 'tests (3.12)', 'browser (1/4)', 'browser (2/4)', 'browser (3/4)',
+    'ci.yml': ['dependency-audit', 'lint', 'tests (3.12)', 'pokecore (3.12)', 'pokecore-native', 'browser (1/4)', 'browser (2/4)', 'browser (3/4)',
                'browser (4/4)', 'container (amd64)', 'ci gate'],
     'python-install.yml': ['native tests (ubuntu-22.04, 1/1)', 'install (ubuntu-22.04)', 'acceleration', 'install gate'],
 }

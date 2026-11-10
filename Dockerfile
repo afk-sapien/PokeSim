@@ -5,6 +5,10 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never UV_HTTP_RE
 WORKDIR /app
 COPY pyproject.toml setup.py uv.lock README.md LICENSE THIRD_PARTY_NOTICES.md ./
 COPY pokesim ./pokesim
+# pokecore is the uv workspace member in packages/pokecore, so the image builds it from this source.
+COPY packages/pokecore/pyproject.toml packages/pokecore/README.md packages/pokecore/LICENSE \
+     packages/pokecore/THIRD_PARTY_NOTICES.md ./packages/pokecore/
+COPY packages/pokecore/src ./packages/pokecore/src
 COPY tools/bundle_dependency_sources.py ./tools/bundle_dependency_sources.py
 # The corresponding pyboy-rs source archive is a release asset next to its wheels. The checksum is
 # required: an empty value fails the build instead of skipping verification.
@@ -35,6 +39,9 @@ COPY --from=build /app/.venv /app/.venv
 COPY --from=build /notices /usr/share/pokesim
 COPY --from=build /app/pokesim /usr/share/pokesim/source/pokesim
 COPY pyproject.toml setup.py uv.lock LICENSE THIRD_PARTY_NOTICES.md /usr/share/pokesim/source/
+COPY packages/pokecore/pyproject.toml packages/pokecore/LICENSE packages/pokecore/THIRD_PARTY_NOTICES.md \
+     /usr/share/pokesim/source/packages/pokecore/
+COPY packages/pokecore/src /usr/share/pokesim/source/packages/pokecore/src
 COPY licenses /usr/share/pokesim/licenses
 ARG VERSION=0.7.0.dev0
 ARG REVISION=unknown

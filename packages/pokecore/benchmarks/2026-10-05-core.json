@@ -1,0 +1,1276 @@
+{
+  "frames": 4800,
+  "repeats": 5,
+  "cpu": 7,
+  "rom_sha256": "5ca7ba01642a3b27b0cc0b5349b52792795b62d3ed977e98a09390659af96b7b",
+  "emulator": {
+    "backend": "pyboy-rs",
+    "version": "0.1.0",
+    "state_format": "pyboy-format-15",
+    "native_sha256": "752047c5d5b176f47ae04da08cfaf84dc40914e0da45918c3b567f51ef7b04ad",
+    "binding_sha256": "0ef59287bfdea2b29ff6706a1b35e8075c8ac1306877dcbb43fec97b4b65a424"
+  },
+  "core_version": "0.2.0.dev0",
+  "reference_version": "2.7.0",
+  "checkpoints": [
+    {
+      "label": "red-navigation-20260914",
+      "sha256": "2ad58c48e8606086648ae7922fbf0a2a6b5580295d3615bf0b58f56af5345d23"
+    },
+    {
+      "label": "red-partial-training-20260915",
+      "sha256": "23b7b8aabe23f4083c6c26356ac1c4e4f059de546bade20ec89daeb7a4f94354"
+    },
+    {
+      "label": "league-baseline",
+      "sha256": "ec96aa965584ddfa1639f1e02c750480f1a69d014c88a2087bed1369bc6c992c"
+    }
+  ],
+  "all_outputs_match": true,
+  "samples": [
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 3,
+      "seconds": 0.3489770369924372,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 0,
+      "seconds": 0.3322362049948424,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 4,
+      "seconds": 0.19013018401165027,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 3,
+      "seconds": 0.41969253499701153,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 1,
+      "seconds": 0.5250368920096662,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 3,
+      "seconds": 0.1940029879915528,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 3,
+      "seconds": 0.5356843440094963,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 0,
+      "seconds": 0.6965019269991899,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 0,
+      "seconds": 0.18999042600626126,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 2,
+      "seconds": 0.3180070280068321,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 3,
+      "seconds": 0.5253850000008242,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 3,
+      "seconds": 0.7607619250047719,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 2,
+      "seconds": 0.3460152829939034,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 3,
+      "seconds": 0.34305119699274655,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 4,
+      "seconds": 0.5775811500061536,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 4,
+      "seconds": 0.29627394399722107,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 0,
+      "seconds": 0.5787932649982395,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 3,
+      "seconds": 0.5773254749947228,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 1,
+      "seconds": 0.5314183040027274,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 0,
+      "seconds": 0.7978020279988414,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 3,
+      "seconds": 0.5690444100036984,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 4,
+      "seconds": 0.5156092399993213,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 2,
+      "seconds": 0.8142594119999558,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 1,
+      "seconds": 0.803896220997558,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 3,
+      "seconds": 0.4219214879994979,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 0,
+      "seconds": 0.29387517100258265,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 1,
+      "seconds": 0.5866741249919869,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 1,
+      "seconds": 0.7498008480033604,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 0,
+      "seconds": 0.33808502300234977,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 4,
+      "seconds": 0.3424282490013866,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 4,
+      "seconds": 0.2088107699964894,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 4,
+      "seconds": 0.3485397980111884,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 3,
+      "seconds": 0.7919834869971965,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 2,
+      "seconds": 0.5795091519976268,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 1,
+      "seconds": 0.18999770098889712,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 0,
+      "seconds": 0.5159009079943644,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 1,
+      "seconds": 0.18969495099736378,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 4,
+      "seconds": 0.33272248499270063,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 2,
+      "seconds": 0.42058307999104727,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 2,
+      "seconds": 0.2916496029938571,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 3,
+      "seconds": 0.3344679959991481,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 2,
+      "seconds": 0.5201102339924546,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 0,
+      "seconds": 0.2110812589962734,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 3,
+      "seconds": 0.213421300999471,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 1,
+      "seconds": 0.3464764520031167,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 4,
+      "seconds": 0.5253490659961244,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 2,
+      "seconds": 0.2977103160083061,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 2,
+      "seconds": 0.5261149589932756,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 1,
+      "seconds": 0.2911980990029406,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 2,
+      "seconds": 0.4255664410011377,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 4,
+      "seconds": 0.42533773998729885,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 0,
+      "seconds": 0.5752041600062512,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 1,
+      "seconds": 0.2986304329970153,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 2,
+      "seconds": 0.3429275489907013,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 0,
+      "seconds": 0.4403607610001927,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 3,
+      "seconds": 0.2984915670094779,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 1,
+      "seconds": 0.4270987670024624,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 1,
+      "seconds": 0.3334191670001019,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 1,
+      "seconds": 0.5836951459932607,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 4,
+      "seconds": 0.4286479440052062,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 2,
+      "seconds": 0.20011150700156577,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 1,
+      "seconds": 0.44241769998916425,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 3,
+      "seconds": 0.29710561799583957,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 4,
+      "seconds": 0.6969200070016086,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 0,
+      "seconds": 0.5307757350092288,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 2,
+      "seconds": 0.2149117219960317,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 0,
+      "seconds": 0.3038404149992857,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 2,
+      "seconds": 0.7632053919951431,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "core",
+      "repeat": 2,
+      "seconds": 0.5835971530032111,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 4,
+      "seconds": 0.5829509120085277,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 4,
+      "seconds": 0.8083784379996359,
+      "hashes": {
+        "state": "85961a3b2fe01610e6fe71f5e5e8abb06caf809d7e17564a084dd530fb89f358",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40",
+        "rgba": "ea4ac45653dfae7d270274c4d63bb54a81fa72bd7af92c6d8fcbc4cf76f70d50",
+        "audio": "bc7cbbb9585421d702dec91d6605522444109ac027b344a0737566c60b414255"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 2,
+      "seconds": 0.3503872949950164,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 3,
+      "seconds": 0.6965289240033599,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 4,
+      "seconds": 0.29030081898963545,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 0,
+      "seconds": 0.3501420200045686,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 1,
+      "seconds": 0.29187739800545387,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 3,
+      "seconds": 0.2880317050003214,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 4,
+      "seconds": 0.29332560100010596,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 4,
+      "seconds": 0.18831720300659072,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "rust",
+      "repeat": 0,
+      "seconds": 0.41596799599938095,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 2,
+      "seconds": 0.18873261100088712,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 4,
+      "seconds": 0.7476849829981802,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 1,
+      "seconds": 0.21779203400365077,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 0,
+      "seconds": 0.7611051080020843,
+      "hashes": {
+        "state": "516545659cff3e6fe70e549a24e25bb58c97fd346fcf30864a4c934e512c3952",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123",
+        "rgba": "68fdcc43594bc7bfdac814d1113bde51a80914bf5079db2abe03c08b0e17f8db",
+        "audio": "14f5704011bf5de7f02c90bdaee7ac7ddb12d65eb611638210f2c26beff9f794"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 0,
+      "seconds": 0.18906065299233887,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 2,
+      "seconds": 0.6875777680106694,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "rust",
+      "repeat": 1,
+      "seconds": 0.3402484429971082,
+      "hashes": {
+        "state": "9223489bc82c9701487cd86b8a253376c630a17957edc8230598f2822f616828",
+        "trace": "4546fe58e6093c516af908612eecd1dfdf7570dc2e22416034de7bdf58225a40"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "pyboy",
+      "repeat": 1,
+      "seconds": 0.685351976993843,
+      "hashes": {
+        "state": "87813293b6e3767ca4ab2ce83b707211c225b7b460e7904fd162f56e98c2b516",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84",
+        "rgba": "edbf4045cd32cd87987c6e392f1e5f267bda6d5ebfa34b070ccd6298e1887ce9",
+        "audio": "3c4b5bdf8c71cfaead84c1cc30f7cc12c7517ab94f4bfd57d059d42ee7615f38"
+      }
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "pyboy",
+      "repeat": 0,
+      "seconds": 0.29292739799711853,
+      "hashes": {
+        "state": "2b2f4959a1e29919cae4491ad50b5525a6c4f9abc778cbc9ab8dfeec7fcb0e9a",
+        "trace": "48091c46411ccf3b59f24d4da01eb1d2822eba7899b3d7960498d1810837f123"
+      }
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "core",
+      "repeat": 3,
+      "seconds": 0.1949170980078634,
+      "hashes": {
+        "state": "60f2949d37e0054a0cc668c18c5004cace85cddbec133fd3d4399f22730a17eb",
+        "trace": "f4b444a2b11b2f2ced084c4314be0d8b3cf79801a48aed37895fdcd481fc4a84"
+      }
+    }
+  ],
+  "summary": [
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "core",
+      "median_seconds": 0.29332560100010596,
+      "min_seconds": 0.2916496029938571,
+      "max_seconds": 0.3038404149992857,
+      "fps": 16364.067724174767
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "rust",
+      "median_seconds": 0.29710561799583957,
+      "min_seconds": 0.29387517100258265,
+      "max_seconds": 0.2986304329970153,
+      "fps": 16155.870873055033
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "backend": "pyboy",
+      "median_seconds": 0.2911980990029406,
+      "min_seconds": 0.2880317050003214,
+      "max_seconds": 0.3180070280068321,
+      "fps": 16483.62409107461
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "core",
+      "median_seconds": 0.5261149589932756,
+      "min_seconds": 0.5156092399993213,
+      "max_seconds": 0.5356843440094963,
+      "fps": 9123.481318958942
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "rust",
+      "median_seconds": 0.5253490659961244,
+      "min_seconds": 0.5201102339924546,
+      "max_seconds": 0.5307757350092288,
+      "fps": 9136.782209555524
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "backend": "pyboy",
+      "median_seconds": 0.7607619250047719,
+      "min_seconds": 0.7476849829981802,
+      "max_seconds": 0.7632053919951431,
+      "fps": 6309.464028407957
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "core",
+      "median_seconds": 0.3489770369924372,
+      "min_seconds": 0.3424282490013866,
+      "max_seconds": 0.3503872949950164,
+      "fps": 13754.486660118047
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "rust",
+      "median_seconds": 0.34305119699274655,
+      "min_seconds": 0.33808502300234977,
+      "max_seconds": 0.3485397980111884,
+      "fps": 13992.080605104231
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "backend": "pyboy",
+      "median_seconds": 0.3334191670001019,
+      "min_seconds": 0.3322362049948424,
+      "max_seconds": 0.3429275489907013,
+      "fps": 14396.292940167214
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "core",
+      "median_seconds": 0.5775811500061536,
+      "min_seconds": 0.5690444100036984,
+      "max_seconds": 0.5836951459932607,
+      "fps": 8310.52052157322
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "rust",
+      "median_seconds": 0.5795091519976268,
+      "min_seconds": 0.5773254749947228,
+      "max_seconds": 0.5866741249919869,
+      "fps": 8282.871777699997
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "backend": "pyboy",
+      "median_seconds": 0.803896220997558,
+      "min_seconds": 0.7919834869971965,
+      "max_seconds": 0.8142594119999558,
+      "fps": 5970.919970296242
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "core",
+      "median_seconds": 0.19013018401165027,
+      "min_seconds": 0.18999042600626126,
+      "max_seconds": 0.20011150700156577,
+      "fps": 25245.85996143505
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "rust",
+      "median_seconds": 0.18906065299233887,
+      "min_seconds": 0.18831720300659072,
+      "max_seconds": 0.1940029879915528,
+      "fps": 25388.677781592694
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "backend": "pyboy",
+      "median_seconds": 0.213421300999471,
+      "min_seconds": 0.2088107699964894,
+      "max_seconds": 0.21779203400365077,
+      "fps": 22490.72598433789
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "core",
+      "median_seconds": 0.4255664410011377,
+      "min_seconds": 0.4219214879994979,
+      "max_seconds": 0.44241769998916425,
+      "fps": 11279.084856193273
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "rust",
+      "median_seconds": 0.42058307999104727,
+      "min_seconds": 0.41596799599938095,
+      "max_seconds": 0.4286479440052062,
+      "fps": 11412.727302539548
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "backend": "pyboy",
+      "median_seconds": 0.6965019269991899,
+      "min_seconds": 0.685351976993843,
+      "max_seconds": 0.6969200070016086,
+      "fps": 6891.5817945835815
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 """A public release must not carry the temporary wheel pins, and its pins must agree with each other."""
 import hashlib
+import io
 import json
 import sys
 from pathlib import Path
@@ -105,6 +106,67 @@ def test_remote_check_reports_unreachable_assets(tmp_path):
         raise OSError('offline')
 
     assert len(release_pins.remote_problems(tmp_path, opener=offline)) == 3
+
+
+def workspace_tree(root, member_version='0.2.0', fragment=True):
+    """Today's shape: uv locks pokecore from packages/pokecore, and the URL pin is the released wheel for pip."""
+    final_tree(root)
+    core = FINAL_BASE + CORE + (('#sha256=' + HASHES[CORE]) if fragment else '')
+    (root / 'pyproject.toml').write_text(
+        '[project]\nname = "x"\nversion = "9.9.9"\ndependencies = [\n'
+        f'  "pokecore[emulator] @ {core} ; sys_platform == \'win32\'",\n'
+        f'  "pyboy-rs @ {FINAL_BASE + WHEEL}#sha256={HASHES[WHEEL]} ; sys_platform == \'win32\'",\n]\n\n'
+        '[tool.uv.workspace]\nmembers = ["packages/pokecore"]\n\n[tool.uv.sources]\npokecore = { workspace = true }\n')
+    (root / 'packages/pokecore/src/pokecore').mkdir(parents=True)
+    (root / 'packages/pokecore/pyproject.toml').write_text(f'[project]\nname = "pokecore"\nversion = "{member_version}"\n')
+    (root / 'packages/pokecore/src/pokecore/__init__.py').write_bytes(b'VERSION = 1\n')
+    (root / 'uv.lock').write_text(
+        f'[[package]]\nname = "pokecore"\nversion = "{member_version}"\nsource = {{ editable = "packages/pokecore" }}\n\n'
+        f'[[package]]\nname = "pyboy-rs"\nversion = "0.1.1"\nsource = {{ url = "{FINAL_BASE + WHEEL}" }}\n'
+        f'wheels = [\n    {{ url = "{FINAL_BASE + WHEEL}", hash = "sha256:{HASHES[WHEEL]}" }},\n]\n')
+    return root
+
+
+def core_wheel(files):
+    import zipfile
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, 'w') as archive:
+        for name, blob in files.items():
+            archive.writestr(name, blob)
+        archive.writestr('pokecore-0.2.0.dist-info/METADATA', 'Name: pokecore\n')
+    return stream.getvalue()
+
+
+def test_a_workspace_member_pin_at_the_member_version_passes(tmp_path):
+    assert release_pins.local_problems(workspace_tree(tmp_path)) == []
+
+
+def test_a_workspace_member_pin_at_another_version_fails(tmp_path):
+    problems = release_pins.local_problems(workspace_tree(tmp_path, member_version='0.3.0'))
+    assert problems == [f'pyproject pins pokecore 0.2.0 but packages/pokecore is 0.3.0: {FINAL_BASE + CORE}']
+
+
+def test_a_workspace_member_pin_needs_a_hash_fragment(tmp_path):
+    problems = release_pins.local_problems(workspace_tree(tmp_path, fragment=False))
+    assert problems == [f'pyproject URL lacks a #sha256 fragment: {FINAL_BASE + CORE}']
+
+
+def test_remote_check_compares_a_workspace_member_wheel_with_its_fragment_and_source(tmp_path):
+    workspace_tree(tmp_path)
+    wheel = core_wheel({'pokecore/__init__.py': b'VERSION = 1\n'})
+    served = {FINAL_BASE + WHEEL: BLOBS[WHEEL], FINAL_BASE + SDIST: BLOBS[SDIST], FINAL_BASE + CORE: wheel}
+    path = tmp_path / 'pyproject.toml'
+    path.write_text(path.read_text().replace(HASHES[CORE], hashlib.sha256(wheel).hexdigest()))
+    assert release_pins.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]]) == []
+    (tmp_path / 'packages/pokecore/src/pokecore/__init__.py').write_bytes(b'VERSION = 2\n')
+    (tmp_path / 'packages/pokecore/src/pokecore/new.py').write_bytes(b'')
+    problems = release_pins.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]])
+    assert problems == ['published pokecore wheel differs from the workspace source: '
+                        'pokecore/__init__.py, pokecore/new.py']
+    served[FINAL_BASE + CORE] = b'not a wheel'
+    problems = release_pins.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]])
+    assert [problem.split(':')[0] for problem in problems] == ['published asset differs from the pyproject fragment',
+                                                               'published asset is not a wheel']
 
 
 def manifest(tmp_path, **changes):
