@@ -4,6 +4,7 @@ from copy import deepcopy
 from itertools import count
 import os
 
+from ..mapfacts.gen1 import SWAPS
 from ..planning.conditions import AnyOf, Badge, Event, Item
 from ..strategy_data import DATA, ITEMS, MAPS, WORLD, event_set
 from . import gates
@@ -23,6 +24,15 @@ SEAFOAM_HOLES = {(MAPS[name], x, y) for name, points in (
     ("SEAFOAM_ISLANDS_B2F", ((19, 6), (22, 6))),
     ("SEAFOAM_ISLANDS_B3F", ((3, 16), (6, 16))),
 ) for x, y in points}
+
+
+def _hideout_door():
+    """The flag that opens the Rocket Hideout B1F door and the walk squares of its block, top left first."""
+    name, bx, by, flag, _, _ = next(row for row in SWAPS if row[0] == 'ROCKET_HIDEOUT_B1F')
+    return flag, tuple((MAPS[name], bx * 2 + dx, by * 2 + dy) for dy in range(2) for dx in range(2))
+
+
+HIDEOUT_DOOR_FLAG, HIDEOUT_DOOR = _hideout_door()
 
 # Stands for the bit the Saffron guards set once they have had a drink, read from the snapshot.
 SAFFRON_OPEN = 'saffron_open'
@@ -313,10 +323,10 @@ class Navigator:
             self.story_blocks.add((MAPS['SEAFOAM_ISLANDS_B3F'], 15, 8))
             self.story_blocks.update((MAPS['SEAFOAM_ISLANDS_B4F'], x, y)
                                      for x in (20, 21) for y in (16, 17))
-        if not event_set(snapshot.event_flags, 'EVENT_BEAT_ROCKET_HIDEOUT_1_TRAINER_4'):
+        if not event_set(snapshot.event_flags, HIDEOUT_DOOR_FLAG):
             # The map draws this door open. The map script shuts it until the Rocket behind it is beaten,
             # so the elevator is reached through the B2F spin maze.
-            self.story_blocks.update((MAPS['ROCKET_HIDEOUT_B1F'], x, y) for x in (24, 25) for y in (16, 17))
+            self.story_blocks.update(HIDEOUT_DOOR)
         for condition, tiles in GUARD_GATES:
             if not condition.holds(world):
                 self.story_blocks.update(tiles)
@@ -511,7 +521,7 @@ class Navigator:
 
     def hideout_lift_floor(self):
         """The floor the Rocket Hideout lift leaves for on the way out, B1F once its door is open."""
-        return 'B2F' if (MAPS['ROCKET_HIDEOUT_B1F'], 24, 16) in self.story_blocks else 'B1F'
+        return 'B2F' if HIDEOUT_DOOR[0] in self.story_blocks else 'B1F'
 
     @staticmethod
     def _world_signature(world):
