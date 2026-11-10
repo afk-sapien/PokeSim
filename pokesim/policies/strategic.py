@@ -57,6 +57,8 @@ HM_TEACH_ITEMS = frozenset((ITEMS['HM03'], ITEMS['HM04']))
 DEVELOPMENT_STALL = 2400
 
 W_WALK_COUNTER = 0xCFC5
+# wFlags_D733 bit 3 is set while a trainer who spotted the player engages them.
+W_FLAGS_D733, TRAINER_ENGAGING = 0xD733, 0x08
 W_FACING = 0xC109
 W_WHICH_POKEMON = 0xCF92
 W_MOVE_NUM = 0xD0E0
@@ -641,7 +643,11 @@ class StrategicPolicy(Policy):
             self.progress_frame = frame
             return wait()
         walking = bool(mem[W_WALK_COUNTER]) and not s.in_battle
-        self.nav.observe(pos, frame, walking, interrupted=kind != "overworld" or bool(s.in_battle))
+        # A trainer who spots the player holds them still until the battle starts. A step tried then did not
+        # meet a wall. Counted as failed steps, they blocked every side of the player while a Route 25 trainer
+        # walked up, and the walk to Bill found no route.
+        held = bool(mem[W_FLAGS_D733] & TRAINER_ENGAGING)
+        self.nav.observe(pos, frame, walking, interrupted=kind != "overworld" or bool(s.in_battle) or held)
         if walking and kind == "overworld":
             return wait()
         walking_state = mem[0xD700] | ((mem[0xD728] & 1) << 2)

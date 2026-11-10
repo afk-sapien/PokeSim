@@ -67,6 +67,17 @@ def legacy_trades(db):
     return 0
 
 
+# --- the legacy pair trade (pokesim/trade) ---
+def complete_pair_trade(db, key):
+    """Mark a pair trade done. False when it already was, so its journal entry is written once."""
+    return db.execute('INSERT OR IGNORE INTO completed_trades(id) VALUES (?)', (key,)).rowcount > 0
+
+
+def complete_pair_event(db, transaction):
+    """Mark a pair gift transaction done. False when it already was."""
+    return db.execute('INSERT OR IGNORE INTO completed_events(id) VALUES (?)', (transaction,)).rowcount > 0
+
+
 # --- upkeep ---
 def free_bytes(db):
     """The bytes SQLite keeps in free pages and never gives back on its own."""

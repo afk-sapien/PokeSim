@@ -16,7 +16,7 @@ from pokesim.state import domains, schema
 
 PACKAGE = Path(__file__).resolve().parents[1] / 'pokesim'
 # The store's own get and set, and the kv helpers, take any key. The calls to them are where the keys are named.
-KV_HELPERS = ('get', 'exists', 'put', 'update', 'add')
+KV_HELPERS = ('get', 'exists', 'put', 'update', 'add', 'delete', 'text', 'put_text', 'starting')
 GENERIC = {('pokesim.store', 'get'), ('pokesim.store', 'set')} | {('pokesim.state.kv', name) for name in KV_HELPERS}
 STORE = re.compile(r'(?:^|[._])store$')
 KV = re.compile(r'\bkv\b')
@@ -157,6 +157,10 @@ class Module:
         """Whether a loop runs over rows a kv query selects. Their keys are the ones its own filter names."""
         while isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'fetchall':
             node = node.func.value
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'starting'
+                and isinstance(node.func.value, ast.Name)
+                and getattr(self.imported(node.func.value.id)[0], 'name', None) == 'pokesim.state.kv'):
+            return True
         return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'execute'
                 and bool(node.args) and bool(re.match(r'\s*SELECT\s+k\b.*\bFROM\s+kv\b', sql(node.args[0]), re.I | re.S)))
 
@@ -307,7 +311,10 @@ class Module:
                 add(call.args[0], lambda node=call.args[0]: self.resolve(node))
             elif (call.func.attr in KV_HELPERS and isinstance(call.func.value, ast.Name) and len(call.args) > 1
                   and getattr(self.imported(call.func.value.id)[0], 'name', None) == 'pokesim.state.kv'):
-                add(call.args[1], lambda node=call.args[1]: self.resolve(node))
+                if call.func.attr == 'starting':
+                    add(call.args[1], lambda node=call.args[1]: [('prefix', text) for _, text in self.resolve(node)])
+                else:
+                    add(call.args[1], lambda node=call.args[1]: self.resolve(node))
             elif call.func.attr in ('execute', 'executemany') and KV.search(text := sql(call.args[0])):
                 found.extend((self.where(call), 'key', key) for key in QUOTED_KEY.findall(text))
                 found.extend((self.where(call), *row) for row in like([('key', p) for p in QUOTED_LIKE.findall(text)]))

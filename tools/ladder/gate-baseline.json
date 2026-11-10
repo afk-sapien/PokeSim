@@ -1,5 +1,5 @@
 {
- "commit": "a8f72291",
+ "commit": "99ec62d6",
  "attempt": 1,
  "taken": "2026-11-10",
  "frames": 108000,
@@ -10,9 +10,9 @@
    "waste": 1.11
   },
   "blue/badges_2": {
-   "stall": "a retry loop: route:bill:88 stood down 4 times in a row",
+   "stall": null,
    "errors": 0,
-   "waste": 16.16
+   "waste": 7.59
   },
   "blue/badges_4": {
    "stall": null,
@@ -37,7 +37,7 @@
   "blue/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 14.97
+   "waste": 6.03
   },
   "crystal/new_game": {
    "stall": null,
@@ -172,7 +172,7 @@
   "red/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 13.75
+   "waste": 20.8
   },
   "red/badges_6": {
    "stall": null,
@@ -192,7 +192,7 @@
   "red/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 17.75
+   "waste": 11.92
   },
   "red-randomized/new_game": {
    "stall": null,
@@ -202,7 +202,7 @@
   "red-randomized/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 10.43
+   "waste": 9.36
   },
   "red-randomized/badges_8": {
    "stall": null,
@@ -270,14 +270,14 @@
    "waste": 1.78
   },
   "yellow/badges_2": {
-   "stall": "a retry loop: route:bill:88 stood down 4 times in a row",
+   "stall": null,
    "errors": 0,
-   "waste": 6.13
+   "waste": 2.59
   },
   "yellow/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 23.63
+   "waste": 19.76
   },
   "yellow/badges_6": {
    "stall": null,
@@ -297,7 +297,7 @@
   "yellow/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 24.32
+   "waste": 13.68
   }
  }
 }
