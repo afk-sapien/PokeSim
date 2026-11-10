@@ -12,6 +12,7 @@ from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
 from pokecore.identity import find, same
 from ..shiny import shiny_bytes
+from ..runtime import trace
 from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows, merge_partners
 from ..trade.partners import received
 from ..trade.preferences import apply, name as setting_name
@@ -227,6 +228,8 @@ class Participant(BaseParticipant):
         if (not isinstance(supply, list) or len(supply) > 251 or type(peers) is not int or not 0 <= peers <= 10000
                 or any(type(dex) is not int or not 1 <= dex <= 251 for dex in supply)):
             raise ValueError('Invalid collection supply')
+        # The demand steers the planner, so a replay has to see it arrive.
+        trace.note(self.emu, 'trade_demand', {'requests': requests, 'supply': supply, 'peers': peers})
         self.emu.policy.demand = {int(k): v for k, v in requests.items()}
         # Species a linked peer offers, which the store errand waits for instead of buying an item.
         self.emu.policy.peer_supply = set(supply)

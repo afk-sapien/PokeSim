@@ -16,6 +16,7 @@ from ..checkpoints import CheckpointStore
 from pokecore.identity import find, legacy, same
 from ..app.registry import digest, validate_id
 from ..state import journal, kv, ledgers
+from . import trace
 
 PREFIX = ledgers.INTERACTIONS
 KEEP_FINISHED = 20
@@ -439,6 +440,8 @@ class Participant:
             if not str(key).isdigit() or not 1 <= int(key) <= 151 or type(count) is not int or not 1 <= count <= 10000:
                 raise ValueError('Invalid collection request')
             cleaned[int(key)] = count
+        # The demand steers the planner, so a replay has to see it arrive.
+        trace.note(self.emu, 'trade_demand', {'requests': cleaned})
         collection = getattr(self.emu.policy, 'collection', None)
         if collection is not None:
             collection.set_demand(cleaned, self.emu.play_clock.frames)
@@ -619,7 +622,8 @@ class Participant:
         record.update(decision='COMMIT', phase='committed')
         _save(self.store, record)
         path = _promote(self.store, record)
-        self.emu._load_state_file(path)
+        with trace.reason(self.emu, 'trade'):
+            self.emu._load_state_file(path)
         self.emu.paused = True
         self.store.set('trade_hold', {'id': record['id'], 'source': record['source_name'], 'phase': 'loaded'})
         record['phase'] = 'applied'
@@ -673,7 +677,8 @@ class Participant:
         hold = self.store.get('trade_hold')
         if hold and hold['id'] == tid:
             if record.get('source_name'):
-                self.emu._load_state_file(self.store.state_path(record['source_name']))
+                with trace.reason(self.emu, 'trade'):
+                    self.emu._load_state_file(self.store.state_path(record['source_name']))
             self.store.set('trade_hold', None)
         preparation = self.store.get('interaction_preparation')
         if preparation and preparation.get('id') == tid:

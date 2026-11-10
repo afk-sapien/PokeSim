@@ -69,7 +69,7 @@ def unstick_emulator(saves, barrier='trade-2'):
                               get=lambda key: barrier if key == 'trade_barrier' else None),
         policy=SimpleNamespace(recoveries=0, menu=None, on_restore=lambda: None, collection={}, goal=None, decisions=0),
         audio=SimpleNamespace(clear=lambda: None), statistics=SimpleNamespace(previous=None), options_applied=True,
-        _tick=lambda n: None, _reset_watch=lambda: None, _boot=lambda: SimpleNamespace(),
+        _tick=lambda n: None, _reset_watch=lambda: None, _boot=lambda **_: SimpleNamespace(),
         pb=SimpleNamespace(stop=lambda save: stops.append(save)), _event=lambda event, snapshot: None,
         _load_state_file=load)
     emu._behind_barrier = lambda metadata: Emulator._behind_barrier(emu, metadata)

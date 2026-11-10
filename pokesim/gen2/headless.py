@@ -10,15 +10,16 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-from pokecore.emulator_state import checkpoint_metadata, validate_runtime
-from pokecore.gen2.clock import (boot, clock_elapsed, clock_lock_state, follow_game_time, host_elapsed,
-                                 rebase_to_host)
+from pokecore.emulator_state import validate_runtime
+from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.gen2.ram import read_snapshot
 
-from .. import __version__, config
+from .. import config
 from ..checkpoints import CheckpointStore, open_state
 from ..experimental.gen2 import identify
+from ..runtime import trace as trace_module
 from ..runtime.game_loop import GameLoop, Gen2
+from ..runtime.manifest import checkpoint_manifest
 from ..seeds import RELOAD_IDLE, reload_idle
 from .data import GameData
 from .emulator import BUTTONS, SCREEN_FRAMES, count_league
@@ -30,8 +31,11 @@ class HeadlessRun:
     generation = 2
     # A tool that saves screenshots renders every frame.
     render = False
+    tracer = None
 
-    def __init__(self, rom, checkpoint=None, seed=7, rng=None, data_root=None):
+    def __init__(self, rom, checkpoint=None, seed=7, rng=None, data_root=None, trace=None):
+        """``trace`` is a folder to record the run in, one segment from the start, as an adventure's
+        trace folder keeps them. None records nothing."""
         rom = Path(rom)
         profile = identify(rom.read_bytes())
         self.rom_sha1, self.game = profile.sha1, profile.game
@@ -43,6 +47,8 @@ class HeadlessRun:
         # A randomized run (RANDOMIZER set) plays the patched cartridge, as the managed worker does.
         from ..randomized import rom_stream
         self.pb = boot(rom_stream(rom), sound=False)
+        # Before the Mart stock registers its hooks, so the trace knows them.
+        self.tracer = trace_module.for_run(trace, 2, self.pb, seed)
         self.pb.set_emulation_speed(0)
         follow_game_time(self.pb)
         StoreStock(self.data, champion=self._champion_catalogue).attach(self.pb)
@@ -59,6 +65,8 @@ class HeadlessRun:
             # A new game, as the managed runtime starts one with no autosave: the clock follows game
             # time from the host clock's reading now.
             self.clock = follow_game_time(self.pb, host_elapsed(self.pb))
+        if self.tracer is not None:
+            self.tracer.ensure(self.manifest)
 
     def _champion_catalogue(self):
         """The planned Champion shop item for the clerk who opens the BUY list, as the managed runtime adds it.
@@ -106,7 +114,8 @@ class HeadlessRun:
         """Go back to a checkpoint as the guards do, idling a random moment so the trouble differs."""
         self.clock = clock_elapsed(self.pb)
         frame = self.frame
-        self._load(Path(path))
+        with trace_module.reason(self, 'reload'):
+            self._load(Path(path))
         self.policy.menu = None
         # A scenario's own generator picks the idle, and otherwise the reload stream does.
         self.tick(1 + self.rng.randrange(RELOAD_IDLE) if self.rng else reload_idle(self.seed, frame))
@@ -118,14 +127,13 @@ class HeadlessRun:
         rebase_to_host(self.pb)
         stream = io.BytesIO()
         self.pb.save_state(stream)
-        lock = clock_lock_state(self.pb)
-        manifest = {'app_version': __version__, **checkpoint_metadata(rtc_clock=lock), 'rtc_clock': lock,
-                    'generation': 2, 'rom_sha1': self.rom_sha1, 'frame': self.frame, 'policy': config.POLICY,
-                    'policy_state': self.policy.state_dict(), 'run_memory': {}, 'gen2_history': self.history,
-                    'rtc_elapsed': clock_elapsed(self.pb),
-                    'settled': self.policy.menu is None and not getattr(self.policy, 'backing_out', False)}
-        return CheckpointStore(path.parent).write_checkpoint(stream.getvalue(), manifest, name=path.name,
+        return CheckpointStore(path.parent).write_checkpoint(stream.getvalue(), self.manifest(), name=path.name,
                                                              compress=compress)
+
+    def manifest(self):
+        """The manifest a checkpoint of this moment carries."""
+        return checkpoint_manifest(self.policy, rom_sha1=self.rom_sha1, frame=self.frame, generation=2, pb=self.pb,
+                                   history=self.history)
 
     def read(self):
         return count_league(self.history, self.data, read_snapshot(self.pb.memory, self.data, self.frame), observe=True)
@@ -151,4 +159,6 @@ class HeadlessRun:
         return bool(self.policy.idle(snapshot) or self.policy.waiting(snapshot))
 
     def stop(self):
+        if self.tracer is not None:
+            self.tracer.close()
         self.pb.stop(save=False)

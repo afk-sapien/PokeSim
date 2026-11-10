@@ -27,8 +27,7 @@ def manifest_emulator(pb):
 
 def test_a_gen2_manifest_carries_the_clock_lock_and_no_legacy_tag(monkeypatch):
     """Gen II always saves with the clock locked to game time, which PyBoy 2.7.0 cannot reproduce."""
-    from pokesim.gen2 import emulator as module
-    monkeypatch.setattr(module, 'clock_elapsed', lambda pb: 42.0)
+    monkeypatch.setattr(core, 'clock_elapsed', lambda pb: 42.0)
     pb = Mock()
     pb.clock_lock_state.return_value = LOCK
     manifest = manifest_emulator(pb)._manifest()
@@ -38,8 +37,7 @@ def test_a_gen2_manifest_carries_the_clock_lock_and_no_legacy_tag(monkeypatch):
 
 
 def test_a_traded_gen2_manifest_stays_untagged(monkeypatch):
-    from pokesim.gen2 import emulator as module
-    monkeypatch.setattr(module, 'clock_elapsed', lambda pb: 42.0)
+    monkeypatch.setattr(core, 'clock_elapsed', lambda pb: 42.0)
     pb = Mock()
     pb.clock_lock_state.return_value = LOCK
     assert 'pyboy_version' not in retag_checkpoint(manifest_emulator(pb)._manifest())

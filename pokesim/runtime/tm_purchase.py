@@ -9,6 +9,7 @@ from .. import champion_shop, tm_shop
 from ..checkpoints import CheckpointStore, sync_directory
 from ..ram import W_BAG_ITEMS, W_CUR_MAP, W_MONEY, W_NUM_BAG_ITEMS, W_X, W_Y, read_snapshot
 from ..state import journal, kv
+from . import trace
 from .reward_delivery import BARRIER, PENDING, recover_storage
 
 
@@ -93,7 +94,8 @@ def purchase(emu):
                     1, 3, before.map_name)
     try:
         path = recover_storage(emu.store)
-        emu._load_state_file(path)
+        with trace.reason(emu, 'gift'):
+            emu._load_state_file(path)
         emu.policy.on_restore()
         emu.input_epoch += 1
     except BaseException:

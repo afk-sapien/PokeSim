@@ -7,7 +7,7 @@ import io
 import logging
 import queue
 import threading
-from pokecore.emulator_state import checkpoint_metadata, validate_runtime
+from pokecore.emulator_state import validate_runtime
 import time
 from pathlib import Path
 
@@ -31,6 +31,8 @@ from .policies import make_policy
 from .policies.base import BUTTONS, Action
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
 from .runtime.game_loop import GameLoop, Gen1, gen1_options
+from .runtime import trace
+from .runtime.manifest import checkpoint_manifest
 from .runtime.reload import FRAMES_PER_SECOND, reload_target
 from .runtime.restart import restart
 from .screen import W_OPTIONS
@@ -174,7 +176,8 @@ class Emulator:
             # Pay optional compilation cost during startup, before gameplay begins.
             from .policies.navigation_numba import kernel
             kernel()
-        self.pb = self._boot()
+        self.tracer = trace.for_store(store, 1)
+        self.pb = self._boot(tracer=self.tracer)
         self._audio_enabled = False
         self.thread = threading.Thread(target=self._run, name="emulator", daemon=True)
 
@@ -189,7 +192,8 @@ class Emulator:
         log.warning("ROM sha1 %s is not a known clean Red, Blue or Yellow dump, so RAM addresses may be off", sha)
         return f"unverified ROM (sha1 {sha[:12]})"
 
-    def _boot(self, *, sound=True) -> CoreEmulator:
+    def _boot(self, *, sound=True, tracer=None) -> CoreEmulator:
+        """A new emulator. The game's own boots pass the ``tracer``, and a clone for a gift passes none."""
         options = {'color_palette': PALETTES['original']}
         if getattr(self, 'isolated_ram', False):
             import io
@@ -197,6 +201,9 @@ class Emulator:
         from .randomized import rom_stream
         pb = open_emulator(rom_stream(self.rom), default=CoreEmulator, window="null", sound_emulated=sound,
                            yellow=self.rom_sha1 == YELLOW_SHA1, **options)
+        if tracer is not None:
+            # Before the trackers register their hooks, so the trace knows every hook.
+            tracer.attach(pb)
         pb.set_emulation_speed(0)
         if getattr(self, 'activity_ledger', None) is not None:
             self.activity_ledger.attach(pb)
@@ -265,9 +272,11 @@ class Emulator:
 
     def pin_goal(self, key):
         """Set the next activity. A ValueError says why the planner cannot take it now."""
+        trace.note(self, 'pin', {'key': key})
         return self.policy.pin_goal(self.snapshot, key).to_dict()
 
     def unpin_goal(self):
+        trace.note(self, 'pin', {'key': None})
         self.policy.unpin_goal()
 
     def _drop_pin(self, reason):
@@ -392,7 +401,7 @@ class Emulator:
                 errors.setdefault(f"{type(error).__name__}: {reason}"[:200], []).append(path.name)
                 log.warning("cannot restore %s: %s", path.name, reason, exc_info=not isinstance(error, ValueError))
                 self.pb.stop(save=False)
-                self.pb = self._boot()
+                self.pb = self._boot(tracer=getattr(self, 'tracer', None))
                 self._audio_enabled = False
         # The reasons travel to the Library and the server log, where the adventure's own log is out of reach.
         tried = sum(map(len, errors.values()))
@@ -811,15 +820,9 @@ class Emulator:
             self.pb.memory[W_OPTIONS] = want
 
     def _manifest(self):
-        return {
-            "app_version": __version__, **checkpoint_metadata(),
-            "rom_sha1": self.rom_sha1, "policy": config.POLICY,
-            "policy_state": self.policy.state_dict(), "run_memory": self.mem.to_dict(),
-            "frame": self.frame, "play_clock": self.play_clock.state_dict(),
-            "trade_id": self.store.get("trade_barrier"),
-            "reward_id": self.store.get("custom-reward-barrier-v1"),
-            "legendary_recovery": self.legendary_recovery.state_dict(),
-        }
+        return checkpoint_manifest(self.policy, rom_sha1=self.rom_sha1, frame=self.frame,
+                                   run_memory=self.mem, play_clock=self.play_clock, store=self.store,
+                                   legendary_recovery=self.legendary_recovery)
 
     def _autosave(self, trade_prepare=False):
         if self.store.get("trade_hold") and not trade_prepare:
@@ -841,7 +844,11 @@ class Emulator:
             log.warning("skipping autosave: game state looks glitched")
             return
         manifest = self._manifest()
-        path = self.store.write_checkpoint(self._state_bytes(), manifest)
+        state = self._state_bytes()
+        path = self.store.write_checkpoint(state, manifest)
+        tracer = getattr(self, 'tracer', None)
+        if tracer is not None:
+            tracer.begin(path.stem, state, manifest, kept=path)
         stall = getattr(self, 'stall', None)
         if stall and stall.fresh and config.KEEP_STALL_BUNDLES and not (snap is not None and snap.in_battle):
             # The first save after an achievement is the last one known to be from before any stall.
@@ -852,6 +859,8 @@ class Emulator:
             except OSError:
                 log.exception("cannot keep the save from before a stall")
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
+        if tracer is not None:
+            tracer.prune(self.store.autosaves())
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
         self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
         self.store.prune_reward_results()
@@ -938,7 +947,8 @@ class Emulator:
                 guard.reloaded(target.name)
             candidates = [target] + [p for p in reversed(saves) if p != target]
             clock = self.play_clock.frames
-            self._restore_first_valid(candidates)
+            with trace.reason(self, 'reload'):
+                self._restore_first_valid(candidates)
             # The emulator is deterministic, so the same save and the same choices would replay the
             # same trouble. Idling a moment drawn from the reload stream moves the game's random
             # numbers along, the same way in a replay.
@@ -946,7 +956,7 @@ class Emulator:
         else:
             log.warning("%s and no save state to go back to; power-cycling", why)
             self.pb.stop(save=False)
-            self.pb = self._boot()
+            self.pb = self._boot(tracer=getattr(self, 'tracer', None))
             self._audio_enabled = False
             self.prev_snapshot = None
             self.policy.on_restore()
@@ -1222,7 +1232,8 @@ class Emulator:
                 with self.store.held(p, BEFORE_LOAD_CHECKPOINT) as source:
                     self._checkpoint_before(BEFORE_LOAD_CHECKPOINT)
                     try:
-                        self._load_state_file(source)
+                        with trace.reason(self, 'rewind'):
+                            self._load_state_file(source)
                     except ValueError as error:
                         log.warning("Rewind to %s refused: %s", p.name, error)
                     else:
@@ -1276,7 +1287,7 @@ class Emulator:
         # The restart's transaction dropped the old seed, so the new game draws its own starter and choices.
         self.adventure_seed = self.policy.seed = seeds.adventure_seed(self.store)
         self.policy.reset()
-        self.pb = self._boot()
+        self.pb = self._boot(tracer=getattr(self, 'tracer', None))
         self._audio_enabled = False
         self.frame = 0
         self.paused = self.manual_mode = False
@@ -1295,10 +1306,14 @@ class Emulator:
         running = True
         self.consecutive_errors = 0
         input_epoch = self.input_epoch
+        tracer = getattr(self, 'tracer', None)
         while running and not getattr(self, "stopping", False):
             try:
+                if tracer is not None:
+                    tracer.ensure(self._manifest)
                 while running and not self.commands.empty():
                     name, arg = self.commands.get_nowait()
+                    trace.note(self, 'command', trace.command(name, arg))
                     running = self._handle_command(name, arg)
                 if not running:
                     break
@@ -1366,4 +1381,6 @@ class Emulator:
             self.fatal_error = 'The final save failed. Check disk space and the logs before relaunching.'
             log.exception('Final emulator save failed')
         finally:
+            if tracer is not None:
+                tracer.close()
             self.pb.stop(save=False)

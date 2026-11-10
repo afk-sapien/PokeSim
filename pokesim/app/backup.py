@@ -139,9 +139,10 @@ def _create_backup(manager):
                 source = manager.root / name
                 if source.exists():
                     # A sprite or game data download can publish its staged files while a backup
-                    # runs. Only completed files belong in the snapshot.
+                    # runs. Only completed files belong in the snapshot. An adventure's trace folder
+                    # is a bug report that is still being written, not part of the game to restore.
                     shutil.copytree(source, staging / name, ignore=shutil.ignore_patterns(
-                        '*.lock', '*.log', '.install-*', '.pending-*', '.reference-*'))
+                        '*.lock', '*.log', '.install-*', '.pending-*', '.reference-*', 'trace'))
             files = {}
             for path in staging.rglob('*'):
                 if path.is_file():

@@ -253,6 +253,7 @@ settings in the browser.
 | `STALL_ALERT_REAL_MINUTES` | `15` | real time that must also pass, so Max pace does not report brief lulls |
 | `STALL_ALERT_REPEAT_HOURS` | `6` | real hours before a continuing stall is reported again |
 | `KEEP_STALL_BUNDLES` | `5` | stalls kept in the adventure's `stalls/` folder, each with the save from before it began; `0` keeps none |
+| `TRACE` | `1` | record every button press and bot decision between autosaves in the adventure's `states/trace/` folder, so a bug can be played again exactly. It keeps only the game time the autosaves cover, about 7 MB. `0` turns it off |
 | `BATTLE_TIMEOUT_SECONDS` | `900` | a battle lasting this many game seconds → reload |
 | `HOST` / `PORT` | `127.0.0.1` / `8000` | native service bind address and port |
 | `VIEWER_ONLY` | `0` | disable browser game controls and preference writes |

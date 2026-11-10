@@ -417,7 +417,7 @@ def test_second_consecutive_unstick_raises_a_stuck_event():
                                                  collection={}, goal=None, decisions=0, in_league=lambda snapshot: False),
                           reloads=0, last_reload=0, audio=SimpleNamespace(clear=lambda: None),
                           statistics=SimpleNamespace(previous=None), options_applied=True, _tick=lambda n: None,
-                          _reset_watch=lambda: None, _boot=lambda: SimpleNamespace(), _sync_clock=lambda: None,
+                          _reset_watch=lambda: None, _boot=lambda **_: SimpleNamespace(), _sync_clock=lambda: None,
                           pb=SimpleNamespace(stop=lambda save: None),
                           _event=lambda event, snapshot: events.append(event))
     Emulator._unstick(emu, 0.0, 'stuck')

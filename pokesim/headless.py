@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import io
-from pokecore.emulator_state import checkpoint_metadata, validate_runtime
+from pokecore.emulator_state import validate_runtime
 import json
 
 from pokecore.emulator import Emulator as CoreEmulator
@@ -20,7 +20,9 @@ from .game_data import VARIANT_ENV
 from .policies.base import BUTTONS
 from .policies.progression import YELLOW
 from .policies.strategic import StrategicPolicy
+from .runtime import trace as runtime_trace
 from .runtime.game_loop import GameLoop, Gen1
+from .runtime.manifest import checkpoint_manifest
 from .seeds import RELOAD_IDLE, reload_idle
 
 BLUE_SHA1 = 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2'
@@ -35,8 +37,11 @@ class HeadlessRun:
     generation = 1
     # A tool that saves screenshots renders every frame.
     render = False
+    tracer = None
 
-    def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False, fair_wild_dvs=None):
+    def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False, fair_wild_dvs=None, trace=None):
+        """``trace`` is a folder to record the run in, one segment from the start, as an adventure's
+        trace folder keeps them. None records nothing."""
         self.rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
         # The policy reads its game data once at import, from POKESIM_GEN1_VARIANT. Yellow under
         # Red data reads menus at Red's addresses, so every battle shortcut times out.
@@ -47,6 +52,8 @@ class HeadlessRun:
         from .randomized import rom_stream
         self.pb = open_emulator(rom_stream(rom), default=CoreEmulator, yellow=self.rom_sha1 == YELLOW_SHA1,
                                 window='null', sound_emulated=False)
+        # Before fair DVs register their hook, so the trace knows it.
+        self.tracer = runtime_trace.for_run(trace, 1, self.pb, seed)
         self.pb.set_emulation_speed(0)
         # Fair wild DVs, as an adventure with the setting on plays them. True keys the rerolls from
         # the seed, and bytes are a live adventure's own key.
@@ -70,6 +77,8 @@ class HeadlessRun:
             # makes the same choices whatever seed is asked for. Exploring needs the seed to matter;
             # replaying a saved stall needs the original choices, so this is the caller's decision.
             self.frame = self._load(checkpoint, reseed=reseed).get('frame', 0)
+        if self.tracer is not None:
+            self.tracer.ensure(self.manifest)
 
     def _load(self, path, reseed=False):
         metadata = CheckpointStore(path.parent).checkpoint_metadata(path)
@@ -91,29 +100,30 @@ class HeadlessRun:
     def reload(self, path):
         """Go back to a checkpoint as the application does after a battle that never ends."""
         frame = self.frame
-        self._load(path)
+        with runtime_trace.reason(self, 'reload'):
+            self._load(path)
         # The same save and the same choices would replay the same trouble. A scenario's own
         # generator picks the idle, and otherwise the reload stream does, so a rerun idles the same.
         idle = 1 + self.rng.randrange(RELOAD_IDLE) if self.rng else reload_idle(self.seed, frame)
         self.pb.tick(idle, render=False)
 
+    def manifest(self):
+        """The manifest a checkpoint of this moment carries."""
+        return checkpoint_manifest(self.policy, rom_sha1=self.rom_sha1, frame=self.frame,
+                                   policy_name='strategic', run_memory=self.memory)
+
     def save(self, path, compress=False):
         """Write a checkpoint the application and the replay tools both accept. ``compress`` writes
         the state and its manifest gzipped, as the library keeps journal saves."""
+        manifest = self.manifest()
         if compress:
             stream = io.BytesIO()
             self.pb.save_state(stream)
-            manifest = {**checkpoint_metadata(), 'rom_sha1': self.rom_sha1, 'policy': 'strategic',
-                        'policy_state': self.policy.state_dict(), 'run_memory': self.memory.to_dict(),
-                        'frame': self.frame}
             return CheckpointStore(path.parent).write_checkpoint(stream.getvalue(), manifest, name=path.name,
                                                                  compress=True)
         with path.open('wb') as stream:
             self.pb.save_state(stream)
-        manifest = {'format': 1, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
-                    **checkpoint_metadata(), 'rom_sha1': self.rom_sha1, 'policy': 'strategic',
-                    'policy_state': self.policy.state_dict(), 'run_memory': self.memory.to_dict(),
-                    'frame': self.frame}
+        manifest = {'format': 1, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), **manifest}
         path.with_suffix('.json').write_text(json.dumps(manifest), encoding='utf-8')
         return path
 
@@ -127,4 +137,6 @@ class HeadlessRun:
         self.loop.step(snapshot)
 
     def stop(self):
+        if self.tracer is not None:
+            self.tracer.close()
         self.pb.stop(save=False)
