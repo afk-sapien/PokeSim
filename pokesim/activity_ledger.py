@@ -1,11 +1,11 @@
 """Per-species and per-item action receipts, independent of sampled observations."""
 from collections import Counter
 import hashlib
-import json
 import re
 import time
 
 from .ram import DEX_NAMES, ITEM_NAMES
+from .state import kv, tracking
 from .strategy_data import SPECIES
 
 KEY = 'activity-ledger-v1'
@@ -63,21 +63,17 @@ YELLOW_HOOKS = (
 def initialize(db):
     """Start the counts once from the receipts kept before them. The tables come from the schema
     version (pokesim.state)."""
-    if db.execute('SELECT 1 FROM kv WHERE k=?', (KEY,)).fetchone():
+    if kv.exists(db, KEY):
         return
-    if db.execute("SELECT 1 FROM sqlite_master WHERE name='capture_receipts'").fetchone():
+    if tracking.has_capture_receipts(db):
         # Receipts distinguish caught partners from custom gifts without journal parsing.
-        for kind, dex, total in db.execute(
-                "SELECT CASE WHEN fingerprint LIKE 'gift-event:%' THEN 'gift' ELSE 'caught' END, "
-                'dex, COUNT(*) FROM capture_receipts GROUP BY 1,2'):
+        for kind, dex, total in tracking.receipt_counts(db):
             increment(db, kind, dex, total)
-    db.execute('INSERT INTO kv VALUES (?,?)', (KEY, json.dumps({'started_at': None, 'available': False})))
+    kv.add(db, KEY, {'started_at': None, 'available': False})
 
 
 def increment(db, kind, subject, amount=1):
-    db.execute('INSERT INTO activity_counts VALUES (?,?,?) '
-               'ON CONFLICT(kind,subject) DO UPDATE SET total=total+excluded.total',
-               (kind, subject, amount))
+    tracking.count_activity(db, kind, subject, amount)
 
 
 class ActivityLedger:
@@ -100,16 +96,16 @@ class ActivityLedger:
                 matches.extend((kind, bank, 0x4000 + match.start() + offset) for match in found)
             for kind, bank, address in matches:
                 pb.hook_register(bank, address, self.completed, (kind, pb))
-        with self.store.lock, self.store.db:
-            value = json.loads(self.store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
+        with self.store.transaction() as db:
+            value = kv.get(db, KEY)
             value['available'] = self.supported
             if self.supported:
-                from .trade_statistics import tracking
-                tracking(self.store.db)
+                from . import trade_statistics
+                trade_statistics.tracking(db)
                 if value['started_at'] is None:
                     # A new adventure has no autosave yet, so nothing happened before this.
                     value.update(started_at=time.time(), complete_history=not self.store.autosaves())
-            self.store.db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))
+            kv.update(db, KEY, value)
 
     def completed(self, context):
         kind, pb = context
@@ -163,10 +159,9 @@ class ActivityLedger:
             if subject not in ITEMS or not 1 <= amount <= 99:
                 return
         fingerprint = hashlib.sha256(bytes(mem[0xc000:0xe000])).digest()
-        with self.store.lock, self.store.db:
-            if self.store.db.execute('INSERT OR IGNORE INTO activity_receipts VALUES (?,?)',
-                                     (kind, fingerprint)).rowcount:
-                increment(self.store.db, kind, subject, amount)
+        with self.store.transaction() as db:
+            if tracking.add_activity_receipt(db, kind, fingerprint):
+                increment(db, kind, subject, amount)
 
 
 def rated(row):
@@ -183,19 +178,19 @@ def counting_since(db, metadata):
     if 'complete_history' in metadata:
         return None if metadata['complete_history'] else started
     # Counting began before this was recorded. A journal older than that shows earlier play.
-    first = db.execute('SELECT MIN(ts) FROM events').fetchone()[0]
+    first = tracking.journal_start(db)[1]
     return started if first is not None and first < started - 60 else None
 
 
 def status(store, game=None):
     from .catches import status as catches
+    from .trade_statistics import KEY as trade_key
     game = game or {}
-    with store.lock:
-        metadata = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
-        metadata['counting_since'] = counting_since(store.db, metadata)
-        counts = {(row[0], row[1]): row[2] for row in store.db.execute('SELECT * FROM activity_counts')}
-        from .trade_statistics import KEY as trade_key
-        trades = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (trade_key,)).fetchone()[0])
+    with store.reading() as db:
+        metadata = kv.get(db, KEY)
+        metadata['counting_since'] = counting_since(db, metadata)
+        counts = tracking.activity_counts(db)
+        trades = kv.get(db, trade_key)
     captures = catches(store)
     held = Counter()
     for mon in [*game.get('party', []), *(game.get('storage') or {}).get('pokemon', [])]:
@@ -231,13 +226,12 @@ def gen2_status(data, game=None, store=None):
     if store is not None:
         from .gen2.tracking import CAPTURES
         from .trade_statistics import KEY as trade_key
-        with store.lock:
-            metadata = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (KEY,)).fetchone()[0])
-            metadata['counting_since'] = counting_since(store.db, metadata)
-            counts = {(row[0], row[1]): row[2] for row in store.db.execute('SELECT * FROM activity_counts')}
-            trades = json.loads(store.db.execute('SELECT v FROM kv WHERE k=?', (trade_key,)).fetchone()[0])
-            row = store.db.execute('SELECT v FROM kv WHERE k=?', (CAPTURES,)).fetchone()
-            captures = json.loads(row[0]) if row else {}
+        with store.reading() as db:
+            metadata = kv.get(db, KEY)
+            metadata['counting_since'] = counting_since(db, metadata)
+            counts = tracking.activity_counts(db)
+            trades = kv.get(db, trade_key)
+            captures = kv.get(db, CAPTURES, {})
     held = Counter()
     for mon in [*(game or {}).get('party', []), *((game or {}).get('storage') or {}).get('pokemon', [])]:
         if not mon.get('egg') and 1 <= (mon.get('dex') or 0) <= 251:

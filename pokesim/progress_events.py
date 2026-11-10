@@ -10,6 +10,8 @@ which knows the hunt's target and rule. Both tables come from the schema version
 """
 import time
 
+from .state.journal import add_progress
+
 # Net per kind. An item is net only when it was needed, so its writer says which.
 NET = {'dex': 1, 'improve': 1, 'badge': 1, 'league': 1, 'event': 1, 'area': 1, 'checkpoint': 1,
        'catch': 0, 'receive': 0, 'release': 0, 'room': 0, 'level': 0, 'goal': 0, 'plan': 0}
@@ -40,16 +42,13 @@ def record(db, kind, *, frame=None, goal='', tier='', species=None, identity=Non
         if kind not in NET:
             raise ValueError('An item row says whether the item was needed')
         net = NET[kind]
-    row = (frame, time.time(), kind, goal or '', tier or '', species, identity, score, int(bool(net)))
-    sql = ('INSERT INTO progress_events(frame, ts, kind, goal, tier, species, identity, score, net) '
-           'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    db.execute(sql, row)
+    add_progress(db, frame, time.time(), kind, goal or '', tier or '', species, identity, score, int(bool(net)))
 
 
 def write(store, kind, **fields):
     """Write one row in a transaction of its own, at the adventure's PlayClock frame."""
-    with store.lock, store.db:
-        record(store.db, kind, frame=frame(store), **fields)
+    with store.transaction() as db:
+        record(db, kind, frame=frame(store), **fields)
 
 
 def journal(db, event_type, *, frame=None, species=None):
@@ -69,10 +68,10 @@ def drain(store, rows):
     rows = list(rows)
     progress = [row for row in rows if isinstance(row, dict) and 'progress' in row]
     if progress:
-        with store.lock, store.db:
+        with store.transaction() as db:
             for row in progress:
                 fields = dict(row)
-                record(store.db, fields.pop('progress'), frame=frame(store), **fields)
+                record(db, fields.pop('progress'), frame=frame(store), **fields)
     return [row for row in rows if not (isinstance(row, dict) and 'progress' in row)]
 
 

@@ -8,16 +8,17 @@ from dataclasses import asdict
 from . import league_partners as league
 from .checkpoints import open_state
 from .ram import read_snapshot
+from .state import journal
 
 log = logging.getLogger(__name__)
 
 
 def recover(store, rom, *, factory=None):
     """Use a separate emulator without ticking or writing cartridge saves."""
-    with store.lock:
-        if league.read(store.db).get('history_recovered'):
+    with store.reading() as db:
+        if league.read(db).get('history_recovered'):
             return
-        rows = list(store.db.execute("SELECT id,title,state,body FROM events WHERE type='champion' ORDER BY id"))
+        rows = journal.champions(db)
     failed = []
     named = []
     pb = None
@@ -34,11 +35,11 @@ def recover(store, rom, *, factory=None):
                     pb.load_state(stream)
                 current = read_snapshot(pb.memory, 0)
                 if current.valid:
-                    with store.lock, store.db:
-                        value = league.read(store.db)
+                    with store.transaction() as db:
+                        value = league.read(db)
                         league.resolve(value, [asdict(mon) for mon in current.party] + current.storage_entries(),
                                        allow_rename=False)
-                        league.save(store.db, value)
+                        league.save(db, value)
         except Exception:
             log.warning('Could not read current party for League history recovery', exc_info=True)
             if pb is not None:
@@ -61,24 +62,24 @@ def recover(store, rom, *, factory=None):
                 snapshot = read_snapshot(pb.memory, 0)
                 if not snapshot.valid or snapshot.map != league.HALL_OF_FAME_MAP:
                     raise ValueError('Saved event is not a Hall of Fame party')
-                with store.lock, store.db:
-                    league.record(store.db, snapshot, row['title'], row['id'], allow_rename=False)
+                with store.transaction() as db:
+                    league.record(db, snapshot, row['title'], row['id'], allow_rename=False)
             except Exception:
                 failed.append(row['id'])
                 log.warning('Could not recover Hall of Fame event %s', row['id'], exc_info=True)
     finally:
         if pb is not None:
             pb.stop(save=False)
-    with store.lock, store.db:
-        value = league.read(store.db)
-        legacy = league._read(store.db, league.LEGACY_KEY) or {}
+    with store.transaction() as db:
+        value = league.read(db)
+        legacy = league._read(db, league.LEGACY_KEY) or {}
         for row in named:
             if not recover_named(value, row, legacy):
                 failed.append(row['id'])
         missing = sorted(set(legacy.get('victories', ())) - set(value['victories']))
         value.update(history_recovered=True, history_complete=not failed and not missing,
                      missing_events=failed, missing_victories=missing)
-        league.save(store.db, value)
+        league.save(db, value)
     log.info('Recovered individual League history: %s events, %s missing', len(rows), len(failed))
 
 
