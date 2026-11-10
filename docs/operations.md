@@ -295,6 +295,11 @@ Each change of an adventure's state is logged with its reason, for example
 `Adventure <id> went from running to failed: its worker exited`. A change the library does not
 expect is logged as an error. An adventure that reads as running while no worker runs for it
 is marked failed on the supervisor's next check.
+A worker that exits, stops answering for a minute, or whose game stops moving for a minute while
+it is not paused, in manual play or in a trade is restarted. The first restart waits 10 seconds
+and each one after it waits twice as long, up to 30 minutes. Ten healthy minutes in a row put the
+wait back to 10 seconds. A worker that exits during an unfinished trade is not restarted, so
+the trade's recovery decides what happens to it.
 Inspect individual adventure failures in the Library and startup failures in the container
 logs. Docker marks failed health checks as unhealthy, but that alone does not restart a
 still-running container.

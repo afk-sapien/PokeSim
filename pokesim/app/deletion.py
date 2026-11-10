@@ -47,7 +47,7 @@ def _finish(manager, aid):
                                     (json.dumps({'complete': True}), PREFIX + aid))
     with manager.supervisor.guard:
         manager.supervisor.children.pop(aid, None)
-        manager.supervisor.retries.pop(aid, None)
+        manager.supervisor.restarts.pop(aid, None)
         manager.supervisor.unhealthy_since.pop(aid, None)
     return {'deleted': aid}
 
