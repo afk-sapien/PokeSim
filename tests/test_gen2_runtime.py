@@ -1518,8 +1518,9 @@ def test_roamer_search_steps_toward_a_neighbour_of_the_beasts_route(real_data, m
     ids = real_data.map_ids
     policy = SimpleNamespace(data=real_data, collection={}, decisions=0, memory=None,
         nav=SimpleNamespace(route=lambda start, end: [None] * (1 if end == ids['ROUTE_36'] else 5),
-                            local=lambda *args, **kwargs: ['left'], visits={}))
-    snapshot = SimpleNamespace(map=ids['VIOLET_CITY'], x=1, y=8, owned=set(), party=(), stored=(),
+                            local=lambda *args, **kwargs: ['left'], visits={},
+                            regions=SimpleNamespace(route=lambda *args, **kwargs: [])))
+    snapshot = SimpleNamespace(map=ids['VIOLET_CITY'], x=1, y=8, badges=0, owned=set(), party=(), stored=(),
         roamers=[{'species': 243, 'level': 40, 'map': ids['ROUTE_37']}])
     monkeypatch.setattr(collection, 'encounter_points', lambda *args: [(58, 8, None), (57, 8, None)])
     goal = roamers(policy, snapshot, Goal)
