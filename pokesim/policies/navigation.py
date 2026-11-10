@@ -85,6 +85,10 @@ def cinnabar_gate_open(flags, index):
     return event_set(flags, CINNABAR_GYM_DOORS[index][0].flag)
 
 
+def cut_tree(tileset, tile):
+    return (tileset == "OVERWORLD" and tile == 0x3D) or (tileset == "GYM" and tile == 0x50)
+
+
 _STAMPS = count(1)
 
 
@@ -610,6 +614,9 @@ class Navigator:
                 ts = current_world["tileset"]
                 if (ts, here, front) in PAIR_COLLISIONS or (ts, front, here) in PAIR_COLLISIONS:
                     continue
+                # A step seen through a tree after Cut grows back with the map, so it needs Cut again.
+                if not self.can_cut and cut_tree(ts, front):
+                    continue
             if (m, x + dx, y + dy) in self.closed_passages or q in self.closed_passages:
                 continue
             if (m, x + dx, y + dy) in SEAFOAM_HOLES:
@@ -669,8 +676,7 @@ class Navigator:
                 if self.active_tile(world, lx, ly) in passable:
                     yield dr, (m, lx, ly)
                 continue
-            cuttable = self.can_cut and ((world["tileset"] == "OVERWORLD" and tile == 0x3D)
-                                        or (world["tileset"] == "GYM" and tile == 0x50))
+            cuttable = self.can_cut and cut_tree(world["tileset"], tile)
             water = self.can_surf and world["tileset"] in WATER_TILESETS and tile in (0x14, 0x32, 0x48)
             if (tile not in passable and not cuttable and not water) or (nx, ny) in static_objects:
                 # Some exits activate by pressing into the boundary from the warp square.
