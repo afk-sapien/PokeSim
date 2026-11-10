@@ -1325,6 +1325,9 @@ class Policy:
             for mid, entry in self.data.maps.items():
                 if entry['region'] != self.travel_region(snapshot) or not entry['shops']:
                     continue
+                # Cures are bought only where the player stands (ledger.cure_wanted), never on a trip.
+                if key == 'cures' and mid != snapshot.map:
+                    continue
                 route = self.nav.walk(snapshot, mid)
                 if route is None:
                     continue

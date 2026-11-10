@@ -85,3 +85,19 @@ def test_a_mart_adds_cures_to_a_bag_without_any(data, monkeypatch):
     assert cures('ROUTE_34', [('POTION', 3)]) == []
     assert cures(mart, [('BURN_HEAL', 1)]) == []
     assert cures(mart, [('POTION', 3)], entries=19) == []
+
+
+def test_a_mart_counter_with_no_clerk_adds_no_cures(data, monkeypatch):
+    # Mahogany Mart's second counter sells Antidotes, and its clerk is away until the hideout is cleared.
+    # A Silver run walking through to the hideout went on a restock trip to Ecruteak for cures alone.
+    from pokesim.gen2 import ledger
+    policy = policy_with_center(data, monkeypatch)
+
+    def cures(*events):
+        flags = bytearray(256)
+        for name in events:
+            flags[data.events[name] // 8] |= 1 << data.events[name] % 8
+        at = replace(snapshot(data, 'MAHOGANY_MART_1F', [('POTION', 3)]), event_flags=bytes(flags))
+        return [row for row in ledger.supplies(policy, at) if row[0] == 'cures']
+    assert cures('EVENT_MAHOGANY_MART_OWNERS') == []
+    assert cures('EVENT_TEAM_ROCKET_BASE_POPULATION') == [('cures', ('ANTIDOTE', 'FULL_HEAL'), 2)]

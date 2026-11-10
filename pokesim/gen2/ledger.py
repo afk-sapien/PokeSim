@@ -209,16 +209,23 @@ def cured(data, snapshot):
     return replace(snapshot, party=tuple(party))
 
 
-def cure_wanted(data, snapshot):
+def cure_wanted(policy, snapshot):
     """Whether the shop adds field cures: the bag holds none and has a free items entry, and the player
-    stands in a map whose clerk sells one, so no trip is made for cures alone."""
+    stands in a map whose clerk is there and sells one, so no trip is made for cures alone.
+
+    The clerk must be on the map. The Mahogany Mart counter that sells Antidotes stays empty until the
+    hideout below it is cleared, and a Silver run walking through to the hideout set off for Ecruteak.
+    """
+    data = policy.data
     if len(snapshot.pockets.get('items', ())) >= POCKET_SLOTS['items']:
         return False
     inventory = dict(snapshot.items)
     if any(inventory.get(data.items[name], 0) for name, _ in CURES):
         return False
     sold = {data.items[name] for name in CURE_NAMES}
-    return any(sold.intersection(shop['items']) for shop in data.maps.get(snapshot.map, {}).get('shops', ()))
+    entry = data.maps.get(snapshot.map, {})
+    return any(sold.intersection(shop['items']) and policy.clerk_present(snapshot, entry, shop)
+               for shop in entry.get('shops', ()))
 
 
 # Worth of a boxed spare: its PC score (pcvalue.py) plus this, and more for one holding an item. An
@@ -580,7 +587,7 @@ def supplies(policy, snapshot):
         revives = inventory.get(data.items['REVIVE'], 0)
         if revives < REVIVE_LOW:
             rows.append(('revives', ('REVIVE',), REVIVE_FULL - revives))
-    if cure_wanted(data, snapshot):
+    if cure_wanted(policy, snapshot):
         rows.append(('cures', CURE_NAMES, CURE_STOCK))
     return rows
 
