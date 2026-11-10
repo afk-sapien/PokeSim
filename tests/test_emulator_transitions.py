@@ -73,7 +73,7 @@ def test_restart_resets_the_adventure_and_input_but_keeps_event_history(emu):
     assert emu.battle_frame is None and emu.invalid_frame is None
     assert not emu.paused and not emu.manual_mode and emu.speed == 4
     assert emu.store.get('trade_barrier') == '123'
-    assert emu.store.trade_preferences() == {} and emu.store.get('policy_state') == {}
+    assert emu.store.trade_preferences() == {} and emu.store.get('policy_state') is None
     assert emu.store.event(eid)['title'] == 'Kept in journal'
     assert not path.exists()
     emu.policy.reset.assert_called_once()

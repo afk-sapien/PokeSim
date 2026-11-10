@@ -57,10 +57,15 @@ GEN1 = (1,)
 GEN2 = (2,)
 
 DOMAINS = (
-    # The kv copies of checkpoint manifest fields. A reload puts back the save's copy.
+    # The last kv copies of checkpoint manifest fields. The autosaves stopped writing them when boot and
+    # reload began to read the manifest alone (docs/design/adventure-state-store.md section 3.5). A Gen I
+    # save with no manifest reads the policy copy, and a Gen II boot reads the history copy for a manifest
+    # from before it carried one. A restart drops both.
     Domain('policy_state', 'pokesim.emulator', REWINDS),
-    Domain('run_memory', 'pokesim.emulator', REWINDS, GEN1),
     Domain('gen2-history', 'pokesim.gen2.emulator', REWINDS, GEN2),
+
+    # The playtime hours Gen I has announced, which a reload keeps so the same hour is not announced twice.
+    Domain('playtime-milestones-v1', 'pokesim.emulator', RESETS_ON_RESTART, GEN1),
 
     # Reset by the restart in both generations.
     Domain(PENDING_REWARD, 'pokesim.runtime.reward_delivery', RESETS_ON_RESTART),
