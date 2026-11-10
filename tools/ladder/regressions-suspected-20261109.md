@@ -102,4 +102,12 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   run back to a Pokémon Center, and the heal cuts a long walk short before any event. Yellow makes four
   such trips to Fuchsia under the lapras goal, 16072 frames. Outside the League the run uses no cure in
   the field, and the shop skips a new item kind at 18 entries or more. Both rules are older than 171176e.
+- The field cure, 2026-11-10: a status a cure in the bag can treat no longer latches a heal, and the run
+  cures it where it stands. A mart with no Antidote sells a first Full Heal into a bag of 18 or 19
+  entries while a finite TM could still be sold for a story item. The four Fuchsia trips are gone.
+  yellow/badges_6 fell to 14.2% and red/badges_6 to 9.0%, and the baseline moved for both. blue/badges_6
+  did not move. Both runs now train a partner on Route 11 for about 55000 frames and reach the Safari
+  Zone too late to get Surf inside the window. Training ends only on a level or 2400 frames without
+  experience, and a level 41 partner on level 15 grass gains a little in every battle. That stall is
+  older than 171176e and is still open.
 - The other rungs are still open.
