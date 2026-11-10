@@ -31,7 +31,7 @@ pokecore = ["py.typed"]
 
 [tool.uv]
 # PyBoy RS is not on PyPI. Its GitHub release lists a wheel per platform.
-find-links = ["https://github.com/afk-sapien/pyboy-rs/releases/expanded_assets/v0.1.2"]
+find-links = ["https://github.com/afk-sapien/pyboy-rs/releases/expanded_assets/v0.1.5"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

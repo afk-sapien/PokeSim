@@ -13,12 +13,12 @@ extra adds the pyboy-rs emulator and Pillow.
 Python 3.11 or newer. Core and pyboy-rs are released on GitHub, not PyPI. Pin
 each file by its URL and the sha256 from the release's `SHA256SUMS.txt`, so pip
 refuses a changed file. First pyboy-rs (pick your platform's wheel from the
-[v0.1.2 release](https://github.com/afk-sapien/pyboy-rs/releases/tag/v0.1.2)):
+[v0.1.5 release](https://github.com/afk-sapien/pyboy-rs/releases/tag/v0.1.5)):
 
 ```bash
-base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2
+base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5
 curl -fsSLO "$base/SHA256SUMS.txt"
-wheel=pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+wheel=pyboy_rs-0.1.5-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 sha=$(grep " $wheel\$" SHA256SUMS.txt | cut -d' ' -f1)
 pip install "pyboy-rs @ $base/$wheel#sha256=$sha"
 ```

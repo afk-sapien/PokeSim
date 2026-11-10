@@ -3,10 +3,10 @@ on: [push, pull_request]
 permissions:
   contents: read
 env:
-  # The emulator job installs the released PyBoy RS v0.1.2 Linux x86_64 wheel from its GitHub release,
+  # The emulator job installs the released PyBoy RS v0.1.5 Linux x86_64 wheel from its GitHub release,
   # pinned by SHA-256 (from the release's SHA256SUMS.txt). PyBoy RS is not on PyPI.
-  PYBOY_RS_WHEEL_URL: https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-  PYBOY_RS_WHEEL_SHA256: b0fd7f4699fed5c2c73a49e3d3767ec74fb5e73117b4fb07285d1eff511c26e2
+  PYBOY_RS_WHEEL_URL: https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  PYBOY_RS_WHEEL_SHA256: 85d000b9d6607f449b6a945bed7923ca3e1adb5bb97dc1606508501eef1da89d
 jobs:
   test:
     name: pure Python (py${{ matrix.python }})
@@ -23,7 +23,7 @@ jobs:
       - run: uv build
 
   emulator:
-    name: emulator and RTC (PyBoy RS v0.1.2 release wheel)
+    name: emulator and RTC (PyBoy RS v0.1.5 release wheel)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
@@ -37,8 +37,8 @@ jobs:
           echo "$PYBOY_RS_WHEEL_SHA256  dist/${PYBOY_RS_WHEEL_URL##*/}" | sha256sum -c -
           python -m pip install dist/pyboy_rs-*.whl
           python -m pip install -e ".[dev]" pillow numpy
-      - name: Require version 0.1.2
-        run: python -c "import pyboy_rs; assert pyboy_rs.__version__ == '0.1.2', pyboy_rs.__version__"
+      - name: Require version 0.1.5
+        run: python -c "import pyboy_rs; assert pyboy_rs.__version__ == '0.1.5', pyboy_rs.__version__"
       - name: Require clock control in the release wheel
         run: python -c "import pyboy_rs; assert pyboy_rs.HAS_CLOCK_CONTROL, pyboy_rs.FEATURES"
       - name: Require whole-bank reads in the release wheel
