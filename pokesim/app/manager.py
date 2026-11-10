@@ -39,7 +39,7 @@ from ..web.pages import LEASE_META, SPRITE_META, SPRITE_VERSION
 from ..web.security import LEASE_HEADER, ROLE_HEADER, VIEWER_HEADER, protect_response, public_origin, viewer_allows
 from .assets import Assets
 from .auth import AuthStore, SetupCode
-from . import policy, trade_settings
+from . import loops, policy, trade_settings
 from .policy import Actor, can
 from .registry import LIBRARY_OWNER, Registry, identifier, validate_id
 from .supervisor import AdventureRunning, Supervisor
@@ -322,6 +322,13 @@ class Manager:
             self.offers.run()
             self.leases.run()
             threading.Thread(target=self.resume_orphans, name='resume-manual', daemon=True).start()
+
+    def loop_problems(self):
+        """Background loops whose thread died or whose heartbeat is too old, for /health/ready."""
+        owners = (self.supervisor, self.coordinator, self.watchdog, getattr(self, 'offers', None),
+                  getattr(self, 'leases', None))
+        found = [getattr(owner, 'monitor', None) or getattr(owner, 'loop', None) for owner in owners]
+        return loops.problems(found)
 
     def resume_orphans(self):
         """Leases do not survive a restart, so a worker still in manual mode goes back to the autopilot."""
@@ -866,7 +873,13 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/health/ready')
     def ready():
-        return {'ok': not manager.closing, 'adventures': len(manager.registry.adventures())}
+        body = {'ok': not manager.closing, 'adventures': len(manager.registry.adventures())}
+        problems = [] if manager.closing else manager.loop_problems()
+        if problems:
+            # A dead or frozen background loop means games stop being restarted or traded, so
+            # the container health check sees it.
+            return JSONResponse({**body, 'ok': False, 'problems': problems}, status_code=503)
+        return body
 
     @app.get('/api/v1/session')
     def session(request: Request):

@@ -23,6 +23,7 @@ import time
 import traceback
 
 from . import progress_sweep
+from .loops import Loop
 
 log = logging.getLogger(__name__)
 
@@ -232,6 +233,7 @@ class Watchdog:
         self.guard = threading.Lock()
         self.stopped = threading.Event()
         self.thread = None
+        self.loop = None
         self.deliveries = deque(maxlen=20)   # recent sends, so tests can wait for them
         self.handler = None
         self.previous_hook = None
@@ -289,15 +291,8 @@ class Watchdog:
 
     def run(self):
         self.started = self.clock()
-        self.thread = threading.Thread(target=self._loop, name='library-watchdog', daemon=True)
-        self.thread.start()
-
-    def _loop(self):
-        while not self.stopped.wait(self.limits.interval):
-            try:
-                self.tick()
-            except Exception:  # noqa: BLE001
-                log.exception('The watchdog check failed')
+        self.loop = Loop('library-watchdog', self.tick, self.limits.interval, self.stopped.wait, logger=log)
+        self.thread = self.loop.start()
 
     def close(self):
         self.stopped.set()

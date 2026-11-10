@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 import pytest
 
+from pokesim.app.loops import Loop
 from pokesim.app.manager import Manager, create_app
 from pokesim.app.registry import identifier
 from pokesim.app.supervisor import AdventureRunning
@@ -19,6 +20,28 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(manager, 'start', lambda: None)
     with TestClient(create_app(manager)) as client:
         yield client, manager
+
+
+def test_readiness_names_a_frozen_monitor_and_a_dead_loop(client):
+    client, manager = client
+    # Loops that have not started yet are no reason to fail readiness.
+    assert client.get('/health/ready').status_code == 200
+    monitor = manager.supervisor.monitor
+    monitor.thread = SimpleNamespace(is_alive=lambda: True)
+    monitor.heartbeat = monitor.clock() - 200
+    try:
+        frozen = client.get('/health/ready')
+        assert frozen.status_code == 503
+        assert frozen.json()['problems'] == ['adventure-supervisor has made no progress for 200 seconds']
+        manager.watchdog.loop = Loop('library-watchdog', lambda: None, 60, lambda seconds: True)
+        manager.watchdog.loop.thread = SimpleNamespace(is_alive=lambda: False)
+        monitor.beat()
+        response = client.get('/health/ready')
+        assert response.status_code == 503
+        assert response.json() == {'ok': False, 'adventures': 0, 'problems': ['library-watchdog stopped']}
+    finally:
+        monitor.thread = None
+        manager.watchdog.loop = None
 
 
 def login(client, manager):

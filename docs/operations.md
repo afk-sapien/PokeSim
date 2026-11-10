@@ -287,6 +287,10 @@ before rolling back and use 0.5.0 or later to open them. Generation I adventures
 ## Health, storage, and recovery
 
 The manager's `/health/ready` endpoint reports readiness. Docker checks it automatically.
+It answers 503 and lists the problem in `problems` when a background loop has stopped (the
+adventure supervisor, trade scheduler, watchdog, trade offer sweep or control lease sweep) or
+when the adventure supervisor has made no progress for 3 minutes. A failure inside a loop is
+logged with its traceback, and the same failure again at most once a minute.
 Inspect individual adventure failures in the Library and startup failures in the container
 logs. Docker marks failed health checks as unhealthy, but that alone does not restart a
 still-running container.

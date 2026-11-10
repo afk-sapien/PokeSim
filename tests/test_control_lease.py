@@ -2,6 +2,7 @@
 import asyncio
 import json
 import threading
+import time
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -456,17 +457,27 @@ def test_a_grant_while_the_worker_resumes_wins(game, monkeypatch):
     lease(game.bob, game.red, 'request')
     carol = manager.actor_for(manager.auth.user(game.ids.carol))
     adventure = manager.registry.adventure(game.red)
-    asking = threading.Thread(target=leases.act, args=(game.red, carol, adventure, 'request'), daemon=True)
+    answers, granted, sent = [], [], []
+    asking = threading.Thread(target=lambda: answers.append(leases.act(game.red, carol, adventure, 'request')),
+                              daemon=True)
 
     def resumed(aid, action, generation):
+        sent.append(action)
         if action == 'resume':
-            # The worker call holds no turn, so Carol's request lands while it is under way.
+            # The worker call holds no turn, so Carol's grant lands while it is under way. Her answer
+            # waits for this send to end, so only the grant is awaited here. The send thread logs
+            # what it raises, so what it saw is checked below.
             asking.start()
-            asking.join(5)
-            assert not asking.is_alive()
+            deadline = time.monotonic() + 5
+            while leases.holder(game.red) != game.ids.carol and time.monotonic() < deadline:
+                time.sleep(0.01)
+            granted.append(leases.holder(game.red) == game.ids.carol)
         return worker(aid, action, generation)
     monkeypatch.setattr(leases, 'worker', resumed)
     assert control(game.alice, game.red, 'resume').status_code == 409
+    asking.join(FULL_ANSWER_SECONDS)
+    assert granted == [True] and not asking.is_alive() and answers[0]['you_hold']
+    assert sent == ['resume', 'take_control']
     assert leases.holder(game.red) == game.ids.carol and game.worker.manual
 
 
