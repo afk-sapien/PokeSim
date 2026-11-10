@@ -1,4 +1,4 @@
-"""Ice sliding, the region graph on ice maps and the escalation when no route exists."""
+"""Ice sliding, the region graph on ice maps and the attempt recorded when no route exists."""
 import os
 from types import SimpleNamespace
 
@@ -86,20 +86,19 @@ def test_exploring_a_pocket_with_no_exit_offers_no_move():
     assert Navigator(pocket).explore(snapshot(0, 0)) is None
 
 
-def test_a_policy_with_no_route_waits_then_asks_for_a_reload():
+def test_a_policy_with_no_route_records_the_attempt_without_a_reload():
     pocket = synthetic()
     pocket.maps[ROOM]['warps'] = [dict(x=3, y=2, map=HALL, warp=1)]
+    pocket.map_ids['TEST_HALL'] = HALL
     policy = Policy.__new__(Policy)
+    policy.data = pocket
     policy.nav, policy.stranded, policy.unreachable_waits = Navigator(pocket), 0, 0
-    policy.goal = SimpleNamespace(label='Reach the far door')
-    failures = []
-    policy.fail = failures.append
+    policy.collection, policy.decisions, policy.failure = {}, 0, None
+    policy.goal = SimpleNamespace(key='far_door', label='Reach the far door', map_name='TEST_HALL', x=0, y=0)
     where = SimpleNamespace(**vars(snapshot(0, 0)), map_name='Test Ice Room')
-    for _ in range(Policy.STRANDED_LIMIT - 1):
-        assert policy.stranded_action(where, None, False).button is None
-    assert not failures
-    policy.stranded_action(where, None, False)
-    assert failures == ['no route to Reach the far door from Test Ice Room'] and policy.stranded == 0
+    # The ice pocket has no way out, so the first turn with no route records the attempt.
+    assert policy.stranded_action(where, None, False).button is None
+    assert policy.no_route_waiting(policy.goal) and policy.take_failure() is None and policy.stranded == 0
 
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])

@@ -947,7 +947,7 @@ class Policy:
                            if obj['event'] not in self.data.events or not snapshot.event(obj['event'])), matches[0])
         x, y = next(((x, y) for i, x, y in snapshot.objects if i == index), (obj['x'], obj['y'])) if snapshot.map == mid else (obj['x'], obj['y'])
         grid = self.nav.collision(replace(snapshot, map=mid), self.memory if snapshot.map == mid else None)
-        choices = []
+        choices, approaches = [], []
         for face, (dx, dy) in DIRS.items():
             for distance in (1, 2):
                 point = (x - dx * distance, y - dy * distance)
@@ -957,11 +957,18 @@ class Policy:
                     continue
                 if not self.nav.passable(grid[point[1] * entry['width'] + point[0]]):
                     continue
+                approaches.append((*point, face))
                 path = self.reachable_path(snapshot, mid, point)
                 if path is not None:
                     choices.append((len(path), point[0], point[1], face))
         if not choices:
-            return Goal(key, label, map_name, x, y + 1, 'up')
+            # Every approach is blocked for now. The walk takes one the map regions join, so it waits on the
+            # people in the way. The tile below is the last resort, and a walk with no route to it is recorded.
+            cut, surf = bool(snapshot.badges & 2), bool(snapshot.badges & 8)
+            x, y, face = next(((px, py, face) for px, py, face in approaches
+                               if self.nav.regions.route(snapshot, mid, [(px, py)], cut=cut, surf=surf) is not None),
+                              (x, y + 1, 'up'))
+            return Goal(key, label, map_name, x, y, face)
         _, x, y, face = min(choices)
         return Goal(key, label, map_name, x, y, face)
 
@@ -1551,6 +1558,17 @@ class Policy:
             self.goal = self.errand or self.goal
         else:
             self.errand = None
+        if self.no_route_waiting(self.goal):
+            # The goal found no route lately (no_route). An errand gives way to the journey goal, and a goal
+            # with nothing to run instead looks around rather than walk the same missing route again.
+            if self.errand is not None and not self.no_route_waiting(journey_goal):
+                self.goal, self.errand = journey_goal, None
+            else:
+                self.decided = True
+                self.mode = 'finding another approach'
+                surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
+                path = self.nav.explore(snapshot, memory, surf=surf)
+                return self.walk(snapshot, memory, path) if path else Action(None, 0, 24)
         self.decided = True
         target =self.data.map_ids[self.goal.map_name]
         # A marathon runner covers the course on foot, so neither Fly nor Surf shortens a leg. The way
@@ -1683,12 +1701,16 @@ class Policy:
         return None
 
     def stranded_action(self, snapshot, memory, surf):
-        """No route to the goal exists from here, so look around and, in the end, ask for a reload."""
+        """No route to the goal exists from here, so end the turn and record a failed attempt on it.
+
+        When the map's regions still join the goal, only a person or a screen is in the way, so the walk
+        looks around for a while first. Neither case asks for a reload, which replayed the same missing
+        route after a full stall timeout and fed the stall watchdog.
+        """
         self.stranded += 1
-        if self.stranded >= self.STRANDED_LIMIT:
+        if self.stranded >= self.STRANDED_LIMIT or not self.joined(snapshot, surf):
             self.stranded = 0
-            self.fail(f'no route to {self.goal.label} from {snapshot.map_name}')
-            return Action(None, 0, 24)
+            return self.no_route(snapshot)
         path = self.nav.explore(snapshot, memory, surf=surf)
         if path:
             self.mode = 'finding another approach'
@@ -1698,6 +1720,29 @@ class Policy:
         self.unreachable_waits += 1
         if self.unreachable_waits >= STUCK_WAITS:
             self.mode = f'Stuck: cannot reach {self.goal.label}'
+        return Action(None, 0, 24)
+
+    def joined(self, snapshot, surf):
+        """Whether the map regions join the player to the goal's tile, people and screens aside."""
+        cut = bool(snapshot.badges & 2) and any(15 in mon.moves for mon in snapshot.party)
+        return self.nav.regions.route(snapshot, self.data.map_ids[self.goal.map_name], [(self.goal.x, self.goal.y)],
+                                      cut=cut, surf=surf) is not None
+
+    def unreachable(self):
+        """The walks that found no route lately (planning/unreachable.py), kept with the collection state."""
+        from ..planning.unreachable import DECISIONS, NoRoute
+        return NoRoute(self.collection, DECISIONS)
+
+    def no_route_waiting(self, goal):
+        """Whether ``goal`` found no route lately and waits before it is walked again."""
+        return goal is not None and self.unreachable().waiting(goal.key, goal.map_name, [(goal.x, goal.y)], self.decisions)
+
+    def no_route(self, snapshot):
+        """End the turn of a walk with no route and record the failed attempt, with its map and target."""
+        goal = self.goal
+        self.unreachable().record(goal.key, goal.map_name, [(goal.x, goal.y)], self.decisions, snapshot.map_name)
+        self.unreachable_waits = 0
+        self.mode = f'No route to {goal.label}'
         return Action(None, 0, 24)
 
     def step_off(self, snapshot, memory, surf):
