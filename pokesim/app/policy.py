@@ -150,6 +150,7 @@ ROUTE_ACTIONS = {
     ('GET', '/health/live'): 'public',
     ('GET', '/health/ready'): 'public',
     ('GET', '/api/v1/session'): 'public',
+    ('POST', '/api/v1/open-notice/dismiss'): 'library.settings',
     # The routes themselves refuse everyone but admins, with a 404 rather than a login prompt.
     ('GET', '/docs'): 'public',
     ('GET', '/openapi.json'): 'public',

@@ -53,9 +53,8 @@ def main():
                 for path in ('/', '/health/ready', '/static/library.js', '/api/v1/session'):
                     with opener.open(f'http://localhost:{port}{path}', timeout=10) as response:
                         assert response.status == 200
-                        # A fresh library has no admin yet, so the Library page sends visitors to setup.
                         if path == '/':
-                            assert response.geturl().endswith('/setup'), response.geturl()
+                            assert b'Your adventure library' in response.read()
                 request = Request(f'http://127.0.0.1:{port}/', headers={'Host': f'localhost:{port}'})
                 with opener.open(request, timeout=10) as response:
                     assert response.status == 200

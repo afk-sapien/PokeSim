@@ -1286,13 +1286,16 @@ class Coordinator:
         """Pokémon in a hand-picked trade that has not finished, as (adventure, trade key) pairs.
 
         Automatic trading never selects them, so a queued trade the owner chose does not lose
-        its Pokémon to an automatic exchange first. An open trade offer holds its Pokémon the
-        same way, and so does the Pokémon it asks for.
+        its Pokémon to an automatic exchange first. On a Library with accounts, an open trade
+        offer holds its Pokémon the same way, and so does the Pokémon it asks for. An open
+        Library has no offers, so offers stored before 0.5.0 hold nothing there.
         """
         keys = set()
         for entry in self._manual_entries():
             if entry['state'] in MANUAL_WAITING:
                 keys |= {(entry['left_id'], entry['left_key']), (entry['right_id'], entry['right_key'])}
+        if getattr(self.manager, 'auth_mode', 'none') != 'accounts':
+            return keys
         for offer in self.registry.trade_offers(statuses=('pending', 'accepted')):
             keys.add((offer['from_id'], offer['from_key']))
             if offer['to_key']:

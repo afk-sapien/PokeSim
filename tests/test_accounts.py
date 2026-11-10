@@ -525,19 +525,50 @@ def test_without_accounts_the_api_reference_stays_off_unless_turned_on(tmp_path,
     manager.close()
 
 
+def test_loopback_names_only_this_machine():
+    from pokesim.app.manager import loopback
+    assert all(map(loopback, ('127.0.0.1', '127.0.0.2', '::1', 'localhost')))
+    assert not any(map(loopback, ('0.0.0.0', '::', '192.0.2.10', 'pokesim.example.com', '')))
+
+
+def test_an_open_library_on_the_network_warns_once_until_dismissed(tmp_path, monkeypatch):
+    manager = Manager(tmp_path, 'http://testserver', auth='none')
+    monkeypatch.setattr(manager, 'start', lambda: None)
+    client = TestClient(create_app(manager))
+    # The desktop app and a server on 127.0.0.1 serve one machine, so they say nothing.
+    assert client.get('/api/v1/session').json()['setup_recommended'] is False
+    manager.listen_host = '0.0.0.0'
+    session = client.get('/api/v1/session').json()
+    assert session['setup_recommended'] is True
+    client.headers['X-PokeSim-CSRF'] = session['csrf_token']
+    assert client.post('/api/v1/open-notice/dismiss', json={}).json() == {'setup_recommended': False}
+    assert client.get('/api/v1/session').json()['setup_recommended'] is False
+    manager.close()
+    # The Library keeps the dismissal, so a restart does not bring the notice back.
+    again = Manager(tmp_path, 'http://testserver', auth='none')
+    again.listen_host = '0.0.0.0'
+    assert not again.open_notice()
+    again.close()
+
+
+def test_a_library_with_accounts_never_shows_the_open_notice(library, people):
+    library.manager.listen_host = '0.0.0.0'
+    assert not library.login('admin').get('/api/v1/session').json().get('setup_recommended')
+    assert library.login('alice').post('/api/v1/open-notice/dismiss', json={}).status_code == 403
+
+
 def older_library(root):
-    """A Library as 0.6.x left it: tables on schema 1, and nothing that says this PokeSim made it."""
+    """A Library as 0.6.x left it: tables on schema 1."""
     import sqlite3
     Manager(root).close()
     db = sqlite3.connect(root / 'app.sqlite')
     with db:
-        db.execute("DELETE FROM settings WHERE key='created_schema'")
         db.execute('PRAGMA user_version=1')
     db.close()
 
 
-def test_upgrades_stay_open_and_new_libraries_log_in(tmp_path, monkeypatch):
-    for name in ('AUTH', 'POKESIM_ADMIN_USER', 'POKESIM_ADMIN_PASSWORD'):
+def test_without_auth_a_library_stays_open_until_it_uses_accounts(tmp_path, monkeypatch):
+    for name in ('AUTH', 'POKESIM_ADMIN_USER', 'POKESIM_ADMIN_PASSWORD', 'OIDC_ISSUER', 'AUTH_PROXY_HEADER'):
         monkeypatch.delenv(name, raising=False)
     older = tmp_path / 'older'
     older_library(older)
@@ -545,12 +576,26 @@ def test_upgrades_stay_open_and_new_libraries_log_in(tmp_path, monkeypatch):
     assert reopened.auth_mode == 'none'
     reopened.close()
     fresh = Manager(tmp_path / 'fresh', auth='auto')
-    assert fresh.auth_mode == 'accounts' and fresh.needs_setup
+    assert fresh.auth_mode == 'none' and not fresh.needs_setup
+    # A login set up in the environment asks for accounts.
+    for name, value in (('OIDC_ISSUER', 'https://id.example.com'), ('AUTH_PROXY_HEADER', 'Remote-User')):
+        monkeypatch.setenv(name, value)
+        assert fresh.resolve_auth('auto') == 'accounts', name
+        monkeypatch.delenv(name)
     fresh.close()
     monkeypatch.setenv('AUTH', 'accounts')
     asked = Manager(older, auth='auto')
-    assert asked.auth_mode == 'accounts'
+    assert asked.auth_mode == 'accounts' and asked.needs_setup
     asked.close()
+    # A Library that had accounts keeps them once AUTH is unset again, even before its first admin.
+    monkeypatch.delenv('AUTH')
+    again = Manager(older, auth='auto')
+    assert again.auth_mode == 'accounts' and again.needs_setup
+    assert again.bootstrap_admin('owner', PASSWORD)['role'] == 'admin'
+    again.close()
+    later = Manager(older, auth='auto')
+    assert later.auth_mode == 'accounts' and not later.needs_setup
+    later.close()
 
 
 def test_an_upgrade_with_an_admin_in_the_environment_logs_in(tmp_path, monkeypatch):
@@ -572,15 +617,16 @@ def test_an_upgrade_with_an_admin_in_the_environment_logs_in(tmp_path, monkeypat
     half.close()
 
 
-def test_a_new_library_that_an_import_made_first_still_logs_in(tmp_path, monkeypatch):
-    monkeypatch.delenv('AUTH', raising=False)
+def test_a_library_that_an_import_made_first_stays_open(tmp_path, monkeypatch):
+    for name in ('AUTH', 'POKESIM_ADMIN_USER', 'POKESIM_ADMIN_PASSWORD', 'OIDC_ISSUER', 'AUTH_PROXY_HEADER'):
+        monkeypatch.delenv(name, raising=False)
     # `pokesim import` into an empty data directory opens the Library first, without accounts.
     with pytest.raises(ValueError, match='pokesim.sqlite'):
         run(SimpleNamespace(command='import', data_dir=tmp_path / 'library', source=tmp_path / 'missing',
                             rom=tmp_path / 'missing.gb', name='Red', stopped=True))
     assert (tmp_path / 'library' / 'app.sqlite').exists()
     server = Manager(tmp_path / 'library', auth='auto')
-    assert server.auth_mode == 'accounts' and server.needs_setup
+    assert server.auth_mode == 'none' and not server.needs_setup
     server.close()
 
 

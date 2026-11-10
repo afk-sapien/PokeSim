@@ -68,10 +68,11 @@ def create_backup(manager):
                 raise ValueError('Resolve pending interactions before creating a backup')
             manager.suspended = True
         try:
-            # A backup ends every control lease, and nobody plays by hand across one. A lease
-            # change takes its adventure's turn before the registry's lock, so end them first.
+            # With accounts a backup ends every control lease, and nobody plays by hand across
+            # one. A lease change takes its adventure's turn before the registry's lock, so end
+            # them first.
             leases = getattr(manager, 'leases', None)
-            if leases is not None:
+            if leases is not None and accounts(manager):
                 leases.end_all('backup')
             with manager.registry.lock:
                 return _create_backup(manager)
@@ -79,10 +80,21 @@ def create_backup(manager):
             manager.suspended = False
 
 
+def accounts(manager):
+    return getattr(manager, 'auth_mode', 'none') == 'accounts'
+
+
 def intended_playback(manager, aid):
-    """'pause' when the adventure should come back paused. A worker that has not run its last
-    control yet would say otherwise, so the control lease's desired state decides, and the
-    worker's summary only when the library never sent it a control."""
+    """The control that puts the adventure back as it was: 'pause', 'take_control' or None.
+
+    An open Library comes back from a backup in Take Control when it was in it. With accounts
+    the backup ended playing by hand, so only 'pause' comes back. A worker that has not run its
+    last control yet would say otherwise, so the control lease's desired state decides, and
+    the worker's summary only when the library never sent it a control.
+    """
+    if not accounts(manager):
+        status = manager.supervisor.child(aid).request('GET', '/api/summary', timeout=5)
+        return 'take_control' if status.get('manual_mode') else 'pause' if status.get('paused') else None
     leases = getattr(manager, 'leases', None)
     action = leases.intended(aid) if leases is not None else None
     if action is not None:

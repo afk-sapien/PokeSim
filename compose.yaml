@@ -9,7 +9,7 @@ services:
     environment:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:${HTTP_PORT:-8930}}
       PORT: "8000"
-      # Accounts (docs/authentication.md). Empty AUTH lets the Library decide. Remove the
+      # Accounts (docs/authentication.md). Empty AUTH stays open until accounts are set up. Remove the
       # admin pair once the first admin exists.
       AUTH: ${AUTH:-}
       AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES:-}

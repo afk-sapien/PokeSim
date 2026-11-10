@@ -10,6 +10,8 @@ from pokesim.build_info import version_label
 
 STATIC = Path(__file__).parent / 'static'
 ASSET = re.compile(r'(/static/)([A-Za-z0-9_./-]+?)(?:\?v=[A-Za-z0-9_.-]*)?"')
+# Page parts that need another person, such as trade offers. An open Library leaves them out.
+ACCOUNTS_ONLY = re.compile(r'<!--accounts-->(.*?)<!--/accounts-->', re.S)
 
 
 @lru_cache(maxsize=256)
@@ -53,8 +55,11 @@ GEN2_CONTEXT = {'dex_total': '251', 'region': 'Johto and Kanto', 'badge_total': 
 
 
 def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', viewer=False,
-                     sprite_version=SPRITE_VERSION, **context):
-    """A viewer (a /view/ link) gets the same page without library navigation or a view link."""
+                     sprite_version=SPRITE_VERSION, accounts=False, **context):
+    """A viewer (a /view/ link) gets the same page without library navigation or a view link.
+
+    The parts marked for accounts show only on a Library with accounts.
+    """
     navigation = view_link = ''
     if base_path and not viewer:
         # A compact key in the top rail: a link glyph and the words View link,
@@ -74,7 +79,7 @@ def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', 
                       f'<option value="{html.escape(adventure_id, quote=True)}">'
                       f'{html.escape(adventure_name or adventure_id)}</option></select>'
                       '</span></nav>')
-    return template(name).substitute(
+    page = template(name).substitute(
         game_base=html.escape(base_path, quote=True),
         adventure_id=html.escape(adventure_id, quote=True),
         adventure_name=html.escape(adventure_name or 'This adventure', quote=True),
@@ -89,3 +94,4 @@ def render_game_page(name, *, base_path='', adventure_id='', adventure_name='', 
             '<button id="export-save" class="key" title="Download your current progress for another emulator">'
             'Download .sav</button>'),
         view_link_control=view_link, library_nav=navigation, **{**GAME_CONTEXT, **context})
+    return ACCOUNTS_ONLY.sub(r'\1' if accounts else '', page)
