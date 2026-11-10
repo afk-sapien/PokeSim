@@ -5,6 +5,7 @@ only the gate.
 """
 import json
 import sqlite3
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -207,6 +208,36 @@ def test_a_newcomer_of_another_species_counts_against_a_rarer_release():
         copies.poll({'party': [], 'storage': {'pokemon': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in held]}},
                     lambda mon: mon['dex'], released)
     assert copies.pushed_out == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
+
+
+def test_a_release_is_judged_by_pc_score_when_the_commit_sends_one():
+    # A traded common Rattata outlasts a rarer own Pidgey by design. Its trade points outscore the Pidgey.
+    def judged(scores):
+        copies = live_soak.Copies(lambda dex, dvs: TAILS[tuple(dvs)])
+        for held, released in (([(16, RARE), (19, PLAIN)], False), ([(16, RARE), (19, PLAIN), (19, COMMON)], False),
+                               ([(19, PLAIN), (19, COMMON)], True)):
+            copies.poll({'party': [], 'storage': {'pokemon': [{'dex': dex, 'dvs': list(dvs)} for dex, dvs in held]}},
+                        lambda mon: mon['dex'], released, scores)
+        return copies.pushed_out
+    assert not judged({RARE: 50, PLAIN: 37, COMMON: 68})
+    assert judged({RARE: 116, PLAIN: 37, COMMON: 8}) == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9,
+                                                          'score': 116, 'by_score': 8}]
+    # Without scores, as from an older commit, the tails judge.
+    assert judged(None) == [{'dex': 16, 'dvs': list(RARE), 'tail': 0.2, 'by': 0.9}]
+
+
+def test_pc_scores_are_read_only_when_the_boxes_change():
+    class Child:
+        asked = 0
+
+        def request(self, method, path):
+            assert path == '/api/pokedex/status?view=pc'
+            self.asked += 1
+            return {'storage': {'pokemon': [{'dvs': list(RARE), 'pc_value': {'score': 116}}, {'dvs': list(COMMON)}]}}
+    child, game = Child(), {'storage': {'pokemon': [{'dvs': list(RARE)}, {'dvs': list(COMMON)}]}}
+    boxed, scores = live_soak._pc_scores(child, game, None)
+    assert scores == {RARE: 116} and child.asked == 1
+    assert live_soak._pc_scores(child, game, boxed) == (boxed, {}) and child.asked == 1
 
 
 def test_a_newcomer_no_release_may_take_does_not_count_against_a_release():
@@ -475,6 +506,33 @@ def test_check_needs_a_passing_report_for_that_commit(tmp_path, capsys):
     (tmp_path / f'{sha}.json').write_text(json.dumps({'commit': sha, 'passed': True}))
     assert live_soak.check(args) == 0
     assert 'no report' in capsys.readouterr().err
+
+
+def test_check_takes_a_passing_report_for_a_commit_with_the_same_tree(tmp_path, monkeypatch, capsys):
+    # A merge commit identical to its soaked head once needed a second 10 minute soak to deploy.
+    repo, reports = tmp_path / 'repo', tmp_path / 'reports'
+    repo.mkdir()
+    reports.mkdir()
+    def git(*command):
+        return subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', *command], cwd=repo,
+                              capture_output=True, text=True, check=True).stdout.strip()
+    git('init', '-q')
+    (repo / 'a.txt').write_text('one')
+    git('add', 'a.txt')
+    git('commit', '-q', '-m', 'soaked')
+    soaked = git('rev-parse', 'HEAD')
+    git('commit', '-q', '--allow-empty', '-m', 'merge with no change')
+    twin = git('rev-parse', 'HEAD')
+    (repo / 'a.txt').write_text('two')
+    git('commit', '-q', '-am', 'changed')
+    changed = git('rev-parse', 'HEAD')
+    monkeypatch.setattr(live_soak, 'ROOT', repo)
+    (reports / f'{soaked}.json').write_text(json.dumps({'commit': soaked, 'passed': True}))
+    assert live_soak.check(SimpleNamespace(sha=twin, reports=reports)) == 0
+    assert f'tree of {soaked[:7]}' in capsys.readouterr().err
+    assert live_soak.check(SimpleNamespace(sha=changed, reports=reports)) == 1
+    (reports / f'{soaked}.json').write_text(json.dumps({'commit': soaked, 'passed': False}))
+    assert live_soak.check(SimpleNamespace(sha=twin, reports=reports)) == 1
 
 
 def test_the_copy_keeps_running_adventures_and_drops_private_files():
