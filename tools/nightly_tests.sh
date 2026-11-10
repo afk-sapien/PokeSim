@@ -133,11 +133,12 @@ EOF
     out=$(mktemp)
     # The outer limit covers the wait for the heavy lock, and the inner one the tests alone.
     timeout 3h sh tools/load_gate.sh heavy timeout 2h \
-      uv run -q --locked --extra dev pytest -q -rfE -p no:cacheprovider --ignore=tests/browser -n 10 2>&1 | tee "$out"
+      uv run -q --locked --extra dev pytest -q -rfEs -p no:cacheprovider --ignore=tests/browser -n 10 2>&1 | tee "$out"
     rc=${PIPESTATUS[0]}
     summary=$(grep -E '^(=+ )?[0-9]+ (passed|failed|errors?|skipped|deselected|xfailed|xpassed|warnings?)\b.* in [0-9.]+s' "$out" | tail -1)
+    # xdist names a test in an xdist_group with an @<group> suffix, which the ids drop.
     mapfile -t bad < <(awk '/short test summary info/ {s = 1; next} s && /^(FAILED|ERROR) [^ ]/' "$out" \
-      | sed -E 's/^(FAILED|ERROR) //; s/ - .*$//' | sort -u)
+      | sed -E 's/^(FAILED|ERROR) //; s/ - .*$//; s/@[^][ @]*$//' | sort -u)
     rm -f "$out"
     case $rc in
       0 | 1) ;;
