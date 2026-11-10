@@ -37,7 +37,7 @@
   "blue/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 5.24
+   "waste": 4.0
   },
   "crystal/new_game": {
    "stall": null,
@@ -177,7 +177,7 @@
   "red/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 8.99
+   "waste": 7.54
   },
   "red/badges_8": {
    "stall": null,
@@ -192,7 +192,7 @@
   "red/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 5.95
+   "waste": 3.58
   },
   "red-randomized/new_game": {
    "stall": null,
@@ -282,7 +282,7 @@
   "yellow/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 26.55
+   "waste": 24.23
   },
   "yellow/badges_8": {
    "stall": null,
@@ -297,7 +297,7 @@
   "yellow/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 3.7
+   "waste": 1.81
   }
  }
 }

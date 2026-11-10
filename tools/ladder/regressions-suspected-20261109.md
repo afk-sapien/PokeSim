@@ -118,4 +118,11 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   Surf wastes 5688 in Yellow. The lead accepted the rise for this rung alone and its baseline moved up.
   red/badges_6 is 9.5%, inside the gate. The teach_surf and restock waste are open, and each fix brings
   the baseline back down.
+- The taught move, 2026-11-10: an HM or TM taught to a party member stays in the bag in Red, Blue and
+  Yellow, so a lesson changed no count the audit read, and every teach span was wasted. teach_strength
+  was credited only because the HM04 pickup fell in its span. The audit now counts a move a party
+  member learned as progress. teach_surf waste fell from 2502 to 0 frames in yellow/badges_6 and from
+  3480 to 1332 in red/badges_6, and teach_battle waste fell to 0 in the three post_game rungs. The
+  baseline moved down for yellow/badges_6 to 24.2%, red/badges_6 to 7.5%, red/post_game to 3.6%,
+  yellow/post_game to 1.8% and blue/post_game to 4.0%. The run itself did not change.
 - The other rungs are still open.
