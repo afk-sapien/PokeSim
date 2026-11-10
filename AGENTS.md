@@ -57,6 +57,7 @@ checkouts that might not load this file automatically.
 ## Project conventions
 
 - Never use em dashes or semicolons in authored output.
+- Pull requests do not edit `CHANGELOG.md`. Say in the description what a user sees. The release pull request writes the version's changelog section from the pull requests merged since the last tag, as [the release guide](docs/publishing.md#the-changelog) says.
 
 ## Local runs
 

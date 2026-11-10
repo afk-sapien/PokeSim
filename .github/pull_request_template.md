@@ -7,7 +7,7 @@ Describe the problem and the resulting behavior. Link the issue it fixes, if any
 - [ ] `uv run --locked pytest --ignore=tests/test_rom.py -q`
 - [ ] `uv run --locked python tools/check_web.py`
 - [ ] `uv run --locked python tools/check_docs.py`
-- [ ] User-visible changes are in `CHANGELOG.md` and the owning guide
+- [ ] User-visible changes are in the owning guide and in this description, which the release changelog is written from
 - [ ] No ROMs, saves, portrait packs, tokens, or private data are included
 
 Note any save-format change, migration, or deployment step.

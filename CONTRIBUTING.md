@@ -96,8 +96,9 @@ Generated data must retain its upstream revision and generator command. See the
 [feature guide](docs/guide.md#generated-game-data) and
 [third-party notices](THIRD_PARTY_NOTICES.md).
 
-Update the owning guide when behavior changes and add user-visible changes to
-[CHANGELOG.md](CHANGELOG.md). Keep future work in the roadmap and deployment details
+Update the owning guide when behavior changes, and describe user-visible changes in the
+pull request. The release pull request writes [CHANGELOG.md](CHANGELOG.md) from those
+descriptions, so other pull requests leave it alone. Keep future work in the roadmap and deployment details
 in validation receipts. Review `docs/release-notes.md` for the exact tag before publishing.
 
 For publishing triggers, GHCR setup, and recovery after a failed release run, see

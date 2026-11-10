@@ -11,7 +11,8 @@ Ordinary branch pushes and pull requests do not publish anything. When ready to
 release, run `python tools/release_version.py <version>`. It moves every pinned
 version together: `pyproject.toml`, the lockfile, both installers, the Dockerfile, the
 Compose files including `compose.quickstart.yaml`, `.env.example`, and the install
-commands in the docs. Then run `uv lock --check` and write the release notes. CI and the
+commands in the docs. Then run `uv lock --check`, write the release notes and write the
+version's changelog section. CI and the
 release workflow both fail while any pin differs from the package version, so a missed
 file cannot ship. Commit and merge the reviewed changes to `main`. Push a new `v<version>` tag for that exact commit, then
 create a draft release and start the publishing workflow:
@@ -29,6 +30,20 @@ Only draft releases can be built. The workflow publishes the draft after every u
 has been verified, so `/releases/latest/download/` continues to serve the previous
 completed stable release throughout validation. Public installation commands use those
 release asset URLs rather than files from `main`.
+
+### The changelog
+
+Pull requests do not edit `CHANGELOG.md`. Each one says in its description what a user sees.
+The release pull request turns `## Unreleased` into `## <version>`, keeps the entries already
+there and adds one for each user-visible pull request merged since the last tag that has none yet:
+
+```sh
+gh pr list --state merged --base main --limit 300 --json number,title,body,mergedAt \
+  --search "merged:>$(git log -1 --format=%cI v0.6.2)"
+```
+
+An entry says what changed for a player, a host or a contributor, and why, in the voice of
+the entries already there. A pull request none of them would notice gets no entry.
 
 To retry a failed run, start the workflow manually with the unchanged draft's tag.
 It refuses a version whose final image download is already attached, so inspect a
