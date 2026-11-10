@@ -24,6 +24,11 @@ def headroom(snapshot):
     return sum(BOX_CAPACITY - count for count in snapshot.box_counts)
 
 
+def room(snapshot):
+    """Free slots a catch may fill, across the party and every box (pcvalue.reserve_allows)."""
+    return headroom(snapshot) + max(6 - len(getattr(snapshot, 'party', ())), 0)
+
+
 def _letter(mon):
     attack, defense, speed, special = mon.dvs[-4:]
     first, second = attack << 4 | defense, speed << 4 | special
@@ -179,6 +184,26 @@ def keeps_another(policy, snapshot, dex, level=5, dvs=None):
     (pcvalue.keeps_new), the one every catch of an owned species asks with the wild DVs.
     """
     from .. import pcvalue
+    owned = getattr(snapshot, 'owned', None)
+    boxes = hasattr(snapshot, 'box_counts')
+    return pcvalue.keeps_new(_with_new(policy, snapshot, dex, level, dvs), missing=owned is not None and dex not in owned,
+                             headroom=headroom(snapshot) if boxes else None,
+                             active_box=getattr(snapshot, 'active_box', None), room=room(snapshot) if boxes else None)
+
+
+def reserve_allows(policy, snapshot, dex, dvs=None):
+    """Whether a catch with its own rule, as a missing entry, a missing Unown letter, a field-move
+    partner, a shiny or an item carrier is, may take a slot from the reserve (pcvalue.reserve_allows).
+    ``dvs`` may be a function, called only once the reserve is reached."""
+    from .. import pcvalue
+    if not hasattr(snapshot, 'box_counts') or room(snapshot) > pcvalue.UPGRADE_RESERVE:
+        return True
+    dvs = dvs() if callable(dvs) else dvs
+    return pcvalue.reserve_allows(_with_new(policy, snapshot, dex, dvs=dvs), room(snapshot), missing=True)
+
+
+def _with_new(policy, snapshot, dex, level=5, dvs=None):
+    """The PC rated as the next release rates it, with one more copy of ``dex`` last."""
     from ..pcvalue import Entry
     names = getattr(policy.data, 'species', {})
     origin = 'gift' if getattr(policy.data, 'game', '') == 'crystal' else 'caught'
@@ -186,12 +211,8 @@ def keeps_another(policy, snapshot, dex, level=5, dvs=None):
         origin = 'legendary'
     phantom = Entry((-1, 0), (dex, 0), names.get(dex, {}).get('name', '?'), level, dvs=tuple(dvs or ()),
                     origin=origin)
-    owned = getattr(snapshot, 'owned', None)
-    rows = (policy.pc_rated(snapshot, extra=(phantom,)) if hasattr(policy, 'pc_rated')
+    return (policy.pc_rated(snapshot, extra=(phantom,)) if hasattr(policy, 'pc_rated')
             else release_rated(policy, snapshot, extra=(phantom,)))
-    return pcvalue.keeps_new(rows, missing=owned is not None and dex not in owned,
-                             headroom=headroom(snapshot) if hasattr(snapshot, 'box_counts') else None,
-                             active_box=getattr(snapshot, 'active_box', None))
 
 
 def pending(policy, snapshot):

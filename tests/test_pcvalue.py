@@ -299,6 +299,37 @@ def test_a_release_never_takes_a_copy_rarer_than_the_catch_that_pushed_it_out():
     assert caught > 20 and pushed > 20
 
 
+@pytest.mark.parametrize('rare, common', [
+    ((88, (14, 1, 7, 5, 2), 0.7048), (19, (5, 5, 5, 5, 5), 0.7895)),
+    ((69, (5, 0, 7, 4, 11), 0.6410), (1, (6, 6, 6, 6, 6), 0.7146)),
+])
+def test_the_most_common_spare_goes_first_across_species_and_boxes(rare, common):
+    # The soak pairs: Grimer against a copy at 0.789, and Bellsprout against a spare Bulbasaur at 0.715.
+    # Both sit in one old visit band, so the open box used to send the rarer copy.
+    tails = {dvs: tail for _, dvs, tail in (rare, common)}
+    inputs = Inputs(rarity=lambda dex, dvs: tails.get(tuple(dvs), 0.05))
+    rows = [mon(rare[0], (0, 0), level=50, dvs=(15,) * 5), mon(rare[0], (0, 1), dvs=rare[1]),
+            mon(common[0], (1, 0), level=50, dvs=(15,) * 5), mon(common[0], (1, 1), dvs=common[1])]
+    rated = rate(rows, inputs)
+    for active in (0, 1, None):
+        assert [row.entry.dvs for row in pcvalue.releases(rated, 1, active)] == [common[1]]
+    # Only copies exactly as common choose by box.
+    tails[rare[1]] = common[2]
+    tied = rate(rows, inputs)
+    assert [row.entry.slot for row in pcvalue.releases(tied, 1, 0)] == [(0, 1)]
+    assert [row.entry.slot for row in pcvalue.releases(tied, 1, 1)] == [(1, 1)]
+
+
+def test_a_traded_common_copy_outlasts_a_rarer_own_spare():
+    # A stranger's trade cannot be traded back, so its points keep it over a copy rare enough to score less.
+    tails = {(1, 1, 1, 1, 1): 0.9, (2, 2, 2, 2, 2): 0.5}
+    inputs = Inputs(rarity=lambda dex, dvs: tails.get(tuple(dvs), 0.05))
+    traded = mon(19, (0, 1), dvs=(1, 1, 1, 1, 1), origin='traded')
+    own = mon(16, (1, 1), dvs=(2, 2, 2, 2, 2))
+    rated = rate([mon(16, (1, 0), dvs=(15,) * 5), own, mon(19, (0, 0), dvs=(15,) * 5), traded], inputs)
+    assert [row.entry for row in pcvalue.releases(rated, 1, 0)] == [own]
+
+
 def test_a_catch_is_refused_when_its_visit_would_release_it_or_a_rarer_copy():
     rare, common = (0, 14, 14, 14, 14), (0, 2, 2, 2, 2)
     better = mon(19, (9, 0), 5, dvs=(0, 12, 12, 12, 12))
@@ -322,3 +353,38 @@ def test_a_catch_visit_comes_only_once_the_reserve_is_spent():
     assert pcvalue.catch_visit(1) == BOX_REFILL
     assert pcvalue.catch_visit(BOX_RESERVE + 1, requests=3) == 0
     assert pcvalue.catch_visit(1, requests=BOX_REFILL + 2) == BOX_REFILL + 2
+
+
+# A PC like Silver's: every boxed Pokémon the only copy of its species, so nothing may go.
+ONLY_COPIES = [mon(16, (0, 0), dvs=HELD), *(mon(dex, (0, dex)) for dex in range(20, 38))]
+
+
+def test_the_last_slot_takes_an_upgrade_even_when_every_boxed_copy_is_the_only_one():
+    reserve = pcvalue.UPGRADE_RESERVE
+    rows = rate([*ONLY_COPIES, mon(16, (-1, 0), dvs=RAREST)], TABLE)
+    assert pcvalue.deadlocked(rate(ONLY_COPIES, TABLE), 0) and pcvalue.upgrade(rows)
+    assert pcvalue.keeps_new(rows, headroom=reserve, room=reserve)
+    # The copy it replaces is the one spare, so the visit after the catch releases it first.
+    assert [row.entry for row in pcvalue.releases(rows, 1)] == [ONLY_COPIES[0]]
+    # A copy not rare enough is no upgrade, and a trained copy it would replace cannot go.
+    assert not pcvalue.keeps_new(rate([*ONLY_COPIES, mon(16, (-1, 0), dvs=RARER)], TABLE), room=reserve)
+    trained = Entry(**{**vars(ONLY_COPIES[0]), 'stat_exp': (30000,) * 5})
+    assert not pcvalue.keeps_new(rate([trained, *ONLY_COPIES[1:], mon(16, (-1, 0), dvs=RAREST)], TABLE), room=reserve)
+
+
+def test_only_an_upgrade_may_take_the_reserved_slot():
+    # A copy a plan's demand keeps is no upgrade, so it waits for room.
+    needed = Inputs(demand={16: 2}, rarity=TABLE.rarity)
+    rows = rate([*ONLY_COPIES, mon(16, (-1, 0), dvs=(0, 2, 2, 2, 2))], needed)
+    assert pcvalue.keeps_new(rows) and pcvalue.keeps_new(rows, room=pcvalue.UPGRADE_RESERVE + 1)
+    assert not pcvalue.keeps_new(rows, room=pcvalue.UPGRADE_RESERVE)
+
+
+def test_a_missing_entry_takes_the_reserved_slot_only_when_a_release_can_follow():
+    reserve = pcvalue.UPGRADE_RESERVE
+    rows = rate([*ONLY_COPIES, mon(99, (-1, 0))], TABLE)
+    assert not pcvalue.reserve_allows(rows, reserve, missing=True)
+    assert pcvalue.reserve_allows(rows, reserve + 1, missing=True)
+    assert pcvalue.boxes_full(True, reserve) and not pcvalue.boxes_full(True, reserve + 1)
+    spare = rate([*ONLY_COPIES, mon(16, (0, 40), dvs=(0, 2, 2, 2, 2)), mon(99, (-1, 0))], TABLE)
+    assert pcvalue.reserve_allows(spare, reserve, missing=True)

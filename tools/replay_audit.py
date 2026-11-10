@@ -22,9 +22,9 @@ Use ``--reseed-goals`` whenever two code versions are compared. Without it a few
 shift the game's random numbers, so a later hunt meets its Pokémon sooner or later by luck alone. With it,
 each time the audit sees a goal start it reseeds the policy's own generator, restarts the divider register
 the game mixes into its rolls, and from then on writes the next number of a seeded stream into the game's
-random bytes (hRandomAdd and hRandomSub) at every VBlank. The seed comes from the save name, the goal key
-and how many times that goal started before, so the same goal on the same save meets the same rolls frame
-for frame in both versions. Rolls still differ once the two policies act differently, and an encounter
+random bytes (hRandomAdd and hRandomSub) at every VBlank. The seed comes from the save name, ``--seed``,
+the goal key and how many times that goal started before, so the same goal on the same save and seed meets
+the same rolls frame for frame in both versions, and another ``--seed`` meets other rolls. Rolls still differ once the two policies act differently, and an encounter
 at another frame meets another roll. ``--lead-in`` idles that many frames
 before the policy starts, which fakes a timing change for checking how well the seeds hold. Both options
 exist only in this tool, so the application never reseeds a game.
@@ -142,8 +142,10 @@ class GoalSeeds:
     stay apart for the rest of the goal. Writing each frame keeps any such difference inside one frame.
     """
 
-    def __init__(self, save):
-        self.save = save
+    def __init__(self, save, seed=7):
+        # Seed 7, the default, keeps the save name alone, so runs made before the seed joined the key
+        # still compare with new ones.
+        self.save = save if seed == 7 else f'{save}\nseed {seed}'
         self.starts = Counter()
         self.stream = None
         self.hooked = None
@@ -285,7 +287,7 @@ def run_one(args, watch=None):
     from pokesim.planning.monitor import Monitor
     run, read, game = _open(Path(args.rom), Path(args.state), args.data_root, args.seed, args.fair_wild_dvs)
     idle(run, args.lead_in)
-    seeds = GoalSeeds(Path(args.state).name) if args.reseed_goals else None
+    seeds = GoalSeeds(Path(args.state).name, args.seed) if args.reseed_goals else None
     monitor = Monitor()
     start = run.frame
     titles, spans, wasted = {}, Counter(), Counter()

@@ -19,7 +19,7 @@ from .naming import Naming
 from .kanto import journey as kanto_journey
 from .menus import (MAX_STEPS, RADIO_MAX_STEPS, SLOT_MAX_STEPS, TASKS, Attack, Buy, ChangeBox, DayCare, FieldMove, Flee, Fly, Release,
                     Forget, Give, Lead, Learn, PutAway, Radio, Remedy, Sell, Send, ShowPartner, Storage, Take, Teach, Throw,
-                    Toss, Use, choose,
+                    Toss, Use, UseOn, choose,
                     close_pc, menu_label, restore)
 
 STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) before reporting a blocked objective
@@ -123,6 +123,8 @@ class Policy:
         self.rescue = deque()
         # Why the wild shiny in this battle cannot be caught, read by the emulator for its notice.
         self.shiny_missed = None
+        # A missing entry was left uncaught because only the upgrade slot was free and nothing may go.
+        self.boxes_full = False
         # Run attempts the battle stance made: failed tries in this battle, whether one is under
         # way, and counts over the whole run that the replay audit reads.
         self.flee_tries, self.fleeing = 0, False
@@ -1048,8 +1050,10 @@ class Policy:
         """A walk that trains toward the bar before the boss ``goal`` names, or None once the team is ready.
 
         Inside the League nothing turns back, so its rooms carry on."""
-        if goal is None or goal.key not in self.BOSSES or self.in_league(snapshot):
+        if goal is None or self.in_league(snapshot):
             return None
+        if goal.key not in self.BOSSES:
+            return self.story_training(snapshot, goal)
         bar = self.boss_bar(goal.key)
         if self.fighter_level(snapshot.party) >= bar:
             return None
@@ -1058,19 +1062,39 @@ class Policy:
         return walk_goal(self, snapshot, Goal, lambda: f'Train the team to level {bar} before {self.BOSS_NAMES[key]}',
                          map_name=self.BOSS_TRAINING[key])
 
+    # The badge each boss goal earns, in the order the story takes them. A story loss trains where
+    # the team would before the first one not yet won, or the League before the first Hall of Fame.
+    BOSS_BADGES = (('zephyr', 1), ('hive', 2), ('plain', 4), ('fog', 8), ('storm', 32), ('mineral', 16),
+                   ('glacier', 64), ('clair', 128), ('league', 0), ('surge', 1024), ('sabrina', 8192),
+                   ('erika', 2048), ('janine', 4096), ('misty', 512), ('brock', 256), ('blaine', 16384),
+                   ('blue', 32768))
+
+    def story_training(self, snapshot, goal):
+        """A walk that trains before a story goal the rival or a Rocket executive beat the team on, or None."""
+        if goal.key not in self.losses.levels():
+            return None
+        bar = self.losses.bar(goal.key, 0)
+        if self.fighter_level(snapshot.party) >= bar:
+            return None
+        key = next((key for key, badge in self.BOSS_BADGES
+                    if not (snapshot.badges & badge if badge else getattr(snapshot, 'hall_of_fame_count', 0))), 'red')
+        from .training import walk_goal
+        return walk_goal(self, snapshot, Goal, lambda: f'Train the team to level {bar} before another try at: {goal.label}',
+                         map_name=self.BOSS_TRAINING[key])
+
     def note_boss_loss(self, snapshot):
         """Remember the best fighter level that lost to the boss the goal names, which raises its bar.
 
         A loss is a black out or a battle that cannot end in the boss's room, or anywhere in the League.
-        A reload into a battle leaves no goal yet, so then the room alone names the boss."""
-        key, here = getattr(self.goal, 'key', None), self.constant(snapshot)
-        if key not in self.BOSSES:
-            key = self.BOSS_ROOMS.get(here)
-            if key is None:
-                return
-        elif here != self.goal.map_name and not self.in_league(snapshot):
-            return
-        self.losses.note(self.boss_key(key), self.fighter_level(snapshot.party))
+        A reload into a battle leaves no goal yet, so then the room alone names the boss. A loss to the
+        rival or a Rocket executive elsewhere counts against the goal under way, which waits on the win."""
+        from ..planning.losses import boss_trainer
+        goal, here = getattr(self.goal, 'key', None), self.constant(snapshot)
+        key = goal if goal in self.BOSSES else self.BOSS_ROOMS.get(here)
+        if key is not None and (key != goal or here == self.goal.map_name or self.in_league(snapshot)):
+            self.losses.note(self.boss_key(key), self.fighter_level(snapshot.party))
+        elif goal is not None and boss_trainer(snapshot, 2) is not None:
+            self.losses.note(goal, self.fighter_level(snapshot.party), snapshot.enemy_level)
 
     def heal_blocked(self, snapshot):
         """Whether healing stands down here: the League, the transmitter room, Ice Path, the Goldenrod
@@ -1087,11 +1111,12 @@ class Policy:
     def boss_ready(self, snapshot, blocked):
         """The boss check before the goal under way (planning/boss.py): READY, HEAL or UNREADY.
 
-        HEAL needs a Pokémon Center the heal walk can reach. UNREADY goes in anyway, and the journal
-        says so once per leg. Each Pokémon Center the party steps into starts a leg with fresh trips.
+        HEAL needs a Pokémon Center the heal walk can reach, or, between League rooms, an item in the bag
+        that treats a short fighter (league_items). UNREADY goes in anyway, and the journal says so once
+        per leg. Each Pokémon Center the party steps into starts a leg with fresh trips.
         """
         from ..planning import boss
-        from .ledger import fighters
+        from .ledger import fighters, league_treatment
         gate = getattr(self, 'boss_gate', None)
         if gate is None:
             gate = self.boss_gate = boss.Gate()
@@ -1099,8 +1124,9 @@ class Policy:
         key = goal.key if goal is not None and goal.key in self.BOSSES else None
         party = fighters(self.data, snapshot)
         at_center = self.data.maps.get(snapshot.map, {}).get('constant', '').endswith('POKECENTER_1F')
+        supply = key is not None and self.in_league(snapshot) and league_treatment(self.data, snapshot) is not None
         verdict = gate.decide(key, party, lambda: not blocked and self.center(snapshot) is not None,
-                              where=snapshot.map, center=at_center)
+                              where=snapshot.map, center=at_center, supply=supply)
         surveying = getattr(self, 'ladder_survey', False)
         if verdict == boss.UNREADY and not surveying and gate.note():
             from .collection import pin_events
@@ -1478,7 +1504,7 @@ class Policy:
             if task is not None and self.allowed(task, snapshot):
                 self.menu = task
                 return Action(None, 0, 24)
-        if self.in_league(snapshot) and self.remedy(snapshot):
+        if self.in_league(snapshot) and (self.league_items(snapshot) or self.remedy(snapshot, cures=True)):
             return Action(None, 0, 24)
         if self.errand_allowed(snapshot, mem):
             prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
@@ -1667,14 +1693,31 @@ class Policy:
         self.nav.issued(snapshot, path[0])
         return Action(path[0], 16, 16)
 
-    def remedy(self, snapshot, *, active=None):
+    def league_items(self, snapshot):
+        """Use the next item between League rooms (planning/boss.py treatment): a Revive for a fainted
+        fighter, a restore up to the boss check's bar, or an Ether or Elixir for spent strong moves."""
+        from .ledger import league_treatment
+        found = league_treatment(self.data, snapshot)
+        if found is None:
+            return False
+        slot, item, move = found
+        count = dict(snapshot.items)[item]
+        task = UseOn(item, slot, count, move) if move is not None else Remedy(item, slot, count)
+        if not self.allowed(task, snapshot):
+            return False
+        self.menu = task
+        return True
+
+    def remedy(self, snapshot, *, active=None, cures=False):
+        """Use a remedy on a party member, or on the one in battle when ``active`` is set. With ``cures``
+        only status cures, which league_items leaves to it."""
         items = dict(snapshot.items)
         for slot, mon in enumerate(snapshot.party):
-            if mon.egg or active is not None and slot != active:
+            if mon.egg or active is not None and slot != active or cures and (mon.hp == 0 or not mon.status):
                 continue
             names = ()
             from .champion_shop import elixir
-            restore = elixir(self.data, snapshot, mon)
+            restore = None if cures else elixir(self.data, snapshot, mon)
             # A remedy the game refused recently is skipped like any other refused shortcut, or the
             # battle would rebuild it every decision and never press a button.
             if restore and self.allowed(task := Remedy(restore, slot, items[restore]), snapshot):
@@ -1682,7 +1725,7 @@ class Policy:
                 return True
             if mon.hp == 0:
                 names = ('MAX_REVIVE', 'REVIVE')
-            elif mon.hp < mon.max_hp * (0.55 if snapshot.in_battle else 0.8):
+            elif not cures and mon.hp < mon.max_hp * (0.55 if snapshot.in_battle else 0.8):
                 names = ('FULL_RESTORE', 'MAX_POTION', 'HYPER_POTION', 'SUPER_POTION', 'POTION')
             elif mon.status:
                 names = ('FULL_RESTORE', 'FULL_HEAL', 'ANTIDOTE' if mon.status & 8 else
@@ -1743,6 +1786,14 @@ class Policy:
         from .ledger import spare_throw
         if catch and not partner and not shiny and not spare_throw(self.data, snapshot, snapshot.enemy_species):
             catch = False
+        if catch and not upgrade:
+            # The last free slot is kept for an upgrade. Any other catch takes it only when a release can
+            # follow, and a missing entry refused asks the owner for help (boxes_full).
+            from .release import reserve_allows
+            catch = reserve_allows(self, snapshot, catch_species, lambda: wild_dvs(mem.read('wEnemyMonDVs', 2)))
+            self.boxes_full = not catch and catch_species not in snapshot.owned
+        elif catch:
+            self.boxes_full = False
         # A shiny that cannot be caught is run from, as Red, Blue and Yellow do, never knocked out.
         # The Bug-Catching Contest uses Park Balls and has its own rules in contest.control.
         self.shiny_missed = (self.shiny_miss_reason(snapshot)

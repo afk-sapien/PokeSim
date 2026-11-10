@@ -273,3 +273,104 @@ def test_gen2_logs_a_pp_heal_at_the_center(gen2, monkeypatch):
     rows = [row for row in pin_events(policy) if row['title'].startswith('PP heal')]
     assert len(rows) == 1 and rows[0]['title'] == f"PP heal at {gen2.maps[mid]['name']}"
     assert rows[0]['priority'] == 1 and rows[0]['notable'] is False
+
+
+def test_the_league_kit_spends_half_the_spare_money():
+    # 1431 spare at Hyper Potion prices buys nothing: half of it is under one potion.
+    assert boss.kit(0, 0, 1431, 1200, 1500) == (0, 0)
+    assert boss.kit(0, 0, 14856, 1200, 1500) == (5, 0)
+    assert boss.kit(0, 0, 40000, 1200, 1500) == (5, 2)
+    # Restores and Revives already in the bag count toward the kit.
+    assert boss.kit(4, 1, 40000, 1200, 1500) == (1, 1)
+    assert boss.kit(9, 3, 40000, 1200, 1500) == (0, 0)
+    # Bought over several trips, the kit stops at the same share of the money.
+    bag, money = 0, 6000
+    while boss.kit(bag, 0, money, 1200, 1500)[0]:
+        bag, money = bag + 1, money - 1200
+    assert (bag, money) == (2, 3600)
+
+
+HYPER = boss.Medicine(16, boss.RESTORE, 200)
+SUPER = boss.Medicine(17, boss.RESTORE, 50)
+FULL = boss.Medicine(14, boss.RESTORE)
+REVIVE = boss.Medicine(39, boss.REVIVE, 50)
+ETHER = boss.Medicine(63, boss.ETHER, 10)
+ELIXIR = boss.Medicine(65, boss.ELIXIR, 10)
+STRENGTHS = (90, 70, 0, 0)
+
+
+def member(hp, pp=(15, 15, 30, 20), level=60):
+    return boss.Member(level, hp, 180, STRENGTHS, pp, MAX_PP)
+
+
+def test_league_items_revive_first_then_lift_past_the_bar():
+    filler = boss.Member(7, 0, 25, (20, 0, 0, 0), (35, 0, 0, 0), (35, 0, 0, 0))
+    party = (member(30), member(0), filler)
+    assert boss.treatment(party, (SUPER, HYPER, REVIVE)) == (1, REVIVE, None)
+    # The smallest restore that lifts 30 of 180 HP past half is a Hyper Potion. A Super Potion lifts 60.
+    assert boss.treatment(party[:1], (FULL, SUPER, HYPER)) == (0, HYPER, None)
+    assert boss.treatment((member(60),), (FULL, SUPER, HYPER)) == (0, SUPER, None)
+    # With no restore that lifts it, the largest one goes in.
+    assert boss.treatment((member(10),), (SUPER,)) == (0, SUPER, None)
+    # A fainted level 7 filler is not worth a Revive.
+    assert boss.treatment((member(180), filler), (REVIVE,)) is None
+    assert boss.treatment((member(180),), (HYPER, REVIVE, ETHER)) is None
+
+
+def test_league_items_restore_the_spent_strong_move():
+    # Flamethrower is spent and Strength is full: an Ether on Flamethrower, not an Elixir.
+    assert boss.treatment((member(180, (2, 14, 30, 20)),), (ETHER, ELIXIR)) == (0, ETHER, 0)
+    # Both strong attacks spent takes the Elixir.
+    assert boss.treatment((member(180, (1, 1, 30, 20)),), (ETHER, ELIXIR)) == (0, ELIXIR, None)
+    assert boss.treatment((member(180, (1, 1, 30, 20)),), (ETHER,)) == (0, ETHER, 0)
+    assert boss.treatment((member(180, (1, 1, 30, 20)),), (HYPER, REVIVE)) is None
+
+
+def test_the_bag_heals_where_no_center_is_in_reach():
+    gate = boss.Gate()
+    low = (boss.fighter(60, 180, list(STRENGTHS), [15, 15, 30, 20], list(MAX_PP)),)
+    for _ in range(boss.TRIPS + 2):
+        assert gate.decide('league_will', low, lambda: False, where=1, supply=True) == boss.HEAL
+    assert gate.trips == 0
+    assert gate.decide('league_will', low, lambda: False, where=1) == boss.UNREADY
+
+
+def league_policy(gen2, key='league_will'):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(gen2, seed=1, starter='cyndaquil')
+    policy.goal = SimpleNamespace(key=key, label='Challenge Will', map_name='WILLS_ROOM')
+    return policy
+
+
+def league_snapshot(gen2, party, items=(), money=0, room='WILLS_ROOM'):
+    return SimpleNamespace(map=gen2.map_ids[room], x=5, y=5, frame=0, badges=255, party=party, items=tuple(items),
+                           pockets={'items': tuple(items), 'balls': ()}, money=money, hall_of_fame_count=0,
+                           can_catch=False, in_battle=0, owned=(), stored=(), event=lambda name: True)
+
+
+def test_gen2_buys_the_league_kit_before_the_first_room(gen2):
+    from pokesim.gen2 import ledger
+    policy = league_policy(gen2)
+    lobby = league_snapshot(gen2, (gen2_mon(180, (15, 15, 30, 20)),), money=14856, room='INDIGO_PLATEAU_POKECENTER_1F')
+    assert ledger.supplies(policy, lobby) == [('potions', ('HYPER_POTION',), 5)]
+    stocked = league_snapshot(gen2, lobby.party, items=((gen2.items['HYPER_POTION'], 5),), money=14856)
+    assert ledger.supplies(policy, stocked) == [('revives', ('REVIVE',), 2)]
+    # Back from a loss to Lance, a training goal shops by the same kit: half of 7133 buys two.
+    training = league_policy(gen2, 'collection_train')
+    back = league_snapshot(gen2, lobby.party, money=7133, room='INDIGO_PLATEAU_POKECENTER_1F')
+    assert ledger.supplies(training, back) == [('potions', ('HYPER_POTION',), 2)]
+
+
+def test_gen2_uses_league_items_between_rooms(gen2):
+    from pokesim.gen2.menus import Remedy, UseOn
+    policy = league_policy(gen2)
+    hyper, ether = gen2.items['HYPER_POTION'], gen2.items['ETHER']
+    hurt = league_snapshot(gen2, (gen2_mon(40, (15, 15, 30, 20)),), items=((hyper, 2), (ether, 1)))
+    assert policy.league_items(hurt) and policy.menu == Remedy(hyper, 0, 2)
+    spent = league_snapshot(gen2, (gen2_mon(180, (1, 15, 30, 20)),), items=((hyper, 2), (ether, 1)))
+    found = policy.league_items(spent) and policy.menu
+    assert isinstance(found, UseOn) and (found.item, found.slot, found.move) == (ether, 0, 0)
+    assert not policy.league_items(league_snapshot(gen2, (gen2_mon(180, (15, 15, 30, 20)),), items=((hyper, 2),)))
+    # A short fighter the bag can treat is healed in the room, not sent in unready.
+    assert policy.boss_ready(hurt, True) == boss.HEAL
+    assert policy.boss_ready(league_snapshot(gen2, (gen2_mon(40, (15, 15, 30, 20)),)), True) == boss.UNREADY

@@ -62,6 +62,26 @@ def test_gen1_safari_catch_asks_verdict(refuse):
     assert policy._dispatch(state, Screen(memory), 'safari', memory)[0].button == 'right'
 
 
+def test_gen1_a_missing_entry_waits_when_only_the_upgrade_slot_is_free():
+    from pokesim.emulator import Emulator
+    # A full party and one free box slot, with nothing boxed that may go.
+    party = tuple(mon(level=50) for _ in range(6))
+    state = collection(party=party, stored_pokemon=(), box_counts=(20,) * 11 + (19,), active_box=11,
+                       boxed_pokemon=((sid(1), 50),) * 19)
+    policy, mem = StrategicPolicy(7), wild()
+    enemy = mon(species=sid(25), types=(23, 23), level=30, hp=1, moves=(), pp=())
+    reserve = policy._reserve(state, sid(25), mem)
+    assert choose_battle(state, party[0], enemy, 0, collect_missing=True).kind == 'item'
+    assert choose_battle(state, party[0], enemy, 0, collect_missing=True, reserve=reserve).kind != 'item'
+    emulator = SimpleNamespace(paused=False, manual_mode=False, stall=None, loop_guard=None, policy=policy, snapshot=state)
+    assert policy.boxes_full and Emulator.help_request(emulator, {'action': 'battle'})['reason'] == pcvalue.BOXES_FULL
+    # With two slots free it is caught as before, and the request clears.
+    roomy = replace(state, box_counts=(20,) * 11 + (18,), boxed_pokemon=((sid(1), 50),) * 18)
+    assert choose_battle(roomy, party[0], enemy, 0, collect_missing=True,
+                         reserve=policy._reserve(roomy, sid(25), mem)).kind == 'item'
+    assert not policy.boxes_full and Emulator.help_request(SimpleNamespace(**{**vars(emulator), 'snapshot': roomy}), {}) is None
+
+
 def test_an_incoming_trade_asks_verdict(refuse):
     policy = SimpleNamespace(pc_rated=lambda snapshot, extra=(): pcvalue.rate(list(extra)))
     game = SimpleNamespace(emu=SimpleNamespace(policy=policy, snapshot=SimpleNamespace(owned={16})))
@@ -102,3 +122,31 @@ def test_gen2_battle_catch_of_an_owned_species_asks_verdict(refuse, real_data, r
     refuse()
     assert not keeps_another(policy, snapshot, 157, dvs=(15,) * 5)
     assert policy.battle(snapshot, mem).button != throw
+
+
+def test_gen2_a_missing_entry_waits_when_only_the_upgrade_slot_is_free(real_data):
+    from pokesim.gen2.policy import Policy
+    from pokesim.gen2.release import room
+    policy = Policy(real_data)
+    policy.battle_task = lambda task, snapshot, mem: SimpleNamespace(button=task.key())
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda *args: None
+    policy.remedy = lambda *args, **kwargs: False
+    # Nothing boxed may go, as when every box holds only copies.
+    floor = pcvalue.Entry((0, 0), (16, 0), 'Pidgey', 5, dvs=(8,) * 5)
+    policy.pc_rated = lambda snapshot, extra=(): pcvalue.rate([floor, *extra])
+    from pokecore.gen2.ram import Mon
+    party = (Mon(16, 'PIDGEY', 50, 150, 150, 0, 0, (33, 0, 0, 0), (35, 0, 0, 0), (0,) * 4,
+                 (150, 80, 80, 80, 80, 80), 125000, (8,) * 4, (0,) * 5, 1, 70),) * 6
+    snapshot = SimpleNamespace(party=party, stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
+        in_battle=1, enemy_species=157, owned={16}, can_catch=True, badges=65535, money=10000,
+        box_counts=(20,) * 13 + (19,), active_box=13, pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
+    mem = SimpleNamespace(byte=lambda name: 0, read=lambda name, size: b'\xff' * size)
+    throw = ('Throw', real_data.items['POKE_BALL'])
+    assert room(snapshot) == pcvalue.UPGRADE_RESERVE
+    assert policy.battle(snapshot, mem).button != throw and policy.boxes_full
+    assert pcvalue.boxes_full(policy.boxes_full, room(snapshot))
+    # With a spare to release after it, the missing entry is caught and the request clears.
+    spare = pcvalue.Entry((0, 1), (16, 0), 'Pidgey', 5, dvs=(1,) * 5)
+    policy.pc_rated = lambda snapshot, extra=(): pcvalue.rate([floor, spare, *extra])
+    assert policy.battle(snapshot, mem).button == throw and not policy.boxes_full

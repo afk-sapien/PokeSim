@@ -49,10 +49,6 @@ FOCUS_COPIES = 2
 # Stat experience summed over the five stats that counts as fully trained. A trained copy is never
 # released automatically.
 TRAINED_STAT_EXP = 100000
-# Release values this close count as equal when choosing a PC visit, so it stays in one box. Each box
-# change saves the game, about 4000 frames. It equals one RARITY_STEP of rarity points, so a copy
-# twice as rare never shares a band with the one it replaced.
-VISIT_BAND = 50
 # A new copy of a species already held is kept only when it is at least this many times rarer than
 # the rarest copy held.
 RARITY_STEP = 2
@@ -285,13 +281,50 @@ class VisitTeam:
         self.errands |= {key}
 
 
-def keeps_new(rows, *, missing=False, headroom=None, active_box=None):
+def keeps_new(rows, *, missing=False, headroom=None, active_box=None, room=None):
     """The one rule for a new copy of an owned species, the last of ``rows``: whether the PC keeps it
     at the visit it brings (verdict). Every catch of an owned species in both gens and an incoming
     trade ask it. ``headroom`` is the free box slots before it, or None when the snapshot does not
-    show them. Rarity has no level term, so a higher level copy is no better."""
+    show them. ``room`` is the free party and box slots a catch may fill (reserve_allows). Rarity has
+    no level term, so a higher level copy is no better."""
     needed = 0 if headroom is None else catch_visit(headroom, len(requested(rows)))
-    return verdict(rows, missing=missing, needed=needed, active_box=active_box).keep
+    return (verdict(rows, missing=missing, needed=needed, active_box=active_box).keep
+            and reserve_allows(rows, room, missing=missing))
+
+
+# Free slots, across the party and every box, that only an upgrade may fill. When the boxes fill with
+# only copies, as Silver's did, the last slot still lets a better copy in, and the copy it replaces
+# goes at the next release.
+UPGRADE_RESERVE = 1
+
+
+def upgrade(rows):
+    """Whether the new copy, the last of ``rows``, is a strictly better copy of its species: it takes
+    the best or rarest copy's place, and a copy it replaces may now go (may_go)."""
+    new = rows[-1]
+    if new.reason not in BETTER or not verdict(rows).keep:
+        return False
+    return any(may_go(row) for row in rows[:-1] if row.entry.group == new.entry.group and not row.entry.egg)
+
+
+def reserve_allows(rows, room, *, missing=False):
+    """Whether a catch of the new copy, the last of ``rows``, may take a slot when ``room``, the free
+    party and box slots, is down to UPGRADE_RESERVE. Only an upgrade may. A missing entry, and any
+    catch with its own rule, may also when a release can follow it, so the slot comes back. None for
+    ``room`` allows every catch."""
+    if room is None or room > UPGRADE_RESERVE or upgrade(rows):
+        return True
+    return missing and any(row is not rows[-1] for row in releases(rows, 1))
+
+
+# The help request both gens raise when a missing entry is left uncaught for want of a slot.
+BOXES_FULL = 'Boxes full'
+
+
+def boxes_full(refused, room):
+    """Whether to ask the owner for help: a missing entry was ``refused`` its catch by reserve_allows and
+    ``room``, the free party and box slots, is still down to UPGRADE_RESERVE."""
+    return bool(refused) and room is not None and room <= UPGRADE_RESERVE
 
 
 def verdict(rows, *, missing=False, needed=0, active_box=None):
@@ -367,14 +400,15 @@ def requested(rated):
 def releases(rated, needed, active_box=None):
     """The ``needed`` lowest-value releases, ordered for one PC visit.
 
-    Values within VISIT_BAND count as equal, and among equal values the open box goes first, then the
-    box holding the most of them, since every box change saves the game. The visit takes the owner's
-    requests first, then the open box, then the box holding the most of the chosen ones.
+    The lowest score goes first, of any species and in any box, since a release cannot be undone and
+    a box change only costs frames. Only copies with the same score choose by box: the open box first,
+    then the box holding the most of them. The visit takes the owner's requests first, then
+    the open box, then the box holding the most of the chosen ones.
     """
     candidates = list(filter(may_go, rated))
-    band = lambda row: (not row.entry.requested, ORDER.get(row.status, 0), row.score // VISIT_BAND)  # noqa: E731
-    per_band = Counter((band(row), row.entry.slot[0]) for row in candidates)
-    order = lambda row: (band(row), row.entry.slot[0] != active_box, -per_band[band(row), row.entry.slot[0]],  # noqa: E731
+    tier = lambda row: (not row.entry.requested, ORDER.get(row.status, 0), row.score)  # noqa: E731
+    per_tier = Counter((tier(row), row.entry.slot[0]) for row in candidates)
+    order = lambda row: (tier(row), row.entry.slot[0] != active_box, -per_tier[tier(row), row.entry.slot[0]],  # noqa: E731
                          _rank(row), row.entry.slot)
     chosen = sorted(candidates, key=order)[:max(needed, 0)]
     per_box = Counter(row.entry.slot[0] for row in chosen)

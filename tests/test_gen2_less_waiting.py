@@ -15,6 +15,13 @@ def data(request):
     return GameData.load(directory, request.param)
 
 
+@pytest.fixture(autouse=True)
+def site(monkeypatch):
+    """These fakes carry no navigation, so every training site is taken as reachable (test_gen2_training_sites checks it)."""
+    from pokesim.gen2 import training
+    monkeypatch.setattr(training, 'site', lambda policy, snapshot, project, mon: project.get('map') or training.SITE)
+
+
 def mon(species, *, box=0, position=0, level=30, dvs=(10, 10, 10, 10, 10), **extra):
     fields = dict(species=species, name=str(species), gender='Male', egg=False, box=box, position=position, trainer_id=4321,
                   dvs=dvs, moves=(33, 0, 0, 0), pp=(35, 0, 0, 0), level=level, friendship=70, held_item=0,
@@ -194,7 +201,7 @@ def test_a_time_of_day_encounter_names_the_species_and_the_time(data):
 def walk_anywhere(monkeypatch):
     from pokesim.gen2 import training
     from pokesim.gen2.policy import Goal
-    monkeypatch.setattr(training, 'walk_goal', lambda policy, snapshot, Goal_, label: Goal(
+    monkeypatch.setattr(training, 'walk_goal', lambda policy, snapshot, Goal_, label, **spot: Goal(
         'collection_train', label(), 'SILVER_CAVE_ROOM_1', 9, 31))
 
 

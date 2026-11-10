@@ -18,17 +18,17 @@ from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner,
 from .move_development import hm_upgrade, move_name
 from .progression import (GAME_STARTERS, STARTERS, YELLOW, Goal, boss_key, boss_room, boss_training, fighter_level,
                           healing_goal, journey, league_partner, milestones, story_goal)
-from ..planning.losses import Losses
+from ..planning.losses import Losses, boss_trainer
 from . import training
 from .menus import select, tap
 from .shopping import ShoppingController
 from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
-from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, improves, legendary_project, snorlax_project
+from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, improves, legendary_project, reserve_allows, snorlax_project
 from ..planning import values
 from ..planning import arbiter
 from ..planning import boss
-from .ledger import battle_room, fighters
+from .ledger import battle_room, fighters, league_treatment
 from ..planning.ledger import PP
 from ..planning.arbiter import Candidate, Tier
 from ..planning.monitor import STOOD_DOWN
@@ -312,6 +312,8 @@ class StrategicPolicy(Policy):
         self.release_spare = None
         # Its (species, PC value text) for the journal, and whether the PC is full with nothing that may go.
         self.release_note, self.pc_deadlock = None, False
+        # A missing entry was left uncaught because only the upgrade slot was free and nothing may go.
+        self.boxes_full = False
         # The note of the release last started, which the journal quotes once it lands.
         self.released_note = None
         self.pending_trade_key = None
@@ -719,10 +721,11 @@ class StrategicPolicy(Policy):
             missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
             targeted = self.collection.repeat_target(s.enemy_species, s.map, s, enemy_dvs(mem),
                                                      self.catch_rating(s)) == s.enemy_species
-            if not s.can_catch or not (s.enemy_shiny or missing or targeted
+            if not s.can_catch or not ((s.enemy_shiny or missing) and self._reserve(s, s.enemy_species, mem)() or targeted
                                        or useful_capture(s, s.enemy_species, s.enemy_level, keeps=self._keeps(s, s.enemy_species, mem))):
                 self.reason = ('Leave the encounter because the party and active box are full' if not s.can_catch
-                               else 'Leave an unnecessary duplicate already covered by the collection')
+                               else 'Leave the encounter because the last free slot is kept for a better copy'
+                               if s.enemy_shiny or missing else 'Leave an unnecessary duplicate already covered by the collection')
                 if scr.top_x != 13:
                     return tap('right')
                 return self._select(scr, 1)
@@ -762,7 +765,8 @@ class StrategicPolicy(Policy):
                                             training_index=self.collection.trainee(s, self.collection.project)
                                             if self.collection.project and self.collection.project['method'] == 'train' else None,
                                             kind=getattr(self.goal, 'kind', STORY), flee_tries=self.flee_tries,
-                                            keeps=self._keeps(s, enemy.species, mem))
+                                            keeps=self._keeps(s, enemy.species, mem),
+                                            reserve=self._reserve(s, enemy.species, mem))
                 self.intent_since = s.frame
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
@@ -858,12 +862,14 @@ class StrategicPolicy(Policy):
         """Remember the best fighter level that lost to the boss the goal names, which raises its bar.
 
         A loss is a black out or a battle that cannot end in the boss's gym, or anywhere in the League.
-        A reload into a battle leaves no boss goal yet, so then the room alone names the boss."""
-        key = getattr(self.goal, 'key', None)
-        if key not in BOSSES:
-            key = next((k for k in BOSSES if boss_room(k, s.map)), None)
+        A reload into a battle leaves no boss goal yet, so then the room alone names the boss. A loss
+        to the rival or Giovanni elsewhere counts against the goal under way, which waits on the win."""
+        goal = getattr(self.goal, 'key', None)
+        key = goal if goal in BOSSES else next((k for k in BOSSES if boss_room(k, s.map)), None)
         if key is not None and boss_room(key, s.map):
             self.losses.note(boss_key(key), fighter_level(s.party))
+        elif goal is not None and boss_trainer(s, 1) is not None:
+            self.losses.note(goal, fighter_level(s.party), s.enemy_level)
 
     def _boss_check(self, s, goal, in_league):
         """The boss check before ``goal`` (planning/boss.py), shared with Gold, Silver and Crystal.
@@ -883,7 +889,9 @@ class StrategicPolicy(Policy):
                 return False
             targets = healing_goal(s).targets
             return self.nav.distance_lookup((s.map, s.x, s.y), s.frame)(targets) is not None
-        verdict = gate.decide(key, party, reachable, where=s.map, center=s.map in CENTER_MAPS)
+        # Between League rooms an item in the bag that treats a short fighter heals in place of a trip.
+        supply = key is not None and in_league and league_treatment(s.party, s.items) is not None
+        verdict = gate.decide(key, party, reachable, where=s.map, center=s.map in CENTER_MAPS, supply=supply)
         self.boss_heal = verdict == boss.HEAL
         if verdict == boss.UNREADY and gate.note():
             names = [mon.nick or f'#{mon.species}' for mon in s.party]
@@ -923,31 +931,20 @@ class StrategicPolicy(Policy):
                                       ((s.map, 13, 4),), 'up', True), swap)
         goal = choice.goal
         if in_league:
-            for target in sorted(range(len(s.party)), key=lambda i: s.party[i].level, reverse=True):
-                mon = s.party[target]
-                if mon.level < 35:
-                    continue
-                for item, qty in s.items:
-                    if qty and mon.hp == 0 and item in (ITEMS["REVIVE"], ITEMS["MAX_REVIVE"]):
-                        actions = self._use_item(s, item, target)
-                        if actions:
-                            return actions
-                if mon.hp > 0:
-                    depleted = any(move and not pp and MOVES.get(move, {}).get("power")
-                                   for move, pp in zip(mon.moves, mon.pp))
-                    if depleted:
-                        for item, qty in s.items:
-                            if qty and item in (ITEMS["ELIXER"], ITEMS["MAX_ELIXER"]):
-                                actions = self._use_item(s, item, target)
-                                if actions:
-                                    return actions
-                    choices = [(min(mon.max_hp - mon.hp, amount), item) for item, amount in HEALING.items()
-                               if any(mid == item and qty for mid, qty in s.items)
-                               and (mon.hp < mon.max_hp * 0.8 or mon.status & CURES.get(item, 0))]
-                    if choices:
-                        actions = self._use_item(s, max(choices)[1], target)
-                        if actions:
-                            return actions
+            # Between rooms the bag heals toward the boss check's bar (planning/boss.py treatment), the same
+            # rule Gold, Silver and Crystal use, and a cure clears a status.
+            found = league_treatment(s.party, s.items)
+            if found is not None:
+                target, item, move = found
+                actions = self._use_item(s, item, target, move=move)
+                if actions:
+                    return actions
+            for target, mon in enumerate(s.party):
+                cures = sorted((item for item, qty in s.items if qty and mon.hp and mon.status & CURES.get(item, 0)),
+                               key=lambda item: item in HEALING)
+                actions = cures and self._use_item(s, cures[0], target)
+                if actions:
+                    return actions
         # A bag this full cannot take a new kind of item, Poké Balls included, so spend the vitamins and
         # Rare Candies that fill it, whether or not a collection project is under way.
         if len(s.items) >= 18:
@@ -1449,6 +1446,15 @@ class StrategicPolicy(Policy):
         """Whether the PC would keep the wild ``species`` in battle, asked only when a catch rule needs it."""
         return lambda: improves(snapshot, species, enemy_dvs(mem), self.catch_rating(snapshot))
 
+    def _reserve(self, snapshot, species, mem):
+        """Whether a catch with its own rule may take the upgrade slot (collection.reserve_allows), asked
+        only when a catch rule needs it. A missing entry refused asks the owner for help (boxes_full)."""
+        def allows():
+            allowed = reserve_allows(snapshot, species, enemy_dvs(mem), self.catch_rating(snapshot))
+            self.boxes_full = not allowed and SPECIES.get(species, {}).get('dex') not in snapshot.owned
+            return allowed
+        return allows
+
     def release_pending(self, snapshot):
         """Whether an owner's release request waits for the next PC visit. A request whose Pokémon has
         gone is dropped."""
@@ -1649,15 +1655,17 @@ class StrategicPolicy(Policy):
         return self._start_shortcut(s, LearnMove(forget), ('learn', forget),
                                     "Keep useful coverage and protect HM moves")
 
-    def _use_item(self, snapshot, item, target=0, purpose=None):
+    def _use_item(self, snapshot, item, target=0, purpose=None, move=None):
+        """Use ``item`` on party slot ``target``, and on its move slot ``move`` for an Ether. A PP Up
+        with no ``move`` picks its own slot."""
         if not any(mid == item and qty for mid, qty in snapshot.items):
             return None
         kind = item_kind(item)
         party_target = kind.target in ('party', 'move')
         if party_target and target >= len(snapshot.party):
             return None
-        move = forget = None
-        if kind.target == 'move':
+        forget = None
+        if kind.target == 'move' and move is None:
             from ..champion_shop import pp_slot
             move = pp_slot(snapshot.party[target])
             if move is None:
