@@ -35,7 +35,9 @@ It refuses a version whose final image download is already attached, so inspect 
 failure during the final upload before retrying. Never move a published tag.
 
 The workflow does not repeat the verification matrix. The CI and Python install
-workflows already run on every push to `main` and on every tag. The `gate` job runs
+workflows run the full matrix on every tag, every night and when started by hand. A pull
+request or a push to `main` runs Linux x86 and Python 3.12 only, so the tag's own runs are
+the ones that pass the gate. The `gate` job runs
 `tools/check_release_gates.py` and requires push runs of both workflows for the exact
 release commit in which every job succeeded, every required job is present by its exact
 name, and none was skipped or cancelled. Required jobs are the whole CI workflow (lint, the
@@ -45,8 +47,9 @@ and ARM, macOS Intel and ARM and all four Windows shards, the fresh installs on 
 platforms, and the acceleration job). The job list in `tools/check_release_gates.py` is
 compared with the workflow files by `tests/test_release_gates.py`, so adding, renaming or
 removing a job in a workflow fails the tests until the gate agrees. The gate waits for runs
-that are still in progress and fails for a missing or failed run, so wait for green checks
-on the release commit before starting the workflow. The script comes from the commit that
+that are still in progress, up to 35 minutes, and fails for a missing or failed run. The
+slim run from the push to `main` lacks the full matrix and never passes the gate alone, so
+the tag must be pushed before the workflow starts. The script comes from the commit that
 dispatched the workflow, not from the release revision.
 
 The `build` job runs in parallel with the gate, once per architecture on a native runner

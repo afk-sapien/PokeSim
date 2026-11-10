@@ -62,7 +62,9 @@ checkouts that might not load this file automatically.
 
 - All local PokeSim work shares `pokesim.slice`, capped at 12 cores and 22G. Install the slices once per machine with `sh tools/local_sims.sh install`.
 - Run one heavy job at a time under `tools/load_gate.sh`, at most `pytest -n 12`. The gate runs every command at nice 10 or lower priority, in `pokesim-tests.slice` (10G), whose CPU weight beats the sims.
-- Before a PR, run locally only the tests for the files you touched, plus lint. CI runs the full suite on 3 Pythons and the browsers, so do not repeat it locally.
+- Before a PR, run locally only lint and the tests for the files you touched. The full suite runs in CI only, so do not repeat it locally. A pull request tests Python 3.12 on Linux x86, and tags, the nightly run and manual runs test every Python and platform.
+- Merge with `gh pr merge <n> --auto --squash --match-head-commit <sha>`, which merges once the required gates pass, in place of a polling watcher. Start the next PR while CI runs, on top of the first one when it depends on it.
+- After a test module's run time changes a lot, rewrite `tests/durations.json` with `python tools/record_durations.py` from the JUnit reports a CI run uploads, so the browser and Windows shards stay balanced.
 - Run the scenario suite and the 3-run batches only when a change can alter planner or bot behavior: planning, strategy, battle or overworld code. Storage, UI, tooling and docs changes skip them.
 - A scenario that also fails on main gets logged once, and the work goes on. Do not rerun it to prove it.
 - Every release runs `tools/stage_ladder.py gate` before the release soak, and a release with a gate failure does not ship. The gate takes the load gate's heavy lock on its own, so never wrap it in a `flock` of those lock files or a script that takes them. A gate inside its own lock waits forever.
