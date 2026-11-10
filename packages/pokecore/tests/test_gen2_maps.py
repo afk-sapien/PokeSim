@@ -5,7 +5,7 @@ Cartridge cases are in test_gen2_maps_roms.py.
 from types import SimpleNamespace
 
 from pokecore import gen2
-from pokecore.gen2 import maps
+from pokecore.gen2 import mapfacts, maps
 
 ICE, DOOR, WALL, FLOOR = 0x23, 0x72, 0x07, 0x00
 ROOM = 1
@@ -168,5 +168,7 @@ def test_flyer_needs_the_storm_badge_and_a_hatched_flier():
 
 def test_names_are_on_the_package():
     for name in ('DIRS', 'OPPOSITE', 'WALLS', 'ICE', 'slide', 'move', 'has_ice', 'side_blocked', 'collision',
-                 'passable', 'CHANGES', 'DOORS', 'travel_collision', 'ice_solids', 'OUTSIDE', 'flyer'):
+                 'passable', 'travel_collision', 'ice_solids', 'OUTSIDE', 'flyer'):
         assert getattr(gen2, name) is getattr(maps, name)
+    for name in ('SWAPS', 'CARPETS'):
+        assert getattr(gen2, name) is getattr(mapfacts, name)

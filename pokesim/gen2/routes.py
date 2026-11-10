@@ -2,11 +2,11 @@
 from collections import deque
 
 from pokecore.gen2 import maps as ice
+from pokecore.gen2.mapfacts import CARPETS
 from pokecore.gen2.maps import DIRS as DIRECTIONS, OPPOSITE, WALLS, side_blocked as side_wall
 
-# Warp carpets and the direction that warps from them. The game warps only when the player already
-# stands on one and walks that way, so walking onto a carpet or along a row of them is ordinary ground.
-CARPETS = {0x70: 'down', 0x76: 'left', 0x78: 'up', 0x7E: 'right'}
+# CARPETS holds the warp carpets and the direction that warps from them. The game warps only when the player
+# already stands on one and walks that way, so walking onto a carpet or along a row of them is ordinary ground.
 EDGE_BUTTONS = {'north': 'up', 'south': 'down', 'west': 'left', 'east': 'right'}
 
 

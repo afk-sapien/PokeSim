@@ -123,8 +123,12 @@ needs `constant`, `width`, `height`, `collision`, `block_collision` and `objects
   the Route 36 Sudowoodo, the Vermilion Snorlax, the Route 19 rocks, the Victory Road gate
   guards and the bike-only Route 16 and 17 gates.
 - `event_changes(data, snapshot, live=None)` returns `{map id: grid}` for the maps that event
-  flags change while they are not loaded (`CHANGES`, `LEAGUE`, the switch room `DOORS`) and the
+  flags change while they are not loaded (the block swaps in `mapfacts.SWAPS`) and the
   `TRAVEL_MAPS`. `live` gives the last grid seen on a map, used as the base for the edits.
+- `mapfacts.SWAPS` and `mapfacts.CARPETS` are generated from the pret disassemblies by
+  `tools/gen2_map_facts.py`. Each swap row is (map, x, y, flag, block once set, block until set),
+  where None leaves the map file block. `CARPETS` maps a warp carpet collision byte to the
+  direction that steps off it.
 - `ice_solids(data, snapshot, map_id)` is the tiles objects hold, with boulders where the game
   reports them while their map is loaded and hidden objects left out.
 - `flyer(snapshot)` is the party slot that can use Fly, or None. `OUTSIDE` is the map

@@ -159,6 +159,21 @@ jobs:
           path: .reference/pokeyellow
           persist-credentials: false
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokeyellow --yellow
+      # tests/test_gen2_map_facts.py regenerates the Gen II map facts from these and fails on drift.
+      - name: Read Crystal user-content reference for tests only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pret/pokecrystal
+          ref: 5beda23ffa505f62e1dad7e3d7c214d1737b3358
+          path: .reference/pokecrystal
+          persist-credentials: false
+      - name: Read Gold and Silver user-content reference for tests only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: pret/pokegold
+          ref: 62388c7204e5d13aa05b4231e220b6760584d1b5
+          path: .reference/pokegold
+          persist-credentials: false
       - name: Generate Gen II game data from pinned public sources
         run: uv run --locked python tools/prepare_gen2_test_data.py "$RUNNER_TEMP/gen2-data"
       - run: uv run --locked pytest --ignore=tests/test_rom.py --ignore=tests/browser -q
