@@ -294,6 +294,17 @@ def run_one(args, watch=None):
     snapshot = read()
     party = [_levels(snapshot)]
     span = None  # [row, frames, progressed]
+    # A Red, Blue or Yellow errand keeps its label only outside battle, so a wild battle on the way runs
+    # under the pick behind the errand, and the row turns back to the errand after it. The errand's span
+    # waits through the battle and goes on after it. A Yellow restock after Surf met three Safari Zone
+    # battles on the walk to the Fuchsia Mart, and only the last of its four spans, the one at the
+    # counter, counted.
+    paused = None
+
+    def close(done):
+        spans[done[0]] += 1
+        if not done[2]:
+            wasted[done[0]] += done[1]
     seeded = None  # The goal key the last reseed was for. Seeds follow goal keys, not rows.
     released = []
     # The shadow arbiter's picks, read only (planner design S3): frames by the kind it would have chosen.
@@ -322,12 +333,20 @@ def run_one(args, watch=None):
         titles.setdefault(line, title)
         found = _goal_events(key, snapshot, current)
         if span is None or span[0] != line:
-            if span is not None:
-                spans[span[0]] += 1
-                if not span[2]:
-                    wasted[span[0]] += span[1]
+            fighting = bool(getattr(snapshot, 'in_battle', 0))
+            if paused is not None and paused[0] == line:
+                close(span)
+                span, paused = paused, None
+            else:
+                if span is not None and fighting and paused is None:
+                    paused = span
+                elif span is not None:
+                    close(span)
+                if paused is not None and not fighting:
+                    close(paused)
+                    paused = None
+                span = [line, 0, False]
             monitor.start(line)
-            span = [line, 0, False]
         if seeds is not None and seeded != key:
             seeds.start(run, key)
         seeded = key

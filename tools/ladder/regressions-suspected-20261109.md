@@ -125,4 +125,13 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   3480 to 1332 in red/badges_6, and teach_battle waste fell to 0 in the three post_game rungs. The
   baseline moved down for yellow/badges_6 to 24.2%, red/badges_6 to 7.5%, red/post_game to 3.6%,
   yellow/post_game to 1.8% and blue/post_game to 4.0%. The run itself did not change.
+- The restock after Surf, 2026-11-10: the audit ended a goal's span at every battle, and a wild battle
+  on the way to the mart ended the restock span before the purchase. The audit counted the walk to the
+  battle as waste and the rest of the trip as a new span. A battle on an errand's way now pauses the
+  span, and the errand resumes it after. Restock waste fell to 0 in yellow/badges_6 from 5688 frames,
+  in blue/badges_4 from 5856, in red/badges_4 from 3252, in blue/badges_6 from 2760 and in red/badges_6
+  from 2430, and to 420 in yellow/badges_4 from 1520. The baseline moved down for yellow/badges_6 to
+  19.0%, blue/badges_4 to 20.2%, red/badges_4 to 9.3%, blue/badges_6 to 9.2%, red/badges_6 to 5.3%,
+  yellow/badges_4 to 12.1%, yellow/new_game to 1.1%, red-randomized/new_game to 1.3% and
+  blue/badges_2 to 7.5%. The run itself did not change.
 - The other rungs are still open.
