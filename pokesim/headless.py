@@ -17,10 +17,10 @@ from .yellow import YELLOW_SHA1, open_emulator
 from .checkpoints import CheckpointStore, open_state
 from .events import RunMemory
 from .game_data import VARIANT_ENV
-from .policies.base import BUTTONS, PolicyContext, stack_pointer
+from .policies.base import BUTTONS
 from .policies.progression import YELLOW
 from .policies.strategic import StrategicPolicy
-from .screen import W_OPTIONS
+from .runtime.game_loop import GameLoop, Gen1
 from .seeds import RELOAD_IDLE, reload_idle
 
 BLUE_SHA1 = 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2'
@@ -33,6 +33,8 @@ def fair_key(seed):
 
 class HeadlessRun:
     generation = 1
+    # A tool that saves screenshots renders every frame.
+    render = False
 
     def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False, fair_wild_dvs=None):
         self.rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
@@ -59,6 +61,7 @@ class HeadlessRun:
         self.policy.collection.wild = wild_odds(rom, self.policy.collection.version)
         self.memory = RunMemory()
         self.frame = 0
+        self.loop = GameLoop(self, Gen1(lambda: self.frame), self.tick)
         # A scenario passes its own generator so that a failure replays the same way.
         self.rng = rng
         self.seed = seed
@@ -114,18 +117,14 @@ class HeadlessRun:
         path.with_suffix('.json').write_text(json.dumps(manifest), encoding='utf-8')
         return path
 
+    def tick(self, frames):
+        if frames > 0:
+            self.pb.tick(frames, render=self.render)
+            self.frame += frames
+
     def step(self, snapshot):
-        self.pb.memory[W_OPTIONS] = (self.pb.memory[W_OPTIONS] & ~7) | 1
-        for action in self.policy.step(PolicyContext(snapshot, self.frame, self.pb.memory, stack_pointer(self.pb))):
-            if action.button:
-                self.pb.button_press(action.button)
-            if action.hold:
-                self.pb.tick(action.hold, render=False)
-            if action.button:
-                self.pb.button_release(action.button)
-            if action.gap:
-                self.pb.tick(action.gap, render=False)
-            self.frame += action.hold + action.gap
+        """One decision and its actions, through the loop the application plays."""
+        self.loop.step(snapshot)
 
     def stop(self):
         self.pb.stop(save=False)
