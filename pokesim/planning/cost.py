@@ -102,6 +102,18 @@ class WildOdds:
             return 0, None
         return slot_chance(table['slots'], species, GEN1_SLOTS), 256 / table['rate']
 
+    def battle_experience(self, map_id):
+        """The experience one wild battle in ``map_id``'s grass pays a lone winner, at the table's top level
+        and its slots' average base experience, or None for a map with no grass table. Gen I pays base
+        experience times level over 7."""
+        table = self.data.encounters.get(f'grass:{map_id}')
+        if not table or not table.get('rate'):
+            return None
+        top = max(level for level, _ in table['slots'])
+        base = sum(chance * self.data.species[species]['base_exp']
+                   for (_, species), chance in zip(table['slots'], GEN1_SLOTS)) / sum(GEN1_SLOTS)
+        return base * top / 7
+
     def cast(self, rod, map_id, species):
         """The percent of casts of ``rod``, such as 'SUPER_ROD', that hook ``species`` on ``map_id``, and
         the share of casts that hook anything."""

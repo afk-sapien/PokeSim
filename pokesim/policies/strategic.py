@@ -1954,7 +1954,11 @@ class StrategicPolicy(Policy):
         if any(p.status for p in s.party) or max((p.hp / max(1, p.max_hp) for p in s.party), default=0) < 0.8:
             return None
         encounters = w.get('encounters', [])
-        trainee = development_candidate(s, max((level for _, level in encounters), default=100))
+        # The cartridge's grass table prices a battle here. Gen I has no training site picker, so a trainee
+        # this map cannot raise waits for a map on the way that can.
+        wild = self.collection.wild
+        trainee = development_candidate(s, max((level for _, level in encounters), default=100),
+                                        wild.battle_experience(s.map) if wild is not None else None)
         grass = tuple((s.map, x, y) for y, row in enumerate(w.get('tiles', [])) for x, tile in enumerate(row)
                       if tile == 0x52 and abs(x - s.x) + abs(y - s.y) <= 8)
         if trainee is not None and grass and s.frame >= self.development_cooldown:

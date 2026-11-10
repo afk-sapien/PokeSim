@@ -5,6 +5,7 @@ from .battle import HEALING, damage, effectiveness, ranked_moves
 from ..events import LEGENDARY_DEX
 from ..game_data import current_variant
 from ..planning.readiness import READY, hp_stat, score as matchup, stat as trainer_stat
+from ..pokemon import experience_at_level
 from ..ram import BOX_CAPACITY, DEX_NAMES, PartyMon
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, event_set
 
@@ -28,6 +29,11 @@ if current_variant() == 'yellow':
 from ..randomized import gen1_opponents
 OPPONENTS = gen1_opponents(OPPONENTS, SPECIES)
 
+
+# A trainee whose next level takes more than this many wild battles at a map's top encounter level is not
+# trained there. A level 41 partner on Route 11's level 15 grass gained a little in every battle, so its
+# development excursion never timed out. The rule belongs to the worth oracle of v2 PR 4 and moves there.
+TRAINING_BATTLES = 10
 
 # Yellow's Pikachu follows the player and loses friendship when it leaves the party,
 # so it never becomes a deposit candidate there.
@@ -227,21 +233,35 @@ def reserve_to_deposit(s, *, prefer_completed=False):
                                          s.party[i].level * 10 + potential(s.party[i].species))) if candidates else None
 
 
-def development_candidate(s, encounter_level):
+def battles_to_level(mon, gain):
+    """The wild battles ``mon`` needs for its next level when each pays ``gain`` experience."""
+    growth = SPECIES.get(mon.species, {}).get('growth')
+    have = max(mon.experience, experience_at_level(mon.level, growth))
+    return (experience_at_level(mon.level + 1, growth) - have) / max(1, gain)
+
+
+def development_candidate(s, encounter_level, gain=None):
+    """The party slot a development excursion on this map trains, or None.
+
+    ``gain`` is the experience one wild battle here pays at the map's top encounter level, from the
+    cartridge's tables. A trainee whose next level needs more than ``TRAINING_BATTLES`` of those battles
+    is not trained here. Without the tables the rule is not applied.
+    """
     if len(s.party) < 2:
         return None
     lead_level = max(p.level for p in s.party)
+    worth = lambda p: gain is None or battles_to_level(p, gain) <= TRAINING_BATTLES
     # Yellow's Pikachu cannot be boxed, so it is trained first. Battle switching covers a tougher opponent
     # and shares the experience.
     candidates = [i for i, p in enumerate(s.party)
                   if p.level < lead_level * 0.8 and stays_in_party(s, p) and p.level + 12 >= encounter_level
-                  and p.hp >= p.max_hp * 0.85 and not p.status
+                  and p.hp >= p.max_hp * 0.85 and not p.status and worth(p)
                   and any(MOVES.get(m, {}).get('power') and pp for m, pp in zip(p.moves, p.pp))]
     if candidates:
         return candidates[0]
     candidates = [i for i, p in enumerate(s.party)
                   if p.level < lead_level * 0.8 and p.level + 2 >= encounter_level
-                  and p.hp >= p.max_hp * 0.85 and not p.status
+                  and p.hp >= p.max_hp * 0.85 and not p.status and worth(p)
                   and any(MOVES.get(m, {}).get('power') and pp for m, pp in zip(p.moves, p.pp))]
     return max(candidates, key=lambda i: potential(s.party[i].species, [p for j, p in enumerate(s.party) if i != j])) if candidates else None
 
