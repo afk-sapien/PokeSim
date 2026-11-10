@@ -52,7 +52,8 @@ class Assets:
         `slot` is only the shelf slot the admin aimed at. The hash decides where the cartridge
         goes, and the result says so when the two differ. `owner` is who uploads it.
         """
-        from ..cartridges import SLOT_TITLES, identify, unsupported_message, unpack
+        from ..cartridges import SLOT_TITLES, identify, unsupported_message
+        from .validation import unpack
         if slot is not None and slot not in SLOT_TITLES:
             raise Conflict('Unknown cartridge slot')
         if len(raw) > MAX_ROM:

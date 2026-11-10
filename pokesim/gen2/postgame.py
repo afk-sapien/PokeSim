@@ -439,7 +439,7 @@ def reachable(policy, snapshot, rows):
         groups.setdefault(key, {**row, 'chance': 0})['chance'] += row['chance']
     ranked = []
     for key, row in groups.items():
-        route = policy.nav.route(snapshot.map, key[0])
+        route = policy.nav.walk(snapshot.map, key[0])
         if route is not None:
             ranked.append((search_expected(row['chance'], len(route)), key, row))
     for _, (mid, method, rare), row in sorted(ranked, key=lambda entry: entry[0])[:4]:
@@ -474,7 +474,7 @@ def quality(policy, snapshot, current_time):
         if row and worth_hunting(odds, [row], spent):
             seen = [ident(mon) for mon in held(snapshot) if mon.species == species]
             nav = getattr(policy, 'nav', None)
-            route = nav.route(snapshot.map, row['map']) if nav is not None else None
+            route = nav.walk(snapshot.map, row['map']) if nav is not None else None
             expected = search_expected(row.get('chance', 10), len(route) if route is not None else 0)
             return {'kind': 'quality', 'species': species, 'row': dict(row, started=policy.decisions),
                     'started': policy.decisions, 'seen': seen, 'caught': 0, 'expected': expected,
@@ -495,7 +495,7 @@ def shiny(policy, snapshot, current_time):
     for mid, species in maps.items():
         if standing_down(policy, f'shiny:{mid}'):
             continue
-        route = policy.nav.route(snapshot.map, mid)
+        route = policy.nav.walk(snapshot.map, mid)
         if route is not None:
             ranked.append((mid in data['shiny_maps'], -len(species), len(route), mid))
     for _, _, maps, mid in sorted(ranked)[:4]:

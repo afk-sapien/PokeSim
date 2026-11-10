@@ -2,8 +2,9 @@
 
 NotFound answers 404, Conflict 409 and Refused 409. Each subclasses the builtin the app raised
 before, so code that catches KeyError, ValueError or RuntimeError still catches it. A builtin
-that reaches the manager's handlers without one of these types is logged with its traceback,
-since it may be a bug rather than an answer to the person who asked.
+that reaches the manager's handlers without one of these types is a bug rather than an answer
+to the person who asked, so it is answered 500 and logged as an error with its traceback.
+Checks from outside the app that refuse a request's values are wrapped in validation.py.
 """
 
 

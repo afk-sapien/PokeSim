@@ -57,6 +57,8 @@ SHARE_COOKIE = 'pokesim_share'
 STREAM_RECHECK_SECONDS = 5
 # A JSON body must arrive whole within this many seconds.
 BODY_SECONDS = 30
+# The answer to a request that failed with an error no app type describes.
+UNEXPECTED = 'PokeSim hit an unexpected error. The log has the details.'
 # The control requests that wait in an adventure's press line, how many presses may wait, and
 # how long a press, or Take Control, Resume or Pause, may wait before it is dropped.
 LINE_ACTIONS = frozenset({'press', 'take_control', 'resume', 'pause'})
@@ -173,17 +175,17 @@ class Manager:
         if not isinstance(values, dict) or not set(values) <= allowed:
             raise Conflict('Unsupported adventure settings')
         result = {'starter': 'random', 'policy': 'strategic', 'auto_start': False, **values}
-        from ..nicknames import validate_trainer_name
+        from .validation import validate_trainer_name
         for name in ('trainer_name', 'rival_name'):
             if name in result:
                 result[name] = validate_trainer_name(result[name])
         if 'palette' in result:
-            from ..palettes import validate_palette
+            from .validation import validate_palette
             validate_palette(result['palette'])
         if 'speed' in result:
-            from ..runtime.settings import validate_speed
+            from .validation import validate_speed
             validate_speed(result['speed'])
-        from ..cartridges import validate_starter
+        from .validation import validate_starter
         validate_starter(result['starter'])
         if result['policy'] not in {'strategic', 'guided_random', 'smart_random'}:
             raise Conflict('Unknown adventure policy')
@@ -191,7 +193,8 @@ class Manager:
                      'extra_store_items', 'fair_wild_dvs'):
             if name in result and type(result[name]) is not bool:
                 raise Conflict(f'{name} must be a boolean')
-        from ..runtime.settings import PLAY_SETTINGS, validate_play_settings
+        from ..runtime.settings import PLAY_SETTINGS
+        from .validation import validate_play_settings
         played = {name: result[name] for name in PLAY_SETTINGS if name in result}
         if played:
             validate_play_settings(played)
@@ -203,8 +206,8 @@ class Manager:
             if result.get(name, default) == default:
                 result.pop(name, None)
         if 'randomizer' in result:
-            from ..randomized import validate
-            result['randomizer'] = validate(result['randomizer'])
+            from .validation import validate_randomizer
+            result['randomizer'] = validate_randomizer(result['randomizer'])
             if not result['randomizer']:
                 del result['randomizer']
         # Every notable event keeps a full save state beside its screenshot, which is about
@@ -241,7 +244,9 @@ class Manager:
                 self.supervisor.setup_retries.pop(aid, None)
                 if not running:
                     stall_truth.lifecycle(self.root / 'adventures' / aid, 'start', 'owner')
-                return self.supervisor.start(aid)
+            # The start takes its own locks, and it downloads data and boots the worker without the
+            # maintenance lock, so a backup or another adventure's start never waits behind it.
+            return self.supervisor.start(aid)
         except Exception as error:
             row = self.registry.adventure(aid)
             if row['desired_state'] == 'running':
@@ -702,11 +707,6 @@ def create_app(manager, shutdown=lambda: None):
     # context, which alone cost 20 to 60 ms a request, and a fresh one reconnects each time.
     app.state.children = None
 
-    def untyped(request, error):
-        """A builtin error with no app type may be a bug, so its traceback goes to the log."""
-        log.warning('%s %s answered a %s with no app error type', request.method, request.url.path,
-                    type(error).__name__, exc_info=error)
-
     @app.exception_handler(NotFound)
     async def not_found(request, error):
         return JSONResponse({'detail': str(error)}, status_code=404)
@@ -717,14 +717,17 @@ def create_app(manager, shutdown=lambda: None):
         return JSONResponse({'detail': str(error)}, status_code=409)
 
     @app.exception_handler(ValueError)
-    async def invalid(request, error):
-        untyped(request, error)
-        return JSONResponse({'detail': str(error)}, status_code=409)
-
     @app.exception_handler(KeyError)
-    async def missing(request, error):
-        untyped(request, error)
-        return JSONResponse({'detail': str(error).strip("'")}, status_code=404)
+    @app.exception_handler(RuntimeError)
+    async def untyped(request, error):
+        """A builtin error with no app type is a bug, so it is logged with its traceback and answered 500.
+
+        The answer leaves the message out, since it was never written for the person who asked.
+        The watchdog picks up the error record and alerts like any other unexpected error.
+        """
+        log.error('%s %s failed with a %s that has no app error type', request.method, request.url.path,
+                  type(error).__name__, exc_info=error)
+        return JSONResponse({'detail': UNEXPECTED}, status_code=500)
 
     @app.exception_handler(CoreBackendCapabilityError)
     async def unsupported(request, error):
@@ -756,11 +759,6 @@ def create_app(manager, shutdown=lambda: None):
     @app.exception_handler(CapReached)
     async def cap_reached(request, error):
         return JSONResponse({'detail': str(error), 'cap': True}, status_code=409)
-
-    @app.exception_handler(RuntimeError)
-    async def unavailable(request, error):
-        untyped(request, error)
-        return JSONResponse({'detail': str(error)}, status_code=409)
 
     # A browser that leaves while sending a body has gone, so there is no one to tell.
     @app.exception_handler(ClientDisconnect)
@@ -1127,15 +1125,15 @@ def create_app(manager, shutdown=lambda: None):
                 raise Conflict('Trainer and rival names are chosen when creating an adventure')
             # The seed shapes the whole world, so changing it mid-adventure would contradict the save.
             if 'randomizer' in changes:
-                from ..randomized import validate
-                if validate(changes['randomizer']) != adventure['settings'].get('randomizer', ''):
+                from .validation import validate_randomizer
+                if validate_randomizer(changes['randomizer']) != adventure['settings'].get('randomizer', ''):
                     raise Conflict('The randomizer is chosen when creating an adventure')
                 changes = {key: value for key, value in changes.items() if key != 'randomizer'}
             if adventure['state'] == 'running' and set(changes) - {'auto_start', 'speed', 'palette', 'fair_wild_dvs'}:
                 raise Conflict('Stop the adventure before changing these settings')
             previous = adventure['settings']
             values['settings'] = manager.validate_adventure_settings({**previous, **changes})
-            from ..cartridges import validate_generation_settings
+            from .validation import validate_generation_settings
             validate_generation_settings(values['settings'], adventure['version'])
         result = manager.registry.update(aid, **values) if values else adventure
         if 'speed' in data.get('settings', {}):
@@ -1150,7 +1148,7 @@ def create_app(manager, shutdown=lambda: None):
     async def edit_play(aid: str, request: Request):
         """Change how the bot plays. Running or stopped, the change is saved and a running game gets it live."""
         manager.check_available()
-        from ..runtime.settings import validate_play_settings
+        from .validation import validate_play_settings
         changes = validate_play_settings(await json_body(request))
         adventure = manager.registry.adventure(aid)
         if manager.coordinator.reserved(aid):
@@ -1171,7 +1169,8 @@ def create_app(manager, shutdown=lambda: None):
     @app.patch('/api/v1/settings')
     async def set_settings(request: Request):
         manager.check_available()
-        from ..nicknames import validate_parts, nickname_defaults
+        from ..nicknames import nickname_defaults
+        from .validation import validate_parts
         changes = validate_parts(await json_body(request))
         parts = validate_parts({**nickname_defaults(), **manager.registry.setting('nickname_parts', {}), **changes})
         manager.registry.set_setting('nickname_parts', parts)

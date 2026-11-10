@@ -66,8 +66,7 @@ def test_real_gen2_worker_stays_healthy_past_the_monitor_sync_interval(tmp_path,
         assert aid not in supervisor.restarts
         assert not supervisor.unhealthy_since
         assert first.request('GET', '/healthz', timeout=3)
-        summary = registry.adventure(aid)['summary']
-        assert time.time() - summary['last_response'] < 15, 'health reporting stopped'
+        assert time.time() - first.watch[0] < 15, 'health reporting stopped'
     finally:
         supervisor.close()
         registry.close()
