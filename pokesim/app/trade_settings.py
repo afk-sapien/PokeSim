@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import threading
 
+from .errors import Conflict
 from .registry import TRADE_SETTINGS, validate_id
 
 KEY = TRADE_SETTINGS
@@ -51,7 +52,7 @@ def update(registry, aid, **values):
         if name not in SWITCHES:
             raise ValueError(f'Unknown trade setting {name}')
         if value is not None and not isinstance(value, bool):
-            raise ValueError(f'{SWITCHES[name]} is either on or off')
+            raise Conflict(f'{SWITCHES[name]} is either on or off')
     # The registry lock too, so a change of owner, which resets these, never lands between the read and the write.
     with _write, registry.lock:
         settings = _all(registry)
@@ -72,7 +73,7 @@ def ask_first(registry):
 
 def set_ask_first(registry, value):
     if not isinstance(value, bool):
-        raise ValueError('Ask me first is either on or off')
+        raise Conflict('Ask me first is either on or off')
     with _write:
         current = registry.setting(LIBRARY_KEY, {})
         current = dict(current) if isinstance(current, dict) else {}

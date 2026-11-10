@@ -3,6 +3,7 @@ import json
 import logging
 import shutil
 
+from .errors import Conflict
 from .registry import validate_id
 
 log = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ def _paths(manager, aid):
     target = trash / aid
     for path in (source.parent, source, trash, target):
         if path.is_symlink():
-            raise ValueError('Adventure deletion refuses symbolic links')
+            raise Conflict('Adventure deletion refuses symbolic links')
     return source, target
 
 
@@ -35,7 +36,7 @@ def _finish(manager, aid):
     source, target = _paths(manager, aid)
     if source.exists():
         if target.exists():
-            raise ValueError('Deletion has conflicting directories. Preserve both for recovery.')
+            raise Conflict('Deletion has conflicting directories. Preserve both for recovery.')
         target.parent.mkdir(exist_ok=True)
         source.rename(target)
     # The durable intent remains until the directory is gone. A retry never starts a game.
@@ -47,7 +48,7 @@ def _finish(manager, aid):
                                     (json.dumps({'complete': True}), PREFIX + aid))
     with manager.supervisor.guard:
         manager.supervisor.children.pop(aid, None)
-        manager.supervisor.retries.pop(aid, None)
+        manager.supervisor.restarts.pop(aid, None)
         manager.supervisor.unhealthy_since.pop(aid, None)
     return {'deleted': aid}
 
@@ -66,15 +67,15 @@ def delete_adventure(manager, aid, confirmation, actor=None):
         if actor is not None:
             require_owner(manager, actor, row)
         if confirmation != row['name']:
-            raise ValueError('Type the adventure name to confirm permanent deletion')
+            raise Conflict('Type the adventure name to confirm permanent deletion')
         if row['state'] not in {'stopped', 'failed', 'deleting'} or row['desired_state'] != 'stopped':
-            raise ValueError('Save and stop this adventure before deleting it')
+            raise Conflict('Save and stop this adventure before deleting it')
         if manager.coordinator.reserved(aid):
-            raise ValueError('Resolve this adventure\'s trade before deleting it')
+            raise Conflict('Resolve this adventure\'s trade before deleting it')
         with manager.supervisor.guard:
             child = manager.supervisor.children.get(aid)
             if child and child.process is not None and child.process.poll() is None:
-                raise ValueError('The adventure worker is still running')
+                raise Conflict('The adventure worker is still running')
         manager.supervisor.close_viewer(aid)
         # A lease left from before the stop ends here, recorded, and each page in its line hears so.
         manager.leases.end(aid, 'deleted', apply=False)

@@ -20,6 +20,7 @@ import psutil
 from .. import stall_truth
 from ..downloads import DataDownloadError
 from . import lifecycle
+from .errors import Conflict, Refused
 from .loops import Loop
 from .registry import digest, identifier
 from .resources import ObservedSpeed, ProcessUsage, recent_activity
@@ -36,9 +37,19 @@ VIEWER_IDLE = 300   # seconds before an unwatched stopped-adventure viewer close
 MONITOR_SECONDS = 3
 STALE_SECONDS = 60
 MONITOR_STALE = 180   # seconds without monitor progress before /health/ready fails
+# A worker that exits or goes unhealthy restarts after 10 seconds, then 20, 40 and so on up to 30
+# minutes. Ten healthy minutes in a row put the wait back to 10 seconds.
+RESTART_FIRST_SECONDS = 10
+RESTART_MAX_SECONDS = 30 * 60
+RESTART_RESET_SECONDS = 10 * 60
 
 
-class WorkerError(RuntimeError):
+def restart_delay(made):
+    """Seconds to wait before the next automatic restart, after `made` restarts in a row."""
+    return min(RESTART_FIRST_SECONDS * 2 ** min(made, 20), RESTART_MAX_SECONDS)
+
+
+class WorkerError(Refused):
     """The worker answered with an error, with its HTTP status."""
     def __init__(self, detail, status):
         super().__init__(detail)
@@ -85,14 +96,14 @@ class Child:
                 last = next((line for line in reversed(tuple(self.logs)) if line.strip()), '')
                 cause = last if len(last) <= 200 else last[:197] + '...'
                 alive = 'still running' if self.process.poll() is None else f'exited with {self.process.returncode}'
-                raise RuntimeError(f'Worker was not ready after {timeout} seconds ({alive}). '
+                raise Refused(f'Worker was not ready after {timeout} seconds ({alive}). '
                                    f'Last output: {cause or "none"}. Full log: {self.log_path}') from None
             if (message.get('event') != 'ready' or message.get('protocol') != 1
                     or message.get('adventure_id') != self.bootstrap['adventure_id']
                     or message.get('generation') != self.generation
                     or message.get('host') != '127.0.0.1'
                     or type(message.get('port')) is not int or not 1 <= message['port'] <= 65535):
-                raise RuntimeError(message.get('error') or 'Invalid worker readiness response')
+                raise Refused(message.get('error') or 'Invalid worker readiness response')
             self.url = f"http://127.0.0.1:{message['port']}"
             return self
         except BaseException:
@@ -142,7 +153,7 @@ class Child:
 
     def request(self, method, path, data=None, timeout=20, headers=None):
         if not self.url or self.process.poll() is not None:
-            raise RuntimeError('Adventure worker is not running')
+            raise Refused('Adventure worker is not running')
         with httpx.Client(trust_env=False, timeout=timeout) as client:
             response = client.request(method, self.url + path, json=data,
                                       headers={**(headers or {}), 'Authorization': 'Bearer ' + self.token})
@@ -182,12 +193,12 @@ class Child:
                         self.process.wait(timeout=3)
                     except subprocess.TimeoutExpired:
                         pass
-                raise RuntimeError('Worker exceeded the shutdown deadline. Its previous safe save was retained.')
+                raise Refused('Worker exceeded the shutdown deadline. Its previous safe save was retained.')
         if self.process.returncode not in (None, 0):
-            raise RuntimeError(f'Worker exited with code {self.process.returncode}. Inspect its diagnostics.')
+            raise Refused(f'Worker exited with code {self.process.returncode}. Inspect its diagnostics.')
 
 
-class AdventureRunning(RuntimeError):
+class AdventureRunning(Refused):
     """A stopped view was asked for while the adventure's worker was already starting or running."""
 
 
@@ -204,7 +215,7 @@ class Supervisor:
         self.guard = threading.RLock()
         self.admission = threading.RLock()
         self.locks = {}
-        self.retries = {}
+        self.restarts = {}   # aid -> [automatic restarts in a row, monotonic due time or None]
         self.setup_retries = {}   # aid -> (due time, automatic attempts made) after a failed data download
         self.unhealthy_since = {}
         self.notifications = None   # installed by the manager: adventure row -> worker notification settings
@@ -223,7 +234,7 @@ class Supervisor:
         with self.guard:
             child = self.children.get(aid)
         if child is None or not child.url or child.process.poll() is not None:
-            raise RuntimeError('This adventure is stopped or still starting')
+            raise Refused('This adventure is stopped or still starting')
         return child
 
     def resources(self, aid):
@@ -250,7 +261,7 @@ class Supervisor:
         """Return a read-only worker for a stopped adventure, launching one from its newest save."""
         with self._lock(aid):
             if self.closed.is_set():
-                raise RuntimeError('PokeSim is shutting down')
+                raise Refused('PokeSim is shutting down')
             with self.guard:
                 entry = self.viewers.get(aid)
                 running = aid in self.children
@@ -263,7 +274,7 @@ class Supervisor:
             adventure = self.registry.adventure(aid)
             data = self.registry.root / 'adventures' / aid
             if not (data / 'pokesim.sqlite').is_file() or next((data / 'states').glob('auto-*.state'), None) is None:
-                raise RuntimeError('This adventure has no save to show yet')
+                raise Refused('This adventure has no save to show yet')
             bootstrap = dict(protocol=1, adventure_id=aid, generation=identifier(),
                              token=secrets.token_urlsafe(32), settings=self._settings(aid, adventure),
                              adventure_name=adventure['name'], frozen=True)
@@ -297,13 +308,13 @@ class Supervisor:
         with self.admission, self._lock(aid):
             adventure = self.registry.adventure(aid)
             if self.closed.is_set():
-                raise RuntimeError('PokeSim is shutting down')
+                raise Refused('PokeSim is shutting down')
             # A running game owns the adventure, so its read-only view closes first.
             self.close_viewer(aid)
             if not recovery and adventure['desired_state'] != 'running':
                 return adventure
             if adventure['archived']:
-                raise ValueError('Restore this adventure from the archive before starting')
+                raise Conflict('Restore this adventure from the archive before starting')
             with self.guard:
                 existing = self.children.get(aid)
                 if existing and existing.process and existing.process.poll() is None:
@@ -388,6 +399,52 @@ class Supervisor:
                 if aid in self.setup_retries and self.setup_retries[aid][0] == float('inf'):
                     self.setup_retries.pop(aid)
 
+    def schedule_restart(self, aid, why):
+        """Restart a worker later, waiting twice as long after each restart that did not last."""
+        with self.guard:
+            made = self.restarts.get(aid, [0, None])[0]
+            delay = restart_delay(made)
+            self.restarts[aid] = [made + 1, time.monotonic() + delay]
+        log.warning('Adventure %s restarts in %d seconds because %s, restart %d in a row', aid, delay, why, made + 1)
+        try:
+            summary = {**(self.registry.adventure(aid).get('summary') or {}), 'next_retry': time.time() + delay}
+            self.registry.update(aid, summary=summary)
+        except KeyError:
+            pass
+
+    def run_restarts(self):
+        """Start each worker whose restart is due. The count stays until the worker has been healthy
+        for RESTART_RESET_SECONDS, so a worker that keeps exiting waits longer each time."""
+        now = time.monotonic()
+        with self.guard:
+            due = [aid for aid, (_, at) in self.restarts.items() if at is not None and at <= now]
+        for aid in due:
+            if self.closed.is_set():
+                return
+            with self.guard:
+                if aid not in self.restarts:
+                    continue
+                self.restarts[aid][1] = None
+            try:
+                row = self.registry.adventure(aid)
+            except KeyError:
+                with self.guard:
+                    self.restarts.pop(aid, None)
+                continue
+            if row['desired_state'] != 'running' or row['archived']:
+                # The owner stopped it, so their next Start begins with a short wait again.
+                with self.guard:
+                    self.restarts.pop(aid, None)
+                continue
+            if row['state'] != 'failed':
+                continue
+            stall_truth.lifecycle(self.registry.root / 'adventures' / aid, 'start', 'supervisor', why='worker exited')
+            try:
+                self.start(aid)
+            except Exception:
+                log.exception('Could not restart adventure %s', aid)
+                self.schedule_restart(aid, 'its restart did not start')
+
     def stop(self, aid, preserve_desired=False, only_if_stopped=False):
         """Stop the adventure's worker. With `only_if_stopped`, stop it only while the owner still
         wants it stopped, read under the lock a Start takes, and return None when they started it."""
@@ -432,7 +489,7 @@ class Supervisor:
     def _apply_speed(child, speed):
         result = child.request('POST', '/internal/speed', {'speed': speed}, timeout=5)
         if result.get('speed') != speed:
-            raise RuntimeError('Worker did not acknowledge the adventure pace')
+            raise Refused('Worker did not acknowledge the adventure pace')
 
     def sync_speed(self, aid, child, actual):
         with self.admission:
@@ -460,7 +517,7 @@ class Supervisor:
     def _apply_palette(child, value):
         result = child.request('POST', '/internal/palette', {'palette': value}, timeout=5)
         if result.get('palette') != value:
-            raise RuntimeError('Worker did not acknowledge the adventure palette')
+            raise Refused('Worker did not acknowledge the adventure palette')
 
     def sync_palette(self, aid, child, actual):
         with self.admission:
@@ -489,7 +546,7 @@ class Supervisor:
     def _apply_fair_wild_dvs(child, value):
         result = child.request('POST', '/internal/fair-wild-dvs', {'fair_wild_dvs': value}, timeout=5)
         if result.get('fair_wild_dvs') is not value:
-            raise RuntimeError('Worker did not acknowledge the fair wild DVs setting')
+            raise Refused('Worker did not acknowledge the fair wild DVs setting')
 
     def sync_fair_wild_dvs(self, aid, child, actual):
         with self.admission:
@@ -572,7 +629,7 @@ class Supervisor:
         values = self.play_settings(aid)
         if getattr(child, 'play_settings', None) != values:
             if child.request('POST', '/internal/play', values, timeout=5) != values:
-                raise RuntimeError('Worker did not acknowledge the play settings')
+                raise Refused('Worker did not acknowledge the play settings')
             child.play_settings = values
 
     def update_nicknames(self):
@@ -599,6 +656,8 @@ class Supervisor:
         logged and the rest of the pass still runs."""
         with self.monitor.guard('Retrying game data downloads'):
             self.run_setup_retries()
+        with self.monitor.guard('Restarting adventures whose workers stopped'):
+            self.run_restarts()
         with self.monitor.guard('Closing idle stopped views'):
             self.close_idle_viewers()
         self.monitor.beat()
@@ -633,7 +692,8 @@ class Supervisor:
                                              error='Adventure worker was not running')
 
     def check(self, aid, child):
-        """Restart a worker that exited, read a live one's summary, and fail one that stays silent."""
+        """Restart a worker that exited, read a live one's summary, and fail one that stays silent
+        or whose game stops moving."""
         if child.process is None or not child.url:
             return
         if child.process.poll() is not None:
@@ -642,19 +702,15 @@ class Supervisor:
                     if self.children.get(aid) is not child:
                         return
                     self.children.pop(aid)
-                adventure = self.registry.transition(aid, 'failed', 'its worker exited',
-                                                     error='Adventure worker exited unexpectedly')
-            recent = [t for t in self.retries.get(aid, []) if time.monotonic() - t < 300]
-            self.retries[aid] = recent
+                current = self.registry.adventure(aid)
+                # A worker the monitor stopped for going quiet keeps that reason, not a bare exit.
+                error = (current['error'] if current['state'] == 'failed' and current['error']
+                         else 'Adventure worker exited unexpectedly')
+                adventure = self.registry.transition(aid, 'failed', 'its worker exited', error=error)
+            # A worker in an unfinished trade waits for the trade's recovery rather than a restart.
             unresolved = any(aid in row['plan'].get('participants', []) for row in self.registry.transactions(True))
-            if adventure['desired_state'] == 'running' and len(recent) < 3 and not unresolved:
-                recent.append(time.monotonic())
-                stall_truth.lifecycle(self.registry.root / 'adventures' / aid, 'start', 'supervisor',
-                                      why='worker exited')
-                try:
-                    self.start(aid)
-                except Exception:
-                    log.exception('Could not restart adventure %s', aid)
+            if adventure['desired_state'] == 'running' and not unresolved:
+                self.schedule_restart(aid, 'its worker exited')
             return
         try:
             child.request('GET', '/healthz', timeout=3)
@@ -662,11 +718,22 @@ class Supervisor:
             child.pace.observe(status.get('performance'))
             child.watch = (time.time(), status)
             settings_errors = self.sync_optional(aid, child, status)
-            self.unhealthy_since.pop(aid, None)
             game = status.get('game') or {}
             # A worker pauses itself for a cable trade or for manual play, so the library
             # says which rather than showing Running beside a speed that reads Paused.
             trading = bool(self.registry.transactions(True, adventure_id=aid))
+            # The frame count only goes up while the game plays, so a count that stands still
+            # while nothing paused it means the game loop is stuck behind a live web server.
+            frames = (status.get('performance') or {}).get('frames')
+            previous, child.frames_seen = getattr(child, 'frames_seen', None), frames
+            frozen = (frames is not None and frames == previous and not status.get('paused')
+                      and not status.get('manual_mode') and not trading)
+            if frozen:
+                if self.unhealthy(aid, child, 'its game stopped moving', 'Adventure game stopped moving'):
+                    return
+            else:
+                self.unhealthy_since.pop(aid, None)
+                self.healthy(aid, child)
             summary = {'activity': game.get('map_name') or 'Adventure in progress',
                        'paused': status.get('paused', False),
                        'manual_mode': bool(status.get('manual_mode')), 'trading': trading,
@@ -687,18 +754,38 @@ class Supervisor:
                 # Undelivered notification settings never make a healthy game look stale.
                 log.warning('Adventure %s has not accepted its notification settings yet', aid)
         except (RuntimeError, OSError, httpx.HTTPError):
-            since = self.unhealthy_since.setdefault(aid, time.monotonic())
-            log.warning('Adventure %s is not responding', aid)
-            if time.monotonic() - since >= STALE_SECONDS and not self.closed.is_set():
-                with self.admission, self._lock(aid):
-                    if self.children.get(aid) is child:
-                        self.registry.transition(aid, 'failed', 'its worker stopped answering',
-                                                 error=f'Adventure health remained stale for {STALE_SECONDS} seconds')
-                        try:
-                            child.stop(timeout=5)
-                        except RuntimeError:
-                            pass
-                self.unhealthy_since.pop(aid, None)
+            self.unhealthy(aid, child, 'its worker stopped answering', 'Adventure health remained stale')
+
+    def unhealthy(self, aid, child, why, error):
+        """Fail and stop a worker that stays unhealthy for STALE_SECONDS, and say whether it did.
+        The worker's exit then schedules a restart."""
+        since = self.unhealthy_since.setdefault(aid, time.monotonic())
+        child.healthy_since = None
+        log.warning('Adventure %s is unhealthy because %s', aid, why)
+        if time.monotonic() - since < STALE_SECONDS or self.closed.is_set():
+            return False
+        with self.admission, self._lock(aid):
+            if self.children.get(aid) is child:
+                self.registry.transition(aid, 'failed', why, error=f'{error} for {STALE_SECONDS} seconds')
+                try:
+                    child.stop(timeout=5)
+                except RuntimeError:
+                    pass
+        self.unhealthy_since.pop(aid, None)
+        return True
+
+    def healthy(self, aid, child):
+        """Forget past restarts once a worker has stayed healthy for RESTART_RESET_SECONDS."""
+        now = time.monotonic()
+        since = getattr(child, 'healthy_since', None)
+        if since is None:
+            child.healthy_since = now
+        elif now - since >= RESTART_RESET_SECONDS:
+            with self.guard:
+                made = self.restarts.pop(aid, [0])[0]
+            if made:
+                log.info('Adventure %s ran well for %d minutes, so its next restart waits %d seconds again',
+                         aid, RESTART_RESET_SECONDS // 60, RESTART_FIRST_SECONDS)
 
     def close(self):
         self.closed.set()

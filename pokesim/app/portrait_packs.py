@@ -17,6 +17,7 @@ import httpx
 from PIL import Image
 
 from ..checkpoints import CheckpointStore
+from .errors import Conflict
 
 REVISION = 'bfb75391935310368065096fa08c51e8970bc43e'
 SOURCE = 'https://github.com/PokeAPI/sprites/tree/' + REVISION
@@ -49,18 +50,18 @@ def download(client, url, limit):
         for chunk in response.iter_bytes():
             data.extend(chunk)
             if len(data) > limit:
-                raise ValueError('The sprite source returned an oversized file')
+                raise Conflict('The sprite source returned an oversized file')
     return bytes(data)
 
 
 def validate_png(data):
     if len(data) > MAX_IMAGE_BYTES:
-        raise ValueError('The sprite source returned an oversized file')
+        raise Conflict('The sprite source returned an oversized file')
     with Image.open(io.BytesIO(data)) as image:
         if image.format != 'PNG' or not all(1 <= side <= 256 for side in image.size):
-            raise ValueError('The sprite source returned an invalid image')
+            raise Conflict('The sprite source returned an invalid image')
         if getattr(image, 'n_frames', 1) != 1:
-            raise ValueError('Animated images are not supported in this pack')
+            raise Conflict('Animated images are not supported in this pack')
         image.verify()
     with Image.open(io.BytesIO(data)) as image:
         image.load()
@@ -144,7 +145,7 @@ class PortraitPacks:
     def begin(self):
         with self.lock:
             if self.busy:
-                raise ValueError('The community sprite pack is already downloading')
+                raise Conflict('The community sprite pack is already downloading')
             self.error = None
             if self.installed():
                 self.registry.set_setting(self.setting, True)
@@ -156,7 +157,7 @@ class PortraitPacks:
     def restore(self):
         with self.lock:
             if self.busy:
-                raise ValueError('Wait for the sprite download to finish before switching')
+                raise Conflict('Wait for the sprite download to finish before switching')
             self.registry.set_setting(self.setting, False)
             self.error = None
 
@@ -217,13 +218,13 @@ class PortraitPacks:
 
                 def fetch(folder, filename, paths):
                     if self.cancelled.is_set():
-                        raise ValueError('Sprite download was interrupted')
+                        raise Conflict('Sprite download was interrupted')
                     data = download(client, RAW + folder + filename, MAX_IMAGE_BYTES)
                     validate_png(data)
                     with self.lock:
                         budget['bytes'] += len(data)
                         if budget['bytes'] > MAX_PACK_BYTES:
-                            raise ValueError('The sprite source returned more data than expected')
+                            raise Conflict('The sprite source returned more data than expected')
                     for path in paths:
                         CheckpointStore.atomic_write(path, data)
                     return len(paths)
@@ -240,7 +241,7 @@ class PortraitPacks:
                             future.cancel()
                         raise
             if self.cancelled.is_set():
-                raise ValueError('Sprite download was interrupted')
+                raise Conflict('Sprite download was interrupted')
             self._activate()
         except Exception:
             log.exception('Community sprite installation failed')

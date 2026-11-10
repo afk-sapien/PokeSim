@@ -19,6 +19,7 @@ import time
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
+from .errors import Conflict, NotFound, Refused
 from .registry import LIBRARY_OWNER, identifier, validate_id
 
 SERVER_ROLES = ('admin', 'member')
@@ -54,11 +55,11 @@ def private_address(host):
 
 def validate_username(value):
     if not isinstance(value, str) or not USERNAME.fullmatch(value.strip()):
-        raise ValueError('Choose a username of 1 to 64 letters, digits, dots, dashes, underscores or @')
+        raise Conflict('Choose a username of 1 to 64 letters, digits, dots, dashes, underscores or @')
     return value.strip()
 
 
-class PasswordCheckFailed(RuntimeError):
+class PasswordCheckFailed(Refused):
     """Argon2 could not run, for want of memory or threads. It says nothing about the password."""
 
 
@@ -70,9 +71,9 @@ CHECK_WAIT = 10.0
 
 def validate_password(value):
     if not isinstance(value, str) or not value:
-        raise ValueError('Choose a password')
+        raise Conflict('Choose a password')
     if len(value) > MAX_PASSWORD:
-        raise ValueError('That password is too long')
+        raise Conflict('That password is too long')
     return value
 
 
@@ -246,7 +247,7 @@ class AuthStore:
         display = str(display_name or username).strip()[:120] or username
         with self.lock, self.db:
             if self.db.execute('SELECT 1 FROM users WHERE username=?', (username.casefold(),)).fetchone():
-                raise ValueError('That username is taken')
+                raise Conflict('That username is taken')
             self.db.execute('''INSERT INTO users (id, username, display_name, role, can_create, password_hash, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)''', (uid, username.casefold(), display, role, int(bool(can_create)), hashed, time.time()))
         return self.user(uid)
@@ -283,11 +284,11 @@ class AuthStore:
     def update_user(self, uid, *, role=None, disabled=None, can_create=None, display_name=None, successor=None):
         current = self.user(uid)
         if current is None or current['placeholder']:
-            raise KeyError('User not found')
+            raise NotFound('User not found')
         values = {}
         if role is not None:
             if role not in SERVER_ROLES:
-                raise ValueError('Unknown role')
+                raise Conflict('Unknown role')
             values['role'] = role
         if disabled is not None:
             values['disabled'] = int(bool(disabled))
@@ -296,7 +297,7 @@ class AuthStore:
         if display_name is not None:
             name = str(display_name).strip()
             if not 1 <= len(name) <= 120:
-                raise ValueError('Choose a display name of 1 to 120 characters')
+                raise Conflict('Choose a display name of 1 to 120 characters')
             values['display_name'] = name
         if not values:
             return current
@@ -306,7 +307,7 @@ class AuthStore:
             self.db.execute('UPDATE users SET ' + ','.join(f'{key}=?' for key in values) + ' WHERE id=?',
                             (*values.values(), uid))
             if admins and self._admins() == 0:
-                raise ValueError('Keep at least one admin')
+                raise Conflict('Keep at least one admin')
             # A library owner who is disabled or demoted hands it on, to `successor` or else the
             # oldest admin, so the command line and adventures from before setup keep an admin.
             if self.db.execute("SELECT 1 FROM settings WHERE key='library_owner' AND value=?", (uid,)).fetchone():
@@ -327,20 +328,20 @@ class AuthStore:
         """
         current = self.user(uid)
         if current is None or current['placeholder']:
-            raise KeyError('User not found')
+            raise NotFound('User not found')
         with self.lock, self.db:
             for heir in set(heirs):
                 row = self.db.execute('SELECT disabled FROM users WHERE id=? AND id != ?',
                                       (heir, LIBRARY_OWNER)).fetchone()
                 if row is None or row['disabled'] or heir == uid:
-                    raise KeyError('User not found')
+                    raise NotFound('User not found')
             self.db.execute('UPDATE shares SET revoked_at=? WHERE created_by=? AND revoked_at IS NULL', (time.time(), uid))
             self.db.execute('UPDATE invites SET revoked=1 WHERE created_by=? AND used_by IS NULL', (uid,))
             # Counted inside the transaction, since `current` may be older than a promotion just made.
             admins = self._admins()
             self.db.execute('DELETE FROM users WHERE id=?', (uid,))
             if admins and self._admins() == 0:
-                raise ValueError('Keep at least one admin')
+                raise Conflict('Keep at least one admin')
             if self.db.execute("SELECT 1 FROM settings WHERE key='library_owner' AND value=?", (uid,)).fetchone():
                 self._keep_library_owner(successor)
         self.cache.clear()
@@ -351,7 +352,7 @@ class AuthStore:
         with self.lock, self.db:
             if self.db.execute('UPDATE users SET password_hash=? WHERE id=? AND id != ?',
                                (hashed, uid, LIBRARY_OWNER)).rowcount != 1:
-                raise KeyError('User not found')
+                raise NotFound('User not found')
         self.end_sessions(uid, keep=keep)
 
     def verify_password(self, username, password):
@@ -417,7 +418,7 @@ class AuthStore:
             existing = self.db.execute('SELECT user_id FROM identities WHERE provider=? AND issuer=? AND subject=?',
                                        (provider, issuer, subject)).fetchone()
             if existing and existing[0] != uid:
-                raise ValueError('That sign-in already belongs to another user')
+                raise Conflict('That sign-in already belongs to another user')
             self.db.execute('INSERT OR IGNORE INTO identities VALUES (?, ?, ?, ?, ?)',
                             (uid, provider, issuer, subject, time.time()))
 
@@ -536,7 +537,7 @@ class AuthStore:
     def create_invite(self, created_by, *, seconds=INVITE_SECONDS, can_create=True):
         """An invite link. Invites only ever create members, so nobody becomes admin by accident."""
         if type(seconds) is not int or not 3600 <= seconds <= MAX_INVITE_SECONDS:
-            raise ValueError('Choose an invite expiry between 1 hour and 30 days')
+            raise Conflict('Choose an invite expiry between 1 hour and 30 days')
         raw = secrets.token_urlsafe(32)
         iid = identifier()
         now = time.time()
@@ -576,27 +577,27 @@ class AuthStore:
     def accept_invite(self, raw, username, password):
         invite = self.invite(raw)
         if invite is None:
-            raise ValueError('This invite link has expired or was already used')
+            raise Conflict('This invite link has expired or was already used')
         user = self.create_user(username, password, role='member', can_create=invite['can_create'])
         with self.lock, self.db:
             claimed = self.db.execute('UPDATE invites SET used_by=?, used_at=? WHERE id=? AND used_by IS NULL',
                                       (user['id'], time.time(), invite['id'])).rowcount
             if claimed != 1:
                 self.db.execute('DELETE FROM users WHERE id=?', (user['id'],))
-                raise ValueError('This invite link has expired or was already used')
+                raise Conflict('This invite link has expired or was already used')
         return user
 
     def revoke_invite(self, iid):
         with self.lock, self.db:
             if self.db.execute('UPDATE invites SET revoked=1 WHERE id=? AND used_by IS NULL', (validate_id(iid),)).rowcount != 1:
-                raise KeyError('Invite not found')
+                raise NotFound('Invite not found')
 
     # Watch grants -----------------------------------------------------------------------
     def grant(self, adventure_id, uid, role, granted_by):
         validate_id(adventure_id)
         user = self.user(uid)
         if user is None or user['placeholder']:
-            raise KeyError('User not found')
+            raise NotFound('User not found')
         with self.lock, self.db:
             self.db.execute('INSERT OR REPLACE INTO grants VALUES (?, ?, ?, ?, ?)',
                             (adventure_id, uid, role, granted_by, time.time()))
@@ -639,7 +640,7 @@ class AuthStore:
     def create_share(self, adventure_id, created_by, *, seconds=None):
         validate_id(adventure_id)
         if seconds is not None and (type(seconds) is not int or not 3600 <= seconds <= 366 * 86400):
-            raise ValueError('Choose a link expiry between 1 hour and a year, or none')
+            raise Conflict('Choose a link expiry between 1 hour and a year, or none')
         raw = secrets.token_urlsafe(32)
         sid = identifier()
         now = time.time()
@@ -659,7 +660,7 @@ class AuthStore:
         with self.lock:
             row = self.db.execute('SELECT * FROM shares WHERE id=?', (sid,)).fetchone()
         if row is None:
-            raise KeyError('Share link not found')
+            raise NotFound('Share link not found')
         return self._public_share(row)
 
     def share(self, raw):
@@ -700,7 +701,7 @@ class AuthStore:
             raise ValueError('A notification link must be a PokeSim path')
         with self.lock, self.db:
             if self.db.execute('SELECT 1 FROM users WHERE id=?', (user_id,)).fetchone() is None:
-                raise KeyError('User not found')
+                raise NotFound('User not found')
             nid = self.db.execute('''INSERT INTO notifications (user_id, kind, adventure_id, text, link, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)''', (user_id, kind, adventure_id, text, link, time.time())).lastrowid
             self.db.execute('''DELETE FROM notifications WHERE user_id=? AND id <= (

@@ -11,6 +11,7 @@ from ..checkpoints import CheckpointStore
 from ..downloads import retrying
 from ..desktop_setup import MAX_ROM, ROM_NAMES, ensure_game_data
 from .. import game_data
+from .errors import Conflict, NotFound, Refused
 from .registry import LIBRARY_OWNER
 
 log = logging.getLogger(__name__)
@@ -53,17 +54,17 @@ class Assets:
         """
         from ..cartridges import SLOT_TITLES, identify, unsupported_message, unpack
         if slot is not None and slot not in SLOT_TITLES:
-            raise ValueError('Unknown cartridge slot')
+            raise Conflict('Unknown cartridge slot')
         if len(raw) > MAX_ROM:
-            raise ValueError('The cartridge file is too large. Game Boy ROMs are at most 2 MB.')
+            raise Conflict('The cartridge file is too large. Game Boy ROMs are at most 2 MB.')
         if not raw:
-            raise ValueError('The chosen file is empty. Choose your .gb, .gbc or .zip ROM file.')
+            raise Conflict('The chosen file is empty. Choose your .gb, .gbc or .zip ROM file.')
         if raw[:4] == b'PK\x03\x04':
             raw = unpack(raw)
         cartridge = identify(raw)
         sha1 = hashlib.sha1(raw).hexdigest()
         if len(raw) > MAX_ROM or (cartridge is None and sha1 not in ROM_NAMES):
-            raise ValueError(unsupported_message())
+            raise Conflict(unsupported_message())
         version = cartridge.version if cartridge else ROM_NAMES[sha1].split()[1].lower()
         sha256 = hashlib.sha256(raw).hexdigest()
         path = self.root / 'roms' / sha256 / 'rom.gb'
@@ -73,7 +74,7 @@ class Assets:
             # An upload still streaming when its owner was deleted would leave a row, and a file,
             # nobody removes.
             if owner in self.registry.leaving:
-                raise ValueError('This account is being deleted')
+                raise Conflict('This account is being deleted')
             path.parent.mkdir(parents=True, exist_ok=True)
             known = self.registry.has_rom(sha256)
             if not path.exists():
@@ -148,13 +149,13 @@ class Assets:
         with self.registry.lock:
             ids = [row['id'] for row in self.registry.roms() if row['version'] == version]
             if not ids:
-                raise KeyError(f'No {title} cartridge is installed')
+                raise NotFound(f'No {title} cartridge is installed')
             users = [game for game in self.registry.adventures() if game['rom_id'] in ids]
             if users:
                 names = ', '.join(game['name'] + (' (archived)' if game['archived'] else '') for game in users)
                 count = 'this adventure uses' if len(users) == 1 else f'these {len(users)} adventures use'
-                raise ValueError(f'{title} cannot be removed because {count} it: {names}. '
-                                 'Delete those adventures first. Archived adventures count, since they can be restored.')
+                raise Conflict(f'{title} cannot be removed because {count} it: {names}. '
+                               'Delete those adventures first. Archived adventures count, since they can be restored.')
             self.registry.remove_roms(ids)
             # Inside the lock, so an upload of the same file cannot add its row between the two.
             self.delete_rom_files(ids)
@@ -217,10 +218,10 @@ class Assets:
 
     def rom_path(self, rom_id):
         if rom_id not in {item['id'] for item in self.registry.roms()}:
-            raise ValueError('Unknown ROM')
+            raise Conflict('Unknown ROM')
         path = self.root / 'roms' / rom_id / 'rom.gb'
         if hashlib.sha256(path.read_bytes()).hexdigest() != rom_id:
-            raise ValueError('Stored ROM verification failed')
+            raise Conflict('Stored ROM verification failed')
         return path
 
     def sprite_path(self, adventure_id, dex, shiny=False):
@@ -330,7 +331,7 @@ class Assets:
             # that only holds Gen II adventures needs them prepared too.
             self._prepare_gen1(report)
             if self.cancelled.is_set():
-                raise RuntimeError('Application setup was cancelled')
+                raise Refused('Application setup was cancelled')
 
     def _has_gen1_data(self):
         try:
@@ -377,7 +378,7 @@ class Assets:
             if version == 'yellow':
                 self._prepare_yellow(report)
             if self.cancelled.is_set():
-                raise RuntimeError('Application setup was cancelled')
+                raise Refused('Application setup was cancelled')
         return self.game_data_dir
 
     def _prepare_yellow(self, report):

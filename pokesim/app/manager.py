@@ -40,6 +40,7 @@ from ..web.security import LEASE_HEADER, ROLE_HEADER, VIEWER_HEADER, protect_res
 from .assets import Assets
 from .auth import AuthStore, SetupCode
 from . import loops, policy, trade_settings
+from .errors import Conflict, NotFound, Refused
 from .policy import Actor, can
 from .registry import LIBRARY_OWNER, Registry, identifier, validate_id
 from .supervisor import AdventureRunning, Supervisor
@@ -170,7 +171,7 @@ class Manager:
                    'mew_event', 'celebi_event', 'extra_store_items', 'fair_wild_dvs', 'legendary_return_steps', 'event_return_steps', 'mew_return_steps',
                    'fossil_preference', 'dojo_preference', 'event_retention_days', 'palette', 'randomizer', 'nicknames', 'play_style'}
         if not isinstance(values, dict) or not set(values) <= allowed:
-            raise ValueError('Unsupported adventure settings')
+            raise Conflict('Unsupported adventure settings')
         result = {'starter': 'random', 'policy': 'strategic', 'auto_start': False, **values}
         from ..nicknames import validate_trainer_name
         for name in ('trainer_name', 'rival_name'):
@@ -185,11 +186,11 @@ class Manager:
         from ..cartridges import validate_starter
         validate_starter(result['starter'])
         if result['policy'] not in {'strategic', 'guided_random', 'smart_random'}:
-            raise ValueError('Unknown adventure policy')
+            raise Conflict('Unknown adventure policy')
         for name in ('auto_start', 'fast_text', 'battle_animations', 'viewer_only', 'league_rewards', 'mew_event', 'celebi_event',
                      'extra_store_items', 'fair_wild_dvs'):
             if name in result and type(result[name]) is not bool:
-                raise ValueError(f'{name} must be a boolean')
+                raise Conflict(f'{name} must be a boolean')
         from ..runtime.settings import PLAY_SETTINGS, validate_play_settings
         played = {name: result[name] for name in PLAY_SETTINGS if name in result}
         if played:
@@ -212,13 +213,13 @@ class Manager:
                                 ('event_return_steps', 0, 1000000000), ('mew_return_steps', 0, 1000000000),
                                 ('stream_fps', 1, 60), ('legendary_return_steps', 0, 1000000000), ('event_retention_days', 0, 36500)]:
             if name in result and (type(result[name]) is not int or not low <= result[name] <= high):
-                raise ValueError(f'{name} must be between {low} and {high}')
+                raise Conflict(f'{name} must be between {low} and {high}')
         for name, choices in {'fossil_preference': {'auto', 'helix', 'dome', 'amber'},
                               'dojo_preference': {'auto', 'hitmonlee', 'hitmonchan'}}.items():
             if name in result and (not isinstance(result[name], str) or result[name] not in choices):
-                raise ValueError(f'Unknown {name}')
+                raise Conflict(f'Unknown {name}')
         if result.get('seed') is not None and type(result['seed']) is not int:
-            raise ValueError('Seed must be an integer')
+            raise Conflict('Seed must be an integer')
         return result
 
     def start_adventure(self, aid):
@@ -249,7 +250,7 @@ class Manager:
 
     def check_available(self):
         if self.suspended or self.closing:
-            raise ValueError('PokeSim is saving, backing up, or shutting down')
+            raise Conflict('PokeSim is saving, backing up, or shutting down')
 
     def running_caps(self):
         """The server-wide cap and the per-member cap on running adventures. None means no cap."""
@@ -701,12 +702,28 @@ def create_app(manager, shutdown=lambda: None):
     # context, which alone cost 20 to 60 ms a request, and a fresh one reconnects each time.
     app.state.children = None
 
+    def untyped(request, error):
+        """A builtin error with no app type may be a bug, so its traceback goes to the log."""
+        log.warning('%s %s answered a %s with no app error type', request.method, request.url.path,
+                    type(error).__name__, exc_info=error)
+
+    @app.exception_handler(NotFound)
+    async def not_found(request, error):
+        return JSONResponse({'detail': str(error)}, status_code=404)
+
+    @app.exception_handler(Conflict)
+    @app.exception_handler(Refused)
+    async def conflict(request, error):
+        return JSONResponse({'detail': str(error)}, status_code=409)
+
     @app.exception_handler(ValueError)
     async def invalid(request, error):
+        untyped(request, error)
         return JSONResponse({'detail': str(error)}, status_code=409)
 
     @app.exception_handler(KeyError)
     async def missing(request, error):
+        untyped(request, error)
         return JSONResponse({'detail': str(error).strip("'")}, status_code=404)
 
     @app.exception_handler(CoreBackendCapabilityError)
@@ -742,6 +759,7 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.exception_handler(RuntimeError)
     async def unavailable(request, error):
+        untyped(request, error)
         return JSONResponse({'detail': str(error)}, status_code=409)
 
     # A browser that leaves while sending a body has gone, so there is no one to tell.
@@ -1039,7 +1057,7 @@ def create_app(manager, shutdown=lambda: None):
         manager.check_available()
         adventure = manager.registry.adventure(aid)
         if adventure['archived']:
-            raise ValueError('Restore this adventure before starting')
+            raise Conflict('Restore this adventure before starting')
         data = await json_body(request)
 
         def admit():
@@ -1079,7 +1097,7 @@ def create_app(manager, shutdown=lambda: None):
         manager.check_available()
         adventure = manager.registry.adventure(aid)
         if adventure['state'] not in {'stopped', 'failed'} or manager.coordinator.reserved(aid):
-            raise ValueError('Stop this adventure and resolve its trades before archiving')
+            raise Conflict('Stop this adventure and resolve its trades before archiving')
         return manager.registry.update(aid, archived=True, desired_state='stopped')
 
     @app.patch('/api/v1/adventures/{aid}')
@@ -1087,34 +1105,34 @@ def create_app(manager, shutdown=lambda: None):
         manager.check_available()
         data = await json_body(request)
         if set(data) - {'name', 'settings', 'archived'}:
-            raise ValueError('Unsupported adventure changes')
+            raise Conflict('Unsupported adventure changes')
         adventure = manager.registry.adventure(aid)
         if manager.coordinator.reserved(aid):
-            raise ValueError('Settings are frozen until the trade is resolved')
+            raise Conflict('Settings are frozen until the trade is resolved')
         values = {}
         if 'name' in data:
             name = str(data['name']).strip()
             if not 1 <= len(name) <= 120:
-                raise ValueError('Choose a name of 1 to 120 characters')
+                raise Conflict('Choose a name of 1 to 120 characters')
             values['name'] = name
         if 'archived' in data:
             if type(data['archived']) is not bool or adventure['state'] not in {'stopped', 'failed'}:
-                raise ValueError('Archive state can only change while stopped')
+                raise Conflict('Archive state can only change while stopped')
             values['archived'] = data['archived']
         if 'settings' in data:
             changes = data['settings']
             if not isinstance(changes, dict):
-                raise ValueError('Settings must be an object')
+                raise Conflict('Settings must be an object')
             if {'trainer_name', 'rival_name'} & set(changes):
-                raise ValueError('Trainer and rival names are chosen when creating an adventure')
+                raise Conflict('Trainer and rival names are chosen when creating an adventure')
             # The seed shapes the whole world, so changing it mid-adventure would contradict the save.
             if 'randomizer' in changes:
                 from ..randomized import validate
                 if validate(changes['randomizer']) != adventure['settings'].get('randomizer', ''):
-                    raise ValueError('The randomizer is chosen when creating an adventure')
+                    raise Conflict('The randomizer is chosen when creating an adventure')
                 changes = {key: value for key, value in changes.items() if key != 'randomizer'}
             if adventure['state'] == 'running' and set(changes) - {'auto_start', 'speed', 'palette', 'fair_wild_dvs'}:
-                raise ValueError('Stop the adventure before changing these settings')
+                raise Conflict('Stop the adventure before changing these settings')
             previous = adventure['settings']
             values['settings'] = manager.validate_adventure_settings({**previous, **changes})
             from ..cartridges import validate_generation_settings
@@ -1136,7 +1154,7 @@ def create_app(manager, shutdown=lambda: None):
         changes = validate_play_settings(await json_body(request))
         adventure = manager.registry.adventure(aid)
         if manager.coordinator.reserved(aid):
-            raise ValueError('Settings are frozen until the trade is resolved')
+            raise Conflict('Settings are frozen until the trade is resolved')
         settings = manager.validate_adventure_settings({**adventure['settings'], **changes})
         result = manager.registry.update(aid, settings=settings)
         result['play_pending'] = await asyncio.to_thread(manager.supervisor.push_play, aid)

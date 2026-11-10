@@ -20,6 +20,7 @@ import time
 
 from . import trade_settings
 from .assets import portrait_url
+from .errors import Conflict, NotFound
 from .registry import identifier, validate_id
 from pokecore.identity import find
 
@@ -186,9 +187,9 @@ class TradeRequests:
     def _pending(self, state, rid):
         row = next((row for row in state['requests'] if row['id'] == rid), None)
         if row is None:
-            raise KeyError('This suggested trade is no longer available')
+            raise NotFound('This suggested trade is no longer available')
         if row['status'] != PENDING:
-            raise ValueError(f'This suggested trade is already {row["status"]}')
+            raise Conflict(f'This suggested trade is already {row["status"]}')
         return row
 
     def _check(self, row):
@@ -200,11 +201,11 @@ class TradeRequests:
             game = self.registry.adventure(aid)
             reason = coordinator.manual_game_reason(game)
             if reason:
-                raise ValueError(f'{game["name"]}: {reason}')
+                raise Conflict(f'{game["name"]}: {reason}')
             try:
                 readable[aid] = coordinator.inventory(aid)
             except (RuntimeError, OSError) as error:
-                raise ValueError(f'{game["name"]} did not answer. Try again in a moment') from error
+                raise Conflict(f'{game["name"]} did not answer. Try again in a moment') from error
             settings[aid] = {'enabled': True}
         return self._stale(row, readable, settings, reserved)
 

@@ -11,6 +11,8 @@ import uuid
 
 import httpx
 
+from .errors import Conflict
+
 
 def _options(parser):
     parser.add_argument('--data-dir', type=Path, default=argparse.SUPPRESS,
@@ -69,13 +71,13 @@ def reset_password(root, username):
     import secrets
     from .auth import AuthStore
     if not (root / 'auth.sqlite').exists():
-        raise ValueError('This library has no accounts')
+        raise Conflict('This library has no accounts')
     store = AuthStore(root)
     try:
         user = store.user_by_name(username)
         # The placeholder row holds an older Library's adventures and is nobody to log in as.
         if user is None or user['placeholder']:
-            raise ValueError(f'No user is called {username}')
+            raise Conflict(f'No user is called {username}')
         password = secrets.token_urlsafe(12)
         store.set_password(user['id'], password)
         store.audit('password.reset', user_id=user['id'], target='command line')
@@ -91,10 +93,10 @@ class RunningApplication:
         try:
             identity = json.loads((root / 'manager.json').read_text(encoding='utf-8'))
         except (OSError, ValueError) as error:
-            raise ValueError('Start the PokeSim application for this data directory before using this command') from error
+            raise Conflict('Start the PokeSim application for this data directory before using this command') from error
         address = urlsplit(identity.get('url', ''))
         if address.scheme not in {'http', 'https'} or not address.netloc or address.username or address.password:
-            raise ValueError('The application address in manager.json is invalid')
+            raise Conflict('The application address in manager.json is invalid')
         self.expected_application = identity['application_id']
         self.client = httpx.Client(base_url=identity['url'].rstrip('/'), trust_env=False, timeout=300)
         # The running app writes this token for commands on its own machine, so they act
@@ -106,7 +108,7 @@ class RunningApplication:
         try:
             health = self.request('GET', '/health/live')
             if health.get('application_id') != self.expected_application:
-                raise ValueError('The running application does not match this data directory')
+                raise Conflict('The running application does not match this data directory')
             session = self.request('GET', '/api/v1/session')
             self.client.headers['X-PokeSim-CSRF'] = session['csrf_token']
         except BaseException:
@@ -118,10 +120,10 @@ class RunningApplication:
         try:
             data = response.json()
         except ValueError as error:
-            raise ValueError('The application returned an invalid response') from error
+            raise Conflict('The application returned an invalid response') from error
         if not response.is_success:
             detail = data.get('detail', f'Application request failed ({response.status_code})')
-            raise ValueError(detail if isinstance(detail, str) else json.dumps(detail))
+            raise Conflict(detail if isinstance(detail, str) else json.dumps(detail))
         return data
 
     def close(self):
@@ -141,7 +143,7 @@ def run(args):
         try:
             manager = Manager(root)
         except BlockingIOError as error:
-            raise ValueError('Stop the destination PokeSim application before importing a directory') from error
+            raise Conflict('Stop the destination PokeSim application before importing a directory') from error
         try:
             if args.command == 'import-pair':
                 from .legacy_import import import_pair
@@ -162,7 +164,7 @@ def run(args):
             if args.rom:
                 from ..desktop_setup import MAX_ROM
                 if args.rom.stat().st_size > MAX_ROM:
-                    raise ValueError('ROM files may be no larger than 1 MB')
+                    raise Conflict('ROM files may be no larger than 1 MB')
                 rom_id = app.request('POST', '/api/v1/assets/rom', content=args.rom.read_bytes(),
                                      headers={'Content-Type': 'application/octet-stream'})['id']
             adventure = app.request('POST', '/api/v1/adventures', json={
@@ -189,7 +191,7 @@ def smoke_check(args):
         url = args.url or json.loads((root / 'manager.json').read_text(encoding='utf-8'))['url']
         token = (root / 'cli.token').read_text(encoding='ascii').strip()
     except (OSError, ValueError, KeyError) as error:
-        raise ValueError('Start the PokeSim application for this data directory before using this command') from error
+        raise Conflict('Start the PokeSim application for this data directory before using this command') from error
     rom = args.rom
     if rom is None:
         # A cartridge already in the library. The check adds it as a throwaway member and removes it again.

@@ -4,6 +4,7 @@ import logging
 import threading
 
 from . import inbox
+from .errors import Conflict, NotFound
 from .offers import OPEN, PENDING
 
 log = logging.getLogger(__name__)
@@ -129,10 +130,10 @@ def transfer(manager, aid, to_uid, actor):
     adventure = manager.registry.adventure(aid)
     user = manager.auth.user(to_uid)
     if user is None or user['placeholder'] or user['disabled']:
-        raise KeyError('User not found')
+        raise NotFound('User not found')
     old = adventure['owner_id']
     if old == to_uid:
-        raise ValueError(f'{user["display_name"]} already owns this adventure')
+        raise Conflict(f'{user["display_name"]} already owns this adventure')
     return hand_on(manager, aid, old, to_uid, actor)
 
 
@@ -147,7 +148,7 @@ def hand_on(manager, aid, old, to_uid, actor):
         require_owner(manager, actor, adventure)
         old = adventure['owner_id']
         if old == to_uid:
-            raise ValueError('They already own this adventure')
+            raise Conflict('They already own this adventure')
         end_trades(manager, aid, actor)
         result = give(manager, aid, old, to_uid, actor)
     manager.leases.forget(aid, old)
@@ -180,9 +181,9 @@ def delete_user(manager, uid, plan, actor):
 def _delete_user(manager, uid, plan, actor):
     user = manager.auth.user(uid)
     if user is None or user['placeholder']:
-        raise KeyError('User not found')
+        raise NotFound('User not found')
     if uid == actor.id:
-        raise ValueError('You cannot delete your own account')
+        raise Conflict('You cannot delete your own account')
     # From here no adventure is created for, imported by or given to them, so `owned` stays whole.
     registry = manager.registry
     with registry.lock:
@@ -200,19 +201,19 @@ def _delete_user(manager, uid, plan, actor):
 def _delete_owner(manager, uid, user, plan, actor):
     owned = [row['id'] for row in manager.registry.adventures() if row.get('owner_id') == uid]
     if not isinstance(plan, dict) or set(plan) != set(owned):
-        raise ValueError('Choose a new owner or Archive for each of their adventures')
+        raise Conflict('Choose a new owner or Archive for each of their adventures')
     for aid, target in plan.items():
         if target == 'archive':
             if manager.coordinator.reserved(aid):
-                raise ValueError('Let their running trades finish before archiving their adventures')
+                raise Conflict('Let their running trades finish before archiving their adventures')
             continue
         if not isinstance(target, str) or target == uid:
-            raise ValueError('Choose a new owner or Archive for each of their adventures')
+            raise Conflict('Choose a new owner or Archive for each of their adventures')
         found = manager.auth.user(target)
         if found is None or found['placeholder'] or found['disabled']:
-            raise KeyError('User not found')
+            raise NotFound('User not found')
     if user['role'] == 'admin' and not user['disabled'] and manager.auth._admins() <= 1:
-        raise ValueError('Keep at least one admin')
+        raise Conflict('Keep at least one admin')
     # The account goes first, with the last-admin and new-owner checks in its own transaction.
     # A refusal there leaves everything as it was. After it, nothing below refuses.
     manager.auth.delete_user(uid, heirs=[target for target in plan.values() if target != 'archive'],
