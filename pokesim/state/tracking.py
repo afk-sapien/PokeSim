@@ -11,6 +11,11 @@ SHINY_RECEIPTS = {1: 'shiny_receipts', 2: 'gen2_shiny_receipts'}
 # The progress columns an adventure record can be dated from.
 PROGRESS_COLUMNS = frozenset({'badges', 'league', 'owned', 'level100', 'perfect'})
 PROGRESS = 'SELECT ts, league, owned, level100 FROM progress'
+# The headline numbers of a progress row, in column order (pokesim/progress.py).
+PROGRESS_FIELDS = ('badges', 'owned', 'seen', 'league', 'level100', 'perfect')
+_FIELDS = ', '.join(PROGRESS_FIELDS)
+# Past this many rows, the progress history comes back thinned to about this many.
+SHOWN_PROGRESS = 600
 # A committed custom gift's receipt is keyed by its journal entry.
 GIFT = "c.fingerprint LIKE 'gift-event:%'"
 GIFT_ENTRY = 'CAST(SUBSTR(c.fingerprint, 12) AS INTEGER)'
@@ -103,6 +108,42 @@ def progress_from(db, cutoff):
 def progress_until(db, cutoff):
     """The last progress row at or before ``cutoff``, or None."""
     return db.execute(PROGRESS + ' WHERE ts <= ? ORDER BY rowid DESC LIMIT 1', (cutoff,)).fetchone()
+
+
+# --- progress history ---
+def last_progress(db):
+    """The PROGRESS_FIELDS of the newest progress row as a tuple, or None."""
+    row = db.execute(f'SELECT {_FIELDS} FROM progress ORDER BY rowid DESC LIMIT 1').fetchone()
+    return tuple(row) if row else None
+
+
+def add_progress_row(db, ts, numbers):
+    """Write one progress row. ``numbers`` holds the PROGRESS_FIELDS in order."""
+    db.execute(f'INSERT INTO progress(ts, {_FIELDS}) VALUES (?,?,?,?,?,?,?)', (ts, *numbers))
+
+
+def has_progress(db):
+    return db.execute('SELECT 1 FROM progress LIMIT 1').fetchone() is not None
+
+
+def backfill_progress(db, rows):
+    """Write (ts, badges, owned, seen, league) rows rebuilt from the journal."""
+    db.executemany('INSERT INTO progress(ts, badges, owned, seen, league) VALUES (?,?,?,?,?)', rows)
+
+
+def progress_history(db):
+    """(ts, *PROGRESS_FIELDS) of the progress rows, oldest first.
+
+    Past SHOWN_PROGRESS rows it keeps the first row and the newest of each of about that many even spans.
+    """
+    count, first, last = db.execute('SELECT COUNT(*), MIN(rowid), MAX(rowid) FROM progress').fetchone()
+    if count > SHOWN_PROGRESS:
+        span = SHOWN_PROGRESS - 2
+        return db.execute(
+            f'SELECT ts, {_FIELDS} FROM progress WHERE rowid IN ('
+            'SELECT MAX(rowid) FROM progress GROUP BY CAST((rowid - ?) / ? AS INTEGER) '
+            'UNION SELECT MIN(rowid) FROM progress) ORDER BY rowid', (first, (last - first + span) // span)).fetchall()
+    return db.execute(f'SELECT ts, {_FIELDS} FROM progress ORDER BY rowid').fetchall()
 
 
 def activity_totals(db):

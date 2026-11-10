@@ -8,6 +8,7 @@ import json
 
 from .. import config
 from ..events import Event
+from ..state import kv
 from pokecore.gen2.ram import Memory
 from pokecore.gen2.resets import write_byte, write_flag
 
@@ -171,16 +172,15 @@ def observe(store, snapshot, memory, walking=None):
 def consume(db, dex):
     """Close a return in the same transaction as its verified capture receipt."""
     for key in (KEY, EVENTS):
-        row = db.execute('SELECT v FROM kv WHERE k=?', (key,)).fetchone()
-        if not row:
+        value = kv.get(db, key)
+        if value is None:
             continue
-        value = json.loads(row[0])
         tickets = value.get('tickets', {})
         ticket = tickets.get(str(dex)) if key == KEY else next(
             (tickets.get(name) for name, _, number, _, _ in ACTIVITIES if number == dex), None)
         if ticket and ticket['state'] == 'available':
             ticket['state'] = 'caught'
-            db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
+            kv.update(db, key, value)
 
 
 def decline(store, dex):

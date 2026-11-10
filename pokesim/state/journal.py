@@ -19,6 +19,11 @@ def add(db, ts, kind, title, body, notable, priority, place, playtime='', detail
                       (ts, kind, title, body, notable, priority, place, playtime, detail)).lastrowid
 
 
+def every_entry(db):
+    """(id, ts, type, title, body) of every entry, oldest first, read one at a time."""
+    return db.execute('SELECT id, ts, type, title, body FROM events ORDER BY id')
+
+
 def champions(db):
     """(id, title, state, body) of every Champion entry, oldest first."""
     return db.execute("SELECT id,title,state,body FROM events WHERE type='champion' ORDER BY id").fetchall()
