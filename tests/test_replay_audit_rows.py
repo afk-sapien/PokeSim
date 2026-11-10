@@ -131,6 +131,25 @@ def test_a_pc_visit_that_changes_the_current_box_is_progress():
     assert _goal_events('collection_box', full, changed) == []
 
 
+def test_a_restock_that_sells_from_the_bag_is_support_and_one_that_changes_nothing_is_waste():
+    # A Yellow run picked up the Silph Scope with 20 entries and sold one at the Lavender Mart.
+    full = _snapshot([_mon('Pikachu')], [])
+    full.items, full.money = tuple((item, 1) for item in range(20)), 12234
+    sold = _snapshot([_mon('Pikachu')], [])
+    sold.items, sold.money = full.items[1:], 13234
+    assert [(event.kind, event.detail) for event in _goal_events('restock', full, sold)] == [('sold', 1)]
+    # The entry and the cash can change on different reads, and each read counts.
+    paid = _snapshot([_mon('Pikachu')], [])
+    paid.items, paid.money = full.items, 13234
+    assert [event.kind for event in _goal_events('restock', full, paid)] == ['sold']
+    assert [event.kind for event in _goal_events('restock', paid, sold)] == ['sold']
+    # A trip that leaves the bag and the purse as they were stays wasted, and other goals gain no sale.
+    assert _goal_events('restock', full, full) == []
+    assert _goal_events('fuji', full, sold) == []
+    sold.valid = False
+    assert _goal_events('restock', full, sold) == []
+
+
 def test_a_battle_fought_under_any_goal_counts_its_experience():
     before, after = _snapshot([_mon('Pidgey')], []), _snapshot([_mon('Pidgey')], [])
     after.party[0].experience = 8200
