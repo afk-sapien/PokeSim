@@ -310,3 +310,17 @@ def test_a_load_gate_inside_a_heavy_run_runs_at_once(tmp_path, monkeypatch):
     nested = ['sh', gate, 'heavy', 'sh', gate, 'heavy', 'sh', gate, 'pytest', 'echo', 'ran']
     done = subprocess.run(nested, capture_output=True, text=True, timeout=30, check=True)
     assert done.stdout == 'ran\n'
+
+
+@pytest.mark.skipif(shutil.which('flock') is None, reason='needs flock')
+@pytest.mark.parametrize('mode', ['pytest', 'heavy'])
+def test_a_load_gate_runs_its_command_at_nice_10_or_lower_priority(tmp_path, monkeypatch, mode):
+    # The local runs rule asked agents to add nice -n 10 by hand, and a full suite once ran at nice 0.
+    monkeypatch.setenv('POKESIM_LOAD_GATE', str(tmp_path))
+    monkeypatch.delenv('POKESIM_LOAD_GATE_HEAVY', raising=False)
+    gate = str(stage_ladder.ROOT / 'tools' / 'load_gate.sh')
+    probe = [gate, mode, 'sh', '-c', 'ps -o nice= -p $$']
+    own = os.nice(0)
+    for prefix, expected in (([], max(own, 10)), (['nice', '-n', '12'], min(own + 12, 19))):
+        done = subprocess.run(prefix + ['sh', *probe], capture_output=True, text=True, timeout=30, check=True)
+        assert int(done.stdout) == expected
