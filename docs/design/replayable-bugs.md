@@ -119,7 +119,7 @@ Where the two loops differ in planner behaviour, Gen I wins. Where they differ i
 
 ### 4.3 The trace
 
-`pokecore.trace` lives in `packages/pokecore` after the pokecore move. It uses only the standard library and imports nothing else from pokecore, so the bisect shim can load it into an old commit (section 4.6). It is modelled on PokeBench `session.py:388-406`.
+`pokecore.trace` lives in `packages/pokecore` after the pokecore move. It uses only the standard library and imports nothing else from pokecore, so the bisect shim can load it into an old commit (section 4.6). It is modelled on the benchmark's `session.py:388-406`.
 
 A trace is a chain of segments. A segment starts at an autosave or a load and ends at the next one. It is written as `trace/<checkpoint>.jsonl.gz` beside its checkpoint and is pruned with it, so any kept autosave is a replay start.
 
@@ -149,7 +149,7 @@ Each hash is SHA-256 of the previous hash and the record without its hash. The f
 
 `pokecore.trace` ships the verifier with two modes.
 
-1. `verify` feeds the log back with no policy. It checks state, ROM and emulator provenance like PokeBench `load_engine` (`session.py:63-87`). It releases every button before the first tick (`session.py:46-60`). Then it applies each press, tick, write, load and input, and fails on the first `decide` or `check` whose digest differs (`session.py:503-505`). A pass proves the log is complete and the emulator deterministic.
+1. `verify` feeds the log back with no policy. It checks state, ROM and emulator provenance like the benchmark's `load_engine` (`session.py:63-87`). It releases every button before the first tick (`session.py:46-60`). Then it applies each press, tick, write, load and input, and fails on the first `decide` or `check` whose digest differs (`session.py:503-505`). A pass proves the log is complete and the emulator deterministic.
 2. `redecide` runs a policy. It loads the same state and policy state, feeds only the `input` records at their frames and lets the policy choose. The first action that differs from the log is the divergence. Bisect runs this mode against another commit.
 
 The exit code is 0 for the same run, 1 for a behaviour difference and 2 for a harness failure, such as a missing ROM or a provenance mismatch. A ladder run once failed its first attempt at setup and then passed, so setup failures must never look like behaviour.
@@ -264,7 +264,7 @@ Each PR deletes the old call sites its new definition replaces, in the same PR.
 
 | # | PR | Adds | Deletes in the same PR | Agent hours |
 |---|---|---|---|---|
-| 1 | Trace and verifier | `pokecore.trace`: header, records, hash chain, `verify` and `redecide`, provenance checks, exit codes. Tests for the chain, a tampered record and both modes | pokecore's record and replay wrappers (`emulator.py:407-445`), which PokeSim never calls, after a check that PokeBench does not call them either | 7 |
+| 1 | Trace and verifier | `pokecore.trace`: header, records, hash chain, `verify` and `redecide`, provenance checks, exit codes. Tests for the chain, a tampered record and both modes | pokecore's record and replay wrappers (`emulator.py:407-445`), which PokeSim never calls, after a check that the benchmark does not call them either | 7 |
 | 2 | Replay diverge and bisect | `python -m pokesim.replay` with `record`, `diverge` and `bisect`, the old-commit shim, the environment cache and the self check. Then the three cases run | `tools/stage_ladder.py:533` importing `tools.replay_audit`, and `tools/live_soak.py:1135` importing `stage_ladder.compare`. The rung runner and `compare` move into `pokesim/replay/` | 5 |
 | 3 | Seeds | `pokesim/seeds.py`, the adventure seed and the streams. Gen II policy generator saved and restored | `secrets.randbelow` at `emulator.py:924`, `gen2/emulator.py:1022`, `headless.py:92` and `gen2/headless.py:107`. `random.Random()` at `strategic.py:241`. The `uuid4` gift seeds at `runtime/reward_delivery.py:49`, `:108` and `gen2/rewards.py:55`, `:57`. The naming generator at `gen2/naming.py:28` | 3 |
 | 4 | Wall time leaves the policy | `PolicyContext.clock` in PlayClock frames. Trade demand on frames, through the command queue | The `stuck_seconds` and `real_time` fields (`policies/base.py:26-27`) and their callers: `emulator.py:1276`, `headless.py:116`, `benchmark.py:116`, 7 call sites in 6 tools and 69 test constructors. The monotonic window at `policies/collection.py:539-544`. The wall reads at `smart_random.py:279` and `guided_random.py:38` | 3 |
