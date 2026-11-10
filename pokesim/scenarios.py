@@ -281,7 +281,7 @@ class Scenario:
     # adventure learns them from its trades and the coordinator. A scenario has neither, so it names them.
     trade_partners: list = field(default_factory=list)
     # Run attempts the battle stance must make (planner design S5), so a hunt shows it ran from
-    # the battles it could not catch from.
+    # the battles it could not catch from. A run that meets fewer such battles owes one run for each.
     min_flees: int = 0
 
     @classmethod
@@ -580,6 +580,14 @@ def matches(wanted, kind, detail):
     return kind == name and (not value or detail == value)
 
 
+def wild_dex(generation, snapshot):
+    """The Pokédex number of the wild Pokémon a battle is against."""
+    if generation == 2:
+        return snapshot.enemy_species
+    from .strategy_data import SPECIES
+    return SPECIES.get(snapshot.enemy_species, {}).get('dex')
+
+
 def gen1_variant(scenario):
     """The Gen I game data a scenario needs, or None for Gen II, which loads its data per run."""
     generation, sha1 = cartridge(scenario.checkpoint)
@@ -604,8 +612,18 @@ def play(scenario, rom=None, progress=None):
         worst, reloads, achieved, failure, reached = 0, 0, [], None, scenario.until is None
         end, reached_frame, followed, followed_frame = start + budget, None, scenario.then is None, None
         marks = getattr(watch, 'marks', None)
+        # Wild battles against anything but an ``owned:`` target, each counted as it ends. These are
+        # the battles min_flees asks the run to leave, so a hunt whose first wild battle is its target
+        # owes no run.
+        name, _, value = (scenario.until or '').partition(':')
+        target = int(value) if name == 'owned' and value.isdigit() else None
+        others, foe = 0, None
         while run.frame < end:
             snapshot = read()
+            if snapshot.in_battle == 1:
+                foe = wild_dex(run.generation, snapshot)
+            elif foe is not None:
+                others, foe = others + (foe != target), None
             gained, earned = watch.observe(snapshot)
             if gained or earned or run.generation == 2 and snapshot.started and run.waiting(snapshot):
                 progress_frame = run.frame
@@ -659,8 +677,9 @@ def play(scenario, rom=None, progress=None):
         elif failure is None and not followed:
             failure = f'no {scenario.then} within {scenario.after_game_minutes} game minutes after {scenario.until}'
         flees = dict(getattr(run.policy, 'flees', None) or {})
-        if failure is None and flees.get('attempts', 0) < scenario.min_flees:
-            failure = f'{flees.get("attempts", 0)} run attempts, fewer than {scenario.min_flees}'
+        owed = min(scenario.min_flees, others)
+        if failure is None and flees.get('attempts', 0) < owed:
+            failure = f'{flees.get("attempts", 0)} run attempts, fewer than {owed}, in {others} other wild battles'
         final = read()
         details = run.policy.details()
         return {'name': scenario.name, 'generation': run.generation, 'passed': failure is None, 'failure': failure,

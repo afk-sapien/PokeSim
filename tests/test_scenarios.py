@@ -320,3 +320,38 @@ def test_a_yellow_scenario_replays_with_yellow_game_data(tmp_path, monkeypatch):
     monkeypatch.setattr(scenarios, 'current_variant', lambda: 'red')
     monkeypatch.setattr(scenarios, '_play_elsewhere', lambda scenario, rom, variant: calls.append(variant) or {'passed': True})
     assert play(Scenario(name='s', folder=tmp_path, checkpoint=checkpoint)) == {'passed': True} and calls == ['yellow']
+
+
+def _hunt(tmp_path, monkeypatch, battles, flees):
+    """Play a Gen II hunt for Mareep (179) through ``battles``, the wild species met in order, with
+    ``flees`` run attempts, and return the replay's result."""
+    import pokesim.scenarios as scenarios
+    checkpoint = tmp_path / 'start.state'
+    checkpoint.with_suffix('.json').write_text(json.dumps({'generation': 2, 'rom_sha1': 'f' * 40}))
+    steps = [SimpleNamespace(in_battle=0, enemy_species=0)]
+    for species in battles:
+        steps += [SimpleNamespace(in_battle=1, enemy_species=species), SimpleNamespace(in_battle=0, enemy_species=0)]
+    for step in steps:
+        step.started, step.map_name, step.party = False, 'Route 42', []
+    run = SimpleNamespace(generation=2, frame=0, policy=SimpleNamespace(flees={'attempts': flees}, recoveries=0,
+                                                                        details=lambda: {}), stop=lambda: None)
+    run.read = lambda: steps[min(run.frame, len(steps) - 1)]
+
+    def step(snapshot):
+        run.frame += 1
+    run.step = step
+    caught = lambda snapshot: [('owned', '179', 'Mareep')] if run.frame == len(steps) - 1 else []
+    watch = SimpleNamespace(observe=lambda snapshot: ([], False), marks=caught, loop=None,
+                            battle_clock=lambda snapshot, since, frame: None, hopeless=lambda snapshot: False)
+    monkeypatch.setattr(scenarios, 'open_run', lambda scenario, rom: (run, watch))
+    return play(Scenario(name='hunt', folder=tmp_path, checkpoint=checkpoint, until='owned:179', min_flees=1))
+
+
+def test_a_hunt_whose_first_wild_battle_is_its_target_owes_no_run(tmp_path, monkeypatch):
+    # A Gold postgame hunt for Mareep met Mareep in its first battle on Route 42 and caught it, so it had
+    # nothing to run from, and min_flees failed it with 0 run attempts.
+    assert _hunt(tmp_path, monkeypatch, [179], flees=0)['passed']
+    assert _hunt(tmp_path, monkeypatch, [41, 179], flees=1)['passed']
+    # A Zubat fought out on the way still fails the hunt.
+    assert _hunt(tmp_path, monkeypatch, [41, 179], flees=0)['failure'] == (
+        '0 run attempts, fewer than 1, in 1 other wild battles')
