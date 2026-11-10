@@ -550,9 +550,9 @@ In the goal tree it is the `done` precondition of each boss goal. HEAL spawns a 
 
 It is the soak gate for every PR below from PR 2 on. After PR 3 switches the readers to `net`, its invariants read `progress_events` instead of titles. During PR 2's shadow mode it reads titles as today and also reports where the shadow rows disagree. That closes its blind spot where duplicate catches write no event. Its other blind spots stay listed in its report.
 
-## 12. Two-week journal replay on the deploy host
+## 12. Two-week journal replay on the desktop
 
-This checks the progress model on real history before the stall tiers switch to it. It is described here and not run yet.
+This checks the progress model on real history before the stall tiers switch to it. It runs on the desktop, never on the deploy host.
 
 ### Tool
 
@@ -563,7 +563,7 @@ replay_progress.py run STORES_DIR --days 14 --out REPORT_JSON [--labels LABELS_J
 replay_progress.py report REPORT_JSON
 ```
 
-1. Input is a read-only copy of each adventure's store taken on the deploy host. It reads `events`, `capture_receipts`, `progress`, `kv` and the stall bundle reports. It never reads save state.
+1. Input is two read-only copies on the desktop. The main one is the hosted app's newest cold backup, extracted outside the repo, for two weeks of real play. The second is a copy of the local dev instance's data folder, for the stall hunt games and their fresh stall events. The tool never opens a live data folder. It reads `events`, `capture_receipts`, `progress`, `kv` and the stall bundle reports. It never reads save state.
 2. It rebuilds `progress_events` rows from the journal and receipts, as the new writers would have written them.
 3. It runs the old checks (StallWatch, LoopGuard and the watchdog fingerprint) and the new model side by side over the same rows.
 4. Ground truth is each stall bundle, help request, give-up, owner restart and the optional labels file.
@@ -579,7 +579,7 @@ replay_progress.py report REPORT_JSON
 | Time to detect | PlayClock frames and wall minutes from stall start to flag, median and worst |
 | Old model | the same columns for today's checks |
 
-The bar to switch: every labeled stall caught, at most one false alarm per adventure per week, and median time to detect no worse than today. Agent time is about 3 hours to build, plus about an hour of run time on the deploy host.
+The bar to switch: every labeled stall caught, at most one false alarm per adventure per week, and median time to detect no worse than today. Agent time is about 3 hours to build, plus about an hour of run time on the desktop.
 
 ## 13. PR sequence
 
