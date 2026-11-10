@@ -195,6 +195,22 @@ and `ROM_PATH` set to that share code and cartridge.
 `stage_ladder.py gate` writes a `gate-report.json` that records its attempt, the number of gate
 runs for that commit so far, so a pass on the fifth try reads as one.
 
+## Preflight for behaviour changes
+
+CI has no cartridges or private saves, so a pull request that changes bot, planner, policy,
+battle, overworld or game loop code runs the ladder gate and every stuck scenario locally before
+it merges. Push the branch, then run from its clean checkout:
+
+```sh
+uv run --locked --extra dev python tools/preflight.py roms/
+```
+
+It plays the gate and then the replays under the heavy load gate, in about 10 minutes, and posts
+the `preflight` commit status on HEAD with the signed-in `gh` account. A replay named in
+`known-failures.txt` in the scenarios folder is a known failure on `main` and does not fail it. A
+gate failure, or any other replay that fails, raises or is skipped, does. The run also writes
+`data/preflight/<commit>.json`. Pass `--no-post` to try it without a status.
+
 ## Live soak before a deploy
 
 `tools/live_soak.py` plays copies of the live adventures with the real Manager and workers. `prepare`
