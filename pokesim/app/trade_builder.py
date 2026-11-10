@@ -13,6 +13,7 @@ from .. import config
 from pokecore.identity import find
 from .coordinator import BUSY_NOTE, LINKABLE
 from .assets import portrait_url
+from .errors import Conflict
 from .registry import identifier, validate_id
 
 FIELDS = ('from_id', 'from_key', 'to_id', 'to_key')
@@ -23,11 +24,11 @@ class ViewOnlyError(Exception):
     """The adventure that would act is view-only."""
 
 
-class Gone(ValueError):
+class Gone(Conflict):
     """A Pokémon or adventure in the trade no longer exists."""
 
 
-class HardLimit(ValueError):
+class HardLimit(Conflict):
     """The cable cannot carry this pair."""
 
 
@@ -70,19 +71,19 @@ class TradeBuilder:
         except KeyError as error:
             raise Gone('An adventure in this trade was deleted') from error
         if game['archived']:
-            raise (Gone if accepting else ValueError)(f'{game["name"]} was archived')
+            raise (Gone if accepting else Conflict)(f'{game["name"]} was archived')
         reason = self.coordinator.manual_game_reason(game)
         if not reason:
             return game
         permanent = game['version'] not in LINKABLE or (game.get('provenance') or {}).get('trading_blocked')
         # A stopped adventure only delays a trade. Start it and try again.
-        raise (HardLimit if accepting and permanent else ValueError)(f'{game["name"]}: {reason}')
+        raise (HardLimit if accepting and permanent else Conflict)(f'{game["name"]}: {reason}')
 
     def _inventories(self, *aids):
         def load(aid):
             inventory = self.coordinator.manual_inventory(aid)
             if inventory.get('reason'):
-                raise ValueError(f'{self.registry.adventure(aid)["name"]}: {inventory["reason"]}')
+                raise Conflict(f'{self.registry.adventure(aid)["name"]}: {inventory["reason"]}')
             return inventory
         with ThreadPoolExecutor(max_workers=len(aids)) as pool:
             return list(pool.map(load, aids))
@@ -183,15 +184,15 @@ class TradeBuilder:
         busy = self.coordinator.busy_adventures()
         if from_key is not None:
             if not isinstance(from_key, str) or not 1 <= len(from_key) <= 256:
-                raise ValueError('Choose a Pokémon to trade')
+                raise Conflict('Choose a Pokémon to trade')
             try:
                 give_inventory = self.coordinator.manual_inventory(from_id)
             except (RuntimeError, OSError, KeyError) as error:
-                raise ValueError(f'{sender["name"]} did not answer: {error}') from error
+                raise Conflict(f'{sender["name"]} did not answer: {error}') from error
             sender_reason = give_inventory.get('reason') or ''
             give = find(give_inventory.get('pokemon') or [], from_key)
             if give is None and not sender_reason:
-                raise ValueError(f'That Pokémon is no longer in {sender["name"]}')
+                raise Conflict(f'That Pokémon is no longer in {sender["name"]}')
             open_games = [game for game in games if not reasons[game['id']]]
             if sender_reason or give.get('blocked'):
                 for game in open_games:
@@ -215,12 +216,12 @@ class TradeBuilder:
         for aid in (from_id, to_id):
             validate_id(aid)
         if from_id == to_id:
-            raise ValueError('Choose another adventure')
+            raise Conflict('Choose another adventure')
         sender, receiver = self._adventure(from_id), self._adventure(to_id)
         give_inventory, take_inventory = self._inventories(from_id, to_id)
         give = find(give_inventory.get('pokemon') or [], from_key)
         if give is None:
-            raise ValueError(f'That Pokémon is no longer in {sender["name"]}')
+            raise Conflict(f'That Pokémon is no longer in {sender["name"]}')
         give_reason = self._give_reason(give_inventory, take_inventory, give)
         blocked = {}
         takes = [] if give_reason else take_inventory.get('pokemon') or []
@@ -267,15 +268,15 @@ class TradeBuilder:
         With `actor`, the trade is queued only while they still own both adventures."""
         from .ownership import owned_by
         if not isinstance(data, dict) or not set(FIELDS) <= set(data) or set(data) - set(FIELDS) - {'request_id'}:
-            raise ValueError('Choose a Pokémon to trade and one to receive')
+            raise Conflict('Choose a Pokémon to trade and one to receive')
         selection = {name: data[name] for name in FIELDS}
         for name in ('from_id', 'to_id'):
             validate_id(selection[name])
         for name in ('from_key', 'to_key'):
             if not isinstance(selection[name], str) or not 1 <= len(selection[name]) <= 256:
-                raise ValueError('Choose a Pokémon on each side')
+                raise Conflict('Choose a Pokémon on each side')
         if selection['from_id'] == selection['to_id']:
-            raise ValueError('Choose another adventure to trade with')
+            raise Conflict('Choose another adventure to trade with')
         request_id = validate_id(data.get('request_id') or identifier())
         try:
             # Sending the same request again returns the trade it already queued.

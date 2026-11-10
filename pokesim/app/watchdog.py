@@ -23,6 +23,7 @@ import time
 import traceback
 
 from . import progress_sweep
+from .errors import Conflict
 from .loops import Loop
 
 log = logging.getLogger(__name__)
@@ -248,7 +249,7 @@ class Watchdog:
 
     def set_enabled(self, value):
         if type(value) is not bool:
-            raise ValueError('enabled must be a boolean')
+            raise Conflict('enabled must be a boolean')
         self.manager.registry.set_setting(SETTING, {'enabled': value})
         if not value:
             with self.guard:

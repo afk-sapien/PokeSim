@@ -14,6 +14,7 @@ import uuid
 
 from ..checkpoints import CheckpointStore
 from . import lifecycle
+from .errors import Conflict, NotFound
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def digest(value):
 
 def validate_id(value):
     if not isinstance(value, str) or len(value) != 32 or any(c not in '0123456789abcdef' for c in value):
-        raise ValueError('Invalid adventure or operation ID')
+        raise Conflict('Invalid adventure or operation ID')
     return value
 
 
@@ -179,7 +180,7 @@ class Registry:
         with self.lock:
             result = self.decode(self.db.execute('SELECT * FROM adventures WHERE id=?', (adventure_id,)).fetchone())
         if result is None:
-            raise KeyError('Adventure not found')
+            raise NotFound('Adventure not found')
         return result
 
     def adventures(self):
@@ -214,21 +215,21 @@ class Registry:
     def create(self, name, rom_id, settings, request_id, *, owner=LIBRARY_OWNER):
         name = str(name).strip()
         if not name or len(name) > 120:
-            raise ValueError('Choose an adventure name of 1 to 120 characters')
+            raise Conflict('Choose an adventure name of 1 to 120 characters')
         request_id = self.scoped_request(request_id, owner)
         payload = dict(name=name, rom_id=rom_id, settings=settings)
         fingerprint = digest(payload)
         with self.lock, self.db:
             if owner in self.leaving:
-                raise ValueError('This account is being deleted')
+                raise Conflict('This account is being deleted')
             previous = self.db.execute('SELECT * FROM operations WHERE id=?', (request_id,)).fetchone()
             if previous:
                 if previous['kind'] != 'create' or previous['digest'] != fingerprint:
-                    raise ValueError('This request ID already belongs to a different operation')
+                    raise Conflict('This request ID already belongs to a different operation')
                 return self.adventure(json.loads(previous['result'])['id'])
             rom = self.db.execute('SELECT * FROM roms WHERE id=?', (rom_id,)).fetchone()
             if rom is None:
-                raise ValueError('Add a game cartridge in Settings before creating an adventure')
+                raise Conflict('Add a game cartridge in Settings before creating an adventure')
             from ..cartridges import validate_generation_settings, validate_starter
             validate_starter(settings.get('starter', 'random'), rom['version'])
             validate_generation_settings(settings, rom['version'])
@@ -260,7 +261,7 @@ class Registry:
         self.adventure(aid)
         with self.lock, self.db:
             if owner in self.leaving:
-                raise ValueError('This account is being deleted')
+                raise Conflict('This account is being deleted')
             before = self.db.execute('SELECT owner_id FROM adventures WHERE id=?', (aid,)).fetchone()
             self.db.execute('UPDATE adventures SET owner_id=? WHERE id=?', (owner, aid))
             if before is not None and before[0] != owner:
@@ -292,7 +293,7 @@ class Registry:
             previous = self.db.execute('SELECT * FROM operations WHERE id=?', (request_id,)).fetchone()
             if previous:
                 if previous['kind'] != action or previous['digest'] != fingerprint:
-                    raise ValueError('This request ID already belongs to another operation')
+                    raise Conflict('This request ID already belongs to another operation')
                 return False
             self.db.execute('UPDATE adventures SET desired_state=? WHERE id=?', (desired, aid))
             self.db.execute('INSERT INTO operations VALUES (?, ?, ?, ?)',
@@ -337,7 +338,7 @@ class Registry:
             raise ValueError(f'Unknown adventure state {to}')
         row = self.db.execute('SELECT state FROM adventures WHERE id=?', (aid,)).fetchone()
         if row is None:
-            raise KeyError('Adventure not found')
+            raise NotFound('Adventure not found')
         before = row['state']
         self.db.execute('UPDATE adventures SET state=? WHERE id=?', (to, aid))
         if before == to:
@@ -365,7 +366,7 @@ class Registry:
         with self.lock:
             row = self.db.execute('SELECT * FROM interactions WHERE id=?', (tid,)).fetchone()
         if not row:
-            raise KeyError('Interaction not found')
+            raise NotFound('Interaction not found')
         return self._interaction(row)
 
     def transactions(self, unresolved=False, *, adventure_id=None):
@@ -407,7 +408,7 @@ class Registry:
             row = self.db.execute('SELECT plan FROM interactions WHERE id=?', (tid,)).fetchone()
             if row:
                 if digest(json.loads(row[0])) != digest(plan):
-                    raise ValueError('Interaction ID already has another plan')
+                    raise Conflict('Interaction ID already has another plan')
             else:
                 now = time.time()
                 self.db.execute('INSERT INTO interactions VALUES (?, ?, NULL, ?, NULL, NULL, ?, ?)',
@@ -420,7 +421,7 @@ class Registry:
         with self.lock, self.db:
             previous = self.transaction(tid)
             if previous['decision'] and 'decision' in values and values['decision'] != previous['decision']:
-                raise ValueError('A durable interaction decision cannot change')
+                raise Conflict('A durable interaction decision cannot change')
             encoded = {key: json.dumps(value) if key == 'result' else value for key, value in values.items()}
             encoded['updated_at'] = time.time()
             self.db.execute('UPDATE interactions SET ' + ','.join(f'{key}=?' for key in encoded) + ' WHERE id=?',
@@ -440,7 +441,7 @@ class Registry:
         with self.lock:
             row = self.db.execute('SELECT * FROM trade_offers WHERE id=?', (oid,)).fetchone()
         if row is None:
-            raise KeyError('Trade offer not found')
+            raise NotFound('Trade offer not found')
         return self._decode_offer(row)
 
     def trade_offers(self, adventure_id=None, statuses=None):

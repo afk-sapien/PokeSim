@@ -13,6 +13,7 @@ import tempfile
 import time
 import zipfile
 
+from .errors import Conflict
 from .registry import identifier
 
 MAX_EXPANDED = 16 * 1024**3
@@ -32,7 +33,7 @@ def extract_archive(archive, destination, max_expanded=MAX_EXPANDED):
     total = 0
     with zipfile.ZipFile(archive) as bundle:
         if len(bundle.infolist()) > 100000:
-            raise ValueError('Archive has too many files')
+            raise Conflict('Archive has too many files')
         for info in bundle.infolist():
             relative = PurePosixPath(info.filename)
             mode = info.external_attr >> 16
@@ -46,15 +47,15 @@ def extract_archive(archive, destination, max_expanded=MAX_EXPANDED):
             if (relative.is_absolute() or '..' in relative.parts or '\\' in info.orig_filename or '\x00' in info.orig_filename
                     or ':' in info.filename or unsafe_component
                     or mode & 0o170000 == 0o120000 or total > max_expanded):
-                raise ValueError('Archive contains unsafe paths or exceeds the expanded size limit')
+                raise Conflict('Archive contains unsafe paths or exceeds the expanded size limit')
             path = destination.joinpath(*relative.parts)
             if any(parent.is_symlink() for parent in (path, *path.parents) if parent != destination):
-                raise ValueError('Archive contains unsafe paths through a symbolic link')
+                raise Conflict('Archive contains unsafe paths through a symbolic link')
             if info.is_dir():
                 path.mkdir(parents=True, exist_ok=True)
             else:
                 if path.exists():
-                    raise ValueError('Archive contains duplicate files')
+                    raise Conflict('Archive contains duplicate files')
                 path.parent.mkdir(parents=True, exist_ok=True)
                 with bundle.open(info) as source, path.open('xb') as target:
                     shutil.copyfileobj(source, target, 1024 * 1024)
@@ -65,7 +66,7 @@ def create_backup(manager):
     with manager.maintenance:
         with manager.registry.lock:
             if manager.registry.transactions(unresolved=True):
-                raise ValueError('Resolve pending interactions before creating a backup')
+                raise Conflict('Resolve pending interactions before creating a backup')
             manager.suspended = True
         try:
             # With accounts a backup ends every control lease, and nobody plays by hand across
@@ -157,22 +158,22 @@ def _create_backup(manager):
 def restore_backup(archive, destination):
     destination = Path(destination).resolve()
     if destination.exists() and any(destination.iterdir()):
-        raise ValueError('Restore requires an empty destination directory')
+        raise Conflict('Restore requires an empty destination directory')
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.pokesim-restore-', dir=destination.parent) as temporary:
         staging = extract_archive(archive, Path(temporary) / 'verified')
         manifest = json.loads((staging / 'backup.json').read_text(encoding='utf-8'))
         if not isinstance(manifest, dict) or manifest.get('format') != 1 or not isinstance(manifest.get('files'), dict):
-            raise ValueError('Unsupported backup format')
+            raise Conflict('Unsupported backup format')
         actual = {p.relative_to(staging).as_posix() for p in staging.rglob('*') if p.is_file()} - {'backup.json'}
         if actual != set(manifest['files']) or 'app.sqlite' not in actual:
-            raise ValueError('Backup file list is incomplete')
+            raise Conflict('Backup file list is incomplete')
         for relative, expected in manifest['files'].items():
             if file_checksum(staging / relative) != expected:
-                raise ValueError(f'Backup verification failed for {relative}')
+                raise Conflict(f'Backup verification failed for {relative}')
         with closing(sqlite3.connect(staging / 'app.sqlite')) as db:
             if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
-                raise ValueError('Backup database is damaged')
+                raise Conflict('Backup database is damaged')
         if destination.exists():
             destination.rmdir()
         staging.rename(destination)
@@ -191,10 +192,10 @@ def _backup_adventures(root):
         validate_id(item['id'])
         rom_id = item['rom_id']
         if not isinstance(rom_id, str) or len(rom_id) != 64 or any(c not in '0123456789abcdef' for c in rom_id):
-            raise ValueError('Backup contains an invalid ROM identifier')
+            raise Conflict('Backup contains an invalid ROM identifier')
         item['settings'] = json.loads(item['settings'])
         if not isinstance(item['settings'], dict) or not isinstance(item['name'], str):
-            raise ValueError('Backup contains invalid adventure metadata')
+            raise Conflict('Backup contains invalid adventure metadata')
         item['summary'] = json.loads(item['summary']) if item['summary'] else {}
         item['restorable'] = (root / 'adventures' / item['id'] / 'pokesim.sqlite').is_file()
         result.append(item)
@@ -208,7 +209,7 @@ def _verified_backup(manager, archive):
             root = restore_backup(archive, Path(temporary) / 'verified')
             yield root
     except (zipfile.BadZipFile, sqlite3.DatabaseError, FileNotFoundError, UnicodeError) as error:
-        raise ValueError('Choose a complete, valid PokeSim backup ZIP') from error
+        raise Conflict('Choose a complete, valid PokeSim backup ZIP') from error
 
 
 def inspect_backup(manager, archive):
@@ -216,7 +217,7 @@ def inspect_backup(manager, archive):
         manifest = json.loads((root / 'backup.json').read_text(encoding='utf-8'))
         created_at = manifest.get('created_at')
         if type(created_at) not in (int, float) or not math.isfinite(created_at) or not 0 <= created_at <= time.time() + 86400:
-            raise ValueError('Backup contains an invalid creation date')
+            raise Conflict('Backup contains an invalid creation date')
         return {'created_at': created_at, 'adventures': [
             {key: item[key] for key in ('id', 'name', 'version', 'restorable')}
             for item in _backup_adventures(root)]}
@@ -229,23 +230,23 @@ def load_backup_adventure(manager, archive, adventure_id, name, request_id, owne
     validate_id(adventure_id)
     validate_id(request_id)
     if not isinstance(name, str) or not 1 <= len(name.strip()) <= 120:
-        raise ValueError('Choose an adventure name of 1 to 120 characters')
+        raise Conflict('Choose an adventure name of 1 to 120 characters')
     fingerprint = digest({'backup': Path(archive).stem, 'adventure': adventure_id, 'name': name.strip()})
     with manager.maintenance, manager.registry.lock:
         manager.check_available()
         previous = manager.registry.db.execute('SELECT * FROM operations WHERE id=?', (request_id,)).fetchone()
         if previous:
             if previous['kind'] != 'backup-load' or previous['digest'] != fingerprint:
-                raise ValueError('This request ID already belongs to another operation')
+                raise Conflict('This request ID already belongs to another operation')
             return manager.registry.adventure(json.loads(previous['result'])['id'])
         with _verified_backup(manager, archive) as root:
             row = next((item for item in _backup_adventures(root) if item['id'] == adventure_id), None)
             if not row or not row['restorable']:
-                raise ValueError('This backup does not contain that saved adventure')
+                raise Conflict('This backup does not contain that saved adventure')
             settings = manager.validate_adventure_settings({**row['settings'], 'auto_start': False})
             rom = root / 'assets' / 'roms' / row['rom_id'] / 'rom.gb'
             if file_checksum(rom) != row['rom_id']:
-                raise ValueError('The backup ROM does not match this adventure')
+                raise Conflict('The backup ROM does not match this adventure')
             restored = import_directory(manager, root / 'adventures' / adventure_id,
                                         rom=rom,
                                         name=name.strip(), stopped=True, owner=owner)

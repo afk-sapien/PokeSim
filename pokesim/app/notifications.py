@@ -10,6 +10,7 @@ import uuid
 from urllib.parse import quote, urlsplit
 
 from ..notify import publish
+from .errors import Conflict
 
 log = logging.getLogger(__name__)
 DEFAULT_SERVER = 'https://ntfy.sh'
@@ -45,19 +46,19 @@ CATEGORY_KEYS = tuple(row[0] for row in CATEGORIES)
 
 def validate_server(value):
     if not isinstance(value, str) or len(value) > 200:
-        raise ValueError('The ntfy server must be an HTTP or HTTPS address')
+        raise Conflict('The ntfy server must be an HTTP or HTTPS address')
     value = value.strip().rstrip('/')
     url = urlsplit(value)
     if url.scheme not in {'http', 'https'} or not url.hostname or url.username or url.password:
-        raise ValueError('The ntfy server must be an HTTP or HTTPS address without credentials')
+        raise Conflict('The ntfy server must be an HTTP or HTTPS address without credentials')
     if url.query or url.fragment:
-        raise ValueError('The ntfy server must not contain a query or fragment')
+        raise Conflict('The ntfy server must not contain a query or fragment')
     return value
 
 
 def validate_topic(value, required=True):
     if not isinstance(value, str) or not (TOPIC.fullmatch(value) or value == '' and not required):
-        raise ValueError('The topic may use 1 to 64 letters, digits, hyphens and underscores')
+        raise Conflict('The topic may use 1 to 64 letters, digits, hyphens and underscores')
     return value
 
 
@@ -66,32 +67,32 @@ def validate_token(value):
         return ''
     if not isinstance(value, str) or len(value) > 512 or not value.isascii() or any(
             not char.isprintable() or char.isspace() for char in value):
-        raise ValueError('The access token must be text without spaces')
+        raise Conflict('The access token must be text without spaces')
     return value
 
 
 def provider_changes(values, changes):
     provider = changes.get('provider', values['provider'])
     if not isinstance(provider, str) or provider not in {'ntfy', 'discord', 'telegram'}:
-        raise ValueError('Choose ntfy, Discord or Telegram')
+        raise Conflict('Choose ntfy, Discord or Telegram')
     values['provider'] = provider
     for key in ('discord_webhook', 'telegram_token', 'telegram_chat_id'):
         if key not in changes:
             continue
         value = changes[key]
         if not isinstance(value, str):
-            raise ValueError('Notification credentials must be text')
+            raise Conflict('Notification credentials must be text')
         value = value.strip()
         if key == 'discord_webhook' and value:
             if not re.fullmatch(
                     r'https://discord(?:app)?\.com/api(?:/v[0-9]+)?/webhooks/[0-9]+/[A-Za-z0-9_-]{20,200}', value):
-                raise ValueError('Enter a Discord webhook URL copied from Server Settings')
+                raise Conflict('Enter a Discord webhook URL copied from Server Settings')
             # Accept copied legacy addresses without sending credentials through redirects.
             value = value.replace('https://discordapp.com/', 'https://discord.com/', 1)
         if key == 'telegram_token' and value and not re.fullmatch(r'[0-9]+:[A-Za-z0-9_-]{20,200}', value):
-            raise ValueError('Enter the Telegram bot token from BotFather')
+            raise Conflict('Enter the Telegram bot token from BotFather')
         if key == 'telegram_chat_id' and value and not re.fullmatch(r'-?[0-9]{1,20}|@[A-Za-z][A-Za-z0-9_]{4,31}', value):
-            raise ValueError('Enter a Telegram chat ID or channel username')
+            raise Conflict('Enter a Telegram chat ID or channel username')
         values[key] = value
 
 
@@ -107,7 +108,7 @@ def destination(values, required=False, provider=None):
         url, token, chat = f"{values['server']}/{values['topic']}", values['token'], ''
         complete = bool(values['topic'])
     if required and not complete:
-        raise ValueError(f'Complete the {provider} destination before sending')
+        raise Conflict(f'Complete the {provider} destination before sending')
     return {'url': url if complete else '', 'token': token, 'provider': provider, 'chat_id': chat}
 
 
@@ -116,7 +117,7 @@ def destinations(values, required=False):
     targets = [destination(values, required=required, provider=name)
                for name in PROVIDERS if selected.get(name)]
     if required and not targets:
-        raise ValueError('Enable at least one notification destination')
+        raise Conflict('Enable at least one notification destination')
     return [target for target in targets if target['url']]
 
 
@@ -246,11 +247,11 @@ class NotificationCenter:
         allowed = {'providers', 'enabled', 'server', 'topic', 'token', 'min_priority', 'categories', 'adventures',
                    'provider', 'discord_webhook', 'telegram_token', 'telegram_chat_id'}
         if not isinstance(changes, dict) or not changes or set(changes) - allowed:
-            raise ValueError('Unsupported notification settings')
+            raise Conflict('Unsupported notification settings')
         values = self.settings()
         if 'integrations' in values:
             if set(changes) != {'enabled'} or type(changes['enabled']) is not bool:
-                raise ValueError('Edit notification integrations individually')
+                raise Conflict('Edit notification integrations individually')
             with self.guard:
                 current = self.settings()
                 self.registry.set_setting('notifications', {'enabled': changes['enabled'],
@@ -261,7 +262,7 @@ class NotificationCenter:
             selected = changes['providers']
             if (not isinstance(selected, dict) or set(selected) - set(PROVIDERS)
                     or any(type(on) is not bool for on in selected.values())):
-                raise ValueError('Notification destinations must be booleans for ntfy, Discord or Telegram')
+                raise Conflict('Notification destinations must be booleans for ntfy, Discord or Telegram')
             values['providers'] = {**values.get('providers', {name: name == values['provider'] for name in PROVIDERS}),
                                    **selected}
         elif 'provider' in changes:
@@ -269,7 +270,7 @@ class NotificationCenter:
             values['providers'] = {name: name == values['provider'] for name in PROVIDERS}
         if 'enabled' in changes:
             if type(changes['enabled']) is not bool:
-                raise ValueError('enabled must be a boolean')
+                raise Conflict('enabled must be a boolean')
             values['enabled'] = changes['enabled']
         if 'server' in changes:
             values['server'] = validate_server(changes['server'])
@@ -279,13 +280,13 @@ class NotificationCenter:
             values['token'] = validate_token(changes['token'])
         if 'min_priority' in changes:
             if type(changes['min_priority']) is not int or not 1 <= changes['min_priority'] <= 5:
-                raise ValueError('Minimum importance must be between 1 and 5')
+                raise Conflict('Minimum importance must be between 1 and 5')
             values['min_priority'] = changes['min_priority']
         for name, known in (('categories', set(CATEGORY_KEYS)),
                             ('adventures', {row['id'] for row in self.registry.adventures()})):
             choices = changes.get(name, {})
             if not isinstance(choices, dict) or set(choices) - known or any(type(on) is not bool for on in choices.values()):
-                raise ValueError(f'Unknown notification {name}')
+                raise Conflict(f'Unknown notification {name}')
         values['categories'].update(changes.get('categories', {}))
         muted = set(values['muted_adventures'])
         for aid, on in changes.get('adventures', {}).items():
@@ -302,42 +303,42 @@ class NotificationCenter:
                    'telegram_token', 'telegram_chat_id', 'min_priority', 'categories', 'adventures',
                    'include_new_adventures'}
         if not isinstance(changes, dict) or not changes or set(changes) - allowed:
-            raise ValueError('Unsupported integration settings')
+            raise Conflict('Unsupported integration settings')
         with self.guard:
             values = self.settings()
             rows = integrations(values)
             request_id = changes.get('request_id')
             if request_id is not None:
                 if integration_id is not None or not isinstance(request_id, str) or not re.fullmatch('[a-f0-9]{32}', request_id):
-                    raise ValueError('Invalid integration request ID')
+                    raise Conflict('Invalid integration request ID')
                 if any(item['id'] == request_id for item in rows):
                     return self.supervisor.push_notifications()
             row = next((item for item in rows if item['id'] == integration_id), None)
             if integration_id is not None and row is None:
-                raise ValueError('Integration not found')
+                raise Conflict('Integration not found')
             if row is None:
                 row = {**defaults(), 'id': request_id or uuid.uuid4().hex, 'name': '', 'enabled': True,
                        'include_new_adventures': True, 'selected_adventures': []}
                 rows.append(row)
             elif 'provider' in changes and changes['provider'] != row['provider']:
-                raise ValueError('Create a new integration to change its provider')
+                raise Conflict('Create a new integration to change its provider')
             provider_changes(row, changes)
             credential_keys = {'token', 'discord_webhook', 'telegram_token', 'telegram_chat_id'}
             provider_keys = {'ntfy': {'token'}, 'discord': {'discord_webhook'},
                              'telegram': {'telegram_token', 'telegram_chat_id'}}[row['provider']]
             if (set(changes) & credential_keys) - provider_keys:
-                raise ValueError('Credentials must match the selected provider')
+                raise Conflict('Credentials must match the selected provider')
             if 'name' in changes:
                 name = changes['name']
                 if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80 or not name.isprintable():
-                    raise ValueError('Give this integration a name of 1 to 80 characters')
+                    raise Conflict('Give this integration a name of 1 to 80 characters')
                 row['name'] = name.strip()
             if not row['name']:
-                raise ValueError('Give this integration a name')
+                raise Conflict('Give this integration a name')
             for key in ('enabled', 'include_new_adventures'):
                 if key in changes:
                     if type(changes[key]) is not bool:
-                        raise ValueError(f'{key} must be a boolean')
+                        raise Conflict(f'{key} must be a boolean')
                     row[key] = changes[key]
             for key, validate in [('server', validate_server), ('topic', lambda value: validate_topic(value, False)),
                                   ('token', validate_token)]:
@@ -345,14 +346,14 @@ class NotificationCenter:
                     row[key] = validate(changes[key])
             if 'min_priority' in changes:
                 if type(changes['min_priority']) is not int or not 1 <= changes['min_priority'] <= 5:
-                    raise ValueError('Minimum importance must be between 1 and 5')
+                    raise Conflict('Minimum importance must be between 1 and 5')
                 row['min_priority'] = changes['min_priority']
             known = {game['id'] for game in self.registry.adventures()}
             for key, keys in [('categories', set(CATEGORY_KEYS)), ('adventures', known)]:
                 choices = changes.get(key, {})
                 if (not isinstance(choices, dict) or set(choices) - keys
                         or any(type(on) is not bool for on in choices.values())):
-                    raise ValueError(f'Unknown integration {key}')
+                    raise Conflict(f'Unknown integration {key}')
             row['categories'].update(changes.get('categories', {}))
             if 'categories' in changes:
                 row.pop('mute', None)
@@ -377,7 +378,7 @@ class NotificationCenter:
             rows = integrations(values)
             remaining = [row for row in rows if row['id'] != integration_id]
             if len(rows) == len(remaining):
-                raise ValueError('Integration not found')
+                raise Conflict('Integration not found')
             self.registry.set_setting('notifications', {'enabled': values['enabled'], 'integrations': remaining})
         return self.supervisor.push_notifications()
 
@@ -403,13 +404,13 @@ class NotificationCenter:
         """Send one message now, optionally with values that are not saved yet."""
         if not isinstance(overrides, dict) or set(overrides) - {'server', 'topic', 'token', 'request_id', 'provider',
                                                               'discord_webhook', 'telegram_token', 'telegram_chat_id'}:
-            raise ValueError('Unsupported test notification settings')
+            raise Conflict('Unsupported test notification settings')
         if integration_id is not None:
             values = next((row for row in integrations(self.settings()) if row['id'] == integration_id), None)
             if values is None:
-                raise ValueError('Integration not found')
+                raise Conflict('Integration not found')
             if 'provider' in overrides and overrides['provider'] != values['provider']:
-                raise ValueError('Create a new integration to change its provider')
+                raise Conflict('Create a new integration to change its provider')
         else:
             values = defaults() if 'integrations' in self.settings() else self.settings()
         provider_changes(values, overrides)

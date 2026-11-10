@@ -23,6 +23,7 @@ from ..checkpoints import CheckpointStore
 from ..game_data import VARIANT_ENV
 from . import inbox, trade_settings
 from .assets import portrait_url
+from .errors import Conflict, NotFound, Refused
 from .loops import Loop
 from .registry import digest, identifier, validate_id
 from pokecore.identity import find, legacy
@@ -69,16 +70,16 @@ PAIR_COOLDOWN_SECONDS = 6 * 3600
 KEEP_CHECKS = 3
 
 
-class Waiting(ValueError):
+class Waiting(Conflict):
     """A chosen trade cannot start yet, only because the Cable Club or an adventure is busy."""
 
 
-class Missing(ValueError):
+class Missing(Conflict):
     """A chosen Pokémon is no longer in its adventure. ``side`` names which one."""
     side = None
 
 
-class Ineligible(ValueError):
+class Ineligible(Conflict):
     """A selected Pokémon left its adventure's offers between scoring and the exchange."""
     def __init__(self, aid, key):
         super().__init__('This Pokémon is no longer eligible. Check its locks and trade preferences.')
@@ -548,7 +549,7 @@ class Coordinator:
 
     def _request(self, aid, operation, data=None, recovery=False):
         if self.closed.is_set():
-            raise RuntimeError('PokeSim is shutting down. The durable exchange will recover on startup.')
+            raise Refused('PokeSim is shutting down. The durable exchange will recover on startup.')
         if recovery:
             self.manager.supervisor.start(aid, recovery=True)
         child = self.manager.supervisor.child(aid)
@@ -558,7 +559,7 @@ class Coordinator:
         except httpx.HTTPError as error:
             # A worker that hangs or drops the connection cannot answer, like one that refuses, so the
             # callers' refusal handling (reject a hand-picked trade, skip an adventure) applies to it too.
-            raise RuntimeError(f'Adventure worker did not answer: {error}') from error
+            raise Refused(f'Adventure worker did not answer: {error}') from error
 
     def inventory(self, aid):
         return self._request(aid, 'inventory')
@@ -589,7 +590,7 @@ class Coordinator:
         from .ownership import owned_by
         required = {'left_id', 'right_id', 'left_key', 'right_key'}
         if not isinstance(data, dict) or not required <= set(data) or set(data) - required - {'request_id', 'manual'}:
-            raise ValueError('Choose two adventures and their Pokémon')
+            raise Conflict('Choose two adventures and their Pokémon')
         manual = data.get('manual') is True
         tid = validate_id(data.get('request_id') or identifier())
         selection = {name: data[name] for name in required}
@@ -597,9 +598,9 @@ class Coordinator:
             validate_id(selection[name])
         for name in ('left_key', 'right_key'):
             if not isinstance(selection[name], str) or not 1 <= len(selection[name]) <= 256:
-                raise ValueError('Select an eligible individual Pokémon')
+                raise Conflict('Select an eligible individual Pokémon')
         if selection['left_id'] == selection['right_id']:
-            raise ValueError('Choose two different adventures')
+            raise Conflict('Choose two different adventures')
         # Asking a worker for its inventory can take up to 55 seconds, and the maintenance lock also
         # admits adventure starts, so the inventories are read with no lock held. Everything they
         # were checked against is checked again, under the locks, before the exchange is recorded.
@@ -637,10 +638,10 @@ class Coordinator:
         give, take = (self._offer_for(selected_offers[0], right), self._offer_for(selected_offers[1], left))
         if not self._compatible_pair(left, right, give, take):
             if manual:
-                raise ValueError(self._capsule_reason(left, right, give, take))
-            raise ValueError('The Time Capsule needs an unlocked Gen II adventure and compatible Kanto Pokémon')
+                raise Conflict(self._capsule_reason(left, right, give, take))
+            raise Conflict('The Time Capsule needs an unlocked Gen II adventure and compatible Kanto Pokémon')
         if not manual and not self._last_copies_useful(give, take, self._benefit(left, take), self._benefit(right, give)):
-            raise ValueError('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
+            raise Conflict('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
         # A transfer ends queued trades under `offers.guard`, so the owner is checked again under it.
         with self.manager.maintenance, self._offers_guard(), owned_by(self.manager, actor, participants), self.guard:
             existing = self._admit(tid, selection)
@@ -679,7 +680,7 @@ class Coordinator:
         for aid, owner in owners.items():
             if self.registry.adventure(aid).get('owner_id') != owner:
                 if manual:
-                    raise ValueError('Cancelled: an adventure changed hands before the trade started')
+                    raise Conflict('Cancelled: an adventure changed hands before the trade started')
                 raise Waiting('An adventure changed hands')
         if not manual and not all(trade_settings.get(self.registry, aid)['enabled'] for aid in owners):
             raise Waiting('Auto trading was turned off')
@@ -694,7 +695,7 @@ class Coordinator:
             existing = None
         if existing:
             if any(existing['plan'][name] != value for name, value in selection.items()):
-                raise ValueError('This request ID already belongs to another exchange')
+                raise Conflict('This request ID already belongs to another exchange')
             return existing
         if self.closed.is_set() or self.manager.suspended:
             raise Waiting('Trading is paused for application maintenance')
@@ -703,11 +704,11 @@ class Coordinator:
         for aid in (selection['left_id'], selection['right_id']):
             game = self.registry.adventure(aid)
             if game['archived'] or game['state'] != 'running' or game['desired_state'] != 'running':
-                raise ValueError('Both adventures must be running before an exchange')
+                raise Conflict('Both adventures must be running before an exchange')
             if (game.get('provenance') or {}).get('trading_blocked'):
-                raise ValueError(game['provenance'].get('reason') or 'This imported adventure needs its legacy peers reconciled before trading')
+                raise Conflict(game['provenance'].get('reason') or 'This imported adventure needs its legacy peers reconciled before trading')
             if game['version'] not in LINKABLE:
-                raise ValueError('This cartridge has no compatible Cable Club adapter')
+                raise Conflict('This cartridge has no compatible Cable Club adapter')
         return None
 
     def _prepare(self, row):
@@ -726,11 +727,11 @@ class Coordinator:
                 # or shutdown ends the wait.
                 if not leases.settle(aid, deadline, cancelled):
                     if cancelled():
-                        raise RuntimeError('Cable Club preparation was cancelled')
+                        raise Refused('Cable Club preparation was cancelled')
                     raise TimeoutError(f'The adventure did not leave manual control in time (adventure {aid})')
         while len(prepared) != 2:
             if cancelled():
-                raise RuntimeError('Cable Club preparation was cancelled')
+                raise Refused('Cable Club preparation was cancelled')
             for side, aid in zip(('left', 'right'), plan['participants']):
                 if aid in prepared:
                     continue
@@ -800,7 +801,7 @@ class Coordinator:
         messages = deque(maxlen=100)
         with self.process_guard:
             if self.closed.is_set():
-                raise RuntimeError('PokeSim is shutting down')
+                raise Refused('PokeSim is shutting down')
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT, text=True, bufsize=1, env=env)
             self.process = process
@@ -835,13 +836,13 @@ class Coordinator:
         try:
             while process.poll() is None:
                 if self.closed.is_set() or self.registry.transaction(row['id'])['decision'] == 'ABORT':
-                    raise RuntimeError('Cable Club session was cancelled')
+                    raise Refused('Cable Club session was cancelled')
                 if time.monotonic() >= deadline:
                     raise TimeoutError('Cable Club session exceeded its deadline')
                 self.closed.wait(0.2)
             reader.join(timeout=2)
             if process.returncode:
-                raise RuntimeError('Cable Club session failed: ' + (messages[-1] if messages else str(process.returncode)))
+                raise Refused('Cable Club session failed: ' + (messages[-1] if messages else str(process.returncode)))
             return json.loads((output / 'manifest.json').read_text(encoding='utf-8'))
         finally:
             if process.stdin:
@@ -902,7 +903,7 @@ class Coordinator:
                 manifest['display'] = self._trade_display(row, prepared, manifest)
                 with self.guard:
                     if self.closed.is_set() or self.registry.transaction(tid)['decision'] == 'ABORT':
-                        raise RuntimeError('Exchange was cancelled before commitment')
+                        raise Refused('Exchange was cancelled before commitment')
                     self.registry.update_transaction(tid, phase='staging')
                     for aid in row['plan']['participants']:
                         peer = next(other for other in row['plan']['participants'] if other != aid)
@@ -1042,7 +1043,7 @@ class Coordinator:
         with self.guard:
             row = self.registry.transaction(tid)
             if row['decision'] == 'COMMIT':
-                raise ValueError('This exchange is committed and must finish recovery')
+                raise Conflict('This exchange is committed and must finish recovery')
             if row['phase'] in TERMINAL:
                 return row
             self.registry.update_transaction(tid, decision='ABORT', phase='aborting', error='Cancelled by the owner')
@@ -1355,12 +1356,12 @@ class Coordinator:
     @staticmethod
     def _manual_offer(inventory, key):
         if inventory.get('reason'):
-            raise ValueError(inventory['reason'])
+            raise Conflict(inventory['reason'])
         row = find(inventory.get('pokemon') or [], key)
         if row is None:
             raise Missing('The selected Pokémon is no longer in that adventure')
         if row.get('blocked'):
-            raise ValueError(row['blocked'])
+            raise Conflict(row['blocked'])
         return dict(row)
 
     @staticmethod
@@ -1450,7 +1451,7 @@ class Coordinator:
         """Queue a trade the owner chose. It starts as soon as the Cable Club is free."""
         names = ('left_id', 'right_id', 'left_key', 'right_key')
         if not isinstance(data, dict) or not set(names) <= set(data) or set(data) - set(names) - {'request_id', 'names'}:
-            raise ValueError('Choose two adventures and a Pokémon from each')
+            raise Conflict('Choose two adventures and a Pokémon from each')
         # The names of both Pokémon when they were chosen, to say which one left if it does.
         chosen = data.get('names') or {}
         names_shown = {side: chosen[side][:64] for side in ('left', 'right')
@@ -1461,28 +1462,28 @@ class Coordinator:
             validate_id(selection[name])
         for name in ('left_key', 'right_key'):
             if not isinstance(selection[name], str) or not 1 <= len(selection[name]) <= 256:
-                raise ValueError('Choose a Pokémon on each side')
+                raise Conflict('Choose a Pokémon on each side')
         if selection['left_id'] == selection['right_id']:
-            raise ValueError('Choose two different adventures')
+            raise Conflict('Choose two different adventures')
         owners = {}
         for aid in (selection['left_id'], selection['right_id']):
             game = self.registry.adventure(aid)
             reason = self.manual_game_reason(game)
             if reason:
-                raise ValueError(f'{game["name"]}: {reason}')
+                raise Conflict(f'{game["name"]}: {reason}')
             owners[aid] = game.get('owner_id')
         if self.closed.is_set() or self.manager.suspended:
-            raise ValueError('Trading is paused for application maintenance')
+            raise Conflict('Trading is paused for application maintenance')
         with self.manual_guard:
             entries = self._manual_entries()
             existing = next((entry for entry in entries if entry['id'] == mid), None)
             if existing:
                 if any(existing[name] != value for name, value in selection.items()):
-                    raise ValueError('This request ID already belongs to another trade')
+                    raise Conflict('This request ID already belongs to another trade')
                 return existing
             try:
                 self.registry.transaction(mid)
-                raise ValueError('This request ID already belongs to another trade')
+                raise Conflict('This request ID already belongs to another trade')
             except KeyError:
                 pass
             now = time.time()
@@ -1561,7 +1562,7 @@ class Coordinator:
     def manual_status(self, mid):
         entry = next((entry for entry in self._manual_entries() if entry['id'] == mid), None)
         if entry is None:
-            raise KeyError('Manual trade not found')
+            raise NotFound('Manual trade not found')
         return self._manual_public(entry)
 
     def manual_statuses(self):
@@ -1597,9 +1598,9 @@ class Coordinator:
             entries = self._manual_entries()
             entry = next((item for item in entries if item['id'] == mid), None)
             if entry is None:
-                raise KeyError('Manual trade not found')
+                raise NotFound('Manual trade not found')
             if entry['state'] in {'starting', 'started'}:
-                raise ValueError('This trade has already started, so it can no longer be cancelled')
+                raise Conflict('This trade has already started, so it can no longer be cancelled')
             if entry['state'] == 'queued':
                 entry.update(state='cancelled', error='Cancelled by the owner', updated_at=time.time())
                 self._manual_save(entries)
@@ -1611,7 +1612,7 @@ class Coordinator:
             entries = self._manual_entries()
             entry = next((item for item in entries if item['id'] == mid), None)
             if entry is None:
-                raise KeyError('Manual trade not found')
+                raise NotFound('Manual trade not found')
             state = entry['state']
             if state == 'queued':
                 entry.update(state='cancelled', error='Cancelled by the owner', updated_at=time.time())

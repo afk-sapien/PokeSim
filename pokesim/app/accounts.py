@@ -11,6 +11,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ..web.pages import template
 from .auth import KNOWN_SECONDS, SESSION_SECONDS, PasswordCheckFailed, private_address
+from .errors import Conflict, NotFound
 from .policy import can
 from .providers import default_gateways, env_flag
 
@@ -248,7 +249,7 @@ def install(app, manager):
     async def edit_user(uid: str, request: Request):
         data = await body(request)
         if set(data) - {'role', 'disabled', 'can_create', 'display_name'}:
-            raise ValueError('Unsupported user changes')
+            raise Conflict('Unsupported user changes')
         result = await run_in_threadpool(changed, uid, data, actor(request))
         auth.audit('user.update', user_id=actor(request).id, target=f'{uid} {sorted(data)}',
                    ip=manager.client_address(request))
@@ -264,13 +265,13 @@ def install(app, manager):
         from . import ownership
         data = await body(request)
         if set(data) != {'adventures'}:
-            raise ValueError('Choose a new owner or Archive for each of their adventures')
+            raise Conflict('Choose a new owner or Archive for each of their adventures')
         return await run_in_threadpool(ownership.delete_user, manager, uid, data['adventures'], actor(request))
 
     @app.delete('/api/v1/users/{uid}/sessions')
     def end_user_sessions(uid: str, request: Request):
         if auth.user(uid) is None:
-            raise KeyError('User not found')
+            raise NotFound('User not found')
         auth.end_sessions(uid)
         auth.audit('sessions.end', user_id=actor(request).id, target=uid, ip=manager.client_address(request))
         return {'ok': True}
@@ -283,7 +284,7 @@ def install(app, manager):
     async def create_invite(request: Request):
         data = await body(request)
         if set(data) - {'seconds', 'can_create'}:
-            raise ValueError('Unsupported invite options')
+            raise Conflict('Unsupported invite options')
         raw, invite = auth.create_invite(actor(request).id, seconds=data.get('seconds', 7 * 86400),
                                          can_create=data.get('can_create', True) is not False)
         auth.audit('invite.create', user_id=actor(request).id, target=invite['id'], ip=manager.client_address(request))
@@ -328,14 +329,14 @@ def install(app, manager):
 
     def grant(aid, data, request):
         if set(data) != {'user_id', 'role'}:
-            raise ValueError('Choose a person and a role')
+            raise Conflict('Choose a person and a role')
         if data['role'] not in GRANT_ROLES:
-            raise ValueError('Choose Can watch, Can play or Can manage')
+            raise Conflict('Choose Can watch, Can play or Can manage')
         found = auth.user(data['user_id']) if isinstance(data['user_id'], str) else None
         if found is None or found['placeholder'] or found['disabled']:
-            raise ValueError('Choose a person to share with')
+            raise Conflict('Choose a person to share with')
         if data['user_id'] == manager.registry.adventure(aid)['owner_id']:
-            raise ValueError('The owner already has this adventure')
+            raise Conflict('The owner already has this adventure')
         # Losing manage ends what it allowed: offers sent from the adventure, and a lease that
         # manage may have taken back from someone.
         with manager.offers.guard:
@@ -371,14 +372,14 @@ def install(app, manager):
         from . import ownership
         data = await body(request)
         if set(data) != {'user_id'} or not isinstance(data['user_id'], str):
-            raise ValueError('Choose who gets this adventure')
+            raise Conflict('Choose who gets this adventure')
         return await run_in_threadpool(ownership.transfer, manager, aid, data['user_id'], actor(request))
 
     @app.post('/api/v1/adventures/{aid}/shares')
     async def add_share(aid: str, request: Request):
         data = await body(request)
         if set(data) - {'seconds', 'legacy'}:
-            raise ValueError('Unsupported share link options')
+            raise Conflict('Unsupported share link options')
         return await run_in_threadpool(share_link, aid, data, request)
 
     def share_link(aid, data, request):
@@ -395,7 +396,7 @@ def install(app, manager):
     @app.delete('/api/v1/adventures/{aid}/shares/{sid}')
     def remove_share(aid: str, sid: str, request: Request):
         if auth.share_row(sid)['adventure_id'] != aid:
-            raise KeyError('Share link not found')
+            raise NotFound('Share link not found')
         auth.revoke_share(sid)
         auth.audit('share.revoke', user_id=actor(request).id, adventure_id=aid, target=sid, ip=manager.client_address(request))
         return sharing_of(aid)

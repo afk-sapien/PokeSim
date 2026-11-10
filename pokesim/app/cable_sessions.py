@@ -27,6 +27,7 @@ import threading
 import time
 
 from ..checkpoints import CheckpointStore
+from .errors import Conflict, NotFound, Refused
 from .registry import digest, identifier, validate_id
 
 log = logging.getLogger(__name__)
@@ -76,11 +77,11 @@ class CableSessions:
         coordinator = self.coordinator
         names = {'left_id', 'right_id'}
         if not isinstance(data, dict) or not names <= set(data) or set(data) - names - {'request_id'}:
-            raise ValueError('Choose two adventures for the Cable Club')
+            raise Conflict('Choose two adventures for the Cable Club')
         tid = validate_id(data.get('request_id') or identifier())
         left, right = validate_id(data['left_id']), validate_id(data['right_id'])
         if left == right:
-            raise ValueError('Choose two different adventures')
+            raise Conflict('Choose two different adventures')
         with coordinator.manager.maintenance, coordinator.guard:
             try:
                 existing = self.registry.transaction(tid)
@@ -88,17 +89,17 @@ class CableSessions:
                 existing = None
             if existing:
                 if not self.is_session(existing) or existing['plan']['participants'] != [left, right]:
-                    raise ValueError('This request ID already belongs to another exchange')
+                    raise Conflict('This request ID already belongs to another exchange')
                 return self.status(tid)
             if coordinator.closed.is_set() or coordinator.manager.suspended:
-                raise ValueError('Trading is paused for application maintenance')
+                raise Conflict('Trading is paused for application maintenance')
             if self.registry.transactions(unresolved=True):
-                raise ValueError('The Cable Club is busy with another exchange. Try again when it finishes')
+                raise Conflict('The Cable Club is busy with another exchange. Try again when it finishes')
             games = [self.registry.adventure(aid) for aid in (left, right)]
             for game in games:
                 reason = self.reason(game)
                 if reason:
-                    raise ValueError(reason if reason == UNSUPPORTED else f'{game["name"]}: {reason}')
+                    raise Conflict(reason if reason == UNSUPPORTED else f'{game["name"]}: {reason}')
             plan = {'kind': KIND, 'manual': True, 'session': True, 'left_id': left, 'right_id': right,
                     'left_key': None, 'right_key': None, 'participants': [left, right],
                     'campaign_ids': {game['id']: game['campaign_id'] for game in games},
@@ -156,7 +157,7 @@ class CableSessions:
     def _session(self, sid):
         row = self.registry.transaction(validate_id(sid))
         if not self.is_session(row):
-            raise KeyError('Cable Club session not found')
+            raise NotFound('Cable Club session not found')
         return row
 
     def _send(self, sid, command):
@@ -164,21 +165,21 @@ class CableSessions:
             live = self.live.get(sid)
         process = live and live.get('process')
         if not live or live['phase'] != 'in_session' or process is None or process.poll() is not None:
-            raise ValueError('The controllers are not live yet')
+            raise Conflict('The controllers are not live yet')
         with live['writer']:
             try:
                 process.stdin.write(json.dumps(command) + '\n')
                 process.stdin.flush()
             except (OSError, ValueError) as error:
-                raise ValueError('The Cable Club session is no longer running') from error
+                raise Conflict('The Cable Club session is no longer running') from error
         return live
 
     def press(self, sid, data):
         row = self._session(sid)
         if row['decision'] is not None:
-            raise ValueError('This session has already ended')
+            raise Conflict('This session has already ended')
         if not isinstance(data, dict) or data.get('side') not in {'left', 'right'} or data.get('button') not in BUTTONS:
-            raise ValueError('Choose a side and a Game Boy button')
+            raise Conflict('Choose a side and a Game Boy button')
         live = self._send(row['id'], {'side': data['side'], 'button': data['button']})
         live['last_input'] = time.monotonic()
         return self.status(row['id'])
@@ -186,7 +187,7 @@ class CableSessions:
     def finish(self, sid):
         row = self._session(sid)
         if row['decision'] is not None:
-            raise ValueError('This session has already ended')
+            raise Conflict('This session has already ended')
         live = self._send(row['id'], {'finish': True})
         live.update(finishing=True, phase='verifying')
         return self.status(row['id'])
@@ -289,7 +290,7 @@ class CableSessions:
         messages = deque(maxlen=100)
         with coordinator.process_guard:
             if coordinator.closed.is_set():
-                raise RuntimeError('PokeSim is shutting down')
+                raise Refused('PokeSim is shutting down')
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT, text=True, bufsize=1, env=env)
             coordinator.process = process
@@ -332,7 +333,7 @@ class CableSessions:
         try:
             while process.poll() is None:
                 if coordinator.closed.is_set() or self.registry.transaction(tid)['decision'] == 'ABORT':
-                    raise RuntimeError('Cable Club session was cancelled')
+                    raise Refused('Cable Club session was cancelled')
                 if (live['phase'] == 'in_session' and not live['finishing']
                         and time.monotonic() - live['last_input'] >= self.idle_seconds):
                     raise TimeoutError(IDLE)
@@ -340,7 +341,7 @@ class CableSessions:
             reader.join(timeout=2)
             if process.returncode:
                 last = messages[-1] if messages else str(process.returncode)
-                raise RuntimeError(NO_TRADE if NO_TRADE in last else 'Cable Club session failed: ' + last)
+                raise Refused(NO_TRADE if NO_TRADE in last else 'Cable Club session failed: ' + last)
             return json.loads((output / 'manifest.json').read_text(encoding='utf-8'))
         finally:
             live['phase'] = 'verifying' if live['finishing'] else live['phase']
@@ -381,7 +382,7 @@ class CableSessions:
             after = [decode(item['party_after']) for item in rows]
             trades = [item['evidence']['trades'] for item in rows]
             if min(trades) < 1:
-                raise ValueError(NO_TRADE)
+                raise Conflict(NO_TRADE)
             # A trade can evolve the Pokémon that arrives, as Session.finish allows for.
             data = self.game_data(row)
             verify_parties(before, after, trades, lambda raw: evolved_species(raw, data))
