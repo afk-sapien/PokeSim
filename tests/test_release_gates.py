@@ -1,4 +1,5 @@
 """The publish gate must accept only complete, successful runs and stay in step with the workflows."""
+import json
 from pathlib import Path
 import re
 
@@ -40,13 +41,46 @@ def test_unfinished_runs_are_waited_for_not_passed():
     assert gates.judge('ci.yml', [])[0] == 'wait'
 
 
-def workflow_job_names(workflow):
-    """The job names GitHub reports for a workflow file, with every matrix combination expanded."""
-    import itertools
+# A matrix axis that is the full list on a tag, the nightly run or a manual run, and a short list otherwise.
+SWITCH = re.compile(r"^\$\{\{ fromJSON\(\((?P<when>.+?)\) && '(?P<full>.+?)' \|\| '(?P<fast>.+?)'\) \}\}$")
+FULL_RUN = ("github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
+            " || startsWith(github.ref, 'refs/tags/')")
+
+
+def load_workflow(workflow):
     import yaml
+    return yaml.safe_load((ROOT / '.github/workflows' / workflow).read_text())
+
+
+def matrix_switches(workflow):
+    """Every fromJSON switch in a workflow's matrices, as regex matches."""
+    found = []
+    for job in load_workflow(workflow)['jobs'].values():
+        for value in ((job.get('strategy') or {}).get('matrix') or {}).values():
+            if isinstance(value, str):
+                match = SWITCH.match(value)
+                assert match, value
+                found.append(match)
+    return found
+
+
+def axis(value, fast):
+    if not isinstance(value, str):
+        return value
+    match = SWITCH.match(value)
+    assert match, value
+    return json.loads(match['fast' if fast else 'full'])
+
+
+def workflow_job_names(workflow, fast=False):
+    """The job names GitHub reports for a workflow file, with every matrix combination expanded.
+
+    fast picks the pull request and branch push matrix, otherwise the full one a tag runs.
+    """
+    import itertools
     names = []
-    for key, job in yaml.safe_load((ROOT / '.github/workflows' / workflow).read_text())['jobs'].items():
-        matrix = (job.get('strategy') or {}).get('matrix') or {}
+    for key, job in load_workflow(workflow)['jobs'].items():
+        matrix = {name: axis(value, fast) for name, value in ((job.get('strategy') or {}).get('matrix') or {}).items()}
         axes = {name: values for name, values in matrix.items() if name not in ('include', 'exclude')}
         combos = [dict(zip(axes, values)) for values in itertools.product(*axes.values())] if axes else []
         combos = [combo for combo in combos if not any(all(combo.get(k) == v for k, v in out.items())
@@ -67,6 +101,38 @@ def workflow_job_names(workflow):
 def test_required_jobs_are_exactly_the_jobs_of_the_workflow(workflow):
     """Every job, every matrix shard (Windows included), is required, and nothing is required that does not exist."""
     assert sorted(gates.REQUIRED[workflow]) == sorted(workflow_job_names(workflow))
+
+
+FAST = {
+    'ci.yml': ['dependency-audit', 'lint', 'tests (3.12)', 'browser (1/4)', 'browser (2/4)', 'browser (3/4)',
+               'browser (4/4)', 'container (amd64)', 'ci gate'],
+    'python-install.yml': ['native tests (ubuntu-22.04, 1/1)', 'install (ubuntu-22.04)', 'acceleration', 'install gate'],
+}
+
+
+@pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
+def test_pull_requests_run_one_platform_and_keep_the_required_gate(workflow):
+    """A pull request runs Linux x86 and Python 3.12 only, and still reports the gate the ruleset requires."""
+    fast = workflow_job_names(workflow, fast=True)
+    assert sorted(fast) == sorted(FAST[workflow])
+    assert set(fast) <= set(gates.REQUIRED[workflow])
+
+
+@pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
+def test_the_full_matrix_runs_on_tags_nightly_and_by_hand(workflow):
+    switches = matrix_switches(workflow)
+    assert switches
+    assert {match['when'] for match in switches} == {FULL_RUN}
+    on = load_workflow(workflow).get('on', load_workflow(workflow).get(True))
+    assert on['push']['tags'] == ['**'] and on['schedule'] and 'workflow_dispatch' in on
+
+
+@pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
+def test_only_a_pull_request_run_is_ever_cancelled(workflow):
+    """Push, tag and nightly runs are evidence for one exact commit, so each has its own group and finishes."""
+    concurrency = load_workflow(workflow)['concurrency']
+    assert concurrency['cancel-in-progress'] == "${{ github.event_name == 'pull_request' }}"
+    assert "github.event_name == 'pull_request' && github.ref || github.sha" in concurrency['group']
 
 
 @pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
@@ -115,32 +181,58 @@ def test_publish_checks_come_from_the_dispatching_commit_and_guard_every_push():
     assert '--unchanged' in before_push and '"$REVISION"' in before_push
 
 
-def test_shards_cover_the_suite_exactly_once(monkeypatch):
+class Item:
+    def __init__(self, nodeid):
+        self.nodeid = nodeid
+
+
+class Config:
+    class hook:
+        @staticmethod
+        def pytest_deselected(items):
+            pass
+
+
+def root_conftest():
     import importlib.util
     spec = importlib.util.spec_from_file_location('pokesim_root_conftest', ROOT / 'conftest.py')
     conftest = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(conftest)
+    return conftest
 
-    class Item:
-        def __init__(self, nodeid):
-            self.nodeid = nodeid
 
-    class Hook:
-        def pytest_deselected(self, items):
-            pass
+def shard(conftest, monkeypatch, spec, names):
+    monkeypatch.setenv('POKESIM_TEST_SHARD', spec)
+    items = [Item(name) for name in names]
+    conftest.pytest_collection_modifyitems(Config(), items)
+    return [item.nodeid for item in items]
 
-    class Config:
-        hook = Hook()
 
+def test_shards_cover_the_suite_exactly_once(monkeypatch):
+    conftest = root_conftest()
     names = [f'tests/test_{module}.py::t{i}' for module in 'abcdefg' for i in range((ord(module) % 5) + 1)]
     chosen = []
     for index in range(1, 4):
-        monkeypatch.setenv('POKESIM_TEST_SHARD', f'{index}/3')
-        items = [Item(name) for name in names]
-        conftest.pytest_collection_modifyitems(Config(), items)
-        assert items
-        chosen.extend(item.nodeid for item in items)
+        picked = shard(conftest, monkeypatch, f'{index}/3', names)
+        assert picked
+        chosen.extend(picked)
     assert sorted(chosen) == sorted(names)
+
+
+def test_shards_balance_by_recorded_time_and_guess_new_modules(tmp_path, monkeypatch):
+    """One slow module gets a shard to itself, and a module with no record counts the median time per test."""
+    conftest = root_conftest()
+    durations = tmp_path / 'durations.json'
+    durations.write_text(json.dumps({'modules': {
+        'tests/test_a.py': {'seconds': 90, 'tests': 1}, 'tests/test_b.py': {'seconds': 30, 'tests': 1},
+        'tests/test_c.py': {'seconds': 30, 'tests': 1}, 'tests/test_d.py': {'seconds': 30, 'tests': 1}}}))
+    monkeypatch.setattr(conftest, 'DURATIONS', durations)
+    assert conftest.recorded()[1] == 30
+    names = [f'tests/test_{module}.py::t' for module in 'abcde']
+    assert shard(conftest, monkeypatch, '1/2', names) == ['tests/test_a.py::t', 'tests/test_e.py::t']
+    assert shard(conftest, monkeypatch, '2/2', names) == ['tests/test_b.py::t', 'tests/test_c.py::t', 'tests/test_d.py::t']
+    monkeypatch.setattr(conftest, 'DURATIONS', tmp_path / 'missing.json')
+    assert conftest.recorded() == ({}, 1.0)
 
 
 def test_validate_and_gate_both_refuse_unfinished_pins():

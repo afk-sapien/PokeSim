@@ -3,18 +3,22 @@ on:
   # Branches are tested through their pull request, so a push runs only on main, feature branches and
   # tags. The release gate and the deploy script need those push runs as evidence for the exact commit.
   # Every pull request runs it too, documentation only or not, because the ruleset requires its gate.
+  # Pull requests and branch pushes run on Linux x86 only. A tag, the nightly run and a manual run cover
+  # every platform, which the release gate requires for the tagged commit.
   push:
     branches: [main, 'feature/**']
     tags: ['**']
   pull_request:
+  schedule:
+    - cron: '17 7 * * *'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: python-install-${{ github.workflow }}-${{ github.ref }}
-  # Runs on main, feature branches and tags are the evidence the publish workflow and the deploy script
-  # require, so they are never cancelled.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/feature/') && !startsWith(github.ref, 'refs/tags/') }}
+  # A pull request's new push cancels its older run. Every other run is the evidence the publish workflow
+  # and the deploy script require for an exact commit, so each has its own group and always finishes.
+  group: python-install-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   native-tests:
     name: native tests (${{ matrix.os }}, ${{ matrix.shard }})
@@ -22,15 +26,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {os: ubuntu-22.04, shard: '1/1'}
-          - {os: ubuntu-24.04-arm, shard: '1/1'}
-          - {os: macos-15, shard: '1/1'}
-          - {os: macos-15-intel, shard: '1/1'}
-          - {os: windows-latest, shard: '1/4'}
-          - {os: windows-latest, shard: '2/4'}
-          - {os: windows-latest, shard: '3/4'}
-          - {os: windows-latest, shard: '4/4'}
+        include: >-
+          ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && '[{"os": "ubuntu-22.04", "shard": "1/1"}, {"os": "ubuntu-24.04-arm", "shard": "1/1"}, {"os": "macos-15", "shard": "1/1"}, {"os": "macos-15-intel", "shard": "1/1"}, {"os": "windows-latest", "shard": "1/4"}, {"os": "windows-latest", "shard": "2/4"}, {"os": "windows-latest", "shard": "3/4"}, {"os": "windows-latest", "shard": "4/4"}]' || '[{"os": "ubuntu-22.04", "shard": "1/1"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -53,13 +50,21 @@ jobs:
           POKESIM_TEST_SHARD: ${{ matrix.shard }}
           # Windows is already split into four jobs, and starting test workers there cost more than they saved.
           PYTEST_ADDOPTS: ${{ startsWith(matrix.os, 'windows') && '-n 0' || '' }}
-        run: uv run --locked pytest --ignore=tests/test_rom.py -q -o faulthandler_timeout=120 --durations=10
+        run: uv run --locked pytest --ignore=tests/test_rom.py -q -o faulthandler_timeout=120 --durations=10 --junitxml=build/junit.xml
+      - name: Keep the test times for tools/record_durations.py
+        if: matrix.os == 'ubuntu-22.04' && (success() || failure())
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: junit-native-ubuntu
+          path: build/junit.xml
+          retention-days: 14
+          if-no-files-found: ignore
   install:
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04-arm, windows-latest, macos-15-intel, macos-15]
+        os: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && '["ubuntu-22.04", "ubuntu-24.04-arm", "windows-latest", "macos-15-intel", "macos-15"]' || '["ubuntu-22.04"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
