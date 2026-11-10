@@ -73,6 +73,7 @@
 - Release the lowest-value spare first at a PC visit, of any species and in any box, in all six games. A visit counted scores within 50 points as equal and then took the open box first, to save a box change. Yellow released a Grimer at 1 in 1.4 while a commoner copy at 1 in 1.3 stayed in another box, and a Bellsprout at 1 in 1.6 while a spare Bulbasaur at 1 in 1.4 stayed. Now only an exact score tie chooses by box. A trade's, a partner's or trade demand's points still keep a commoner copy. The live soak now judges a release by the same PC score, so it fails only when a released copy outscores a copy kept.
 - Take a walked step through a cut tree again only while a partner knows Cut, in Red, Blue and Yellow. Trees grow back, but the walk kept every step it had seen and trusted it later. Yellow on its way to Celadon paced Route 2 for two game hours between two trees it had cut before, after no partner knew Cut. Now it takes the way through Viridian Forest.
 - Run every command under `tools/load_gate.sh` at nice 10 or lower priority. Agents had to add `nice -n 10` by hand, and a full suite once ran at full priority. A command already at a lower priority keeps it.
+- Accept a passing live soak for a commit with the same git tree when deploying. A merge commit that changed nothing from its soaked head needed a second 10 minute soak. The tree is read from git, never from the report, so a commit with any change still needs its own soak.
 
 ## 0.6.2
 
