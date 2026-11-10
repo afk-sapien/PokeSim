@@ -45,24 +45,19 @@ def level_credit(data, species):
     return {species} if data.species[species]['evolutions'] else ancestors(data, species)
 
 
+def new_ledger(complete_history):
+    """An empty capture ledger. ``complete_history`` says it starts with the game, so it counts every capture."""
+    return {'counts': {}, 'total': 0, 'started_at': time.time(), 'complete_history': complete_history,
+            'available': True}
+
+
 class Tracker:
     def __init__(self, store, data, *, fresh):
         self.store, self.data = store, data
         self.candidate = self.confirmed = None
         with store.lock, store.db:
-            store.db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)', (CAPTURES, json.dumps({
-                'counts': {}, 'total': 0, 'started_at': time.time(), 'complete_history': fresh, 'available': True})))
+            store.db.execute('INSERT OR IGNORE INTO kv VALUES (?, ?)', (CAPTURES, json.dumps(new_ledger(fresh))))
             shiny.start(store.db, 2, available=True, fresh=fresh)
-
-    def reset(self):
-        with self.store.lock, self.store.db:
-            self.store.db.execute('DELETE FROM capture_receipts')
-            progress_events.clear(self.store.db)
-            self.store.db.execute('INSERT OR REPLACE INTO kv VALUES (?, ?)', (CAPTURES, json.dumps({
-                'counts': {}, 'total': 0, 'started_at': time.time(), 'complete_history': True, 'available': True})))
-            self.store.db.execute('DELETE FROM kv WHERE k=?', (MILESTONES,))
-            shiny.clear(self.store.db, 2)
-        self.candidate = self.confirmed = None
 
     def attach(self, pb):
         for bank, address in capture_hooks(pb.memory, self.data):

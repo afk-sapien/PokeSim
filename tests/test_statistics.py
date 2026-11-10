@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from types import SimpleNamespace
 
 from pokesim import statistics
-from pokesim.catches import CatchTracker, SUPPORTED
+from pokesim.catches import KEY, CatchTracker, SUPPORTED
 from pokesim.events import Event
 from pokesim.pokemon import stored_strength
 from pokesim.ram import PartyMon, StoredMon
@@ -98,7 +98,9 @@ def test_capture_receipts_and_existing_marathons_seed_stats_once(tmp_path):
     tracker.flush(now=201)
     assert statistics.status(store)['current']['captures'] == 1
     assert statistics.status(store)['current']['marathons'] == 1
-    catches.reset()
+    store.restart(1, {KEY: catches.empty(True)})
+    catches = CatchTracker(store, next(iter(SUPPORTED)), fresh=True)
+    tracker = statistics.StatisticsTracker(store)
     tracker.flush(now=202)
     catches.record('second', 2)
     tracker.flush(now=203)

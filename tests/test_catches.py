@@ -90,7 +90,8 @@ def test_counts_survive_event_pruning_and_checkpoint_memory_changes(tracking):
 def test_restart_explicitly_starts_a_fresh_count(tracking):
     store, tracker = tracking
     tracker.completed(capture())
-    tracker.reset()
+    store.restart(1, {KEY: tracker.empty(True)})
+    tracker = CatchTracker(store, sorted(SUPPORTED)[0])
     assert status(store)['total'] == 0
     assert status(store)['complete_history']
     tracker.completed(capture())
@@ -160,7 +161,7 @@ def test_historical_custom_gifts_backfill_once_without_guessing_other_obtains(tm
     try:
         tracker = CatchTracker(store, sorted(SUPPORTED)[0])
         assert status(store)['total'] == 4
-        tracker.reset()
+        store.restart(1, {KEY: tracker.empty(True)})
         CatchTracker(store, sorted(SUPPORTED)[0])
         assert status(store)['total'] == 0
     finally:

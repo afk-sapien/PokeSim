@@ -61,7 +61,8 @@ def restartable(tmp_path, generation):
         emu.data, emu.fatal_error = None, None
         emu._sync_clock, emu._autosave = Mock(), Mock()
         emu.tracker, emu.steps = Mock(), Mock()
-        emu.statistics = SimpleNamespace(previous=None, records=Mock())
+        emu.statistics = SimpleNamespace(previous=None, records=Mock(), flush=Mock())
+        emu.snapshot = None
     emu.store = Store(tmp_path)
     emu.pb, emu._boot, emu.policy = Mock(), Mock(return_value=Mock()), Mock()
     emu.paused = emu.manual_mode = False

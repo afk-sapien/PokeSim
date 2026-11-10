@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pokesim.shiny import is_shiny, shiny_bytes, ShinyTracker, record, status
+from pokesim.shiny import KEY, fresh, is_shiny, shiny_bytes, ShinyTracker, record, status
 from pokesim.store import Store
 from pokesim.broker.inventory import spare_entries
 
@@ -44,7 +44,8 @@ def test_receipts_survive_reopen_without_double_counting(tmp_path):
             record(store.db, 'seen', 'encounter', 25)
             record(store.db, 'acquired', 'capture', 25)
         assert status(store)['seen'] == status(store)['acquired'] == 1
-        tracker.reset()
+        store.restart(1, {KEY: fresh(tracker.supported)})
+        ShinyTracker(store, 'ea9bcae617fdf159b045185467ae58b2e4a48b9a')
         assert status(store)['seen'] == 0
 
 

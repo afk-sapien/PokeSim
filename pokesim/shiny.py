@@ -82,13 +82,9 @@ def start(db, generation, *, available, fresh=False):
     db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
 
 
-def clear(db, generation):
-    """Forget every receipt when the adventure restarts from a new game."""
-    key, table, _ = LEDGERS[generation]
-    initialize(db, generation)
-    db.execute(f'DELETE FROM {table}')
-    value = {**empty(), 'started_at': time.time(), 'available': True, 'complete_history': True}
-    db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), key))
+def fresh(available):
+    """The ledger of a new game, which counts every shiny it meets. A restart writes it."""
+    return {**empty(), 'started_at': time.time(), 'available': available, 'complete_history': True}
 
 
 def store_dvs(pb, signature):
@@ -134,9 +130,3 @@ class ShinyTracker:
         fingerprint = hashlib.sha256(bytes(mem[0xc000:0xe000])).hexdigest()
         with self.store.lock, self.store.db:
             record(self.store.db, 'seen', fingerprint, SPECIES[species]['dex'])
-
-    def reset(self):
-        with self.store.lock, self.store.db:
-            self.store.db.execute('DELETE FROM shiny_receipts')
-            value = {**empty(), 'started_at': time.time(), 'available': self.supported, 'complete_history': True}
-            self.store.db.execute('UPDATE kv SET v=? WHERE k=?', (json.dumps(value), KEY))

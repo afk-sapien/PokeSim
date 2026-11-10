@@ -20,7 +20,8 @@ def gen2_emu(tmp_path, monkeypatch):
     emu._sync_clock = Mock()
     emu._autosave = Mock()
     emu.tracker, emu.steps = Mock(), Mock()
-    emu.statistics = SimpleNamespace(previous=None, records=Mock())
+    emu.statistics = SimpleNamespace(previous=None, records=Mock(), flush=Mock())
+    emu.snapshot = None
     emu.policy = Mock()
     emu.paused = emu.manual_mode = False
     yield emu

@@ -5,7 +5,7 @@ Only map geometry and game constants are exported, never ROM images.
 """
 import re
 
-from ..mapfacts.gen1 import SWAPS
+from ..mapfacts.gen1 import SWAPS, SWITCHES
 
 DEBUG_BLOCK =re.compile(r"^IF DEF\(_DEBUG\)\n.*?^(?:ELSE\n(.*?)^)?ENDC\n", re.M | re.S)
 
@@ -17,6 +17,11 @@ def opened_blocks(symbol):
     """
     return [(bx, by, block, flag) for name, bx, by, flag, block, _ in SWAPS
             if name == symbol and name != "ROCKET_HIDEOUT_B1F" and block is not None]
+
+
+def switched_blocks(symbol):
+    """(block x, block y, block while the switch is off, block while it is on) for each block a switch flips."""
+    return [(bx, by, off, on) for name, bx, by, _, on, off in SWITCHES if name == symbol]
 
 
 def release_source(text):
@@ -143,12 +148,7 @@ def generate(src, revision):
             r"object_event\s+(\d+),\s*(\d+),\s*(\w+),\s*(\w+),\s*\w+,\s*(\w+)", obj)]
         opened_tiles = [[flag, bx * 2 + dx, by * 2 + dy, bst[block * 16 + dy * 8 + dx * 2 + 4]]
                         for bx, by, block, flag in opened_blocks(match[2]) for dx in range(2) for dy in range(2)]
-        switch_blocks = {
-            "PokemonMansion1F": [(12, 6, 0x0E, 0x2D), (8, 3, 0x2D, 0x0E), (10, 8, 0x2D, 0x0E), (13, 13, 0x2D, 0x0E)],
-            "PokemonMansion2F": [(4, 2, 0x0E, 0x5F), (9, 4, 0x54, 0x0E), (3, 11, 0x5F, 0x0E)],
-            "PokemonMansion3F": [(7, 2, 0x0E, 0x5F), (7, 5, 0x5F, 0x0E)],
-            "PokemonMansionB1F": [(13, 8, 0x0E, 0x2D), (6, 11, 0x0E, 0x5F), (4, 3, 0x5F, 0x0E), (8, 8, 0x54, 0x0E)],
-        }.get(name, [])
+        switch_blocks = switched_blocks(match[2])
         switch_tiles = [[[bx * 2 + dx, by * 2 + dy, bst[block[mode] * 16 + dy * 8 + dx * 2 + 4]]
                          for bx, by, *block in switch_blocks for dx in range(2) for dy in range(2)] for mode in range(2)]
         doors = []
