@@ -200,6 +200,15 @@ def _goal_events(key, previous, current):
     if not found and box_before is not None and box_after is not None and box_after != box_before \
             and getattr(current, 'valid', True) and getattr(previous, 'valid', True):
         found.append(ProgressEvent('box', box_after))
+    # A restock sells only to free an entry in a crowded bag or to raise cash it lacks. A full bag picks up
+    # no item ball and a short purse buys nothing, so a sale is support for the goal behind it, though it
+    # gains no item. A Yellow restock after the Silph Scope sold one item at the Lavender Mart on the way
+    # to the tower. The entry and the cash can change on different reads, so either one counts.
+    if key == 'restock' and previous is not None and current is not None and not found \
+            and getattr(current, 'valid', True) and getattr(previous, 'valid', True):
+        freed = len(previous.items) - len(current.items)
+        if freed > 0 or getattr(current, 'money', 0) > getattr(previous, 'money', 0):
+            found.append(ProgressEvent('sold', max(freed, 0)))
     # A PC visit that swaps the trainee into the party keeps the held count, so no other event shows it,
     # yet it is the whole of the preparation goal. A goal cut short between the deposit and the withdrawal
     # leaves two spans, so each half of the swap counts.
