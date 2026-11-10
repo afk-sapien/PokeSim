@@ -56,7 +56,7 @@ jobs:
     strategy:
       matrix:
         python: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && '["3.11", "3.12", "3.14"]' || '["3.12"]') }}
-    name: pokecore (py${{ matrix.python }})
+    name: pokecore (${{ matrix.python }})
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
