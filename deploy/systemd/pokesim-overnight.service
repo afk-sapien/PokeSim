@@ -1,5 +1,5 @@
 [Unit]
-Description=PokeSim overnight watch (real-cartridge tests at the deployed commit and hosted app health)
+Description=PokeSim overnight watch (real-cartridge tests and quality hunts on the dev instance, hosted app health)
 After=network-online.target
 OnFailure=pokesim-watch-failed@%n.service
 

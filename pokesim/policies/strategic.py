@@ -1271,7 +1271,11 @@ class StrategicPolicy(Policy):
                 if social:
                     return social
             curiosity = 0 if goal.key in ("heal", "restock", "buy_tm", "collect_pickup", "collect_hunt") or (self.collection.project or {}).get('method') in ('train', 'marathon') or legendary_project(self.collection.project) else EXPLORATION_CHANCE
-            if s.map in MANSION_MAPS:
+            # A goal whose walk found no route lately (_no_route) looks around instead of walking it again.
+            waiting = self.no_route_waiting(goal)
+            if waiting:
+                direction = None
+            elif s.map in MANSION_MAPS:
                 direction = self.mansion.route(s, goal.targets, self.nav)
                 if direction == "switch":
                     self.mode = "using the statue switch"
@@ -1300,6 +1304,9 @@ class StrategicPolicy(Policy):
             if remaining is not None and (self.goal_distance is None or remaining < self.goal_distance):
                 self.goal_distance = remaining
                 self.progress_frame = s.frame
+            if direction is None and goal.targets and not waiting and s.map not in MANSION_MAPS | VICTORY_MAPS:
+                # The puzzle floors keep their own planners, which wait on switches a route search cannot see.
+                return self._no_route(s, goal)
             if direction is None:
                 self.mode = "exploring obstacle"
                 self.reason = "The route is blocked or unknown, explore and learn a reachable path"
@@ -1789,6 +1796,35 @@ class StrategicPolicy(Policy):
         self.progress_frame = snapshot.frame
         self.recovery_until = snapshot.frame + 180
         return self._recovery_step(snapshot)
+
+    def unreachable(self):
+        """The walks that found no route lately (planning/unreachable.py), kept with the director's record."""
+        from ..planning.unreachable import FRAMES, NoRoute
+        return NoRoute(self.collection.director.progress, FRAMES)
+
+    @staticmethod
+    def _place(goal):
+        return '+'.join(sorted({str(target[0]) for target in goal.targets}))
+
+    def no_route_waiting(self, goal):
+        """Whether ``goal`` found no route lately and waits before it is walked again."""
+        return self.unreachable().waiting(goal.key, self._place(goal), goal.targets, self.collection.elapsed)
+
+    def _no_route(self, snapshot, goal):
+        """End the turn of a walk with no route and record the failed attempt, with its map and targets.
+
+        Nothing reloads. A reload replayed the same missing route after a full stall timeout and fed the
+        stall watchdog. A collection project stands down as well, so the director picks another one.
+        """
+        self.unreachable().record(goal.key, self._place(goal), goal.targets, self.collection.elapsed, snapshot.map)
+        if goal.key == 'collect_pickup':
+            self.pickups.defer(self.collection.elapsed, 'No route to the pickup')
+        elif goal.key.startswith('collect_') and self.collection.project:
+            self.collection.abandon(f'No route to {goal.title}')
+        self.nav.path.clear()
+        self.mode = 'no route'
+        self.reason = f'No route to {goal.title} from here, so another goal goes first'
+        return wait()
 
     def recover_stall(self, snapshot):
         """Change the plan in the current world before considering a save rewind."""

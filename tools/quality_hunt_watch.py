@@ -1,9 +1,10 @@
 """Check that a Gold, Silver or Crystal adventure goes back to better-DV hunts once its training runs out.
 
-    ssh HOST "docker exec -i CONTAINER python - collect" < tools/quality_hunt_watch.py \\
+    DATA_DIR=DATA_FOLDER APP_PYTHON - collect < tools/quality_hunt_watch.py \\
         | python3 tools/quality_hunt_watch.py judge STATE_JSON
 
-``collect`` runs inside the app container and only reads. For each running Gen II adventure it prints
+``collect`` runs with the app's own Python on its data folder and only reads. The overnight watch
+runs it on the local dev instance. For each running Gen II adventure it prints
 the trainees left, the play clock, the policy's decision count, its better-DV hunt counts and the
 current hunt from the saved policy, and the capture receipts. It reads the data folder alone, never
 the app's pages, so it works under every AUTH mode without a login. ``judge`` runs on the watch host.
