@@ -102,6 +102,33 @@ def test_a_walk_with_no_route_records_the_attempt_without_a_reload_or_a_stall(wa
     assert reloads == [] and events == []
 
 
+def test_a_gen1_step_tried_while_a_trainer_engages_is_not_a_failed_step():
+    """Blue badges_2 stalled on Route 25. While a trainer walked up, every step tried failed and was blocked,
+    so the walk to Bill found no route four times in a row and tripped the retry loop stall."""
+    from dataclasses import replace
+
+    from pokesim.policies.base import PolicyContext
+    from pokesim.policies.strategic import StrategicPolicy
+    from test_events import snap
+
+    def tried(held):
+        policy = StrategicPolicy(42)
+        memory = bytearray(65536)
+        # wFlags_D733 bit 3 is set while a trainer who spotted the player engages them.
+        memory[0xD733] = 0x08 if held else 0
+        where = snap(frame=1000)
+        policy.observed_map = where.map
+        here = (where.map, where.x, where.y)
+        for frame in (1000, 1040):
+            policy.nav.issued(here, 'left', frame)
+            policy.step(PolicyContext(replace(where, frame=frame + 30), 0, memory))
+        return policy.nav.failures.get((here, 'left')), (here, 'left') in policy.nav.blocked
+
+    # Two steps that fail on their own block that side, and the same two tried while held do not.
+    assert tried(False) == (2, True)
+    assert tried(True) == (None, False)
+
+
 def test_a_target_that_keeps_failing_waits_longer_each_time():
     record = NoRoute({}, DECISIONS)
     first = record.record('olivine', 'OLIVINE_CITY', [(5, 6)], 0)
