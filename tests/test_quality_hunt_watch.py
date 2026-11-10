@@ -189,3 +189,12 @@ def test_the_overnight_watch_reads_the_app_without_its_site():
         script = (ROOT / 'tools' / name).read_text(encoding='utf-8')
         assert 'curl' not in script and 'wget' not in script and 'POKESIM_WATCH_SITE' not in script
     assert 'urllib' not in (ROOT / 'tools' / 'quality_hunt_watch.py').read_text(encoding='utf-8')
+
+
+def test_the_overnight_watch_only_health_checks_the_hosted_app():
+    """The tests and the quality hunts follow the local dev instance, so the hosted app gets one SSH call."""
+    script = (ROOT / 'tools' / 'overnight_watch.sh').read_text(encoding='utf-8')
+    calls = [line for line in script.splitlines() if 'ssh -o' in line]
+    assert len(calls) == 1 and 'docker exec $CONTAINER pokesim smoke' in script
+    assert 'alert_watch.sh' not in script and 'org.opencontainers.image.revision' not in script
+    assert 'DEV_UNIT' in script and 'quality-hunts-dev.json' in script
