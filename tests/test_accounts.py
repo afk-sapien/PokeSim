@@ -558,12 +558,11 @@ def test_a_library_with_accounts_never_shows_the_open_notice(library, people):
 
 
 def older_library(root):
-    """A Library as 0.6.x left it: tables on schema 1, and nothing that says this PokeSim made it."""
+    """A Library as 0.6.x left it: tables on schema 1."""
     import sqlite3
     Manager(root).close()
     db = sqlite3.connect(root / 'app.sqlite')
     with db:
-        db.execute("DELETE FROM settings WHERE key='created_schema'")
         db.execute('PRAGMA user_version=1')
     db.close()
 

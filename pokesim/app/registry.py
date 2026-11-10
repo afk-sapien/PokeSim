@@ -22,8 +22,6 @@ SCHEMA = 2
 LIBRARY_OWNER = '0' * 32
 # The setting that holds each adventure's trading switches, read through trade_settings.
 TRADE_SETTINGS = 'trade_auto'
-# Set when this PokeSim made the Library, so a Library from before accounts is told apart.
-CREATED_SCHEMA = 'created_schema'
 
 
 def identifier():
@@ -98,9 +96,6 @@ class Registry:
             # The Library has one shelf that admins manage, so the per-user shelves of earlier
             # builds go. Only that table is dropped, and every ROM row and file stays.
             self.db.execute('DROP TABLE IF EXISTS rom_owners')
-            if new:
-                # Whatever opens it first, the server or `pokesim import`, this Library is not an upgrade.
-                self.db.execute('INSERT OR IGNORE INTO settings VALUES (?, ?)', (CREATED_SCHEMA, json.dumps(SCHEMA)))
             self.db.execute(f'PRAGMA user_version={SCHEMA}')
         if self.setting('application_id') is None:
             self.set_setting('application_id', identifier())

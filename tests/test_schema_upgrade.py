@@ -100,7 +100,8 @@ def test_a_schema_1_library_opens_open_with_every_row_kept(older, monkeypatch):
         # Every adventure belongs to the Library until setup names an admin, and the offer has no sender.
         assert db.execute('SELECT DISTINCT owner_id FROM adventures').fetchall() == [(LIBRARY_OWNER,)]
         assert db.execute('SELECT sender_id FROM trade_offers').fetchall() == [(None,)]
-        assert db.execute("SELECT 1 FROM settings WHERE key IN ('created_schema', 'accounts')").fetchall() == []
+        # Opening it open writes nothing that would turn accounts on at the next start.
+        assert db.execute("SELECT 1 FROM settings WHERE key='accounts'").fetchall() == []
     db.close()
     # The copy from before the upgrade is schema 1 with the same rows, so 0.6.x can open it again.
     [copy] = older.glob(f'app.sqlite.pre-schema-{SCHEMA}-*')
