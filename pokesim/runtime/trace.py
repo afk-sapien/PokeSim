@@ -20,7 +20,11 @@ import shutil
 import time
 from pathlib import Path
 
-from pokecore import trace as core
+try:
+    from pokecore import trace as core
+except ImportError:
+    # A released pokecore older than its trace module. The game then plays with no trace.
+    core = None
 
 from .. import config, fair_dvs, rewards, seeds
 from ..build_info import build_info
@@ -79,7 +83,7 @@ def command(name, arg):
     return {'command': name, 'arg': _plain(arg)}
 
 
-class _Segment(core.Segment):
+class _Segment(object if core is None else core.Segment):
     """A segment that stops writing after a disk error instead of stopping the game."""
 
     broken = False
@@ -213,9 +217,13 @@ class Tracer:
 
 
 def for_store(store, generation):
-    """The tracer for an adventure's store, or None when ``TRACE`` is off or the store keeps no states."""
+    """The tracer for an adventure's store, or None when ``TRACE`` is off, the store keeps no states or
+    the installed pokecore cannot trace."""
     states = getattr(store, 'states', None)
     if not config.TRACE or not isinstance(states, (str, os.PathLike)):
+        return None
+    if core is None:
+        log.warning('the installed pokecore has no trace module, so this adventure keeps no trace')
         return None
     return Tracer(Path(states) / FOLDER, generation, lambda: seed_digests(store))
 
@@ -225,6 +233,8 @@ def for_run(folder, generation, pb, seed):
     None when ``folder`` is None. Attach it before anything registers a hook on ``pb``."""
     if folder is None:
         return None
+    if core is None:
+        raise RuntimeError('this run asks for a trace, and the installed pokecore has no trace module')
     tracer = Tracer(folder, generation, {'adventure': digest(seed)})
     tracer.attach(pb)
     return tracer

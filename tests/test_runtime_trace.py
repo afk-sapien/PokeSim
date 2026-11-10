@@ -129,6 +129,14 @@ def test_a_tracer_needs_the_setting_and_a_states_folder(tmp_path, monkeypatch):
     assert trace.for_run(None, 1, None, 7) is None
 
 
+def test_a_pokecore_with_no_trace_module_turns_the_trace_off(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, 'TRACE', True)
+    monkeypatch.setattr(trace, 'core', None)
+    assert trace.for_store(SimpleNamespace(states=tmp_path, get=lambda key: None), 1) is None
+    with pytest.raises(RuntimeError, match='no trace module'):
+        trace.for_run(tmp_path, 1, None, 7)
+
+
 def test_a_host_with_no_tracer_ignores_notes_and_reasons():
     host = SimpleNamespace()
     trace.note(host, 'trade_demand', {'requests': {}})
