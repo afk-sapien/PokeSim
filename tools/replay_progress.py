@@ -381,7 +381,8 @@ class OldChecks:
         self.gen2, self.journal, self.status, self.clock = gen2, journal, status, clock
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
-        self.guard = LoopGuard(clock=lambda: clock[0])
+        # The loop guard counts game frames, so ``clock`` holds the frame on the replay axis.
+        self.guard = LoopGuard(lambda: clock[0])
         self.watch, self.loop, self.quiet = watchdog(), None, False
 
     def entry(self, entry, frame):
@@ -472,7 +473,7 @@ def replay(adventure, axis, rows, start, end, churn_n=10):
             ts, _, kind, item = stream[position]
             position += 1
             frame = axis(ts)
-            clock[0] = ts
+            clock[0] = frame
             if kind == 'entry':
                 journal.add(item)
                 if item.map:
@@ -515,8 +516,8 @@ def replay(adventure, axis, rows, start, end, churn_n=10):
         t = max(begun, start - WARMUP)
         while t <= min(ended, end):
             consume(t)
-            clock[0] = t
             frame = axis(t)
+            clock[0] = frame
             flags_old, flags_new = old.tick(t, frame), new.tick(t, frame)
             if start <= t <= end:
                 old_flags += flags_old

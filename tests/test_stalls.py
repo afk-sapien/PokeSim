@@ -17,11 +17,24 @@ def test_alert_repeats_slowly_and_progress_starts_a_new_episode():
     watch = StallWatch(game_minutes=120, real_minutes=15, repeat_hours=6)
     watch.progress(0, 0)
     assert watch.check(200 * MINUTE, 3600)
-    assert watch.check(400 * MINUTE, 2 * 3600) is None and watch.stalled(400 * MINUTE, 2 * 3600)
+    assert watch.check(400 * MINUTE, 2 * 3600) is None and watch.stalled(400 * MINUTE)
     assert watch.check(900 * MINUTE, 7 * 3600 + 1)
     watch.progress(900 * MINUTE, 8 * 3600)
-    assert not watch.stalled(901 * MINUTE, 8 * 3600 + 60)
+    assert not watch.stalled(901 * MINUTE)
     assert watch.check(1100 * MINUTE, 9 * 3600)
+
+
+def test_status_questions_change_nothing_and_count_only_game_time():
+    watch = StallWatch(game_minutes=120, real_minutes=15, repeat_hours=6)
+    watch.progress(1000 * MINUTE, 0)
+    before = (watch.frame, watch.since, watch.alerted)
+    # Hours of real time on a paused game are not a stall. Only game frames count.
+    assert not watch.stalled(1000 * MINUTE + 10) and watch.game_minutes(1000 * MINUTE + 10) == 0
+    assert watch.stalled(1125 * MINUTE) and watch.game_minutes(1125 * MINUTE) == 125
+    # A frame from before the last progress is a reloaded save, and asking about it moves no clock.
+    assert not watch.stalled(500 * MINUTE) and watch.game_minutes(500 * MINUTE) == 0
+    assert not watch.stalled(None) and watch.game_minutes(None) == 0
+    assert (watch.frame, watch.since, watch.alerted) == before
 
 
 def test_zero_game_minutes_disables_and_a_restore_restarts_the_clock():

@@ -42,21 +42,21 @@ def test_the_league_shopping_list_includes_a_cure_for_freeze():
 
 
 def test_autosaves_stop_rotating_during_a_battle_that_may_never_end():
-    import time
     from types import SimpleNamespace
     from pokesim import config
     from pokesim.emulator import Emulator
+    from pokesim.runtime.reload import FRAMES_PER_SECOND
     writes = []
     store = SimpleNamespace(get=lambda key: None, set=lambda *a: None, write_checkpoint=lambda *a: writes.append(1),
                             prune_autosaves=lambda n: None, prune_events=lambda n: None)
-    game = SimpleNamespace(store=store, play_clock=SimpleNamespace(state_dict=dict), snapshot=None,
-                           battle_since=time.time() - config.BATTLE_TIMEOUT_SECONDS)
+    frame = 10 ** 6
+    game = SimpleNamespace(store=store, play_clock=SimpleNamespace(state_dict=dict), snapshot=None, frame=frame,
+                           battle_frame=frame - config.BATTLE_TIMEOUT_SECONDS * FRAMES_PER_SECOND)
     Emulator._autosave(game)
     assert writes == [], 'the save from before the battle must survive until the timeout reloads it'
 
 
 def test_a_league_attempt_is_checkpointed_on_entry_and_restarted_when_a_battle_repeats_unending(tmp_path):
-    import time
     from types import SimpleNamespace
     from pokesim import emulator
     from pokesim.checkpoints import CheckpointStore
@@ -67,15 +67,16 @@ def test_a_league_attempt_is_checkpointed_on_entry_and_restarted_when_a_battle_r
     assert store.checkpoint_metadata(store.state_path(emulator.LEAGUE_CHECKPOINT))['sha256']
     recent = store.write_checkpoint(b'doomed', {'policy_state': {}, 'run_memory': {}})
     restored = []
-    game = SimpleNamespace(store=SimpleNamespace(autosaves=store.autosaves, state_path=store.state_path),
-                           snapshot=SimpleNamespace(map=emulator.MAPS['LANCES_ROOM']), reloads=0,
+    game = SimpleNamespace(store=SimpleNamespace(autosaves=store.autosaves, state_path=store.state_path,
+                                                 checkpoint_metadata=store.checkpoint_metadata),
+                           snapshot=SimpleNamespace(map=emulator.MAPS['LANCES_ROOM']), reloads=0, frame=10 ** 6,
                            play_clock=PlayClock(), adventure_seed=7,
                            _restore_first_valid=lambda paths: restored.append(paths[0].name), _tick=lambda n: None)
-    emulator.Emulator._unstick(game, time.time() + 3600, 'battle never ended')
-    emulator.Emulator._unstick(game, time.time() + 3600, 'battle never ended')
+    emulator.Emulator._unstick(game, game.frame, 'battle never ended')
+    emulator.Emulator._unstick(game, game.frame, 'battle never ended')
     assert restored == [recent.name, emulator.LEAGUE_CHECKPOINT]
     game.snapshot.map, game.unstick_streak = emulator.MAPS['ROUTE_1'], 5
-    emulator.Emulator._unstick(game, time.time() + 3600, 'battle never ended')
+    emulator.Emulator._unstick(game, game.frame, 'battle never ended')
     assert restored[-1] == recent.name, 'outside the League the entry checkpoint is never used'
 
 
@@ -105,11 +106,13 @@ def test_a_party_that_cannot_act_hands_over_to_someone_the_foe_will_knock_out():
 
 
 def test_a_hopeless_battle_is_reloaded_without_waiting_for_the_timeout():
-    import time
     from types import SimpleNamespace
     from pokesim.emulator import Emulator
+    from pokesim.runtime.reload import FRAMES_PER_SECOND
     reloaded = []
-    game = SimpleNamespace(last_reload=0, invalid_since=None, stuck_since=time.time(), battle_since=time.time() - 90,
+    frame = 10 ** 6
+    game = SimpleNamespace(frame=frame, last_reload_frame=0, invalid_frame=None, stuck_frame=frame,
+                           battle_frame=frame - 90 * FRAMES_PER_SECOND,
                            policy=SimpleNamespace(hopeless_battle=True), _check_stall=lambda now: None,
                            _unstick=lambda since, why: reloaded.append(why))
     Emulator._check_guards(game)

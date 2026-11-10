@@ -322,7 +322,7 @@ def make_emulator(**extra):
     values = dict(paused=False, manual_mode=False, preparation=None, store=SimpleNamespace(get=lambda key: None),
                   snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'), frame=100000,
                   last_reload_frame=0, policy=policy, failure_streak=0, invalid_frame=None, battle_frame=None,
-                  stuck_frame=100000, screen_frame=100000, progress_frame=100000, stuck_ts=0.0,
+                  stuck_frame=100000, screen_frame=100000, progress_frame=100000,
                   stall=SimpleNamespace(check=lambda frame, now: None))
     values.update(extra)
     emu = SimpleNamespace(**values)
@@ -519,6 +519,6 @@ def test_gen2_preparation_hands_an_unloaded_map_to_the_policy(monkeypatch):
     nav = SimpleNamespace(regions=regions, collision=lambda snapshot, memory: pytest.fail('collision read for an unloaded map'))
     policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False, step=lambda snapshot, memory, sp=None: pressed)
     emu = SimpleNamespace(policy=policy, data=SimpleNamespace(maps={1: {}}), pb=SimpleNamespace(memory=None), frame=10)
-    prep = preparation.Preparation(emu, {'deadline': time.time() + 60, 'started_frame': 0, 'protect': [], 'wished': []})
+    prep = preparation.Preparation(emu, {'started_frame': 0, 'protect': [], 'wished': []})
     snapshot = SimpleNamespace(map=0, started=True, in_battle=False)
     assert prep.advance(snapshot) is pressed

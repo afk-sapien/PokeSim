@@ -221,17 +221,18 @@ def test_waiting_does_not_adopt_an_unplanned_party_member(participant, monkeypat
     emu.policy.step.assert_not_called()
 
 
-def test_safe_point_wait_has_a_wall_clock_deadline(participant, monkeypatch):
+def test_safe_point_wait_does_not_fail_on_real_time_alone(participant, monkeypatch):
+    # The budget is game frames, so hours of real time on a slow or paused run change nothing.
     emu, snap, candidate = participant
     active = replace(snap, in_battle=True)
     monkeypatch.setattr(preparation, 'read_snapshot', lambda *args: active)
     state = preparation.begin(emu, identity(asdict(candidate)), 'transaction-1')
-    monkeypatch.setattr(preparation.time, 'time', lambda: state['deadline'] + 1)
-    actions = emu.preparation.step(PolicyContext(active, 0, emu.pb.memory))
-    assert all(action.button is None for action in actions)
-    assert emu.store.get(preparation.KEY)['phase'] == 'failed'
-    assert 'deadline' in emu.store.get(preparation.KEY)['error']
-    emu.policy.step.assert_not_called()
+    monkeypatch.setattr(preparation.time, 'time', lambda: state['started_at'] + 7200)
+    emu.policy.step.return_value = []
+    emu.preparation.step(PolicyContext(active, 0, emu.pb.memory))
+    assert emu.store.get(preparation.KEY)['phase'] != 'failed'
+    assert 'deadline' not in emu.store.get(preparation.KEY)
+    emu.policy.step.assert_called_once()
 
 
 def storage_party():

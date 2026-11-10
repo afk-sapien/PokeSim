@@ -24,7 +24,7 @@ def guard(*, waiting, still=False, stuck_frame=None):
                           snapshot=SimpleNamespace(valid=True, started=True), frame=frame, last_reload_frame=0,
                           policy=policy, failure_streak=0, invalid_frame=None, battle_frame=None,
                           stuck_frame=frame if stuck_frame is None else stuck_frame, screen_frame=frame,
-                          progress_frame=0, stuck_ts=0.0, stall=SimpleNamespace(frame=5), waiting=False)
+                          progress_frame=0, stall=SimpleNamespace(frame=5), waiting=False)
     emu._unstick = lambda since, why: reloads.append((since, why))
     emu._check_stall = lambda: None
     Emulator._check_guards(emu)

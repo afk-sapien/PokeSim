@@ -975,7 +975,7 @@ def test_trade_preparation_closes_the_pc_after_link_closed_text(real_data, monke
         collision=lambda *args: [])
     policy.nav.collision = lambda *args: []
     emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}))
-    controller = preparation.Preparation(emu, {'deadline': time.time() + 60, 'started_frame': 0})
+    controller = preparation.Preparation(emu, {'started_frame': 0})
     snapshot = SimpleNamespace(in_battle=False, map=real_data.map_ids['VIOLET_POKECENTER_1F'],
         text='TURN OFF\nLink closed…')
     assert controller.advance(snapshot).button == 'b'
@@ -992,7 +992,7 @@ def test_trade_preparation_heals_poison_before_freezing_the_source(real_data, mo
         nav=SimpleNamespace(observe=lambda snapshot: None, collision=lambda *args: [],
             toward=lambda *args, **kwargs: [], regions=SimpleNamespace(observe=lambda *args: None)))
     emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}))
-    controller = preparation.Preparation(emu, {'deadline': time.time() + 60, 'started_frame': 0})
+    controller = preparation.Preparation(emu, {'started_frame': 0})
     snapshot = SimpleNamespace(in_battle=False, map=real_data.map_ids['VIOLET_POKECENTER_1F'],
         text='', tiles=[''] * 18, badges=65535, party=(SimpleNamespace(status=8, egg=False, moves=()),))
     assert controller.advance(snapshot).button == 'a'
@@ -1024,7 +1024,7 @@ def test_time_capsule_preparation_heals_before_depositing_the_last_pokemon_that_
             toward=toward, regions=SimpleNamespace(observe=lambda *args: None,
                 route=lambda snapshot, mid, points, **kwargs: [] if mid == center else None)))
     emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}))
-    state = {'deadline': time.time() + 60, 'started_frame': 0, 'trade_key': 'k', 'manual': True,
+    state = {'started_frame': 0, 'trade_key': 'k', 'manual': True,
              'time_capsule': True}
     controller = preparation.Preparation(emu, state)
     controller.center = (center, (9, 1))

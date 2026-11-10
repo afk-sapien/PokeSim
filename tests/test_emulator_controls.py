@@ -205,19 +205,18 @@ def test_failed_tick_releases_button_before_worker_retries(monkeypatch):
     emu.pb.stop.assert_called_once_with(save=False)
 
 
-def test_stationary_strategic_run_replans_without_rewinding(monkeypatch):
+def test_stationary_strategic_run_replans_without_rewinding():
     from pokesim import config
     from pokesim.policies.strategic import StrategicPolicy
+    from pokesim.runtime.reload import FRAMES_PER_SECOND
     emu = Emulator.__new__(Emulator)
     emu.policy = StrategicPolicy(7)
     emu.snapshot = snap(frame=1000)
-    emu.last_reload = 0
-    emu.stuck_since = 1
-    emu.invalid_since = None
-    emu.battle_since = None
+    # The stuck limit is in game seconds, so it counts emulator frames.
+    emu.frame = 10 ** 6
+    emu.stuck_frame = emu.frame - (config.STUCK_RELOAD_SECONDS + 1) * FRAMES_PER_SECOND
     emu.input_epoch = 0
     emu._unstick = Mock()
-    monkeypatch.setattr('pokesim.emulator.time.time', lambda: config.STUCK_RELOAD_SECONDS + 2)
     emu._check_guards()
     emu._unstick.assert_not_called()
     assert emu.policy.recoveries == 1
@@ -229,7 +228,7 @@ def test_live_progress_uses_achievement_age_and_recovery_state(monkeypatch):
     emu = Emulator.__new__(Emulator)
     emu.policy = StrategicPolicy(7)
     emu.last_achievement = {'id': 1, 'title': 'Caught Ditto', 'ts': 1000}
-    emu.invalid_since = None
+    emu.invalid_frame = None
     emu.last_reload = 0
     monkeypatch.setattr('pokesim.emulator.time.time', lambda: 1050)
     assert emu.progress_status()['state'] == 'making_progress'

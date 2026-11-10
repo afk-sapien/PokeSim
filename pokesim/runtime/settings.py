@@ -71,7 +71,7 @@ class SimulationSettings:
     seed: int | None = None
     fast_text: bool = True
     battle_animations: bool = True
-    autosave_seconds: int = 60
+    autosave_seconds: int = 300
     keep_autosaves: int = 20
     stuck_reload_seconds: int = 600
     battle_timeout_seconds: int = 900

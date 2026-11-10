@@ -5,7 +5,7 @@ from pokesim.events import Event, release_title
 from pokesim.gen2.rewards import gift_title as gen2_gift_title
 from pokesim.ram import SPECIES_NAMES
 from pokesim.runtime.reward_delivery import gift_title
-from pokesim.stalls import LOOP_LIMIT, LoopGuard
+from pokesim.stalls import LOOP_LIMIT, SCAN_FRAMES, LoopGuard
 from pokesim.store import Store
 
 from test_events import snap
@@ -32,10 +32,10 @@ def test_the_same_gift_and_release_repeated_trips_the_guard_until_real_progress(
         assert guard.looping(store) is None
         add(store, 'obtain', gen2_gift_title('Chikorita'))
         add(store, 'release', release_title('Chikorita'))
-        clock.now += 60
+        clock.now += SCAN_FRAMES
         assert 'received and released Chikorita 6 times' in guard.looping(store)
         add(store, 'badge', 'Earned the Zephyr Badge')
-        clock.now += 60
+        clock.now += SCAN_FRAMES
         assert guard.looping(store) is None
     finally:
         store.close()
@@ -47,7 +47,7 @@ def test_different_pokemon_released_after_a_gift_are_not_a_loop(tmp_path):
         for index in range(LOOP_LIMIT * 2):
             add(store, 'obtain', 'Received Totodile from a custom PokeSim gift')
             add(store, 'release', f'Said goodbye to a spare Rattata{index}')
-        assert LoopGuard().looping(store) is None
+        assert LoopGuard(clock=Clock()).looping(store) is None
     finally:
         store.close()
 
@@ -61,7 +61,7 @@ def test_the_same_save_reloaded_again_and_again_trips_the_guard(tmp_path):
         assert 'reloaded auto-v1-reward-1.state 6 times' in guard.looping(store)
         # Real progress clears the count.
         add(store, 'map', 'Reached Route 30')
-        clock.now += 60
+        clock.now += SCAN_FRAMES
         assert guard.looping(store) is None
     finally:
         store.close()
@@ -71,9 +71,30 @@ def test_gen2_help_request_names_why_the_run_loops():
     from types import SimpleNamespace
 
     from pokesim.gen2.emulator import Emulator
-    guard = SimpleNamespace(looping=lambda store: 'It received and released Chikorita 6 times.')
+    # The status page reads the last scan's answer and never scans itself.
+    guard = SimpleNamespace(reason='It received and released Chikorita 6 times.',
+                            looping=lambda store: (_ for _ in ()).throw(AssertionError('status scanned')))
     assert Emulator._looping(SimpleNamespace(loop_guard=guard, store=None)) == 'It received and released Chikorita 6 times.'
     assert Emulator._looping(SimpleNamespace(store=None)) is None
+
+
+def test_a_scan_falls_on_game_frames_and_a_rewound_clock_scans_at_once(tmp_path):
+    store, clock = Store(tmp_path), Clock()
+    try:
+        guard = LoopGuard(clock=clock)
+        assert guard.looping(store) is None
+        for _ in range(LOOP_LIMIT):
+            add(store, 'obtain', gen2_gift_title('Chikorita'))
+            add(store, 'release', release_title('Chikorita'))
+        # Inside one scan window the answer is the last scan's, however much real time passed.
+        clock.now += SCAN_FRAMES - 1
+        assert guard.looping(store) is None
+        # A clock that went back past the last scan, as on a new game, scans again straight away.
+        clock.now = 500.0
+        assert 'received and released Chikorita 6 times' in guard.looping(store)
+        assert guard.reason is not None
+    finally:
+        store.close()
 
 
 def test_catching_a_returning_legendary_ends_the_loop(tmp_path):
@@ -85,10 +106,10 @@ def test_catching_a_returning_legendary_ends_the_loop(tmp_path):
             add(store, 'release', 'Said goodbye to a spare Cyndaquil')
         assert guard.looping(store)
         add(store, 'event_return', 'Caught the returning Sudowoodo')
-        clock.now += 60
+        clock.now += SCAN_FRAMES
         # It counts once it has stayed in the PC for a check.
         assert guard.looping(store)
-        clock.now += 60
+        clock.now += SCAN_FRAMES
         assert guard.looping(store) is None
     finally:
         store.close()
@@ -105,12 +126,12 @@ def test_a_return_released_straight_away_is_not_progress(tmp_path):
         add(store, 'event_return', 'Caught the returning Sudowoodo')
         add(store, 'event_return', 'Completed the Eevee gift')
         add(store, 'event_return', 'Sudowoodo has returned!')
-        clock.now += 60
+        clock.now += SCAN_FRAMES
         assert guard.looping(store)
         add(store, 'release', 'Said goodbye to a spare Sudowoodo Lv 20')
         add(store, 'release', 'Said goodbye to a spare Eevee')
         for _ in range(3):
-            clock.now += 60
+            clock.now += SCAN_FRAMES
             assert 'reloaded auto-v1-1.state' in guard.looping(store)
     finally:
         store.close()
@@ -125,7 +146,7 @@ def test_gen1_gifts_and_releases_pair_by_species_across_spellings(tmp_path):
             add(store, 'release', release_title(SPECIES_NAMES[177]))
             add(store, 'obtain', gift_title('MIMIC', 42, index))
             add(store, 'release', release_title(SPECIES_NAMES[42]) + ' Lv 5')
-        reason = LoopGuard().looping(store)
+        reason = LoopGuard(clock=Clock()).looping(store)
         assert 'received and released Squirtle 6 times' in reason or 'Mr. Mime 6 times' in reason
     finally:
         store.close()
@@ -155,7 +176,7 @@ def test_reload_counts_survive_a_worker_restart(tmp_path):
         fresh.reloaded('auto-v1-1.state')
         assert 'reloaded auto-v1-1.state 6 times' in fresh.looping(store)
         add(store, 'badge', 'Earned the Boulder Badge')
-        clock.now += 60
+        clock.now += SCAN_FRAMES
         assert fresh.looping(store) is None
         assert LoopGuard(clock=clock).looping(store) is None
     finally:
@@ -174,11 +195,11 @@ def test_a_reload_replaying_the_same_journal_is_not_progress(tmp_path):
             # The reload rewinds the run, and the replay journals the same map and level again.
             add(store, 'map', 'Reached Route 30')
             add(store, 'level', 'CHIKO grew to level 9')
-            clock.now += 60
+            clock.now += SCAN_FRAMES
             guard.looping(store)
         assert 'reloaded auto-v1-1.state 6 times' in guard.looping(store)
         add(store, 'level', 'CHIKO grew to level 10')
-        clock.now += 60
+        clock.now += SCAN_FRAMES
         assert guard.looping(store) is None
     finally:
         store.close()
@@ -188,7 +209,7 @@ def test_the_web_thread_and_the_emulator_thread_share_one_guard(tmp_path):
     import threading
     store = Store(tmp_path)
     try:
-        guard = LoopGuard(every=0)
+        guard = LoopGuard(clock=Clock(), every=0)
         for _ in range(LOOP_LIMIT):
             add(store, 'obtain', 'Received Totodile from a custom PokeSim gift')
             add(store, 'release', 'Said goodbye to a spare Totodile')

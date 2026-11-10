@@ -53,7 +53,7 @@ Each row reaches a bot decision. Section 3.4 lists the clock reads that stay, be
 | `:955` | Stuck reload after `STUCK_RELOAD_SECONDS` (600) of wall time | 36,000 frames, as Gen II at `gen2/emulator.py:1067` |
 | `:965` | Battle timeout after `BATTLE_TIMEOUT_SECONDS` (900) of wall time | 54,000 frames, as Gen II at `:1076` |
 | `:821` | Autosave pauses once a battle is 300 s old | 18,000 frames |
-| `:1247`, `:1310-1313` | Autosave every 60 s of wall time | Every 3,600 frames |
+| `:1247`, `:1310-1313` | Autosave every 60 s of wall time | Every 18,000 frames (section 7, ruling 2) |
 | `:1276` | `PolicyContext(snap, time.time() - self.stuck_since, time.time(), ...)` | `PolicyContext(snap, clock, mem, sp)`, where `clock` is PlayClock frames |
 | `:330`, `:644`, `:758` | StallWatch gets `time.time()` with each progress and check | The game-minute clock decides. The real clock only paces the alert (section 4.8) |
 
@@ -62,7 +62,7 @@ Each row reaches a bot decision. Section 3.4 lists the clock reads that stay, be
 | Where | What it decides now | Replaced by |
 |---|---|---|
 | `:1022` | `self._tick(1 + secrets.randbelow(180))` after a reload | The reload stream |
-| `:1231`, `:1283-1285` | Autosave every 60 s of `time.monotonic()` | Every 3,600 frames |
+| `:1231`, `:1283-1285` | Autosave every 60 s of `time.monotonic()` | Every 18,000 frames |
 | `:1097` | `self.stall.check(self.frame, time.time())` | As Gen I |
 | `:264`, `:707`, `:818`, `:908`, `:916`, `:1048`, `:1057` | `stuck_ts` is written and never read | Deleted |
 | `:354` | `host_elapsed` sets the cartridge clock when a save has no reading | Stays. The reading goes in the trace header |
@@ -113,7 +113,7 @@ As built in PR 3, the seed lives under `adventure-seed-v1` and an owner restart 
 
 ### 4.2 One loop
 
-`pokesim/runtime/game_loop.py` adds `GameLoop`. One step reads the snapshot, asks the decider, runs the action (press, hold, release, gap), writes W_OPTIONS, runs guards every 60 frames, autosaves every 3,600 frames and writes the trace. The decider is the only part per generation. Gen I builds a `PolicyContext`. Gen II calls `step(snapshot, mem, sp)`. Phase 3 widens the decider into the full GameAdapter.
+`pokesim/runtime/game_loop.py` adds `GameLoop`. One step reads the snapshot, asks the decider, runs the action (press, hold, release, gap), writes W_OPTIONS, runs guards every 60 frames, autosaves every 18,000 frames and writes the trace. The decider is the only part per generation. Gen I builds a `PolicyContext`. Gen II calls `step(snapshot, mem, sp)`. Phase 3 widens the decider into the full GameAdapter.
 
 Production `_run` keeps commands, pause, manual mode, pacing and frame publishing. `HeadlessRun` keeps setup and nothing else. Both call the same step, so a test and production play the same frames.
 
@@ -270,7 +270,7 @@ Each PR deletes the old call sites its new definition replaces, in the same PR.
 | 2 | Replay diverge and bisect | `python -m pokesim.replay` with `record`, `diverge` and `bisect`, the old-commit shim, the environment cache and the self check. Then the three cases run | `tools/stage_ladder.py:533` importing `tools.replay_audit`, and `tools/live_soak.py:1135` importing `stage_ladder.compare`. The rung runner and `compare` move into `pokesim/replay/` | 5 |
 | 3 | Seeds | `pokesim/seeds.py`, the adventure seed and the streams. Gen II policy generator saved and restored | `secrets.randbelow` at `emulator.py:924`, `gen2/emulator.py:1022`, `headless.py:92` and `gen2/headless.py:107`. `random.Random()` at `strategic.py:241`. The `uuid4` gift seeds at `runtime/reward_delivery.py:49`, `:108` and `gen2/rewards.py:55`, `:57`. The naming generator at `gen2/naming.py:28` | 3 |
 | 4 | Wall time leaves the policy | `PolicyContext.clock` in PlayClock frames. Trade demand on frames, through the command queue | The `stuck_seconds` and `real_time` fields (`policies/base.py:26-27`) and their callers: `emulator.py:1276`, `headless.py:116`, `benchmark.py:116`, 7 call sites in 6 tools and 69 test constructors. The monotonic window at `policies/collection.py:539-544`. The wall reads at `smart_random.py:279` and `guided_random.py:38` | 3 |
-| 5 | Supervision on frames | Gen I guards, battle timeout, invalid grace and autosave pause on frames. Autosave every 3,600 frames in both loops. `runtime/reload.py` with `reload_target` | The rows of section 3.1 except `:924` (PR 3) and `:1276` (PR 4), with the mtime pick at `emulator.py:907`. The write-only `stuck_ts` in Gen II. The wall deadlines in both preparation modules. The LoopGuard real-second scan at `stalls.py:147`. `participant.py:663` | 5 |
+| 5 | Supervision on frames | Gen I guards, battle timeout, invalid grace and autosave pause on frames. Autosave every 18,000 frames in both loops. `runtime/reload.py` with `reload_target` | The rows of section 3.1 except `:924` (PR 3) and `:1276` (PR 4), with the mtime pick at `emulator.py:907`. The write-only `stuck_ts` in Gen II. The wall deadlines in both preparation modules. The LoopGuard real-second scan at `stalls.py:147`. `participant.py:663` | 5 |
 | 6 | One loop | `runtime/game_loop.py` with the per-generation decider. Production and headless call it | The action code in `emulator.py:1292-1309`, `gen2/emulator.py:1268-1279`, `headless.py:114-125`, `gen2/headless.py:133-142` and `benchmark.py:116-117`. The tool loops in `play_gen2`, `playthrough`, `validate_progress`, `validate_legendary_recovery`, `verify_gen2_postgame`, `verify_gen2_trading` and `benchmark_decisions` move onto `HeadlessRun` | 6 |
 | 7 | Trace in production | Both loops write segments. Outside inputs are logged. `tests/test_determinism.py` | The five manifest builders (`emulator.py:800`, `gen2/emulator.py:540`, `headless.py:100` and `:107`, `gen2/headless.py:117`) become one shared builder that carries the header fields | 4 |
 | 8 | Automatic stall capture | Captures at every trigger in section 4.8, Gen II bundles, `replay capture` and `scenarios/index.toml` | `tools/stuck_scenarios.py add` (`:61-88`). The bundle writer in `tools/find_stalls.py`, which moves onto the shared capture | 5 |
@@ -284,7 +284,7 @@ PRs 3 to 5 can each ship alone. PR 6 needs 3 to 5. PR 7 needs 1 and 6. PR 8 need
 The lead ruled on the open questions on 2026-11-10.
 
 1. pyboy-rs: the bisect holds pyboy-rs at 0.1.5 for every commit. It reports 0.1.4 against 0.1.5 once, as its own result.
-2. Autosave: it stays at 3,600 frames with 20 kept saves. That covers 20 game minutes, and the stuck reload looks back only 10. The stall capture keeps its own save from before the stall. PR 5 measures the save cost at Max pace and reports back only when it passes 2% of loop time.
+2. Autosave: 20 saves are kept. PR 5 measured 3,600 frames at Max pace: 60 saves a game hour cost 13.6% of loop time on Red and 11.9% on Crystal. The lead then ruled 18,000 frames (`AUTOSAVE_SECONDS` 300), about 2.7% at Max pace. The 20 saves cover 100 game minutes, and a crash at 1x loses at most 5 minutes of play. The stall capture keeps its own save from before the stall. A cheaper save is not planned for now.
 3. Mew gift seeds: they come from the adventure seed with the kind and the championship count. A gift claimed again after a rollback gets the same DVs, because a rollback must not be a reroll.
 4. Trace in production: the full trace is kept and pruned with its autosave. PR 7 reports the measured bytes per game hour, and reports back only when one adventure's kept traces pass 50 MB.
 5. Order: the trace and the bisect tool come first, then the clock work. PR 1 of this plan starts after the pokecore move has merged, since it lives in `packages/pokecore`. The three cases run as soon as PR 2 lands.

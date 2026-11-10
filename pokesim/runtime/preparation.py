@@ -90,7 +90,7 @@ def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False, prote
     if type(max_frames) is not int or not 60 <= max_frames <= 216000:
         raise ValueError('Invalid preparation frame budget')
     state = {'id': transaction_id, 'trade_key': trade_key, 'phase': 'travelling',
-             'started_at': time.time(), 'deadline': time.time() + 1800,
+             'started_at': time.time(),
              'elapsed_frames': 0, 'max_frames': max_frames, 'party_slot': None, 'selected_key': trade_key,
              # Hand-picked Pokémon and wished species the PC must keep if it has to release one to make room.
              'protect': sorted(set(protect)), 'wished': sorted(set(wished))}
@@ -132,7 +132,7 @@ def begin_restore(emu, prepared):
     except ValueError:
         return None
     state = {'id': prepared['id'], 'trade_key': holder, 'selected_key': holder, 'received_key': received[0],
-             'restore': True, 'phase': 'storage' if snapshot.map in CENTERS else 'travelling', 'started_at': time.time(), 'deadline': time.time() + 1800,
+             'restore': True, 'phase': 'storage' if snapshot.map in CENTERS else 'travelling', 'started_at': time.time(),
              'elapsed_frames': 0, 'max_frames': 108000, 'party_slot': None, 'protect': [], 'wished': []}
     emu.store.set(KEY, state)
     emu.preparation = Preparation(emu, state)
@@ -274,7 +274,8 @@ class Preparation:
         snap = ctx.snapshot
         self.state['elapsed_frames'] += max(0, snap.frame - self.last_frame)
         self.last_frame = snap.frame
-        if self.state['elapsed_frames'] > self.state['max_frames'] or time.time() > self.state['deadline']:
+        # The budget is game frames only, so a slow pace or a replay never changes when it runs out.
+        if self.state['elapsed_frames'] > self.state['max_frames']:
             raise ValueError('Cable Club preparation exceeded its travel deadline')
         screen = Screen(ctx.mem)
         kind = screen.kind(snap)

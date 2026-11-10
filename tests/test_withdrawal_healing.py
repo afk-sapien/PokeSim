@@ -10,6 +10,7 @@ from pokesim.policies.battle import needs_healing
 from pokesim.policies.progression import Goal
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.ram import PartyMon
+from pokesim.runtime.reload import FRAMES_PER_SECOND
 from pokesim.strategy_data import MAPS
 from test_events import snap
 from test_strategy import mon
@@ -47,26 +48,41 @@ def test_hp_recovery_does_not_hide_other_invalid_fields(change):
     assert not replace(withdrawn(), **change).hp_overflow_only
 
 
+START = 100 * FRAMES_PER_SECOND
+
+
 def guard(snapshot, *, speed=1):
     return SimpleNamespace(snapshot=snapshot, policy=SimpleNamespace(heal_latch=True), speed=speed,
-                           last_reload=0, invalid_since=100, stuck_since=100, battle_since=None,
-                           _unstick=Mock(), _check_stall=Mock())
+                           frame=START, last_reload_frame=-10 ** 9, invalid_frame=START, stuck_frame=START,
+                           battle_frame=None, _unstick=Mock(), _check_stall=Mock())
 
 
-@pytest.mark.parametrize('speed,grace', [(0, 60), (1, 60), (16, 60), (0.5, 120), (0.1, 600)])
-def test_nurse_has_bounded_time_to_repair_hp_at_each_speed(monkeypatch, speed, grace):
+@pytest.mark.parametrize('speed', [0, 1, 16, 0.5, 0.1])
+def test_nurse_has_sixty_game_seconds_to_repair_hp_at_any_speed(speed):
+    # The grace counts emulator frames, so the pace the run plays at does not change it.
     emu = guard(withdrawn(), speed=speed)
-    monkeypatch.setattr('pokesim.emulator.time.time', lambda: 100 + grace - 1)
+    emu.frame = START + 60 * FRAMES_PER_SECOND - 1
     Emulator._check_guards(emu)
     emu._unstick.assert_not_called()
-    monkeypatch.setattr('pokesim.emulator.time.time', lambda: 100 + grace + 1)
+    emu.frame = START + 60 * FRAMES_PER_SECOND + 1
     Emulator._check_guards(emu)
-    emu._unstick.assert_called_once_with(100, 'game state glitched')
+    emu._unstick.assert_called_once_with(START, 'game state glitched')
 
 
 @pytest.mark.parametrize('change', [dict(map=MAPS['VICTORY_ROAD_2F']), dict(in_battle=1), dict(playtime=(0, 77, 0))])
-def test_other_invalid_states_keep_the_normal_reload_deadline(monkeypatch, change):
+def test_other_invalid_states_keep_the_normal_reload_deadline(change):
     emu = guard(replace(withdrawn(), **change))
-    monkeypatch.setattr('pokesim.emulator.time.time', lambda: 106)
+    emu.frame = START + 6 * FRAMES_PER_SECOND
     Emulator._check_guards(emu)
-    emu._unstick.assert_called_once_with(100, 'game state glitched')
+    emu._unstick.assert_called_once_with(START, 'game state glitched')
+
+
+def test_a_reload_gives_the_reloaded_game_a_quiet_minute():
+    emu = guard(replace(withdrawn(), in_battle=1))
+    emu.last_reload_frame = START
+    emu.frame = START + 59 * FRAMES_PER_SECOND
+    Emulator._check_guards(emu)
+    emu._unstick.assert_not_called()
+    emu.frame = START + 61 * FRAMES_PER_SECOND
+    Emulator._check_guards(emu)
+    emu._unstick.assert_called_once_with(START, 'game state glitched')

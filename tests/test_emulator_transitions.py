@@ -24,7 +24,7 @@ def emu(tmp_path):
     value.input_epoch = 7
     value.speed = 4
     value.paused = value.manual_mode = True
-    value.battle_since = value.invalid_since = 1
+    value.battle_frame = value.invalid_frame = 1
     value.last_pos = (1, 2, 3)
     value.manual = queue.Queue()
     value.manual.put('old input')
@@ -41,7 +41,9 @@ def test_resume_discards_input_but_preserves_game_and_event_observations(emu):
     assert emu.mem is memory and emu.play_clock is clock
     assert emu.prev_snapshot is previous and emu.pending == ['pending event']
     assert emu.manual.empty() and emu.input_epoch == 8
-    assert emu.battle_since is None and emu.invalid_since is None
+    assert emu.battle_frame is None and emu.invalid_frame is None
+    # The guard clocks restart from the frame the game is on.
+    assert emu.stuck_frame == emu.last_reload_frame == 900
     assert not emu.paused and not emu.manual_mode
 
 
@@ -52,7 +54,7 @@ def test_restore_discards_stale_observations_and_timers_without_changing_control
     monkeypatch.setattr('pokesim.emulator.read_snapshot', lambda *args: current)
     emu._load_state_file(path)
     assert emu.snapshot is current and emu.prev_snapshot is None and emu.pending == []
-    assert emu.battle_since is None and emu.invalid_since is None and emu.last_pos is None
+    assert emu.battle_frame is None and emu.invalid_frame is None and emu.last_pos is None
     assert emu.manual.empty() and emu.input_epoch == 8
     assert emu.paused and emu.manual_mode and emu.speed == 4
 
@@ -68,7 +70,7 @@ def test_restart_resets_the_adventure_and_input_but_keeps_event_history(emu):
     emu._handle_command('restart', None)
     assert emu.frame == 0 and emu.snapshot is None and emu.prev_snapshot is None
     assert emu.pending == [] and emu.manual.empty() and emu.input_epoch == 8
-    assert emu.battle_since is None and emu.invalid_since is None
+    assert emu.battle_frame is None and emu.invalid_frame is None
     assert not emu.paused and not emu.manual_mode and emu.speed == 4
     assert emu.store.get('trade_barrier') == '123'
     assert emu.store.trade_preferences() == {} and emu.store.get('policy_state') == {}

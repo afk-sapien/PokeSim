@@ -410,7 +410,7 @@ def release_session(store, data):
     record['phase'] = 'applied'
     store.set(PREFIX + record['id'], record)
     participant = Participant(SimpleNamespace(store=store, emulator=None), SimpleNamespace())
-    participant.emu = SimpleNamespace(paused=True, policy=SimpleNamespace(on_restore=lambda: None), stuck_since=0)
+    participant.emu = SimpleNamespace(paused=True, policy=SimpleNamespace(on_restore=lambda: None), stuck_frame=0)
     participant.release({'id': record['id']})
     participant.release({'id': record['id']})
 

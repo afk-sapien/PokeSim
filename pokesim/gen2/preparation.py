@@ -1,6 +1,4 @@
 """Prepare a boxed Gen II offer with ordinary travel and PC controls."""
-import time
-
 from pokecore.identity import same
 from ..trade.preferences import identity
 from .teams import key as team_key
@@ -77,7 +75,7 @@ def begin(emu, key, tid, *, time_capsule=False, manual=False, session=False, pro
         if not compatible(selected(snapshot, preferences, key)[2], emu.data):
             raise ValueError('The selected Pokémon cannot enter the Time Capsule')
     state = {'id': tid, 'trade_key': key, 'phase': 'travelling', 'started_frame': emu.frame,
-             'deadline': time.time() + 1800, 'party_slot': None, 'time_capsule': time_capsule}
+             'party_slot': None, 'time_capsule': time_capsule}
     if manual:
         state['manual'] = True
     if session:
@@ -174,7 +172,8 @@ class Preparation:
 
     def advance(self, snapshot):
         emu, state = self.emu, self.state
-        if time.time() > state['deadline'] or emu.frame - state['started_frame'] > 108000:
+        # The budget is game frames only, so a slow pace or a replay never changes when it runs out.
+        if emu.frame - state['started_frame'] > 108000:
             raise ValueError('The trainer did not reach the Cable Club before the preparation deadline')
         policy, data = emu.policy, emu.data
         mem = Memory(emu.pb.memory, data)
