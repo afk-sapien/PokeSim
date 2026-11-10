@@ -208,6 +208,47 @@ def test_a_heal_that_restores_the_party_is_support_and_one_with_nothing_to_resto
     # Only the heal is credited, not another goal the party happened to recover under.
     assert _goal_events('surf', hurt, _snapshot([_hurt(hp=40)], [])) == []
 
+
+def _walk(in_battle=0, experience=8000, items=()):
+    lapras = _mon('Lapras')
+    lapras.experience = experience
+    at = _snapshot([lapras], [])
+    at.items, at.in_battle = items, in_battle
+    return at
+
+
+def _audit(monkeypatch, out, steps):
+    """The run file ``out`` of the audit loop over ``steps``, each a goal key and the read that step leaves."""
+    from pokesim.replay import rung
+    reads = [_walk()] + [after for _, after in steps]
+    policy = SimpleNamespace(goal=None, recoveries=0, collection=SimpleNamespace(director=SimpleNamespace(outcomes=[])))
+    run = SimpleNamespace(frame=0, generation=1, policy=policy, stop=lambda: None)
+
+    def step(snapshot):
+        policy.goal = SimpleNamespace(key=steps[run.frame // 100][0], title=steps[run.frame // 100][0], reason='')
+        run.frame += 100
+    run.step = step
+    monkeypatch.setattr(rung, '_open', lambda *args: (run, lambda: reads[run.frame // 100], 'yellow'))
+    rung.run_one(SimpleNamespace(randomizer='', rom='yellow.gb', state='badges_6.state', data_root=None, seed=7,
+                                 fair_wild_dvs=False, lead_in=0, reseed_goals=False, frames=100 * len(steps), out=out))
+    return json.loads(out.read_text())
+
+
+def test_a_battle_on_an_errands_way_does_not_cut_the_errand_short(monkeypatch, tmp_path):
+    # A Yellow restock after Surf met Safari Zone battles on the walk to the Fuchsia Mart. Each battle ran
+    # under the pick behind the errand, and every walk before one was read as wasted.
+    battle, won = _walk(in_battle=1), _walk(experience=8100)
+    trip = [('restock', _walk()), ('restock', battle), ('party_surf', battle), ('party_surf', won),
+            ('restock', won), ('restock', _walk(experience=8100, items=((17, 5),))), ('story', won), ('story', won)]
+    result = _audit(monkeypatch, tmp_path / 'trip.json', trip)
+    assert result['wasted'] == {} and result['spans'] == {'restock': 1, 'party_surf': 1}
+    # A battle after which the run turns to another goal still leaves the walk before it wasted.
+    turned = [('restock', _walk()), ('restock', battle), ('party_surf', battle), ('party_surf', won),
+              ('story', won), ('story', won)]
+    result = _audit(monkeypatch, tmp_path / 'turned.json', turned)
+    assert result['wasted'] == {'restock': 200} and result['spans'] == {'restock': 1, 'party_surf': 1}
+
+
 RED_ROM = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
 
 
