@@ -22,13 +22,15 @@ import os
 from pathlib import Path
 import time
 
-from pokesim.ram import ITEM_NAMES, read_snapshot
-from pokesim.scenarios import Scenario, WorkerDied, discover, open_run, play, replay_all
-
 DEFAULT_ROOT = Path(__file__).resolve().parents[2] / 'data' / 'scenarios'
 
 
+# pokesim.ram and pokesim.scenarios read the game data as they load, so each command imports them
+# when it runs and --help works on a machine without game data.
+
 def show(args):
+    from pokesim.ram import ITEM_NAMES, read_snapshot
+    from pokesim.scenarios import Scenario, open_run
     scenario = Scenario.load(args.scenario)
     run, _ = open_run(scenario, args.rom)
     try:
@@ -51,12 +53,14 @@ def show(args):
 
 
 def _play(folder, rom):
+    from pokesim.scenarios import Scenario, play
     started = time.monotonic()
     result = play(Scenario.load(folder), rom)
     return {**result, 'wall_seconds': round(time.monotonic() - started)}
 
 
 def run(args):
+    from pokesim.scenarios import WorkerDied, discover, replay_all
     scenarios = [s for s in discover(args.root) if not args.only or any(word in s.name for word in args.only)]
     if not scenarios:
         raise SystemExit(f'No scenarios under {args.root}')
