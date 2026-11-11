@@ -101,6 +101,7 @@ The proposed rule: a restart starts a new cartridge game. State that a new game 
 | Loop guard reload counts (`loop-guard-reloads-v1`) | Keeps | Keeps. The new `LoopGuard` (`:1223`) reads them back from kv (`stalls.py:239`) | Resets. The counts are for the old game's places |
 | Goal time (`goal-time-v1`) | Keeps | Keeps | Resets. Its shares and stand-downs are the old game's |
 | Supervisor ladder counts (`supervisor-ladder-v1`) | Resets | Resets | Resets. A reload keeps them, but a new game starts the ladder from the bottom |
+| Supervisor progress bests (`supervisor-best-v1`) | Resets | Resets | Resets. A reload keeps them, so a replay is not new progress, but a new game starts from nothing |
 
 Lifetime tallies stay `survives` in both: `adventure-counters-v1`, `activity-ledger-v1`, `adventure-statistics-v1`, the statistics history and the journal.
 

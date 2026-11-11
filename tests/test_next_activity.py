@@ -157,6 +157,7 @@ def pinned_emulator():
     emu.policy.collection.pin = Pin('hunt', 'Find Clefairy')
     emu.snapshot = snap(frame=1000)
     emu.supervisor = Supervisor()
+    emu.play_clock = PlayClock()
     emu.journal = []
     emu._handle_events = lambda events, snapshot: emu.journal.extend(event.title for event in events)
     return emu

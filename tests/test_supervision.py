@@ -1,7 +1,9 @@
 """The one reload ladder both generations climb, and the counts it keeps across a reload and a worker restart."""
+from types import SimpleNamespace
+
 from pokesim.runtime import supervision
-from pokesim.runtime.supervision import (CANNOT_END, GIVE_UP, HOLD, KEY, LEAGUE_RESTARTS, MAX_RELOADS, RELOAD,
-                                         STALL_RELOADS, Supervisor)
+from pokesim.runtime.supervision import (BEST_KEY, CANNOT_END, GIVE_UP, HOLD, KEY, LEAGUE_RESTARTS, MAX_RELOADS,
+                                         RELOAD, STALL_RELOADS, Supervisor)
 
 
 class Kv:
@@ -122,3 +124,87 @@ def test_the_report_names_the_trouble_and_the_place():
     title, body = supervision.report('no progress', 'Route 29')
     assert title == 'Stuck? The adventure had to reload three times'
     assert body == 'No progress at Route 29 and 2 reloads did not help.'
+
+
+def pokemon(experience, species=157, trainer_id=1, dvs=(9, 9), egg=False, friendship=0):
+    return SimpleNamespace(species=species, trainer_id=trainer_id, dvs=dvs, experience=experience, egg=egg,
+                           friendship=friendship)
+
+
+def seen(*party, badges=1, flags=b'\x01', owned=(1,)):
+    return SimpleNamespace(badges=badges, event_flags=flags, owned=set(owned), party=party)
+
+
+def test_only_a_new_high_is_progress_and_the_replay_after_a_reload_is_not():
+    supervisor = ladder()
+    assert supervisor.progressed(seen(pokemon(1000)), 3, 0)
+    supervisor.climb('no progress', never)
+    # The reload goes back to a save with less, and the replay earns the same experience again.
+    assert not supervisor.progressed(seen(pokemon(800)), 3, 0)
+    assert not supervisor.progressed(seen(pokemon(1000)), 3, 0)
+    assert supervisor.reloads == 1
+    assert supervisor.progressed(seen(pokemon(1000), badges=3), 3, 0)
+    assert supervisor.reloads == 0
+    # A new area or a League win counts, as each part of the score does.
+    assert supervisor.progressed(seen(pokemon(1000), badges=3), 4, 0)
+    assert supervisor.progressed(seen(pokemon(1000), badges=3), 4, 1)
+
+
+def test_a_trainee_swapped_in_still_counts_against_its_own_best():
+    supervisor = ladder()
+    supervisor.progressed(seen(pokemon(90000), pokemon(500, species=16)), 3, 0)
+    supervisor.reloads = 2
+    # The party total drops with the trained Pokémon gone, yet the trainee beat its own best.
+    assert supervisor.progressed(seen(pokemon(600, species=16)), 3, 0) and supervisor.reloads == 0
+
+
+def test_an_egg_counts_once_per_cycle_and_once_on_hatching():
+    supervisor = ladder()
+    supervisor.progressed(seen(pokemon(0, egg=True, friendship=5)), 3, 0)
+    assert supervisor.progressed(seen(pokemon(0, egg=True, friendship=4)), 3, 0)
+    # A reload back to a fuller egg replays steps that already counted.
+    assert not supervisor.progressed(seen(pokemon(0, egg=True, friendship=5)), 3, 0)
+    assert supervisor.progressed(seen(pokemon(0)), 3, 0)
+    assert not supervisor.progressed(seen(pokemon(0)), 3, 0)
+
+
+def test_the_bests_survive_a_worker_restart_and_forget_old_pokemon():
+    store = Kv()
+    Supervisor(store).progressed(seen(pokemon(1000)), 3, 0)
+    again = Supervisor(store)
+    assert again.best == (1, 1, 1, 3, 1000, 0) and not again.progressed(seen(pokemon(1000)), 3, 0)
+    for species in range(supervision.KEEP_MONS + 5):
+        again.progressed(seen(pokemon(10, species=species)), 3, 0)
+    kept = Supervisor(store).trained
+    assert len(kept) == supervision.KEEP_MONS and supervision.mon_key(pokemon(10, species=supervision.KEEP_MONS + 4)) in kept
+
+
+def test_a_restart_forgets_the_bests_in_either_generation(tmp_path):
+    from pokesim.store import Store
+    for generation in (1, 2):
+        store = Store(tmp_path / str(generation))
+        try:
+            supervisor = Supervisor(store)
+            supervisor.progressed(seen(pokemon(1000)), 3, 0)
+            supervisor.climb('no progress', never)
+            assert store.get(BEST_KEY)['score'] == [1, 1, 1, 3, 1000, 0]
+            store.restart(generation, {})
+            fresh = Supervisor(store)
+            assert (fresh.best, fresh.trained, fresh.reloads) == ((), {}, 0)
+        finally:
+            store.close()
+
+
+def test_a_boss_attempt_holds_the_ladder_and_a_loss_puts_it_back():
+    supervisor = ladder(2)
+    supervisor.watch_boss(True, False)
+    assert supervisor.progressed(seen(pokemon(1000)), 3, 0) and supervisor.reloads == 0
+    supervisor.watch_boss(True, True)
+    assert supervisor.reloads == 2 and supervisor.held is None
+    # A won attempt keeps its progress.
+    supervisor.watch_boss(True, False)
+    supervisor.progressed(seen(pokemon(2000)), 3, 0)
+    supervisor.watch_boss(False, False)
+    assert supervisor.reloads == 0 and supervisor.held is None
+    supervisor.lost()
+    assert supervisor.reloads == 0

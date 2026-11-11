@@ -69,8 +69,8 @@ def test_only_progress_marks_the_next_autosave_as_the_one_to_keep():
     watch = StallWatch(game_minutes=120, real_minutes=0)
     assert watch.fresh
     watch.fresh = False
-    watch.quiet(50 * MINUTE, 10)
-    watch.quiet(10 * MINUTE, 20)            # a reloaded save restarts the clocks and nothing else
+    watch.quiet(10 * MINUTE, 20)
+    # The play clock goes on through a reload, so the quiet stretch does too, and nothing is fresh.
     assert not watch.fresh and watch.quiet(12 * MINUTE, 80) == (2, 1)
     watch.progress(13 * MINUTE, 90)
     assert watch.fresh
@@ -83,7 +83,7 @@ def game(tmp_path, **extra):
     store.get = lambda key: None
     store.set = store.prune_events = store.prune_attachments = store.prune_reward_results = lambda *a: None
     return SimpleNamespace(store=store, snapshot=snapshot, stall=StallWatch(game_minutes=120, real_minutes=0),
-                           play_clock=SimpleNamespace(state_dict=dict), policy=SimpleNamespace(state_dict=dict, details=dict),
+                           play_clock=SimpleNamespace(state_dict=dict, frames=0), policy=SimpleNamespace(state_dict=dict, details=dict),
                            _state_bytes=lambda: b'state', _manifest=lambda: dict(MANIFEST), _shot_png=lambda: b'png',
                            reloads=3, frame=0, **extra)
 
@@ -114,7 +114,7 @@ def test_a_reported_stall_leaves_a_bundle_and_the_setting_turns_it_off(tmp_path,
     playing = game(tmp_path, _handle_events=lambda events, snap: seen.extend(events))
     Emulator._autosave(playing)
     playing.stall.progress(0, 0)
-    playing.frame = 130 * MINUTE
+    playing.play_clock.frames = 130 * MINUTE
     Emulator._check_stall(playing, 600)
     folder, = playing.store.stalls.iterdir()
     report = json.loads((folder / 'report.json').read_text())
