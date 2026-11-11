@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 from .menus import MenuDecision, select, tap
 from .collection import Collection
-from .team import release_rated, release_target, reserve_to_deposit
+from .team import hunt_focus, release_rated, release_target, reserve_to_deposit
 from . import league_rotation
 from ..strategy_data import SPECIES
 
@@ -41,11 +41,11 @@ class StorageController:
         The running project's family, a League rotation parent and a trade's give are stock, which holds
         a plan role for its best copies. Peer demand keeps the copies it asks for. ``partners`` are the
         linked adventures, ``rewards`` the League reward marks and ``requested`` the owner's release
-        requests.
+        requests. An open DV hunt keeps its best copy (team.hunt_focus).
         """
         stock, roles, gifts, demand = StorageController.plan_inputs(project, collection)
         return release_target(snapshot, stock, avoid, partners, gifts, preferences, demand, rewards, requested, roles, favor,
-                              team)
+                              team, hunt_focus(project))
 
     @staticmethod
     def plan_inputs(project, collection=None):
@@ -68,7 +68,7 @@ class StorageController:
         """Every Pokémon scored as release_target scores it, for the PC tab. ``extra`` adds rows."""
         stock, roles, gifts, demand = StorageController.plan_inputs(project, collection)
         return release_rated(snapshot, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor,
-                             extra, team)
+                             extra, team, hunt_focus(project))
 
     @staticmethod
     def field_move_box(snapshot, goal_key):

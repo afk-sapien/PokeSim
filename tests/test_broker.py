@@ -36,11 +36,13 @@ def inv(instance, owned, party=(), stored=(), **kw):
 def test_the_json_spare_rules_agree_with_the_snapshot_rules():
     # Covers every branch of team.spare_copies: a party member standing in as the surviving copy,
     # a lone Pokemon that is never offered, a level tie, and a keeper that appears after a spare.
+    # The Pokédex is full, since the broker's spare list does not count family demand yet.
     stored = ((0, DEX_TO_SPECIES[KADABRA], 20, ''), (0, DEX_TO_SPECIES[HAUNTER], 30, ''),
               (0, DEX_TO_SPECIES[HAUNTER], 30, ''), (0, DEX_TO_SPECIES[PIDGEY], 5, 'SOLO'),
               (1, DEX_TO_SPECIES[HAUNTER], 12, ''), (1, DEX_TO_SPECIES[MACHOKE], 50, ''),
               (1, DEX_TO_SPECIES[MACHOKE], 60, ''), (1, DEX_TO_SPECIES[BULBASAUR], 9, ''))
-    s = full_box(party=(mon(species=DEX_TO_SPECIES[BULBASAUR], level=40),
+    s = full_box(owned=frozenset(range(1, 152)),
+                 party=(mon(species=DEX_TO_SPECIES[BULBASAUR], level=40),
                         mon(species=DEX_TO_SPECIES[KADABRA], level=44)),
                  stored_pokemon=stored, box_counts=(4, 4) + (0,) * 10, boxed_pokemon=((1, 1),) * 4)
     payload = live_status(s.to_dict(), {'version': 'red', 'phase': 'Testing', 'entries': []})

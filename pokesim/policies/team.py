@@ -30,11 +30,6 @@ from ..randomized import gen1_opponents
 OPPONENTS = gen1_opponents(OPPONENTS, SPECIES)
 
 
-# A trainee whose next level takes more than this many wild battles at a map's top encounter level is not
-# trained there. A level 41 partner on Route 11's level 15 grass gained a little in every battle, so its
-# development excursion never timed out. The rule belongs to the worth oracle of v2 PR 4 and moves there.
-TRAINING_BATTLES = 10
-
 # Yellow's Pikachu follows the player and loses friendship when it leaves the party,
 # so it never becomes a deposit candidate there.
 STAYS_IN_PARTY = ({sid for sid, data in SPECIES.items() if data.get('name') == 'PIKACHU'}
@@ -68,18 +63,42 @@ def storage_headroom(s):
     return sum(BOX_CAPACITY - count for count in s.box_counts)
 
 
+def evolutions():
+    """Each Pokédex number's next stages from the game data, for pcvalue.Inputs.evolutions."""
+    if not _EVOLUTIONS:
+        from .collection import EVOS
+        dex = lambda sid: SPECIES.get(sid, {}).get('dex', 0)  # noqa: E731
+        _EVOLUTIONS.update({dex(sid): tuple(dex(row['species']) for row in rows) for sid, rows in EVOS.items() if dex(sid)})
+    return _EVOLUTIONS
+
+
+_EVOLUTIONS = {}
+
+
+def hunt_focus(project):
+    """The Pokédex number an open DV hunt works on, for pcvalue.Inputs.focus. Its best copy is locked
+    until the hunt ends."""
+    project = project or {}
+    found = SPECIES.get(project.get('species'), {}).get('dex') if project.get('dv_hunt') else None
+    return frozenset({found}) if found else frozenset()
+
+
 def release_rated(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts=frozenset(),
-                  rewards=frozenset(), requested=None, demand=None, favor=None, extra=(), team=frozenset()):
+                  rewards=frozenset(), requested=None, demand=None, favor=None, extra=(), team=frozenset(),
+                  focus=frozenset()):
     """Every Pokémon scored with pcvalue.rate. ``demand`` maps a Pokédex number to the linked adventures
     missing it, which keeps that many copies and counts as trade demand. ``favor`` is the Favor shiny or
-    Favor DVs setting, ``extra`` adds rows such as an incoming trade, ``team`` is pcvalue.Inputs.team
-    and the rest are as in ``entries``."""
+    Favor DVs setting, ``extra`` adds rows such as an incoming trade, ``team`` and ``focus`` are as in
+    pcvalue.Inputs and the rest are as in ``entries``. The snapshot's Pokédex is Inputs.owned, so a
+    family keeps copies for its missing stages."""
     from collections import Counter
     from ..investment import dex_rarity
     from ..pcvalue import Inputs, rate
+    owned = getattr(s, 'owned', None)
     return rate([*entries(s, preferences, roles, stock, partners, gifts, rewards, requested), *extra],
                 Inputs(demand=dict(demand or {}), wishes=Counter(demand or {}), favor=favor, rarity=dex_rarity,
-                       team=frozenset(team)))
+                       team=frozenset(team), focus=frozenset(focus), evolutions=evolutions(),
+                       owned=None if owned is None else frozenset(owned)))
 
 
 def team_keys(party):
@@ -104,7 +123,8 @@ _RELEASE = [None, None, None]
 
 
 def release_target(s, stock=(), reserved=(), partners=frozenset(), gifts=frozenset(), preferences=None,
-                   demand=None, rewards=frozenset(), requested=None, roles=(), favor=None, team=frozenset()):
+                   demand=None, rewards=frozenset(), requested=None, roles=(), favor=None, team=frozenset(),
+                   focus=frozenset()):
     """The next Pokémon to release as (box, position), or None (pcvalue.py). Only a stored spare may go:
     the party, a plan's trainee or partner and a ``team`` member deposited at this visit are floors.
 
@@ -121,14 +141,15 @@ def release_target(s, stock=(), reserved=(), partners=frozenset(), gifts=frozens
            getattr(s, 'player_id', None),
            getattr(s, 'active_box', None), tuple(getattr(s, 'box_counts', ()) or ()),
            tuple(sorted((key, (value or {}).get('state')) for key, value in (preferences or {}).items())),
-           freeze(demand), frozenset(rewards), freeze(requested), frozenset(roles), favor, frozenset(team))
+           freeze(demand), frozenset(rewards), freeze(requested), frozenset(roles), favor, frozenset(team),
+           frozenset(focus), frozenset(getattr(s, 'owned', ()) or ()))
     try:
         hash(key)
     except TypeError:
         key = object()
     if _RELEASE[0] != key:
         _RELEASE[:] = [key, *_release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards,
-                                             requested, roles, favor, team)]
+                                             requested, roles, favor, team, focus)]
     return _RELEASE[1]
 
 
@@ -209,10 +230,12 @@ def held_identities(s):
     return {identity(mon) for mon in [*(asdict(mon) for mon in s.party), *stored] if mon.get('trainer_id') is not None}
 
 
-def _release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards, requested, roles, favor, team=frozenset()):
+def _release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards, requested, roles, favor, team=frozenset(),
+                    focus=frozenset()):
     from ..planning.ledger import box_wanted
     from ..pcvalue import deadlocked, releases, requested as asked
-    every = release_rated(s, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor, team=team)
+    every = release_rated(s, preferences, roles, stock, partners, gifts, rewards, requested, demand, favor, team=team,
+                          focus=focus)
     rated = [row for row in every if row.entry.slot not in reserved]
     # The visit takes every owner request, as in Gold, Silver and Crystal (gen2/ledger.py).
     chosen = releases(rated, max(box_wanted(storage_headroom(s), True), len(asked(rated)), 1),
@@ -244,13 +267,14 @@ def development_candidate(s, encounter_level, gain=None):
     """The party slot a development excursion on this map trains, or None.
 
     ``gain`` is the experience one wild battle here pays at the map's top encounter level, from the
-    cartridge's tables. A trainee whose next level needs more than ``TRAINING_BATTLES`` of those battles
-    is not trained here. Without the tables the rule is not applied.
+    cartridge's tables. A trainee the worth oracle says is not worth the battles (pcvalue.trains) is not
+    trained here. Without the tables the rule is not applied.
     """
+    from ..pcvalue import trains
     if len(s.party) < 2:
         return None
     lead_level = max(p.level for p in s.party)
-    worth = lambda p: gain is None or battles_to_level(p, gain) <= TRAINING_BATTLES
+    worth = lambda p: trains(None if gain is None else battles_to_level(p, gain))
     # Yellow's Pikachu cannot be boxed, so it is trained first. Battle switching covers a tougher opponent
     # and shares the experience.
     candidates = [i for i, p in enumerate(s.party)

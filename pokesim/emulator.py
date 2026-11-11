@@ -122,7 +122,7 @@ class Emulator:
         self.play_clock = PlayClock(store.get("play_clock", {}))
         # A reset replaces the clock, so the store asks for the current one each time.
         store.clock = lambda: self.play_clock.frames
-        self.goal_watch = store.goal_watch = progress_events.GoalWatch()
+        self.goal_watch = store.goal_watch = self.policy.goal_watch = progress_events.GoalWatch()
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
         # The newest autosave's manifest replaces this, and the policy's state, when start() loads it.
@@ -1028,8 +1028,9 @@ class Emulator:
                                    'to this journal entry.', priority=HIGH, tags='warning')], snap)
 
     def _release_journal(self, events, snap):
-        """Quote the PC value of a spare the policy let go, and say once when the PC is full with nothing that may go."""
-        from .pcvalue import DEADLOCK, full_notice
+        """Quote the PC value of a spare the policy let go, and say once when the PC is full with nothing
+        that may go, with the box counts and the objective waiting for room (pcvalue.full_alert)."""
+        from .pcvalue import full_alert, full_notice
         from .policies.team import storage_headroom
         policy = getattr(self, 'policy', None)
         # The note of the release the policy started, not the next target's.
@@ -1039,7 +1040,10 @@ class Emulator:
                 ev.body += f' PC value: {note[1]}.'
         blocked = bool(getattr(policy, 'pc_deadlock', False)) and storage_headroom(snap) <= 0
         if policy is not None and full_notice(self.store, blocked):
-            events.append(Event('pc_full', 'PC full', f'{DEADLOCK} Release or unlock one from the PC tab.',
+            details = policy.details() if hasattr(policy, 'details') else {}
+            waiting = [(details.get('objective') or {}).get('title')]
+            text = full_alert(getattr(snap, 'box_counts', ()), waiting)
+            events.append(Event('pc_full', 'PC full', f'{text} Release or unlock one from the PC tab.',
                                 priority=HIGH, tags='warning'))
 
     def pc_values(self):

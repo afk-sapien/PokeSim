@@ -110,16 +110,16 @@ def staged_mark(seed, generation=1):
 
 
 def wasted(policy, snapshot, slot, seed, generation=1):
-    """Whether the gift staged at ``slot`` from ``seed`` only costs a release: a spare by the PC value
-    rules (pcvalue.py), or any copy short of the best when the boxes, with it, are below the reserve
-    that starts a release visit. Such a gift either goes itself or pushes out the cheapest other copy,
-    so sending it turns every League win into a gift and a release.
+    """Whether the gift staged at ``slot`` from ``seed`` only costs a release: the worth oracle
+    (pcvalue.worth) does not keep it, as it would not keep the same copy caught. Such a gift either
+    goes itself or pushes out a rarer copy, so sending it turns every League win into a gift and a
+    release.
 
     The gift is rated as the League reward it is. Until the ledger counts it, its mark is unknown, and
     an unmarked gift rates as a Pokémon traded in, the best copy of its species. The mark is passed to
     the rating, so the PC tab and other readers never see it.
     """
-    from .planning.ledger import box_wanted
+    from .pcvalue import worth
     marks = frozenset({staged_mark(seed, generation)})
     if hasattr(policy, 'pc_rated'):
         rated = policy.pc_rated(snapshot, marks=marks)
@@ -131,9 +131,10 @@ def wasted(policy, snapshot, slot, seed, generation=1):
     row = next((row for row in rated if row.entry.slot == slot), None)
     if row is None:
         return False
-    # Both generations hold 20 Pokémon per box.
-    short = box_wanted(sum(20 - count for count in snapshot.box_counts), False) > 0
-    return row.status == 'spare' or row.status != 'floor' and short
+    # Both generations hold 20 Pokémon per box, and the staged gift already fills one slot.
+    free = sum(20 - count for count in snapshot.box_counts) + 1
+    return not worth([*(other for other in rated if other is not row), row], headroom=free,
+                     active_box=getattr(snapshot, 'active_box', None)).keep
 
 
 def skip(store, ordinal):

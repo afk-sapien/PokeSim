@@ -104,6 +104,20 @@ def test_the_gen1_full_notice_needs_a_full_pc():
     assert policy.pc_deadlock
 
 
+def test_a_pc_full_of_locked_pokemon_journals_one_alert(tmp_path):
+    from pokesim.emulator import Emulator
+    from pokesim.pcvalue import full_alert
+    policy = SimpleNamespace(pc_deadlock=True, details=lambda: {'objective': {'title': 'Catch Mew'}})
+    emulator = SimpleNamespace(policy=policy, store=Store(tmp_path))
+    full = gen1_snapshot([stored(0, level=60)], box_counts=(20,) * 12)
+    first, second = [], []
+    Emulator._release_journal(emulator, first, full)
+    Emulator._release_journal(emulator, second, full)
+    assert [event.type for event in first] == ['pc_full'] and second == []
+    assert first[0].body.startswith(f"{full_alert((20,) * 12, ['Catch Mew'])} Release or unlock")
+    assert '12 boxes hold 240 Pokémon. Waiting for room: Catch Mew.' in first[0].body
+
+
 class Requests(Policy):
     def __init__(self, requests):
         super().__init__()

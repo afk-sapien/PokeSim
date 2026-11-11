@@ -97,23 +97,30 @@ def shadow_kind(project):
     return kind
 
 
-def improves(s, species, dvs, rated=None):
-    """True when the PC would keep a wild ``species`` with ``dvs`` (pcvalue.verdict): a new entry, a
-    shiny, or a copy at least RARITY_STEP times rarer than every copy held, which the PC visit it
-    brings would not release, nor a rarer copy for it. A held copy without DV data, as in a compact
-    snapshot, is not counted. ``rated`` rates the PC with extra rows as the next release does
-    (the policy's pc_rated). Without it the PC is rated without trade settings or plans.
+def improves(s, species, dvs, rated=None, watch=None):
+    """True when the PC would keep a wild ``species`` with ``dvs`` (pcvalue.worth): a new entry, a
+    shiny, a copy its evolution family or a plan needs, or a copy at least RARITY_STEP times rarer than
+    every copy held, which the PC visit it brings would not release, nor a rarer copy for it. A held
+    copy without DV data, as in a compact snapshot, is not counted. ``rated`` rates the PC with extra
+    rows as the next release does (the policy's pc_rated). Without it the PC is rated without trade
+    settings or plans. A copy kept for an improve reason is noted on ``watch``, the goal watch, so
+    its catch writes an ``improve`` row. Before the Champion a copy only its family would keep is not
+    caught (pcvalue.worth's story).
 
-    This is the Gen I catch rule for an owned species (pcvalue.keeps_new). Every path that throws a
-    ball at one asks it: an incidental catch, the Safari Zone, a DV hunt, a repeat project and a
-    returned legendary. A missing entry, a shiny and a field-move carrier keep their own rules, and a
-    missing entry is a keep here anyway."""
+    This is the Gen I catch rule for an owned species. Every path that throws a ball at one asks it:
+    an incidental catch, the Safari Zone, a DV hunt, a repeat project and a returned legendary. A
+    missing entry, a shiny and a field-move carrier keep their own rules, and a missing entry is a
+    keep here anyway."""
     from .. import pcvalue
     from .team import storage_headroom
     boxes = hasattr(s, 'box_counts')
-    return pcvalue.keeps_new(_with_new(s, species, dvs, rated), missing=dex(species) not in s.owned,
-                             headroom=storage_headroom(s) if boxes else None,
-                             active_box=getattr(s, 'active_box', None), room=catch_room(s) if boxes else None)
+    found = pcvalue.worth(_with_new(s, species, dvs, rated), missing=dex(species) not in s.owned,
+                          headroom=storage_headroom(s) if boxes else None,
+                          active_box=getattr(s, 'active_box', None), room=catch_room(s) if boxes else None,
+                          story=not champion(s))
+    if watch is not None:
+        watch.expect(dex(species), dvs, found)
+    return found.keep
 
 
 def catch_room(s):
@@ -567,7 +574,7 @@ class Collection:
         self.peer_demand = dict(requests)
         self.demand_until = self.clock + DEMAND_FRAMES
 
-    def repeat_target(self, species, map_id=None, snapshot=None, dvs=None, rated=None):
+    def repeat_target(self, species, map_id=None, snapshot=None, dvs=None, rated=None, watch=None):
         """The species a wild battle should catch as a repeat, or None.
 
         A returned legendary, a DV hunt's species on its map and a repeat project's species are
@@ -582,7 +589,7 @@ class Collection:
             target = species
         else:
             target = project.get('species') if project.get('repeat') else None
-        if target == species and snapshot is not None and dvs is not None and not improves(snapshot, species, dvs, rated):
+        if target == species and snapshot is not None and dvs is not None and not improves(snapshot, species, dvs, rated, watch):
             if dex(species) in getattr(self, 'returned_legendaries', ()) and snapshot.in_battle:
                 # Close the return so neither the plan nor the retry timers bring back a refused legendary.
                 self.declined_returns = getattr(self, 'declined_returns', set()) | {dex(species)}

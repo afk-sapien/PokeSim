@@ -2,8 +2,10 @@
 
 Catches, receives, releases, marathon checkpoints and goal ends each write one row to
 ``progress_events``. So do a new Pokédex entry, a badge, a League win, a new area and an item, each
-from the journal entry that reports it, and story flags set for the first time this run. Each reload
-writes a ``plan`` row that names its reason. ``net`` says
+from the journal entry that reports it, and story flags set for the first time this run. A caught or
+received copy the worth oracle kept for an improve reason (pcvalue.improvement), such as rarer DVs
+or a later stage its family lacks, writes an ``improve`` row. Each reload writes a ``plan`` row that
+names its reason. ``net`` says
 whether a row counts as progress, from the Kinds table. The rows are written in shadow mode: nothing
 reads them for a decision yet, and a stall, LoopGuard or the watchdog still go by the journal.
 
@@ -93,6 +95,22 @@ def encounter(store, species, dvs):
         watch.pending.append((watch.key or '', at // HOUR, watch.hunt, species, bytes(dvs)))
 
 
+def packed(dvs):
+    """The two DV bytes the cartridge holds, from HP, Attack, Defense, Speed and Special or as read."""
+    if len(dvs) == 5:
+        return bytes((dvs[1] << 4 | dvs[2], dvs[3] << 4 | dvs[4]))
+    return bytes(dvs)
+
+
+def improved(store, db, species, dvs, identity=None):
+    """The ``improve`` row for a caught or received copy the worth oracle kept for an improve reason
+    (pcvalue.improvement), in the catch's own transaction, under the goal that noted it."""
+    watch = getattr(store, 'goal_watch', None)
+    noted = watch.expected.pop((species, packed(dvs)), None) if watch is not None else None
+    if noted:
+        record(db, 'improve', frame=frame(store), goal=noted[0], tier=noted[1], species=species, identity=identity)
+
+
 def queued(kind, **fields):
     """A row for an emulator queue that otherwise holds journal entries, kept as plain data for the save."""
     return {'progress': kind, **fields}
@@ -126,12 +144,27 @@ class GoalWatch:
     It writes a ``goal`` row when the running goal ends, seen as its key changing between decisions.
     ``hunt`` is the goal's target species and rule for the encounter counters, or None. A target of
     None takes any species, and a rule of None takes any DVs. ``pending`` holds the encounters the
-    next decision writes, and ``flags`` the story flags this run has seen set.
+    next decision writes, and ``flags`` the story flags this run has seen set. ``expected`` holds the
+    copies the worth oracle kept for an improve reason, by species and DV bytes, until one is caught
+    or received (improved).
     """
+    # The newest copies ``expected`` holds. One is noted at each catch decision, and most are never thrown at.
+    EXPECTED = 32
 
     def __init__(self):
         self.key, self.tier, self.hunt = None, '', None
-        self.pending, self.flags = [], b''
+        self.pending, self.flags, self.expected = [], b'', {}
+
+    def expect(self, species, dvs, found):
+        """Note a copy ``found`` (pcvalue.Worth) keeps for an improve reason, under the running goal."""
+        from .pcvalue import improvement
+        if not improvement(found) or len(dvs) not in (2, 5):
+            return
+        key = (species, packed(dvs))
+        self.expected.pop(key, None)
+        self.expected[key] = (self.key or '', self.tier)
+        while len(self.expected) > self.EXPECTED:
+            del self.expected[next(iter(self.expected))]
 
     def observe(self, store, key, tier='', hunt=None):
         """Called at each decision: write the encounters so far, then take the goal now running."""
@@ -178,8 +211,8 @@ class GoalWatch:
             write(store, 'event', goal=self.key, tier=self.tier, score=sum(byte.bit_count() for byte in self.flags))
 
     def restart(self):
-        """A new game: no encounters or flags of the old one carry over."""
-        self.pending, self.flags = [], b''
+        """A new game: no encounters, flags or kept copies of the old one carry over."""
+        self.pending, self.flags, self.expected = [], b'', {}
 
 
 def met(rule, dvs):

@@ -117,6 +117,23 @@ def families(data):
     return cached
 
 
+def evolutions(data):
+    """Each Pokédex number's next stages, for pcvalue.Inputs.evolutions, kept on ``data``."""
+    cached = getattr(data, '_evolutions', None)
+    if cached is None:
+        cached = {dex: tuple(evolution['species'] for evolution in row.get('evolutions', []))
+                  for dex, row in getattr(data, 'species', {}).items()}
+        data._evolutions = cached
+    return cached
+
+
+def hunt_focus(collection):
+    """The species an open quality hunt works on, for pcvalue.Inputs.focus. A DV hunt's best copy
+    is locked until the hunt ends."""
+    activity = ((collection or {}).get('postgame') or {}).get('activity') if isinstance(collection, dict) else None
+    return frozenset({activity['species']}) if activity and activity.get('kind') == 'quality' else frozenset()
+
+
 def rarity(data):
     """A copy's rarity from its Pokédex number and DVs, the shape pcvalue.Inputs takes. A species
     without stats rates by the DV total."""
@@ -124,17 +141,21 @@ def rarity(data):
 
 
 def rated(snapshot, demand=None, stock=(), preferences=None, partners=(), owners=None, rewards=frozenset(),
-          requested=None, names=None, focus=frozenset(), favor=None, extra=(), rarity=None, team=frozenset()):
+          requested=None, names=None, focus=frozenset(), favor=None, extra=(), rarity=None, team=frozenset(),
+          evolutions=None):
     """Every Pokémon scored with pcvalue.rate, in party then box order. ``demand`` maps a species to the
     linked adventures missing it, which keeps that many copies and counts as trade demand. ``favor`` is
-    the Favor shiny or Favor DVs setting, ``extra`` rows are rated after the PC and ``rarity`` and
-    ``team`` are as in pcvalue.Inputs, rarity by the DV total when not given."""
+    the Favor shiny or Favor DVs setting, ``extra`` rows are rated after the PC and ``rarity``,
+    ``team``, ``focus`` and ``evolutions`` are as in pcvalue.Inputs, rarity by the DV total when not
+    given. The snapshot's Pokédex is Inputs.owned, so a family keeps copies for its missing stages."""
     from collections import Counter
     from ..pcvalue import Inputs, rate
     from ..rarity import generic
     rows = entries(snapshot, names or {}, preferences, partners, stock, owners, rewards, requested) + list(extra)
+    owned = getattr(snapshot, 'owned', None)
     return rate(rows, Inputs(demand=dict(demand or {}), focus=frozenset(focus), wishes=Counter(demand or {}),
-                             favor=favor, rarity=rarity or generic, team=frozenset(team)))
+                             favor=favor, rarity=rarity or generic, team=frozenset(team),
+                             evolutions=evolutions or {}, owned=None if owned is None else frozenset(owned)))
 
 
 def team_keys(party):
@@ -159,8 +180,9 @@ def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset()
     favor = policy.pc_favor() if hasattr(policy, 'pc_favor') else None
     names = {sid: row.get('name', '?') for sid, row in getattr(policy.data, 'species', {}).items()}
     return rated(snapshot, policy.demand, stock, policy.trade_preferences() if preferences is None else preferences,
-                 plan_partners(policy.collection), owners, marks, requested, names, favor=favor, extra=extra,
-                 rarity=rarity(policy.data), team=getattr(getattr(policy, 'visit_team', None), 'keys', frozenset()))
+                 plan_partners(policy.collection), owners, marks, requested, names, focus=hunt_focus(policy.collection),
+                 favor=favor, extra=extra, rarity=rarity(policy.data),
+                 team=getattr(getattr(policy, 'visit_team', None), 'keys', frozenset()), evolutions=evolutions(policy.data))
 
 
 def may_release(policy, snapshot, box, position):
@@ -180,15 +202,22 @@ def keeps_another(policy, snapshot, dex, level=5, dvs=None):
     being the first. With ``dvs`` it is kept by the same rule as a Gen I catch (collection.improves).
     Crystal's caught data marks a gift, which Gold and Silver cannot tell from a catch. It is rated
     as the next release rates the PC, and not kept when the PC visit it brings would release it or a
-    rarer copy for it (pcvalue.pushes_out). This is the Gen II catch rule for an owned species
-    (pcvalue.keeps_new), the one every catch of an owned species asks with the wild DVs.
+    rarer copy for it (pcvalue.pushes_out). This is the Gen II catch rule for an owned species, the
+    one every catch of an owned species asks with the wild DVs. A copy kept for an improve reason is
+    noted on the policy's goal watch, so its catch writes an ``improve`` row. Before the Hall of Fame
+    a catch only its family would keep is not taken.
     """
     from .. import pcvalue
     owned = getattr(snapshot, 'owned', None)
     boxes = hasattr(snapshot, 'box_counts')
-    return pcvalue.keeps_new(_with_new(policy, snapshot, dex, level, dvs), missing=owned is not None and dex not in owned,
-                             headroom=headroom(snapshot) if boxes else None,
-                             active_box=getattr(snapshot, 'active_box', None), room=room(snapshot) if boxes else None)
+    # A catch before the Champion is not taken for its family alone (pcvalue.worth's story).
+    found = pcvalue.worth(_with_new(policy, snapshot, dex, level, dvs), missing=owned is not None and dex not in owned,
+                          headroom=headroom(snapshot) if boxes else None,
+                          active_box=getattr(snapshot, 'active_box', None), room=room(snapshot) if boxes else None,
+                          story=bool(dvs) and not getattr(snapshot, 'hall_of_fame_count', 0))
+    if dvs and (watch := getattr(policy, 'goal_watch', None)) is not None:
+        watch.expect(dex, dvs, found)
+    return found.keep
 
 
 def reserve_allows(policy, snapshot, dex, dvs=None):

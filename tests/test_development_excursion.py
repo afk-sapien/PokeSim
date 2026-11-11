@@ -8,7 +8,8 @@ import pytest
 from pokesim.planning.cost import WildOdds
 from pokesim.policies.progression import Goal
 from pokesim.policies.strategic import DEVELOPMENT_STALL, StrategicPolicy
-from pokesim.policies.team import TRAINING_BATTLES, battles_to_level, development_candidate
+from pokesim.pcvalue import TRAINING_BATTLES
+from pokesim.policies.team import battles_to_level, development_candidate
 from pokesim.strategy_data import MAPS
 from test_collection import state
 from test_strategy import mon

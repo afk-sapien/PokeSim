@@ -74,6 +74,8 @@ class Goal:
 
 class Policy:
     name = 'strategic'
+    # The emulator's progress_events.GoalWatch, where a catch kept for an improve reason is noted.
+    goal_watch = None
 
     def __init__(self, data, *, seed=None, starter='random'):
         self.data = data
@@ -756,11 +758,12 @@ class Policy:
 
     def rating_key(self, snapshot):
         """Everything the PC values read: the Pokémon, the plans, the trade settings, the linked
-        adventures, the League rewards, the owner's release requests, the Favor setting and the team
-        seen at this PC visit."""
-        from .release import plan_partners
+        adventures, the League rewards, the owner's release requests, the Favor setting, the team
+        seen at this PC visit, the Pokédex and the open hunt."""
+        from .release import hunt_focus, plan_partners
         preferences = self.trade_preferences()
         return (snapshot.party, snapshot.stored, snapshot.active_box, tuple(sorted(self.demand.items())), self.visit_team.keys,
+                frozenset(getattr(snapshot, 'owned', ()) or ()), hunt_focus(self.collection),
                 tuple(sorted(map(str, plan_partners(self.collection)))), self.release_owners(),
                 tuple(sorted((key, (value or {}).get('state')) for key, value in preferences.items())),
                 frozenset(self.league_marks()) if hasattr(self, 'league_marks') else frozenset(),

@@ -21,7 +21,9 @@ def stored(position, **changes):
 
 
 def snapshot(copies, party=()):
-    return snap(party=party, stored_details=tuple(copies),
+    # A full Pokédex, so no copy is kept for a later stage of its family (pcvalue.family_need) and
+    # these tests judge DVs, levels and locks alone. The broker's spare list has no family demand yet.
+    return snap(party=party, owned=frozenset(range(1, 152)), stored_details=tuple(copies),
                 stored_pokemon=tuple((p.box, p.species, p.level, p.nick) for p in copies))
 
 
@@ -106,4 +108,4 @@ def test_filtered_invalid_box_slot_does_not_shift_release_or_trade_address():
     for position in (1, 2, 3):
         boxes.write_slot(memory, 1, position, entry(0x99, 20, dvs=0 if position == 3 else 0xFFFF))
     memory[W_BOX_COUNT + 22] = 0
-    assert_spares(read_snapshot(memory, 1), [(0, 2, 20)])
+    assert_spares(replace(read_snapshot(memory, 1), owned=frozenset(range(1, 152))), [(0, 2, 20)])
