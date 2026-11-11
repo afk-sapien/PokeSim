@@ -100,10 +100,19 @@ def _promote(store, record):
             journal.add(db, time.time(), 'trade', title, body, 1, 4, location,
                         detail=json.dumps(detail) if detail else None)
             from ..progress_events import journal as count_entry
-            count_entry(db, 'trade')
+            count_entry(db, 'trade', frame=_frame(store, db))
             kv.add(db, marker, True)
     return path
 
+
+def _frame(store, db):
+    """The receiving adventure's PlayClock frame for its trade row. A restart promotes a commit before
+    the emulator and its clock exist, so then the row takes the clock the adventure last saved."""
+    from ..progress_events import frame
+    at = frame(store)
+    if at is None:
+        at = (kv.get(db, 'play_clock') or {}).get('frames')
+    return at
 
 
 def _traded_mon(side):
