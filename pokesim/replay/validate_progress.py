@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 from pokecore.emulator import Emulator as PyBoy
 from pokesim.checkpoints import CheckpointStore
-from pokesim.runtime.game_loop import GameLoop, Gen1
+from pokesim.runtime.game_loop import Decider, GameLoop, write_gen1_options
 
 
 def run(rom, checkpoint, frames):
@@ -51,7 +51,7 @@ def run(rom, checkpoint, frames):
             host.frame += count
             counts[policy.mode] += count
 
-    loop = GameLoop(host, Gen1(lambda: host.frame), tick)
+    loop = GameLoop(host, Decider(lambda: host.frame, write_gen1_options), tick)
     try:
         with checkpoint.open('rb') as stream:
             pb.load_state(stream)

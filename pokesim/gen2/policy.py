@@ -12,6 +12,8 @@ from ..planning.ledger import FIELD_MOVES, LEARN_KEPT
 from ..planning.losses import ace_slot
 from ..planning.shadow import Shadow
 from ..planning.stance import FLEE, STORY, Encounter, stance
+from ..runtime import policy as protocol
+from ..runtime.policy import Action
 from ..runtime.supervision import REFUSED_SHORTCUT
 from .navigation import DIRS, Navigator
 from pokecore.gen2.ram import Memory
@@ -57,13 +59,6 @@ def transformed(mem, mon):
 
 
 @dataclass(frozen=True)
-class Action:
-    button: str | None = None
-    hold: int = 8
-    gap: int = 16
-
-
-@dataclass(frozen=True)
 class Goal:
     key: str
     label: str
@@ -75,7 +70,7 @@ class Goal:
     kind: str = STORY
 
 
-class Policy:
+class Policy(protocol.Policy):
     name = 'strategic'
     # The emulator's progress_events.GoalWatch, where a catch kept for an improve reason is noted.
     goal_watch = None
@@ -174,7 +169,7 @@ class Policy:
         self.picked = None
 
     def state_dict(self):
-        return {'starter': self.starter, 'rng': self.rng.getstate(), 'completed': self.completed, 'collection': self.collection, 'demand': self.demand, 'decisions': self.decisions,
+        return {'version': 1, 'starter': self.starter, 'rng': self.rng.getstate(), 'completed': self.completed, 'collection': self.collection, 'demand': self.demand, 'decisions': self.decisions,
                 'naming': self.naming.state_dict(), 'learning': self.learning, 'partner_move': self.partner_move,
                 'menu': {'kind': type(self.menu).__name__, 'state': asdict(self.menu)} if self.menu else None,
                 'shopping': self.shopping, 'shop_location': self.shop_location, 'healing_map': self.healing_map,
@@ -185,7 +180,12 @@ class Policy:
     def load_state_dict(self, state):
         from .gamecorner import Coins, Prize, Slots
         from .npc_trades import Trade
+        # A pin belongs to the moment it was set, so it never outlives a load, even of a save it cannot read.
         self.pin = None
+        # A save from before the version was written is version 1.
+        if state.get('version', 1) != 1:
+            self.on_restore()
+            return
         self.starter = state.get('starter', self.starter)
         if 'rng' in state:
             # Saved as JSON lists, so the tuples the generator wants are rebuilt.
@@ -217,6 +217,7 @@ class Policy:
             self.interaction = tuple(self.interaction)
         self.nav.objects = {int(mid): {int(index): tuple(point) for index, point in objects.items()}
                             for mid, objects in state.get('objects', {}).items()}
+        self.on_restore()
 
     STRANDED_LIMIT = 60
     MENU_STEP_LIMIT = MAX_STEPS
@@ -364,6 +365,9 @@ class Policy:
 
     def unpin_goal(self):
         self.pin = None
+
+    def restore_pin(self, pin):
+        self.pin = pin
 
     def drop_pin(self):
         """Drop the pin. Returns the label dropped, or None with no pin."""
@@ -1489,16 +1493,14 @@ class Policy:
             self.shopping = (item, min(amount, (snapshot.money - reserve) // price))
         return self.person(snapshot, 'buy_balls', 'Restock adventure supplies', self.data.maps[mid]['constant'], script), buy
 
-    def step(self, snapshot, memory, sp=None, clock=None):
-        """``sp`` is the CPU stack pointer, which Core's PC lists read to press through a <CONT> name.
-
-        ``clock`` is the PlayClock frame the policy's waits count. A call without one keeps the last.
-        """
-        if clock is not None:
-            self.clock = clock
+    def step(self, ctx):
+        """The one action of a decision. ``ctx.sp`` is the CPU stack pointer, which Core's PC lists read
+        to press through a <CONT> name, and ``ctx.clock`` the PlayClock frame the policy's waits count."""
+        snapshot = ctx.snapshot
+        self.clock = ctx.clock
         self.pick, self.decided = None, False
         self.ballot = self.pipeline_pick = None
-        action = self._step(snapshot, memory, sp)
+        action = self._step(snapshot, ctx.mem, ctx.sp)
         ballot = self.ballot
         if self.errand is not None and not self.decided and self.goal is self.pick and not snapshot.in_battle:
             # An errand under way is the goal until the next errand decision ends it. Otherwise each
@@ -1526,7 +1528,7 @@ class Policy:
             self.pipeline_pick = decision.record() if decision is not None else None
         # A journey asked for outside a step weighs on a ballot of its own.
         self.ballot = None
-        return action
+        return [action]
 
     def _step(self, snapshot, memory, sp=None):
         self.memory, self.sp = memory, sp

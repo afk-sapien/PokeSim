@@ -29,9 +29,9 @@ from .play_clock import PlayClock
 from .palettes import PALETTES, recolor, validate_palette
 from .planning import pin
 from .policies import make_policy
-from .policies.base import BUTTONS, Action
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
-from .runtime.game_loop import GameLoop, Gen1, gen1_options
+from .runtime.game_loop import Decider, GameLoop, gen1_options, write_gen1_options
+from .runtime.policy import BUTTONS, Action
 from .runtime import capture, trace
 from .runtime.manifest import checkpoint_manifest
 from .runtime.reload import FRAMES_PER_SECOND, reload_target
@@ -437,8 +437,7 @@ class Emulator:
         # policy action must not inherit that button from the saved joypad.
         for button in BUTTONS:
             self.pb.button_release(button)
-        # A pin belongs to the moment it was set, so it never outlives a load.
-        self.policy.unpin_goal()
+        # The load clears the pin, which belongs to the moment it was set.
         if metadata:
             self.policy.load_state_dict(metadata["policy_state"])
             announced = getattr(self, 'mem', RunMemory()).playtime_milestones.copy()
@@ -850,7 +849,7 @@ class Emulator:
         battle_frame = getattr(self, 'battle_frame', None)
         if battle_frame is not None and not trade_prepare and (
                 self.frame - battle_frame > config.BATTLE_TIMEOUT_SECONDS * FRAMES_PER_SECOND // 3
-                or getattr(self.policy, 'hopeless_battle', False)):
+                or self.policy.hopeless_battle(snap)):
             # A battle this long may never end, and the only way out is a save from before it began.
             # Rotating autosaves during it would push that save out before the timeout reloads it.
             return
@@ -1012,7 +1011,7 @@ class Emulator:
                 self._unstick(self.stuck_frame, "stuck")
         elif self.battle_frame is not None and frame - self.battle_frame > config.BATTLE_TIMEOUT_SECONDS * FRAMES_PER_SECOND:
             self._unstick(self.battle_frame, "battle never ended")
-        elif self.battle_frame is not None and getattr(self.policy, 'hopeless_battle', False):
+        elif self.battle_frame is not None and self.policy.hopeless_battle(self.snapshot):
             # The player has worked out that neither side can finish, so the timeout has nothing to wait for.
             self._unstick(self.battle_frame, "battle cannot end")
         self._check_stall(time.time())
@@ -1311,7 +1310,7 @@ class Emulator:
     def _run(self):
         # The autosave counts game time, so a replay saves on the same frames at any pace. A reload
         # rewinds the frame and the cadence counts again from there.
-        loop = GameLoop(self, Gen1(lambda: self.play_clock.frames), self._tick, guards=self._guards,
+        loop = GameLoop(self, Decider(lambda: self.play_clock.frames, write_gen1_options), self._tick, guards=self._guards,
                         autosave=self._autosave)
         running = True
         self.consecutive_errors = 0

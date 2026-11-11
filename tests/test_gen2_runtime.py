@@ -16,6 +16,8 @@ from pokecore.gen2.ram import calculated_stats, experience_at, experience_progre
 from pokesim.gen2.sprites import portrait
 from pokesim.gen2.web import Reference
 from pokesim.play_clock import PlayClock
+from pokesim.runtime.game_loop import GEN2_WAIT
+from pokesim.runtime.policy import PolicyContext
 from pokesim.runtime.supervision import Supervisor
 
 
@@ -2131,16 +2133,17 @@ def test_real_lighthouse_jasmine_is_reached_while_amphy_blocks_the_near_side():
     frame = 0
     for _ in range(30):
         snapshot = read_snapshot(pb.memory, data, frame)
-        action = policy.step(snapshot, pb.memory)
+        action, = policy.step(PolicyContext(snapshot, policy.clock, pb.memory))
         if action.button:
             pb.button_press(action.button)
         if action.hold > 0:
             pb.tick(action.hold, True)
         if action.button:
             pb.button_release(action.button)
-        if action.gap > 0:
-            pb.tick(action.gap, True)
-        frame += action.hold + action.gap
+        gap = action.frames(GEN2_WAIT) - action.hold
+        if gap > 0:
+            pb.tick(gap, True)
+        frame += action.frames(GEN2_WAIT)
     assert policy.unreachable_waits == 0
     assert (read_snapshot(pb.memory, data, frame).x, read_snapshot(pb.memory, data, frame).y) != (9, 13)
 

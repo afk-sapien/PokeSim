@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.gen2.data import GameData
+from pokesim.runtime.policy import PolicyContext
 from pokecore.textmatch import ScreenText
 
 
@@ -65,7 +66,8 @@ def test_the_hunt_goal_carries_through_the_battle_transition(data, monkeypatch):
     policy, snapshot, hunt, planned = policy_on_route(data, monkeypatch)
     policy.goal = hunt
     # The wild battle script is running and has picked its Pokémon, but the battle screen is not up yet.
-    policy.step(snapshot, Cartridge(data, wScriptRunning=255, wTempWildMonSpecies=55, wMapWidth=20))
+    policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data, wScriptRunning=255, wTempWildMonSpecies=55,
+                                                                wMapWidth=20)))
     assert planned == []
     assert policy.goal is hunt
 
@@ -74,7 +76,7 @@ def test_other_scripts_still_replan(data, monkeypatch):
     policy, snapshot, hunt, planned = policy_on_route(data, monkeypatch)
     policy.goal = hunt
     # A script with no wild Pokémon chosen, such as a conversation, is planned as before.
-    policy.step(snapshot, Cartridge(data, wScriptRunning=255, wMapWidth=20))
+    policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data, wScriptRunning=255, wMapWidth=20)))
     assert planned == [10]
     assert policy.goal.key == 'collection_wait'
 

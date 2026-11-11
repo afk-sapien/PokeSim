@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.gen2.data import GameData
+from pokesim.runtime.policy import PolicyContext
 
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
@@ -50,7 +51,7 @@ def test_policy_continues_the_save_instead_of_walking_an_unloaded_map(data, monk
     policy = Policy(data, seed=1, starter='cyndaquil')
     policy.naming.step = lambda snapshot, mem: None
     snapshot = snapshot_at(data, 'BATTLE_TOWER_1F' if data.game == 'crystal' else 'OLIVINE_CITY')
-    action = policy.step(snapshot, Cartridge(data))
+    action, = policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data)))
     assert policy.mode == 'opening'
     assert action.button in {'start', 'a'}
     assert not policy.unloaded(snapshot, memory(wMapWidth=8))

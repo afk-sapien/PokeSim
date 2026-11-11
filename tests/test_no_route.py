@@ -107,7 +107,7 @@ def test_a_gen1_step_tried_while_a_trainer_engages_is_not_a_failed_step():
     so the walk to Bill found no route four times in a row and tripped the retry loop stall."""
     from dataclasses import replace
 
-    from pokesim.policies.base import PolicyContext
+    from pokesim.runtime.policy import PolicyContext
     from pokesim.policies.strategic import StrategicPolicy
     from test_events import snap
 

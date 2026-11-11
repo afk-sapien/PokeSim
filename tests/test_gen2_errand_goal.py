@@ -6,6 +6,7 @@ the purchases ran under the journey goal and the shop trip split at every menu.
 from tests.test_gen2_battle_start import Cartridge, data, policy_on_route  # noqa: F401
 
 from pokesim.gen2.policy import Goal
+from pokesim.runtime.policy import PolicyContext
 
 SHOP = Goal('buy_supplies', 'Buy capture supplies', 'VIOLET_MART', 1, 3, 'left')
 
@@ -15,7 +16,7 @@ def test_a_menu_step_on_the_shop_trip_keeps_the_errand(data, monkeypatch):
     policy.errand = SHOP
     policy.menu = object()
     policy.menu_step = lambda snapshot, mem: 'a'
-    policy.step(snapshot, Cartridge(data, wMapWidth=20))
+    policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data, wMapWidth=20)))
     assert policy.goal is SHOP
 
 
@@ -23,7 +24,7 @@ def test_a_menu_step_with_no_errand_keeps_the_journey_goal(data, monkeypatch):
     policy, snapshot, hunt, _ = policy_on_route(data, monkeypatch)
     policy.menu = object()
     policy.menu_step = lambda snapshot, mem: 'a'
-    policy.step(snapshot, Cartridge(data, wMapWidth=20))
+    policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data, wMapWidth=20)))
     assert policy.goal.key == 'collection_wait'
 
 
@@ -37,7 +38,7 @@ def deciding(data, monkeypatch, events=()):
 
     def step():
         policy.menu = None
-        policy.step(snapshot, Cartridge(data, wMapWidth=20))
+        policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data, wMapWidth=20)))
     return policy, step
 
 

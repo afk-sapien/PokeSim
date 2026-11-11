@@ -14,7 +14,7 @@ from . import config, game_data
 from .policies import POLICIES, make_policy
 from .policies.progression import milestones
 from .ram import read_snapshot
-from .runtime.game_loop import GameLoop, Gen1
+from .runtime.game_loop import Decider, GameLoop, write_gen1_options
 from .screen import Screen
 
 
@@ -81,7 +81,7 @@ def run(rom, policy_name, seed, frames, checkpoint=None, target=None, trace=None
             metrics.modes[host.mode] += chunk
             metrics.observe(read_snapshot(pb.memory, host.frame), host.frame)
 
-    loop = GameLoop(host, Gen1(lambda: host.frame), tick)
+    loop = GameLoop(host, Decider(lambda: host.frame, write_gen1_options), tick)
     last_pos = None
     stuck_frame = battle_frame = invalid_frame = None
     saves = []

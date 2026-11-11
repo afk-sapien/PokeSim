@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from pokesim.gen2.emulator import Emulator
-from pokesim.gen2.policy import Action
+from pokesim.runtime.policy import Action
 from pokesim.runtime.game_loop import GUARD_FRAMES
 
 
@@ -28,11 +28,11 @@ def emu(monkeypatch):
 
 
 def test_a_step_that_raises_once_does_not_end_the_run(emu):
-    def step(snapshot, memory, sp=None, clock=None):
+    def step(ctx):
         if emu.policy.step.call_count == 1:
             raise RuntimeError('one bad step')
         emu.commands.put(('stop', None))
-        return Action('a', 6, 24)
+        return [Action('a', 6, 24)]
     emu.policy.step.side_effect = step
     emu._run()
     assert emu.policy.step.call_count == 2
@@ -52,7 +52,7 @@ def test_ten_failures_in_a_row_stop_without_overwriting_good_saves(emu):
 
 
 def test_a_committed_reward_that_needs_recovery_stops_at_once(emu):
-    def step(snapshot, memory, sp=None, clock=None):
+    def step(ctx):
         emu.fatal_error = 'A committed Gen II gift needs recovery. Restart this adventure.'
         raise RuntimeError('recovery failed')
     emu.policy.step.side_effect = step

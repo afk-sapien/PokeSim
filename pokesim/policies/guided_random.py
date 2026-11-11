@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import random
 
-from .base import Action, Policy, PolicyContext, Stillness
+from ..runtime.policy import Action, Policy, PolicyContext, Stillness
 from .naming import NamingController
 from ..screen import Screen
 

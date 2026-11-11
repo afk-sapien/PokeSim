@@ -1,7 +1,7 @@
 """Record the Core shortcuts a policy starts, without running them on synthetic memory."""
 from types import SimpleNamespace
 
-from pokesim.policies.base import Action
+from pokesim.runtime.policy import Action
 from pokesim.runtime.supervision import REFUSED_SHORTCUT
 from pokesim.shortcuts import ShortcutRunner
 

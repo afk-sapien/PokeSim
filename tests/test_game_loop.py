@@ -4,7 +4,9 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim import config
-from pokesim.runtime.game_loop import GUARD_FRAMES, IDLE_FRAMES, GameLoop, Gen1, Gen2, gen1_options
+from pokesim.runtime.game_loop import (GEN1_WAIT, GEN2_WAIT, GUARD_FRAMES, IDLE_FRAMES, Decider, GameLoop,
+                                       gen1_options, play, write_gen1_options)
+from pokesim.runtime.policy import Action
 
 
 def act(button, hold, gap):
@@ -36,15 +38,14 @@ class Host:
 
 
 class Script:
-    """A decider that hands out the same actions for every decision."""
+    """A decider that writes the options and hands out the same actions for every decision."""
+    wait = GEN1_WAIT
 
     def __init__(self, actions):
         self.actions = actions
 
-    def options(self, pb):
-        pb.log.append(('options',))
-
     def ask(self, policy, snapshot, pb):
+        pb.log.append(('options',))
         return list(self.actions)
 
 
@@ -102,12 +103,20 @@ def test_the_autosave_runs_before_the_guards(monkeypatch):
     assert order == ['autosave', 'guards']
 
 
-def test_a_gen1_policy_with_nothing_to_do_waits_and_reads_the_play_clock():
+def test_a_policy_with_nothing_to_do_waits_and_reads_the_play_clock():
     seen = []
     policy = SimpleNamespace(step=lambda ctx: seen.append(ctx) or [])
-    actions = Gen1(lambda: 1234).ask(policy, 'snapshot', Pad())
+    actions = Decider(lambda: 1234, write_gen1_options).ask(policy, 'snapshot', Pad())
     assert [(a.button, a.hold, a.gap) for a in actions] == [(None, 0, IDLE_FRAMES)]
     assert (seen[0].snapshot, seen[0].clock, seen[0].sp) == ('snapshot', 1234, 0xDFF0)
+
+
+def test_an_action_with_no_gap_waits_the_generation_wait():
+    for wait in (GEN1_WAIT, GEN2_WAIT):
+        pb, ticks = Pad(), []
+        play(pb, Action('a'), ticks.append, wait)
+        play(pb, Action('a', 6, 24), ticks.append, wait)
+        assert ticks == [8, wait, 6, 24]
 
 
 def test_gen1_options_follow_the_text_and_animation_settings(monkeypatch):
@@ -117,7 +126,7 @@ def test_gen1_options_follow_the_text_and_animation_settings(monkeypatch):
     assert gen1_options(0b011) == 0b001
     pb = Pad()
     pb.memory[W_OPTIONS] = 0b011
-    Gen1(lambda: 0).options(pb)
+    Decider(lambda: 0, write_gen1_options).ask(SimpleNamespace(step=lambda ctx: []), 'snapshot', pb)
     assert pb.memory[W_OPTIONS] == 0b001
     monkeypatch.setattr(config, 'BATTLE_ANIMATIONS', False)
     assert gen1_options(0b011) == 0b1000_0001
@@ -128,10 +137,9 @@ def test_gen1_options_follow_the_text_and_animation_settings(monkeypatch):
 def test_gen2_asks_with_the_stack_pointer_and_never_writes_options():
     pb = Pad()
     before = bytes(pb.memory)
-    Gen2(lambda: 0).options(pb)
-    assert bytes(pb.memory) == before
     calls = []
-    policy = SimpleNamespace(step=lambda snapshot, memory, sp, clock: calls.append((snapshot, sp, clock)) or act('a', 6, 24))
+    policy = SimpleNamespace(step=lambda ctx: calls.append((ctx.snapshot, ctx.sp, ctx.clock)) or [act('a', 6, 24)])
     # The policy's waits count the clock the decider was given, the PlayClock in a managed run.
-    assert [a.button for a in Gen2(lambda: 7200).ask(policy, 'snapshot', pb)] == ['a']
+    assert [a.button for a in Decider(lambda: 7200, wait=GEN2_WAIT).ask(policy, 'snapshot', pb)] == ['a']
     assert calls == [('snapshot', 0xDFF0, 7200)]
+    assert bytes(pb.memory) == before

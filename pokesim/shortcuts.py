@@ -8,7 +8,7 @@ on the caller's clock, which the policy passes as the PlayClock frame.
 """
 from pokecore.shortcuts import Done
 
-from .policies.base import Action
+from .runtime.policy import Action
 from .runtime.supervision import REFUSED_SHORTCUT
 
 # Core's own runner holds a button for 8 frames, then waits 36 before the next observation.

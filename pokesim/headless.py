@@ -16,12 +16,12 @@ from .yellow import YELLOW_SHA1, open_emulator
 from .checkpoints import CheckpointStore, open_state
 from .events import RunMemory
 from .game_data import VARIANT_ENV
-from .policies.base import BUTTONS
 from .policies.progression import YELLOW
 from .policies.strategic import StrategicPolicy
 from .runtime import trace as runtime_trace
-from .runtime.game_loop import GameLoop, Gen1
+from .runtime.game_loop import Decider, GameLoop, write_gen1_options
 from .runtime.manifest import checkpoint_manifest
+from .runtime.policy import BUTTONS
 from .runtime.supervision import Tables
 from .seeds import RELOAD_IDLE, reload_idle
 
@@ -72,7 +72,7 @@ class HeadlessRun(runtime_trace.HeadlessPins):
         self.policy.collection.wild = wild_odds(rom, self.policy.collection.version)
         self.memory = RunMemory()
         self.frame = 0
-        self.loop = GameLoop(self, Gen1(lambda: self.frame), self.tick)
+        self.loop = GameLoop(self, Decider(lambda: self.frame, write_gen1_options), self.tick)
         # A scenario passes its own generator so that a failure replays the same way.
         self.rng = rng
         self.seed = seed
@@ -96,9 +96,8 @@ class HeadlessRun(runtime_trace.HeadlessPins):
             # The run counts its frames on from the save's, before the policy reads a wait timed on them.
             # A reload keeps counting, so the frames never go back.
             self.frame = metadata.get('frame', 0)
+        # The load clears the pin and discards in-flight actions, as in the application.
         self.policy.load_state_dict(metadata['policy_state'])
-        # A pin belongs to the moment it was set, so it never outlives a load, as in the application.
-        self.policy.unpin_goal()
         self.memory = RunMemory.from_dict(metadata['run_memory'])
         if reseed:
             self.policy.rng.seed(self.seed)
@@ -139,10 +138,6 @@ class HeadlessRun(runtime_trace.HeadlessPins):
         if frames > 0:
             self.pb.tick(frames, render=self.render)
             self.frame += frames
-
-    def restore_pin(self, data):
-        from .planning.pin import Pin
-        self.policy.collection.pin = Pin.from_dict(data)
 
     def step(self, snapshot):
         """One decision and its actions, through the loop the application plays."""

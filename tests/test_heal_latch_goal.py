@@ -1,6 +1,6 @@
 """A heal under way is the goal of every step, not only the overworld ones."""
 from pokesim.policies import strategic
-from pokesim.policies.base import PolicyContext
+from pokesim.runtime.policy import PolicyContext
 from pokesim.policies.progression import object_goal
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.strategy_data import MAPS

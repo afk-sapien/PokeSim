@@ -680,9 +680,9 @@ def gen2_trading(args):
         args.error(f'{args.output / "store"} already exists. Use a fresh --output so no earlier preparation is resumed')
     from pokecore.gen2.ram import read_snapshot
     from pokesim.gen2.emulator import Emulator
-    from pokesim.gen2.policy import Action
     from pokesim.gen2.trading import Participant
-    from pokesim.runtime.game_loop import GameLoop, Gen2, play
+    from pokesim.runtime.game_loop import GEN2_WAIT, Decider, GameLoop, play
+    from pokesim.runtime.policy import Action
     from pokesim.runtime.settings import SimulationSettings
     from pokesim.store import Store
     args.output.mkdir(parents=True, exist_ok=True)
@@ -713,7 +713,7 @@ def gen2_trading(args):
         emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
         # The policy and the preparation count their waits on the PlayClock, as the managed worker does.
         emu.play_clock.seed(emu.snapshot.playtime_seconds)
-        loop = GameLoop(emu, Gen2(lambda: emu.play_clock.frames), tick)
+        loop = GameLoop(emu, Decider(lambda: emu.play_clock.frames, wait=GEN2_WAIT), tick)
         for _ in range(6000):
             from pokecore.gen2.ram import Memory
             snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)

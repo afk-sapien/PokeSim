@@ -5,25 +5,30 @@ autosave every ``AUTOSAVE_SECONDS`` of game time and the guards every ``GUARD_FR
 keeps for itself is setup, commands, pause, manual input, pacing and frame publishing, all through
 the ``tick`` it passes in. So a test and the application play the same frames.
 
-The decider is the only part that differs by generation. Red, Blue and Yellow ask with a
-``PolicyContext``. Gold, Silver and Crystal ask with the snapshot, the memory and the stack pointer.
-This module loads no Gen I code until a Gen I decider is built, so a Gen II worker never reads Gen I
-game data.
+Both generations ask their policy the same way, with a ``PolicyContext`` (runtime/policy.py). What
+differs is two settings of the ``Decider``: Red, Blue and Yellow write the options byte before every
+decision, and Gold, Silver and Crystal wait 16 frames after a press where Gen I waits 2. This module
+loads no game code, so a Gen II worker never reads Gen I game data.
 """
 from __future__ import annotations
 
 from .. import config
+from .policy import Action, PolicyContext, stack_pointer
 from .reload import FRAMES_PER_SECOND, Cadence
 
 # The guards look at the run once a second of game time, in both generations.
 GUARD_FRAMES = 60
-# The action a Gen I policy that has nothing to do waits with.
+# The action a policy that has nothing to do waits with.
 IDLE_FRAMES = 12
+# The frames each generation waits after a press whose action names no gap of its own.
+GEN1_WAIT = 2
+GEN2_WAIT = 16
 
 
-def play(pb, action, tick):
+def play(pb, action, tick, wait=GEN1_WAIT):
     """Press, hold, release and wait out one action. ``tick`` advances the emulator and the host's
-    frame count. The button comes up even when a tick fails, so a crash never leaves it held."""
+    frame count, and ``wait`` is the gap of an action that names none. The button comes up even when a
+    tick fails, so a crash never leaves it held."""
     if action.button:
         pb.button_press(action.button)
     try:
@@ -31,7 +36,7 @@ def play(pb, action, tick):
     finally:
         if action.button:
             pb.button_release(action.button)
-    tick(action.gap)
+    tick(wait if action.gap is None else action.gap)
 
 
 def gen1_options(value):
@@ -43,39 +48,27 @@ def gen1_options(value):
     return value
 
 
-class Gen1:
-    """Asks a Red, Blue or Yellow policy. ``clock`` gives the PlayClock frames the policy reads."""
-
-    def __init__(self, clock):
-        from ..policies.base import Action, PolicyContext, stack_pointer
-        from ..screen import W_OPTIONS
-        self.clock = clock
-        self._idle = Action(None, 0, IDLE_FRAMES)
-        self._context, self._stack_pointer, self._options = PolicyContext, stack_pointer, W_OPTIONS
-
-    def options(self, pb):
-        # Written before every decision, so a menu press that slowed the text never lasts a decision.
-        pb.memory[self._options] = gen1_options(pb.memory[self._options])
-
-    def ask(self, policy, snapshot, pb):
-        context = self._context(snapshot, self.clock(), pb.memory, self._stack_pointer(pb))
-        return list(policy.step(context)) or [self._idle]
+def write_gen1_options(pb):
+    """Write the Gen I options byte. Red, Blue and Yellow write it before every decision, so a menu press
+    that slowed the text never lasts a decision. Gen II sets its options once after each load, since a
+    write before every decision would set every step of a trace apart from every trace before it."""
+    from ..screen import W_OPTIONS
+    pb.memory[W_OPTIONS] = gen1_options(pb.memory[W_OPTIONS])
 
 
-class Gen2:
-    """Asks a Gold, Silver or Crystal policy for its one next action. ``clock`` is as in ``Gen1``."""
+class Decider:
+    """Asks a policy of either generation for its next actions. ``clock`` gives the PlayClock frames the
+    policy reads. ``options`` writes the options byte before every decision, or is None where the host
+    writes it after a load. ``wait`` is the gap after a press of an action that names none."""
 
-    def __init__(self, clock):
-        self.clock = clock
-
-    def options(self, pb):
-        # Gen II sets its options once after each load. A write before every decision would add a
-        # memory write to every step of a trace and set it apart from every trace before it.
-        pass
+    def __init__(self, clock, options=None, wait=GEN1_WAIT):
+        self.clock, self.options, self.wait = clock, options, wait
 
     def ask(self, policy, snapshot, pb):
-        from ..gen2.menus import stack_pointer
-        return [policy.step(snapshot, pb.memory, stack_pointer(pb), clock=self.clock())]
+        if self.options is not None:
+            self.options(pb)
+        context = PolicyContext(snapshot, self.clock(), pb.memory, stack_pointer(pb))
+        return list(policy.step(context)) or [Action(None, 0, IDLE_FRAMES)]
 
 
 class GameLoop:
@@ -96,7 +89,6 @@ class GameLoop:
     def decide(self, snapshot, policy=None):
         """Ask ``policy``, the host's own by default, for the next actions and queue them."""
         pb = self.host.pb
-        self.decider.options(pb)
         policy = policy or self.host.policy
         self.pending = self.decider.ask(policy, snapshot, pb)
         tracer = getattr(self.host, 'tracer', None)
@@ -108,7 +100,7 @@ class GameLoop:
     def act(self):
         """Play the next queued action, then autosave and run the guards when they are due."""
         action = self.pending.pop(0)
-        play(self.host.pb, action, self.tick)
+        play(self.host.pb, action, self.tick, self.decider.wait)
         frame = self.host.frame
         if self.autosave and (self.ready is None or self.ready()) and self.cadence.due(frame):
             self.autosave()

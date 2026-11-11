@@ -16,7 +16,7 @@ from dataclasses import replace
 
 import pytest
 
-from pokesim.policies.base import PolicyContext
+from pokesim.runtime.policy import PolicyContext
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.ram import PartyMon, Snapshot, StoredMon
 from pokesim.strategy_data import EVENTS, ITEMS, MAPS, SPECIES, WORLD
@@ -286,7 +286,7 @@ def test_gen2_step_stays_within_budget_on_a_large_state(game):
         snapshot = replace(snapshot, frame=100 + step * 16)
         references.append(reference.time())
         start = clock()
-        action = policy.step(snapshot, memory)
+        action, = policy.step(PolicyContext(snapshot, policy.clock, memory))
         times.append(clock() - start)
         if action.button in {'up', 'down', 'left', 'right'}:
             snapshot = gen2_walk(policy, snapshot, memory, action.button)

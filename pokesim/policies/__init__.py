@@ -1,4 +1,4 @@
-from .base import Action, Policy, PolicyContext
+from ..runtime.policy import Action, Policy, PolicyContext
 from .guided_random import GuidedRandomPolicy
 from .smart_random import SmartRandomPolicy
 from .strategic import StrategicPolicy

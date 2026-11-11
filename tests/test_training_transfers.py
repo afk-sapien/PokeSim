@@ -1,7 +1,7 @@
 import json
 from dataclasses import replace
 
-from pokesim.policies.base import PolicyContext
+from pokesim.runtime.policy import PolicyContext
 from pokesim.policies.collection import Collection
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.strategy_data import MAPS

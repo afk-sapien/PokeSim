@@ -137,8 +137,7 @@ class HeadlessPins:
     """A headless run's pins, set as a manager sets them in the application: logged, then given to the
     policy. The run passes a ``pin_script`` to ``take_pins`` once its checkpoint is loaded and calls
     ``feed_pins`` before each step. Each set or clear is made before the step it was logged before, and
-    the pin a segment began with is in force before the run begins its own. The run gives ``restore_pin``,
-    which puts a pin's dict back on its policy."""
+    the pin a segment began with is in force before the run begins its own."""
 
     # The steps the run has begun, which a pin script counts its pins by.
     _pin_steps = 0
@@ -170,6 +169,11 @@ class HeadlessPins:
     def unpin_goal(self):
         note(self, 'pin', {'key': None})
         self.policy.unpin_goal()
+
+    def restore_pin(self, data):
+        """Put a logged pin's dict back on the policy, as it was when it was logged."""
+        from ..planning.pin import Pin
+        self.policy.restore_pin(Pin.from_dict(data))
 
 
 def command(name, arg):

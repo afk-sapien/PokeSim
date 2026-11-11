@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from pokecore.naming import menu_button
 
-from .base import Action
+from ..runtime.policy import Action
 
 
 def tap(button, hold=6, gap=12):

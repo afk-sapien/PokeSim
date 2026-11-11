@@ -1,7 +1,7 @@
 from dataclasses import replace
 import random
 
-from pokesim.policies.base import PolicyContext
+from pokesim.runtime.policy import PolicyContext
 from pokesim.policies.battle import Decision, choose_battle
 from pokesim.policies.progression import Goal
 from pokesim.policies.strategic import StrategicPolicy

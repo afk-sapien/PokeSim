@@ -32,6 +32,25 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
+def policy_types():
+    """Action and PolicyContext of the source root. A root from before the one Policy protocol keeps
+    them in policies/base.py."""
+    try:
+        from pokesim.runtime.policy import Action, PolicyContext
+    except ImportError:
+        from pokesim.policies.base import Action, PolicyContext
+    return Action, PolicyContext
+
+
+def played(action):
+    """An action as Gen I plays it, with the 2 frame wait of an action that names no gap filled in, so
+    a trace reads the same from every source root."""
+    row = asdict(action)
+    if row['gap'] is None:
+        row['gap'] = 2
+    return row
+
+
 def summary(values):
     ordered = sorted(values)
     return {'calls': len(values), 'total_ms': sum(values),
@@ -140,7 +159,6 @@ def policy_start(fixture, metadata):
     if hasattr(policy, 'collection'):
         policy.collection.version = 'blue' if 'Blue' in known else 'red'
     policy.load_state_dict(metadata['policy_state'])
-    policy.on_restore()
     return policy
 
 
@@ -260,8 +278,8 @@ def simulate(fixture_path, frames, capture):
         # The source root's own headless run plays the decisions, so a root from before the shared
         # game loop still plays the loop it shipped with.
         from pokesim.headless import HeadlessRun
-        from pokesim.policies.base import Action
         from pokesim.ram import read_snapshot
+        Action, _ = policy_types()
         if hashlib.sha1(Path(settings.rom_path).read_bytes()).hexdigest() != metadata['rom_sha1']:
             raise ValueError('Fixture ROM does not match its checkpoint')
         validate_runtime(metadata)
@@ -279,7 +297,7 @@ def simulate(fixture_path, frames, capture):
             routes_before = len(timings.route_wall)
             actions = timings.step(policy.step, ctx)
             row = {'frame': run.frame, 'snapshot': digest(ctx.snapshot.to_dict()),
-                   'actions': [asdict(action) for action in actions],
+                   'actions': [played(action) for action in actions],
                    'policy_state': digest(policy.state_dict()),
                    'route_calls': len(timings.route_wall) - routes_before}
             trace.append(row)
@@ -287,7 +305,7 @@ def simulate(fixture_path, frames, capture):
                 workload.append({'snapshot': ctx.snapshot, 'memory': memory,
                     'clock': ctx.clock, 'expected': row})
             actions = actions or [Action(None, 0, 12)]
-            if any(action.hold + action.gap <= 0 for action in actions):
+            if any(row['hold'] + row['gap'] <= 0 for row in map(played, actions)):
                 raise ValueError('A policy action did not advance emulated time')
             action_count += len(actions)
             return actions
@@ -333,7 +351,7 @@ def replay(path, repeats, warmups, decisions):
         if corpus['schema'] != 1 or corpus['fixture'] != fixture:
             raise ValueError('Unsupported or mismatched workload metadata')
         workload = corpus['workload'][:decisions] if decisions else corpus['workload']
-        from pokesim.policies.base import PolicyContext
+        _, PolicyContext = policy_types()
         for trial in range(warmups + repeats):
             policy = policy_start(corpus['fixture'], corpus['metadata'])
             timings = Timings()
@@ -347,7 +365,7 @@ def replay(path, repeats, warmups, decisions):
                     before = len(timings.route_wall)
                     actions = timings.step(policy.step, ctx)
                     expected = record['expected']
-                    actual = {'actions': [asdict(action) for action in actions],
+                    actual = {'actions': [played(action) for action in actions],
                               'policy_state': digest(policy.state_dict()),
                               'route_calls': len(timings.route_wall) - before}
                     if any(actual[key] != expected[key] for key in actual):
