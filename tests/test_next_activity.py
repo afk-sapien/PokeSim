@@ -28,6 +28,11 @@ from test_strategy import flags, mon
 SPECIES_ID = {row['dex']: sid for sid, row in SPECIES.items()}
 
 
+def entry(key, label, tier):
+    """A picker row as the manager's goal list sends it. Every listed goal can run now."""
+    return {'key': key, 'label': label, 'tier': tier, 'feasible': True, 'why_not': None}
+
+
 def postgame():
     c = Collection()
     c.completed_champion = True
@@ -206,9 +211,8 @@ def test_gen1_setting_a_group_runs_its_best_ranked_place():
 def test_the_picker_groups_rows_once_each_in_rank_order():
     rows = [('a:1', 'pidgey', 'Better Pidgey', Tier.PROGRESS), ('b', 'mew', 'Get Mew', Tier.PROGRESS),
             ('a:2', 'pidgey', 'Better Pidgey', Tier.FILLER), ('c', 'other', 'Get Mew', Tier.FILLER)]
-    assert pin.grouped(rows) == [{'key': 'a:1', 'label': 'Better Pidgey', 'tier': 'progress'},
-                                 {'key': 'b', 'label': 'Get Mew', 'tier': 'progress'}]
-    assert pin.grouped(rows, query=' MEW ') == [{'key': 'b', 'label': 'Get Mew', 'tier': 'progress'}]
+    assert pin.grouped(rows) == [entry('a:1', 'Better Pidgey', 'progress'), entry('b', 'Get Mew', 'progress')]
+    assert pin.grouped(rows, query=' MEW ') == [entry('b', 'Get Mew', 'progress')]
     assert len(pin.grouped([(str(i), i, f'Goal {i}', Tier.FILLER) for i in range(100)])) == pin.LIMIT
 
 
@@ -346,8 +350,7 @@ def test_gen2_a_survey_lists_the_rungs_and_changes_nothing(monkeypatch):
     monkeypatch.setattr(ladder_module, 'journey', journey)
     goals, reason = ladder_module.goal_list(owner, SimpleNamespace(map=1), None, None)
     assert reason is None
-    assert goals == [{'key': 'hunt:hunt', 'label': 'Label hunt', 'tier': 'progress'},
-                     {'key': 'league:league', 'label': 'Label league', 'tier': 'filler'}]
+    assert goals == [entry('hunt:hunt', 'Label hunt', 'progress'), entry('league:league', 'Label league', 'filler')]
     assert owner.collection == {'target': None} and owner.rng.getstate() == before
     assert owner.pin_events == [] and not hasattr(owner, 'ladder_offers')
 
@@ -357,17 +360,17 @@ def test_gen2_lists_each_label_once_at_most_the_limit_and_pins_past_it(monkeypat
     offers = [SimpleNamespace(key=f'hunt:{i}', tier=Tier.PROGRESS) for i in range(60)]
     # Two rungs can offer the same want. The better ranked one is listed.
     labels = {offer.key: f'Catch Goal {i // 2}' for i, offer in enumerate(offers)}
-    monkeypatch.setattr(ladder_module, 'survey', lambda *args: (offers, labels, None))
+    monkeypatch.setattr(ladder_module, 'survey', lambda *args: (offers, labels, None, []))
     owner = gen2_policy(pin=None)
     goals, reason = ladder_module.goal_list(owner, None, None, None)
     every, _ = ladder_module.goal_list(owner, None, None, None, limit=None)
     assert reason is None and len(goals) == pin.LIMIT and len(every) == 30 == len({g['label'] for g in every})
-    assert every[1] == {'key': 'hunt:2', 'label': 'Catch Goal 1', 'tier': 'progress'}
+    assert every[1] == entry('hunt:2', 'Catch Goal 1', 'progress')
     assert ladder_module.goal_list(owner, None, None, None, query='goal 29') == (
-        [{'key': 'hunt:58', 'label': 'Catch Goal 29', 'tier': 'progress'}], None)
+        [entry('hunt:58', 'Catch Goal 29', 'progress')], None)
     assert ladder_module.goal_list(owner, None, None, None, query='mew') == ([], 'No goal matches that name')
     many = [SimpleNamespace(key=f'hunt:{i}', tier=Tier.PROGRESS) for i in range(45)]
-    monkeypatch.setattr(ladder_module, 'survey', lambda *args: (many, {o.key: o.key for o in many}, None))
+    monkeypatch.setattr(ladder_module, 'survey', lambda *args: (many, {o.key: o.key for o in many}, None, []))
     picker = SimpleNamespace(pin=None, ladder_pick=None,
                              goals=lambda snapshot, every=False: ladder_module.goal_list(
                                  owner, None, None, None, limit=None if every else pin.LIMIT))

@@ -49,11 +49,14 @@ let currentSpeed = 1
 let shownObjective = null
 let pendingObjective = null
 let pendingSightings = 0
-// Gold, Silver and Crystal name a goal by key and label, Red, Blue and Yellow by id and title.
+// Both generations name the goal that runs now in strategy.goal. A worker from before it names the goal
+// by key and label in Gold, Silver and Crystal, and by id and title in Red, Blue and Yellow. The id stays
+// the objective's, so the planning gap reads the same in both.
 function objectiveOf(strategy) {
   const objective = strategy?.objective
-  const title = objective?.title || objective?.label
-  return title ? {...objective, id: objective.id ?? objective.key, title} : null
+  const goal = strategy?.goal
+  const title = goal?.title || objective?.title || objective?.label
+  return title ? {...objective, goal: goal || null, id: objective?.id ?? objective?.key ?? goal?.key, title} : null
 }
 function steadyObjective(objective) {
   if (!objective) return shownObjective

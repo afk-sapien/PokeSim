@@ -189,8 +189,11 @@ class Monitor:
 
     def failure(self, key, now):
         """The kind of failure ``key`` stands down for at ``now``, or None when it is not standing down
-        or stood down for no named failure."""
-        return self._table(FAILURES).get(key) if self.standing_down(key, now) else None
+        or stood down for no named failure. Reading it writes nothing, as the goal catalogue needs."""
+        failures = self.state.get(FAILURES)
+        if not isinstance(failures, dict) or not self.standing_down(key, now):
+            return None
+        return failures.get(key)
 
     def clear(self, key):
         """Forget ``key``'s stand-downs, failure and spent frames, as when its goal is done."""
