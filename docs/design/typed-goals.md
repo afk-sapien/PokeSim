@@ -1,6 +1,6 @@
 # Typed goals
 
-Status: proposal for review. Every line number was read from main at `153a4c53` (#538). This is phase 2 item 5 of the architecture plan of 2026-11-09, and PR 7 of [Goal system v2](goal-system.md) section 13. It builds on the [Decide pipeline](decide-pipeline.md), whose section 7 lists what it hands over, and on the trace in [Replayable bugs](replayable-bugs.md).
+Status: accepted on 2026-11-11. Every line number was read from main at `153a4c53` (#538). This is phase 2 item 5 of the architecture plan of 2026-11-09, and PR 7 of [Goal system v2](goal-system.md) section 13. It builds on the [Decide pipeline](decide-pipeline.md), whose section 7 lists what it hands over, and on the trace in [Replayable bugs](replayable-bugs.md).
 
 Today a Gen I goal the planner works on is a project, one dict that mixes what the goal is with what it has done so far. Its kind is a string that about a hundred checks read, 83 of them in `policies/collection.py`. Gen II has no project. Its hunt target, training project and postgame activity are three more dicts with their own switches. When a goal gets stuck, Gen II reloads a save, though the trouble is usually that one goal and not the whole game. A manager can pin a goal only from the best few the planner offers now, and nothing outside the planner can see what else it could do or why it will not.
 
@@ -105,7 +105,9 @@ The park is `carry_over` (`gen2/standdown.py:192`) without the reload before it:
 
 The park counts as one rung of the shared ladder (`Supervisor.climb`), so the streak, the stalled report and the twelve-reload give-up work as before. A reload still happens for a glitched state, a battle that never ended or cannot end, a story goal, and a second stall without progress since the park.
 
-Gen I keeps its rule. `recover_stall` (`policies/strategic.py:1892`) already abandons the project with no reload on every stuck outside battle with a valid snapshot. Slice 3 only types it: the abandoned project's stand-down records `stuck`. Whether Gen I should also climb to a reload on a second stall is a question for later (section 7), since it would change Red, Blue and Yellow.
+Gen I keeps its rule. `recover_stall` (`policies/strategic.py:1892`) already abandons the project with no reload on every stuck outside battle with a valid snapshot. Slice 3 only types it: the abandoned project's stand-down records `stuck`.
+
+Rule 5 is an adapter setting, `RELOAD_AFTER_PARK`, written beside each generation's guards: `True` for Gen II and `False` for Gen I. A Gen I stall after a park parks again and never climbs to a reload outside battle. The generations differ because Gen II's park is new, so its second stall falls back to the reload it does today, which bounds the change, while Gen I has parked without a reload since `recover_stall` and keeps that play.
 
 ### How a parked goal comes back
 
@@ -200,7 +202,13 @@ The trace records every pin change, and a replay feeds the director's choices ba
 
 Each PR deletes what it replaces, runs the targeted tests, and gives the gate and replay agreement in its body. Heavy runs go through `tools/load_gate.sh heavy`. Every second merged slice is reported to the lead.
 
-## 7. Open questions
+## 7. Decisions and open questions
 
-1. Should Gen I climb to a reload on a second stall without progress since a park, as Gen II will? Today `recover_stall` abandons a project every 600 seconds and never reloads outside battle. Matching Gen II would change Red, Blue and Yellow, so it waits for its own PR.
-2. Should the catalogue name each kind's family (catch, gift, trade, evolve, breed, train, battle, item, explore, upkeep), so a director can ask for "the best catch" in either generation? It is cheap but not asked for yet.
+Decided on 2026-11-11:
+
+1. Gen I does not reload after a park, and Gen II does on a second stall without progress. It is the `RELOAD_AFTER_PARK` adapter setting in section 3.
+2. A pin keeps today's auth check: the owner and anyone the owner gave Can manage.
+
+Open:
+
+1. Should the catalogue name each kind's family (catch, gift, trade, evolve, breed, train, battle, item, explore, upkeep), so a director can ask for "the best catch" in either generation? It is cheap but not asked for yet.
