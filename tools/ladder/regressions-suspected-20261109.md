@@ -140,4 +140,56 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   and the baseline moved for it. The run now makes one ball restock inside the window, not two. Main's
   second restock was the Tangela throws, and they no longer fall inside the window, so that catch item
   is still open.
-- The other rungs are still open.
+- The long-odds catch, #463, 2026-11-10: a throw under 1 in 10 now weakens its target first, with a
+  switch to a member that outlasts the target's best hit. A target nobody can weaken is left until a new
+  move, member or ball. Gold, Silver and Crystal had the bigger gap, and this closes the Tangela item.
+  No rung moved down. gold/badges_4, silver/badges_6 and silver/badges_8 rose inside the tolerance and
+  each plays its window differently, so the baseline stays.
+
+## Where each rung ended
+
+Now is the gate baseline after #463. The cause names the merge that brought the rise, where one did.
+
+| Rung | 171176e | 2026-11-09 | Now | Cause | Fixed by |
+| --- | ---: | ---: | ---: | --- | --- |
+| crystal/post_game | 0.0% | 32.1% | 0.0% | training judged reach from a ledge's wall tile (#376) | #441 |
+| silver/badges_6 | 1.3% | 25.9% | 1.3% | a Gen II ledge jump read the wall tile (#389) | #439 |
+| gold/new_game | 5.7% | 23.7% | 5.7% | the ledge wall tile (#389) | #439 |
+| gold/badges_6 | 0.0% | 17.3% | 0.0% | the ledge wall tile (#389) | #439 |
+| gold/red | 0.0% | 15.5% | 0.0% | postgame play past Red (#346), a box change the audit missed, no field cure | #447, #453 |
+| silver/new_game | 0.3% | 12.4% | 0.3% | the ledge wall tile (#389) | #439 |
+| gold-randomized/new_game | 0.2% | 12.2% | 0.2% | the ledge wall tile (#389) | #439 |
+| yellow/badges_4 | 11.8% | 23.6% | 12.1%, open | a step tried while a trainer engages counted as a wall (#389), a sale and a split restock the audit missed | #445, #449, #459 |
+| crystal/new_game | 3.9% | 15.7% | 3.9% | the ledge wall tile (#389) | #439 |
+| silver/post_game | 0.0% | 11.0% | 0.0% | the ledge wall tile (#389, #376) | #439, #441 |
+| yellow/post_game | 15.0% | 24.3% | 1.8% | the trainer step (#389), a deposit and a taught move the audit missed | #445, #450, #457 |
+| blue/post_game | 6.1% | 15.0% | 4.0% | the trainer step (#389), a deposit and a taught move the audit missed | #445, #450, #457 |
+| red/post_game | 9.1% | 17.8% | 3.6% | the trainer step (#389), a deposit for the Eevee gift (#358), a taught move | #445, #450, #457 |
+| crystal/badges_2 | 0.0% | 8.5% | 0.0% | the ledge wall tile (#389) | #439 |
+| gold/badges_2 | 0.0% | 8.5% | 0.0% | the ledge wall tile (#389) | #439 |
+| crystal/red | 0.0% | 8.2% | 0.3% | the ledge wall tile (#389), postgame play past Red (#346), a box change | #439, #447 |
+| yellow/badges_6 | 13.4% | 21.5% | 19.0%, open | heal trips for a status with no field cure (#358), long partner training, a taught move and a split restock | #451, #454, #457, #459 |
+| silver/red | 12.6% | 17.3% | 0.0% | the ledge wall tile (#389) | #439 |
+| crystal/kanto_entry | 0.0% | 4.5% | 0.0% | the ledge wall tile (#389) | #439 |
+| blue/badges_6 | 7.3% | 11.8% | 9.2%, open | heal trips (#358), a split restock | #459 |
+| gold-randomized/badges_8 | 0.0% | 3.4% | 0.0% | the ledge wall tile (#389) | #439 |
+| blue/badges_2 | 13.0% | 16.2% | 7.5% | the trainer step (#389), a split restock | #445, #459 |
+| silver/kanto_entry | 6.0% | 8.8% | 0.0% | the ledge wall tile (#389) | #439 |
+| gold/post_game | 0.0% | 2.7% | 0.0% | training reach from the wall tile (#376) | #441 |
+| yellow/badges_2 | 3.9% | 6.1% | 2.6% | the trainer step (#389) | #445 |
+| red/badges_6 | 12.6% | 14.8% | 5.3% | a sale the audit missed, no field cure, a taught move, a split restock | #449, #451, #457, #459 |
+
+crystal/red keeps 0.3% of postgame play that the 171176e run never reached, so it is not open.
+
+## Open strategy items
+
+None of these is a regression. Each is play the 171176e runs did not reach, or did the same way.
+
+1. yellow/badges_6, 19.0%: the run now reaches the Secret Key. Its waste is the Safari Zone and Surf
+   goals: surf 10270 frames, party_surf 3688, teeth 2344 and party_upgrade 1676.
+2. blue/badges_6, 9.2%: surf 7220 frames and lapras 2024.
+3. The Rocket Hideout elevator: 19984 frames in blue/badges_4 and 5612 in yellow/badges_4.
+4. red/badges_6: train_partner 3480 frames and teach_surf 1332. red/badges_2 is at 4.0% against a 3.5%
+   baseline on main, with bill 2404 and surge_switches 1804, inside the gate.
+5. Gen II ball restocks: with #463, 1216 frames of them count as waste in gold/badges_4 and 3220 in
+   silver/badges_6. Why those spans gained nothing is not traced yet.
