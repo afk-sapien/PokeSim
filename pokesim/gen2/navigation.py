@@ -36,7 +36,7 @@ class Navigator:
         self.last_map = None
         self.moved_frame = -10 ** 9
 
-    def observe(self, snapshot):
+    def observe(self, snapshot, *, interrupted=False):
         if self.last_map is not None and self.last_map != snapshot.map:
             self.objects.pop(snapshot.map, None)
             self.regions.observe_rocks(snapshot.map, set())
@@ -82,7 +82,8 @@ class Navigator:
         self.visits[point] = self.visits.get(point, 0) + 1
         if self.previous:
             before, button, frame = self.previous
-            if point == before and snapshot.frame - frame >= 24 and not snapshot.in_battle:
+            # A running script, such as a phone ringing, ignores the pad, so standing still is no wall.
+            if point == before and snapshot.frame - frame >= 24 and not snapshot.in_battle and not interrupted:
                 dx, dy = DIRS[button]
                 ahead = (snapshot.x + dx, snapshot.y + dy)
                 # A boulder push, or the Strength question, leaves the player in place without the

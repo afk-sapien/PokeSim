@@ -180,6 +180,8 @@ def test_a_gen2_quiet_stretch_keeps_a_bundle_from_the_first_autosave_after_progr
     Gen2Emulator._check_stall(playing)
     folder, report = kept(playing.store)
     assert report['kind'] == 'quiet' and report['why'] == 'no progress for 130 game minutes'
+    # The minutes are on the PlayClock. The emulator frame, still 0 here, goes back with every reload.
+    assert report['quiet_game_minutes'] == 130
     assert report['has_before'] and report['party'] == [['Lapras', 40, 0, 0]] and len(seen) == 1
     # The same stretch keeps no second bundle.
     playing.play_clock.frames += MINUTE

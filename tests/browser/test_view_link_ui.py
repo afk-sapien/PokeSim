@@ -67,7 +67,7 @@ def test_phone_rail_keeps_the_copy_link_beside_the_brand(page, game, width):
     assert box['x'] + box['width'] <= width
     assert box['width'] >= 40 and box['height'] >= 40
     # A dropped connection brings the rail status back, and the key folds to its glyph.
-    page.route('**/api/state', lambda route: route.fulfill(status=503, body='down'))
+    page.route(re.compile(r'/api/state(\?|$)'), lambda route: route.fulfill(status=503, body='down'))
     expect(page.locator('#connection')).to_be_visible(timeout=10000)
     expect(page.locator('#status')).to_have_text('Reconnecting…')
     expect(key.locator('.rail-key-text')).to_be_hidden()

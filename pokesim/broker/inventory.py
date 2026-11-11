@@ -127,37 +127,10 @@ def placed(stored) -> list[dict]:
     return out
 
 
-def spare_entries(party, stored, version=''):
-    """Boxed copies that are spares by the PC value score, lowest value first.
-
-    The best copy of each species stays, party members count, and Keep-locked or eggs never go.
-    Rarity is the ``version``'s own (species_rarity).
-    """
-    from ..pcvalue import Entry, Inputs, queue, rate
-    rows = [Entry(None if index < len(party) else (mon['box'], mon['position']), (mon['species'], 0),
-                  mon.get('name', ''), mon['level'], mon.get('experience', 0), tuple(mon.get('dvs') or ()),
-                  tuple(mon.get('stat_exp') or ()), bool(mon.get('egg')),
-                  locked=mon.get('trade_preference') in ('locked', 'withdrawn'),
-                  stock=mon.get('trade_preference') == 'offered', record=mon)
-            for index, mon in enumerate([*party, *stored])]
-    return [row.entry.record for row in queue(rate(rows, Inputs(rarity=species_rarity(version))))
-            if row.status == 'spare']
-
-
-def species_rarity(version=''):
-    """A copy's rarity by its species id and DVs, as the version's own PC rates it (pcvalue.Inputs).
-
-    Red, Blue and Yellow rate by family (investment.families), which raises RatingUnavailable when it
-    cannot, so pcvalue.rate offers nothing. The broker holds no Gold, Silver or Crystal tables, so
-    those rate by the DV total."""
-    from ..rarity import generic
-    if version in ('gold', 'silver', 'crystal'):
-        return generic
-    from ..investment import families
-    return lambda species, dvs: families().rarity(species, dvs)
-
-
-def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory:
+def normalise(instance: str, url: str, payload: dict, protected=(), demand=None, gives=None) -> Inventory:
+    """The board's view of one payload. Spares are the boxed copies a trade may give (trade/worth.py):
+    ``gives`` holds their (box, position) slots from the adventure's own PC rows, or without it the
+    payload is rated here with the linked adventures' ``demand``."""
     if not payload.get('started'):
         return Inventory(instance=instance, url=url, started=False,
                          version=payload.get('version', ''), phase=payload.get('phase', ''))
@@ -185,12 +158,15 @@ def normalise(instance: str, url: str, payload: dict, protected=()) -> Inventory
                  and (mon.get('trade_preference') == 'offered'
                       or (mon['box'], mon['position']) not in investment_slots)]
     available_slots = {(mon['box'], mon['position']) for mon in available}
+    from ..trade.worth import spares
+    given = ([mon for mon in boxes if (mon['box'], mon['position']) in gives] if gives is not None
+             else spares(party, boxes, payload, demand))
     return Inventory(
         instance=instance, url=url, started=True,
         player_name=payload.get('player_name', ''), version=payload.get('version', ''),
         phase=payload.get('phase', ''), owned=owned, seen=frozenset(payload.get('seen') or ()),
         party=tuple(party), stored=tuple(to_copy(mon) for mon in boxes),
-        spares=tuple(to_copy(mon) for mon in spare_entries(party, boxes, payload.get('version', ''))
+        spares=tuple(to_copy(mon) for mon in given
                      if mon['species'] not in off_limits and (mon['box'], mon['position']) in available_slots),
         tradeable=tuple(to_copy(mon) for mon in available if mon['species'] not in off_limits),
         hunting=hunting,

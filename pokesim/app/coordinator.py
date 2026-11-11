@@ -29,6 +29,7 @@ from .loops import Loop
 from .registry import digest, identifier, validate_id
 from pokecore.identity import find, legacy
 from ..trade.preferences import FIRST
+from ..trade.worth import gain
 
 log = logging.getLogger(__name__)
 TERMINAL = {'completed', 'aborted'}
@@ -641,7 +642,7 @@ class Coordinator:
             if manual:
                 raise Conflict(self._capsule_reason(left, right, give, take))
             raise Conflict('The Time Capsule needs an unlocked Gen II adventure and compatible Kanto Pokémon')
-        if not manual and not self._last_copies_useful(give, take, self._benefit(left, take), self._benefit(right, give)):
+        if not manual and not self._last_copies_useful(give, take, gain(left, take).points, gain(right, give).points):
             raise Conflict('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
         # A transfer ends queued trades under `offers.guard`, so the owner is checked again under it.
         with self.manager.maintenance, self._offers_guard(), owned_by(self.manager, actor, participants), self.guard:
@@ -1055,29 +1056,6 @@ class Coordinator:
         return self.recover_one(tid)
 
     @staticmethod
-    def _benefit(inventory, mon):
-        owned = set(inventory.get('owned', []))
-        dex = mon.get('arrived_dex', mon.get('dex'))
-        gain = len({mon.get('dex'), dex} - owned - {None})
-        if gain:
-            return 100 * gain
-        copies = [entry for entry in list(inventory.get('party') or [])
-                  + list((inventory.get('storage') or {}).get('pokemon') or []) if entry.get('dex') == dex]
-        if not copies:
-            return 20
-        best_level = max(entry.get('level', 0) for entry in copies)
-        if mon.get('level', 0) >= best_level + 5:
-            return 10
-        for field, improvement in [('dvs', 4), ('stat_exp', 20000)]:
-            values = mon.get(field) or []
-            known = [sum(entry[field]) for entry in copies if len(entry.get(field) or []) == 5]
-            level_floor = best_level - 5 if field == 'dvs' else best_level
-            if (len(values) == 5 and len(known) == len(copies) and mon.get('level', 0) >= level_floor
-                    and sum(values) >= max(known) + improvement):
-                return 5
-        return 0
-
-    @staticmethod
     def _last_copies_useful(give, take, mine, theirs):
         def allowed(outgoing, incoming, owner_gain, recipient_gain):
             if not outgoing.get('last_copy') or recipient_gain >= 100:
@@ -1202,12 +1180,12 @@ class Coordinator:
                 if owners[left_id] != owners[right_id] and not (
                         settings[left_id]['across_owners'] and settings[right_id]['across_owners']):
                     continue
-                # Each benefit scans a whole library, so score every offer once per pair
+                # Each gain rates a whole PC (trade/worth.py), so score every offer once per pair
                 # rather than once per combination.
                 gives = [self._offer_for(offer, right) for offer in left.get('offers', [])]
                 takes = [self._offer_for(offer, left) for offer in right.get('offers', [])]
-                theirs_by_give = [self._benefit(right, give) for give in gives]
-                mine_by_take = [self._benefit(left, take) for take in takes]
+                theirs_by_give = [gain(right, give).points for give in gives]
+                mine_by_take = [gain(left, take).points for take in takes]
                 for give, theirs in zip(gives, theirs_by_give):
                     for take, mine in zip(takes, mine_by_take):
                         if not self._compatible_pair(left, right, give, take):
@@ -1269,8 +1247,8 @@ class Coordinator:
         refused species pair waits PAIR_COOLDOWN_SECONDS. A worker that cannot answer does not block its trade.
         """
         for index, (_, left_id, right_id, _, _, (give, theirs), (take, mine)) in enumerate(candidates[:KEEP_CHECKS]):
-            refused = next((aid for aid, mon, gain in ((left_id, take, mine), (right_id, give, theirs))
-                            if gain < 100 and not self._would_keep(aid, mon)), None)
+            refused = next((aid for aid, mon, points in ((left_id, take, mine), (right_id, give, theirs))
+                            if points < 100 and not self._would_keep(aid, mon)), None)
             if refused is None:
                 return candidates[index:]
             self.refused_pairs[pair_key(left_id, right_id, give, take)] = now + PAIR_COOLDOWN_SECONDS

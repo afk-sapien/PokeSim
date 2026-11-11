@@ -52,6 +52,7 @@ GAME_POSTS = {
 # missing here makes the coverage test fail.
 GAME_QUERY_FLAGS = {
     ('api/state', 'storage'): 'adventure.watch',
+    ('api/state', 'view'): 'adventure.watch',
     ('api/pokedex', 'version'): 'adventure.watch',
     ('api/pokedex', 'view'): 'adventure.watch',
     ('api/events', 'limit'): 'adventure.watch',

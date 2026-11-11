@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 import json
 from functools import lru_cache
+from pokecore.gen1 import W_COMPLETED_IN_GAME_TRADE_FLAGS
 from pokecore.resets import Flag, update_flags
 
 from . import config
@@ -12,7 +13,7 @@ from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
 from .strategy_data import DATA, EVENTS, ITEMS, MAPS, SPECIES, WORLD, event_set
 
 KEY = 'step-events-v1'
-TRADE_FLAGS = 0xD737
+TRADE_FLAGS = W_COMPLETED_IN_GAME_TRADE_FLAGS
 FOSSILS = {'helix': (138, 'HELIX_FOSSIL'), 'dome': (140, 'DOME_FOSSIL'), 'amber': (142, 'OLD_AMBER')}
 # In-game trades for species with no other source, as indexes into TradeMons.
 TRADES = ((1, 122, 'ROUTE_2_TRADE_HOUSE'), (4, 83, 'VERMILION_TRADE_HOUSE'),

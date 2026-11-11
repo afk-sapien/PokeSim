@@ -350,40 +350,26 @@ class Emulator:
         }
 
     def help_request(self, strategy):
-        """Ask the owner for a hand when live play has stopped making game progress."""
-        stall = getattr(self, 'stall', None)
-        if self.paused or self.manual_mode:
-            return None
-        # The answer of the last scan. Only the guard check scans, on the emulator thread, so the
-        # status page cannot move a scan to a frame a replay would not reach.
-        guard = getattr(self, 'loop_guard', None)
-        if loop := guard and guard.reason:
-            return {'reason': f'The run is caught in a loop. {loop}', 'action': strategy.get('action', '')}
-        # The third reload in a row without progress asks too, as in Gold, Silver and Crystal.
-        if not (stall and stall.stalled(self.play_clock.frames)) and not self.supervisor.stalled:
-            # A missing entry left uncaught for want of a slot, with nothing in the PC that may go.
-            from .pcvalue import BOXES_FULL, boxes_full
-            from .policies.collection import catch_room
+        """Ask the owner for a hand when live play has stopped making game progress (Supervisor.help_request)."""
+        from .pcvalue import boxes_full
+        from .policies.collection import catch_room
+
+        def full():
             snap = getattr(self, 'snapshot', None)
-            if boxes_full(getattr(getattr(self, 'policy', None), 'boxes_full', False), catch_room(snap) if snap else None):
-                return {'reason': BOXES_FULL, 'action': strategy.get('action', '')}
-            return None
-        return {'reason': 'The policy has stopped making game progress', 'action': strategy.get('action', '')}
+            return boxes_full(getattr(getattr(self, 'policy', None), 'boxes_full', False), catch_room(snap) if snap else None)
+        guard = getattr(self, 'loop_guard', None)
+        return self.supervisor.help_request(getattr(self, 'stall', None), self.play_clock.frames,
+                                            held=self.paused or self.manual_mode, loop=guard and guard.reason,
+                                            full=full, action=strategy.get('action', ''))
 
     def progress_status(self):
-        achievement = getattr(self, 'last_achievement', None)
-        age = max(0, int(time.time() - achievement['ts'])) if achievement else None
-        mode = self.policy.details().get('action', '')
-        state = 'recovering' if (self.invalid_frame is not None or time.time() - self.last_reload < 30
-                                 or mode == 'finding another approach') else 'making_progress' if age is not None and age < 120 else 'exploring'
-        stall, frames = getattr(self, 'stall', None), self.play_clock.frames
-        if stall and stall.stalled(frames) or self.supervisor.stalled:
-            state = 'stalled'
-        return {'state': state, 'quiet_game_minutes': stall.game_minutes(frames) if stall else 0,
-                'last_achievement': {
-                    'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
-                    'age_seconds': age,
-                } if achievement else None}
+        """The status page's progress line (Supervisor.progress)."""
+        guard = getattr(self, 'loop_guard', None)
+        return self.supervisor.progress(
+            getattr(self, 'stall', None), self.play_clock.frames, time.time(),
+            achievement=getattr(self, 'last_achievement', None), held=self.paused or self.manual_mode,
+            loop=guard and guard.reason, glitched=self.invalid_frame is not None, last_reload=self.last_reload,
+            mode=self.policy.details().get('action', ''))
 
     # ---------------- internals ----------------
     def health(self) -> dict:

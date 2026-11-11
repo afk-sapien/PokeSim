@@ -179,7 +179,9 @@ def release_rated(policy, snapshot, keep=(), preferences=None, marks=frozenset()
     requested = policy.release_requests() if hasattr(policy, 'release_requests') else {}
     favor = policy.pc_favor() if hasattr(policy, 'pc_favor') else None
     names = {sid: row.get('name', '?') for sid, row in getattr(policy.data, 'species', {}).items()}
-    return rated(snapshot, policy.demand, stock, policy.trade_preferences() if preferences is None else preferences,
+    if preferences is None:
+        preferences = policy.trade_preferences() if hasattr(policy, 'trade_preferences') else {}
+    return rated(snapshot, policy.demand, stock, preferences,
                  plan_partners(policy.collection), owners, marks, requested, names, focus=hunt_focus(policy.collection),
                  favor=favor, extra=extra, rarity=rarity(policy.data),
                  team=getattr(getattr(policy, 'visit_team', None), 'keys', frozenset()), evolutions=evolutions(policy.data))
@@ -218,6 +220,28 @@ def keeps_another(policy, snapshot, dex, level=5, dvs=None):
     if dvs and (watch := getattr(policy, 'goal_watch', None)) is not None:
         watch.expect(dex, dvs, found)
     return found.keep
+
+
+def keeps_hatch(policy, snapshot, dex, dvs=None):
+    """Whether the PC would keep what an egg of ``dex`` hatches into (pcvalue.worth): a missing Pokédex
+    entry, a copy its family or a plan needs, a shiny or a rarer copy, rated with ``dvs`` once the egg
+    is laid. The egg already holds its slot, so a hatch brings no PC visit. Gold once boxed dozens of
+    Sneasel eggs, and fetching them one by one held a trainee in the PC for days. Every training step
+    asks this for each boxed egg, so the answers are kept until rating_key changes."""
+    from .. import pcvalue
+    owned = getattr(snapshot, 'owned', None)
+    if owned is None:
+        return True
+    egg = (dex, tuple(dvs or ()))
+    key = policy.rating_key(snapshot) if hasattr(policy, 'rating_key') else None
+    cache = getattr(policy, '_hatch_worth', None)
+    if key is None or cache is None or cache[0] != key:
+        cache = (key, {})
+        if key is not None:
+            policy._hatch_worth = cache
+    if egg not in cache[1]:
+        cache[1][egg] = pcvalue.worth(_with_new(policy, snapshot, dex, 5, dvs), missing=dex not in owned).keep
+    return cache[1][egg]
 
 
 def reserve_allows(policy, snapshot, dex, dvs=None):

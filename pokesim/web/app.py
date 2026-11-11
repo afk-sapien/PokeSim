@@ -30,6 +30,8 @@ from ..trade import preferences
 
 STATIC = Path(__file__).parent / "static"
 BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
+# The longest an open screen stream stays silent. The library's proxy gives up on a child after 30.
+STREAM_KEEPALIVE_SECONDS = 10
 # Set for each request that arrived through a /view/ link.
 VIEWING = contextvars.ContextVar('pokesim_viewing', default=False)
 # The adventure role the library named for this request. Without accounts everyone is the owner.
@@ -96,6 +98,23 @@ def without_stored_pokemon(status):
     if not isinstance(storage, dict) or 'pokemon' not in storage:
         return status
     return {**status, 'game': {**game, 'storage': {key: value for key, value in storage.items() if key != 'pokemon'}}}
+
+
+# The plan fields the live page draws. The rest of the plan, the Red, Blue and Yellow collection
+# list above all, is for the Pokédex, the bots and tools, which read the default view.
+LIVE_PLAN_FIELDS = ('objective', 'next', 'reason', 'action', 'visited_tiles', 'pin')
+
+
+def live_view(status):
+    """Live state for the live page, which reads it every 2 seconds: the plan trimmed to what it draws."""
+    strategy = status.get('strategy') if isinstance(status, dict) else None
+    if not isinstance(strategy, dict):
+        return status
+    plan = pick(strategy, LIVE_PLAN_FIELDS)
+    collection = strategy.get('collection')
+    if isinstance(collection, dict) and 'version' in collection:
+        plan['collection'] = {'version': collection['version']}
+    return {**status, 'strategy': plan}
 
 
 def status_summary(status):
@@ -521,11 +540,14 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/state")
-    def state(storage: bool = Query(False)):
-        """Live state. `?storage=1` adds the boxed Pokémon list, which the live page never draws."""
+    def state(storage: bool = Query(False), view: Literal['live'] | None = Query(None)):
+        """Live state. `?storage=1` adds the boxed Pokémon list, which the live page never draws.
+        `?view=live` trims the plan to the fields the live page draws."""
         status = emu.status()
         if not storage:
             status = without_stored_pokemon(status)
+        if view == 'live':
+            status = live_view(status)
         if not isinstance(status, dict):
             return status
         game = status.get('game')
@@ -755,15 +777,25 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     async def stream():
         boundary = "pokesimframe"
 
+        def part(data):
+            return (f"--{boundary}\r\nContent-Type: image/png\r\nContent-Length: {len(data)}\r\n\r\n").encode() + data + b"\r\n"
+
         async def gen():
-            seq = -1
             delay = 1.0 / max(1, config.STREAM_FPS)
+            clock = asyncio.get_running_loop().time
+            # The first part is the frame a poll would get, so a paused Gold or Silver draws it fresh.
+            data = await asyncio.to_thread(emu.current_frame)
+            seq, sent = emu.frame_seq, clock()
+            if data:
+                yield part(data)
             while True:
                 emu.watch()     # keep frames being produced for as long as this stream is open
-                if emu.frame_seq != seq:
-                    seq = emu.frame_seq
-                    data = emu.frame_image
-                    yield (f"--{boundary}\r\nContent-Type: image/png\r\nContent-Length: {len(data)}\r\n\r\n").encode() + data + b"\r\n"
+                # A paused game draws nothing new. Sending its frame again now and then keeps the
+                # library's proxy and any reverse proxy from closing a quiet stream.
+                if emu.frame_seq != seq or clock() - sent >= STREAM_KEEPALIVE_SECONDS:
+                    seq, sent = emu.frame_seq, clock()
+                    if emu.frame_image:
+                        yield part(emu.frame_image)
                 await asyncio.sleep(delay)
 
         return StreamingResponse(gen(), media_type=f"multipart/x-mixed-replace; boundary={boundary}",
