@@ -65,6 +65,29 @@ def test_policy_steps_and_owner_commands_go_into_the_segment(tracer, game):
     assert [record['payload'] for record in found if record['kind'] == 'input'] == [{'command': 'speed', 'arg': 2}]
 
 
+def test_a_pipeline_pick_goes_into_the_decide_record(tracer, game):
+    tracer.ensure(dict)
+    pick = {'goal': 'heal', 'source': 'heal', 'rule': 'need'}
+    tracer.decide(SimpleNamespace(goal=SimpleNamespace(key='heal'), pipeline_pick=pick), SimpleNamespace(map=1, x=2, y=3))
+    tracer.decide(SimpleNamespace(goal=SimpleNamespace(key='heal'), pipeline_pick=None), SimpleNamespace(map=1, x=2, y=3))
+    found = [record for record in records(tracer, tracer.name).records if record['kind'] == 'decide']
+    assert [record.get('pipeline') for record in found] == [pick, None]
+
+
+def test_a_recorder_without_the_pipeline_field_logs_the_step_without_it():
+    calls = []
+
+    class Older:
+        def decide(self, goal, map, x, y):
+            calls.append((goal, map, x, y))
+    tracer = trace.Tracer('unused', 1)
+    tracer.recorder = Older()
+    tracer.recorder.sink = object()
+    tracer.decide(SimpleNamespace(goal=SimpleNamespace(key='heal'), pipeline_pick={'goal': 'heal'}),
+                  SimpleNamespace(map=1, x=2, y=3))
+    assert calls == [('heal', 1, 2, 3)]
+
+
 def test_command_payloads_hold_only_plain_values():
     def call():
         pass

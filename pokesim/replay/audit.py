@@ -97,10 +97,20 @@ def shadow_lines(game):
     shadow = game.get('shadow') if game else None
     if not shadow:
         return []
-    lines = ['| point | decisions | agreed |', '|---|---|---|']
+    lines = ['| point | decisions | agreed | frames agreed |', '|---|---|---|---|']
     for point, count in sorted(shadow['decisions'].items()):
         agreed = shadow['agreed'][point]
-        lines.append(f'| {point} | {count} | {100 * agreed / max(count, 1):.1f}% |')
+        # Only the decide pipeline counts frames, and run files from before it have none.
+        frames = shadow['frames'][point] if 'frames' in shadow else 0
+        held = f'{100 * shadow["frames_agreed"][point] / frames:.1f}%' if frames else '-'
+        lines.append(f'| {point} | {count} | {100 * agreed / max(count, 1):.1f}% | {held} |')
+    if shadow.get('sources'):
+        lines += ['', '| point | source | decisions | agreed |', '|---|---|---|---|']
+        for key, count in sorted(shadow['sources'].items()):
+            point, source = key.split(' ', 1)
+            agreed = shadow['sources_agreed'][key]
+            lines.append(f'| {point} | {source} | {count} | {100 * agreed / max(count, 1):.1f}% |')
+        lines.append('')
     total = sum(shadow['frames_by_pick'].values())
     shares = ', '.join(f'{kind} {100 * frames / max(total, 1):.1f}%'
                        for kind, frames in shadow['frames_by_pick'].most_common(8))

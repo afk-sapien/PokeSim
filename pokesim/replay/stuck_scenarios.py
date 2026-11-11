@@ -23,6 +23,7 @@ from pathlib import Path
 import time
 
 from pokesim.ram import ITEM_NAMES, read_snapshot
+from pokesim.replay.rung import PIPELINE_BAR, agreement, share
 from pokesim.scenarios import Scenario, WorkerDied, discover, open_run, play, replay_all
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2] / 'data' / 'scenarios'
@@ -76,8 +77,11 @@ def run(args):
             continue
         results.append(result)
         verdict = 'ok   ' if result['passed'] else 'STUCK'
+        pipeline = result.get('pipeline')
+        agrees = (f', pipeline {share(pipeline["agreed"], pipeline["decisions"]):.0f}% of {pipeline["decisions"]}'
+                  if pipeline else '')
         print(f'{verdict} {result["name"]:<44} {result["game_minutes"]:>4}m played, quiet {result["worst_quiet_minutes"]:>3}m, '
-              f'{result["reloads"]} reloads, {result["wall_seconds"]}s'
+              f'{result["reloads"]} reloads, {result["wall_seconds"]}s{agrees}'
               + ('' if result['passed'] else f'\n      {result["failure"]} on {result["final_map"]}: '
                                              f'{result["objective"]} ({result["reason"]})'), flush=True)
     results.sort(key=lambda row: row['name'])
@@ -85,6 +89,12 @@ def run(args):
         args.output.write_text(json.dumps(results, indent=2) + '\n', encoding='utf-8')
     stuck = [row['name'] for row in results if not row['passed']]
     print(f'{len(results) - len(stuck)} of {len(results)} scenarios got going again')
+    total, low = agreement(results)
+    if total:
+        print(f'decide pipeline: agrees on {share(total["agreed"], total["decisions"]):.1f}% of '
+              f'{total["decisions"]} decisions and {share(total["frames_agreed"], total["frames"]):.1f}% of frames')
+        if low:
+            print(f'decide pipeline under {100 * PIPELINE_BAR:g}% of frames: {", ".join(low)}')
     return 1 if stuck else 0
 
 

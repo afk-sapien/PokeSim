@@ -38,6 +38,8 @@ GATE_QUIET = 20
 GATE_WASTE_POINTS = 2.0
 GATE_FURTHER_POINTS = 10.0
 GATE_TIMEOUT = 1800
+# The share of decide pipeline decisions a rung agrees on before a switch, from the decide pipeline design.
+PIPELINE_BAR = 0.95
 # Gold, Silver and Crystal also note their last Bug-Catching Contest and Battle Tower visit among the
 # milestones. Both repeat, and neither is story.
 ACTIVITIES = frozenset({'contest', 'tower'})
@@ -410,6 +412,10 @@ def run_one(args, watch=None):
     }
     if shadow is not None:
         result['shadow'] = {**shadow.summary(), 'frames_by_pick': dict(would)}
+        # The Gen I decide pipeline's agreement with the chain, which the gate reports per rung.
+        pipeline = shadow.point('pipeline') if hasattr(shadow, 'point') else None
+        if pipeline is not None:
+            result['pipeline'] = pipeline
     Path(args.out).write_text(json.dumps(result, indent=1), encoding='utf-8')
     return result
 
@@ -508,6 +514,8 @@ def gate_rung(args):
                'errors': result['errors'], 'stall': watch.stall,
                'waste': round(100 * sum(result['wasted'].values()) / max(result['frames'], 1), 2),
                'story': result['story']}
+    if result.get('pipeline') is not None:
+        summary['pipeline'] = result['pipeline']
     (args.out / 'summary.json').write_text(json.dumps(summary, indent=1) + '\n', encoding='utf-8')
     return 0
 
@@ -545,6 +553,29 @@ def compare(results, baseline, points=GATE_WASTE_POINTS, further=GATE_FURTHER_PO
                 past = f', more than {further:g} points up past the baseline to {result["story"][-1]}' if ahead else ''
                 problems.append(f'{name}: {result["waste"]:.1f}% wasted, {base["waste"]:.1f}% before{past}')
     return problems
+
+
+def agreement(results, bar=PIPELINE_BAR):
+    """The decide pipeline's agreement with the old chain over gate rungs or scenario replays: the totals
+    of decisions, agreed decisions, frames and agreed frames, and the names of the runs whose frames run
+    under a goal both picked less than ``bar`` of the time. A switch PR states these numbers
+    (docs/design/decide-pipeline.md, the switch bar)."""
+    total = Counter()
+    low = []
+    for result in results:
+        pipeline = result.get('pipeline')
+        if not pipeline:
+            continue
+        for field in ('decisions', 'agreed', 'frames', 'frames_agreed'):
+            total[field] += pipeline[field]
+        if pipeline['frames_agreed'] < bar * pipeline['frames']:
+            low.append(result.get('name') or f'{result["ladder"]}/{result["rung"]}')
+    return dict(total), low
+
+
+def share(part, whole):
+    """``part`` as a percentage of ``whole``, or 100 when ``whole`` is zero."""
+    return 100.0 * part / whole if whole else 100.0
 
 
 def past_baseline(results, baseline, further=GATE_FURTHER_POINTS):
