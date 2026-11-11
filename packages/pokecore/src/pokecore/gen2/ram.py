@@ -208,14 +208,18 @@ def caught_details(word, data):
     return {'level': (high & 63) or None, 'time': TIMES_OF_DAY.get(high >> 6), 'location': place}
 
 
+def max_pp(base, pp_ups):
+    """Maximum PP of a move with ``base`` PP after ``pp_ups`` PP Ups."""
+    return min(61, base * (5 + pp_ups) // 5)
+
+
 def decode_mon(raw, name, data, *, egg=False, box=None, position=None):
     dvs, training = individual(raw)
     species, level = raw[0], raw[31]
     if not 1 <= species <= 251 or not 1 <= level <= 100:
         return None
     moves = tuple(raw[2:6])
-    max_pp = tuple(min(61, data.moves.get(move, {}).get('pp', 0) * (5 + (raw[23 + i] >> 6)) // 5)
-                   for i, move in enumerate(moves))
+    maximum = tuple(max_pp(data.moves.get(move, {}).get('pp', 0), raw[23 + i] >> 6) for i, move in enumerate(moves))
     if len(raw) == 48:
         stats = tuple(int.from_bytes(raw[i:i + 2], 'big') for i in (36, 38, 40, 42, 44, 46))
         hp, status = int.from_bytes(raw[34:36], 'big'), raw[32]
@@ -223,7 +227,7 @@ def decode_mon(raw, name, data, *, egg=False, box=None, position=None):
         stats = calculated_stats(data.species[species]['stats'], level, dvs, training)
         hp, status = stats[0], 0
     return Mon(species, data.text(name), level, hp, stats[0], status, raw[1], moves,
-               tuple(value & 63 for value in raw[23:27]), max_pp, stats,
+               tuple(value & 63 for value in raw[23:27]), maximum, stats,
                int.from_bytes(raw[8:11], 'big'), dvs, training, int.from_bytes(raw[6:8], 'big'),
                raw[27], egg, box, position, data, raw[28], int.from_bytes(raw[29:31], 'big'), bytes(name))
 
