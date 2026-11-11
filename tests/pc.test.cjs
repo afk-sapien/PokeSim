@@ -4,7 +4,7 @@ const test = require('node:test')
 const vm = require('node:vm')
 const source = fs.readFileSync('pokesim/web/static/types.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/routes.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/mon-grid.js', 'utf8') + '\n{}\n' + fs.readFileSync('pokesim/web/static/pc.js', 'utf8')
 
-function pc(pokemon, search = '?scope=all', party = [], base = '', refuse = '') {
+function pc(pokemon, search = '?scope=all', party = [], base = '', refuse = '', hold = {}) {
   const elements = new Map()
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
@@ -17,7 +17,8 @@ function pc(pokemon, search = '?scope=all', party = [], base = '', refuse = '') 
   let url
   const calls = []
   // `server.offline` fails later status reads; `server.gate` holds them, answering with the state when asked.
-  const server = {offline: false, gate: null}
+  // `hold.full` holds the answer with PC values and `hold.quick` the one without, from the first visit on.
+  const server = {offline: false, gate: null, ...hold}
   const context = vm.createContext({
     document: {querySelector: selector => selector.startsWith('meta[') ? {content: selector.includes('pokesim-base') ? base : ''} : element(selector), activeElement: null, hidden: false, addEventListener() {}},
     location: {search}, URLSearchParams,
@@ -27,7 +28,10 @@ function pc(pokemon, search = '?scope=all', party = [], base = '', refuse = '') 
       if (server.offline) throw new Error('offline')
       const body = JSON.parse(JSON.stringify({started: true, version: 'blue', party,
         storage: {active_box: 1, box_counts: Array(12).fill(20), pokemon}}))
+      const quick = path.includes('values=0')
+      if (quick) for (const each of body.storage.pokemon) delete each.pc_value
       if (server.gate) await server.gate
+      await (quick ? server.quick : server.full)
       return {ok: true, json: async () => body} },
     setInterval() {}, setTimeout, requestAnimationFrame: callback => setTimeout(callback, 0),
   })
@@ -492,6 +496,34 @@ test('boxes lay out in rows that divide 20 and the party in rows that divide 6',
   assert.deepEqual([...(await layout('?box=party')).classes], ['pc-party-grid'])
   const css = fs.readFileSync('pokesim/web/static/panel-pc.css', 'utf8')
   for (const columns of css.matchAll(/\.pc-box-grid[^{]*\{ grid-template-columns: repeat\((\d+)/g)) assert.equal(20 % Number(columns[1]), 0)
+})
+
+test('a first visit draws the boxes before the PC values and adds them when they come', async () => {
+  let release
+  const full = new Promise(resolve => { release = resolve })
+  const view = pc([mon(1, 1, 20, {trade_key: 'a', pc_value: {score: 40, text: 'Score 40', status: 'spare', next: 1}})], '?box=1', [], '', '', {full})
+  await view.ready()
+  assert.match(view.element('#pc-grid').innerHTML, /data-mon="0"/)
+  assert.doesNotMatch(view.element('#pc-grid').innerHTML, /Next 1/)
+  assert.equal(view.element('#status').textContent, 'Running')
+  release()
+  await view.settle()
+  assert.match(view.element('#pc-grid').innerHTML, /pc-release-tag[^>]*>Next 1</)
+  // Once the full PC has loaded, a refresh asks only for it.
+  const asked = view.calls.length
+  await view.refresh()
+  assert.deepEqual(view.calls.slice(asked).map(call => call.path), ['/api/pokedex/status?view=pc'])
+})
+
+test('a quick answer that comes after the full one is not drawn over it', async () => {
+  let release
+  const quick = new Promise(resolve => { release = resolve })
+  const view = pc([mon(1, 1, 20, {trade_key: 'a', pc_value: {score: 40, text: 'Score 40', status: 'spare', next: 1}})], '?box=1', [], '', '', {quick})
+  await view.ready()
+  assert.match(view.element('#pc-grid').innerHTML, /Next 1/)
+  release()
+  await view.settle()
+  assert.match(view.element('#pc-grid').innerHTML, /Next 1/)
 })
 
 test('the next releases are tagged and the popup shows the PC value with a Release button', async () => {

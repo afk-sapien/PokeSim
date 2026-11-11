@@ -167,6 +167,13 @@ def test_the_pc_api_saves_requests_and_favor_and_shows_each_value(game, monkeypa
     shown = page['storage']['pokemon'][0]
     assert shown['pc_value']['next'] == 1 and shown['release_requested']
     assert page['pc_favor'] == 'dvs' and page['pc_deadlock'] == DEADLOCK
+    # Without the values the PC answers at once, since only they wait on the game.
+    asked = emu.pc_values.call_count
+    quick = client.get('/api/pokedex/status?view=pc&values=0').json()
+    assert emu.pc_values.call_count == asked
+    shown = quick['storage']['pokemon'][0]
+    assert 'pc_value' not in shown and shown['release_requested']
+    assert quick['pc_favor'] == 'dvs' and quick['pc_deadlock'] is None
     assert client.post('/api/pc/release', json={**body, 'cancel': True}).status_code == 200
     assert store.release_requests() == {}
     assert client.post('/api/pc/favor', json={'favor': 'level'}).status_code == 422

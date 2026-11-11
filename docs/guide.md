@@ -119,7 +119,7 @@ A previously silent save may need the next music change before all channels play
 | `/events/{id}` | one event and screenshot, with rewind available when a saved state and access policy allow it |
 | `/api/state` | JSON: emulator status + parsed game state. Boxed Pokémon are left out; `?storage=1` adds them |
 | `/api/summary` | JSON: playback, health, pace and the current map, without game data, for health checks |
-| `/api/pokedex/status` | JSON: Pokédex, party, boxes and collection plan in full. `?view=pc` leaves out the plan; `?view=dex` keeps only who holds each species |
+| `/api/pokedex/status` | JSON: Pokédex, party, boxes and collection plan in full. `?view=pc` leaves out the plan, and with `&values=0` also the PC values, which wait on the game; `?view=dex` keeps only who holds each species |
 | `/api/events` | JSON event list (`limit`, `all`, `types`, `min_priority`, `before`) |
 | `/api/progress` | JSON history of badges, Pokédex owned and seen, League wins, level 100 species and perfect finds, one row per change |
 | `/api/goals` | JSON: the best 30 goals the planner can start now, best first, as `key`, `label` and `tier`, with the active `pin` and a `reason` when the list is empty. Each goal is listed once under its best ranked way to do it. `?q=` lists the goals whose label holds that text. A view link cannot read it |
