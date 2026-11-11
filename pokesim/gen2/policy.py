@@ -31,6 +31,8 @@ BORROWED_MOVES = frozenset({'EFFECT_TRANSFORM', 'EFFECT_MIMIC', 'EFFECT_METRONOM
 # Moves that win back HP, so a foe's attacks may never knock out the Pokémon that knows one.
 HEALING_MOVES = frozenset({'EFFECT_HEAL', 'EFFECT_MORNING_SUN', 'EFFECT_SYNTHESIS', 'EFFECT_MOONLIGHT',
                            'EFFECT_LEECH_SEED'})
+# Rest heals with EFFECT_HEAL like Recover, then sleeps two turns. Leech Seed fails on a Grass foe.
+REST, GRASS = 156, 22
 
 
 def transformed(mem, mon):
@@ -2169,23 +2171,53 @@ class Policy:
         was reloaded again for spending the copied attack, though Struggle was a few turns away.
         With no move that wins back HP the foe knocks everyone out in the end, so the battle ends in
         a loss. A Metapod with only Harden left at Falkner was reloaded back into the same battle.
+        A healer the foe hits harder each turn than it heals is knocked out in the end too. A level 5
+        Hoppip with Splash, Synthesis and Tail Whip, last in line at Chuck, was reloaded back into his
+        Poliwrath's battle instead of blacking out and going to train.
         """
         if snapshot.in_battle != 2:
             return False
         from .champion_shop import elixir
         memory = getattr(self, 'memory', None)
-        if memory is not None and Memory(memory, self.data).byte('wPlayerSubStatus5') & SUBSTATUS_TRANSFORMED:
+        mem = Memory(memory, self.data) if memory is not None else None
+        if mem is not None and mem.byte('wPlayerSubStatus5') & SUBSTATUS_TRANSFORMED:
             # A Transformed battler has five PP for each borrowed move, so Struggle is never far off.
             return False
         standing = [mon for mon in snapshot.party if mon.hp and not mon.egg]
         if not standing or any(not any(mon.pp) or elixir(self.data, snapshot, mon) for mon in standing):
             return False
-        if not any(pp and self.data.moves.get(move, {}).get('effect') in HEALING_MOVES
-                   for mon in standing for move, pp in zip(mon.moves, mon.pp)):
+        if not any(self.outlasts(snapshot, mem, mon) for mon in standing):
             return False
         return not any(pp and (self.move_score(move, mon, snapshot) > 0
                                or self.data.moves.get(move, {}).get('effect') in BORROWED_MOVES)
                        for mon in standing for move, pp in zip(mon.moves, mon.pp))
+
+    def outlasts(self, snapshot, mem, mon):
+        """Whether ``mon`` wins back more HP each turn than the foe's best hit takes from it.
+
+        Rest heals fully and then sleeps two turns, so it wins back a third of the maximum each turn.
+        Recover and the other full heals win back half, Morning Sun, Synthesis and Moonlight a quarter
+        at least, and Leech Seed an eighth of the foe's maximum, unless the foe is Grass. Without the
+        battle memory the foe's moves are unknown, so any healer counts.
+        """
+        heals = [(move, self.data.moves[move]['effect']) for move, pp in zip(mon.moves, mon.pp)
+                 if pp and self.data.moves.get(move, {}).get('effect') in HEALING_MOVES]
+        if not heals or mem is None:
+            return bool(heals)
+        stats = tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef'))
+        grass = GRASS in self.data.species.get(snapshot.enemy_species, {}).get('types', ())
+
+        def heal(move, effect):
+            if effect == 'EFFECT_LEECH_SEED':
+                return 0 if grass else stats[0] / 8
+            if effect == 'EFFECT_HEAL':
+                return mon.max_hp / (3 if move == REST else 2)
+            return mon.max_hp / 4
+        enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=stats)
+        target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
+            enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
+        hit = max((self.move_score(move, enemy, target) for move in mem.read('wEnemyMonMoves', 4)), default=0)
+        return hit < max(heal(move, effect) for move, effect in heals)
 
     def move_choice(self, snapshot, mem, mon, opponent, weaken):
         """The move slot to use this turn, or None when no move has PP."""

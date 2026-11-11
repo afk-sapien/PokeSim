@@ -18,7 +18,8 @@ from pokesim.gen2.policy import SUBSTATUS_TRANSFORMED, Policy, transformed
 from pokesim.play_clock import PlayClock
 
 HYDRO_PUMP, WATERFALL, REST, GROWL, PECK, SURF, TRANSFORM = 56, 127, 156, 45, 64, 57, 144
-DITTO, GYARADOS = 132, 130
+SPLASH, SYNTHESIS, TAIL_WHIP = 150, 235, 39
+DITTO, GYARADOS, HOPPIP, POLIWRATH = 132, 130, 187, 62
 
 
 def move(name, power, kind, pp):
@@ -31,11 +32,15 @@ DATA = SimpleNamespace(
              130: {'types': [21, 2], 'stats': [95, 125, 79, 81, 60, 100]},
              84: {'types': [0, 2], 'stats': [35, 85, 45, 75, 35, 35]},
              73: {'types': [21, 3], 'stats': [80, 70, 65, 100, 80, 120]},
-             132: {'types': [0, 0], 'stats': [48, 48, 48, 48, 48, 48]}},
+             132: {'types': [0, 0], 'stats': [48, 48, 48, 48, 48, 48]},
+             187: {'types': [22, 2], 'stats': [35, 35, 40, 50, 35, 55]},
+             62: {'types': [21, 1], 'stats': [90, 85, 95, 70, 70, 90]}},
     moves={HYDRO_PUMP: move('Hydro Pump', 120, 21, 5), WATERFALL: move('Waterfall', 80, 21, 15),
            REST: dict(move('Rest', 0, 24, 10), effect='EFFECT_HEAL'), GROWL: move('Growl', 0, 0, 40), PECK: move('Peck', 35, 2, 35),
-           SURF: move('Surf', 95, 21, 15), TRANSFORM: dict(move('Transform', 0, 0, 10), effect='EFFECT_TRANSFORM')},
-    matchups={(21, 21): 0.5}, items={'MAX_ELIXER': 1, 'ELIXER': 2}, map_ids={'INDIGO_PLATEAU_POKECENTER_1F': 7, 'ROUTE_23': 3})
+           SURF: move('Surf', 95, 21, 15), TRANSFORM: dict(move('Transform', 0, 0, 10), effect='EFFECT_TRANSFORM'),
+           SPLASH: dict(move('Splash', 0, 0, 40), effect='EFFECT_SPLASH'), TAIL_WHIP: move('Tail Whip', 0, 0, 30),
+           SYNTHESIS: dict(move('Synthesis', 0, 22, 5), effect='EFFECT_SYNTHESIS')},
+    matchups={(21, 21): 0.5, (21, 22): 0.5}, items={'MAX_ELIXER': 1, 'ELIXER': 2}, map_ids={'INDIGO_PLATEAU_POKECENTER_1F': 7, 'ROUTE_23': 3})
 
 
 @pytest.fixture(scope='module', params=['synthetic', 'gold', 'silver', 'crystal'])
@@ -88,12 +93,14 @@ def test_a_party_with_nothing_but_rest_and_growl_cannot_end_the_battle(data):
 
 
 class BattleMemory:
-    """The few battle bytes the policy reads, with the active Pokémon optionally Transformed."""
+    """The few battle bytes the policy reads, with the active Pokémon optionally Transformed.
 
-    def __init__(self, active=1, transformed=False, moves=(SURF, 0, 0, 0), pp=(5, 0, 0, 0)):
+    Every foe stat reads 150, and the foe knows ``enemy`` moves."""
+
+    def __init__(self, active=1, transformed=False, moves=(SURF, 0, 0, 0), pp=(5, 0, 0, 0), enemy=(WATERFALL, 0, 0, 0)):
         self.bytes = {'wCurBattleMon': active, 'wPlayerSubStatus5': SUBSTATUS_TRANSFORMED if transformed else 0,
                       'wBattleMonSpecies': GYARADOS}
-        self.lists = {'wBattleMonMoves': moves, 'wBattleMonPP': pp}
+        self.lists = {'wBattleMonMoves': moves, 'wBattleMonPP': pp, 'wEnemyMonMoves': enemy}
 
     def byte(self, name):
         return self.bytes[name]
@@ -126,6 +133,32 @@ def test_a_ditto_left_standing_can_still_transform_and_end_the_battle(data, monk
     assert not Policy.hopeless_battle(fake, lance((fainted, vaporeon())))
     monkeypatch.setattr(policy_module, 'Memory', lambda memory, data: BattleMemory())
     assert Policy.hopeless_battle(fake, lance((fainted, vaporeon())))
+
+
+def hoppip():
+    return mon(HOPPIP, 5, 19, (SPLASH, SYNTHESIS, TAIL_WHIP, 0), (40, 5, 30, 0))
+
+
+def chuck(party):
+    return SimpleNamespace(party=party, items=(), in_battle=2, enemy_species=POLIWRATH, enemy_level=30,
+                           enemy_hp=28, hall_of_fame_count=0)
+
+
+def test_a_healer_the_foe_outhits_blacks_out_instead_of_reloading(data, monkeypatch):
+    # A live Silver run lost everyone but a level 5 Hoppip to Chuck's Poliwrath. Synthesis wins back
+    # a quarter of its 19 HP and Surf takes more than that, so the battle ends in a blackout and the
+    # team goes to train. The guards called it endless and reloaded the same battle instead.
+    fake = policy(data)
+    fake.memory = object()
+    fainted = mon(84, 20, 0, (PECK, GROWL, 0, 0), (35, 40, 0, 0))
+    monkeypatch.setattr(policy_module, 'Memory', lambda memory, data: BattleMemory(enemy=(SURF, 0, 0, 0)))
+    assert not Policy.hopeless_battle(fake, chuck((fainted, hoppip())))
+    # Vaporeon's Rest wins back a third of 359 HP a turn, more than Surf takes, so it outlasts him.
+    assert Policy.hopeless_battle(fake, chuck((fainted, vaporeon())))
+    assert Policy.hopeless_battle(fake, chuck((hoppip(), vaporeon())))
+    # Without the battle memory the foe's moves are unknown, so any healer counts as before.
+    fake.memory = None
+    assert Policy.hopeless_battle(fake, chuck((fainted, hoppip())))
 
 
 def test_a_transformed_battler_takes_the_foes_species_moves_and_pp():
