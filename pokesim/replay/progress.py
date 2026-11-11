@@ -2,10 +2,11 @@
 
 docs/design/goal-system.md, section 12. The input is a read-only copy of an adventures folder,
 never a live data folder. Every database opens read-only. The tool reads the journal, the capture
-receipts, the progress and statistics tables, kv and the stall bundle reports. It never reads save
-state and never writes into its input.
+receipts, the progress, progress_events and statistics tables, kv and the stall bundle reports. It
+never reads save state and never writes into its input. An adventure replays the progress_events rows
+the writers stored when its window holds any, and rows rebuilt from the journal otherwise.
 
-    python -m pokesim.replay progress run STORES_DIR [STORES_DIR ...] --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10]
+    python -m pokesim.replay progress run STORES_DIR [STORES_DIR ...] --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10] [--rows stored|rebuilt]
     python -m pokesim.replay progress report REPORT_JSON
 
 A labels file is JSON, {"labels": [{"adventure": ID, "start": TS, "end": TS, "stall": true, "note": ""}]}.
@@ -97,6 +98,8 @@ class Adventure:
     stats: list
     bundles: list
     shadow_rows: int = 0
+    # The progress_events rows the writers stored: (ts, frame, kind, species, net, rewound).
+    stored: list = field(default_factory=list)
 
     @property
     def gen2(self):
@@ -136,7 +139,9 @@ def load(folder):
             frames = json.loads(data).get('active_frames')
             if isinstance(frames, (int, float)):
                 stats.append((ts, frames))
-        shadow = rows('progress_events', 'SELECT COUNT(*) FROM progress_events')
+        written = {row[1] for row in db.execute('PRAGMA table_info(progress_events)')} if 'progress_events' in tables else set()
+        undone = 'rewound' if 'rewound' in written else '0'
+        stored = rows('progress_events', f'SELECT ts, frame, kind, species, net, {undone} FROM progress_events ORDER BY id')
     finally:
         db.close()
     bundles = []
@@ -148,7 +153,7 @@ def load(folder):
             continue
         bundles.append((ts, report.get('quiet_game_minutes'), report.get('quiet_real_minutes')))
     return Adventure(meta.get('id', folder.name), meta.get('version', ''), events, receipts, progress, shiny, stats,
-                     bundles, shadow[0][0] if shadow else 0)
+                     bundles, len(stored), stored)
 
 
 class Axis:
@@ -275,6 +280,20 @@ def rebuild(adventure, axis):
         best = tuple(max(a, b) for a, b in zip(values, best))
     for ts, _dex in adventure.shiny:
         add(ts, 'improve')
+    rows.sort(key=lambda row: row.ts)
+    return rows
+
+
+def stored_rows(adventure, axis):
+    """The progress_events rows the writers stored, in place of the rebuilt ones.
+
+    On a statistics axis each row keeps its own PlayClock frame, the clock that axis reads. A row with
+    no frame, or any row on another axis, is placed at its wall time. Receive and release rows key the
+    loop check by dex number. A row a reload undid (rewound) counts no net progress."""
+    own = axis.name == 'statistics'
+    rows = [Row(ts, float(frame if own and frame is not None else axis(ts)), kind, 0 if rewound else int(net or 0),
+                f'dex:{species}' if species is not None and kind in ('receive', 'release') else '')
+            for ts, frame, kind, species, net, rewound in adventure.stored]
     rows.sort(key=lambda row: row.ts)
     return rows
 
@@ -616,7 +635,9 @@ def restarts(stores):
     return {aid: count - 1 for aid, count in counts.items() if count > 1}
 
 
-def run_input(stores, days, labels, churn_n):
+def run_input(stores, days, labels, churn_n, source=None):
+    """One input folder's results. ``source`` picks the rows, stored or rebuilt. With None an adventure
+    replays its stored rows when the window holds any, and rebuilds them otherwise."""
     stores = Path(stores)
     folders = sorted(p for p in stores.iterdir() if (p / 'pokesim.sqlite').exists())
     adventures = [load(folder) for folder in folders]
@@ -627,12 +648,13 @@ def run_input(stores, days, labels, churn_n):
     for adventure in adventures:
         bundles += len(adventure.bundles)
         axis = axis_for(adventure, start, end)
-        rows = rebuild(adventure, axis)
+        picked = source or ('stored' if any(start <= row[0] <= end for row in adventure.stored) else 'rebuilt')
+        rows = stored_rows(adventure, axis) if picked == 'stored' else rebuild(adventure, axis)
         episodes = ground_truth(adventure, axis, labels)
         old_flags, new_flags, churn = replay(adventure, axis, rows, start, end, churn_n)
         window = [row for row in rows if start <= row.ts <= end]
         active = sum(min(b, end) - max(a, start) for a, b in segments(adventure) if b >= start and a <= end)
-        result = {'adventure': adventure.id, 'version': adventure.version, 'axis': axis.name,
+        result = {'adventure': adventure.id, 'version': adventure.version, 'axis': axis.name, 'rows_source': picked,
                   'active_hours': round(active / 3600, 1),
                   'entries': sum(start <= e.ts <= end for e in adventure.events),
                   'rows': dict(Counter(row.kind for row in window)), 'net_rows': sum(row.net for row in window),
@@ -655,6 +677,11 @@ def run_input(stores, days, labels, churn_n):
 
 
 AMBIGUITIES = [
+    'Rows: an adventure whose store holds progress_events rows in the window replays those stored rows unless '
+    '--rows rebuilt, and its rows_source says which. The notes on improve, event, item and checkpoint describe the '
+    'rebuild and do not apply to stored rows. On a statistics axis a stored row keeps its own PlayClock frame. A row '
+    'with no frame, or any row on another axis, is placed at its wall time. A row a reload undid counts no net '
+    'progress.',
     'Window: section 4 gives no window for the new stall rule, so it uses the StallWatch clocks, 120 game minutes '
     'and 15 real minutes with a repeat after 6 hours. The new watchdog keeps its 3600 real seconds and its map rule, '
     'with the newest net row as its fingerprint.',
@@ -688,6 +715,9 @@ def main(argv=None, prog=None):
     run.add_argument('--out', type=Path, required=True)
     run.add_argument('--labels', type=Path)
     run.add_argument('--churn-n', type=int, default=10)
+    run.add_argument('--rows', choices=('stored', 'rebuilt'),
+                     help='the rows to replay. By default an adventure replays its stored rows when the window holds '
+                          'any, and rebuilds them from the journal otherwise')
     show = commands.add_parser('report')
     show.add_argument('report', type=Path)
     args = parser.parse_args(argv)
@@ -700,11 +730,12 @@ def main(argv=None, prog=None):
             parser.error('The report must go outside the input')
     began = time.time()
     report = {'tool': 'replay_progress', 'days': args.days, 'churn_n': args.churn_n, 'labels': len(labels),
+              'rows': args.rows or 'stored when the window holds any',
               'constants': {'tick_seconds': TICK, 'gap_seconds': GAP, 'warmup_seconds': WARMUP, 'hour_frames': HOUR,
                             'stall_game_minutes': config.STALL_ALERT_GAME_MINUTES,
                             'stall_real_minutes': config.STALL_ALERT_REAL_MINUTES,
                             'watchdog_seconds': Limits().no_progress, 'loop_limit': LOOP_LIMIT},
-              'inputs': [run_input(stores, args.days, labels, args.churn_n) for stores in args.stores],
+              'inputs': [run_input(stores, args.days, labels, args.churn_n, args.rows) for stores in args.stores],
               'ambiguities': AMBIGUITIES, 'missing_sources': MISSING}
     failures = [{'input': item['path'], 'adventure': result['adventure'], 'reasons': result['bar']}
                 for item in report['inputs'] for result in item['adventures'] if result['bar']]
@@ -727,7 +758,7 @@ def render(report):
         lines.append(f"\n{item['path']}  bundles {item['stall_bundles']}  {' '.join(item['notes'])}")
         for result in item['adventures']:
             lines.append(f"  {result['adventure'][:6]} {result['version']:<8} {result['active_hours']:>6}h "
-                         f"net {result['net_rows']:<5} old: {cell(result['old'])} | new: {cell(result['new'])} "
+                         f"{result.get('rows_source', 'rebuilt'):<7} net {result['net_rows']:<5} old: {cell(result['old'])} | new: {cell(result['new'])} "
                          f"| churn {result['churn_flags']} | {'; '.join(result['bar']) or 'pass'}")
     lines.append(f"\nBar: {'pass' if report['bar']['pass'] else 'fail'}")
     return '\n'.join(lines)

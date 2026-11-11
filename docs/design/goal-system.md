@@ -582,12 +582,12 @@ This checks the progress model on real history before the stall tiers switch to 
 `python -m pokesim.replay progress`, in `pokesim/replay/progress.py`:
 
 ```
-python -m pokesim.replay progress run STORES_DIR --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10]
+python -m pokesim.replay progress run STORES_DIR --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10] [--rows stored|rebuilt]
 python -m pokesim.replay progress report REPORT_JSON
 ```
 
-1. Input is two read-only copies on the desktop. The main one is the hosted app's newest cold backup, extracted outside the repo, for two weeks of real play. The second is a copy of the local dev instance's data folder, for the stall hunt games and their fresh stall events. The tool never opens a live data folder. It reads `events`, `capture_receipts`, `progress`, `kv` and the stall bundle reports. It never reads save state.
-2. It rebuilds `progress_events` rows from the journal and receipts, as the new writers would have written them.
+1. Input is two read-only copies on the desktop. The main one is the hosted app's newest cold backup, extracted outside the repo, for two weeks of real play. The second is a copy of the local dev instance's data folder, for the stall hunt games and their fresh stall events. The tool never opens a live data folder. It reads `events`, `capture_receipts`, `progress`, `progress_events`, `kv` and the stall bundle reports. It never reads save state.
+2. An adventure whose window holds `progress_events` rows replays the rows the writers stored. On the statistics axis each row keeps its own PlayClock frame, and a row a reload undid counts no net progress. An adventure with none rebuilds the rows from the journal and receipts, as the new writers would have written them. `--rows stored` or `--rows rebuilt` picks one for every adventure, and each adventure's line in the report says which it used.
 3. It runs the old checks (StallWatch, LoopGuard and the watchdog fingerprint) and the new model side by side over the same rows.
 4. Ground truth is each stall bundle, help request, give-up, owner restart and the optional labels file.
 5. It runs as one process under `nice -n 10`, inside the load gate.
