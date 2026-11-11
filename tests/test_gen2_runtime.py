@@ -685,6 +685,29 @@ def test_restock_does_not_walk_to_a_mart_through_ice_path(real_data):
     assert goal is not None and goal.map_name != 'BLACKTHORN_MART'
 
 
+def test_a_ledge_hop_keeps_the_shop_already_chosen(real_data):
+    # The walk from Route 38 to Olivine Mart drops three ledges on Route 39 at x=12. In each hop the
+    # coordinates read the wall tile between two ledges, which is in no region, so no route could be
+    # judged. The shop was dropped for that decision and picked again on landing, three times, and
+    # the gate counted the cut walk on gold/badges_4 as 1216 frames of waste.
+    from pokesim.gen2.policy import Policy, Goal
+    policy = Policy(real_data)
+    # The tile in front of the Olivine Mart clerk, which the gate run walked to.
+    policy.person = lambda snapshot, key, label, name, script: Goal(key, label, name, 3, 3)
+    ids = real_data.map_ids
+    snapshot = SimpleNamespace(map=ids['ROUTE_39'], x=12, y=24, items=(), party=(), owned=set(),
+        pockets={'balls': ((real_data.items['POKE_BALL'], 3),)}, money=10356, can_catch=True, badges=15,
+        hall_of_fame_count=0, event=lambda name: True)
+    landed = policy.shop(snapshot)
+    assert landed is not None and landed.map_name == 'OLIVINE_MART'
+    chosen = policy.shop_location, policy.shopping
+    hop = SimpleNamespace(**{**vars(snapshot), 'y': 25})
+    assert policy.nav.regions.between(hop, True, True)
+    goal = policy.shop(hop)
+    assert goal is not None and goal.map_name == 'OLIVINE_MART'
+    assert (policy.shop_location, policy.shopping) == chosen
+
+
 @pytest.mark.parametrize('owned,expected', [({243, 245, 249, 250}, ('BLACKTHORN_MART', 'ULTRA_BALL')),
                                              ({243, 244, 245, 249, 250}, None)])
 def test_restock_prefers_ultra_balls_while_a_legendary_is_uncaught(real_data, owned, expected):
