@@ -85,6 +85,11 @@ PARTNER_TRAINING = Budget('partner training', 18000)
 DETOUR_REST = Budget('detour rest', 3600)
 LOOK_AROUND = Budget('look around', 1800)
 CHAT_REST = Budget('chat rest', 900)
+# Gen I's ground-item detours: a look for items nearby every 5 seconds, half a minute to pick one up,
+# and 5 minutes before an item it gave up on is tried again.
+PICKUP_SCAN = Budget('pickup scan', 300)
+PICKUP_DETOUR = Budget('pickup detour', 1800)
+PICKUP_RETRY = Budget('pickup retry', 18000)
 
 
 class Tables(dict):
@@ -116,9 +121,7 @@ class Tables(dict):
         if any(self.values()):
             return False
         if now is None:
-            # The emulator sets the store's clock after it attaches the tables, so it is read here.
-            clock = self.clock if self.clock is not None else getattr(self.store, 'clock', None)
-            now = clock() if callable(clock) else then
+            now = self.now(then)
         self.clear()
         self.update({name: deepcopy(table) for name, table in (saved or {}).items()
                      if isinstance(table, dict) and table})
@@ -126,6 +129,12 @@ class Tables(dict):
         for key, when in (stood or {}).items():
             stood[key] = now - (then - when) * factor
         return True
+
+    def now(self, default=None):
+        """The frame the tables count on now, or ``default`` when they have no clock."""
+        # The emulator sets the store's clock after it attaches the tables, so it is read here.
+        clock = self.clock if self.clock is not None else getattr(self.store, 'clock', None)
+        return clock() if callable(clock) else default
 
     def flush(self):
         if self.store is not None:

@@ -14,6 +14,7 @@ from test_events import snap
 def test_reward_retries_soon_but_success_keeps_gifts_spaced(monkeypatch, delivered, interval):
     emu = Emulator.__new__(Emulator)
     emu.frame = 100
+    emu.play_clock = PlayClock({'frames': 100})
     emu.input_epoch = 0
     emu.commands = queue.Queue()
     emu.manual = queue.Queue()
@@ -35,21 +36,25 @@ def test_reward_retries_soon_but_success_keeps_gifts_spaced(monkeypatch, deliver
 
 
 def test_gift_pacing_counts_frames_not_wall_seconds(monkeypatch):
-    """An uncapped run must not starve gifts, and a reload that rewinds frames must not stall them."""
+    """An uncapped run must not starve gifts, and a reload neither restarts the spacing nor ends it."""
     emu = Emulator.__new__(Emulator)
-    emu.frame = 1000
+    emu.play_clock = PlayClock({'frames': 1000, 'initialized': True})
     assert reward_due(emu)
     schedule(emu, {'phase': 'complete'})
     monkeypatch.setattr('pokesim.emulator.time.time', lambda: 10 ** 9)
-    emu.frame = 1000 + SPACING_FRAMES - 1
+    emu.play_clock.advance(SPACING_FRAMES - 1)
     assert not reward_due(emu)
-    emu.frame += 1
+    emu.play_clock.advance(1)
     assert reward_due(emu)
     schedule(emu, None)
-    emu.frame += RETRY_FRAMES
+    emu.play_clock.advance(RETRY_FRAMES)
     assert reward_due(emu)
     schedule(emu, {'phase': 'complete'})
+    # A reload moves the emulator's frame back, and the PlayClock keeps its larger count.
     emu.frame = 10
+    emu.play_clock.restore({'frames': 10})
+    assert not reward_due(emu)
+    emu.play_clock.advance(SPACING_FRAMES)
     assert reward_due(emu)
 
 

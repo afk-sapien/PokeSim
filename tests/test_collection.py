@@ -144,7 +144,6 @@ def test_legacy_style_preserves_active_project_and_progress(legacy_style):
                         'map': MAPS['ROUTE_1'], 'key': 'hunt'}
     original.remaining = 500
     original.cooldown = 120
-    original.elapsed = 9000
     original.history = ['Completed: Caterpie']
     saved = original.state_dict()
     restored = Collection()
@@ -353,7 +352,6 @@ def test_reload_rewind_does_not_silence_the_planner():
     loop on 2026-09-14.
     """
     c=Collection()
-    c.elapsed=2_000_000
     c.idle_token=('as if the last plan', 'found nothing')
     c.load(dict(c.state_dict(),elapsed=1_400_000))
     assert c.idle_token is None
@@ -449,7 +447,7 @@ def test_training_gains_keep_an_expedition_alive_and_a_reload_keeps_the_idle_cou
 def test_stationary_recovery_abandons_project_without_losing_game_progress():
     p = StrategicPolicy(7)
     p.collection.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
-    p.collection.elapsed = 10000
+    p.collection.clock = 10000
     p.recover_stall(state(frame=300))
     assert p.collection.project is None
     assert p.collection.director.waiting('ditto', p.collection.clock)
@@ -589,7 +587,7 @@ def test_missing_returning_snorlax_is_a_new_pokedex_entry():
     c, s, _ = snorlax_world()
     nav = Navigator()
     nav.update_story(s)
-    c.elapsed = 10000
+    c.clock = 10000
     goal = c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
     assert goal.key == 'collect_static' and c.project['event_return'] == 'snorlax'
     assert new_entry(c.project)
@@ -602,7 +600,7 @@ def test_snorlax_battle_without_a_catch_ends_the_project():
     c, s, _ = snorlax_world()
     nav = Navigator()
     nav.update_story(s)
-    c.elapsed = 10000
+    c.clock = 10000
     c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
     c.observe(replace(s, event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_BEAT_ROUTE12_SNORLAX')))
     assert c.project is None
@@ -626,7 +624,6 @@ def test_story_comes_before_side_projects_until_the_champion():
     # A side project carried in an older save gives the turn back to the story.
     before.project = {'method': 'evolve', 'parent': sid(10), 'species': sid(11),
                       'evolution': EVOS[sid(10)][0], 'key': 'evo'}
-    before.last_choice = before.elapsed - 600
     assert before.choose(s, nav, random.Random(3), main) is None
     assert before.project is None and before.history[-1].startswith('Changed plan')
     # After the Champion the same moment offers expeditions, and a missing entry still comes first.

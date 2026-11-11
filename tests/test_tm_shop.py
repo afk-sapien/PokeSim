@@ -364,7 +364,7 @@ def test_future_natural_move_is_saved_and_trip_survives_local_recovery(shop_data
     after, _ = policy._tm_development(replace(s, frame=s.frame + 3 * TM_TRIP_FRAMES), goal, False)
     # That item stands down on the monitor's backoff, and the next best purchase goes at once.
     monitor = policy.collection.director.monitor
-    assert monitor.standing_down(f'tm:{planned["item"]}', policy.collection.elapsed)
+    assert monitor.standing_down(f'tm:{planned["item"]}', policy.clock)
     assert after.key == 'buy_tm' and policy.tm_plan['item'] != planned['item']
 
 

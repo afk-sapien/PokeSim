@@ -148,7 +148,7 @@ def test_owned_legendary_return_is_planned_and_finished_by_receipt(monkeypatch):
     c = Collection()
     c.completed_champion = True
     c.returned_legendaries = {150}
-    c.elapsed = 2000
+    c.clock = 2000
     monkeypatch.setattr(c, 'sources', lambda: {sid(150): [{'map': MAPS['CERULEAN_CAVE_B1F'],
                     'method': 'static', 'fragment': 'MEWTWO', 'flag': 'EVENT_BEAT_MEWTWO'}]})
     monkeypatch.setattr(c.director, 'select', lambda options, projects: next(
@@ -175,7 +175,7 @@ def test_refused_legendary_return_closes_until_the_next_milestone(tracking, monk
     observe(store, s, memory)
     c = Collection()
     c.completed_champion = True
-    c.elapsed = 2000
+    c.clock = 2000
     c.returned_legendaries, c.closed_legendaries = claims(store)
     monkeypatch.setattr(c, 'sources', lambda: {sid(150): [{'map': MAPS['CERULEAN_CAVE_B1F'],
                     'method': 'static', 'fragment': 'MEWTWO', 'flag': 'EVENT_BEAT_MEWTWO'}]})

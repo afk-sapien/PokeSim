@@ -4,6 +4,7 @@ from copy import deepcopy
 from .progression import object_goal
 from .shopping import DUNGEON_KEY_SLOTS, DUNGEONS, SAFARI_INTERIOR, SAFARI_PRIZE_SLOTS
 from ..ground_items import ground_item
+from ..runtime.supervision import PICKUP_DETOUR, PICKUP_RETRY, PICKUP_SCAN
 from ..strategy_data import DATA, WORLD, object_hidden
 
 
@@ -21,10 +22,16 @@ class Pickups:
         return deepcopy({key: getattr(self, key) for key in
                          ('active', 'completed', 'retry', 'next_scan', 'history')})
 
-    def load(self, data):
+    def load(self, data, shift=0):
+        """``shift`` moves an older save's times onto the PlayClock (Collection.clock_shift)."""
         for key in self.state_dict():
             if key in data:
                 setattr(self, key, deepcopy(data[key]))
+        if shift:
+            self.retry = {key: until + shift for key, until in self.retry.items()}
+            self.next_scan += shift
+            if self.active and 'expires' in self.active:
+                self.active['expires'] += shift
 
     @staticmethod
     def has_space(s, item):
@@ -48,8 +55,9 @@ class Pickups:
             # An untracked object cannot provide reliable pickup confirmation.
             return None
 
-    def observe(self, s, elapsed):
-        self.retry = {key: until for key, until in self.retry.items() if until > elapsed}
+    def observe(self, s, now):
+        """``now`` is the PlayClock frame, which a reload never moves back."""
+        self.retry = {key: until for key, until in self.retry.items() if until > now}
         if not self.active:
             return
         target = self.active
@@ -57,12 +65,12 @@ class Pickups:
             self.completed = list(dict.fromkeys(self.completed + [target['key']]))
             self.history = (self.history + ['Collected ' + target['name']])[-8:]
             self.active = None
-        elif elapsed >= target['expires'] or s.map != target['map'] or not self.has_space(s, target['item']):
-            self.defer(elapsed, 'Pickup unavailable or detour budget reached')
+        elif now >= target['expires'] or s.map != target['map'] or not self.has_space(s, target['item']):
+            self.defer(now, 'Pickup unavailable or detour budget reached')
 
-    def defer(self, elapsed, reason):
+    def defer(self, now, reason):
         if self.active:
-            self.retry[self.active['key']] = elapsed + 18000
+            self.retry[self.active['key']] = PICKUP_RETRY.until(now)
             self.history = (self.history + [reason + ': ' + self.active['name']])[-8:]
             self.active = None
 
@@ -71,15 +79,15 @@ class Pickups:
                            'Collect a nearby ground item, then resume the expedition',
                            WORLD[target['map']]['symbol'], target['fragment'])
 
-    def choose(self, s, nav, main, elapsed):
+    def choose(self, s, nav, main, now):
         if (not nav.use_world or not s.party or s.in_battle
                 or main.key.startswith(('heal', 'restock', 'party_', 'teach_', 'league', 'champion'))):
             return None
         if self.active:
             return self.goal(self.active)
-        if elapsed < self.next_scan:
+        if now < self.next_scan:
             return None
-        self.next_scan = elapsed + 300
+        self.next_scan = PICKUP_SCAN.until(now)
         world = WORLD.get(s.map, {})
         candidates = []
         for index, obj in enumerate(world.get('objects', [])):
@@ -87,7 +95,7 @@ class Pickups:
             if not item or abs(obj[0] - s.x) + abs(obj[1] - s.y) > 10:
                 continue
             target = dict(item, map=s.map, object=index, fragment=obj[4], key=f'{s.map}:{index}')
-            if target['key'] in self.completed or self.retry.get(target['key'], 0) > elapsed:
+            if target['key'] in self.completed or self.retry.get(target['key'], 0) > now:
                 continue
             if self.hidden(s, target) is not False or not self.has_space(s, item['item']):
                 continue
@@ -100,6 +108,6 @@ class Pickups:
         if not candidates:
             return None
         self.active = min(candidates, key=lambda row: row[:2])[2]
-        self.active['expires'] = elapsed + 1800
+        self.active['expires'] = PICKUP_DETOUR.until(now)
         nav.path.clear()
         return self.goal(self.active)
