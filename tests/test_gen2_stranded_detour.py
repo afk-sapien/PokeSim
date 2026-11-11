@@ -73,3 +73,25 @@ def test_a_waypoint_comes_before_the_tree(monkeypatch):
     policy = policy_with(lambda snapshot, map_id, targets, memory, surf=False: ['left'], goal)
     assert policy.detour(where(EVENT_FOUGHT_SUDOWOODO=True), None, None, OLIVINE, False) == (['left'], True)
     assert policy.goal is goal
+
+
+def test_the_well_boulder_is_pushed_off_the_way_the_walk_leaves(monkeypatch):
+    """A Gold run bounced on Slowpoke Well B1F for two hours. The boulder had gone back to its place and
+    shut the exit, and the map regions do not know it is there."""
+    monkeypatch.setattr(flight, 'outside', lambda *args: None)
+    well, azalea = 7, 8
+    goal = Goal('box', 'Make room for new catches', 'AZALEA_POKECENTER_1F', 5, 3)
+    policy = policy_with(lambda snapshot, map_id, targets, memory, surf=False:
+                         ['up'] if (map_id, targets) == (well, [(2, 2)]) else None, goal)
+    policy.data.map_ids['SLOWPOKE_WELL_B1F'] = well
+    policy.data.maps = {well: {'objects': [{'sprite': 'SPRITE_ROCKET'}, {'sprite': 'SPRITE_BOULDER'}]}}
+    policy.nav.objects, policy.nav.local, policy.memory = {}, lambda *args, **kwargs: None, None
+    policy.nav.walk = lambda snapshot, target: [(well, azalea, [(17, 15)], 'warp')]
+    inside = SimpleNamespace(map=well, map_name='Slowpoke Well B1F', x=7, y=11, objects=[],
+                             event=lambda name: False)
+    assert policy.detour(inside, None, None, azalea, False) == (['up'], False)
+    assert (policy.goal.key, policy.goal.x, policy.goal.y, policy.goal.face) == ('push_well_exit', 2, 2, 'right')
+    # Once the boulder is pushed clear, the goal walks on.
+    policy.goal, inside.objects = goal, [(2, 6, 2)]
+    assert policy.detour(inside, None, None, azalea, False) == (None, False)
+    assert policy.goal is goal
