@@ -246,3 +246,66 @@ def test_a_waiting_pin_says_why_beside_its_label(page, live_game, width):
     # A pin with no reason, as every pin is until the server sends one, shows only its label.
     pin['parked'] = None
     expect(line).to_have_text('Next: Find Clefairy', timeout=5000)
+
+
+SURF = {'key': 'surf', 'label': 'Catch a Pokemon on the water', 'tier': 'filler', 'feasible': False,
+        'why_not': {'kind': 'needs', 'detail': 'a Pokemon must learn Surf first, so this waits for the next badge'}}
+
+
+@pytest.mark.parametrize('width', [1280, 320])
+def test_a_waiting_goal_reads_as_waiting_and_can_still_be_set(page, live_game, width):
+    url, emu = live_game
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.route('**/api/goals', lambda route: route.fulfill(json={'goals': [
+        {'key': 'hunt', 'label': 'Find Clefairy', 'tier': 'progress', 'feasible': True, 'why_not': None}, SURF], 'pin': None}))
+    page.goto(url)
+    goal = page.locator('#next-activity').get_by_role('combobox', name='Goal')
+    expect(goal.locator('option')).to_have_text(['Choose a goal', 'Find Clefairy',
+                                                 'Catch a Pokémon on the water (waiting: a Pokémon must learn Surf first, '
+                                                 'so this waits for the next badge)'])
+    goal.select_option('surf')
+    expect(page.locator('#next-activity-note')).to_have_text(
+        'This goal waits: a Pokémon must learn Surf first, so this waits for the next badge. '
+        'Set keeps it as next, and it runs once it can.')
+    expect(page.locator('#next-activity-set')).to_be_enabled()
+    expect(page.locator('#next-activity-catalogue')).to_be_hidden()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+CATALOGUE = {'generation': 1, 'kinds': [], 'pin': None, 'reason': None, 'goals': [
+    {'key': 'hunt', 'kind': 'hunt', 'params': {}, 'title': 'Find Clefairy', 'tier': 'progress', 'feasible': True,
+     'why_not': None, 'cost': None, 'worth': None},
+    {**{key: SURF[key] for key in ('key', 'feasible', 'why_not')}, 'kind': 'catch', 'params': {},
+     'title': SURF['label'], 'tier': None, 'cost': None, 'worth': None}]}
+
+
+@pytest.mark.parametrize('width', [1280, 320])
+def test_a_view_link_sees_every_goal_but_no_pin_control(page, live_game, monkeypatch, width):
+    url, emu = live_game
+    monkeypatch.setattr(config, 'VIEWER_ONLY', True)
+    shown = emu.status
+    pin = {'key': 'hunt', 'label': 'Find Clefairy', 'started': False, 'parked': None}
+    emu.status = lambda: {**shown(), 'strategy': {**shown()['strategy'], 'pin': pin}}
+    asked = []
+
+    def catalogue(route):
+        asked.append(route.request.url)
+        route.fulfill(json=CATALOGUE)
+    page.route(lambda address: '/api/catalogue' in address, catalogue)
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.goto(url)
+    row = page.locator('#next-activity')
+    expect(row.locator('#next-activity-heading')).to_have_text('Goals')
+    expect(page.locator('#next-activity-status')).to_have_text('Next: Find Clefairy')
+    for control in ('#next-activity-goal', '#next-activity-search', '#next-activity-set', '#next-activity-cancel'):
+        expect(page.locator(control)).to_be_hidden()
+    assert asked == []
+    row.get_by_text('See every goal').click()
+    items = page.locator('#next-activity-catalogue-list li')
+    expect(items).to_have_text(['Find Clefairy', 'Catch a Pokémon on the waterWaiting: a Pokémon must learn Surf first, '
+                                                 'so this waits for the next badge'])
+    assert len(asked) == 1 and asked[0].endswith('/api/catalogue?limit=40')
+    with page.expect_request(lambda request: 'q=clef' in request.url) as searched:
+        row.get_by_role('searchbox', name='Find').fill('clef')
+    assert searched.value.url.endswith('/api/catalogue?limit=40&q=clef')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
