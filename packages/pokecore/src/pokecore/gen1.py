@@ -44,6 +44,11 @@ W_NUM_BAG_ITEMS = 0xD31D
 
 W_BAG_ITEMS = 0xD31E
 
+# wNumBoxItems: the item count of the PC's item storage, then wBoxItems as (item, quantity) pairs.
+W_NUM_BOX_ITEMS = 0xD53A
+W_BOX_ITEMS = 0xD53B
+PC_ITEM_CAPACITY = 50
+
 W_MONEY = 0xD347
 
 W_RIVAL_NAME = 0xD34A
@@ -81,6 +86,9 @@ W_EVENT_FLAGS = 0xD747
 W_STATUS_FLAGS1 = W_EVENT_FLAGS - 31
 
 W_PLAYTIME_H = 0xDA41
+# wPlayTimeMaxed sits between the hours and the minutes.
+W_PLAYTIME_M = W_PLAYTIME_H + 2
+W_PLAYTIME_S = W_PLAYTIME_H + 3
 
 # Overworld, menu and battle state, by pret/pokered name. Bits count from 0.
 # wSpritePlayerStateData1FacingDirection: a key of FACINGS.
@@ -202,9 +210,18 @@ def read_party(memory, move_data=None, *, version=None) -> list[dict]:
 
 def read_bag(memory, *, version=None) -> tuple[tuple[int, int], ...]:
     """Decode bag entries, limiting reads to the cartridge's twenty slots."""
-    memory = red_layout(memory, version)
-    count = min(memory[W_NUM_BAG_ITEMS], 20)
-    raw = bytes(memory[W_BAG_ITEMS:W_BAG_ITEMS + count * 2]) if count else b""
+    return _items(red_layout(memory, version), W_NUM_BAG_ITEMS, 20)
+
+
+def read_pc_items(memory, *, version=None) -> tuple[tuple[int, int], ...]:
+    """Decode the PC's item storage, limiting reads to its fifty slots."""
+    return _items(red_layout(memory, version), W_NUM_BOX_ITEMS, PC_ITEM_CAPACITY)
+
+
+def _items(memory, count_address, capacity):
+    count = min(memory[count_address], capacity)
+    start = count_address + 1
+    raw = bytes(memory[start:start + count * 2]) if count else b""
     return tuple((raw[index], raw[index + 1]) for index in range(0, len(raw), 2)
                  if raw[index] not in (0, 255))
 

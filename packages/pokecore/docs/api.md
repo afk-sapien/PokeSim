@@ -187,6 +187,8 @@ PyBoy, a live process, application globals, a filesystem data directory, or labe
 - `read_party(memory, move_data=None)` returns dicts matching the numerical fields
   of PokeSim's PartyMon. Optional integer-keyed move data provides base PP values.
 - `read_bag(memory)` returns a tuple of item ID and quantity pairs.
+- `read_pc_items(memory)` returns the PC's stored items the same way, from
+  `W_NUM_BOX_ITEMS`, up to `PC_ITEM_CAPACITY` (50).
 - `read_progress(memory)` returns the following raw facts.
 
 | Field | Meaning |
@@ -220,6 +222,35 @@ tiles). `W_SPRITE_STATE_DATA2`, `SPRITE_STRUCT`, `SPRITE_MAP_Y` and `SPRITE_MAP_
 locate sprite positions, and `sprite_tile(memory, sprite, *, version=None)` returns
 the (x, y) tile of sprite slot `sprite`: 0 is the player and 1 to 15 the map's objects.
 Read Yellow through `yellow.red_layout` as with the other addresses.
+
+## Game state
+
+`state.read_state(memory, game, move_data=None)` returns one frozen `GameState` for
+Red, Blue, Yellow, Gold, Silver and Crystal. `game` is a version string or a
+`cartridges.Cartridge`. Gen I memory is read as `gen1` reads it, with Yellow raw or
+already in the Red layout. Gen II memory takes banked reads as `gen2.state` does.
+The state is built from those decoders, reads the same bytes and never writes.
+
+`GameState` has `game`, `generation`, `player` (`Player`), `map` (`MapState`),
+`party` (`Party`, a sequence of `Mon`), `bag` (`Bag`), and `seen` and `owned` as
+national Pokédex numbers. Gen I drops an owned flag whose seen flag is clear, as the
+snapshot reader does.
+
+- `Mon` has `species` (the cartridge's ID), `dex`, `nick`, `ot_name`, `level`, `hp`,
+  `status`, `moves`, `pp`, `pp_ups`, `max_pp`, `stats`, `experience`, `dvs`,
+  `stat_exp`, `trainer_id`, `egg`, `types`, `held_item`, `friendship` and `pokerus`,
+  plus `max_hp`, `pending` and `shiny`. `stats` starts with maximum HP and keeps the
+  cartridge's order. `max_pp` is None unless `move_data` gives base PP.
+- `Player` has `name`, `rival_name`, `trainer_id`, `money`, `coins`, `badges` (a bit
+  field, Gen II Kanto in bits 8 to 15), `badge_names`, `playtime`,
+  `hall_of_fame_count`, `gender` and `moms_money`.
+- `MapState` has `map`, `group`, `number`, `x` and `y`. Gen II's `map` is the group
+  times 256 plus the number.
+- `Bag` has `items` and `pc_items` as ID and quantity pairs, and Gen II's `balls`,
+  `key_items` (IDs) and `tms_hms` (57 quantities).
+
+A field a generation lacks is None, and `state.ABSENT` lists each one with its reason.
+The state holds IDs only. Names come from the caller's tables.
 
 ## Save summary
 

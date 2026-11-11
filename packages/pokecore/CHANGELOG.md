@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `state.read_state(memory, game)` returns one frozen `GameState` with `Player`,
+  `MapState`, `Party`, `Mon` and `Bag` for all six games. A field a generation lacks
+  is None, and `state.ABSENT` gives the reason.
+- `gen1.read_pc_items` reads the PC's stored items. `gen1` also names
+  `W_NUM_BOX_ITEMS`, `W_BOX_ITEMS`, `PC_ITEM_CAPACITY`, `W_PLAYTIME_M` and
+  `W_PLAYTIME_S`.
+- `gen2.ram.max_pp(base, pp_ups)` is the maximum PP rule the Gen II decoder uses.
+
 ## 0.11.0
 
 ### Added
