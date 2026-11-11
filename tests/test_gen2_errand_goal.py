@@ -25,3 +25,49 @@ def test_a_menu_step_with_no_errand_keeps_the_journey_goal(data, monkeypatch):
     policy.menu_step = lambda snapshot, mem: 'a'
     policy.step(snapshot, Cartridge(data, wMapWidth=20))
     assert policy.goal.key == 'collection_wait'
+
+
+def deciding(data, monkeypatch, events=()):
+    """A policy on the route whose step decides and then flies, so a test reads the decision alone."""
+    from pokesim.gen2 import flight
+    policy, snapshot, hunt, _ = policy_on_route(data, monkeypatch)
+    snapshot.event = lambda name: name in events
+    policy.errand_allowed = lambda snapshot, mem: True
+    monkeypatch.setattr(flight, 'shortcut', lambda *args: 'fly')
+
+    def step():
+        policy.menu = None
+        policy.step(snapshot, Cartridge(data, wMapWidth=20))
+    return policy, step
+
+
+def test_a_shop_errand_writes_its_purchase_only_when_the_step_runs_it(data, monkeypatch):
+    # Rule A, from slice 4b: a restock with no route lately gives way to the journey goal and leaves no
+    # purchase and no chosen shop behind.
+    policy, step = deciding(data, monkeypatch)
+    writes, waiting = [], {SHOP.key}
+    policy.healing = lambda snapshot: None
+    policy.shop = lambda snapshot: (SHOP, lambda: writes.append(SHOP.key))
+    policy.no_route_waiting = lambda goal: goal.key in waiting
+    step()
+    assert policy.goal.key == 'collection_wait' and policy.errand is None and writes == []
+    waiting.clear()
+    step()
+    assert policy.goal is policy.errand is SHOP and writes == [SHOP.key]
+
+
+def test_a_partner_trip_sets_its_field_move_only_when_it_runs(data, monkeypatch):
+    # A behaviour change of slice 4b: a partner trip that a heal overrides leaves the field move the
+    # battles check as it was.
+    heal = Goal('heal', 'Restore the team at a Pokémon Center', 'VIOLET_POKECENTER_1F', 3, 3, 'up')
+    partner = Goal('fish_surf', 'Fish for a partner that can learn Surf', 'OLIVINE_CITY', 5, 5)
+    policy, step = deciding(data, monkeypatch, events={'EVENT_GOT_HM03_SURF'})
+    shores = []
+    policy.no_room = lambda snapshot: False
+    policy.partner_goal = lambda snapshot, move, shore=None: shores.append(shore) or partner
+    policy.healing = lambda snapshot: heal
+    step()
+    assert policy.goal is heal and policy.partner_move is None and shores == [57]
+    policy.healing = lambda snapshot: None
+    step()
+    assert policy.goal is partner and policy.partner_move == 57

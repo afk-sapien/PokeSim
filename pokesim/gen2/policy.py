@@ -371,14 +371,19 @@ class Policy:
                 'reason': self.goal.label if self.goal else 'Start the adventure'}
 
     def journey(self, snapshot, mem):
-        goal = self.story(snapshot, mem)
+        """The journey goal: the story goal, or the boss training it needs. Both are offered on the step's
+        ballot, or outside a step on a ballot of their own, and the ballot's pick is the journey goal."""
         ballot = getattr(self, 'ballot', None)
-        if ballot is not None and goal is not None:
+        if ballot is None:
+            from .pipeline import Ballot
+            ballot = Ballot()
+        goal = self.story(snapshot, mem)
+        if goal is not None:
             ballot.offer(goal, self.story_site(), kind=self.story_kind())
         training = self.boss_training(snapshot, goal)
-        if ballot is not None and training is not None:
+        if training is not None:
             ballot.offer(training, 'boss')
-        return training or goal
+        return ballot.goal
 
     def story_site(self):
         """The site of this decision's story goal: an activity under way that holds the collection, the
@@ -699,7 +704,9 @@ class Policy:
             self.partner_move = None
         return 127 if snapshot.badges & 128 else 250 if snapshot.badges & 64 else 57
 
-    def partner_goal(self, snapshot, move):
+    def partner_goal(self, snapshot, move, shore=None):
+        """The goal that fetches a partner for ``move``, or None. ``shore`` is the move whose shore a fishing
+        trip picks, the move the partner is wanted for so far by default."""
         if any(not mon.egg and move in self.data.species[mon.species]['machines'] for mon in snapshot.party):
             return None
         if self.no_room(snapshot):
@@ -713,7 +720,7 @@ class Policy:
             return self.storage_goal(snapshot)
         if not snapshot.event('EVENT_GOT_GOOD_ROD'):
             return self.person(snapshot, 'good_rod', 'Get a fishing rod', 'OLIVINE_GOOD_ROD_HOUSE', 'GoodRodGuru')
-        return self.fishing(snapshot)
+        return self.fishing(snapshot, shore)
 
     # Prompts where the adventure should answer YES at once, and prompts it must always decline.
     YES_PROMPTS = re.compile(r'HEAL')
@@ -945,8 +952,9 @@ class Policy:
             self.storage_pick = (mid, x, y)
         return Goal('storage', 'Prepare a place for a field move partner', self.data.maps[mid]['constant'], x, y, 'up')
 
-    def fishing(self, snapshot):
-        map_name = 'BLACKTHORN_CITY' if self.needed_move(snapshot) == 127 else 'OLIVINE_CITY'
+    def fishing(self, snapshot, move=None):
+        move = self.needed_move(snapshot) if move is None else move
+        map_name = 'BLACKTHORN_CITY' if move == 127 else 'OLIVINE_CITY'
         mid = self.data.map_ids[map_name]
         entry = self.data.maps[mid]
         choices = []
@@ -1316,7 +1324,8 @@ class Policy:
         return True
 
     def shop(self, snapshot):
-        """A supply errand worth breaking off for, or None.
+        """A supply errand worth breaking off for and the commit that writes its purchase and its shop, or
+        ``(None, None)``. The commit runs only when the errand is picked (rule A).
 
         Each trip is weighed against restocking later on the arbiter (see errands): the walk there and
         back, the puzzle maps on the way and what leaving the current work loses. That keeps the run
@@ -1325,19 +1334,19 @@ class Policy:
         """
         if not snapshot.event('EVENT_GAVE_MYSTERY_EGG_TO_ELM'):
             self.shop_location = None
-            return None
+            return None, None
         from . import errands, ledger
         exit_frames = errands.exit_cost(self, snapshot)
         if exit_frames >= errands.worth(self, snapshot):
             # No trip can beat restocking later from here. The chosen shop stays chosen for after.
-            return None
+            return None, None
         cut, surf = bool(snapshot.badges & 2), bool(snapshot.badges & 8)
         if snapshot.money < ledger.price(self.data, 'POKE_BALL'):
             self.shop_location = None
             # With no ball and no money for one, the ledger sells what is worth least for money.
             sale = None if snapshot.pockets['balls'] else ledger.ball_sale(self.data, snapshot)
             if sale is None:
-                return None
+                return None, None
             choices = []
             for mid, entry in self.data.maps.items():
                 if entry['region'] != self.travel_region(snapshot):
@@ -1351,19 +1360,20 @@ class Policy:
                                                                 [node[0] for _, node, _, _ in route], exit_frames=exit_frames):
                         choices.append((len(route), mid, goal))
             if choices:
-                self.shopping = sale
-                return min(choices, key=lambda row: row[:2])[-1]
-            return None
+                def sell():
+                    self.shopping = sale
+                return min(choices, key=lambda row: row[:2])[-1], sell
+            return None, None
         requests = ledger.supplies(self, snapshot)
         if not requests:
             self.shop_location = None
-            return None
+            return None, None
         if self.shop_location and self.nav.regions.between(snapshot, cut, surf):
             # In a ledge hop the coordinates read the wall tile jumped over, which is in no region, so no
             # route can be judged until the player lands. The shop already chosen stays the goal. The walk
             # to Olivine Mart drops three ledges on Route 39, and the trip was dropped in each hop.
             mid, script, _ = self.shop_location
-            return self.person(snapshot, 'buy_balls', 'Restock adventure supplies', self.data.maps[mid]['constant'], script)
+            return self.person(snapshot, 'buy_balls', 'Restock adventure supplies', self.data.maps[mid]['constant'], script), None
         choices = []
         for priority, (key, names, amount) in enumerate(requests):
             reserve = ledger.held_money(self.data, snapshot, key)
@@ -1401,12 +1411,14 @@ class Policy:
                                         len(walk), mid, item, shop['script'], amount, reserve))
         if not choices:
             self.shop_location = None
-            return None
+            return None, None
         _, _, _, mid, item, script, amount, reserve = min(choices)
-        self.shop_location = (mid, script, item)
         price = self.data.item_attributes[item]['price']
-        self.shopping = (item, min(amount, (snapshot.money - reserve) // price))
-        return self.person(snapshot, 'buy_balls', 'Restock adventure supplies', self.data.maps[mid]['constant'], script)
+
+        def buy():
+            self.shop_location = (mid, script, item)
+            self.shopping = (item, min(amount, (snapshot.money - reserve) // price))
+        return self.person(snapshot, 'buy_balls', 'Restock adventure supplies', self.data.maps[mid]['constant'], script), buy
 
     def step(self, snapshot, memory, sp=None, clock=None):
         """``sp`` is the CPU stack pointer, which Core's PC lists read to press through a <CONT> name.
@@ -1422,20 +1434,27 @@ class Policy:
         if self.errand is not None and not self.decided and self.goal is self.pick and not snapshot.in_battle:
             # An errand under way is the goal until the next errand decision ends it. Otherwise each
             # menu, conversation and team step on the way ran under the journey goal behind it. The step
-            # has already decided under that goal, so menus read the same goal as before.
-            self.goal = self.errand
-            if ballot is not None:
-                errand = getattr(self, 'errand_offer', None)
-                if errand is not None:
-                    ballot.resume(errand)
-                else:
-                    ballot.offer(self.errand, 'heal')
+            # has already decided under that goal, so menus read the same goal as before. It is offered again
+            # as it was picked, so it is still the enabler of the goal it serves.
+            errand = getattr(self, 'errand_offer', None)
+            if ballot is None:
+                self.goal = self.errand
+            elif errand is not None:
+                self.goal = ballot.resume(errand)
+            else:
+                self.goal = ballot.offer(self.errand, 'heal')
+        if ballot is not None:
+            # Only the offer the step ends with writes, so an offer a later site overrides leaves nothing.
+            ballot.commit()
         shadow = getattr(self, 'shadow', None)
         if ballot is not None and shadow is not None and self.goal is not None:
-            # The chain still decides. The shadow keeps the pipeline's record for the gate and the replays.
+            # The decision is the pipeline's, and the shadow keeps its record for the gate and the replays.
+            # A goal no site offered shows there as unlisted.
             decision = shadow.weigh('pipeline', lambda: ballot.decision, self.goal.key, None,
                                     getattr(snapshot, 'frame', None))
             self.pipeline_pick = decision.record() if decision is not None else None
+        # A journey asked for outside a step weighs on a ballot of its own.
+        self.ballot = None
         return action
 
     def _step(self, snapshot, memory, sp=None):
@@ -1514,21 +1533,17 @@ class Policy:
             self.resetting_puzzle = None
         releasing = self.goal is not None and self.goal.key == 'collection_release'
         starting = self.goal is not None and self.battle_starting(mem)
-        # Each site that sets the goal from here on records its offer, which the shadow weighs when the
-        # step ends (gen2/pipeline.py).
+        # Each site that sets the goal from here on offers it on the step's ballot, and the goal is the
+        # ballot's pick (gen2/pipeline.py). A site writes its state only when its goal is picked (rule A).
         from .pipeline import Ballot
         self.ballot = ballot = Ballot()
         if starting:
-            journey_goal = self.goal
-            ballot.offer(journey_goal, 'current')
+            self.goal = journey_goal = ballot.offer(self.goal, 'current')
         else:
             self.goal = journey_goal = self.journey(snapshot, mem)
-            if not ballot.offers and journey_goal is not None:
-                ballot.offer(journey_goal, 'story')
         release = self.release_goal(snapshot, mem, releasing)
         if release:
-            self.goal = journey_goal = release
-            ballot.offer(release, 'release')
+            self.goal = journey_goal = ballot.offer(release, 'release')
         self.pick = self.goal
         if isinstance(self.menu, Storage) and (self.menu.box_full or 'BOX is full' in snapshot.text):
             box = next((box for box, count in enumerate(snapshot.box_counts) if count < 20), None)
@@ -1566,9 +1581,8 @@ class Policy:
             # trip stays one goal and the restore lands inside it.
             if not starting and self.errand_allowed(snapshot, mem):
                 heal = self.healing(snapshot)
-                self.goal = heal or self.goal
                 if heal:
-                    ballot.offer(heal, 'talk_heal')
+                    self.goal = ballot.offer(heal, 'talk_heal')
             if self.talk_progress(snapshot):
                 return Action('b', 8, 36)
             answer = self.unknown_yes_no(snapshot)
@@ -1599,19 +1613,22 @@ class Policy:
                 compatible = [mon for mon in snapshot.party if not mon.egg
                               and move in self.data.species[mon.species]['machines']]
                 if not compatible and move in {57, 250, 127} and not self.no_room(snapshot):
-                    self.partner_move = move
-                    self.goal = self.partner_goal(snapshot, move)
-                    if self.goal is not None:
-                        ballot.offer(self.goal, 'partner')
+                    # The trip fishes on the shore for this move, and the move it is for is written only when
+                    # the trip runs.
+                    partner = self.partner_goal(snapshot, move, shore=move)
+                    if partner is not None:
+                        def commit(move=move):
+                            self.partner_move = move
+                        self.goal = ballot.offer(partner, 'partner', commit=commit)
                     break
                 if 'ice_path' in self.completed:
                     candidates = [i for i, mon in enumerate(snapshot.party) if not mon.egg
                                   and move in self.data.species[mon.species]['machines']]
                     if candidates:
-                        self.goal = self.person(snapshot, f'delete_hm_{candidates[0]}', f'Make room for {self.data.moves[move]["name"]}',
-                                                'MOVE_DELETERS_HOUSE', 'MoveDeleter')
-                        if self.goal is not None:
-                            ballot.offer(self.goal, 'delete_hm')
+                        goal = self.person(snapshot, f'delete_hm_{candidates[0]}', f'Make room for {self.data.moves[move]["name"]}',
+                                           'MOVE_DELETERS_HOUSE', 'MoveDeleter')
+                        if goal is not None:
+                            self.goal = ballot.offer(goal, 'delete_hm')
                         break
         lead = snapshot.party[0] if snapshot.party else None
         iron_tail = Teach(231, 0)
@@ -1634,18 +1651,22 @@ class Policy:
         if self.errand_allowed(snapshot, mem):
             prize_errand = self.goal.key in {'collection_coin_case', 'collection_coins', 'collection_prize', 'collection_slots'}
             heal = self.healing(snapshot)
-            self.errand = heal or (None if prize_errand else self.shop(snapshot))
-            self.goal = self.errand or self.goal
-            self.errand_offer = ballot.offer(self.errand, 'heal' if heal else 'shop') if self.errand else None
+            errand, commit = (heal, None) if heal or prize_errand else self.shop(snapshot)
+            self.errand = self.errand_offer = None
+            if errand is not None:
+                self.goal = ballot.offer(errand, 'heal' if heal else 'shop', commit=commit)
+                if self.goal is errand:
+                    self.errand, self.errand_offer = errand, ballot.running
         else:
             self.errand = self.errand_offer = None
         if self.no_route_waiting(self.goal):
-            # The goal found no route lately (no_route). An errand gives way to the journey goal, and a goal
-            # with nothing to run instead looks around rather than walk the same missing route again.
+            # The goal found no route lately (no_route). An errand gives way to what the ballot picks
+            # without it, and a goal with nothing to run instead looks around rather than walk the same
+            # missing route again.
             if self.errand is not None and not self.no_route_waiting(journey_goal):
-                ballot.park(self.errand)
-                self.goal, self.errand, self.errand_offer = journey_goal, None, None
-            else:
+                self.goal = ballot.park(self.errand) or journey_goal
+                self.errand = self.errand_offer = None
+            if self.no_route_waiting(self.goal):
                 self.decided = True
                 self.mode = 'finding another approach'
                 surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
@@ -1666,15 +1687,20 @@ class Policy:
         surf = not running and bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
         path = self.nav.toward(snapshot, target, [(self.goal.x, self.goal.y)], memory, surf=surf)
         if path is None and self.goal is not journey_goal:
-            # A side errand that cannot be reached from here must not hide the main objective.
+            # A side goal that cannot be reached from here must not hide the main objective. It gives way to
+            # what the ballot picks without it, and so on down to the journey goal.
             fallback = self.nav.toward(snapshot, self.data.map_ids[journey_goal.map_name],
                                        [(journey_goal.x, journey_goal.y)], memory, surf=surf)
-            if fallback is not None:
-                ballot.park(self.goal)
-                self.goal, path = journey_goal, fallback
+            while fallback is not None and path is None and self.goal is not journey_goal:
+                goal = ballot.park(self.goal) or journey_goal
+                self.goal = journey_goal if goal is self.goal else goal
+                path = fallback if self.goal is journey_goal else self.nav.toward(
+                    snapshot, self.data.map_ids[self.goal.map_name], [(self.goal.x, self.goal.y)], memory, surf=surf)
         waypoint = False
         if path is None:
             path, waypoint = self.detour(snapshot, mem, memory, target, surf)
+        # The goal's arrival reads what its site wrote, so the pick writes now (rule A).
+        ballot.commit()
         self.mode = self.goal.label
         action = self.follow(snapshot, memory, path, waypoint, surf)
         if action:
@@ -1764,9 +1790,9 @@ class Policy:
             # A returned Sudowoodo walls off Route 36. With no other way round, battle it even without a ball.
             tree = self.nav.toward(snapshot, self.data.map_ids['ROUTE_36'], [(35, 10)], memory, surf=surf)
             if tree is not None:
-                self.goal = Goal('sudowoodo', 'Clear the moving tree off Route 36', 'ROUTE_36', 35, 10, 'up')
-                if getattr(self, 'ballot', None) is not None:
-                    self.ballot.offer(self.goal, 'sudowoodo')
+                goal = Goal('sudowoodo', 'Clear the moving tree off Route 36', 'ROUTE_36', 35, 10, 'up')
+                ballot = getattr(self, 'ballot', None)
+                self.goal = goal if ballot is None else ballot.offer(goal, 'sudowoodo')
                 return tree, False
         return None, False
 

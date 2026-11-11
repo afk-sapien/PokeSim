@@ -61,9 +61,6 @@ test('the search box asks for goals by name, and the select never holds more tha
 test('the status line names the pinned goal', () => {
   const {NextActivity} = load()
   assert.equal(NextActivity.status({key: 'hunt', label: 'Find Clefairy'}), 'Next: Find Clefairy')
-  assert.equal(NextActivity.status({key: 'hunt', label: 'Find Clefairy', parked: ''}), 'Next: Find Clefairy')
-  assert.equal(NextActivity.status({key: 'hunt', label: 'Find Clefairy', parked: 'no route'}),
-    'Next: Find Clefairy, waiting (no route)')
   assert.equal(NextActivity.status(null), '')
 })
 
@@ -118,6 +115,29 @@ test('a refusal shows its reason and leaves the picker as it was', async () => {
   assert.equal(element('#next-activity-note').textContent, 'Not available now')
   assert.equal(element('#next-activity-note').classList.contains('error'), true)
   assert.equal(element('#next-activity-cancel').hidden, true)
+})
+
+test('a pin the planner cannot run now says why, and one without a reason shows only its label', () => {
+  const {NextActivity} = load()
+  assert.equal(NextActivity.status({key: 'hunt', label: 'Find Clefairy', parked: 'no route found lately'}),
+    'Next: Find Clefairy (waiting: no route found lately)')
+  assert.equal(NextActivity.status({key: 'hunt', label: 'Find Clefairy', parked: ''}), 'Next: Find Clefairy')
+  assert.equal(NextActivity.status({key: 'hunt', label: 'Find Clefairy', parked: '  '}), 'Next: Find Clefairy')
+  assert.equal(NextActivity.status({key: 'hunt', label: 'Find Clefairy', parked: null}), 'Next: Find Clefairy')
+})
+
+test('a waiting pin says why as soon as it is set, and again on each state refresh', async () => {
+  const pin = {key: 'league', label: 'Run the League', started: false, parked: 'a Pokemon must learn Surf first'}
+  const {NextActivity, element, settle} = load({pin_goal: [200, {ok: true, pin}]})
+  NextActivity.update({strategy: {pin: null}})
+  await settle()
+  element('#next-activity-goal').value = 'league'
+  await NextActivity.pick()
+  assert.equal(element('#next-activity-status').textContent, 'Next: Run the League (waiting: a Pokémon must learn Surf first)')
+  NextActivity.update({strategy: {pin: {...pin, parked: ''}}})
+  assert.equal(element('#next-activity-status').textContent, 'Next: Run the League')
+  NextActivity.update({strategy: {pin: {...pin, parked: 'no route found lately'}}})
+  assert.equal(element('#next-activity-status').textContent, 'Next: Run the League (waiting: no route found lately)')
 })
 
 test('a pin from the live state shows without a click', () => {

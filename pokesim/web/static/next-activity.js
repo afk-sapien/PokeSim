@@ -23,8 +23,13 @@
   // A state refresh runs every 2 seconds and writes only what changed.
   const put = (element, property, value) => { if (element && element[property] !== value) element[property] = value }
 
-  // A pin the planner parked, because its goal stood down or found no route, says why it waits.
-  const status = pin => !pin ? '' : `Next: ${spell(pin.label)}${pin.parked ? `, waiting (${pin.parked})` : ''}`
+  // A pin the planner cannot run now says why after its label, so a waiting pin never looks like one
+  // that does nothing. A pin without the reason, or with an empty one, shows only its label.
+  const status = pin => {
+    if (!pin) return ''
+    const parked = spell(pin.parked).trim()
+    return `Next: ${spell(pin.label)}${parked ? ` (waiting: ${parked})` : ''}`
+  }
   // The game's own spelling, whatever the label source wrote.
   const spell = text => String(text ?? '').replace(/\bPokemon\b/g, 'Pokémon')
   // Typed names match without case, accents or punctuation, so "farfetchd" finds "Farfetch’d".
