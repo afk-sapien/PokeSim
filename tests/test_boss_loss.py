@@ -3,12 +3,13 @@
 A live Gen II run lost at Lance for 12 hours. Each run earned experience, levels and trainer wins before
 the blackout, so the stall alert never fired.
 """
+import time
 from types import SimpleNamespace
 
 from pokesim.emulator import Emulator
 from pokesim.gen2.emulator import Emulator as Gen2Emulator
 from pokesim.runtime.supervision import Supervisor
-from pokesim.stalls import LOOP_LIMIT, SCAN_FRAMES, LoopGuard, StallWatch, advanced
+from pokesim.stalls import LOOP_LIMIT, SCAN_FRAMES, LoopGuard, StallWatch
 from pokesim.store import Store
 from pokesim.strategy_data import MAPS
 from test_events import snap
@@ -56,21 +57,22 @@ def test_repeated_gen2_league_blackouts_trip_the_stall_while_experience_keeps_ri
 def test_repeated_gen1_league_blackouts_trip_the_stall_while_experience_keeps_rising():
     stall = StallWatch(game_minutes=120, real_minutes=0)
     emu = SimpleNamespace(stall=stall, loop_guard=None, store=None, policy=SimpleNamespace(goal=None),
-                          supervisor=Supervisor())
+                          supervisor=Supervisor(), play_clock=SimpleNamespace(frames=0),
+                          mem=SimpleNamespace(seen_maps=set(), championships=0))
     experience, before, alerts, frame = 100000, None, [], 0
 
     def tick(room, fainted=False, gain=0):
         nonlocal experience, before, frame
         experience += gain
         frame += 3600 * 5
+        emu.play_clock.frames = frame
         party = (mon(level=56, hp=0 if fainted else 100, max_hp=100, experience=experience),)
         s = snap(map=MAPS[room], party=party, badges=255)
+        # As Emulator._observe_snapshot does.
         Emulator._watch_boss(emu, before, s)
-        # As Emulator._observe_snapshot does after the boss watch.
-        if before is None or advanced(before, s):
-            stall.progress(frame, 0.0)
+        Emulator._note_progress(emu, before, s)
         before = s
-        alerts.append(stall.check(frame, 1e9))
+        alerts.append(stall.check(frame, time.time() + 60))
 
     tick('INDIGO_PLATEAU_LOBBY')
     for _ in range(12):
@@ -117,19 +119,19 @@ def test_a_reload_out_of_a_boss_attempt_is_a_loss():
     assert supervisor.reloads == 1 and stall.frame == 10
 
 
-def test_trainer_wins_before_a_blackout_do_not_reset_the_reload_count(tmp_path):
+def test_trainer_wins_before_a_blackout_do_not_end_a_loop(tmp_path):
     store, clock = Store(tmp_path), Clock()
     try:
         guard, stall, supervisor = LoopGuard(clock=clock), StallWatch(), Supervisor(store)
-        for _ in range(LOOP_LIMIT - 1):
-            guard.reloaded('league-entry.state')
+        for _ in range(LOOP_LIMIT):
+            add(store, 'obtain', 'Received Totodile from a custom PokeSim gift')
+            add(store, 'release', 'Said goodbye to a spare Totodile')
         supervisor.watch_boss(True, False, stall, guard)
         add(store, 'trainer', 'Defeated Elite Four Will')
         add(store, 'level', 'TYPHLOSION grew to level 57')
         supervisor.watch_boss(False, True, stall, guard)
-        guard.reloaded('league-entry.state')
         clock.now += SCAN_FRAMES
-        assert 'reloaded league-entry.state 6 times' in guard.looping(store)
+        assert 'received and released Totodile 6 times' in guard.looping(store)
         # A won battle outside any boss attempt is real progress again.
         add(store, 'badge', 'Earned the Rising Badge')
         clock.now += SCAN_FRAMES

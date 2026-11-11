@@ -1,4 +1,4 @@
-"""A run that repeats a gift and a release, or one reload, asks for help and stops the repeat."""
+"""A run that repeats a gift and a release asks for help and stops the repeat. The reload ladder counts reloads."""
 import time
 
 from pokesim.events import Event, release_title
@@ -48,21 +48,6 @@ def test_different_pokemon_released_after_a_gift_are_not_a_loop(tmp_path):
             add(store, 'obtain', 'Received Totodile from a custom PokeSim gift')
             add(store, 'release', f'Said goodbye to a spare Rattata{index}')
         assert LoopGuard(clock=Clock()).looping(store) is None
-    finally:
-        store.close()
-
-
-def test_the_same_save_reloaded_again_and_again_trips_the_guard(tmp_path):
-    store, clock = Store(tmp_path), Clock()
-    try:
-        guard = LoopGuard(clock=clock)
-        for _ in range(LOOP_LIMIT):
-            guard.reloaded('auto-v1-reward-1.state')
-        assert 'reloaded auto-v1-reward-1.state 6 times' in guard.looping(store)
-        # Real progress clears the count.
-        add(store, 'map', 'Reached Route 30')
-        clock.now += SCAN_FRAMES
-        assert guard.looping(store) is None
     finally:
         store.close()
 
@@ -121,7 +106,8 @@ def test_a_return_released_straight_away_is_not_progress(tmp_path):
     try:
         guard = LoopGuard(clock=clock)
         for _ in range(LOOP_LIMIT):
-            guard.reloaded('auto-v1-1.state')
+            add(store, 'obtain', 'Received Cyndaquil from a custom PokeSim gift')
+            add(store, 'release', 'Said goodbye to a spare Cyndaquil')
         assert guard.looping(store)
         add(store, 'event_return', 'Caught the returning Sudowoodo')
         add(store, 'event_return', 'Completed the Eevee gift')
@@ -132,7 +118,7 @@ def test_a_return_released_straight_away_is_not_progress(tmp_path):
         add(store, 'release', 'Said goodbye to a spare Eevee')
         for _ in range(3):
             clock.now += SCAN_FRAMES
-            assert 'reloaded auto-v1-1.state' in guard.looping(store)
+            assert 'received and released Cyndaquil' in guard.looping(store)
     finally:
         store.close()
 
@@ -164,41 +150,27 @@ def test_every_gen1_gift_title_pairs_with_its_release_title():
         assert gift == release, SPECIES[species]['name']
 
 
-def test_reload_counts_survive_a_worker_restart(tmp_path):
-    store, clock = Store(tmp_path), Clock()
-    try:
-        guard = LoopGuard(clock=clock)
-        for _ in range(LOOP_LIMIT - 1):
-            guard.reloaded('auto-v1-1.state')
-        assert guard.looping(store) is None
-        # A new worker builds a new guard. The counts it kept come back with the adventure.
-        fresh = LoopGuard(clock=clock)
-        fresh.reloaded('auto-v1-1.state')
-        assert 'reloaded auto-v1-1.state 6 times' in fresh.looping(store)
-        add(store, 'badge', 'Earned the Boulder Badge')
-        clock.now += SCAN_FRAMES
-        assert fresh.looping(store) is None
-        assert LoopGuard(clock=clock).looping(store) is None
-    finally:
-        store.close()
-
-
 def test_a_reload_replaying_the_same_journal_is_not_progress(tmp_path):
     store, clock = Store(tmp_path), Clock()
     try:
         add(store, 'map', 'Reached Route 30')
         add(store, 'level', 'CHIKO grew to level 9')
-        guard = LoopGuard(clock=clock)
+        # The reload ladder says whether the run has reloaded since its last new high.
+        replaying = [True]
+        guard = LoopGuard(clock=clock, replaying=lambda: replaying[0])
         assert guard.looping(store) is None
         for _ in range(LOOP_LIMIT):
-            guard.reloaded('auto-v1-1.state')
+            add(store, 'obtain', gen2_gift_title('Chikorita'))
+            add(store, 'release', release_title('Chikorita'))
             # The reload rewinds the run, and the replay journals the same map and level again.
             add(store, 'map', 'Reached Route 30')
             add(store, 'level', 'CHIKO grew to level 9')
             clock.now += SCAN_FRAMES
             guard.looping(store)
-        assert 'reloaded auto-v1-1.state 6 times' in guard.looping(store)
-        add(store, 'level', 'CHIKO grew to level 10')
+        assert 'received and released Chikorita 6 times' in guard.looping(store)
+        # Once a new high ends the replay, the same entry is progress again.
+        replaying[0] = False
+        add(store, 'map', 'Reached Route 30')
         clock.now += SCAN_FRAMES
         assert guard.looping(store) is None
     finally:
@@ -216,7 +188,7 @@ def test_the_web_thread_and_the_emulator_thread_share_one_guard(tmp_path):
         reasons = []
         threads = [threading.Thread(target=lambda: reasons.extend(guard.looping(store) for _ in range(50)))
                    for _ in range(4)]
-        threads.append(threading.Thread(target=lambda: [guard.reloaded('a.state') for _ in range(200)]))
+        threads.append(threading.Thread(target=lambda: [guard.take_trip() for _ in range(200)]))
         for thread in threads:
             thread.start()
         for thread in threads:
@@ -228,7 +200,7 @@ def test_the_web_thread_and_the_emulator_thread_share_one_guard(tmp_path):
 
 def test_a_waiting_run_is_not_shown_stalled_even_while_it_loops():
     from pokesim.stalls import stalled_state
-    assert stalled_state(True, False, False, 'It reloaded a.state 6 times without progress')
-    assert not stalled_state(True, True, False, 'It reloaded a.state 6 times without progress')
+    assert stalled_state(True, False, False, 'It received and released Totodile 6 times without other progress')
+    assert not stalled_state(True, True, False, 'It received and released Totodile 6 times without other progress')
     assert not stalled_state(True, True, True, None) and not stalled_state(False, False, True, 'loop')
     assert stalled_state(True, False, True, None)

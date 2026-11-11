@@ -78,10 +78,19 @@ BOX_CAPACITY = 20
 BOX_COUNT = 12
 
 BOX_DATA_SIZE = 1122
+# sBox1 and sBox7, where boxes 1 to 6 and 7 to 12 start in cartridge RAM banks 2 and 3.
+S_BOXES = 0xA000
+# Offsets in a box of its 33-byte records, its 11-byte original trainer names and its 11-byte
+# nicknames. The count byte and 21 species bytes come first.
+BOX_MONS_OFFSET = 22
+BOX_OTS_OFFSET = 682
+BOX_NICKS_OFFSET = 902
 
 W_TOGGLE_OBJECT_FLAGS = 0xD5A6
 
 W_EVENT_FLAGS = 0xD747
+# Event flags at wEventFlags, eight to a byte.
+NUM_EVENTS = 0xA00
 
 W_STATUS_FLAGS1 = W_EVENT_FLAGS - 31
 
@@ -281,7 +290,7 @@ def read_progress(memory, *, version=None) -> dict:
     Yellow uses the same event indices as Red and Blue.
     """
     memory = red_layout(memory, version)
-    flags = bytes(memory[W_EVENT_FLAGS:W_EVENT_FLAGS + 0x140])
+    flags = bytes(memory[W_EVENT_FLAGS:W_EVENT_FLAGS + NUM_EVENTS // 8])
     count = memory[W_PARTY_COUNT]
     valid = 1 <= count <= 6 and all(
         1 <= memory[W_PARTY_MONS + index * PARTY_STRUCT] <= 190

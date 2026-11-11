@@ -237,15 +237,25 @@ already in the Red layout. Gen II memory takes banked reads as `gen2.state` does
 The state is built from those decoders, reads the same bytes and never writes.
 
 `GameState` has `game`, `generation`, `player` (`Player`), `map` (`MapState`),
-`party` (`Party`, a sequence of `Mon`), `bag` (`Bag`), `seen` and `owned` as
-national Pokédex numbers, `battle` (`BattleState`) and `ui` (`UiState`). Gen I
-drops an owned flag whose seen flag is clear, as the snapshot reader does.
+`party` (`Party`, a sequence of `Mon`), `boxes` (`Boxes`), `bag` (`Bag`), `seen` and
+`owned` as national Pokédex numbers, `events`, `battle` (`BattleState`) and `ui`
+(`UiState`). Gen I drops an owned flag whose seen flag is clear, as the snapshot
+reader does. `events` holds the set event flags at `wEventFlags`, counted from 0 as
+the `EVENT_` constants of the pret disassemblies are.
 
 - `Mon` has `species` (the cartridge's ID), `dex`, `nick`, `ot_name`, `level`, `hp`,
   `status`, `moves`, `pp`, `pp_ups`, `max_pp`, `stats`, `experience`, `dvs`,
   `stat_exp`, `trainer_id`, `egg`, `types`, `held_item`, `friendship` and `pokerus`,
   plus `max_hp`, `pending` and `shiny`. `stats` starts with maximum HP and keeps the
   cartridge's order. `max_pp` is None unless `move_data` gives base PP.
+- `Boxes` has `active`, `counts` and `mons`, a tuple of `StoredMon` in box order, plus
+  `box(index)`. Boxes count from 0. `active` is None before a Gen I game selects a
+  box. A count is None for a box in a cartridge RAM bank the memory cannot serve,
+  such as an inactive Gen I box in flat memory. Gen I boxes come from
+  `storage.read_box_records` and Gen II boxes from `gen2.state.read_box_structs`.
+- `StoredMon` has `box`, `position` and the `Mon` fields a box record keeps, plus
+  `shiny`. It has no `stats`. Gen I records keep `hp`, `status` and `types`, and
+  Gen II records keep `held_item`, `friendship` and `pokerus`.
 - `Player` has `name`, `rival_name`, `trainer_id`, `money`, `coins`, `badges` (a bit
   field, Gen II Kanto in bits 8 to 15), `badge_names`, `playtime`,
   `hall_of_fame_count`, `gender` and `moms_money`.
@@ -498,6 +508,16 @@ with zero based positions and tuple fields. Its 128-entry cache is keyed only
 by complete immutable bytes. It cannot go stale after a restore, trade or box
 switch. No species validity policy is applied. `read_storage` retains its
 existing dictionaries and list fields, returning fresh mutable values each call.
+
+`storage.box_location(box, active)` gives the `(bank, address)` of a Gen I box's
+count byte. The active box is `(None, gen1.W_BOX_COUNT)` in WRAM, and the others
+start at `gen1.S_BOXES` in cartridge RAM banks 2 and 3. `storage.read_box_counts(memory, *, version=None)`
+returns one count per box, or `()` before a box is selected. Inactive boxes
+count 0 until the game initializes the boxes, and memory without banks reports
+`BOX_CAPACITY` for them. `storage.read_box_records(memory, counts=None, *, version=None)`
+returns a frozen `BoxRecords(box, structs, names)` for each box that holds
+Pokémon. Its `mons` property is `decode_box` of those bytes. A box whose bank the
+memory cannot serve is left out. Neither reader switches banks or writes memory.
 
 ## Trusted resets
 

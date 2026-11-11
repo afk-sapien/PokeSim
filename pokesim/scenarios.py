@@ -25,7 +25,8 @@ from .game_data import VARIANT_ENV, current_variant
 from .headless import HeadlessRun
 from .ram import (PARTY_STRUCT, W_BADGES, W_BAG_ITEMS, W_DEX_OWNED, W_EVENT_FLAGS, W_IS_IN_BATTLE, W_MONEY, W_NUM_BAG_ITEMS,
                   W_PARTY_COUNT, W_PARTY_MONS, read_snapshot)
-from .stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, advanced
+from .runtime.supervision import Supervisor
+from .stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, held_rose
 from .strategy_data import EVENTS, ITEMS
 from .trade.partners import valid as valid_partner
 from .yellow import YELLOW_SHA1
@@ -390,7 +391,9 @@ class PlannerMarks:
 
 
 class Gen1Watch(PlannerMarks):
-    """Achievements as the Red, Blue and Yellow application counts them for its stall watch.
+    """Progress as the Red, Blue and Yellow application counts it for its stall watch: a new best
+    (Supervisor.progressed) or more Pokémon held (stalls.GEN1_HELD_RISE). The journal entries are the
+    report's achievements, and an entry alone restarts nothing.
 
     A Kanto Marathon checkpoint counts too, as a Johto one does for Gen II. The race runs longer than
     a scenario's quiet window and earns nothing else, so a Red dojo return failed while it ran well.
@@ -398,6 +401,8 @@ class Gen1Watch(PlannerMarks):
 
     def __init__(self, run):
         self.run = run
+        # The best so far, kept across a reload as the application keeps it, so a replay is not progress.
+        self.supervisor = Supervisor()
         self.reset()
 
     def reset(self):
@@ -423,8 +428,11 @@ class Gen1Watch(PlannerMarks):
         new = diff(self.previous, snapshot, self.run.memory)
         self.pending = [event for event in new if event.still is not None]
         events += [event for event in new if event.still is None]
-        earned = (self.previous is not None and self.previous.valid and snapshot.valid
-                  and advanced(self.previous, snapshot))
+        # The first look only sets the best, as in the Gen II watch.
+        memory, first = self.run.memory, not self.supervisor.best
+        earned = bool(snapshot.valid and snapshot.started
+                      and (self.supervisor.progressed(snapshot, len(memory.seen_maps), memory.championships)
+                           and not first or held_rose(self.previous, snapshot)))
         reached = self.race_checkpoint()
         if reached is not None and self.checkpoint is not None and reached > self.checkpoint:
             earned = True
@@ -527,7 +535,7 @@ class Gen2Watch(PlannerMarks):
                 earned = True
             self.checkpoint = reached
         self.previous = snapshot
-        return gained, earned
+        return gained, earned or bool(gained)
 
     def battle_clock(self, snapshot, since, frame):
         """The runtime restarts its hung-battle clock each time a new opposing Pokémon enters."""
@@ -628,7 +636,7 @@ def play(scenario, rom=None, progress=None):
                 if foe is not None:
                     others, foe = others + (foe != target), None
             gained, earned = watch.observe(snapshot)
-            if gained or earned or run.generation == 2 and snapshot.started and run.waiting(snapshot):
+            if earned or run.generation == 2 and snapshot.started and run.waiting(snapshot):
                 progress_frame = run.frame
             for kind, title in gained:
                 achieved.append({'minute': (run.frame - start) // MINUTE, 'type': kind, 'title': title})

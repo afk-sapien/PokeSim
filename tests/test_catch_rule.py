@@ -10,6 +10,7 @@ from pokesim.policies.battle import W_ENEMY_MON, choose_battle, useful_capture
 from pokesim.policies.collection import Collection
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.runtime.participant import Participant
+from pokesim.runtime.supervision import Supervisor
 from pokesim.screen import Screen
 from test_capture_diversity import collection, sid
 from test_level100_priority import individual, postgame
@@ -73,7 +74,8 @@ def test_gen1_a_missing_entry_waits_when_only_the_upgrade_slot_is_free():
     reserve = policy._reserve(state, sid(25), mem)
     assert choose_battle(state, party[0], enemy, 0, collect_missing=True).kind == 'item'
     assert choose_battle(state, party[0], enemy, 0, collect_missing=True, reserve=reserve).kind != 'item'
-    emulator = SimpleNamespace(paused=False, manual_mode=False, stall=None, loop_guard=None, policy=policy, snapshot=state)
+    emulator = SimpleNamespace(paused=False, manual_mode=False, stall=None, loop_guard=None, policy=policy, snapshot=state,
+                               supervisor=Supervisor())
     assert policy.boxes_full and Emulator.help_request(emulator, {'action': 'battle'})['reason'] == pcvalue.BOXES_FULL
     # With two slots free it is caught as before, and the request clears.
     roomy = replace(state, box_counts=(20,) * 11 + (18,), boxed_pokemon=((sid(1), 50),) * 18)

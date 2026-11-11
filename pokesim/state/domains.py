@@ -95,7 +95,6 @@ DOMAINS = (
     Domain('pokesim-mew-v1', 'pokesim.runtime.reward_delivery', RESETS_ON_RESTART, GEN1, cached=True),
 
     # Reset by both restarts, so the new game's stall counts and goal times start empty.
-    Domain('loop-guard-reloads-v1', 'pokesim.stalls', RESETS_ON_RESTART),
     # A reload keeps the ladder's counts, so reloading cannot start the climb again.
     Domain('supervisor-ladder-v1', 'pokesim.runtime.supervision', RESETS_ON_RESTART),
     # A reload keeps the run's bests, so the replay after it cannot count as new progress.

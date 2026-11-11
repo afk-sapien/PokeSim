@@ -57,7 +57,8 @@ def gen2_help(game):
 
 
 def gen1_game(store, loop):
-    return SimpleNamespace(**stalled_game(store, loop), snapshot=None, policy=SimpleNamespace(boxes_full=False))
+    return SimpleNamespace(**stalled_game(store, loop), snapshot=None, policy=SimpleNamespace(boxes_full=False),
+                           supervisor=Supervisor())
 
 
 def gen2_game(store, loop):
