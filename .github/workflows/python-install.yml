@@ -44,7 +44,7 @@ jobs:
         with:
           args: --extra dev
       - name: Prepare verified reference data without a private ROM
-        run: uv run --locked python tools/prepare_test_data.py
+        run: uv run --locked python tools/check_install.py prepare-data
       - name: Test native service and Python launcher
         env:
           POKESIM_TEST_SHARD: ${{ matrix.shard }}
@@ -81,14 +81,14 @@ jobs:
         with:
           args: --extra dev
       - name: Prepare verified reference data without a private ROM
-        run: uv run --locked python tools/prepare_test_data.py
+        run: uv run --locked python tools/check_install.py prepare-data
       - run: uv build
       - name: Check package resources and exclude private data
-        run: uv run --locked python tools/check_package.py
+        run: uv run --locked python tools/check_install.py package
       - name: Install wheel and test Library and native workers outside the checkout
-        run: uv run --locked python tools/check_python_install.py --workspace-pokecore
+        run: uv run --locked python tools/check_install.py python-install --workspace-pokecore
       - name: Verify the user-facing installer and repeat installation
-        run: uv run --locked python tools/check_installer.py --workspace-pokecore
+        run: uv run --locked python tools/check_install.py installer --workspace-pokecore
   acceleration:
     timeout-minutes: 15
     runs-on: ubuntu-22.04
@@ -106,12 +106,12 @@ jobs:
       - uses: ./.github/actions/uv-sync
         with:
           args: --extra dev --extra acceleration
-      - run: uv run --locked --extra acceleration python tools/prepare_test_data.py
+      - run: uv run --locked --extra acceleration python tools/check_install.py prepare-data
       - name: Verify compiled paths and fallback behavior
         run: uv run --locked --extra dev --extra acceleration pytest -q tests/test_navigation_numba.py tests/test_navigation_equivalence.py
       - run: uv build
       - name: Test installed workers with optional acceleration
-        run: uv run --locked --extra acceleration python tools/check_python_install.py --acceleration --workspace-pokecore
+        run: uv run --locked --extra acceleration python tools/check_install.py python-install --acceleration --workspace-pokecore
   gate:
     # The one check the branch ruleset requires, so a new or renamed job above cannot be skipped by accident.
     name: install gate

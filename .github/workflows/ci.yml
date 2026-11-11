@@ -190,11 +190,11 @@ jobs:
       - run: python tools/check_web.py
       - run: python tools/check_docs.py
       - run: uv build
-      - run: python tools/check_package.py
+      - run: python tools/check_install.py package
       - name: Verify installation outside the source checkout
         if: matrix.python == '3.12'
         # The release workflow checks the pinned pokecore release instead.
-        run: python tools/check_python_install.py --workspace-pokecore
+        run: python tools/check_install.py python-install --workspace-pokecore
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -264,9 +264,9 @@ jobs:
       - run: docker compose config --quiet
       - run: docker build --pull -t pokesim:ci .
       - name: Verify the Compose installation and save lifecycle
-        run: python tools/check_container.py pokesim:ci
+        run: python tools/check_container.py compose pokesim:ci
       - name: Verify the new-user Docker setup and persistent volume
-        run: python tools/check_quickstart.py pokesim:ci
+        run: python tools/check_container.py quickstart pokesim:ci
       - name: Prepare local data outside the image
         run: docker run --rm -v pokesim-ci-data:/data pokesim:ci python -m pokesim.prepare_data --download
       - name: Verify repeated setup works offline

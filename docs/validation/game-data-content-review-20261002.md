@@ -97,7 +97,7 @@ Runtime portraits already come from the user's ROM through
 ## Current distribution boundary
 
 Packaging excludes `pokesim/data/` and standalone sprite packs.
-[`check_package.py`](../../tools/check_package.py) checks those paths and rejects
+[`check_install.py package`](../../tools/check_install.py) checks those paths and rejects
 ROM and save-file extensions. The generators themselves are shipped.
 README gameplay screenshots are included in the repository and source archives.
 They are a separate artwork consideration, not evidence that the generated JSON

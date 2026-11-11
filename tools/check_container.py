@@ -1,21 +1,27 @@
-"""Exercise the Compose lifecycle with disposable data and PyBoy's demo ROM."""
+"""Check the container image, the Docker quick start and a first run in an empty library.
+
+Only the standard library loads at import. The quick start check runs this file inside its container
+with python -c to make the first run check there, and python -c has no __file__.
+"""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
+import socket
 import subprocess
+import sys
 import tempfile
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener, urlopen
 import uuid
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1] if '__file__' in globals() else None
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('image')
-    args = parser.parse_args()
+def compose_check(args):
+    """Exercise the Compose lifecycle with disposable data and PyBoy's demo ROM."""
     project = 'pokesim-smoke-' + uuid.uuid4().hex[:12]
     with tempfile.TemporaryDirectory(prefix=project) as temporary:
         root = Path(temporary)
@@ -84,8 +90,8 @@ def main():
             subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--read-only',
                             '--cap-drop', 'ALL', '--tmpfs', '/tmp:size=256m,mode=1777',
                             '-v', project + '_audit-data:/data',
-                            '-v', str(ROOT / 'tools/check_python_runtime.py') + ':/check_runtime.py:ro',
-                            '--entrypoint', 'python', args.image, '/check_runtime.py'],
+                            '-v', str(ROOT / 'tools/check_install.py') + ':/check_install.py:ro',
+                            '--entrypoint', 'python', args.image, '/check_install.py', 'runtime'],
                            check=True, timeout=180)
             compose('down', '--remove-orphans')
             override.write_text(json.dumps({
@@ -118,6 +124,150 @@ def main():
             # Remove only this uniquely named test project's disposable resources.
             subprocess.run([*command, 'down', '--volumes', '--remove-orphans'],
                            env=env, check=True, timeout=60)
+
+
+def compose_environment(image, port):
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith('COMPOSE_')
+           and key not in {'DATA_PATH', 'PUBLIC_URL', 'NTFY_URL', 'NTFY_TOKEN', 'NTFY_MUTE'}}
+    env.update(POKESIM_IMAGE=image, HTTP_PORT=str(port), BIND_ADDRESS='127.0.0.1')
+    return env
+
+
+def compose_command(root, project):
+    return ['docker', 'compose', '--project-name', project, '--env-file', str(root / '.env'),
+            '-f', str(root / 'compose.yaml')]
+
+
+def quickstart(args):
+    """Verify the documented Docker quick start with a fresh, disposable named volume."""
+    project = 'pokesim-quickstart-' + uuid.uuid4().hex[:12]
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        port = listener.getsockname()[1]
+    with tempfile.TemporaryDirectory(prefix=project) as temporary:
+        root = Path(temporary)
+        shutil.copyfile(ROOT / 'compose.quickstart.yaml', root / 'compose.yaml')
+        (root / '.env').write_text('', encoding='utf-8')
+        env = compose_environment(args.image, port)
+        command = compose_command(root, project)
+
+        def compose(*arguments, capture=False):
+            return subprocess.run([*command, *arguments], cwd=root, env=env, check=True,
+                                  text=True, capture_output=capture, timeout=150)
+
+        opener = build_opener(ProxyHandler({}))
+        try:
+            for attempt in range(2):
+                compose('up', '-d', '--pull', 'never', '--wait', '--wait-timeout', '90')
+                for path in ('/', '/health/ready', '/static/library.js', '/api/v1/session'):
+                    with opener.open(f'http://localhost:{port}{path}', timeout=10) as response:
+                        assert response.status == 200
+                        if path == '/':
+                            assert b'Your adventure library' in response.read()
+                request = Request(f'http://127.0.0.1:{port}/', headers={'Host': f'localhost:{port}'})
+                with opener.open(request, timeout=10) as response:
+                    assert response.status == 200
+                code = ('import os\nfrom pathlib import Path\n'
+                        'assert os.getuid() == 10001\n'
+                        'p = Path("/data/quickstart-test.txt")\n')
+                if attempt == 0:
+                    code += 'p.write_text("retained library")\n'
+                else:
+                    code += 'assert p.read_text() == "retained library"\n'
+                compose('exec', '-T', 'pokesim', 'python', '-c', code)
+                if attempt == 0:
+                    probe = (ROOT / 'tools/check_container.py').read_text(encoding='utf-8')
+                    compose('exec', '-T', 'pokesim', 'python', '-c', probe, 'first-run', '--data-dir', '/data')
+                container = compose('ps', '-q', 'pokesim', capture=True).stdout.strip()
+                compose('stop')
+                inspected = json.loads(subprocess.check_output(['docker', 'inspect', container], text=True))[0]
+                assert inspected['State']['ExitCode'] in (0, 143)
+                compose('down')
+            print('Docker quick start passed: first ROM setup, fresh volume, non-root writes, custom port, health, shutdown, and persistence')
+        except BaseException:
+            compose('logs', '--no-color', '--tail=100')
+            raise
+        finally:
+            # Only this randomly named test project's disposable volume is removed.
+            compose('down', '--volumes', '--remove-orphans')
+
+
+def first_run(args):
+    """Check first ROM upload and automatic setup in an empty application directory."""
+    from fastapi.testclient import TestClient
+    from pokecore import emulator as pyboy
+    from pokesim import desktop_setup, sprites
+    from pokesim.app.manager import Manager, create_app
+    from pokesim.app.registry import identifier
+
+    raw = (args.rom or pyboy.demo_rom()).read_bytes()
+    if not args.rom:
+        # Only this isolated probe accepts the redistributable demo cartridge.
+        desktop_setup.ROM_NAMES[hashlib.sha1(raw).hexdigest()] = 'Pokémon Red'
+
+        def demo_portraits(rom, species):
+            assert rom == raw
+            assert all(isinstance(key, int) for key in species)
+            assert {entry['dex'] for entry in species.values()} >= set(range(1, 152))
+            return {dex: sprites.png([[0]]) for dex in range(1, 152)}
+
+        sprites.extract = demo_portraits
+
+    with tempfile.TemporaryDirectory(prefix='pokesim-first-run-', dir=args.data_dir) as temporary:
+        root = Path(temporary)
+        os.environ['DATA_DIR'] = str(root / 'legacy')
+        os.environ['GAME_DATA_DIR'] = str(root / 'missing-reference')
+        manager = Manager(root / 'library', 'http://testserver', game_data_dir=args.game_data)
+        with TestClient(create_app(manager)) as client:
+            csrf = client.get('/api/v1/session').json()['csrf_token']
+            response = client.post('/api/v1/assets/rom', content=raw,
+                                   headers={'X-PokeSim-CSRF': csrf})
+            assert response.status_code == 200, response.text
+            assert not manager.assets.game_data_dir.exists(), 'Upload must not require reference setup'
+            assert 'pokesim.strategy_data' not in sys.modules
+            rom = response.json()
+            adventure = manager.registry.create('First adventure', rom['id'], {}, identifier())
+            aid = adventure['id']
+            manager.registry.request_lifecycle(aid, 'start', identifier())
+            assert manager.start_adventure(aid)['state'] == 'running'
+            assert (manager.assets.game_data_dir / 'current.json').is_file()
+            portraits = list((manager.assets.root / 'sprites').glob('*.png'))
+            assert len(portraits) == 151, len(portraits)
+            assert 'pokesim.strategy_data' not in sys.modules
+            assert not (root / 'missing-reference').exists()
+            assert not (root / 'legacy').exists()
+            manager.supervisor.stop(aid)
+            assert list((manager.root / 'adventures' / aid / 'states').glob('*.state'))
+            custom = manager.assets.root / 'sprites' / '1.png'
+            custom_art = sprites.png([[1]])
+            custom.write_bytes(custom_art)
+
+            def unexpected_download(*args, **kwargs):
+                raise AssertionError('A prepared library must restart without downloading reference data')
+
+            desktop_setup.urlopen = unexpected_download
+            manager.registry.request_lifecycle(aid, 'start', identifier())
+            assert manager.start_adventure(aid)['state'] == 'running'
+            assert custom.read_bytes() == custom_art
+            manager.supervisor.stop(aid)
+    print('First run passed: upload without legacy data, automatic setup, portraits, worker start, save, and offline restart')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    for name, run in (('compose', compose_check), ('quickstart', quickstart)):
+        check = commands.add_parser(name, help=run.__doc__, description=run.__doc__)
+        check.add_argument('image')
+        check.set_defaults(run=run)
+    check = commands.add_parser('first-run', help=first_run.__doc__, description=first_run.__doc__)
+    check.add_argument('--data-dir', type=Path)
+    check.add_argument('--game-data', type=Path)
+    check.add_argument('--rom', type=Path)
+    check.set_defaults(run=first_run)
+    args = parser.parse_args()
+    args.run(args)
 
 
 if __name__ == '__main__':

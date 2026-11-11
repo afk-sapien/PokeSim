@@ -31,7 +31,7 @@ uv run --locked pytest --ignore=tests/test_rom.py -q
 uv run --locked python tools/check_web.py
 uv run --locked python tools/check_docs.py
 uv build
-uv run --locked python tools/check_package.py
+uv run --locked python tools/check_install.py package
 ```
 
 Stylesheet changes also need `npm ci` once, then `npm run lint:css`. Stylelint enforces the
