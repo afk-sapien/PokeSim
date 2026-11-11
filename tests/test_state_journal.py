@@ -11,8 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from pokesim.stalls import RELOADS_KEY, LoopGuard
-from pokesim.state import Error, journal, kv, tracking
+from pokesim.state import journal, tracking
 from pokesim.store import Store
 
 PACKAGE = Path(__file__).resolve().parents[1] / 'pokesim'
@@ -101,20 +100,3 @@ def test_an_activity_receipt_counts_once_and_the_receipts_seed_the_counts(store)
         assert sorted(tuple(row) for row in tracking.receipt_counts(db)) == [('caught', 25, 2), ('gift', 151, 1)]
         tracking.forget_caught(db)
         assert tracking.activity_counts(db) == {('wild', 25): 3}
-
-
-def test_the_loop_guard_keeps_its_reload_counts_and_shrugs_off_a_failed_write(store, monkeypatch):
-    guard = LoopGuard(clock=lambda: 0)
-    guard.reloaded('Route 1')
-    guard.looping(store)
-    with store.reading() as db:
-        assert kv.get(db, RELOADS_KEY) == {'Route 1': 1}
-
-    def fail(*args):
-        raise Error('disk I/O error')
-    monkeypatch.setattr(kv, 'put', fail)
-    guard.reloaded('Route 1')
-    guard._save(store)
-    assert guard.saved == {'Route 1': 1}
-    with store.reading() as db:
-        assert kv.get(db, RELOADS_KEY) == {'Route 1': 1}

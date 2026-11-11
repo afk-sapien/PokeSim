@@ -133,7 +133,7 @@ class Emulator:
         self.last_achievement = achievements[0] if achievements else None
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
-        self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
+        self.loop_guard = LoopGuard(lambda: self.play_clock.frames, replaying=lambda: self.supervisor.reloads > 0)
         self.supervisor = Supervisor(store)
         self.commands: queue.Queue = queue.Queue()
         self.manual: queue.Queue = queue.Queue(maxsize=2)
@@ -359,7 +359,8 @@ class Emulator:
         guard = getattr(self, 'loop_guard', None)
         if loop := guard and guard.reason:
             return {'reason': f'The run is caught in a loop. {loop}', 'action': strategy.get('action', '')}
-        if not stall or not stall.stalled(self.play_clock.frames):
+        # The third reload in a row without progress asks too, as in Gold, Silver and Crystal.
+        if not (stall and stall.stalled(self.play_clock.frames)) and not self.supervisor.stalled:
             # A missing entry left uncaught for want of a slot, with nothing in the PC that may go.
             from .pcvalue import BOXES_FULL, boxes_full
             from .policies.collection import catch_room
@@ -951,8 +952,6 @@ class Emulator:
         if target:
             log.warning("%s for %.1f game minutes, reloading %s", why,
                         max(0, self.frame - since_frame) / FRAMES_PER_SECOND / 60, target.name)
-            if guard:
-                guard.reloaded(target.name)
             candidates = [target] + [p for p in reversed(saves) if p != target]
             clock = self.play_clock.frames
             with trace.reason(self, 'reload'):
@@ -1267,7 +1266,7 @@ class Emulator:
         """Boot the committed new game, with trackers that hold nothing of the old one in memory."""
         from .goal_time import GoalTime
         self.pb.stop(save=False)
-        self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
+        self.loop_guard = LoopGuard(lambda: self.play_clock.frames, replaying=lambda: self.supervisor.reloads > 0)
         # The restart emptied the old run's reload streak from the store, so it cannot hold the new one stalled.
         self.supervisor = Supervisor(self.store)
         if watch := getattr(self, 'goal_watch', None):

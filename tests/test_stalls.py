@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 
 from pokesim.emulator import Emulator
+from pokesim.runtime.supervision import STALL_RELOADS, Supervisor
 from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, StallWatch
 
 
@@ -83,7 +84,7 @@ def test_earned_experience_is_progress_but_a_party_swap_is_not():
 
 
 def test_a_stalled_red_blue_or_yellow_run_asks_for_help():
-    game = SimpleNamespace(stall=StallWatch(game_minutes=120, real_minutes=0),
+    game = SimpleNamespace(stall=StallWatch(game_minutes=120, real_minutes=0), supervisor=Supervisor(),
                            play_clock=SimpleNamespace(frames=130 * MINUTE), paused=False, manual_mode=False)
     game.stall.progress(0, 0)
     request = Emulator.help_request(game, {'action': 'exploring'})
@@ -95,3 +96,6 @@ def test_a_stalled_red_blue_or_yellow_run_asks_for_help():
     game.manual_mode = False
     game.stall.progress(125 * MINUTE, 0)
     assert Emulator.help_request(game, {}) is None
+    # The third reload in a row without progress asks too, as in Gold, Silver and Crystal.
+    game.supervisor.reloads = STALL_RELOADS
+    assert Emulator.help_request(game, {})['reason'] == 'The policy has stopped making game progress'

@@ -193,7 +193,7 @@ class Emulator:
         self.explored = set()
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
-        self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
+        self.loop_guard = LoopGuard(lambda: self.play_clock.frames, replaying=lambda: self.supervisor.reloads > 0)
         self.reloads = 0
         self.last_reload = 0.0
         self.supervisor = Supervisor(store)
@@ -887,7 +887,7 @@ class Emulator:
         return True
 
     def _looping(self):
-        """Why the loop guard saw the same gift and release, or the same reload, repeating, or None.
+        """Why the loop guard saw the same gift and release repeating, or None.
 
         This is the answer of the last scan. Only the guard check scans, on the emulator thread, so
         the status page cannot move a scan to a frame a replay would not reach.
@@ -946,8 +946,6 @@ class Emulator:
         progress_events.reload(self.store, why)
         if target:
             log.warning('%s for %.1f game minutes, reloading %s', why, max(0, self.frame - since_frame) / 3600, target.name)
-            if guard := getattr(self, 'loop_guard', None):
-                guard.reloaded(target.name)
             for path in [target] + [path for path in reversed(saves) if path != target]:
                 try:
                     with trace.reason(self, 'reload'):
@@ -1179,7 +1177,7 @@ class Emulator:
         # The old run's bests and reload streak would hold the new one stalled for good, and the
         # watch clocks still pointed at its frames, which kept the guards and reward checks off.
         self.supervisor = Supervisor(self.store)
-        self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
+        self.loop_guard = LoopGuard(lambda: self.play_clock.frames, replaying=lambda: self.supervisor.reloads > 0)
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
         self._reset_watch()

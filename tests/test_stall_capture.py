@@ -18,10 +18,11 @@ from pokesim.runtime import capture, trace
 from pokesim.stalls import BEFORE_STALL_CHECKPOINT, FRAMES_PER_GAME_MINUTE as MINUTE, LOOP_LIMIT, LoopGuard, StallWatch
 from pokesim.store import Store
 
+from test_loop_guard import add
 from test_stall_bundles import MANIFEST, game
 from test_supervision import ladder
 
-LOOP = 'It reloaded auto-v1-1.state 6 times without progress'
+LOOP = 'It received and released Totodile 6 times without other progress'
 
 
 def sha(data):
@@ -55,7 +56,8 @@ def test_each_new_loop_is_taken_once(tmp_path):
         guard = LoopGuard(clock=lambda: 1000.0)
         assert guard.take_trip() is None
         for _ in range(LOOP_LIMIT):
-            guard.reloaded('auto-v1-1.state')
+            add(store, 'obtain', 'Received Totodile from a custom PokeSim gift')
+            add(store, 'release', 'Said goodbye to a spare Totodile')
         reason = guard.looping(store)
         assert reason and guard.take_trip() == reason and guard.take_trip() is None
         # The same loop seen again is not a new one.
