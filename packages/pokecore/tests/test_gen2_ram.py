@@ -246,6 +246,14 @@ def test_decoded_mons_carry_pokerus_caught_data_move_power_and_egg_cycles():
     assert egg['egg_cycles'] == 20
 
 
+def test_each_pp_up_adds_a_fifth_of_the_base_at_most_seven():
+    # pokecrystal's ComputeMaxPP caps each PP Up's gain at 7, so only 40 PP moves fall short of 8/5 of the base.
+    assert [ram.max_pp(40, ups) for ups in range(4)] == [40, 47, 54, 61]
+    assert [ram.max_pp(35, ups) for ups in range(4)] == [35, 42, 49, 56]
+    assert [ram.max_pp(5, ups) for ups in range(4)] == [5, 6, 7, 8]
+    assert ram.max_pp(0, 3) == 0
+
+
 def test_the_egg_view_is_opt_in():
     crystal, name = tables('crystal'), bytes([0x50] * 11)
     egg = gen2.decode_mon(raw_mon(215, 5, friendship=20), name, crystal, egg=True)
