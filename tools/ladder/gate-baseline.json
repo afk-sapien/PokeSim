@@ -7,297 +7,415 @@
   "blue/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 1.11
+   "waste": 1.11,
+   "story": [
+    "starter",
+    "parcel",
+    "pokedex"
+   ]
   },
   "blue/badges_2": {
    "stall": null,
    "errors": 0,
-   "waste": 7.48
+   "waste": 7.48,
+   "story": []
   },
   "blue/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 20.2
+   "waste": 20.2,
+   "story": []
   },
   "blue/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 9.21
+   "waste": 9.21,
+   "story": []
   },
   "blue/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 0.06
+   "waste": 0.06,
+   "story": []
   },
   "blue/league_first": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "blue/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 4.0
+   "waste": 4.0,
+   "story": []
   },
   "crystal/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 3.93
+   "waste": 3.93,
+   "story": [
+    "starter",
+    "mystery_egg",
+    "deliver_egg"
+   ]
   },
   "crystal/badges_2": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "crystal/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "crystal/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "crystal/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "crystal/league_first": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "crystal/champion_first": {
    "stall": null,
    "errors": 0,
-   "waste": 1.05
+   "waste": 1.05,
+   "story": [
+    "kanto",
+    "surge"
+   ]
   },
   "crystal/kanto_entry": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": [
+    "surge",
+    "sabrina",
+    "erika"
+   ]
   },
   "crystal/red": {
    "stall": null,
    "errors": 0,
-   "waste": 0.28
+   "waste": 0.28,
+   "story": [
+    "red"
+   ]
   },
   "crystal/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "gold/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 5.71
+   "waste": 5.71,
+   "story": [
+    "starter",
+    "mystery_egg",
+    "deliver_egg"
+   ]
   },
   "gold/badges_2": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "gold/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "gold/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "gold/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "gold/league_first": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "gold/champion_first": {
    "stall": null,
    "errors": 0,
-   "waste": 6.49
+   "waste": 6.49,
+   "story": [
+    "kanto",
+    "surge",
+    "sabrina"
+   ]
   },
   "gold/kanto_entry": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": [
+    "surge",
+    "sabrina",
+    "erika"
+   ]
   },
   "gold/red": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": [
+    "red"
+   ]
   },
   "gold/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "gold-randomized/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.24
+   "waste": 0.24,
+   "story": [
+    "starter",
+    "mystery_egg",
+    "deliver_egg"
+   ]
   },
   "gold-randomized/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "gold-randomized/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "gold-randomized/league_first": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "red/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 1.11
+   "waste": 1.11,
+   "story": [
+    "starter",
+    "parcel",
+    "pokedex"
+   ]
   },
   "red/badges_2": {
    "stall": null,
    "errors": 0,
-   "waste": 3.53
+   "waste": 3.53,
+   "story": []
   },
   "red/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 9.26
+   "waste": 9.26,
+   "story": []
   },
   "red/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 5.29
+   "waste": 5.29,
+   "story": []
   },
   "red/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 0.06
+   "waste": 0.06,
+   "story": []
   },
   "red/league_first": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "red/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 3.58
+   "waste": 3.58,
+   "story": []
   },
   "red-randomized/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 1.26
+   "waste": 1.26,
+   "story": [
+    "starter",
+    "parcel",
+    "pokedex"
+   ]
   },
   "red-randomized/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 9.36
+   "waste": 9.36,
+   "story": []
   },
   "red-randomized/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 0.06
+   "waste": 0.06,
+   "story": []
   },
   "red-randomized/league_first": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "silver/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.27
+   "waste": 0.27,
+   "story": [
+    "starter",
+    "mystery_egg",
+    "deliver_egg"
+   ]
   },
   "silver/badges_2": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "silver/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "silver/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 1.3
+   "waste": 1.3,
+   "story": []
   },
   "silver/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "silver/league_first": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "silver/champion_first": {
    "stall": null,
    "errors": 0,
-   "waste": 6.43
+   "waste": 6.43,
+   "story": [
+    "kanto",
+    "surge",
+    "sabrina"
+   ]
   },
   "silver/kanto_entry": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": [
+    "surge",
+    "sabrina",
+    "erika"
+   ]
   },
   "silver/red": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "silver/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "yellow/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 1.06
+   "waste": 1.06,
+   "story": [
+    "starter",
+    "parcel",
+    "pokedex"
+   ]
   },
   "yellow/badges_2": {
    "stall": null,
    "errors": 0,
-   "waste": 2.59
+   "waste": 2.59,
+   "story": []
   },
   "yellow/badges_4": {
    "stall": null,
    "errors": 0,
-   "waste": 12.12
+   "waste": 12.12,
+   "story": []
   },
   "yellow/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 18.96
+   "waste": 18.96,
+   "story": []
   },
   "yellow/badges_8": {
    "stall": null,
    "errors": 0,
-   "waste": 0.06
+   "waste": 0.06,
+   "story": []
   },
   "yellow/league_first": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0
+   "waste": 0.0,
+   "story": []
   },
   "yellow/post_game": {
    "stall": null,
    "errors": 0,
-   "waste": 1.81
+   "waste": 1.81,
+   "story": []
   }
  }
 }
