@@ -30,8 +30,10 @@ class Pin:
 
 
 def entry(key, label, tier):
-    """One row of the goal list a manager picks from."""
-    return {'key': key, 'label': label, 'tier': getattr(tier, 'name', str(tier)).lower()}
+    """One row of the goal list a manager picks from. Every listed goal can run now, so ``feasible`` is
+    True and ``why_not`` None until the list shows goals that wait."""
+    return {'key': key, 'label': label, 'tier': getattr(tier, 'name', str(tier)).lower(),
+            'feasible': True, 'why_not': None}
 
 
 def grouped(rows, query=None, limit=LIMIT):

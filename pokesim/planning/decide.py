@@ -40,6 +40,10 @@ STUCK = Failure('stuck', 'it stopped moving')
 NO_PROGRESS = Failure('no_progress', 'it stopped making progress')
 MENU_FAILED = Failure('menu_failed', 'a menu task for it kept failing')
 FAILURES = {failure.kind: failure for failure in (STOOD_DOWN, NO_ROUTE, CLAIM_HELD, STUCK, NO_PROGRESS, MENU_FAILED)}
+# Why the goal catalogue lists a goal its source left out of the draw (planning/catalogue.py). Each
+# Failure of these kinds names what it waits for in its own detail.
+NEEDS = 'needs'       # Something it cannot start without, such as a ball or a rod.
+NOT_NOW = 'not_now'   # A rule of its source holds it back for now, such as a party too weak for the grass.
 
 # The chain chose a goal the filter parked.
 PARKED = 'parked'

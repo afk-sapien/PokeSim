@@ -21,6 +21,7 @@ from typing import Literal
 
 from .. import config, stall_truth
 from ..capability import CAPABILITY_ERRORS
+from ..planning.catalogue import LIMIT as CATALOGUE_LIMIT
 from .event_page import render_event
 from .feed import render_feed
 from .journal_art import annotate as species_art, species_index
@@ -147,7 +148,7 @@ def without_stored_pokemon(status):
 
 # The plan fields the live page draws. The rest of the plan, the Red, Blue and Yellow collection
 # list above all, is for the Pokédex, the bots and tools, which read the default view.
-LIVE_PLAN_FIELDS = ('objective', 'next', 'reason', 'action', 'visited_tiles', 'pin')
+LIVE_PLAN_FIELDS = ('objective', 'goal', 'next', 'reason', 'action', 'visited_tiles', 'pin')
 
 
 def live_view(status):
@@ -648,6 +649,17 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         query = q.strip()[:40] or None
         try:
             return emu.call(lambda: emu.goals(query), timeout=10)
+        except (RuntimeError, TimeoutError) as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.get('/api/catalogue')
+    def goal_catalogue(q: str = '', limit: int = Query(CATALOGUE_LIMIT, ge=1, le=CATALOGUE_LIMIT)):
+        """The goal catalogue: the kinds of goal a director can ask for, and the goals open now or
+        waiting, each with why it waits. Anyone who can see the adventure reads it, as /api/state.
+        ``q`` finds the goals named like it."""
+        query = q.strip()[:40] or None
+        try:
+            return emu.call(lambda: emu.catalogue(query, limit), timeout=10)
         except (RuntimeError, TimeoutError) as error:
             raise HTTPException(409, str(error)) from error
 

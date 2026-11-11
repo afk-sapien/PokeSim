@@ -58,8 +58,19 @@ ALLOWED = {
     'state.game.party[].max_pp': 'The Gen 1 party record keeps PP limits in move_details, which the Live page draws.',
     'state.game.party[].move_details[].id': 'The Live page draws moves by name. The PC popup loads its own record.',
     'state.game.party[].perfect_dvs': 'The Live page does not draw it. The PC popup loads its own record.',
-    'state.strategy': 'Each generation has its own planner. The Live page reads both goal shapes, '
-                      'id and title or key and label, in objectiveOf.',
+    # Each generation has its own planner. Both send state.strategy.goal in one shape (REQUIRED below),
+    # and these parts stay each planner's own.
+    'state.strategy.objective': 'Each planner keeps its own goal detail, id and title in Gen 1 and key and '
+                                'label in Gen 2. The Live page reads state.strategy.goal first.',
+    'state.strategy.collection': 'Each planner reports its own collection: Gen 1 its projects and their '
+                                 'budget, Gen 2 its ladder phase. The Live page reads only its version, '
+                                 'to name the edition.',
+    'state.strategy.blocked': 'Gen 2 only. Its planner flags a goal it has waited on for about 16 seconds.',
+    'state.strategy.fossil': 'Gen 1 only. The Mt. Moon fossil choice is a Red, Blue and Yellow event.',
+    'state.strategy.interactions': 'Gen 1 only. Its planner counts the people and signs it talked to.',
+    'state.strategy.personality': 'Gen 1 only. Its planner draws a play personality at the start.',
+    'state.strategy.pickups': 'Gen 1 only. Its planner keeps its own record of ground items.',
+    'state.strategy.starter_confirmed': 'Gen 1 only. Its planner confirms the starter after the lab.',
     # Three known differences have no field in these payloads, so they need no entry. Celebi (Crystal
     # only) is the celebi_event setting. Shiny sprites (Gen 2 only) are the /sprites/shiny route. An
     # untracked Gen 1 ROM hack sends None counts, and both fixtures here run tracked cartridges.
@@ -98,7 +109,11 @@ def gaps(gen1, gen2, path):
 # Features both generations have, which the allowlist may never excuse. Each course runs on one
 # marathon engine, so neither generation may hide the race again.
 REQUIRED = ('statistics.marathon', 'statistics.marathon.name', 'statistics.marathon.total_checkpoints',
-            'statistics.current.marathons', 'statistics.history[].marathons')
+            'statistics.current.marathons', 'statistics.history[].marathons',
+            # The goal that runs now has one shape in both (docs/design/typed-goals.md section 4).
+            'state.strategy.goal', 'state.strategy.goal.key', 'state.strategy.goal.kind',
+            'state.strategy.goal.title', 'state.strategy.goal.tier', 'state.strategy.goal.done',
+            'state.strategy.goal.stop', 'state.strategy.goal.parked')
 
 
 def paths(value, path):
@@ -193,7 +208,7 @@ def gen2_adventure(tmp_path, data):
     from pokesim.gen2 import activity
     from pokesim.gen2.emulator import Emulator
     from pokesim.gen2.legendary import Recovery
-    from pokesim.gen2.policy import Policy
+    from pokesim.gen2.policy import Goal, Policy
     from pokesim.gen2.statistics import Statistics
     from pokesim.gen2.tracking import Tracker
     store = Store(tmp_path / data.game)
@@ -215,6 +230,8 @@ def gen2_adventure(tmp_path, data):
         statistics.observe(replace(emu.snapshot, frame=frame))
     statistics.flush(emu.snapshot)
     emu.data, emu.policy = data, Policy(data, seed=1, starter=config.STARTER)
+    # A running adventure always has a goal, as Red's starts with its boot goal.
+    emu.policy.goal = Goal('boot', 'Start the adventure', data.maps[start]['constant'], 5, 5)
     emu.rom_note = f'Pokémon {data.game.title()} (revision 0)'
     emu.progress_frame, emu.waiting, emu.supervisor, emu.invalid_frame = 3500, False, Supervisor(), None
     emu.game_clock = {'weekday': 'Monday', 'hour': 10, 'minute': 0, 'period': 'Day'}

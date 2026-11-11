@@ -135,18 +135,21 @@ The catalogue is plain data. It lists what a director can ask for.
 
 ```json
 {
-  "generation": 2,
-  "kinds": [{"kind": "hunt", "tier": "progress",
-             "params": [{"name": "species", "type": "species", "about": "the Pokémon to find"}]}],
-  "goals": [{"key": "hunt:35", "kind": "hunt", "params": {"species": 35},
-             "title": "Find Clefairy", "tier": "progress",
-             "feasible": false, "why_not": {"kind": "no_route", "detail": "no route lately"},
+  "generation": 1,
+  "kinds": [{"kind": "grass", "about": "catch a wild Pokémon in the grass",
+             "params": [{"name": "species", "type": "species", "about": "the Pokémon to get"},
+                        {"name": "map", "type": "map", "about": "the map it is on"}]}],
+  "goals": [{"key": "4:grass:59:", "kind": "grass", "params": {"species": 35, "map": 59},
+             "title": "Catch Clefairy (missing entry)", "tier": "progress",
+             "feasible": false, "why_not": {"kind": "no_route", "detail": "no route"},
              "cost": 42000, "worth": 3.5}],
-  "pin": {"key": "hunt:35", "label": "Find Clefairy", "started": false, "parked": "no route"},
+  "pin": {"key": "4:grass:59:", "label": "Catch Clefairy (missing entry)", "started": false,
+          "parked": {"kind": "no_route", "detail": "no route"}},
   "reason": null
 }
 ```
 
+- A kind names what a director can ask for and its params, and a goal's tier is its own, so a kind carries none. Gen I's kinds are its collection rules (`policies/kinds.py`), with the species as a dex number and the map as its id. Gen II's kinds are its ladder rungs (`gen2/collection.py`), whose one param is the key of the goal the rung offers. A goal waits for one of the kinds in `planning/decide.py`. Two are new here: `needs`, something it cannot start without such as a ball or a rod, and `not_now`, a rule of its source that holds it back for now.
 - `kinds` comes from the rules classes. `goals` comes from the same offers draw that feeds the pipeline, plus the goals that draw skipped and why. Gen I's `offers` drops a goal silently today when its key is standing down (`collection.py:1273`), when it has no step (`:1363`), when it has no route (`:1366`), when a need is unmet (`:1323`) and on a few source rules (`:1331`, `:1333`). Each skip becomes a `Failure` handed to an optional sink, which a live decision does not pass. Gen II's `survey` (`gen2/collection.py:955`) gets the same sink from the filter's parked offers.
 - A goal its game can never offer again, such as a species already caught that the dex does not need twice, is left out. The list is goals a director can act on or wait for.
 - `cost` is the candidate's `expected_frames` and `worth` its `value`, from the oracles that already price them (`planning/cost.py`, `planning/values.py` and each source's `candidate`). A goal skipped before its source priced it sends `null` for both. No new estimate code.

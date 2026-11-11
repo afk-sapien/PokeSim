@@ -13,6 +13,7 @@ from pokecore.gen2.ram import Memory
 from ..planning.monitor import STOOD_DOWN
 from .standdown import (DECISION_FRAMES, exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down,
                         standing_down)
+from .standdown import monitor as standdown_monitor
 from . import kinds
 
 
@@ -624,6 +625,8 @@ class Ladder:
         # A survey asks every rung, for the goal list a manager picks from, and changes nothing.
         self.survey = getattr(policy, 'ladder_survey', False)
         self.asked, self.labels = set(), {}
+        # In a survey, the goals a rung left out for now, each (key, title, Failure), for the catalogue.
+        self.skipped = []
 
     def _slots(self):
         policy = self.policy
@@ -700,6 +703,9 @@ class Ladder:
             # waits, and says why.
             if name == self.pin_rung:
                 self.pin_parked = decide.STOOD_DOWN
+            if self.survey:
+                kind = standdown_monitor(self.policy).failure(rung_key(name), self.policy.clock)
+                self.skipped.append((name, RUNGS.get(name, name).capitalize(), decide.FAILURES.get(kind, decide.STOOD_DOWN)))
             return
         self.asked.add(name)
         before = self.save()
@@ -709,6 +715,8 @@ class Ladder:
             # The walk to this goal found no route lately (policy.no_route), so another rung runs first.
             if self.pin is not None and f'{name}:{goal.key}' == self.pin.key:
                 self.pin_parked = decide.NO_ROUTE
+            if self.survey:
+                self.skipped.append((f'{name}:{goal.key}', goal.label, decide.NO_ROUTE))
             self.load(before)
             return
         if goal is None:
@@ -893,6 +901,8 @@ def journey(policy, snapshot, mem, Goal):
     policy.ladder_pick = ladder.pick.key if ladder.pick is not None else None
     policy.ladder_decision = getattr(policy, 'decisions', None)
     policy.ladder_labels = ladder.labels
+    if ladder.survey:
+        policy.ladder_skipped = ladder.skipped
     goal = ladder.goal
     if state.get('funding') is not None and ('collection', 'funding') not in ladder.undo:
         # A rung that offered nothing, such as the Game Corner prize partner, just asked for League prize
@@ -954,21 +964,24 @@ def pin_events(policy):
 
 
 def survey(policy, snapshot, mem, Goal):
-    """Every rung's candidate for this moment, best first, with labels, and the activity that holds the
-    ladder if one does. Each rung is asked as a decision would ask it and then everything is undone."""
+    """Every rung's candidate for this moment, best first, with labels, the activity that holds the
+    ladder if one does, and the goals the rungs left out for now, each (key, title, Failure). Each rung is
+    asked as a decision would ask it and then everything is undone."""
     ladder = Ladder(policy, snapshot)
     saved = ladder.save()
     names = ('ladder_rung', 'ladder_offers', 'ladder_pick', 'ladder_decision', 'ladder_labels', 'ladder_hold',
-             'collection_decision')
+             'ladder_skipped', 'collection_decision')
     kept = {name: getattr(policy, name, _MISSING) for name in names}
     rng = policy.rng.getstate() if hasattr(policy, 'rng') else None
     events = list(pin_events(policy))
     policy.ladder_survey = True
+    policy.ladder_skipped = []
     try:
         journey(policy, snapshot, mem, Goal)
         offers = arbiter.rank(getattr(policy, 'ladder_offers', None) or [])
         labels = dict(getattr(policy, 'ladder_labels', None) or {})
         hold = getattr(policy, 'ladder_hold', None)
+        skipped = list(policy.ladder_skipped)
     finally:
         policy.ladder_survey = False
         ladder.load(saved)
@@ -981,7 +994,71 @@ def survey(policy, snapshot, mem, Goal):
         if rng is not None:
             policy.rng.setstate(rng)
         policy.pin_events = events
-    return offers, labels, hold
+    return offers, labels, hold, skipped
+
+
+# Plain words for each collection rung, the kinds of the goal catalogue.
+RUNGS = {
+    'super_rod': 'get the Super Rod',
+    'headbutt_tutor': 'learn about Headbutt encounters',
+    'rock_smash_tutor': 'learn about Rock Smash encounters',
+    'funding': 'run the League for prize money',
+    'returned': 'meet a returned legendary at its home',
+    'pickups': 'pick up a stone that is offered only today',
+    'ruins': 'solve the Ruins of Alph picture boards',
+    'lapras': 'meet the Union Cave Lapras on a Friday',
+    'gifts': 'receive a Pokémon someone gives away',
+    'trade_items': 'get an item a trade evolution needs',
+    'npc_trades': 'trade with a person for their Pokémon',
+    'tower': 'take the Battle Tower challenge',
+    'celebi': 'meet Celebi at the Ilex Forest shrine',
+    'contest': 'earn a Sun Stone in the Bug-Catching Contest',
+    'breed': 'breed a missing Pokémon at the Day Care',
+    'prizes': 'exchange Game Corner coins for a Pokémon',
+    'stones': 'get an evolution stone',
+    'phones': 'collect a stone a phone contact holds',
+    'store': 'buy extra Goldenrod Dept. Store stock',
+    'champion_shop': 'buy limited TMs and Champion supplies',
+    'hatching': 'hatch the eggs the party carries',
+    'peer_store': 'box a Pokémon a peer adventure can take',
+    'training': 'raise a collected partner',
+    'legends': 'meet a legendary Pokémon',
+    'hunt': 'find a wild Pokémon for the Pokédex',
+    'postgame': 'keep playing once the Pokédex work runs out',
+}
+GOAL_PARAM = ('goal', 'key', 'the goal the rung offers')
+
+
+def catalogue(policy, snapshot, mem, Goal):
+    """The collection goals for the goal catalogue (planning/catalogue.py), best first, and why there
+    are none.
+
+    The goals the rungs offer come first in rank order, with the cost and worth their candidates priced.
+    The goals they left out follow, each with why. A passive goal such as the clock wait runs on any walk,
+    so it is not listed. The survey undoes every write.
+    """
+    from ..planning import catalogue as listing
+    if 'red' not in policy.completed:
+        return [], 'Finish the story first'
+    offers, labels, hold, skipped = survey(policy, snapshot, mem, Goal)
+    rows = []
+    for offer in offers:
+        if offer.passive:
+            continue
+        rung, _, goal = offer.key.partition(':')
+        rows.append(listing.goal(offer.key, rung, {'goal': goal}, labels.get(offer.key, offer.key), offer.tier,
+                                 cost=offer.expected_frames, worth=offer.value))
+    listed = {row['key'] for row in rows}
+    for key, title, failure in skipped:
+        if key not in listed:
+            rung, _, goal = key.partition(':')
+            rows.append(listing.goal(key, rung, {'goal': goal or None}, title, failure=failure))
+            listed.add(key)
+    if rows:
+        return rows, None
+    if hold is not None:
+        return [], f'{hold.label} finishes first'
+    return [], 'Nothing to do until the game changes'
 
 
 def goal_list(policy, snapshot, mem, Goal, query=None, limit=pin.LIMIT):
@@ -992,7 +1069,7 @@ def goal_list(policy, snapshot, mem, Goal, query=None, limit=pin.LIMIT):
     """
     if 'red' not in policy.completed:
         return [], 'Finish the story first'
-    offers, labels, hold = survey(policy, snapshot, mem, Goal)
+    offers, labels, hold, _ = survey(policy, snapshot, mem, Goal)
     rows = []
     for offer in offers:
         label = labels.get(offer.key, offer.key)

@@ -79,6 +79,8 @@ def planned_status():
     entries = [{'dex': dex, 'name': f'Species {dex}', 'owned': dex % 3 == 0,
                 'sources': [{'kind': 'wild', 'detail': 'Route 1 grass, morning and day' * 3}]} for dex in range(1, 152)]
     plan = {'objective': {'id': 'gym', 'title': 'Beat Brock'}, 'next': {'title': 'Cross Mt. Moon'}, 'reason': 'Badge',
+            'goal': {'key': 'gym', 'kind': 'story', 'title': 'Beat Brock', 'tier': 'progress', 'done': False,
+                     'stop': None, 'parked': None},
             'action': 'walk', 'visited_tiles': 900,
             # Why the pin waits rides inside the pin, so the live view needs no field of its own for it.
             'pin': {'kind': 'catch', 'label': 'Catch Pikachu', 'parked': {'kind': 'no_route', 'detail': 'no route found lately'}},

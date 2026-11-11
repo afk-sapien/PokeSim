@@ -7,6 +7,7 @@ import random
 import re
 from types import SimpleNamespace
 
+from ..planning import catalogue as listing
 from ..planning.ledger import FIELD_MOVES, LEARN_KEPT
 from ..planning.losses import ace_slot
 from ..planning.shadow import Shadow
@@ -166,6 +167,8 @@ class Policy:
         self.ballot = None
         self.errand_offer = None
         self.pipeline_pick = None
+        # The offer the goal ran under when a ballot last chose it, which the goal record reads. Never saved.
+        self.goal_offer = None
         # The source and goal key of the last decision's pick, which tells the stuck guard whether the
         # goal that stopped is the collection's and can be set aside. Never saved.
         self.picked = None
@@ -360,11 +363,33 @@ class Policy:
         self.pin = None
         return label
 
+    def catalogue(self, snapshot, query=None, limit=listing.LIMIT):
+        """The goal catalogue (planning/catalogue.py). The survey behind it undoes every write."""
+        from .collection import GOAL_PARAM, RUNGS, catalogue
+        kinds = [listing.kind(name, about, [GOAL_PARAM]) for name, about in RUNGS.items()]
+        if snapshot is None or self.memory is None:
+            rows, reason = [], 'Not available now'
+        else:
+            rows, reason = catalogue(self, snapshot, Memory(self.memory, self.data), Goal)
+        return listing.body(2, kinds, rows, self.pin, reason, query, limit)
+
+    def goal_record(self):
+        """The goal that runs now in the shape both generations share (docs/design/typed-goals.md
+        section 4). The offer's kind and tier count only while the goal is still the one its ballot chose."""
+        goal = self.goal
+        if goal is None:
+            return None
+        offer = getattr(self, 'goal_offer', None)
+        offer = offer if offer is not None and offer.goal is goal else None
+        return {'key': goal.key, 'kind': None if offer is None else offer.kind, 'title': goal.label,
+                'tier': None if offer is None else listing.tier_name(offer.candidate.tier),
+                'done': False, 'stop': None, 'parked': None if offer is None else listing.why(offer.parked)}
+
     def details(self):
         from .collection import active_target
         from .marathon import details as marathon_details
         return {'action': self.mode, 'decisions': self.decisions, 'starter': self.starter,
-                'pin': self.pin.to_dict() if self.pin else None,
+                'pin': self.pin.to_dict() if self.pin else None, 'goal': self.goal_record(),
                 'milestones': dict(self.completed), 'recoveries': self.recoveries, 'visited_tiles': len(self.nav.visits),
                 'objective': {'key': self.goal.key, 'label': self.goal.label, 'reason': self.goal.label} if self.goal else {},
                 'collection': {'version': self.data.game, 'dex_total': 251,
@@ -1476,7 +1501,7 @@ class Policy:
         if ballot is not None:
             # Only the offer the step ends with writes, so an offer a later site overrides leaves nothing.
             ballot.commit()
-            running = ballot.running
+            running = self.goal_offer = ballot.running
             self.picked = None if running is None else (running.source, running.key)
         shadow = getattr(self, 'shadow', None)
         if ballot is not None and shadow is not None and self.goal is not None:
