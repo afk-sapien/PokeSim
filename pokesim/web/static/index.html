@@ -16,7 +16,7 @@
 <link rel="icon" href="${game_base}/static/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="${game_base}/static/fonts/pokesim-panel.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${game_base}/static/tokens.css?v=panel-1">
-<link rel="stylesheet" href="${game_base}/static/panel.css?v=play-ui-2">
+<link rel="stylesheet" href="${game_base}/static/panel.css?v=goal-catalogue-1">
 <link rel="stylesheet" href="${game_base}/static/mon-grid.css?v=locks-1">
 <link rel="alternate" type="application/atom+xml" title="pokesim events" href="${game_base}/feed.xml">
 <link rel="stylesheet" href="${game_base}/static/types.css?v=glow-2">
@@ -72,7 +72,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <div class="plan-now"><p class="micro" id="objective-heading">Plan</p><h2 class="headline" id="objective">Finding the way forward</h2><p class="body" id="decision" hidden></p></div>
 <div class="plan-state"><p class="micro">Now</p><p class="value"><i class="lamp" data-on="ok" aria-hidden="true"></i><span id="progress-state">Exploring</span></p><p class="note" id="last-achievement">Waiting for the first achievement.</p></div>
 <div class="plan-next"><p class="micro">Next</p><p class="value" id="next-objective">Finding the next milestone</p><p class="note plan-meta"><span id="action-tag"></span><span id="progress"></span></p></div>
-<div class="plan-pick" id="next-activity" hidden><p class="micro plan-pick-label" id="next-activity-heading">Choose next</p><div class="plan-pick-controls" role="group" aria-labelledby="next-activity-heading"><p class="plan-pick-status" id="next-activity-status" hidden></p><label class="plan-pick-field plan-pick-search" id="next-activity-search-field"><span class="micro">Find</span><input id="next-activity-search" type="search" placeholder="Find a Pokémon" autocomplete="off" spellcheck="false"></label><label class="plan-pick-field plan-pick-focus" id="next-activity-goal-field"><span class="micro">Goal</span><select id="next-activity-goal"><option value="">Choose a goal</option></select></label><label class="plan-pick-field plan-pick-species" id="next-activity-species-field" hidden><span class="micro">Pokémon</span><input id="next-activity-species" type="search" placeholder="Search Pokémon" list="next-activity-species-list" autocomplete="off" spellcheck="false"></label><datalist id="next-activity-species-list"></datalist><label class="plan-pick-field plan-pick-stop" id="next-activity-stop-field" hidden><span class="micro">Stop when</span><select id="next-activity-stop"></select></label><button type="button" class="key plan-pick-button" id="next-activity-set" disabled>Set</button><button type="button" class="key plan-pick-button" id="next-activity-cancel" hidden>Cancel</button><p class="note" id="next-activity-note" role="status"></p></div></div>
+<div class="plan-pick" id="next-activity" hidden><p class="micro plan-pick-label" id="next-activity-heading">Choose next</p><div class="plan-pick-controls" role="group" aria-labelledby="next-activity-heading"><p class="plan-pick-status" id="next-activity-status" hidden></p><label class="plan-pick-field plan-pick-search" id="next-activity-search-field"><span class="micro">Find</span><input id="next-activity-search" type="search" placeholder="Find a Pokémon" autocomplete="off" spellcheck="false"></label><label class="plan-pick-field plan-pick-focus" id="next-activity-goal-field"><span class="micro">Goal</span><select id="next-activity-goal"><option value="">Choose a goal</option></select></label><label class="plan-pick-field plan-pick-species" id="next-activity-species-field" hidden><span class="micro">Pokémon</span><input id="next-activity-species" type="search" placeholder="Search Pokémon" list="next-activity-species-list" autocomplete="off" spellcheck="false"></label><datalist id="next-activity-species-list"></datalist><label class="plan-pick-field plan-pick-stop" id="next-activity-stop-field" hidden><span class="micro">Stop when</span><select id="next-activity-stop"></select></label><button type="button" class="key plan-pick-button" id="next-activity-set" disabled>Set</button><button type="button" class="key plan-pick-button" id="next-activity-cancel" hidden>Cancel</button><p class="note" id="next-activity-note" role="status"></p><details class="plan-pick-catalogue" id="next-activity-catalogue" hidden><summary>See every goal</summary><div class="plan-goals-body"><label class="plan-goals-find"><span class="micro">Find</span><input id="next-activity-catalogue-search" type="search" placeholder="Find a goal" autocomplete="off" spellcheck="false"></label><ol class="plan-goals" id="next-activity-catalogue-list"></ol><p class="note" id="next-activity-catalogue-note" role="status"></p></div></details></div></div>
 </section>
 </main>
 
@@ -93,7 +93,7 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/" aria-cur
 <script src="${game_base}/static/audio.js?v=5"></script>
 <script src="${game_base}/static/mon-grid.js?v=release-1"></script>
 <script src="${game_base}/static/party-popup.js?v=1"></script>
-<script src="${game_base}/static/next-activity.js?v=play-ui-3"></script>
+<script src="${game_base}/static/next-activity.js?v=goal-catalogue-1"></script>
 <script src="${game_base}/static/app.js?v=play-ui-3"></script>
 </body>
 </html>
