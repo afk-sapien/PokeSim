@@ -147,6 +147,10 @@ BIT_STRENGTH_ACTIVE = 0
 BIT_GAVE_SAFFRON_GUARDS_DRINK = 6
 W_MOVEMENT_FLAGS = 0xD736
 BIT_SPINNING = 7    # riding the arrow tiles in the Rocket Hideout and Viridian Gym
+# wStatusFlags7, once wFlags_D733. BIT_TRAINER_BATTLE is set while a trainer who spotted the
+# player engages them.
+W_STATUS_FLAGS7 = 0xD733
+BIT_TRAINER_BATTLE = 3
 # wCompletedInGameTradeFlags: 2 bytes, one bit per in-game trade, set once that trade is done.
 W_COMPLETED_IN_GAME_TRADE_FLAGS = 0xD737
 # hRandomAdd and hRandomSub: the two bytes the random number routine updates.
@@ -176,6 +180,7 @@ W_PLAYER_BATTLE_STATUS3 = 0xD064
 W_ENEMY_BATTLE_STATUS1 = 0xD067
 W_ENEMY_BATTLE_STATUS3 = 0xD069
 W_LINK_STATE = 0xD12B    # wLinkState: nonzero while a link is up, LINK_STATE_BATTLING (4) in a link battle
+W_CAPTURED_MON_SPECIES = 0xD11C    # wCapturedMonSpecies: set once a ball catches, before the dialogue
 # wBattleType values. BATTLE_TYPE_PIKACHU is Yellow's catch in Oak's lab.
 BATTLE_TYPE_OLD_MAN = 1
 BATTLE_TYPE_SAFARI = 2

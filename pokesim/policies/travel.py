@@ -1,4 +1,6 @@
 """Directed journeys reuse ordinary battle, menu, and field-move controls."""
+from pokecore.gen1 import BIT_STRENGTH_ACTIVE, W_STATUS_FLAGS1
+
 from .navigation import Navigator, shut_tiles
 from .progression import Goal
 from .puzzles import MANSION_MAPS, VICTORY_MAPS
@@ -69,7 +71,7 @@ class TravelPolicy(StrategicPolicy):
             if not direction:
                 _, direction = self.boulders.exit_push(s, self.nav, self.targets)
             if direction:
-                if not mem[0xD728] & 1:
+                if not mem[W_STATUS_FLAGS1] & (1 << BIT_STRENGTH_ACTIVE):
                     partner = next((i for i, mon in enumerate(s.party) if 70 in mon.moves), None)
                     if partner is None:
                         raise ValueError('The route to the Cable Club needs a partner with Strength')

@@ -4,6 +4,8 @@ from copy import deepcopy
 from itertools import count
 import os
 
+from pokecore.gen1 import sprite_tile
+
 from ..mapfacts.gen1 import SHUT, SWAPS
 from ..mapfacts.gen1_hand import HAND
 from ..planning.conditions import AnyOf, Badge, Event, Item
@@ -286,7 +288,7 @@ class Navigator:
 
     def update_live(self, snapshot, memory):
         self.live_map = snapshot.map
-        self.live_positions = [(memory[0xC215 + i * 16] - 4, memory[0xC214 + i * 16] - 4)
+        self.live_positions = [sprite_tile(memory, i + 1)
                                for i in range(min(15, len(WORLD.get(snapshot.map, {}).get("objects", []))))]
 
     def update_story(self, snapshot, *, allow_remote_puzzles=True):
