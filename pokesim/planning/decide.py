@@ -94,6 +94,19 @@ def _ranked(offers, pinned, style):
     return [next(offer for offer in offers if offer.candidate is candidate) for candidate in order]
 
 
+def serve(best, enablers):
+    """The offer that runs for ``best``, and the goal it serves or None. While the pick has a need that an
+    enabler in ``enablers``, keyed by the need it serves, can meet, that enabler runs in its place, and
+    then its own needs are walked the same way. A need is met once per walk."""
+    pick, serving, met = best, None, set()
+    while True:
+        need = next((need for need in pick.needs if need in enablers and need not in met), None)
+        if need is None:
+            return pick, serving
+        met.add(need)
+        pick, serving = enablers[need], best
+
+
 def decide(offers, pinned=None, style=None):
     """The Decision for ``offers``. ``pinned`` and ``style`` are as for ``arbiter.rank``."""
     offers = latest(offers)
@@ -120,14 +133,8 @@ def decide(offers, pinned=None, style=None):
         # With no goal to serve, the latest enabler still meets its need.
         enabler = next(reversed(enablers.values()), None)
         return Decision(enabler, None if enabler is None else NEED, offers, parked)
-    pick, serving, met = best, None, set()
-    while True:
-        need = next((need for need in pick.needs if need in enablers and need not in met), None)
-        if need is None:
-            break
-        met.add(need)
-        pick, serving, rule = enablers[need], best, NEED
-    return Decision(pick, rule, offers, parked, serving)
+    pick, serving = serve(best, enablers)
+    return Decision(pick, rule if serving is None else NEED, offers, parked, serving)
 
 
 def difference(decision, chosen):

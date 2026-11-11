@@ -1,6 +1,6 @@
 # Decide pipeline
 
-Status: proposed on 2026-11-11. Nothing here is built yet. Every line number was read from main at `2d02e6c2`. This is phase 2 item 4 of the architecture plan of 2026-11-09, the new PR before [Goal system v2](goal-system.md) PR 7. Shadow mode reuses `planning/shadow.py`, and the trace is the one in [Replayable bugs](replayable-bugs.md).
+Status: accepted on 2026-11-11. Slices 1 and 2 are built. Every line number was read from main at `2d02e6c2`. This is phase 2 item 4 of the architecture plan of 2026-11-09, the new PR before [Goal system v2](goal-system.md) PR 7. Shadow mode reuses `planning/shadow.py`, and the trace is the one in [Replayable bugs](replayable-bugs.md).
 
 Today each generation rebuilds its goal on every decision through an ordered chain. A source low in the chain wins because it comes later in the file, not because it is worth more, and nothing records that two sources fought. This note replaces both chains with one pipeline. Every source offers, one filter decides what can run, and the arbiter ranks everything that is left in one call.
 
@@ -93,6 +93,8 @@ class Offer:
 
 The needs table is read off today's chain, so the switch starts from today's behaviour. A goal needs every enabler that replaces it today, which is every enabler whose replace comes later in the chain. Slice 1 writes the table for Gen I and slice 4 for Gen II. Any later change to the table is a behaviour change and goes to the lead first.
 
+The Gen I party upgrade (L980) is an offer today, but only one that wins is made, so it overrides every goal before it as the replaces do. Slice 2 makes it the enabler of the `team` need, at its own place in the table. Slice 1 recorded it as an offer, so the pipeline ranked it against the story goal, and that was the one disagreement in slice 1's shadow data.
+
 Item uses where the party stands take one action and end the step before the chain finishes. They are the League treatment, field cures, vitamins in a full bag, medicine during a heal and teaching from TM development (strategic.py:986-1052, L1639-1655). They stay in the step until phase 3 makes them task objects. A step that ends in one is not a decision, and shadow does not count it.
 
 Until a group of sources switches on, the chain that is left runs as one source, `legacy`, which offers its own pick. So a switch moves one group at a time, and every switch PR deletes the chain sites of its group.
@@ -151,15 +153,17 @@ The lead approved all three on 2026-11-11.
 | the swap's `pc.species` and `pc.destination` | strategic.py:978-979, before its offer | party upgrade |
 | `release_spare`, and clearing the swap | strategic.py:629, L632-633 | party release |
 | clearing the swap | strategic.py:638-639 | party box |
-| `supplies_prepared` on the project | strategic.py:1024 | supplies |
-| the supplies abandon | strategic.py:1026 | supplies |
+| `supplies_prepared` on the project, when the supplies plan offers its own goal | strategic.py:1024 | supplies |
+| the supplies abandon, when the supplies plan offers its own goal | strategic.py:1026 | supplies |
 | the abandon before the Champion | `policies/collection.py:1110` | collection |
 | the committed `project`, `idle_token` and marathon timer | `policies/collection.py:1127-1132`, L1148 | collection |
 | the pickup's `active` and its `expires` | `policies/pickups.py:110-111` | pickup |
 | `tm_plan` and `tm_frame` for a TM purchase | strategic.py:1664-1665 | TM development |
 | `next_goal`, the goal shown behind an errand | strategic.py:1067, L1075 | collection, pickup |
 
-Observations that every decision makes stay where they are, such as the heal latch update (L959), the pickup scan timer (`pickups.py:90`) and clearing a finished swap (L599). Slice 4a adds the Gen II `_step` writes to this table before 4b moves them.
+Observations that every decision makes stay where they are, such as the heal latch update (L959), the pickup scan timer (`pickups.py:90`) and clearing a finished swap (L599). Two more stay in slice 2. With no spare to let go, `release_spare` is cleared on every decision. A supplies plan that keeps the goal, because the legendary's supplies are ready or the hunt cannot pay for its balls, writes `supplies_prepared` and its abandon at once, since no goal of its own can be picked. Slice 4a adds the Gen II `_step` writes to this table before 4b moves them.
+
+So in slice 2 a release that loses to a heal leaves its spare unmarked, and a trade may still offer that spare until the release runs. A box change or a release that loses no longer ends a swap under way. A legendary plan that gives up during a lift ride, or on the League side of Victory Road, abandons the project once the ride or the passage out is done.
 
 **B. A pin passes the checks** (slice 5). A pinned Gen II rung no longer skips the stand-down check (`gen2/collection.py:704`) or the no-route check (L712). A rung the watchdog gave up on is parked, where today the pin asks it again. A pin comes from the owner in the UI, and a pin that silently does nothing is a bug. So the same PR puts the parked reason into the adventure's API state and shows it in the UI where the pin is set. The UI part is agreed with pokesim-ui through the lead.
 
@@ -172,8 +176,8 @@ Each switch slice deletes the old call sites it replaces in the same PR. Estimat
 | # | Slice | Deletes | Time |
 |---|---|---|---|
 | 1 | Pipeline and Gen I shadow: `planning/decide.py`, every Gen I chain site recording its offer with its source, the Gen I needs table, the trace field, the `pipeline` point and the report | the `overworld` shadow point (strategic.py:1104-1106), which agrees by construction | 5 hours |
-| 2 | Gen I upkeep and party switch: heal, upgrade, release, box, supplies and trash become needs and UPKEEP offers. Holds replace the heal latch and the errand restore | replaces at L603, L634, L640, L650, L967, L1022, L1056, the offer at L980, the heal latch, the restore at L489 | 3 hours |
-| 3 | Gen I story and collection switch: base goal and boss training, the project, `collection.choose`, pickups, teaching, TM development and the forced moves | `Choice` (L168-230) with `offer` and `replace`, replaces at L594, L1068, L1083, L1098, offers at L596, L1045, L1076, L1640-1666, direct assignments at L518, L582-587, L1047, L1138-1139, L1286, L1288, L1294, the `legacy` source, the `collection` shadow point (`collection.py:1144`) | 4 hours |
+| 2 | Gen I upkeep and party switch: heal, upgrade, release, box, supplies and trash become enablers that the need walk (`decide.serve`) runs, and their writes move to commits (rule A). The heal latch stays the party's observation, and its site offers the heal as an enabler. The errand restore stays, since it sets the goal on battle, menu and dialogue steps that make no overworld decision, so no hold can replace it before the errand is a goal under way in slice 3 | replaces at L603, L634, L640, L650, L967, L1022, L1056, the offer at L980 | 3 hours |
+| 3 | Gen I story and collection switch: base goal and boss training, the project, `collection.choose`, pickups, teaching, TM development and the forced moves. Holds replace the errand restore | `Choice` (L168-230) with `offer` and `replace`, replaces at L594, L1068, L1083, L1098, offers at L596, L1045, L1076, L1640-1666, direct assignments at L518, L582-587, L1047, L1138-1139, L1286, L1288, L1294, the restore at L489, the `legacy` source, the `collection` shadow point (`collection.py:1144`) | 4 hours |
 | 4 | Gen II, in two PRs. 4a is shadow: story, holds, ladder and the `_step` sites as sources, with the Gen II needs table. 4b switches them | 4a: the `ladder` shadow point (policy.py:1489-1496). 4b: boss training (L368-369), release (L1486), heal (L1532, L1593-1594), partner and HM (L1564, L1570), the no-route fallback (L1601), Sudowoodo (L1720), the errand restore (L1399), the `holds` return (`collection.py:811`) | 4 hours |
 | 5 | Director source: the manager pin becomes the director in both generations, and its choices go into the trace. A parked pin's reason reaches the API state and the UI, and a test checks that a Gen I project resumes intact after a pin | the pin exemptions (`gen2/collection.py:627-629`, L702, L704, L712), the Gen I pin abandon (`policies/collection.py:1446`) | 2 hours |
 

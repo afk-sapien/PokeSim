@@ -132,6 +132,30 @@ def test_a_mart_without_ultra_balls_does_not_finish_legendary_preparation():
     assert not p.collection.project.get('supplies_prepared')
 
 
+def test_a_plan_that_gives_up_on_supplies_abandons_only_when_it_runs():
+    # A source writes only when its goal is picked (decide pipeline rule A): the lift a lift ride puts
+    # first leaves the expedition under way until the plan to earn supplies runs.
+    from pokesim.policies.shopping import SupplyPlan
+    from pokesim.policies.strategic import StrategicPolicy
+    from test_strategy import fake_mem
+    plan = SupplyPlan(Goal('collect_plan', 'Plan another expedition', 'Earn supplies before another legendary attempt'),
+                      True, 'Need money or bag space for legendary capture supplies')
+
+    def policy():
+        p = StrategicPolicy(1)
+        p.collection.project = {'method': 'static', 'species': sid(150), 'legendary': True, 'key': 'mewtwo'}
+        p.shop.plan = lambda *args, **kwargs: plan
+        return p
+
+    riding = policy()
+    riding._overworld(state(map=MAPS['CELADON_MART_ELEVATOR'], x=1, y=3), fake_mem({}))
+    assert riding.goal.key == 'hideout_elevator' and riding.collection.project['key'] == 'mewtwo'
+    assert not riding.collection.project.get('supplies_prepared')
+    walking = policy()
+    walking._overworld(state(map=MAPS['CELADON_CITY'], x=10, y=10), fake_mem({}))
+    assert walking.goal.key == 'collect_plan' and walking.collection.project is None
+
+
 def test_barrier_does_not_make_a_damaging_attack_safe_for_legendary_capture():
     me = mon(species=sid(75), level=100, hp=300, max_hp=311, attack=250,
              moves=(70, 89, 88, 153), pp=(15, 10, 15, 5))

@@ -1,10 +1,10 @@
-"""The Gen I overworld chain's sites as decide pipeline sources (docs/design/decide-pipeline.md, slice 1).
+"""The Gen I overworld chain's sites as decide pipeline sources (docs/design/decide-pipeline.md).
 
 Each site of the chain in ``strategic.py`` records its offer under its site name, and ``offer`` turns
 that into a pipeline ``Offer`` with the site's source, needs and rule. The needs table is read off the
-chain: a goal needs every enabler whose replace comes later, since a later replace overrides it today.
-The most urgent need is the one the latest site serves. Changing the table changes behaviour once a
-group switches on, so a change goes to the lead first.
+chain: a goal needs every enabler whose site comes later, since a later enabler overrode it in the old
+chain. The most urgent need is the one the latest site serves. The upkeep and party enablers decide by
+this table (slice 2), so a change to it changes behaviour and goes to the lead first.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ SITES = (
     ('box', 'party', 'room'),          # A box change that makes room for catches.
     ('heal_latch', 'heal', 'healthy'),  # The heal under way, set by the step.
     ('heal', 'heal', 'healthy'),       # The heal under way, set again by the overworld step.
-    ('upgrade', 'party', ''),          # A stronger reserve in the box.
+    ('upgrade', 'party', 'team'),      # A stronger reserve in the box.
     ('supplies', 'supplies', 'supplies'),  # A restock the goal cannot go on without.
     ('teach', 'moves', ''),            # An owned HM.
     ('tm_trip', 'moves', ''),          # A TM trip under way.
@@ -54,7 +54,8 @@ SOURCES = {site: source for site, source, _ in SITES}
 SERVES = {site: serves for site, _, serves in SITES}
 
 
-def offer(site, goal, candidate, source=None):
-    """The pipeline offer of ``goal`` at chain ``site``. An unknown site offers as the legacy chain."""
+def offer(site, goal, candidate, source=None, commit=None):
+    """The pipeline offer of ``goal`` at chain ``site``, with the writes ``commit`` runs only when it is
+    picked. An unknown site offers as the legacy chain."""
     return Offer(source or SOURCES.get(site, 'legacy'), goal, candidate, needs=NEEDS.get(site, ()),
-                 serves=SERVES.get(site, ''), hold=site in HOLDS, forced=site in FORCED)
+                 serves=SERVES.get(site, ''), hold=site in HOLDS, forced=site in FORCED, commit=commit)

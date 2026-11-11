@@ -2,6 +2,7 @@
 import random
 from collections import Counter
 from dataclasses import asdict
+from functools import partial
 
 from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositPokemon, FieldMove, LearnMove, ReleasePokemon,
                                     ReorderParty, RunAway, SellItem, SwitchPokemon, UseItem, WithdrawPokemon, item_kind)
@@ -170,21 +171,28 @@ def ball_at_hand(s, goal, nav):
 class Choice:
     """The goal sources of one overworld decision, weighed on the arbiter.
 
-    ``pick`` is the best candidate offered so far and ``goal`` its goal. Each source offers its goal as a
-    candidate, and the arbiter keeps the better of it and the pick. A failed precondition, such as a
-    hurt party or a full box, cannot be weighed: the goal behind it cannot run until it is met, so its
-    enabler replaces the pick. ``candidates`` lists what was weighed since the last replacement, so its
-    arbiter pick is always ``pick``.
+    ``chosen`` is the best goal offered so far. Each source offers its goal as a candidate, and the
+    arbiter keeps the better of it and the pick. A failed precondition, such as a hurt party or a full
+    box, cannot be weighed: the goal behind it cannot run until it is met. Its enabler is kept by the need
+    it serves, and the decide pipeline's need walk (``decide.serve``) runs it in place of the goal that
+    needs it. ``pick`` and ``goal`` are what runs, the enabler or the chosen goal. ``candidates`` lists
+    what was weighed since the last replacement or enabler, so its arbiter pick is always ``pick``.
 
     ``offers`` records each source's offer with its chain site, for the decide pipeline in shadow mode
     (docs/design/decide-pipeline.md). An offer an errand under way leaves out is not recorded, since that
-    guard reads the chain's pick and stays at its site until a group switches on.
+    guard reads the pick and stays at its site until the story and collection sources switch on.
     """
 
     def __init__(self, goal, candidate, site='base', source='current'):
-        self.goal, self.pick = goal, candidate
+        self.chosen = pipeline.offer(site, goal, candidate, source)
+        self.enablers = {}
         self.candidates = [candidate]
-        self.offers = [pipeline.offer(site, goal, candidate, source)]
+        self.offers = [self.chosen]
+        self._walk()
+
+    def _walk(self):
+        self.running = decide.serve(self.chosen, self.enablers)[0]
+        self.goal, self.pick = self.running.goal, self.running.candidate
 
     @property
     def kind(self):
@@ -224,19 +232,37 @@ class Choice:
         """Offer ``goal`` as ``candidate`` from chain ``site`` and return the goal the arbiter keeps. An
         errand under way weighs nothing but its own steps, so any other offer is left out of ``candidates``."""
         wins = self.wins(candidate)
+        offered = pipeline.offer(site, goal, candidate)
         if wins or not self.errand:
             self.candidates.append(candidate)
-            self.offers.append(pipeline.offer(site, goal, candidate))
+            self.offers.append(offered)
         if wins:
-            self.goal, self.pick = goal, candidate
+            self.chosen = offered
+            self._walk()
         return self.goal
 
     def replace(self, goal, candidate, site=None):
-        """Put ``goal`` first, as the enabler of a failed precondition, from chain ``site``."""
-        self.goal, self.pick = goal, candidate
+        """Put ``goal`` first from chain ``site``, over every goal and enabler before it."""
+        self.chosen = pipeline.offer(site, goal, candidate)
         self.candidates = [candidate]
-        self.offers.append(pipeline.offer(site, goal, candidate))
+        self.offers.append(self.chosen)
+        self._walk()
         return goal
+
+    def enable(self, goal, candidate, site, commit=None):
+        """Offer ``goal`` as the enabler of the need chain ``site`` serves, and return the goal that runs.
+        ``commit`` holds the writes that run only if the step ends with this enabler running."""
+        offered = pipeline.offer(site, goal, candidate, commit=commit)
+        self.enablers[offered.serves] = offered
+        self.candidates = [candidate]
+        self.offers.append(offered)
+        self._walk()
+        return self.goal
+
+    def commit(self):
+        """Run the writes of the offer that runs, which only an enabler has for now."""
+        if self.running.commit is not None:
+            self.running.commit()
 
 
 class StrategicPolicy(Policy):
@@ -398,8 +424,10 @@ class StrategicPolicy(Policy):
         # The TM and supply options last scored, and the party, bag and purse they were scored for.
         self.tm_token = None
         self.tm_options = None
-        # The step's choice, which the overworld chain goes on weighing.
+        # The step's choice, which the overworld chain goes on weighing, and the one whose running offer
+        # writes when the step ends.
         self.choice = None
+        self.committing = None
         # The errand the last overworld decision picked, the step's pick before any errand, and whether
         # this step reached the overworld decision.
         self.errand = None
@@ -491,8 +519,12 @@ class StrategicPolicy(Policy):
         return select(scr, target, one_based, scroll)
 
     def step(self, ctx):
-        self.pick, self.decided, self.pipeline_pick = None, False, None
+        self.pick, self.decided, self.pipeline_pick, self.committing = None, False, None, None
         actions = self._step(ctx)
+        if self.committing is not None:
+            # Only the offer the step ends with writes, so an enabler a later site overrides leaves nothing.
+            self.committing.commit()
+            self.committing = None
         if self.errand is not None and not self.decided and self.goal is self.pick and not ctx.snapshot.in_battle:
             # An errand under way is the goal until the next overworld decision ends it. Otherwise each
             # walking, warp, dialogue and menu step on the way ran under the pick behind it. The step has
@@ -616,10 +648,10 @@ class StrategicPolicy(Policy):
                 self.pc.destination = None
             else:
                 # The swap is under way, and the reserve it withdraws is the one the goal behind it needs.
-                choice.replace(Goal('party_upgrade', 'Bring a stronger reserve onto the team',
-                                    'Swap an underused reserve for a useful Pokémon already in storage',
-                                    ((self.pc.destination, 13, 4),), 'up', True),
-                               choice.errand_candidate('party_upgrade', 'party'), site='swap')
+                choice.enable(Goal('party_upgrade', 'Bring a stronger reserve onto the team',
+                                   'Swap an underused reserve for a useful Pokémon already in storage',
+                                   ((self.pc.destination, 13, 4),), 'up', True),
+                              choice.errand_candidate('party_upgrade', 'party'), site='swap')
         self.goal = self.pick = choice.goal
         self.next_goal = self.goal.to_dict()
         league_rooms = {MAPS[n] for n in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM')}
@@ -642,30 +674,31 @@ class StrategicPolicy(Policy):
         self.pc_deadlock = False
         release = (self._release_target(s) if box_wanted(storage_headroom(s), self.release_spare is not None)
                    or self.release_pending(s) else None)
-        self.release_spare = release
+        if release is None:
+            # With no spare to let go, no release visit is under way.
+            self.release_spare = None
         if release and not withdrawing_partner and s.map not in league_rooms:
-            # Room to catch is a precondition of every catch, so its enabler replaces the pick.
-            self.pc.species = None
-            self.pc.destination = None
-            self.goal = choice.replace(Goal('party_release', 'Make room in storage',
-                                            'Let a spare duplicate go so there is room for new catches',
-                                            CENTERS, 'up', True), choice.errand_candidate('party_release', 'party'),
-                                       site='release')
+            # Room to catch is a precondition of every catch. Its spare and the swap it ends are written
+            # only when the step ends with the release running (decide pipeline rule A).
+            self.goal = choice.enable(Goal('party_release', 'Make room in storage',
+                                           'Let a spare duplicate go so there is room for new catches',
+                                           CENTERS, 'up', True), choice.errand_candidate('party_release', 'party'),
+                                      site='release', commit=partial(self._commit_release, release))
         elif s.box_full and not withdrawing_partner and s.next_free_box is not None and s.map not in league_rooms:
-            self.pc.species = None
-            self.pc.destination = None
-            self.goal = choice.replace(Goal('party_box', 'Make room for new catches',
-                                            f'Box {s.active_box + 1} is full. Visit a PC and switch to Box '
-                                            f'{s.next_free_box + 1}', CENTERS, 'up', True),
-                                       choice.errand_candidate('party_box', 'party'), site='box')
+            self.goal = choice.enable(Goal('party_box', 'Make room for new catches',
+                                           f'Box {s.active_box + 1} is full. Visit a PC and switch to Box '
+                                           f'{s.next_free_box + 1}', CENTERS, 'up', True),
+                                      choice.errand_candidate('party_box', 'party'), site='box',
+                                      commit=self._end_swap)
         if kind == 'overworld' and not s.in_battle:
             self._boss_check(s, self.pick, s.map in league_rooms)
             self._update_heal_latch(s)
         if self.heal_latch and s.map not in league_rooms and not ball_at_hand(s, choice.goal, self.nav):
             # The heal under way is the goal of every step, not only the overworld ones. Otherwise each
             # dialogue box, battle and poison tick on the way to the nurse ran under the story goal.
-            self.goal = choice.replace(healing_goal(s), choice.errand_candidate('heal', 'heal'), site='heal_latch')
-        self.choice = choice
+            self.goal = choice.enable(healing_goal(s), choice.errand_candidate('heal', 'heal'), site='heal_latch')
+        # The step ends with this choice's writes unless the overworld decision goes on weighing it.
+        self.choice = self.committing = choice
         token =(s.badges, tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
         if s.party and token != self.assessment_token:
             self.readiness = readiness(s)
@@ -979,9 +1012,9 @@ class StrategicPolicy(Policy):
         choice = self.choice
         if choice is None or choice.goal is not self.goal:
             choice = Choice(self.goal, goal_candidate(self.goal, self.collection))
-        self.choice = None
+        self.choice, self.committing = None, choice
         if self.heal_latch and not in_league and not ball_at_hand(s, choice.goal, self.nav):
-            choice.replace(healing_goal(s), choice.errand_candidate('heal', 'heal'), site='heal')
+            choice.enable(healing_goal(s), choice.errand_candidate('heal', 'heal'), site='heal')
         swap = choice.errand_candidate('party_upgrade', 'party')
         if (not s.box_full and not self.heal_latch and not choice.owns_party and choice.wins(swap)
                 and 'Pokecenter' in WORLD.get(s.map, {}).get('name', '') and WORLD[s.map]['width'] == 14):
@@ -992,11 +1025,11 @@ class StrategicPolicy(Policy):
                             if level >= max(mon.level for mon in s.party) * 0.5
                             and not any(mon.species == sid for mon in s.party)]
                 if upgrades and max(upgrades)[0] > potential(p.species, [mon for i, mon in enumerate(s.party) if i != weakest]) + p.level * 10 + 80:
-                    self.pc.species = max(upgrades)[1]
-                    self.pc.destination = s.map
-                    choice.offer(Goal('party_upgrade', 'Bring a stronger reserve onto the team',
-                                      'Swap an underused reserve for a useful Pokémon already in storage',
-                                      ((s.map, 13, 4),), 'up', True), swap, site='upgrade')
+                    # The swap is set only when the step ends with it running (decide pipeline rule A).
+                    choice.enable(Goal('party_upgrade', 'Bring a stronger reserve onto the team',
+                                       'Swap an underused reserve for a useful Pokémon already in storage',
+                                       ((s.map, 13, 4),), 'up', True), swap, site='upgrade',
+                                  commit=partial(self._start_swap, max(upgrades)[1], s.map))
         goal = choice.goal
         if in_league:
             # Between rooms the bag heals toward the boss check's bar (planning/boss.py treatment), the same
@@ -1035,12 +1068,16 @@ class StrategicPolicy(Policy):
                                   has_pokedex=self.completed.get('pokedex', False),
                                   completed_champion=self.collection.completed_champion)
         if supplies.goal is not goal:
-            # The shop plans a restock only for supplies the goal cannot go on without.
-            goal = choice.replace(supplies.goal, choice.errand_candidate(supplies.goal.key, 'supplies'), site='supplies')
-        if supplies.prepared and self.collection.project:
-            self.collection.project['supplies_prepared'] = True
-        if supplies.abandon:
-            self.collection.abandon(supplies.abandon)
+            # The shop plans a restock only for supplies the goal cannot go on without. What the plan
+            # writes on the project is written only when the step ends with it running (decide pipeline
+            # rule A).
+            goal = choice.enable(supplies.goal, choice.errand_candidate(supplies.goal.key, 'supplies'), site='supplies',
+                                 commit=partial(self._commit_supplies, supplies) if supplies.prepared or supplies.abandon
+                                 else None)
+        else:
+            # A plan that keeps the goal reads the bag and the purse as they are: the supplies are ready,
+            # or a hunt cannot pay for its balls.
+            self._commit_supplies(supplies)
         if self.heal_latch:
             # Medicine is useful when no known route to a center can be followed.
             for target, mon in enumerate(s.party):
@@ -1071,7 +1108,7 @@ class StrategicPolicy(Policy):
         if tm_action:
             return tm_action
         if goal.key == "thunder" and not event_set(s.event_flags, "EVENT_2ND_LOCK_OPENED"):
-            goal = choice.replace(self._trash_goal(s), choice.errand_candidate('trash', 'trash'), site='trash')
+            goal = choice.enable(self._trash_goal(s), choice.errand_candidate('trash', 'trash'), site='trash')
         if not self.heal_latch and not in_league and not choice.errand:
             # The collection pick weighs its own projects on the arbiter against the goal it is handed, and
             # commits the one it picks, so its pick is taken as it is. An errand under way is never handed
@@ -1128,6 +1165,8 @@ class StrategicPolicy(Policy):
         self.goal = goal
         self.errand = goal if choice.errand else None
         self.decided = True
+        choice.commit()
+        self.committing = None
         if self.next_goal and self.next_goal['id'] == goal.key:
             next_badge = next((row['title'] for row in self.journey if not row['done']), 'Celebrate the Champion victory')
             self.next_goal = {'id': 'milestone', 'title': next_badge}
@@ -1535,6 +1574,25 @@ class StrategicPolicy(Policy):
             self.boxes_full = not allowed and SPECIES.get(species, {}).get('dex') not in snapshot.owned
             return allowed
         return allows
+
+    # The writes the upkeep and party enablers make when a step ends with one running (decide pipeline
+    # rule A, docs/design/decide-pipeline.md). An enabler a later site overrides leaves nothing behind.
+
+    def _start_swap(self, species, destination):
+        self.pc.species, self.pc.destination = species, destination
+
+    def _end_swap(self):
+        self._start_swap(None, None)
+
+    def _commit_release(self, spare):
+        self.release_spare = spare
+        self._end_swap()
+
+    def _commit_supplies(self, supplies):
+        if supplies.prepared and self.collection.project:
+            self.collection.project['supplies_prepared'] = True
+        if supplies.abandon:
+            self.collection.abandon(supplies.abandon)
 
     def release_pending(self, snapshot):
         """Whether an owner's release request waits for the next PC visit. A request whose Pokémon has
