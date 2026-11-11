@@ -1,14 +1,16 @@
 from copy import deepcopy
 import hashlib
 import json
+import logging
 import os
 import threading
+import time
 from types import SimpleNamespace
 
 import httpx
 import pytest
 
-from pokesim.app.coordinator import Coordinator
+from pokesim.app.coordinator import SUMMARY_SECONDS, Coordinator
 from pokesim.app.registry import Registry, identifier
 from pokesim.interactions.cable_metadata import ADAPTER_ID
 
@@ -1325,3 +1327,28 @@ def test_trade_views_build_only_the_rows_they_return(setup):
     mine = c.adventure_status(left)
     assert len(mine['history']) == 20 and len(mine['recent_failures']) == 5 and mine['active'] == []
     assert len(built) <= 25
+
+
+def test_the_scheduler_logs_a_count_of_its_passes_every_five_minutes(setup, caplog):
+    # A pass that goes well logs nothing else, so this line is what shows trading runs at all.
+    c = setup.coordinator
+    caplog.set_level(logging.INFO, logger='pokesim.app.coordinator')
+    summaries = lambda: [r.getMessage() for r in caplog.records if r.getMessage().startswith('Automatic trading over')]
+    c._schedule()
+    assert setup.cable_calls and summaries() == []
+
+    def broken():
+        raise RuntimeError('Game data is missing')
+    c.schedule_once = broken
+    with pytest.raises(RuntimeError):
+        c._schedule()
+    del c.schedule_once
+    c.summary_started = time.monotonic() - SUMMARY_SECONDS
+    c._schedule()
+    # The two Red games rated each other's offers in the first pass. The failed pass counts apart.
+    line, = summaries()
+    assert line == ('Automatic trading over 5 minutes: 2 passes, 1 failed, 1 rated Red, Blue or Yellow offers, '
+                    '0 rated Gold, Silver or Crystal offers')
+    assert not any(aid in line for aid in setup.peers)
+    c._schedule()
+    assert len(summaries()) == 1

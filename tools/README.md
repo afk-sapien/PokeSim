@@ -56,7 +56,8 @@ and `summarize-soak`.
 
 | Tool | Purpose |
 | --- | --- |
-| `deploy_host.sh` | Build one commit into an image and deploy it to the managed app on a Docker host |
+| `deploy_host.sh` | Deploy the image a passing image trial ran, or build one for a rollback, to the managed app on a Docker host |
+| `image_trial.py` | Gate a deploy on 30 minutes of its image as a container on a copy of a cold backup |
 | `live_soak.py` | Gate a deploy on a copy of the live adventures |
 | `local_sims.sh` | Run the dev instance and temporary sims inside the capped PokeSim user slices |
 | `maintain.py` | Offline maintenance for stopped, backed-up PokeSim data |

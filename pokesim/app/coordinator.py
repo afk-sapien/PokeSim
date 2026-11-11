@@ -34,6 +34,11 @@ from ..trade.worth import gain
 log = logging.getLogger(__name__)
 TERMINAL = {'completed', 'aborted'}
 COOLDOWN_SECONDS = 300
+# A scheduler pass that goes well logs nothing, so every SUMMARY_SECONDS it logs how many passes ran,
+# how many failed and how many rated offers for a game of each generation. Counts only, no names.
+SUMMARY_SECONDS = 300
+SUMMARY = ('Automatic trading over %d minutes: %d passes, %d failed, %d rated Red, Blue or Yellow offers, '
+           '%d rated Gold, Silver or Crystal offers')
 # Each attempt keeps two save states, two cartridge saves and two screenshots, so the tree
 # grows by about half a megabyte per exchange and every backup copies all of it.
 KEEP_INTERACTIONS = 20
@@ -212,6 +217,10 @@ class Coordinator:
         self.recovery_failures = {}
         self.ineligible = {}
         self.refused_pairs = {}
+        # For the SUMMARY line: counts since summary_started, and the generations the current pass rated.
+        self.pass_counts = Counter()
+        self.pass_rated = set()
+        self.summary_started = time.monotonic()
         self.prepare_timeout = 900
         self.prepare_poll = 1
         self.session_timeout = 960
@@ -1186,6 +1195,8 @@ class Coordinator:
                 takes = [self._offer_for(offer, left) for offer in right.get('offers', [])]
                 theirs_by_give = [gain(right, give).points for give in gives]
                 mine_by_take = [gain(left, take).points for take in takes]
+                self.pass_rated.update(side.get('cartridge_generation', 1) for side, offers in
+                                       ((right, gives), (left, takes)) if offers)
                 for give, theirs in zip(gives, theirs_by_give):
                     for take, mine in zip(takes, mine_by_take):
                         if not self._compatible_pair(left, right, give, take):
@@ -1606,14 +1617,30 @@ class Coordinator:
         if self.scheduler and self.scheduler.is_alive():
             return
         self.loop = Loop('cable-coordinator', self._schedule, 10, self.closed.wait, logger=log)
+        self.summary_started = time.monotonic()
         self.scheduler = self.loop.start()
 
     def _schedule(self):
+        self.pass_rated = set()
         try:
             self.schedule_once()
         except Exception:
+            self.pass_counts['failed'] += 1
             self.last_message = 'Trading is waiting and will try again. Your adventures keep their progress.'
             raise
+        else:
+            self.pass_counts['passes'] += 1
+            self.pass_counts.update(self.pass_rated)
+        finally:
+            self._summarize()
+
+    def _summarize(self):
+        now = time.monotonic()
+        if now - self.summary_started < SUMMARY_SECONDS:
+            return
+        counts, minutes = self.pass_counts, round((now - self.summary_started) / 60)
+        self.pass_counts, self.summary_started = Counter(), now
+        log.info(SUMMARY, minutes, counts['passes'], counts['failed'], counts[1], counts[2])
 
     def preview(self, aid):
         with self.view_guard:
