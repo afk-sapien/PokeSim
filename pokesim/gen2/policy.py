@@ -1325,6 +1325,12 @@ class Policy:
         if not requests:
             self.shop_location = None
             return None
+        if self.shop_location and self.nav.regions.between(snapshot, cut, surf):
+            # In a ledge hop the coordinates read the wall tile jumped over, which is in no region, so no
+            # route can be judged until the player lands. The shop already chosen stays the goal. The walk
+            # to Olivine Mart drops three ledges on Route 39, and the trip was dropped in each hop.
+            mid, script, _ = self.shop_location
+            return self.person(snapshot, 'buy_balls', 'Restock adventure supplies', self.data.maps[mid]['constant'], script)
         choices = []
         for priority, (key, names, amount) in enumerate(requests):
             reserve = ledger.held_money(self.data, snapshot, key)

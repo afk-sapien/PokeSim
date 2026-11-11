@@ -112,7 +112,7 @@
   "crystal/red": {
    "stall": null,
    "errors": 0,
-   "waste": 0.28,
+   "waste": 0.0,
    "story": [
     "red"
    ]
@@ -324,7 +324,7 @@
   "silver/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 1.3,
+   "waste": 0.0,
    "story": []
   },
   "silver/badges_8": {
