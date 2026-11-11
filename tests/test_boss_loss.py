@@ -22,7 +22,7 @@ LEAGUE = {'WILLS_ROOM', 'LANCES_ROOM', 'HALL_OF_FAME'}
 
 def blackout_emu(stall):
     policy = SimpleNamespace(in_league=lambda snapshot: snapshot.where in LEAGUE, constant=lambda snapshot: snapshot.where,
-                             goal=None, BOSSES=frozenset())
+                             goal=None)
     return SimpleNamespace(stall=stall, loop_guard=None, store=None, policy=policy, data=SimpleNamespace(map_ids={}),
                            history={'maps': set(), 'league': 0}, play_clock=SimpleNamespace(frames=0),
                            supervisor=Supervisor())

@@ -186,8 +186,9 @@ class Emulator(EmulatorBase):
         store.clock = lambda: self.play_clock.frames
         from ..progress_events import GoalWatch
         self.goal_watch = store.goal_watch = self.policy.goal_watch = GoalWatch()
-        # A restart replaces the policy, so the hook asks for the current one each time.
-        self.goal_watch.readiness = lambda snapshot: getattr(self.policy, 'readiness_target', lambda _: None)(snapshot)
+        from ..planning.league import readiness_target
+        from .readiness import BOSS_TABLE, aces
+        self.goal_watch.readiness = lambda snapshot: readiness_target(BOSS_TABLE, snapshot, aces(self.data))
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.commands = queue.Queue()
@@ -732,13 +733,15 @@ class Emulator(EmulatorBase):
 
         An attempt runs while the party is inside the League or in the room of the boss its goal names.
         """
+        from ..planning.league import challenges
+        from .readiness import BOSS_TABLE
         policy, stall = self.policy, getattr(self, 'stall', None)
         if stall is None or not hasattr(policy, 'in_league'):
             return
         goal = getattr(policy, 'goal', None)
         boss = bool(snapshot.valid and snapshot.started) and (
             policy.in_league(snapshot) and policy.constant(snapshot) != 'HALL_OF_FAME'
-            or goal is not None and goal.key in policy.BOSSES and self.data.map_ids.get(goal.map_name) == snapshot.map)
+            or challenges(BOSS_TABLE, goal) and self.data.map_ids.get(goal.map_name) == snapshot.map)
         blackout = before is not None and snapshot.all_fainted and not before.all_fainted
         self.supervisor.watch_boss(boss, blackout, stall, getattr(self, 'loop_guard', None))
 

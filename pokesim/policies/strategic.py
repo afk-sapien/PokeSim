@@ -17,9 +17,9 @@ from .naming import NamingController
 from .pickups import Pickups, ground_item
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
 from .move_development import hm_upgrade, move_name
-from .progression import (GAME_STARTERS, STARTERS, YELLOW, Goal, boss_key, boss_room, boss_training, fighter_level,
-                          healing_goal, journey, league_partner, milestones, story_goal)
-from ..planning.losses import Losses, ace_slot, boss_trainer
+from .progression import (BOSS_TABLE, GAME_STARTERS, STARTERS, YELLOW, Goal, boss_training, healing_goal, journey,
+                          milestones, power, story_goal)
+from ..planning.losses import Losses, ace_slot
 from . import training
 from .menus import select, tap
 from .shopping import ShoppingController
@@ -30,6 +30,7 @@ from . import kinds
 from ..planning import values
 from ..planning import boss
 from ..planning import decide
+from ..planning import league
 from ..planning import catalogue
 from .pipeline import ERRAND_FRAMES, ERRANDS, Ballot
 from .ledger import battle_room, fighters, league_treatment
@@ -100,10 +101,6 @@ def individual(mon):
     return mon.species, mon.level, mon.nick, mon.max_hp, tuple(mon.moves)
 
 
-# Goals that end in a gym leader, Elite Four or Champion battle, which the boss check guards when the
-# goal challenges the trainer (planning/boss.py). The Champion is the rival.
-BOSSES = frozenset({'boulder', 'cascade', 'thunder', 'rainbow', 'soul', 'marsh', 'volcano', 'earth',
-                    'league_lorelei', 'league_bruno', 'league_agatha', 'league_lance', 'league_rival'})
 # The Pokémon Center maps, the Indigo Plateau lobby among them. Stepping into one starts a boss heal leg.
 CENTER_MAPS = frozenset(center[0] for center in CENTERS)
 # The kind of a goal, by key prefix, in the order they are tried. Each kind's candidate is built once,
@@ -907,40 +904,21 @@ class StrategicPolicy(Policy):
         A loss is a black out or a battle that cannot end in the boss's gym, or anywhere in the League.
         A reload into a battle leaves no boss goal yet, so then the room alone names the boss. A loss
         to the rival or Giovanni elsewhere counts against the goal under way, which waits on the win."""
-        goal = getattr(self.goal, 'key', None)
-        key = goal if goal in BOSSES else next((k for k in BOSSES if boss_room(k, s.map)), None)
-        if key is not None and boss_room(key, s.map):
-            self.losses.note(boss_key(key), fighter_level(s.party))
-        elif goal is not None and boss_trainer(s, 1) is not None:
-            self.losses.note(goal, fighter_level(s.party), s.enemy_level)
+        league.note_loss(BOSS_TABLE, self.losses, getattr(self.goal, 'key', None), s.map, s, power)
 
     def _boss_check(self, s, goal, in_league):
-        """The boss check before ``goal`` (planning/boss.py), shared with Gold, Silver and Crystal.
-
-        A party with a Pokémon under half its HP or its strong attacks' PP heals first when a nurse can
-        be reached. Otherwise it goes in as it stands, and the journal says so once per leg. Each
-        Pokémon Center the party steps into starts a leg with fresh trips.
-        """
-        gate = getattr(self, 'boss_gate', None)
-        if gate is None:
-            gate = self.boss_gate = boss.Gate()
-        key = goal.key if goal is not None and goal.key in BOSSES and goal.title.startswith('Challenge') else None
-        party = fighters(s.party)
-
+        """The boss check before ``goal`` (planning/league.check), shared with Gold, Silver and Crystal."""
         def reachable():
             if in_league:
                 return False
             targets = healing_goal(s).targets
             return self.nav.distance_lookup((s.map, s.x, s.y), s.frame)(targets) is not None
-        # Between League rooms an item in the bag that treats a short fighter heals in place of a trip.
-        supply = key is not None and in_league and league_treatment(s.party, s.items) is not None
-        verdict = gate.decide(key, party, reachable, where=s.map, center=s.map in CENTER_MAPS, supply=supply)
+        verdict, rows = league.check(
+            BOSS_TABLE, self, goal, fighters(s.party), reachable, where=s.map, inside=in_league,
+            center=s.map in CENTER_MAPS, treatment=lambda: league_treatment(s.party, s.items) is not None,
+            title=lambda: goal.title, names=lambda: [mon.nick or f'#{mon.species}' for mon in s.party])
         self.boss_heal = verdict == boss.HEAL
-        if verdict == boss.UNREADY and gate.note():
-            names = [mon.nick or f'#{mon.species}' for mon in s.party]
-            self.collection.activity_events.append(boss.unready_event(goal.title, party, names))
-        if gate.healed():
-            self.collection.activity_events.append(boss.healed_event(goal.title))
+        self.collection.activity_events.extend(rows)
         return verdict
 
     def _overworld(self, s, mem):
@@ -1216,7 +1194,7 @@ class StrategicPolicy(Policy):
                 if action:
                     return action
         if not goal.key.startswith(("collect_", "party_collection", "party_league")) and (goal.key == "train_league_partner" or self.development_index is not None and self.developing):
-            target = league_partner(s) if goal.key == 'train_league_partner' else self.development_index
+            target = league.partner(s.party, BOSS_TABLE.partner) if goal.key == 'train_league_partner' else self.development_index
             if target is not None and target != 0:
                 actions = self._reorder(s, target, "Give the partner the lead position while training")
                 if actions:

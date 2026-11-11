@@ -7,6 +7,7 @@ ask for one stand aside.
 """
 from types import SimpleNamespace
 
+from ..planning import league
 from ..planning.readiness import hp_stat, score, stat
 
 # The trainer class each boss goal battles (planning/losses.py BOSS_CLASSES).
@@ -17,6 +18,50 @@ CLASSES = {'zephyr': 1, 'hive': 3, 'plain': 2, 'fog': 4, 'storm': 7, 'mineral': 
 LEAGUE = ('league_will', 'league_koga', 'league_bruno', 'league_karen', 'league_lance')
 # A clean cartridge's League: the five battles field 26 Pokémon, all at level 40 or over.
 CLEAN_LINEUP = (26, 40)
+LEAGUE_ROOMS = frozenset({'WILLS_ROOM', 'KOGAS_ROOM', 'BRUNOS_ROOM', 'KARENS_ROOM', 'LANCES_ROOM'})
+
+
+def _row(key, name, ace, training, rooms, badge, **rest):
+    return league.Row(key, name, ace, training, frozenset(rooms), badge, **rest)
+
+
+def _gym(key, name, ace, training, room, badge):
+    """A gym the oracle judges by the team's matchup with the leader's ace, as Red, Blue and Yellow do."""
+    return _row(key, name, ace, training, (room,), badge, scores=(key,))
+
+
+# Gold, Silver and Crystal's bosses for planning/league.py, in the order the story takes them, by map
+# constant. Each names its trainer, the level of its ace when the cartridge's tables were not read
+# (ace_level), the map the team trains on and the badge that marks it won. The Elite Four and Lance
+# share the key 'league', since their rooms run back to back, and the Hall of Fame wins it. Falkner
+# and the Kanto gyms have no matchup score, so the loss bar alone holds them, and Falkner keeps a
+# level floor. Red is never won, and his gains still count toward the matchup level over his ace,
+# Pikachu's Lv 81 plus MARGIN, which is also the most a loss bar before him asks (readiness.CEILING).
+# The rival's battles are scripted on the way to other goals, so none is a goal. A postgame League
+# run also needs the stamina and depth to finish (league.run).
+BOSS_TABLE = league.Table(
+    generation=2,
+    rows=(_row('zephyr', 'Falkner', 9, 'ROUTE_31', ('VIOLET_GYM',), 1, floor=14),
+          _gym('hive', 'Bugsy', 16, 'ROUTE_33', 'AZALEA_GYM', 2),
+          _gym('plain', 'Whitney', 19, 'ROUTE_34', 'GOLDENROD_GYM', 4),
+          _gym('fog', 'Morty', 25, 'ROUTE_37', 'ECRUTEAK_GYM', 8),
+          _gym('storm', 'Chuck', 30, 'ROUTE_39', 'CIANWOOD_GYM', 32),
+          _gym('mineral', 'Jasmine', 35, 'ROUTE_39', 'OLIVINE_GYM', 16),
+          _gym('glacier', 'Pryce', 31, 'ROUTE_44', 'MAHOGANY_GYM', 64),
+          _row('clair', 'Clair', 40, 'ROUTE_45', ('BLACKTHORN_GYM_1F', 'BLACKTHORN_GYM_2F'), 128, scores=('clair',)),
+          _row(league.LEAGUE, 'the Elite Four', 50, 'VICTORY_ROAD', LEAGUE_ROOMS, 0, scores=LEAGUE),
+          _row('surge', 'Lt. Surge', 46, 'ROUTE_6', ('VERMILION_GYM',), 1024),
+          _row('sabrina', 'Sabrina', 48, 'ROUTE_8', ('SAFFRON_GYM',), 8192),
+          _row('erika', 'Erika', 46, 'ROUTE_7', ('CELADON_GYM',), 2048),
+          _row('janine', 'Janine', 39, 'ROUTE_15', ('FUCHSIA_GYM',), 4096),
+          _row('misty', 'Misty', 47, 'ROUTE_24', ('CERULEAN_GYM',), 512),
+          _row('brock', 'Brock', 44, 'ROUTE_2', ('PEWTER_GYM',), 256),
+          _row('blaine', 'Blaine', 50, 'ROUTE_21', ('SEAFOAM_GYM',), 16384),
+          _row('blue', 'Blue', 58, 'ROUTE_2', ('VIRIDIAN_GYM',), 32768),
+          _row('red', 'Red', 81, 'SILVER_CAVE_ROOM_1', ('SILVER_CAVE_ROOM_3',), None, aim=True)),
+    goals=frozenset({'zephyr', 'hive', 'plain', 'fog', 'storm', 'mineral', 'glacier', 'clair', *LEAGUE,
+                     'surge', 'sabrina', 'erika', 'janine', 'misty', 'brock', 'blaine', 'blue', 'red'}),
+    league=LEAGUE_ROOMS | {'HALL_OF_FAME'}, rematch=True)
 
 
 def league_lineup(data):
@@ -53,6 +98,11 @@ def ace_level(data, key):
     """The level of the boss's ace. The key 'league' names the top ace of the Elite Four and Lance."""
     levels = [ace(data, room) for room in (LEAGUE if key == 'league' else (key,))]
     return None if None in levels else max(mon['level'] for mon in levels)
+
+
+def aces(data):
+    """The ace level of each boss row, from the cartridge's trainer tables when they were read."""
+    return lambda row: ace_level(data, row.key) or row.ace
 
 
 def readiness(policy, party, key):

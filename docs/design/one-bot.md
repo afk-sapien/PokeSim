@@ -126,9 +126,15 @@ These have a reason in the code or in the PR that made them, and they stay.
 | Reload after a park | never | on a second stall before new progress | #547, which named it an adapter setting |
 | Wait after a policy press | 2 frames | 16 frames | every Gen II trace and gate is played this way |
 | Background check | none | rewards and Celebi every 300 frames | Gen II events only |
+| League partner (`partner`) | trains a sturdy second battler before the League | none | in the Gen I rules since the first public source, with no PR on record |
+| Postgame League gate (`rematch`) | none | a full attack's PP for each opponent, and a deeper team after a loss | Crystal runs ran out of attacks at Lance and lost to him every twenty minutes (`league.run`) |
+
+The last two are settings in each generation's boss table (`planning/league.py`). Item 4 kept play the
+same, so both stay as they are for now. They are open choices for the owner: either can change in one line
+of a boss table, and its gate then shows what the change does.
 
 Two more are data, not settings: Gen II judges only the Johto gyms by matchup, and Falkner has a level
-floor. Both go in the Gen II boss table in item 4.
+floor. Both are rows in the Gen II boss table (`gen2/readiness.py`).
 
 ## Differences to settle
 
@@ -141,5 +147,6 @@ and its PR says which way it went.
 3. Saves behind a trade or a custom reward: Gen II never reloads to one, since that would undo the trade.
    Item 2 checks how Gen I keeps the same rule and makes it one.
 4. The League partner: Gen I trains a sturdy partner beside the strongest before the League, Gen II does
-   not (item 4).
-5. Gen I's rematch has no readiness gate, Gen II's postgame League has a stamina and depth gate (item 4).
+   not. Item 4 kept it as a setting that stays (above), an open choice for the owner.
+5. Gen I's rematch has no readiness gate, Gen II's postgame League has a stamina and depth gate. Item 4
+   kept it as a setting that stays (above), an open choice for the owner.

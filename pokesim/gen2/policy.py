@@ -8,6 +8,7 @@ import re
 from types import SimpleNamespace
 
 from ..planning import catalogue as listing
+from ..planning import league
 from ..planning.ledger import FIELD_MOVES, LEARN_KEPT
 from ..planning.losses import ace_slot
 from ..planning.shadow import Shadow
@@ -20,6 +21,7 @@ from pokecore.gen2.ram import Memory
 from pokecore.gen2.screens import ScreenText, mask_roster
 from pokecore.gen2.state import script_running
 from .puzzles import push_plan
+from .readiness import BOSS_TABLE, aces
 from .world import update as update_world
 from .naming import Naming
 from .kanto import journey as kanto_journey
@@ -1092,8 +1094,7 @@ class Policy(protocol.Policy):
         return route
 
     def in_league(self, snapshot):
-        return self.constant(snapshot) in {
-            'WILLS_ROOM', 'KOGAS_ROOM', 'BRUNOS_ROOM', 'KARENS_ROOM', 'LANCES_ROOM', 'HALL_OF_FAME'}
+        return self.constant(snapshot) in BOSS_TABLE.league
 
     def in_transmitter_room(self, snapshot):
         return (snapshot.map == self.data.map_ids['TEAM_ROCKET_BASE_B2F']
@@ -1107,166 +1108,46 @@ class Policy(protocol.Policy):
         return (not self.goal.key.startswith('push_') and not well_item
                 and (not self.collection.get('contest') or not mem.byte('wStatusFlags2') & 4))
 
-    # Goals that end in a gym leader, Elite Four, Champion or Red battle, which the boss check guards
-    # (planning/boss.py). The rival's battles are scripted on the way to other goals, so none is a goal.
-    BOSSES = frozenset({'zephyr', 'hive', 'plain', 'fog', 'storm', 'mineral', 'glacier', 'clair',
-                        'league_will', 'league_koga', 'league_bruno', 'league_karen', 'league_lance',
-                        'surge', 'sabrina', 'erika', 'janine', 'misty', 'brock', 'blaine', 'blue', 'red'})
-
-    # The training before a boss goal, by goal key: the level the best fighter trains to first, the
-    # level of the boss's ace and the map the team trains on. The Elite Four and Lance share the key
-    # 'league', since their rooms run back to back. A loss raises the bar (planning/losses.py).
-    BOSS_FLOORS = {'zephyr': 14}
-    BOSS_ACES = {'zephyr': 9, 'hive': 16, 'plain': 19, 'fog': 25, 'storm': 30, 'mineral': 35, 'glacier': 31,
-                 'clair': 40, 'league': 50, 'surge': 46, 'sabrina': 48, 'erika': 46, 'janine': 39,
-                 'misty': 47, 'brock': 44, 'blaine': 50, 'blue': 58, 'red': 81}
-    BOSS_TRAINING = {'zephyr': 'ROUTE_31', 'hive': 'ROUTE_33', 'plain': 'ROUTE_34', 'fog': 'ROUTE_37',
-                     'storm': 'ROUTE_39', 'mineral': 'ROUTE_39', 'glacier': 'ROUTE_44', 'clair': 'ROUTE_45',
-                     'league': 'VICTORY_ROAD', 'surge': 'ROUTE_6', 'sabrina': 'ROUTE_8', 'erika': 'ROUTE_7',
-                     'janine': 'ROUTE_15', 'misty': 'ROUTE_24', 'brock': 'ROUTE_2', 'blaine': 'ROUTE_21',
-                     'blue': 'ROUTE_2', 'red': 'SILVER_CAVE_ROOM_1'}
-    BOSS_NAMES = {'zephyr': 'Falkner', 'hive': 'Bugsy', 'plain': 'Whitney', 'fog': 'Morty', 'storm': 'Chuck',
-                  'mineral': 'Jasmine', 'glacier': 'Pryce', 'clair': 'Clair', 'league': 'the Elite Four',
-                  'surge': 'Lt. Surge', 'sabrina': 'Sabrina', 'erika': 'Erika', 'janine': 'Janine',
-                  'misty': 'Misty', 'brock': 'Brock', 'blaine': 'Blaine', 'blue': 'Blue', 'red': 'Red'}
-    BOSS_ROOMS = {'VIOLET_GYM': 'zephyr', 'AZALEA_GYM': 'hive', 'GOLDENROD_GYM': 'plain', 'ECRUTEAK_GYM': 'fog',
-                  'CIANWOOD_GYM': 'storm', 'OLIVINE_GYM': 'mineral', 'MAHOGANY_GYM': 'glacier',
-                  'BLACKTHORN_GYM_1F': 'clair', 'BLACKTHORN_GYM_2F': 'clair', 'VERMILION_GYM': 'surge',
-                  'SAFFRON_GYM': 'sabrina', 'CELADON_GYM': 'erika', 'FUCHSIA_GYM': 'janine',
-                  'CERULEAN_GYM': 'misty', 'PEWTER_GYM': 'brock', 'SEAFOAM_GYM': 'blaine',
-                  'VIRIDIAN_GYM': 'blue', 'SILVER_CAVE_ROOM_3': 'red',
-                  'WILLS_ROOM': 'league_will', 'KOGAS_ROOM': 'league_koga', 'BRUNOS_ROOM': 'league_bruno',
-                  'KARENS_ROOM': 'league_karen', 'LANCES_ROOM': 'league_lance'}
-
-    @staticmethod
-    def boss_key(key):
-        return 'league' if key.startswith('league_') else key
-
     def move_power(self, move):
         entry = self.data.moves.get(move) or {}
         return entry.get('power') or entry.get('effect') in BORROWED_MOVES
 
-    def fighter_level(self, party):
-        """The level of the best party Pokémon that can deal damage, the one a boss bar measures."""
-        from ..planning.losses import best_level
-        return best_level(party, self.move_power)
+    def matchup(self, snapshot):
+        """The scorer of the party's matchup with a boss's ace (readiness.readiness), by boss key."""
+        from .readiness import readiness
+        return lambda key: readiness(self, snapshot.party, key)
 
-    def boss_ace(self, key):
-        """The level of the boss's ace, from the cartridge's trainer tables when they were read."""
-        from .readiness import ace_level
-        key = self.boss_key(key)
-        return ace_level(self.data, key) or self.BOSS_ACES[key]
-
-    def boss_bar(self, key):
-        """The level the best fighter trains to before the boss goal ``key``, its loss bar (planning/readiness.py)."""
-        from ..planning.readiness import Boss, loss_bar
-        key = self.boss_key(key)
-        return loss_bar(Boss(key, self.boss_ace(key), floor=self.BOSS_FLOORS.get(key, 0)), self.losses)
-
-    # The gyms the oracle judges by the team's matchup with the leader's ace, as Red, Blue and Yellow
-    # do before every gym (planning/readiness.py). Falkner and the Kanto gyms have no matchup score, so
-    # the loss bar alone holds them, and Falkner keeps his level floor.
-    MATCHUP_GYMS = frozenset({'hive', 'plain', 'fog', 'storm', 'mineral', 'glacier', 'clair'})
-
-    def plain_boss(self, key):
-        """The boss ``key`` names with its ace, floor and League flag, and a matchup rule whose scores are not read."""
-        from ..planning.readiness import Boss
-        from .readiness import LEAGUE
-        key = self.boss_key(key)
-        scores = (None,) * len(LEAGUE) if key == 'league' else (None,) if key in self.MATCHUP_GYMS else ()
-        return Boss(key, self.boss_ace(key), floor=self.BOSS_FLOORS.get(key, 0), scores=scores, league=key == 'league')
-
-    def boss(self, snapshot, goal):
-        """The boss ``goal`` names, as the oracle sees it: its ace, floor and matchup scores."""
-        from dataclasses import replace
-        from .readiness import LEAGUE, readiness
-        boss = self.plain_boss(goal.key)
-        if boss.league:
-            scores = tuple(readiness(self, snapshot.party, room) for room in LEAGUE)
-        elif boss.scores:
-            scores = (readiness(self, snapshot.party, goal.key),)
-        else:
-            scores = ()
-        inside = self.in_league(snapshot) if boss.league else self.BOSS_ROOMS.get(self.constant(snapshot)) == boss.key
-        return replace(boss, scores=scores, inside=inside)
-
-    def next_boss(self, snapshot):
-        """The first boss in the order the story takes them (BOSS_BADGES) not yet won, then Red."""
-        key = next((key for key, badge in self.BOSS_BADGES
-                    if not (snapshot.badges & badge if badge else getattr(snapshot, 'hall_of_fame_count', 0))), 'red')
-        return self.plain_boss(key)
-
-    def readiness_target(self, snapshot):
-        """The level a Pokémon's gain counts toward as progress (planning/readiness.target), or None.
-
-        Red has no matchup rule, so the loss bar alone holds him, as it holds the Kanto gyms. His
-        gains still count toward the matchup level over his ace, Pikachu's Lv 81 plus MARGIN, which
-        is also the most a loss bar before him asks (planning/readiness.CEILING). Play does not
-        change, since only the progress rows read it."""
-        from dataclasses import replace
-        from ..planning.readiness import target
-        boss = self.next_boss(snapshot)
-        if boss.key == 'red':
-            boss = replace(boss, scores=(None,))
-        return target(boss)
+    def league_boss(self, snapshot):
+        """The League as the oracle judges a postgame run (collection.league_run), its scores read."""
+        return league.boss(BOSS_TABLE, BOSS_TABLE.league_row, self.constant(snapshot), self.matchup(snapshot),
+                           aces(self.data))
 
     def boss_training(self, snapshot, goal):
-        """A walk that trains before the boss ``goal`` names, or None once the oracle finds the team ready.
-
-        Inside the League nothing turns back, so its rooms carry on."""
-        if goal is None or self.in_league(snapshot):
+        """A walk that trains before the boss or story goal ``goal`` (planning/league.training), or None
+        once the oracle finds the team ready."""
+        from ..planning.readiness import LOSS
+        plan = league.training(BOSS_TABLE, snapshot, getattr(goal, 'key', None), self.constant(snapshot),
+                               self.move_power, self.losses, self.matchup(snapshot), aces(self.data))
+        if plan is None:
             return None
-        if goal.key not in self.BOSSES:
-            return self.story_training(snapshot, goal)
-        from ..planning.readiness import LOSS, judge, team
-        boss = self.boss(snapshot, goal)
-        verdict = judge(boss, team(snapshot.party, self.move_power), self.losses)
-        if verdict is None:
-            return None
-        name, target = self.BOSS_NAMES[boss.key], verdict.target
-        if verdict.reason == LOSS:
-            label = f'Train the team to level {target} before {name}'
-        elif boss.league:
-            label = f'Prepare for the Pokémon League: train until the team matches up or reaches level {target}'
+        row, level = plan.row, plan.verdict.target
+        if row is None:
+            label = f'Train the team to level {level} before another try at: {goal.label}'
+        elif plan.verdict.reason == LOSS:
+            label = f'Train the team to level {level} before {row.name}'
+        elif row.league:
+            label = f'Prepare for the Pokémon League: train until the team matches up or reaches level {level}'
         else:
-            label = f'Prepare for {name}: train until the team matches up or reaches level {target}'
+            label = f'Prepare for {row.name}: train until the team matches up or reaches level {level}'
         from .training import walk_goal
-        return walk_goal(self, snapshot, Goal, lambda: label, map_name=self.BOSS_TRAINING[boss.key])
-
-    # The badge each boss goal earns, in the order the story takes them. A story loss trains where
-    # the team would before the first one not yet won, or the League before the first Hall of Fame.
-    BOSS_BADGES = (('zephyr', 1), ('hive', 2), ('plain', 4), ('fog', 8), ('storm', 32), ('mineral', 16),
-                   ('glacier', 64), ('clair', 128), ('league', 0), ('surge', 1024), ('sabrina', 8192),
-                   ('erika', 2048), ('janine', 4096), ('misty', 512), ('brock', 256), ('blaine', 16384),
-                   ('blue', 32768))
-
-    def story_training(self, snapshot, goal):
-        """A walk that trains before a story goal the rival or a Rocket executive beat the team on, or None."""
-        if goal.key not in self.losses.levels():
-            # Only a loss gives a story goal a bar, so with none the oracle has nothing to judge.
-            return None
-        from ..planning.readiness import Boss, judge, team
-        verdict = judge(Boss(goal.key), team(snapshot.party, self.move_power), self.losses)
-        if verdict is None:
-            return None
-        bar = verdict.target
-        from .training import walk_goal
-        return walk_goal(self, snapshot, Goal, lambda: f'Train the team to level {bar} before another try at: {goal.label}',
-                         map_name=self.BOSS_TRAINING[self.next_boss(snapshot).key])
+        return walk_goal(self, snapshot, Goal, lambda: label, map_name=plan.where)
 
     def note_boss_loss(self, snapshot):
-        """Remember the best fighter level that lost to the boss the goal names, which raises its bar.
+        """Remember the best fighter level that lost to the boss the goal names (planning/league.note_loss).
 
-        A loss is a black out or a battle that cannot end in the boss's room, or anywhere in the League.
-        A reload into a battle leaves no goal yet, so then the room alone names the boss. A loss to the
-        rival or a Rocket executive elsewhere counts against the goal under way, which waits on the win."""
-        from ..planning.losses import boss_trainer
-        goal, here = getattr(self.goal, 'key', None), self.constant(snapshot)
-        key = goal if goal in self.BOSSES else self.BOSS_ROOMS.get(here)
-        if key is not None and (key != goal or here == self.goal.map_name or self.in_league(snapshot)):
-            self.losses.note(self.boss_key(key), self.fighter_level(snapshot.party))
-        elif goal is not None and boss_trainer(snapshot, 2) is not None:
-            self.losses.note(goal, self.fighter_level(snapshot.party), snapshot.enemy_level)
+        A boss goal's loss counts on its goal's map or anywhere in the League."""
+        league.note_loss(BOSS_TABLE, self.losses, getattr(self.goal, 'key', None), self.constant(snapshot),
+                         snapshot, self.move_power, rooms=BOSS_TABLE.league | {getattr(self.goal, 'map_name', None)})
 
     def heal_blocked(self, snapshot):
         """Whether healing stands down here: the League, the transmitter room, Ice Path, the Goldenrod
@@ -1281,32 +1162,21 @@ class Policy(protocol.Policy):
                      and not snapshot.event('EVENT_EUSINE_IN_BURNED_TOWER')))
 
     def boss_ready(self, snapshot, blocked):
-        """The boss check before the goal under way (planning/boss.py): READY, HEAL or UNREADY.
+        """The boss check before the goal under way (planning/league.check): READY, HEAL or UNREADY.
 
         HEAL needs a Pokémon Center the heal walk can reach, or, between League rooms, an item in the bag
-        that treats a short fighter (league_items). UNREADY goes in anyway, and the journal says so once
-        per leg. Each Pokémon Center the party steps into starts a leg with fresh trips.
+        that treats a short fighter (league_items). A collection survey writes nothing to the journal.
         """
-        from ..planning import boss
         from .ledger import fighters, league_treatment
-        gate = getattr(self, 'boss_gate', None)
-        if gate is None:
-            gate = self.boss_gate = boss.Gate()
         goal = self.goal
-        key = goal.key if goal is not None and goal.key in self.BOSSES else None
-        party = fighters(self.data, snapshot)
-        at_center = self.data.maps.get(snapshot.map, {}).get('constant', '').endswith('POKECENTER_1F')
-        supply = key is not None and self.in_league(snapshot) and league_treatment(self.data, snapshot) is not None
-        verdict = gate.decide(key, party, lambda: not blocked and self.center(snapshot) is not None,
-                              where=snapshot.map, center=at_center, supply=supply)
-        surveying = getattr(self, 'ladder_survey', False)
-        if verdict == boss.UNREADY and not surveying and gate.note():
+        verdict, rows = league.check(
+            BOSS_TABLE, self, goal, fighters(self.data, snapshot), lambda: not blocked and self.center(snapshot) is not None,
+            where=snapshot.map, inside=self.in_league(snapshot), center=self.constant(snapshot).endswith('POKECENTER_1F'),
+            treatment=lambda: league_treatment(self.data, snapshot) is not None, title=lambda: goal.label,
+            names=lambda: [mon.name for mon in snapshot.party if not mon.egg], quiet=getattr(self, 'ladder_survey', False))
+        if rows:
             from .collection import pin_events
-            names = [mon.name for mon in snapshot.party if not mon.egg]
-            pin_events(self).append(boss.unready_event(goal.label, party, names))
-        if not surveying and gate.healed():
-            from .collection import pin_events
-            pin_events(self).append(boss.healed_event(goal.label))
+            pin_events(self).extend(rows)
         return verdict
 
     def healing(self, snapshot):
