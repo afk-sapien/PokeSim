@@ -11,6 +11,8 @@ from pokecore import trace as core  # noqa: E402
 from pokecore.emulator import Emulator, demo_rom  # noqa: E402
 
 from pokesim import config  # noqa: E402
+from pokesim.planning.decide import NO_ROUTE, STUCK  # noqa: E402
+from pokesim.planning.pin import Pin  # noqa: E402
 from pokesim.runtime import capture, trace  # noqa: E402
 from pokesim.runtime.manifest import checkpoint_manifest  # noqa: E402
 
@@ -72,6 +74,88 @@ def test_a_pipeline_pick_goes_into_the_decide_record(tracer, game):
     tracer.decide(SimpleNamespace(goal=SimpleNamespace(key='heal'), pipeline_pick=None), SimpleNamespace(map=1, x=2, y=3))
     found = [record for record in records(tracer, tracer.name).records if record['kind'] == 'decide']
     assert [record.get('pipeline') for record in found] == [pick, None]
+
+
+def test_a_pin_is_on_disk_before_the_policy_reads_it(tracer, game):
+    tracer.ensure(dict)
+    tracer.input('command', {'command': 'speed'})
+    tracer.input('pin', {'key': 'heal'})
+    # The segment is still open, so these read back only because the pin flushed them.
+    read = core.Trace.read(tracer.folder / tracer.name / trace.SEGMENT)
+    assert [(record['source'], record['payload']) for record in read.records if record['kind'] == 'input'] == [
+        ('command', {'command': 'speed'}), ('pin', {'key': 'heal'})]
+
+
+def test_a_step_that_changes_the_pin_logs_what_play_did_to_it_once(tracer, game):
+    tracer.ensure(dict)
+    where = SimpleNamespace(map=1, x=2, y=3)
+    policy = SimpleNamespace(goal=None, pin=None)
+    tracer.decide(policy, where)
+    policy.pin = Pin('4:grass:59:', 'Catch Clefairy', parked=NO_ROUTE)
+    tracer.decide(policy, where)
+    tracer.decide(policy, where)
+    policy.pin = Pin('4:grass:59:', 'Catch Clefairy', started=True)
+    tracer.decide(policy, where)
+    policy.pin = None
+    tracer.decide(policy, where)
+    # A policy with no pin of its own, as a battle's, leaves it as it was.
+    tracer.decide(SimpleNamespace(goal=None), where)
+    found = [(record['source'], record['payload']) for record in records(tracer, tracer.name).records
+             if record['kind'] == 'input']
+    assert found == [
+        ('pin_outcome', {'key': '4:grass:59:', 'label': 'Catch Clefairy', 'started': False,
+                         'parked': {'kind': 'no_route', 'detail': 'no route'}}),
+        ('pin_outcome', {'key': '4:grass:59:', 'label': 'Catch Clefairy', 'started': True, 'parked': None}),
+        ('pin_outcome', None)]
+
+
+def test_a_segment_carries_its_pin_and_its_script_holds_each_set_and_clear(tracer, game):
+    tracer.ensure(dict)
+    assert 'pin' not in records(tracer, tracer.name).header
+    held = {'key': 'a', 'label': 'A', 'started': True, 'parked': {'kind': 'stuck', 'detail': 'it stopped moving'}}
+    assert Pin.from_dict(held) == Pin('a', 'A', True, STUCK)
+    policy = SimpleNamespace(goal=None, pin=Pin.from_dict(held))
+    # Reading the segment closed it, so the next begins from here.
+    assert tracer.ensure(dict, policy)
+    where = SimpleNamespace(map=1, x=2, y=3)
+    tracer.decide(policy, where)
+    tracer.input('pin', {'key': 'b'})
+    tracer.decide(policy, where)
+    tracer.decide(policy, where)
+    tracer.input('pin', {'key': None})
+    read = records(tracer, tracer.name)
+    assert read.header['pin'] == held
+    # The pin the segment began with is not logged again as an outcome.
+    assert not [record for record in read.records if record.get('source') == 'pin_outcome']
+    assert trace.pin_script(read) == [(0, held), (1, 'b'), (3, None)]
+
+
+def test_a_headless_run_sets_each_scripted_pin_before_the_step_it_was_logged_before():
+    calls = []
+
+    class Policy:
+        def pin_goal(self, snapshot, key):
+            if key == 'refused':
+                raise ValueError('Choose a goal from the list')
+            calls.append(('pin', key, snapshot))
+
+        def unpin_goal(self):
+            calls.append(('unpin',))
+
+    class Run(trace.HeadlessPins):
+        policy = Policy()
+
+        def restore_pin(self, data):
+            calls.append(('restore', data['key']))
+
+    run = Run()
+    run.take_pins([(0, {'key': 'a'}), (0, 'b'), (2, 'refused'), (2, None)])
+    assert calls == [('restore', 'a')]
+    run.feed_pins('first')
+    assert calls[1:] == [('pin', 'b', 'first')]
+    run.feed_pins('second')
+    run.feed_pins('third')
+    assert calls[2:] == [('unpin',)]
 
 
 def test_a_recorder_without_the_pipeline_field_logs_the_step_without_it():

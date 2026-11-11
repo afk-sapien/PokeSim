@@ -293,7 +293,7 @@ def test_a_seed_varies_a_checkpoint_run_only_when_the_caller_asks(tmp_path, monk
     def rolled(reseed):
         run = HeadlessRun.__new__(HeadlessRun)
         run.rom_sha1, run.seed, run.rng = 'rom', 4321, None
-        run.policy = type('P', (), {'rng': random.Random(),
+        run.policy = type('P', (), {'rng': random.Random(), 'unpin_goal': lambda self: None,
                                     'load_state_dict': lambda self, data: self.rng.setstate(saved)})()
         released = []
         run.pb = type('B', (), {'load_state': lambda self, stream: None,

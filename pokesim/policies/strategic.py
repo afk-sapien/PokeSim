@@ -569,7 +569,8 @@ class StrategicPolicy(Policy):
             if project_goal:
                 # The collection weighed the project against the plan when it committed it, and any real
                 # goal outranks the plan placeholder, so the project under way is the pick.
-                choice.offer(project_goal, goal_candidate(project_goal, self.collection, 'collection'), site='project')
+                choice.offer(project_goal, goal_candidate(project_goal, self.collection, 'collection'), site='project',
+                             pinned=self.collection.pinned())
         if self.pickups.active and s.map not in LEAGUE:
             choice.offer(self.pickups.goal(self.pickups.active), choice.errand_candidate('collect_pickup', 'pickup'),
                          site='pickup')
@@ -942,7 +943,8 @@ class StrategicPolicy(Policy):
         in_league = s.map in league_rooms
         choice = self.choice
         if choice is None or choice.goal is not self.goal:
-            choice = Ballot(self.goal, goal_candidate(self.goal, self.collection))
+            choice = Ballot(self.goal, goal_candidate(self.goal, self.collection),
+                            pinned=self.collection.pinned() and goal_kind(self.goal.key) == 'collection')
         self.choice, self.committing = None, choice
         if self.heal_latch and not in_league and not ball_at_hand(s, choice.goal, self.nav):
             choice.offer(healing_goal(s), choice.errand_candidate('heal', 'heal'), site='heal')
@@ -1052,7 +1054,8 @@ class StrategicPolicy(Policy):
                              else goal_candidate(collection_goal, self.collection, 'collection', inner))
                 behind = goal if choice.kind not in ('collection', 'plan') else None
                 goal = choice.offer(collection_goal, candidate, site='collection',
-                                    commit=partial(self._commit_pick, start, behind))
+                                    commit=partial(self._commit_pick, start, behind),
+                                    pinned=self.collection.pinned(inner))
         # A legendary or a marathon under way loses its run when it leaves, so no pickup cuts into one.
         committed = legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon'
         pickup_errand = choice.errand_candidate('collect_pickup', 'pickup')

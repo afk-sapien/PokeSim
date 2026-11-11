@@ -33,15 +33,17 @@ def fair_key(seed):
     return hashlib.sha256(f'fair-wild-dvs {seed}'.encode()).digest()
 
 
-class HeadlessRun:
+class HeadlessRun(runtime_trace.HeadlessPins):
     generation = 1
     # A tool that saves screenshots renders every frame.
     render = False
     tracer = None
 
-    def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False, fair_wild_dvs=None, trace=None):
+    def __init__(self, rom, checkpoint=None, seed=7, rng=None, reseed=False, fair_wild_dvs=None, trace=None,
+                 pins=None):
         """``trace`` is a folder to record the run in, one segment from the start, as an adventure's
-        trace folder keeps them. None records nothing."""
+        trace folder keeps them. None records nothing. ``pins`` is a trace segment's ``pin_script``, the
+        pins a replay of it sets."""
         self.rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
         # The policy reads its game data once at import, from POKESIM_GEN1_VARIANT. Yellow under
         # Red data reads menus at Red's addresses, so every battle shortcut times out.
@@ -79,8 +81,9 @@ class HeadlessRun:
             # makes the same choices whatever seed is asked for. Exploring needs the seed to matter;
             # replaying a saved stall needs the original choices, so this is the caller's decision.
             self._load(checkpoint, reseed=reseed, first=True)
+        self.take_pins(pins)
         if self.tracer is not None:
-            self.tracer.ensure(self.manifest)
+            self.tracer.ensure(self.manifest, self.policy)
 
     def _load(self, path, reseed=False, first=False):
         metadata = CheckpointStore(path.parent).checkpoint_metadata(path)
@@ -94,6 +97,8 @@ class HeadlessRun:
             # A reload keeps counting, so the frames never go back.
             self.frame = metadata.get('frame', 0)
         self.policy.load_state_dict(metadata['policy_state'])
+        # A pin belongs to the moment it was set, so it never outlives a load, as in the application.
+        self.policy.unpin_goal()
         self.memory = RunMemory.from_dict(metadata['run_memory'])
         if reseed:
             self.policy.rng.seed(self.seed)
@@ -135,8 +140,13 @@ class HeadlessRun:
             self.pb.tick(frames, render=self.render)
             self.frame += frames
 
+    def restore_pin(self, data):
+        from .planning.pin import Pin
+        self.policy.collection.pin = Pin.from_dict(data)
+
     def step(self, snapshot):
         """One decision and its actions, through the loop the application plays."""
+        self.feed_pins(snapshot)
         self.loop.step(snapshot)
 
     def stop(self):

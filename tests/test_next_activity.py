@@ -45,12 +45,17 @@ def postgame():
 PLAN = Goal('collect_plan', 'Plan', 'Plan')
 
 
+def last_ready(c, s, nav):
+    """The last goal in the picker that can run now. The goals that wait follow it."""
+    return [goal for goal in c.goal_list(s, nav, random.Random(3))[0] if goal['feasible']][-1]
+
+
 def test_gen1_a_pinned_goal_runs_next_and_clears_when_it_ends():
     c, s, nav = postgame()
     goals, reason = c.goal_list(s, nav, random.Random(3))
     assert reason is None and len(goals) > 1
     assert {'key', 'label', 'tier'} <= set(goals[0])
-    last = goals[-1]
+    last = last_ready(c, s, nav)
     assert c.set_pin(s, nav, random.Random(3), last['key']).label == last['label']
     c.choose(s, nav, random.Random(3), PLAN)
     assert c.project_key == last['key'] and c.pin.started
@@ -68,7 +73,7 @@ def test_gen1_listing_the_goals_changes_nothing():
 
 def test_gen1_an_unknown_or_story_time_key_is_refused_and_changes_nothing():
     c, s, nav = postgame()
-    with pytest.raises(ValueError, match='Not available now'):
+    with pytest.raises(ValueError, match=pin.CHOOSE):
         c.set_pin(s, nav, random.Random(3), 'no-such-goal')
     assert c.pin is None and c.project is None
     c.completed_champion = False
@@ -86,6 +91,39 @@ def test_gen1_a_pin_that_drops_out_of_the_list_is_journaled():
     assert c.pin is None
     [event] = c.take_activity_events()
     assert event.title == 'Gave up on Find Mew: not available now'
+
+
+def test_gen1_a_pin_that_cannot_run_now_waits_with_why_and_starts_when_that_clears(monkeypatch):
+    # Slice 5 of docs/design/typed-goals.md: a manager can pin a goal that waits. The pin is checked at
+    # each draw and starts at the first one that ranks it.
+    c, s, nav = postgame()
+    target = last_ready(c, s, nav)['key']
+    monkeypatch.setattr(c.director, 'waiting', lambda key, clock: key == target)
+    rows, _ = c.catalogue(s, nav, random.Random(3))
+    [row] = [row for row in rows if row['key'] == target]
+    assert not row['feasible'] and row['why_not']['kind'] == decide.STOOD_DOWN.kind
+    held = c.set_pin(s, nav, random.Random(3), target)
+    assert (held.parked, held.started) == (decide.STOOD_DOWN, False)
+    c.choose(s, nav, random.Random(3), PLAN)
+    assert c.pin is held and held.parked == decide.STOOD_DOWN and c.project_key != target
+    assert not c.pinned()
+    c.abandon('The hunt ended')
+    assert c.pin is held
+    monkeypatch.setattr(c.director, 'waiting', lambda key, clock: False)
+    c.choose(s, nav, random.Random(3), PLAN)
+    assert c.project_key == target and held.started and held.parked is None and c.pinned()
+
+
+def test_gen1_a_started_pin_that_ends_on_a_failure_is_journaled_with_it():
+    c, s, nav = postgame()
+    last = last_ready(c, s, nav)
+    c.set_pin(s, nav, random.Random(3), last['key'])
+    c.choose(s, nav, random.Random(3), PLAN)
+    assert c.pin.started
+    c.take_activity_events()
+    c.abandon('No route to the hunt', failure=decide.NO_ROUTE.kind)
+    assert c.pin is None
+    assert [event.title for event in c.take_activity_events()] == [f'Gave up on {last["label"]}: no route']
 
 
 def started_with_progress():
@@ -355,9 +393,19 @@ def test_gen2_a_survey_lists_the_rungs_and_changes_nothing(monkeypatch):
     assert owner.pin_events == [] and not hasattr(owner, 'ladder_offers')
 
 
+def gen2_offer(key, passive=False):
+    """A rung's candidate as the survey ranks it."""
+    return SimpleNamespace(key=key, tier=Tier.PROGRESS, passive=passive, expected_frames=ERRAND_FRAMES,
+                           value=values.NEW_ENTRY)
+
+
+# A Gen II policy reading a cartridge, as pin_goal needs one.
+HERE = SimpleNamespace(map=1)
+
+
 def test_gen2_lists_each_label_once_at_most_the_limit_and_pins_past_it(monkeypatch):
     from pokesim.gen2.policy import Policy
-    offers = [SimpleNamespace(key=f'hunt:{i}', tier=Tier.PROGRESS) for i in range(60)]
+    offers = [gen2_offer(f'hunt:{i}') for i in range(60)]
     # Two rungs can offer the same want. The better ranked one is listed.
     labels = {offer.key: f'Catch Goal {i // 2}' for i, offer in enumerate(offers)}
     monkeypatch.setattr(ladder_module, 'survey', lambda *args: (offers, labels, None, []))
@@ -369,26 +417,57 @@ def test_gen2_lists_each_label_once_at_most_the_limit_and_pins_past_it(monkeypat
     assert ladder_module.goal_list(owner, None, None, None, query='goal 29') == (
         [entry('hunt:58', 'Catch Goal 29', 'progress')], None)
     assert ladder_module.goal_list(owner, None, None, None, query='mew') == ([], 'No goal matches that name')
-    many = [SimpleNamespace(key=f'hunt:{i}', tier=Tier.PROGRESS) for i in range(45)]
+    many = [gen2_offer(f'hunt:{i}') for i in range(45)]
     monkeypatch.setattr(ladder_module, 'survey', lambda *args: (many, {o.key: o.key for o in many}, None, []))
-    picker = SimpleNamespace(pin=None, ladder_pick=None,
-                             goals=lambda snapshot, every=False: ladder_module.goal_list(
-                                 owner, None, None, None, limit=None if every else pin.LIMIT))
-    assert len(picker.goals(None)[0]) == pin.LIMIT
-    assert Policy.pin_goal(picker, None, 'hunt:44').key == 'hunt:44'
+    picker = gen2_policy(pin=None, memory=bytearray(1))
+    assert len(ladder_module.goal_list(picker, None, None, None)[0]) == pin.LIMIT
+    assert Policy.pin_goal(picker, HERE, 'hunt:44').key == 'hunt:44'
 
 
-def test_gen2_refuses_before_red_and_an_unknown_key_with_a_reason():
+def test_gen2_refuses_before_red_and_an_unknown_key_with_a_reason(monkeypatch):
     from pokesim.gen2.policy import Policy
     assert ladder_module.goal_list(SimpleNamespace(completed={}), None, None, None) == ([], 'Finish the story first')
-    owner = SimpleNamespace(pin=None, goals=lambda snapshot, every=False: ([], 'Finish the story first'))
+    owner = gen2_policy(pin=None, memory=bytearray(1))
+    owner.completed = {}
     with pytest.raises(ValueError, match='Finish the story first'):
-        Policy.pin_goal(owner, None, 'hunt:hunt')
-    owner.goals = lambda snapshot, every=False: ([{'key': 'hunt:hunt', 'label': 'Label hunt', 'tier': 'progress'}], None)
-    with pytest.raises(ValueError, match='Not available now'):
-        Policy.pin_goal(owner, None, 'league:league')
+        Policy.pin_goal(owner, HERE, 'hunt:hunt')
+    owner.completed = {'red': 1}
+    monkeypatch.setattr(ladder_module, 'survey',
+                        lambda *args: ([gen2_offer('hunt:hunt')], {'hunt:hunt': 'Label hunt'}, None, []))
+    with pytest.raises(ValueError, match=pin.CHOOSE):
+        Policy.pin_goal(owner, HERE, 'league:league')
     assert owner.pin is None
-    assert Policy.pin_goal(owner, None, 'hunt:hunt').label == 'Label hunt'
+    assert Policy.pin_goal(owner, HERE, 'hunt:hunt').label == 'Label hunt'
+
+
+def test_gen2_the_picker_leaves_out_passive_goals_and_lists_the_ones_that_wait(monkeypatch):
+    # Slice 5 of docs/design/typed-goals.md: a goal that cannot run now is listed with why, and a pin on it
+    # waits with that reason. The clock wait runs on any walk, so a manager cannot pick it.
+    from pokesim.gen2.policy import Policy
+    offers = [gen2_offer('clock:wait', passive=True), gen2_offer('hunt:hunt')]
+    skipped = [('league', 'Run the League', decide.STOOD_DOWN), ('hunt:hunt', 'Label hunt', decide.NO_ROUTE)]
+    monkeypatch.setattr(ladder_module, 'survey', lambda *args: (
+        offers, {'clock:wait': 'Wait for the clock', 'hunt:hunt': 'Label hunt'}, None, skipped))
+    owner = gen2_policy(pin=None, memory=bytearray(1))
+    goals, reason = ladder_module.goal_list(owner, None, None, None)
+    assert reason is None
+    assert goals == [entry('hunt:hunt', 'Label hunt', 'progress'),
+                     pin.entry('league', 'Run the League', None, decide.STOOD_DOWN)]
+    with pytest.raises(ValueError, match=pin.CHOOSE):
+        Policy.pin_goal(owner, HERE, 'clock:wait')
+    held = Policy.pin_goal(owner, HERE, 'league')
+    assert (held.label, held.parked, held.started) == ('Run the League', decide.STOOD_DOWN, False)
+
+
+def test_gen2_a_pin_on_a_rung_that_stood_down_starts_on_the_goal_that_rung_offers_later():
+    # The catalogue names a rung that stood down by the rung alone, so the pin takes the key of the goal
+    # the rung offers once it can run again.
+    owner = gen2_policy(pin=Pin('league', 'Run the League', parked=decide.STOOD_DOWN))
+    rungs = weigh(owner)
+    assert rungs.pinned('league:league') and not rungs.pinned('hunt:hunt')
+    assert rungs.rung == 'league'
+    settle_pin(owner, rungs)
+    assert (owner.pin.key, owner.pin.started, owner.pin.parked) == ('league:league', True, None)
 
 
 def test_gen2_an_unstick_drops_the_pin_and_journals_it():

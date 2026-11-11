@@ -28,15 +28,16 @@ from .policy import Policy
 from .store_stock import StoreStock
 
 
-class HeadlessRun:
+class HeadlessRun(trace_module.HeadlessPins):
     generation = 2
     # A tool that saves screenshots renders every frame.
     render = False
     tracer = None
 
-    def __init__(self, rom, checkpoint=None, seed=7, rng=None, data_root=None, trace=None):
+    def __init__(self, rom, checkpoint=None, seed=7, rng=None, data_root=None, trace=None, pins=None):
         """``trace`` is a folder to record the run in, one segment from the start, as an adventure's
-        trace folder keeps them. None records nothing."""
+        trace folder keeps them. None records nothing. ``pins`` is a trace segment's ``pin_script``, the
+        pins a replay of it sets."""
         rom = Path(rom)
         profile = identify(rom.read_bytes())
         self.rom_sha1, self.game = profile.sha1, profile.game
@@ -68,8 +69,9 @@ class HeadlessRun:
             # A new game, as the managed runtime starts one with no autosave: the clock follows game
             # time from the host clock's reading now.
             self.clock = follow_game_time(self.pb, host_elapsed(self.pb))
+        self.take_pins(pins)
         if self.tracer is not None:
-            self.tracer.ensure(self.manifest)
+            self.tracer.ensure(self.manifest, self.policy)
 
     def _champion_catalogue(self):
         """The planned Champion shop item for the clerk who opens the BUY list, as the managed runtime adds it.
@@ -105,6 +107,8 @@ class HeadlessRun:
         self.screen_key = None
         self.policy.load_state_dict(metadata.get('policy_state', {}))
         self.policy.on_restore()
+        # A pin belongs to the moment it was set, so it never outlives a load, as in the application.
+        self.policy.unpin_goal()
         self.history = metadata.get('gen2_history') or self.history
         self._options()
         return metadata
@@ -154,8 +158,13 @@ class HeadlessRun:
             self.pb.tick(frames, render=self.render)
             self.frame += frames
 
+    def restore_pin(self, data):
+        from ..planning.pin import Pin
+        self.policy.pin = Pin.from_dict(data)
+
     def step(self, snapshot):
         """One decision and its action, through the loop the application plays."""
+        self.feed_pins(snapshot)
         self.loop.step(snapshot)
         screen =hash((snapshot.tiles, snapshot.map, snapshot.x, snapshot.y, snapshot.in_battle))
         if screen != self.screen_key:

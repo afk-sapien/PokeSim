@@ -546,7 +546,7 @@ class Emulator:
         path = self.store.write_checkpoint(state, manifest)
         tracer = getattr(self, 'tracer', None)
         if tracer is not None:
-            tracer.begin(path.stem, state, manifest, kept=path)
+            tracer.begin(path.stem, state, manifest, kept=path, pin=trace.pin_state(self.policy))
         # The first save after an achievement is the last one known to be from before any stall.
         capture.keep_before(self, path, self.snapshot)
         self.store.set('play_clock', self.play_clock.state_dict())
@@ -1269,7 +1269,7 @@ class Emulator:
                 try:
                     if tracer is not None:
                         # A run that has not saved since power-on or a reboot begins a start segment.
-                        tracer.ensure(self._manifest)
+                        tracer.ensure(self._manifest, self.policy)
                     while not self.commands.empty():
                         name, arg = self.commands.get_nowait()
                         trace.note(self, 'command', trace.command(name, arg))

@@ -8,6 +8,10 @@ removed with it, so the traces hold about as much game time as the autosaves do.
 
 A failure to write a segment is logged and never stops the game. ``pokecore.trace.verify`` plays a
 segment again from its start state. docs/design/replayable-bugs.md section 4.
+
+A manager's pin is an input with source ``pin``, flushed to disk before the policy reads it. What play
+does to the pin, its park, start, end or drop, is a ``pin_outcome`` input after the step that changed
+it. A segment's header carries the pin in force when it began. docs/design/typed-goals.md section 5.
 """
 from __future__ import annotations
 
@@ -105,6 +109,69 @@ def _plain(value, depth=0):
     return type(value).__qualname__
 
 
+_NO_PIN = object()
+
+
+def pin_state(policy):
+    """The pin a policy holds as plain data (``Pin.to_dict``), or None when it holds none."""
+    held = getattr(policy, 'pin', None)
+    return None if held is None else held.to_dict()
+
+
+def pin_script(trace):
+    """The pins a segment's run was given, as a headless run takes them (``HeadlessRun(pins=...)``): a
+    list of ``(step, pin)``, where ``step`` counts the policy steps logged before it. The pin the segment
+    began with comes first at step 0 as the dict its header holds. Each manager's set or clear follows
+    as the key it named, or None. Outcomes are left out, since play makes them again."""
+    script = [] if trace.header.get('pin') is None else [(0, trace.header['pin'])]
+    steps = 0
+    for record in trace.records:
+        if record['kind'] == 'decide':
+            steps += 1
+        elif record['kind'] == 'input' and record.get('source') == 'pin':
+            script.append((steps, (record.get('payload') or {}).get('key')))
+    return script
+
+
+class HeadlessPins:
+    """A headless run's pins, set as a manager sets them in the application: logged, then given to the
+    policy. The run passes a ``pin_script`` to ``take_pins`` once its checkpoint is loaded and calls
+    ``feed_pins`` before each step. Each set or clear is made before the step it was logged before, and
+    the pin a segment began with is in force before the run begins its own. The run gives ``restore_pin``,
+    which puts a pin's dict back on its policy."""
+
+    # The steps the run has begun, which a pin script counts its pins by.
+    _pin_steps = 0
+    _pins = ()
+
+    def take_pins(self, pins):
+        self._pins, self._pin_steps = list(pins or ()), 0
+        while self._pins and self._pins[0][0] == 0 and isinstance(self._pins[0][1], dict):
+            self.restore_pin(self._pins.pop(0)[1])
+
+    def feed_pins(self, snapshot):
+        while self._pins and self._pins[0][0] <= self._pin_steps:
+            pin = self._pins.pop(0)[1]
+            if isinstance(pin, dict):
+                self.restore_pin(pin)
+            elif pin is None:
+                self.unpin_goal()
+            else:
+                # A key the policy refused when it was logged is refused again here.
+                with contextlib.suppress(ValueError):
+                    self.pin_goal(pin, snapshot)
+        self._pin_steps += 1
+
+    def pin_goal(self, key, snapshot):
+        """Pin ``key`` as the application does. A ValueError says why the policy cannot take it."""
+        note(self, 'pin', {'key': key})
+        return self.policy.pin_goal(snapshot, key)
+
+    def unpin_goal(self):
+        note(self, 'pin', {'key': None})
+        self.policy.unpin_goal()
+
+
 def command(name, arg):
     """The payload of an owner command's input record."""
     if name == 'runtime_call' and isinstance(arg, tuple) and arg:
@@ -163,6 +230,8 @@ class Tracer:
         self.name = None
         self._previous = None
         self._failed = None
+        # The pin as the segment last logged it, so a step that changes it logs the outcome once.
+        self._pin = None
 
     def attach(self, pb):
         """Follow a new emulator. Attach before anything registers a hook, so every hook is known."""
@@ -176,9 +245,10 @@ class Tracer:
     def recording(self):
         return self.recorder is not None and self.recorder.sink is not None
 
-    def begin(self, name, state, manifest, kept=None):
+    def begin(self, name, state, manifest, kept=None, pin=None):
         """Begin a segment named ``name`` from ``state``. ``kept`` is a file holding those bytes, linked
-        in as the start state instead of a second copy. Returns whether the segment began."""
+        in as the start state instead of a second copy. ``pin`` is the pin in force (``pin_state``), which
+        the header carries since no save keeps it. Returns whether the segment began."""
         recorder = self.recorder
         if recorder is None:
             return False
@@ -195,25 +265,28 @@ class Tracer:
                         os.link(kept, start)
                         linked = True
             found = self.seeds() if callable(self.seeds) else self.seeds
+            # A segment with no pin keeps the header it had before pins were logged.
+            held = {} if pin is None else {'pin': pin}
             recorder.begin(_Segment(folder / SEGMENT, keep_start=not linked), state, previous_head=previous,
-                           generation=self.generation, build=build_info(), seeds=found, manifest=manifest)
+                           generation=self.generation, build=build_info(), seeds=found, manifest=manifest, **held)
         except Exception:
             # A begin that fails part way must not leave records going to a half-made segment.
             recorder.close()
             self._failed = time.monotonic()
             log.exception('cannot begin the trace segment %s', name)
             return False
-        self.name, self._failed = name, None
+        self.name, self._failed, self._pin = name, None, pin
         return True
 
-    def ensure(self, manifest):
+    def ensure(self, manifest, policy=None):
         """Begin a start segment when none is open, as after power-on or a reboot. ``manifest`` builds the
-        header's manifest, only when one is needed."""
+        header's manifest, only when one is needed, and the header carries ``policy``'s pin."""
         if self.recording or self.recorder is None:
             return False
         if self._failed is not None and time.monotonic() - self._failed < RETRY_SECONDS:
             return False
-        return self.begin(f'start-{time.time_ns()}', self.recorder.emulator.save(), manifest())
+        return self.begin(f'start-{time.time_ns()}', self.recorder.emulator.save(), manifest(),
+                          pin=pin_state(policy))
 
     def decide(self, policy, snapshot):
         """Log one policy step before the inputs it chose."""
@@ -231,10 +304,21 @@ class Tracer:
             self.recorder.decide(key, *where, pipeline=pipeline)
         else:
             self.recorder.decide(key, *where)
+        # A policy with no pin, as a battle's, leaves the pin as it was.
+        if getattr(policy, 'pin', _NO_PIN) is not _NO_PIN:
+            state = pin_state(policy)
+            if state != self._pin:
+                self._pin = state
+                self.recorder.input('pin_outcome', state)
 
     def input(self, source, payload=None):
         if self.recording:
             self.recorder.input(source, payload)
+            if source == 'pin':
+                # On disk before the policy reads the pin, so a crash between the two cannot lose it.
+                flush = getattr(self.recorder.sink, 'flush', None)
+                if flush is not None:
+                    flush()
 
     def reason(self, why):
         """Name the reason loads inside this block are logged with."""

@@ -628,6 +628,13 @@ class Ladder:
         # In a survey, the goals a rung left out for now, each (key, title, Failure), for the catalogue.
         self.skipped = []
 
+    def pinned(self, key):
+        """Whether the candidate ``key`` is the pinned goal. A pin on a rung that stood down names the
+        rung alone, so any goal that rung offers is the pinned one."""
+        if self.pin is None:
+            return False
+        return key == self.pin.key or ':' not in self.pin.key and key.split(':', 1)[0] == self.pin_rung
+
     def _slots(self):
         policy = self.policy
         slots = {('collection', key): value for key, value in policy.collection.items()}
@@ -713,7 +720,7 @@ class Ladder:
         waiting = getattr(self.policy, 'no_route_waiting', None)
         if goal is not None and waiting is not None and waiting(goal):
             # The walk to this goal found no route lately (policy.no_route), so another rung runs first.
-            if self.pin is not None and f'{name}:{goal.key}' == self.pin.key:
+            if self.pinned(f'{name}:{goal.key}'):
                 self.pin_parked = decide.NO_ROUTE
             if self.survey:
                 self.skipped.append((f'{name}:{goal.key}', goal.label, decide.NO_ROUTE))
@@ -737,7 +744,7 @@ class Ladder:
         if candidate.passive:
             self.passive.append(goal)
             return
-        pinned = self.pin.key if self.pin else None
+        pinned = next((c.key for c in (candidate, self.pick) if c is not None and self.pinned(c.key)), None)
         if self.pick is not None and arbiter.choose([self.pick, candidate], pinned=pinned) is not candidate:
             self.load(before)
             return
@@ -936,22 +943,23 @@ def settle_pin(policy, ladder):
     whose goal is parked before it starts, because its rung stood down or its walk found no route
     lately, waits with the reason, which the API state carries. A pin whose rung was asked and offered
     another goal or none cannot run now, so it is dropped with a journal entry. A pin that lost only to
-    upkeep waits for the next decision.
+    upkeep waits for the next decision. A pin on a rung that stood down takes the key of the goal that
+    rung starts.
     """
     current = ladder.pin
     if current is None or ladder.survey:
         return
     current.parked = ladder.pin_parked
     pick = ladder.pick.key if ladder.pick is not None else None
-    if pick == current.key:
-        current.started = True
+    if pick is not None and ladder.pinned(pick):
+        current.key, current.started = pick, True
     elif current.started:
         policy.pin = None
         if current.parked:
             pin_events(policy).append(pin.gave_up(current.label, current.parked))
     elif current.parked:
         return
-    elif ladder.pin_rung in ladder.asked and all(c.key != current.key for c in ladder.candidates):
+    elif ladder.pin_rung in ladder.asked and not any(ladder.pinned(c.key) for c in ladder.candidates):
         policy.pin = None
         pin_events(policy).append(pin.gave_up(current.label, pin.UNAVAILABLE))
 
@@ -1062,18 +1070,27 @@ def catalogue(policy, snapshot, mem, Goal):
 
 
 def goal_list(policy, snapshot, mem, Goal, query=None, limit=pin.LIMIT):
-    """The goals a manager can set as the next activity, best first, and why the list is empty.
+    """The goals a manager can set as the next activity, best first, then the goals that wait, and why
+    the list is empty.
 
-    Offers with one label serve one want, so each label is listed once under its best offer's key.
-    ``query`` and ``limit`` are as in pin.grouped.
+    Offers with one label serve one want, so each label is listed once under its best offer's key. A
+    passive goal such as the clock wait runs on any walk, so it is not listed. ``query`` and ``limit``
+    are as in pin.grouped.
     """
     if 'red' not in policy.completed:
         return [], 'Finish the story first'
-    offers, labels, hold, _ = survey(policy, snapshot, mem, Goal)
+    offers, labels, hold, skipped = survey(policy, snapshot, mem, Goal)
     rows = []
     for offer in offers:
+        if offer.passive:
+            continue
         label = labels.get(offer.key, offer.key)
         rows.append((offer.key, label, label, offer.tier))
+    listed = {offer.key for offer in offers}
+    for key, title, failure in skipped:
+        if key not in listed:
+            rows.append((key, title, title, None, failure))
+            listed.add(key)
     goals = pin.grouped(rows, query, limit)
     if goals:
         return goals, None

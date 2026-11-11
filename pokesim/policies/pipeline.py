@@ -75,16 +75,20 @@ class Ballot:
     An errand under way weighs nothing but its own steps, so while the pick is an errand an offer of
     another kind is left out. An update of the pick, an enabler, a goal under way and a forced move always
     go in.
+
+    ``pinned`` is the key of the offer a manager pinned (planning/pin.py), which ranks after upkeep and
+    before every other source's goals. The source that offers the pin says so.
     """
 
-    def __init__(self, goal, candidate, site='base', source='current'):
+    def __init__(self, goal, candidate, site='base', source='current', pinned=False):
         self.offers = [offer(site, goal, candidate, source)]
+        self.pinned = candidate.key if pinned else None
         self._decision = None
 
     @property
     def decision(self):
         if self._decision is None:
-            self._decision = decide.decide(self.offers)
+            self._decision = decide.decide(self.offers, self.pinned)
         return self._decision
 
     @property
@@ -130,15 +134,18 @@ class Ballot:
             return True
         if self.errand:
             return candidate.goal == self.kind
-        return arbiter.choose([self.pick, candidate]) is candidate
+        return arbiter.choose([self.pick, candidate], pinned=self.pinned) is candidate
 
-    def offer(self, goal, candidate, site, source=None, commit=None):
+    def offer(self, goal, candidate, site, source=None, commit=None, pinned=False):
         """Offer ``goal`` as ``candidate`` from ``site`` and return the goal that runs now. ``commit``
-        holds the writes that run only if the step ends with this offer running."""
+        holds the writes that run only if the step ends with this offer running. ``pinned`` says the
+        offer is the goal a manager pinned."""
         offered = offer(site, goal, candidate, source, commit)
         if (offered.serves or offered.hold or offered.forced or not self.errand
                 or candidate.key == self.pick.key or candidate.goal == self.kind):
             self.offers.append(offered)
+            if pinned:
+                self.pinned = candidate.key
             self._decision = None
         return self.goal
 

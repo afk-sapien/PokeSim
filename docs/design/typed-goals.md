@@ -194,6 +194,18 @@ The trace records every pin change, and a replay feeds the director's choices ba
 4. `redecide` applies pin inputs at their frames, beside the clock inputs `verify` applies today.
 5. A headless run takes a pin script, a list of frames and keys, fed through the same `pin_goal` path. A test pins a goal mid-run, replays the trace and gets the same decide digests.
 
+### As built
+
+Slice 5 differs from the plan above in five places.
+
+1. **The pin script counts steps, not frames.** An entry is `(step, pin)`, where the step is the number of decide records before the pin. A reload idles a random moment that is not on the run's frame count, so a frame would not name the same step in a replay. `trace.pin_script` reads it from a segment, the header's pin first as step 0, and `HeadlessPins.feed_pins` sets each one before its step through `pin_goal` and `unpin_goal`.
+2. **Replay goes through the headless pin script, not `redecide`.** Item 4 is not built. No PokeSim play runs `redecide` yet, and the headless runners already replay a segment to the same records. `tests/test_pin_replay.py` pins a catalogue goal mid-run in Gen I and Gen II, replays the trace with its script and compares every record.
+3. **Each source still names its pin.** A source offers one goal per step, so it must offer the pin for the ballot to rank it. The Gen I collection's pick keeps `arbiter.choose(options, pinned=)`, and the Gen II ladder keeps its pin rung. What changed is that the source then says the offer is the pin, and `decide.decide` ranks it over the other sources. So the source's own pin lane stays, where the table below planned to delete it.
+4. **A Gen I pin that waits is checked at the next draw.** `director.select` is kept. The collection draws when no project runs, so a pin set to wait while a project runs starts once that project ends and the reason has cleared. A goal that can run now still sets the running project aside, as before.
+5. **The Gen II picker lists the goals that wait.** A goal a rung left out follows the goals that can run, with why, and a pin on it waits. A pin on a rung that stood down names the rung alone, and takes the key of the goal that rung offers once it can run (`Ladder.pinned`). A passive goal such as the clock wait runs on any walk, so it is no longer listed.
+
+The pin outcome is an `input` record with source `pin_outcome` and the pin as `Pin.to_dict()`, or none once it is gone. It is written after the decide record of the step that changed it, once per change, so a drop on a stall or a clear on a load shows at the next decision. A segment's header carries `pin` only while one is in force, so a run with no pin writes the same trace as before.
+
 ## 6. Slices
 
 | # | Scope | Deletes | Behaviour change | Agent time |

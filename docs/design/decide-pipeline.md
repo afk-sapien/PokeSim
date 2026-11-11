@@ -127,6 +127,8 @@ A director is one more source. It holds at most one standing choice, a goal key 
 
 Slice 5 builds it. The director's offer stays inside its source: in Gen I the collection's pick with `director.select(pinned=)`, in Gen II the ladder's pin rung. Neither pipeline passes `pinned` to `decide.decide`, so the pin outranks the other goals of its source and never the other sources, as before. Ranking it across sources changes what a pin beats, so it waits for PR 7.
 
+PR 7 slice 5 (typed-goals section 5) ranks it across sources. The source that offers the pin says so, both ballots pass `pinned` to `decide.decide`, and the pin beats every goal but upkeep. The director's key is a catalogue key, and a pin on a goal that cannot run now waits with why.
+
 ## 4. Shadow mode
 
 ### How it runs
@@ -221,7 +223,7 @@ Do not offer the errand under way as a fresh goal. The gate caught two goals tha
 
 **B. A pin passes the checks** (slice 5). A pinned Gen II rung no longer skips the stand-down check (`gen2/collection.py:704`) or the no-route check (L712). A rung the watchdog gave up on is parked, where today the pin asks it again. A pin comes from the owner in the UI, and a pin that silently does nothing is a bug. So the same PR puts the parked reason into the adventure's API state and shows it in the UI where the pin is set. The UI part is agreed with pokesim-ui through the lead.
 
-Built in slice 5. `Pin.parked` holds the reason, `decide.STOOD_DOWN` or `decide.NO_ROUTE`, and is empty while the pin can run. `/api/state` carries it in `strategy.pin`, and `/api/goals` in `pin`. The Next activity line, from #536, reads "Next: Find Clefairy (waiting: no route)". A parked pin that has not started waits for the reason to clear. A started pin whose goal is parked ends with a `pin.gave_up` row that names the reason. Gen I has no parked pin: `set_pin` refuses a goal that stood down, and the Gen I pipeline has no no-route park.
+Built in slice 5. `Pin.parked` holds the reason, `decide.STOOD_DOWN` or `decide.NO_ROUTE`, and is empty while the pin can run. `/api/state` carries it in `strategy.pin`, and `/api/goals` in `pin`. The Next activity line, from #536, reads "Next: Find Clefairy (waiting: no route)". A parked pin that has not started waits for the reason to clear. A started pin whose goal is parked ends with a `pin.gave_up` row that names the reason. Gen I has no parked pin: `set_pin` refuses a goal that stood down, and the Gen I pipeline has no no-route park. Since PR 7 slice 5, Gen I parks a pin too. `set_pin` accepts a goal the draw left out, with why, and each draw checks it again.
 
 **C. A pin keeps the project** (slice 5). Setting a pin in Gen I no longer abandons the running project (`policies/collection.py:1446`). The pin wins by its lane, and the project resumes after it. The project's budget counts only the frames it runs. A test checks that the project resumes with its progress intact after the pin ends.
 
