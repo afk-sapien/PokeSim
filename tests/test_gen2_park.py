@@ -28,9 +28,9 @@ SAVE = Path('auto-v1-1.state')
 
 
 def hunting(**extra):
-    """A run hunting Zubat on Route 32 that has stopped moving, its last decision the ladder's pick."""
+    """A run hunting Zubat on Route 32 that has stopped moving, its last decision the hunt rung's pick."""
     loaded, events = [], []
-    policy = SimpleNamespace(collection={'target': {'species': ZUBAT}}, goal=HUNT, menu=None, picked=('ladder', HUNT.key),
+    policy = SimpleNamespace(collection={'target': {'species': ZUBAT}}, goal=HUNT, menu=None, picked=('hunt', HUNT.key),
                              monitor_tables=Tables(), clock=500000, data=SimpleNamespace(map_ids={}), recoveries=0,
                              decisions=0, in_league=lambda snapshot: False, take_failure=lambda: None,
                              idle=lambda snapshot: False, waiting=lambda snapshot: False, recover=lambda level: None,
@@ -57,7 +57,7 @@ def failure(policy, key):
 
 def stop_again(emu, species=GEODUDE):
     """The next decision picks a hunt for ``species`` and the run stops moving again."""
-    emu.policy.goal, emu.policy.picked = HUNT, ('ladder', HUNT.key)
+    emu.policy.goal, emu.policy.picked = HUNT, ('hunt', HUNT.key)
     emu.policy.collection['target'] = {'species': species}
     emu.frame += STUCK_FRAMES + 1
     emu.stuck_frame = emu.frame - STUCK_FRAMES - 1
@@ -125,7 +125,7 @@ def story(emu):
 
 
 def stale(emu):
-    emu.policy.picked = ('ladder', 'collection_box')
+    emu.policy.picked = ('hunt', 'collection_box')
 
 
 def unpicked(emu):

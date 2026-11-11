@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pokesim import config
 from pokesim.emulator import Emulator
 from pokesim.gen2 import collection as ladder_module
-from pokesim.gen2.collection import ERRAND_FRAMES, Ladder, settle_pin
+from pokesim.gen2.collection import ERRAND_FRAMES, Rungs
 from pokesim.planning import arbiter, decide, pin, values
 from pokesim.planning.arbiter import Tier
 from pokesim.planning.pin import Pin
@@ -312,38 +312,48 @@ def gen2_goal(key):
 
 
 def weigh(owner):
-    rungs = Ladder(owner, SimpleNamespace(map=1))
+    rungs = Rungs(owner, SimpleNamespace(map=1))
     rungs.offer('hunt', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, lambda: gen2_goal('hunt'))
     rungs.offer('league', Tier.FILLER, values.SMALL, ERRAND_FRAMES * 10, lambda: gen2_goal('league'))
     return rungs
 
 
+def picked(rungs):
+    """The rung the decision over ``rungs`` picks, or None."""
+    pick = rungs.decision().pick
+    return None if pick is None else pick.source
+
+
+def settle_pin(rungs):
+    rungs.settle(rungs.decision().pick)
+
+
 def test_gen2_a_pinned_rung_is_asked_and_wins_but_not_over_upkeep():
-    assert weigh(gen2_policy(pin=None)).rung == 'hunt'
+    assert picked(weigh(gen2_policy(pin=None))) == 'hunt'
     owner = gen2_policy(pin=Pin('league:league', 'Label league'))
     rungs = weigh(owner)
-    assert rungs.rung == 'league' and 'league' in rungs.asked
-    upkeep = Ladder(owner, SimpleNamespace(map=1))
+    assert picked(rungs) == 'league' and 'league' in rungs.asked
+    upkeep = Rungs(owner, SimpleNamespace(map=1))
     upkeep.offer('restock', Tier.UPKEEP, values.SMALL, ERRAND_FRAMES * 50, lambda: gen2_goal('restock'))
     upkeep.offer('league', Tier.FILLER, values.SMALL, ERRAND_FRAMES, lambda: gen2_goal('league'))
-    assert upkeep.rung == 'restock' and 'league' in upkeep.asked
+    assert picked(upkeep) == 'restock' and 'league' in upkeep.asked
 
 
 def test_gen2_a_pin_starts_when_picked_and_clears_when_its_run_ends():
     owner = gen2_policy(pin=Pin('league:league', 'Label league'))
-    settle_pin(owner, weigh(owner))
+    settle_pin(weigh(owner))
     assert owner.pin.started
-    rungs = Ladder(owner, SimpleNamespace(map=1))
+    rungs = Rungs(owner, SimpleNamespace(map=1))
     rungs.offer('hunt', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, lambda: gen2_goal('hunt'))
-    settle_pin(owner, rungs)
+    settle_pin(rungs)
     assert owner.pin is None and not ladder_module.pin_events(owner)
 
 
 def test_gen2_a_pin_whose_rung_offers_something_else_is_dropped_and_journaled():
     owner = gen2_policy(pin=Pin('league:league', 'Label league'))
-    rungs = Ladder(owner, SimpleNamespace(map=1))
+    rungs = Rungs(owner, SimpleNamespace(map=1))
     rungs.offer('league', Tier.FILLER, values.SMALL, ERRAND_FRAMES, lambda: None)
-    settle_pin(owner, rungs)
+    settle_pin(rungs)
     assert owner.pin is None
     assert [row['title'] for row in owner.pin_events] == ['Gave up on Label league: not available now']
 
@@ -355,22 +365,22 @@ def test_gen2_a_pinned_rung_passes_every_check_and_a_parked_pin_says_why(monkeyp
     owner.monitor_tables[ladder_module.STOOD_DOWN] = {'league': 1}
     monkeypatch.setattr(ladder_module, 'standing_down', lambda policy, key: key == ladder_module.rung_key('league'))
     rungs = weigh(owner)
-    assert rungs.rung == 'hunt' and 'league' not in rungs.asked
-    settle_pin(owner, rungs)
+    assert picked(rungs) == 'hunt' and 'league' not in rungs.asked
+    settle_pin(rungs)
     assert owner.pin.to_dict() == {'key': 'league:league', 'label': 'Label league', 'started': False,
                                    'parked': {'kind': 'stood_down', 'detail': 'stood down'}}
     owner.monitor_tables.clear()
     owner.no_route_waiting = lambda goal: goal.key == 'league'
     rungs = weigh(owner)
-    assert rungs.rung == 'hunt' and 'league' in rungs.asked
-    settle_pin(owner, rungs)
+    assert picked(rungs) == 'hunt' and 'league' in rungs.asked
+    settle_pin(rungs)
     assert owner.pin.parked == decide.NO_ROUTE and not owner.pin.started
     assert not ladder_module.pin_events(owner)
     owner.no_route_waiting = lambda goal: False
-    settle_pin(owner, weigh(owner))
+    settle_pin(weigh(owner))
     assert owner.pin.started and owner.pin.parked is None
     owner.no_route_waiting = lambda goal: goal.key == 'league'
-    settle_pin(owner, weigh(owner))
+    settle_pin(weigh(owner))
     assert owner.pin is None
     assert [row['title'] for row in owner.pin_events] == ['Gave up on Label league: no route']
 
@@ -465,8 +475,8 @@ def test_gen2_a_pin_on_a_rung_that_stood_down_starts_on_the_goal_that_rung_offer
     owner = gen2_policy(pin=Pin('league', 'Run the League', parked=decide.STOOD_DOWN))
     rungs = weigh(owner)
     assert rungs.pinned('league:league') and not rungs.pinned('hunt:hunt')
-    assert rungs.rung == 'league'
-    settle_pin(owner, rungs)
+    assert picked(rungs) == 'league'
+    settle_pin(rungs)
     assert (owner.pin.key, owner.pin.started, owner.pin.parked) == ('league:league', True, None)
 
 

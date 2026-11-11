@@ -3,9 +3,10 @@
 Each site in ``policy.py`` offers its goal on the step's ``Ballot`` under its site name, and ``offer``
 turns that into a pipeline ``Offer`` with the site's source, needs and rule. The needs table is read off
 the old chain: a goal needs every enabler whose site comes later, since a later enabler replaced it there.
-The most urgent need is the one the latest site serves. Every Gen II overworld goal is picked by
-``decide.decide`` over these offers (slice 4b), so a change to this table changes behaviour and goes to
-the lead first.
+The most urgent need is the one the latest site serves. Every collection rung offers at the ``rung`` site
+under its own name, with its own tier, worth and frames (collection.Rungs). Every Gen II overworld goal is
+picked by ``decide.decide`` over these offers, so a change to this table changes behaviour and goes to the
+lead first.
 """
 from __future__ import annotations
 
@@ -17,12 +18,14 @@ from ..planning.decide import Offer
 
 # The frames of a short errand such as a Pokémon Center visit or a shop trip, as Gen I prices it.
 ERRAND_FRAMES = 3000
+# The frames of a story step, as Gen I prices it.
+STORY_FRAMES = 12000
 
 # Every overworld site in the order the step reaches it: the site, its source and the need it serves.
 SITES = (
-    ('story', 'story', ''),              # The story goal, or the collection's goal once the story is done.
+    ('story', 'story', ''),              # The story goal.
     ('holds', 'holds', ''),              # An activity under way that no rung cuts into (collection.holds).
-    ('ladder', 'ladder', ''),            # The collection ladder's pick of its rungs.
+    ('rung', 'collection', ''),          # A collection rung's goal, whose source is the rung's name.
     ('current', 'current', ''),          # The goal a battle that is starting keeps.
     ('boss', 'boss', 'trained'),         # Training for the next boss.
     ('release', 'party', 'room'),        # A release that makes room in storage.
@@ -43,15 +46,17 @@ SOURCES = {site: source for site, source, _ in SITES}
 SERVES = {site: serves for site, _, serves in SITES}
 
 
-def offer(site, goal, candidate=None, kind=None, commit=None):
-    """The pipeline offer of ``goal`` at ``site``, with the writes ``commit`` runs only when it is picked.
-    Without ``candidate`` it offers a short active goal of kind ``kind``, or of its source. An unknown site
-    offers as the legacy chain."""
-    source = SOURCES.get(site, 'legacy')
-    if candidate is None:
-        candidate = Candidate(goal.key, Tier.PROGRESS, values.SMALL, ERRAND_FRAMES, goal=kind or source)
-    return Offer(source, goal, candidate, needs=NEEDS.get(site, ()), serves=SERVES.get(site, ''),
-                 hold=site in HOLDS, forced=site in FORCED, commit=commit)
+def offer(site, goal, candidate, source=None, commit=None):
+    """The pipeline offer of ``goal`` as ``candidate`` at ``site``, with the writes ``commit`` runs only
+    when it is picked. ``source`` names it in place of the site's source, as a rung's name does. An
+    unknown site offers as the legacy chain."""
+    return Offer(source or SOURCES.get(site, 'legacy'), goal, candidate, needs=NEEDS.get(site, ()),
+                 serves=SERVES.get(site, ''), hold=site in HOLDS, forced=site in FORCED, commit=commit)
+
+
+def story_candidate(goal, kind, tier=Tier.STORY):
+    """A story goal, worth a new entry in ``tier``, as Gen I prices its story."""
+    return Candidate(goal.key, tier, values.NEW_ENTRY, STORY_FRAMES, goal=kind)
 
 
 class Ballot:
@@ -88,19 +93,39 @@ class Ballot:
         running = self.running
         return None if running is None else running.goal
 
-    def _add(self, offered):
-        self.offers.append(offered)
+    def _add(self, *offered):
+        self.offers.extend(offered)
         self._decision = None
         return self.goal
 
-    def offer(self, goal, site, candidate=None, kind=None, commit=None, pinned=False):
-        """Offer ``goal`` from ``site`` and return the goal that runs now. ``commit`` holds the writes that
-        run only if this offer is the one that runs. ``pinned`` says the offer is the goal a manager
-        pinned."""
-        offered = offer(site, goal, candidate, kind, commit)
+    def offer(self, goal, site, candidate, commit=None, pinned=False):
+        """Offer ``goal`` as ``candidate`` from ``site`` and return the goal that runs now. ``commit`` holds
+        the writes that run only if this offer is the one that runs. ``pinned`` says the offer is the goal
+        a manager pinned."""
+        offered = offer(site, goal, candidate, commit=commit)
         if pinned:
-            self.pinned = offered.candidate.key
+            self.pinned = candidate.key
         return self._add(offered)
+
+    def errand_candidate(self, key, kind, frames=ERRAND_FRAMES):
+        """An errand that serves the goal that runs now. It takes that goal's tier and value, at least a
+        small one, as Gen I's errands do. With nothing offered yet it is short upkeep."""
+        running = self.running
+        if running is None:
+            return Candidate(key, Tier.UPKEEP, values.SMALL, frames, goal=kind)
+        held = running.candidate
+        return Candidate(key, held.tier, max(held.value, values.SMALL), frames, hunt=held.hunt, goal=kind)
+
+    def errand(self, goal, site, commit=None):
+        """Offer ``goal``, a short errand from ``site``, and return the goal that runs now."""
+        return self.offer(goal, site, self.errand_candidate(goal.key, SOURCES.get(site, 'legacy')), commit)
+
+    def extend(self, offers, pinned=None):
+        """Offer ``offers``, the collection rungs' offers (collection.Rungs), and return the goal that runs
+        now. ``pinned`` is the key of the one a manager pinned, or None."""
+        if pinned is not None:
+            self.pinned = pinned
+        return self._add(*offers)
 
     def park(self, goal, reason=decide.NO_ROUTE):
         """Park the latest offer of ``goal``, which cannot run now for ``reason``, and return the goal that
