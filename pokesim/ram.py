@@ -51,7 +51,7 @@ from .display_names import place_name
 from .game_data import load
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
-from pokecore.storage import decode_box, memory_bytes
+from pokecore.storage import decode_box, read_box_counts as read_box_counts, read_box_records
 
 # Yellow's opening scene, where Oak catches Pikachu before the player has a party.
 BATTLE_TYPE_PIKACHU = 4
@@ -312,23 +312,6 @@ def repair_party_nicknames(mem):
     return repaired
 
 
-def read_box_counts(mem) -> tuple[int, ...]:
-    current = mem[W_CURRENT_BOX]
-    active = current & 0x7F
-    if active >= BOX_COUNT:
-        return ()
-    counts = [0] * BOX_COUNT
-    if current & 0x80:
-        try:
-            counts = [mem[2 + i // 6, 0xA000 + (i % 6) * BOX_DATA_SIZE]
-                      for i in range(BOX_COUNT)]
-        except TypeError:
-            # Flat test memory cannot expose cartridge RAM banks.
-            counts = [BOX_CAPACITY] * BOX_COUNT
-    counts[active] = min(mem[W_BOX_COUNT], BOX_CAPACITY)
-    return tuple(counts)
-
-
 def read_stored_pokemon(mem):
     return tuple((mon.box, mon.species, mon.level, mon.nick) for mon in read_stored_details(mem))
 
@@ -354,9 +337,6 @@ def _max_pp(moves, raw_pp, move_data):
     return tuple(out)
 
 
-_box_bytes = memory_bytes
-
-
 def read_stored_details(mem, *, counts=None):
     return _read_storage(mem, counts)[0]
 
@@ -370,23 +350,11 @@ def _read_storage(mem, counts=None):
     from .pc_list import gen1_unlisted
     from .yellow import YellowMemory
     yellow = isinstance(mem, YellowMemory)
-    counts = read_box_counts(mem) if counts is None else counts
-    active = mem[W_CURRENT_BOX] & 0x7F
     out, unlisted = [], []
-    for box, count in enumerate(counts):
-        count = min(count, BOX_CAPACITY)
-        if not count:
-            continue
-        base = W_BOX_COUNT if box == active else 0xA000 + (box % 6) * BOX_DATA_SIZE
-        bank = None if box == active else 2 + box // 6
-        try:
-            structs = _box_bytes(mem, bank, base + 22, count * 33)
-            names = _box_bytes(mem, bank, base + 902, count * 11)
-        except TypeError:
-            # Flat memory has no inactive cartridge banks.
-            continue
-        out.extend(_decode_box(box, structs, names))
-        unlisted.extend((box, position) for position in gen1_unlisted(names, count, yellow))
+    for record in read_box_records(mem, counts):
+        out.extend(_decode_box(record.box, record.structs, record.names))
+        unlisted.extend((record.box, position)
+                        for position in gen1_unlisted(record.names, record.count, yellow))
     return tuple(out), tuple(unlisted)
 
 

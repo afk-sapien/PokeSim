@@ -499,6 +499,16 @@ by complete immutable bytes. It cannot go stale after a restore, trade or box
 switch. No species validity policy is applied. `read_storage` retains its
 existing dictionaries and list fields, returning fresh mutable values each call.
 
+`storage.box_location(box, active)` gives the `(bank, address)` of a Gen I box's
+count byte. The active box is `(None, gen1.W_BOX_COUNT)` in WRAM, and the others
+start at `gen1.S_BOXES` in cartridge RAM banks 2 and 3. `storage.read_box_counts(memory, *, version=None)`
+returns one count per box, or `()` before a box is selected. Inactive boxes
+count 0 until the game initializes the boxes, and memory without banks reports
+`BOX_CAPACITY` for them. `storage.read_box_records(memory, counts=None, *, version=None)`
+returns a frozen `BoxRecords(box, structs, names)` for each box that holds
+Pokémon. Its `mons` property is `decode_box` of those bytes. A box whose bank the
+memory cannot serve is left out. Neither reader switches banks or writes memory.
+
 ## Trusted resets
 
 `resets` is deliberately separate from read-only facts and controller actions.
