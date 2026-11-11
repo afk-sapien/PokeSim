@@ -38,13 +38,16 @@ OWNER_FAILURES = ('Cancelled by the owner', 'Set aside for a trade you chose')
 
 @dataclass(frozen=True)
 class Limits:
-    """Seconds unless the name says otherwise. Each one reads POKESIM_WATCHDOG_<NAME> in minutes, except
-    the count and the gigabytes, which read as they are."""
+    """Real seconds unless the name says otherwise. Each one reads POKESIM_WATCHDOG_<NAME> in minutes,
+    except the count and the gigabytes, which read as they are."""
     interval: float = 60
     grace: float = 300
     down: float = 120
     stuck: float = 900
+    # Seconds of play, from the worker's PlayClock, so the game's pace and a pause never count.
     no_progress: float = 3600
+    # The one check on real time: how long PlayClock may stand still while the adventure runs.
+    not_live: float = 900
     trade_waiting: float = 600
     failure_window: float = 7200
     failure_repeats: int = 3
@@ -212,8 +215,15 @@ class Problem:
 @dataclass
 class Progress:
     fingerprint: tuple
-    since: float
+    since: float     # real time, for the problem's date
+    played: int      # PlayClock seconds, which the window counts
     maps: set = field(default_factory=set)
+
+
+def played(status):
+    """The PlayClock seconds a worker's status reports, or None without them."""
+    seconds = ((status or {}).get('play_clock') or {}).get('seconds')
+    return seconds if isinstance(seconds, (int, float)) and not isinstance(seconds, bool) else None
 
 
 class Watchdog:
@@ -230,6 +240,7 @@ class Watchdog:
         self.progress = {}
         self.readings = {}   # adventure id -> (read at, progress_sweep.Reading or None)
         self.held = {}       # adventure id -> the last check that found it stopped, down or held still
+        self.moved = {}      # adventure id -> (PlayClock seconds, the real time they last changed)
         self.phases = {}
         self.guard = threading.Lock()
         self.stopped = threading.Event()
@@ -322,7 +333,7 @@ class Watchdog:
             self.down_since.pop(aid, None)
         for aid in set(self.progress) - set(names):
             self.progress.pop(aid, None)
-        for table in (self.readings, self.held):
+        for table in (self.readings, self.held, self.moved):
             for aid in set(table) - set(names):
                 table.pop(aid, None)
         self._trades(names, now, found)
@@ -369,6 +380,7 @@ class Watchdog:
             # The owner stopped it. Nothing about it is a problem until they start it again.
             self.down_since.pop(aid, None)
             self.progress.pop(aid, None)
+            self.moved.pop(aid, None)
             self.held[aid] = now
             return
         reserved = self.manager.coordinator.reserved(aid)
@@ -379,11 +391,19 @@ class Watchdog:
                 found[f'down:{aid}'] = Problem(
                     f'down:{aid}', 'down', f'{name} stopped unexpectedly and has not been running for {duration(now - since)}.',
                     since, aid, f'{name} is running again.')
+            # A worker that is down is the down alert's, so the clock that it stands still starts again.
             self.progress.pop(aid, None)
+            self.moved.pop(aid, None)
             self.held[aid] = now
             return
         self.down_since.pop(aid, None)
+        summary = row.get('summary') or {}
         if status is None:
+            # A worker that stops answering counts as standing still, unless a trade holds it.
+            if reserved or summary.get('trading'):
+                self.moved.pop(aid, None)
+            else:
+                self._live(row, None, now, found)
             return
         rating = status.get('rating_problem')
         if isinstance(rating, str) and rating:
@@ -392,12 +412,13 @@ class Watchdog:
                 f'rating:{aid}', 'rating',
                 f'{name} cannot rate its PC, so it releases nothing. {rating.rstrip(".")}. Restart it once the cartridge reads.',
                 now, aid, f'{name} rates its PC again.')
-        summary = row.get('summary') or {}
         if reserved or status.get('paused') or status.get('manual_mode') or summary.get('trading'):
             # A pause, manual play or a trade holds the game still on purpose.
             self.progress.pop(aid, None)
+            self.moved.pop(aid, None)
             self.held[aid] = now
             return
+        self._live(row, status, now, found)
         self._stalled(row, now, found, status)
         game = status.get('game') or {}
         place = game.get('map_name') or 'the same place'
@@ -408,11 +429,12 @@ class Watchdog:
                 f'stuck:{aid}', 'stuck', f'{name} has been stuck in {place} for {duration(stuck)}.',
                 now - stuck, aid, f'{name} is moving again.')
         if self._quiet(aid, status, now) and not stuck_now:
-            since = self.progress[aid].since
+            window = self.progress[aid]
             found[f'progress:{aid}'] = Problem(
                 f'progress:{aid}', 'no_progress',
-                f'{name} has made no progress for {duration(now - since)}. It is still playing in {place}.',
-                since, aid, f'{name} is making progress again.')
+                f'{name} has made no progress for {duration(played(status) - window.played)} of play. '
+                f'It is still playing in {place}.',
+                window.since, aid, f'{name} is making progress again.')
         help_request = status.get('help_request')
         if isinstance(help_request, dict):
             reason = str(help_request.get('reason') or 'It needs a hand').rstrip('.')
@@ -420,13 +442,34 @@ class Watchdog:
             found[f'help:{aid}'] = Problem(f'help:{aid}', 'help_request', f'{name} asked for help. {reason}.',
                                            now, aid, announce=False)
 
+    def _live(self, row, status, now, found):
+        """While an adventure runs, its PlayClock must advance. This is the one check on real time
+        (goal system, section 6), since a hung worker plays no frames for any frame clock to count.
+        A worker that stops answering counts as standing still. Not live is not a stall and climbs
+        no reload ladder. A worker restart fixes it."""
+        aid, name = row['id'], row['name']
+        seconds = played(status)
+        last = self.moved.get(aid)
+        if last is None or (seconds is not None and seconds != last[0]):
+            self.moved[aid] = last = (seconds, now)
+        still = now - last[1]
+        if still >= self.limits.not_live:
+            found[f'live:{aid}'] = Problem(
+                f'live:{aid}', 'not_live',
+                f'{name} has stopped playing. Its game clock has not moved for {duration(still)}. Restart it.',
+                last[1], aid, f'{name} is playing again.')
+
     def _quiet(self, aid, status, now):
-        """True when the game kept running for the whole window without doing anything new.
+        """True when the game played the whole window without doing anything new. The window counts
+        PlayClock seconds, so the game's pace does not change it.
 
         Moving around does not count, because a game caught in a loop moves too. New events,
         Pokédex entries, badges, League wins, newly discovered areas and maps not seen during
         this window do.
         """
+        seconds = played(status)
+        if seconds is None:
+            return False
         watch = status.get('watch') or {}
         achievement = (status.get('progress') or {}).get('last_achievement') or {}
         fingerprint = (achievement.get('id'), watch.get('owned'), watch.get('badges'), watch.get('hall_of_fame'),
@@ -434,13 +477,13 @@ class Watchdog:
         place = watch.get('map', (status.get('game') or {}).get('map_name'))
         current = self.progress.get(aid)
         if current is None or current.fingerprint != fingerprint:
-            self.progress[aid] = Progress(fingerprint, now, {place})
+            self.progress[aid] = Progress(fingerprint, now, seconds, {place})
             return False
         if place not in current.maps:
             current.maps.add(place)
-            current.since = now
+            current.since, current.played = now, seconds
             return False
-        return now - current.since >= self.limits.no_progress
+        return seconds - current.played >= self.limits.no_progress
 
     def _stalled(self, row, now, found, status=None):
         """Read the adventure's progress table and journal every few minutes (progress_sweep.py). Time

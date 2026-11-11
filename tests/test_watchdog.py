@@ -75,14 +75,24 @@ def world():
     watchdog = Watchdog(manager, clock=clock, limits=Limits(), environ={})
     clock.now += Limits().grace + 1   # past the startup grace unless a test says otherwise
 
-    def child(aid=AID, seen=None, code=None):
-        manager.supervisor.children[aid] = SimpleNamespace(process=Process(code), watch=(clock.now, seen or status()))
+    played = {}   # adventure id -> its PlayClock seconds, which a new summary carries on
 
-    def tick(advance=0):
+    def child(aid=AID, seen=None, code=None):
+        seen = seen or status()
+        seen['play_clock'] = {'seconds': played.setdefault(aid, 0)}
+        manager.supervisor.children[aid] = SimpleNamespace(process=Process(code), watch=(clock.now, seen))
+
+    def tick(advance=0, pace=1.0, answering=True):
+        """Move the clock on. A game that is not paused plays ``pace`` seconds a second, and a worker
+        that is not answering keeps its last summary and the time it gave it."""
         clock.now += advance
         for aid, item in manager.supervisor.children.items():
-            if item.watch:
-                item.watch = (clock.now, item.watch[1])
+            if item.watch and answering:
+                seen = item.watch[1]
+                if not seen.get('paused') and not seen.get('manual_mode'):
+                    played[aid] = played.get(aid, 0) + int(advance * pace)
+                seen['play_clock'] = {'seconds': played.get(aid, 0)}
+                item.watch = (clock.now, seen)
         return watchdog.tick()
     return SimpleNamespace(clock=clock, registry=registry, manager=manager, watchdog=watchdog, sent=sent,
                            child=child, tick=tick)
@@ -197,8 +207,8 @@ def test_a_game_looping_in_place_is_no_progress(world):
         world.manager.supervisor.children[AID].watch[1]['stuck_seconds'] = 30
     assert world.sent == []
     world.tick(61)
-    assert world.sent == [('Needs attention',
-                           'Mischievous Badge Hunt has made no progress for 60 minutes. It is still playing in Violet City.')]
+    assert world.sent == [('Needs attention', 'Mischievous Badge Hunt has made no progress for 60 minutes of play. '
+                                              'It is still playing in Violet City.')]
     seen = status()
     seen['watch']['owned'] = 6
     world.child(seen=seen)
@@ -232,6 +242,74 @@ def test_a_stuck_game_is_not_also_reported_as_no_progress(world):
     world.child(seen=status(stuck=4000))
     world.tick(4000)
     assert [problem['kind'] for problem in world.watchdog.public()['problems']] == ['stuck']
+
+
+def test_a_slow_game_is_quiet_only_after_an_hour_of_play(world):
+    world.registry.rows = [game()]
+    world.child(seen=status())
+    world.tick()
+    for _ in range(119):
+        world.tick(60, pace=0.5)
+    # Two real hours at half pace are not yet an hour of play.
+    assert world.sent == []
+    world.tick(120, pace=0.5)
+    assert world.sent == [('Needs attention', 'Mischievous Badge Hunt has made no progress for 60 minutes of play. '
+                                              'It is still playing in Violet City.')]
+
+
+NOT_LIVE = 'Mischievous Badge Hunt has stopped playing. Its game clock has not moved for 15 minutes. Restart it.'
+
+
+def test_a_game_clock_that_stands_still_is_one_not_live_alert_and_not_a_stall(world):
+    world.registry.rows = [game()]
+    world.child(seen=status())
+    world.tick()
+    for _ in range(14):
+        world.tick(60, pace=0)
+    assert world.sent == []
+    world.tick(60, pace=0)
+    assert world.sent == [('Needs attention', NOT_LIVE)]
+    for _ in range(60):
+        world.tick(60, pace=0)
+    # A clock that stands still plays no time for the quiet check to count, so it stays one alert.
+    assert len(world.sent) == 1
+    assert [problem['kind'] for problem in world.watchdog.public()['problems']] == ['not_live']
+    world.tick(60)
+    assert world.sent[-1] == ('Recovered', 'Mischievous Badge Hunt is playing again.')
+    assert world.watchdog.public()['problems'] == []
+
+
+def test_a_worker_that_stops_answering_counts_as_standing_still(world):
+    world.registry.rows = [game()]
+    world.child(seen=status())
+    world.tick()
+    world.tick(60)
+    for _ in range(14):
+        world.tick(60, answering=False)
+    assert world.sent == []
+    world.tick(60, answering=False)
+    assert world.sent == [('Needs attention', NOT_LIVE)]
+
+
+def test_a_pause_manual_play_or_a_trade_never_counts_as_not_live(world):
+    world.registry.rows = [game()]
+    world.child(seen=status(paused=True))
+    world.tick()
+    world.tick(3600)
+    world.child(seen=status(manual_mode=True))
+    world.tick(3600)
+    world.registry.rows = [game(summary={'trading': True})]
+    world.child(seen=status())
+    world.tick(3600, pace=0)
+    world.tick(3600, pace=0, answering=False)
+    assert world.sent == []
+    # The clock starts again once play resumes.
+    world.registry.rows = [game()]
+    world.tick()
+    world.tick(14 * 60, pace=0)
+    assert world.sent == []
+    world.tick(60, pace=0)
+    assert world.sent == [('Needs attention', NOT_LIVE)]
 
 
 def test_a_help_request_shows_but_does_not_send(world):
