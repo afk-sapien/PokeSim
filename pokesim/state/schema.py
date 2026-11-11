@@ -254,7 +254,10 @@ def intact(path):
         return False
 
 
-def copy(source, target):
-    """Copy an adventure database whole into a new file, as a trade keeps the game before it."""
-    with closing(connect(source)) as db, closing(sqlite3.connect(target)) as destination:
+def copy(source, target, *, read_only=False):
+    """Copy an adventure database whole into a new file, as a trade keeps the game before it.
+
+    A read-only copy leaves the source as it is, so the new file keeps the source's version.
+    """
+    with closing(connect(source, read_only=read_only)) as db, closing(sqlite3.connect(target)) as destination:
         db.backup(destination)

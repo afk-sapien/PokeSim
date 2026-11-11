@@ -265,7 +265,9 @@ def seed_rung_state(args):
 # Runner, inside each commit's own tree and environment ---------------------------------------------
 
 def _readonly(path):
-    return sqlite3.connect(f'file:{path}?mode=ro', uri=True, timeout=30)
+    # Each commit's runner reads with its own pokesim.state, which every playable commit has since #452.
+    from pokesim import state
+    return state.connect(path, read_only=True, timeout=30)
 
 
 def _kv_bytes(db):
@@ -904,11 +906,11 @@ def add_rung(manager, rung, info, rom):
     CheckpointStore(folder / 'states').write_checkpoint((rung / 'start.state').read_bytes(), metadata)
     store = Store(folder)
     try:
-        with store.lock, store.db:
+        with store.transaction() as db:
             # A fixed seed and a backlog of open League claims, so every soak draws the same gifts.
             seed = f'live-soak:{rung.name}'
-            rewards.save(store.db, {**rewards.ledger(store.db), 'seed': seed})
-            rewards.open_claims(store.db, seed, info['backlog'])
+            rewards.save(db, {**rewards.ledger(db), 'seed': seed})
+            rewards.open_claims(db, seed, info['backlog'])
     finally:
         store.close()
     return adventure['id']

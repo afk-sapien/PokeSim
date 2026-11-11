@@ -43,7 +43,7 @@ A new `pokesim/state/` package holds `schema.py` (the version, the migrations an
 
 Reads and writes through `store.get` and `store.set` already go through the owner, so they stay. About 50 `trade_hold` reads are of this kind and do not move. What moves is raw SQL on `store.db`.
 
-The last slice adds a test that fails when a module outside `pokesim/state/` and `store.py` uses a store's `db` or opens a `pokesim.sqlite`. That test is `tests/test_state_owner.py`. It covers the package. The modules that own `app.sqlite` and `auth.sqlite` may open those files with sqlite3, and nothing else may.
+The last slice adds a test that fails when a module outside `pokesim/state/` and `store.py` uses a store's `db` or opens a `pokesim.sqlite`. That test is `tests/test_state_owner.py`. It covers the package and the scripts in `tools/`. The modules that own `app.sqlite` and `auth.sqlite`, and the two tools that read a copy of `app.sqlite`, may open those files with sqlite3, and nothing else may.
 
 ### 3.2 Schema version
 
@@ -155,7 +155,7 @@ Phase 1 files the state store never touches: `runtime/game_loop.py` and `runtime
 1. What a reload keeps, stand-downs across a reload and persisted reload counts. Those are v2 PR 6. Its new domains, and the PR 5 claims table, get declared in `domains.py`.
 2. `app.sqlite` and `adventure.json`. The registry already has its own version.
 3. Loading a named checkpoint from before a restart. Today `rewards.initialize` guards the gift ledger after such a load (`emulator.py:428-430`, `gen2/emulator.py:642-645`). Other `resets_on_restart` domains stay reset, as they do today.
-4. The scripts in `tools/`. They check, soak and profile copies or live folders, outside any worker. Six of them open `pokesim.sqlite` with sqlite3 or use a store's `db`: `check_managed_app.py`, `check_managed_cable.py`, `live_soak.py`, `profile_simulation.py`, `quality_hunt_watch.py` and `replay_progress.py`. The owner test does not cover them. Two more, `pc_dry_run.py` and `sample_live.py`, were deleted.
+4. The scripts in `tools/`, past the owner rule. They check, soak and profile copies or live folders, outside any worker. They open `pokesim.sqlite` with `state.connect` and use a store's methods, as a module does, and the owner test reads them too. `live_soak.py` and `replay_progress.py` may also open a copy of `app.sqlite`.
 
 ## 8. Rulings
 

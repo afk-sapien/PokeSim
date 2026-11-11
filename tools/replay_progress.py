@@ -29,7 +29,7 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pokesim import config
+from pokesim import config, state
 from pokesim.app.watchdog import Limits, Watchdog
 from pokesim.gen2.journal import NOT_PROGRESS
 from pokesim.progress_events import HOUR, JOURNAL, NET
@@ -107,7 +107,8 @@ class Adventure:
 
 
 def connect(path):
-    """Open a database read-only, so a replay can never change its input."""
+    """Open the app database read-only, so a replay can never change its input. An adventure's own
+    database opens with ``state.connect``, which also checks its schema version."""
     return sqlite3.connect(f'file:{quote(str(path))}?mode=ro', uri=True)
 
 
@@ -115,7 +116,7 @@ def load(folder):
     """Read one adventure folder."""
     folder = Path(folder)
     meta = json.loads((folder / 'adventure.json').read_text(encoding='utf-8')) if (folder / 'adventure.json').exists() else {}
-    db = connect(folder / 'pokesim.sqlite')
+    db = state.connect(folder / 'pokesim.sqlite', read_only=True)
     try:
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
 
@@ -351,13 +352,13 @@ class Journal:
 
     def __init__(self):
         self.lock = threading.Lock()
-        self.db = sqlite3.connect(':memory:', check_same_thread=False)
-        self.db.execute('CREATE TABLE events (id INTEGER PRIMARY KEY, type TEXT, title TEXT)')
-        self.db.execute('CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)')
+        # The adventure schema itself, so LoopGuard reads the tables it reads in a worker.
+        self.db = state.connect(':memory:', check_same_thread=False)
 
     def add(self, entry):
         if entry.type in self.KINDS:
-            self.db.execute('INSERT INTO events VALUES (?, ?, ?)', (entry.id, entry.type, entry.title))
+            self.db.execute('INSERT INTO events (id, ts, type, title) VALUES (?, ?, ?, ?)',
+                            (entry.id, entry.ts, entry.type, entry.title))
 
     @contextmanager
     def transaction(self):

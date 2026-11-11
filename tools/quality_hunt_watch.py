@@ -99,11 +99,11 @@ def collect():
     Nothing goes through the app's web pages, so the check needs no login whatever AUTH is set to.
     """
     import os
-    import sqlite3
 
+    from pokesim import state
     from pokesim.gen2.standdown import BACKOFF, train_key
     from pokesim.planning.monitor import Monitor
-    from pokesim.state import manifests
+    from pokesim.state import kv, manifests
 
     root = Path(os.environ.get('DATA_DIR', '/data'))
     rows = []
@@ -116,9 +116,9 @@ def collect():
         if row['state'] != 'running':
             continue
         saved = (manifests.newest(path.parent / 'states') or {}).get('policy_state') or {}
-        db = sqlite3.connect(f'file:{path.parent / "pokesim.sqlite"}?mode=ro', uri=True)
+        db = state.connect(path.parent / 'pokesim.sqlite', read_only=True)
         try:
-            clock = db.execute("SELECT v FROM kv WHERE k='play_clock'").fetchone()
+            clock = kv.text(db, 'play_clock')
             captures = db.execute('SELECT dex, recorded_at FROM capture_receipts').fetchall()
         finally:
             db.close()
@@ -133,7 +133,7 @@ def collect():
         postgame = collection.get('postgame') or {}
         activity = postgame.get('activity') or {}
         # The app clock as PlayClock keeps it, in frames at 60 a second.
-        frames = json.loads(clock[0]).get('frames', 0) if clock else 0
+        frames = json.loads(clock).get('frames', 0) if clock else 0
         row.update(hours=frames // 60 / 3600, wall=time.time(),
                    decisions=decisions, can_catch=bool(storage.get('can_catch')),
                    trainees=trainees(party + (storage.get('pokemon') or []),

@@ -2,17 +2,18 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
 import secrets
-import sqlite3
 import subprocess
 import sys
 import time
 
 from pokesim.app.supervisor import Child
+from pokesim.state import kv, schema
 from pokesim.checkpoints import CheckpointStore
 from pokesim.interactions.cable import checked
 from pokesim.interactions.link_worker import CableParticipant, CableSessionPlan
@@ -154,8 +155,8 @@ def exercise(root, fixtures, roms, game_data, abort=False, progress=print):
         for child in children.values():
             child.stop()
     for aid in children:
-        with sqlite3.connect(root / 'adventures' / aid / 'pokesim.sqlite') as db:
-            count = db.execute('SELECT COUNT(*) FROM kv WHERE k=?', ('managed_journal:' + tid,)).fetchone()[0]
+        with closing(schema.connect(root / 'adventures' / aid / 'pokesim.sqlite', read_only=True)) as db:
+            count = int(kv.exists(db, 'managed_journal:' + tid))
             checked(count == (0 if abort else 1), 'Trade journal was duplicated or lost')
     report['journal_once' if not abort else 'no_committed_journal'] = True
     (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')

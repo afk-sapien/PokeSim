@@ -2,15 +2,17 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import hashlib
 import json
 from pathlib import Path
-import sqlite3
 
+from pokesim import state
 from pokesim.app.manager import Manager
 from pokesim.app.registry import identifier
 from pokesim.checkpoints import CheckpointStore
 from pokesim.interactions.cable import checked
+from pokesim.state import kv
 
 
 def exercise_app(root, fixtures, roms, game_data, progress=print):
@@ -107,8 +109,8 @@ def exercise_app(root, fixtures, roms, game_data, progress=print):
     finally:
         manager.close()
     for aid in ids:
-        with sqlite3.connect(root / 'adventures' / aid / 'pokesim.sqlite') as db:
-            count = db.execute('SELECT COUNT(*) FROM kv WHERE k LIKE ?', ('managed_journal:%',)).fetchone()[0]
+        with closing(state.connect(root / 'adventures' / aid / 'pokesim.sqlite', read_only=True)) as db:
+            count = len(kv.starting(db, 'managed_journal:'))
         checked(count == (0 if aid == ids[2] else 1), 'Managed trade journal count is incorrect')
     for edition, expected in source_hashes.items():
         checked(hashlib.sha256((Path(fixtures) / f'{edition}.state').read_bytes()).hexdigest() == expected,

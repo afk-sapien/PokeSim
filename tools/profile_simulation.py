@@ -17,13 +17,13 @@ import os
 from pathlib import Path
 import pstats
 import shutil
-import sqlite3
 import tempfile
 import threading
 import time
 
 
 def capture(source, output, rom, game_data):
+    from pokesim.state import schema
     output.mkdir(parents=True, mode=0o700, exist_ok=False)
     target = output / 'adventure'
     target.mkdir()
@@ -43,9 +43,7 @@ def capture(source, output, rom, game_data):
             continue
     else:
         raise ValueError('No complete, verified autosave was available')
-    with sqlite3.connect(f'file:{source / "pokesim.sqlite"}?mode=ro', uri=True) as src:
-        with sqlite3.connect(target / 'pokesim.sqlite') as dest:
-            src.backup(dest)
+    schema.copy(source / 'pokesim.sqlite', target / 'pokesim.sqlite', read_only=True)
     for directory in ('shots',):
         if (source / directory).exists():
             shutil.copytree(source / directory, target / directory)
