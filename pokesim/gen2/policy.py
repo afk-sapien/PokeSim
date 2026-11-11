@@ -1190,14 +1190,15 @@ class Policy:
     def healing(self, snapshot):
         from ..planning import boss
         from ..planning.ledger import PP
-        from .ledger import battle_room, walk_spent
+        from .ledger import battle_room, cured, walk_spent
         if self.heal_blocked(snapshot):
             if any(not mon.egg for mon in getattr(snapshot, 'party', ())):
                 # No walk out from here, so a boss ahead is met as the party stands.
                 self.boss_ready(snapshot, True)
             return None
         healthy = [mon for mon in snapshot.party if not mon.egg]
-        spent = bool(healthy) and walk_spent(self.data, snapshot)
+        # A status a cure in the bag clears is treated where the party stands (field_cure), not walked to a nurse.
+        spent = bool(healthy) and walk_spent(self.data, cured(self.data, snapshot))
         surveying = getattr(self, 'ladder_survey', False)
         if not healthy or not spent and self.boss_ready(snapshot, False) != boss.HEAL:
             if not surveying:
@@ -1323,6 +1324,9 @@ class Policy:
             reserve = ledger.held_money(self.data, snapshot, key)
             for mid, entry in self.data.maps.items():
                 if entry['region'] != self.travel_region(snapshot) or not entry['shops']:
+                    continue
+                # Cures are bought only where the player stands (ledger.cure_wanted), never on a trip.
+                if key == 'cures' and mid != snapshot.map:
                     continue
                 route = self.nav.walk(snapshot, mid)
                 if route is None:
@@ -1554,6 +1558,8 @@ class Policy:
             task = champion_use(self, snapshot)
             if task is not None and self.allowed(task, snapshot):
                 self.menu = task
+                return Action(None, 0, 24)
+            if self.field_cure(snapshot):
                 return Action(None, 0, 24)
         if self.in_league(snapshot) and (self.league_items(snapshot) or self.remedy(snapshot, cures=True)):
             return Action(None, 0, 24)
@@ -1804,6 +1810,21 @@ class Policy:
             return False
         self.menu = task
         return True
+
+    def field_cure(self, snapshot):
+        """Cure a status outside battle and outside the League with the cheapest cure in the bag
+        (ledger.field_cure). The heal check leaves such a status out (ledger.cured)."""
+        from .ledger import field_cure
+        items = dict(snapshot.items)
+        for slot, mon in enumerate(snapshot.party):
+            name = field_cure(self.data, items, mon)
+            if name is None:
+                continue
+            item = self.data.items[name]
+            if self.allowed(task := Remedy(item, slot, items[item]), snapshot):
+                self.menu = task
+                return True
+        return False
 
     def remedy(self, snapshot, *, active=None, cures=False):
         """Use a remedy on a party member, or on the one in battle when ``active`` is set. With ``cures``
