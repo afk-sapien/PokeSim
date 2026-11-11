@@ -6,25 +6,56 @@ from types import SimpleNamespace
 import pytest
 
 from pokecore import gen1, yellow
-from pokecore.gen2 import memory_map
 from pokecore.identity import GEN1_DEX
-from pokecore.state import ABSENT, BATTLE_KINDS, GENERATIONS, GameState, Party, read_battle, read_state
+from pokecore.shortcuts import gen2ui
+from pokecore.shortcuts.screens import W_STATUS_FLAGS_6
+from pokecore.state import (ABSENT, BATTLE_KINDS, GENERATIONS, LIST_SCREENS, GameState, Party, read_battle,
+                            read_state, read_ui)
 
 GEN1_MOVES = {84: {'pp': 30}, 45: {'pp': 40}}
 GEN2_MOVES = {33: {'pp': 35}, 45: {'pp': 40}}
+# Gen I wListMenuID, 2 for a mart's item list.
+W_LIST_MENU_ID = 0xCF94
+CURSOR, BOX_TL, BOX_H, BOX_TR, BOX_V, BOX_BL, BOX_BR, BLANK = 0xED, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F
 
 
 def text(value):
     return bytes(0x80 + ord(c) - ord('A') for c in value) + b'\x50'
 
 
+def tiles(data):
+    """Tile bytes, with a string drawn in capital letters."""
+    return text(data)[:-1] if isinstance(data, str) else bytes(data)
+
+
+def gen1_put(raw, game, address, data):
+    mem = yellow.red_layout(raw, game)
+    mem[address:address + len(data)] = bytes(data)
+
+
+def gen1_draw(raw, game, x, y, data):
+    gen1_put(raw, game, gen1.W_TILEMAP + y * 20 + x, tiles(data))
+
+
+def battle_menu(draw, item):
+    """The battle menu with its cursor on FIGHT. ``item`` is the bag's label."""
+    draw(9, 14, [CURSOR])
+    for x, y, label in ((10, 14, 'FIGHT'), (16, 14, 'PKMN'), (10, 16, item), (16, 16, 'RUN')):
+        draw(x, y, label)
+
+
 def gen1_memory(game):
-    """Raw memory of ``game`` with Red-layout fields written through the Yellow translation."""
+    """Raw memory of a started ``game`` on the overworld, Red-layout fields written through the Yellow translation."""
     raw = bytearray(65536)
     mem = yellow.red_layout(raw, game)
 
     def put(address, data):
         mem[address:address + len(data)] = bytes(data)
+
+    # The LCD is on, with the normal palette, and play time counts.
+    put(0xFF40, [0x91])
+    put(0xFF47, [0xE4])
+    put(W_STATUS_FLAGS_6, [1])
 
     block = bytearray(44)
     block[0], block[1:3] = 84, (28).to_bytes(2, 'big')
@@ -61,7 +92,8 @@ def gen1_memory(game):
 class BankedMemory:
     def __init__(self, version):
         self.banks = defaultdict(lambda: bytearray(65536))
-        self.symbols = memory_map.symbols(version)
+        # Core's memory map and the menu symbols the screen reader adds.
+        self.symbols = gen2ui.tables(version).symbols
 
     def __getitem__(self, key):
         bank, address = key if isinstance(key, tuple) else (0, key)
@@ -70,6 +102,19 @@ class BankedMemory:
     def put(self, name, data):
         bank, address = self.symbols[name]
         self.banks[bank][address:address + len(data)] = bytes(data)
+
+    def draw(self, x, y, data):
+        bank, address = self.symbols['wTilemap']
+        start = address + y * 20 + x
+        self.banks[bank][start:start + len(tiles(data))] = tiles(data)
+
+    def box(self, left, top, right, bottom):
+        """A menu frame with a blank inside."""
+        inner = right - left - 1
+        self.draw(left, top, [BOX_TL] + [BOX_H] * inner + [BOX_TR])
+        for y in range(top + 1, bottom):
+            self.draw(left, y, [BOX_V] + [BLANK] * inner + [BOX_V])
+        self.draw(left, bottom, [BOX_BL] + [BOX_H] * inner + [BOX_BR])
 
 
 def struct(species, level, *, item=0, pokerus=0, friendship=70):
@@ -87,7 +132,10 @@ def struct(species, level, *, item=0, pokerus=0, friendship=70):
 
 
 def gen2_memory(game):
+    """A started ``game`` on the overworld."""
     memory = BankedMemory(game)
+    memory.banks[0][gen2ui.LCDC] = 0x91
+    memory.put('wGameTimerPaused', [1])
     memory.put('wPartyCount', [2])
     memory.put('wPartySpecies', [152, 0xFD, 0xFF])
     memory.put('wPartyMons', struct(152, 5, item=7, pokerus=0x23) + struct(175, 1, friendship=10))
@@ -149,6 +197,10 @@ def gen1_battle(raw, game, *, mode=1, battle_type=0, link=0, status1=0, player_s
     put(gen1.W_PLAYER_BATTLE_STATUS3, [player_status3])
     put(gen1.W_ENEMY_BATTLE_STATUS1, [status1])
     put(gen1.W_ENEMY_BATTLE_STATUS3, [enemy_status3])
+    put(gen1.W_TOP_MENU_ITEM_Y, [14])
+    put(gen1.W_TOP_MENU_ITEM_X, [9])
+    put(gen1.W_CURRENT_MENU_ITEM, [0])
+    battle_menu(lambda x, y, data: gen1_draw(raw, game, x, y, data), 'ITEM')
     return raw
 
 
@@ -176,6 +228,8 @@ def gen2_battle(memory, *, mode=1, battle_type=0, link=0, player_sub5=0, enemy_s
     memory.put('wPlayerSubStatus5', [player_sub5])
     memory.put('wEnemySubStatus5', [enemy_sub5])
     memory.put('wPlayerWrapCount', [wrap])
+    memory.put('wMenuCursorY', [1])
+    battle_menu(memory.draw, 'PACK')
     return memory
 
 
@@ -379,3 +433,147 @@ def test_pc_items_are_bounded_to_fifty_slots():
     raw[gen1.W_NUM_BOX_ITEMS] = 255
     raw[gen1.W_BOX_ITEMS:gen1.W_BOX_ITEMS + 120] = bytes((1, 1)) * 60
     assert len(gen1.read_pc_items(raw)) == 50
+
+
+@pytest.mark.parametrize('game', ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal'])
+def test_overworld_ui(game):
+    memory = memory_for(game)
+    ui = read_state(memory, game).ui
+    assert ui == read_ui(memory, game)
+    assert (ui.screen, ui.text_box, ui.start_menu, ui.cursor, ui.menu_item, ui.scroll) == (
+        'overworld', False, False, None, 0, 0)
+    assert (ui.facing, ui.movement, ui.movement_state) == ('down', 'walking', 0)
+
+
+@pytest.mark.parametrize('game', ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal'])
+def test_battle_menu_ui(game):
+    memory = memory_for(game, battle=True)
+    ui = read_state(memory, game).ui
+    assert ui == read_ui(memory, game)
+    assert (ui.screen, ui.cursor, ui.menu_item, ui.scroll) == ('battle_menu', (9, 14), 0, 0)
+    assert not ui.text_box and not ui.start_menu
+
+
+def test_yellow_ui_reads_raw_memory_and_the_red_layout_view_alike():
+    raw = gen1_memory('yellow')
+    gen1_put(raw, 'yellow', gen1.W_WALK_BIKE_SURF_STATE, [1])
+    assert read_ui(raw, 'yellow') == read_ui(yellow.red_layout(raw, 'yellow'), 'yellow')
+    assert read_ui(raw, 'yellow').movement == 'biking'
+
+
+@pytest.mark.parametrize('facing, walk_bike_surf, expected', [
+    (4, 1, ('up', 'biking')), (8, 2, ('left', 'surfing')), (12, 0, ('right', 'walking')), (0, 7, ('down', None)),
+])
+@pytest.mark.parametrize('game', ['red', 'yellow'])
+def test_gen1_facing_and_movement(game, facing, walk_bike_surf, expected):
+    raw = gen1_memory(game)
+    gen1_put(raw, game, gen1.W_FACING, [facing])
+    gen1_put(raw, game, gen1.W_WALK_BIKE_SURF_STATE, [walk_bike_surf])
+    ui = read_ui(raw, game)
+    assert (ui.facing, ui.movement) == expected and ui.movement_state == walk_bike_surf
+
+
+@pytest.mark.parametrize('game', ['red', 'yellow'])
+def test_gen1_start_menu(game):
+    raw = gen1_memory(game)
+    gen1_draw(raw, game, 10, 0, [BOX_TL])
+    for row, label in zip((2, 4, 6, 8), ('ITEM', 'RED', 'SAVE', 'EXIT')):
+        gen1_draw(raw, game, 12, row, label)
+    gen1_draw(raw, game, 11, 8, [CURSOR])
+    gen1_put(raw, game, gen1.W_TOP_MENU_ITEM_Y, [2])
+    gen1_put(raw, game, gen1.W_TOP_MENU_ITEM_X, [11])
+    gen1_put(raw, game, gen1.W_CURRENT_MENU_ITEM, [3])
+    gen1_put(raw, game, gen1.W_MAX_MENU_ITEM, [3])
+    # A list's old scroll offset is not this menu's.
+    gen1_put(raw, game, gen1.W_LIST_SCROLL_OFFSET, [5])
+    ui = read_ui(raw, game)
+    assert (ui.screen, ui.start_menu, ui.cursor, ui.menu_item, ui.scroll) == ('pause', True, (11, 8), 3, 0)
+    gen1_put(raw, game, gen1.W_IS_IN_BATTLE, [1])
+    assert not read_ui(raw, game).start_menu
+
+
+@pytest.mark.parametrize('game', ['red', 'yellow'])
+def test_gen1_list_scroll(game):
+    raw = gen1_memory(game)
+    gen1_put(raw, game, W_LIST_MENU_ID, [2])
+    gen1_draw(raw, game, 5, 6, [CURSOR])
+    gen1_put(raw, game, gen1.W_TOP_MENU_ITEM_Y, [4])
+    gen1_put(raw, game, gen1.W_TOP_MENU_ITEM_X, [5])
+    gen1_put(raw, game, gen1.W_CURRENT_MENU_ITEM, [1])
+    gen1_put(raw, game, gen1.W_LIST_SCROLL_OFFSET, [3])
+    ui = read_ui(raw, game)
+    assert ui.screen in LIST_SCREENS
+    assert (ui.screen, ui.cursor, ui.menu_item, ui.scroll) == ('mart_list', (5, 6), 1, 3)
+
+
+@pytest.mark.parametrize('game', ['red', 'yellow'])
+def test_gen1_text_box(game):
+    raw = gen1_memory(game)
+    gen1_draw(raw, game, 0, 12, [BOX_TL])
+    ui = read_ui(raw, game)
+    assert ui.text_box and ui.screen == 'dialogue' and not ui.start_menu
+
+
+@pytest.mark.parametrize('direction, player_state, expected', [
+    (4, 1, ('up', 'biking')), (8, 4, ('left', 'surfing')), (12, 8, ('right', 'surfing')), (0, 2, ('down', None)),
+])
+@pytest.mark.parametrize('game', ['gold', 'crystal'])
+def test_gen2_facing_and_movement(game, direction, player_state, expected):
+    memory = gen2_memory(game)
+    memory.put('wPlayerDirection', [direction])
+    memory.put('wPlayerState', [player_state])
+    ui = read_ui(memory, game)
+    assert (ui.facing, ui.movement) == expected and ui.movement_state == player_state
+
+
+@pytest.mark.parametrize('game', ['gold', 'silver', 'crystal'])
+def test_gen2_start_menu(game):
+    memory = gen2_memory(game)
+    memory.box(10, 0, 19, 5)
+    memory.draw(12, 2, 'PACK')
+    memory.draw(12, 4, 'EXIT')
+    memory.draw(11, 4, [CURSOR])
+    memory.put('wMenuCursorY', [2])
+    # A list's old scroll position is not this menu's.
+    memory.put('wMenuScrollPosition', [5])
+    ui = read_ui(memory, game)
+    assert (ui.screen, ui.start_menu, ui.cursor, ui.menu_item, ui.scroll) == ('pause', True, (11, 4), 1, 0)
+    assert not ui.text_box
+
+
+@pytest.mark.parametrize('game', ['gold', 'crystal'])
+def test_gen2_text_box(game):
+    memory = gen2_memory(game)
+    memory.box(0, 12, 19, 17)
+    memory.draw(1, 14, 'HELLO')
+    ui = read_ui(memory, game)
+    assert ui.text_box and ui.screen == 'dialogue' and not ui.start_menu
+
+
+@pytest.mark.parametrize('pocket, scroll', [(0, 5), (1, 5), (3, 9)])
+@pytest.mark.parametrize('game', ['gold', 'crystal'])
+def test_gen2_bag_scroll(game, pocket, scroll):
+    """The TM pocket keeps its own scroll position."""
+    memory = gen2_memory(game)
+    memory.draw(7, 4, [CURSOR])
+    memory.put('wCurPocket', [pocket])
+    memory.put('wMenuCursorY', [2])
+    memory.put('wMenuScrollPosition', [5])
+    memory.put('wTMHMPocketScrollPosition', [9])
+    ui = read_ui(memory, game)
+    assert (ui.screen, ui.cursor, ui.menu_item, ui.scroll) == ('bag', (7, 4), 1, scroll)
+
+
+@pytest.mark.parametrize('loaded, screen', [(0, 'pc_party'), (3, 'pc_box')])
+@pytest.mark.parametrize('game', ['gold', 'crystal'])
+def test_gen2_bills_pc_scroll(game, loaded, screen):
+    memory = gen2_memory(game)
+    memory.draw(8, 0, [BOX_TL])
+    memory.draw(8, 1, [BOX_V])
+    memory.draw(8, 2, [BOX_BL])
+    memory.draw(10, 1, 'BOX')
+    memory.put('wBillsPC_LoadedBox', [loaded])
+    memory.put('wBillsPC_ScrollPosition', [4])
+    memory.put('wBillsPC_CursorPosition', [2])
+    ui = read_ui(memory, game)
+    assert (ui.screen, ui.cursor, ui.menu_item, ui.scroll) == (screen, None, 2, 4)

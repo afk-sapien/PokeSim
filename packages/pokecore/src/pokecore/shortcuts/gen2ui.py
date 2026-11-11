@@ -135,12 +135,17 @@ def text_box(view):
     return ' '.join(text_box_lines(view))
 
 
+def text_box_top(view):
+    """The top row of the bottom text box, as ``text_box`` finds it, or None with no box."""
+    if view.tile(0, 17) != BOX_BL:
+        return None
+    return next((y for y in (12, 14, 15) if view.tile(0, y) in (BOX_TL, BOX_V)
+                 and view.tile(19, y) in (BOX_TR, BOX_BR)), None)
+
+
 def text_box_lines(view):
     """The non-blank lines of the bottom text box, as ``text_box`` finds it, or [] with no box."""
-    if view.tile(0, 17) != BOX_BL:
-        return []
-    top = next((y for y in (12, 14, 15) if view.tile(0, y) in (BOX_TL, BOX_V)
-                and view.tile(19, y) in (BOX_TR, BOX_BR)), None)
+    top = text_box_top(view)
     if top is None:
         return []
     rows = [y for y in range(top + 1, 17) if view.tile(0, y) == BOX_V and view.tile(19, y) == BOX_V]
@@ -348,18 +353,22 @@ def holds_mail(mon):
     return bool(mon.get('held_item')) and item_kind(mon['held_item'], 'crystal').kind == 'mail'
 
 
+def list_scroll(view, screen):
+    """How many entries a list screen has scrolled past, or 0 on a screen that does not scroll."""
+    if screen == 'bag':
+        return view.byte('wTMHMPocketScrollPosition' if view.byte('wCurPocket') == 3 else 'wMenuScrollPosition')
+    if screen in ('mart_list', 'pc_items'):
+        return view.byte('wMenuScrollPosition')
+    if screen in ('pc_party', 'pc_box'):
+        return view.byte('wBillsPC_ScrollPosition')
+    return 0
+
+
 def list_index(view, screen):
     """The highlighted entry of a list screen (0 based, scroll included), or None."""
-    cursor = view.byte('wMenuCursorY')
-    if screen == 'bag':
-        if view.byte('wCurPocket') == 3:
-            return view.byte('wTMHMPocketScrollPosition') + cursor - 1
-        return view.byte('wMenuScrollPosition') + cursor - 1
-    if screen in ('mart_list', 'pc_items'):
-        return view.byte('wMenuScrollPosition') + cursor - 1
     if screen in ('pc_party', 'pc_box'):
-        return view.byte('wBillsPC_CursorPosition') + view.byte('wBillsPC_ScrollPosition')
-    return cursor - 1
+        return list_scroll(view, screen) + view.byte('wBillsPC_CursorPosition')
+    return list_scroll(view, screen) + view.byte('wMenuCursorY') - 1
 
 
 def ready(view):

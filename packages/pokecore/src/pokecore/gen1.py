@@ -109,6 +109,14 @@ W_PLAYER_DISABLED_MOVE = 0xD06D
 W_MOVE_NUM = 0xD0E0
 # wWalkBikeSurfState: 0 walking, 1 biking, 2 surfing.
 W_WALK_BIKE_SURF_STATE = 0xD700
+WALK_BIKE_SURF = {0: 'walking', 1: 'biking', 2: 'surfing'}
+# The active menu: the top item's tile row and column, the highlighted item from 0,
+# the last item's index, and a list menu's scroll offset.
+W_TOP_MENU_ITEM_Y = 0xCC24
+W_TOP_MENU_ITEM_X = 0xCC25
+W_CURRENT_MENU_ITEM = 0xCC26
+W_MAX_MENU_ITEM = 0xCC28
+W_LIST_SCROLL_OFFSET = 0xCC36
 # Bits of W_STATUS_FLAGS1 and wMovementFlags.
 BIT_STRENGTH_ACTIVE = 0
 BIT_GAVE_SAFFRON_GUARDS_DRINK = 6
