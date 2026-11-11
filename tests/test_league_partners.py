@@ -133,18 +133,19 @@ def test_the_second_league_battler_does_not_depend_on_party_order():
     # Muk and Charizard were both level 54. Moving Lapras to the lead changed which of them counted as
     # the strongest, so the partner to train changed too, and Lapras and Muk traded the lead forever.
     from itertools import permutations
-    from pokesim.policies.progression import league_partner
-    from test_events import snap
+    from pokesim.planning.league import partner
+    from pokesim.policies.progression import BOSS_TABLE
     from test_strategy import mon
+    league_partner = lambda party: partner(party, BOSS_TABLE.partner)  # noqa: E731
     muk = mon(species=136, level=54, max_hp=190, attack=120)
     charizard = mon(species=180, level=54, max_hp=175, attack=110)
     lapras = mon(species=19, level=30, max_hp=127, attack=60)
     for party in permutations((muk, charizard, lapras, mon(level=47))):
-        assert party[league_partner(snap(party=party))] is lapras
+        assert party[league_partner(party)] is lapras
     # An identical twin already in the lead stays the one to train.
     twins = (lapras, charizard, mon(species=19, level=30, max_hp=127, attack=60))
-    assert league_partner(snap(party=twins)) == 0
-    assert league_partner(snap(party=(charizard, mon(level=20)))) is None
+    assert league_partner(twins) == 0
+    assert league_partner((charizard, mon(level=20))) is None
 
 
 def test_different_families_with_identical_dvs_keep_separate_wins(tmp_path):

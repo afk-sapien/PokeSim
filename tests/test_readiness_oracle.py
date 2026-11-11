@@ -81,7 +81,7 @@ def cartridge():
         pytest.skip('Set GEN2_DATA_DIR to generated local game data')
     from pokesim.gen2.data import GameData
     data = GameData.load(directory, 'gold')
-    # Without the trainer tables each boss keeps the ace in the policy's own table.
+    # Without the trainer tables each boss keeps the ace in its generation's boss table.
     data.boss_parties = {}
     return data
 
@@ -90,7 +90,7 @@ def cartridge():
 def verdicts(cartridge, monkeypatch):
     """Every verdict the oracle gives, with the boss and the team it judged, as each generation asks."""
     from pokesim.gen2 import training
-    from pokesim.policies import progression
+    from pokesim.planning import league
     monkeypatch.setattr(training, 'walk_points', lambda policy, snapshot, mid: [(10, 10, 0)])
     seen, real = [], oracle.judge
 
@@ -98,7 +98,7 @@ def verdicts(cartridge, monkeypatch):
         seen.append((boss, team, real(boss, team, losses)))
         return seen[-1][2]
     monkeypatch.setattr(oracle, 'judge', judge)
-    monkeypatch.setattr(progression, 'judge', judge)
+    monkeypatch.setattr(league, 'judge', judge)
     return seen
 
 
@@ -118,6 +118,7 @@ def test_both_generations_get_one_verdict_from_the_same_facts(cartridge, verdict
     # best fighter level over the ace, and the same loss there give the same verdict.
     from pokesim.gen2 import readiness as gen2_readiness
     from pokesim.gen2.policy import Goal, Policy
+    from pokesim.planning.league import boss_key
     from pokesim.policies import progression
     from pokesim.strategy_data import MAPS
     from test_events import snap
@@ -126,16 +127,16 @@ def test_both_generations_get_one_verdict_from_the_same_facts(cartridge, verdict
     monkeypatch.setattr(gen2_readiness, 'readiness', lambda policy, party, key: best)
     gold = Policy(cartridge)
     if league:
-        red_ace, red_goal, red_map, badges = progression.LEAGUE_ACE, 'league_lorelei', 'INDIGO_PLATEAU_LOBBY', 255
+        red_ace, red_goal, red_map, badges = progression.BOSS_TABLE.league_row.ace, 'league_lorelei', 'INDIGO_PLATEAU_LOBBY', 255
         gold_goal, gold_map = Goal('league_will', 'Challenge Will', 'WILLS_ROOM', 5, 5), 'INDIGO_PLATEAU_POKECENTER_1F'
     else:
         red_ace = next(gym[5] for gym in progression.GYMS if gym[1] == 'cascade')
         red_goal, red_map, badges = 'cascade', 'CERULEAN_CITY', 1
         gold_goal, gold_map = Goal('hive', 'Challenge Bugsy', 'AZALEA_GYM', 5, 8, 'up'), 'AZALEA_TOWN'
-    gold_ace, red_losses = gold.boss_ace(gold_goal.key), Losses()
+    gold_ace, red_losses = gen2_readiness.aces(cartridge)(gen2_readiness.BOSS_TABLE.row(gold_goal.key)), Losses()
     if lost is not None:
-        red_losses.note(progression.boss_key(red_goal), red_ace + lost)
-        gold.losses.note(gold.boss_key(gold_goal.key), gold_ace + lost)
+        red_losses.note(boss_key(red_goal), red_ace + lost)
+        gold.losses.note(boss_key(gold_goal.key), gold_ace + lost)
     red = progression.boss_training(snap(map=MAPS[red_map], badges=badges, party=(mon(level=red_ace + over),)),
                                     SimpleNamespace(key=red_goal), red_losses)
     party = (gold_mon(cartridge, gold_ace + over),)
@@ -173,11 +174,14 @@ def test_the_readiness_target_is_the_level_the_matchup_rules_train_to():
 
 
 def test_gen1_targets_the_next_gym_in_badge_order_then_the_league():
-    from pokesim.policies.progression import GYMS, LEAGUE_ACE, readiness_target
-    assert readiness_target(SimpleNamespace(badges=0)) == GYMS[0][5] + oracle.MARGIN
+    from pokesim.planning.league import readiness_target
+    from pokesim.policies.progression import BOSS_TABLE, GYMS
+    target = lambda badges, hall_of_fame_count=0: readiness_target(  # noqa: E731
+        BOSS_TABLE, SimpleNamespace(badges=badges, hall_of_fame_count=hall_of_fame_count))
+    assert target(0) == GYMS[0][5] + oracle.MARGIN
     # A gym won out of order leaves the first one not won as the next boss.
-    assert readiness_target(SimpleNamespace(badges=0b101)) == GYMS[1][5] + oracle.MARGIN
-    assert readiness_target(SimpleNamespace(badges=0x7f)) == GYMS[7][5] + oracle.MARGIN
-    assert readiness_target(SimpleNamespace(badges=0xff)) == LEAGUE_ACE
+    assert target(0b101) == GYMS[1][5] + oracle.MARGIN
+    assert target(0x7f) == GYMS[7][5] + oracle.MARGIN
+    assert target(0xff) == BOSS_TABLE.league_row.ace == 65
     # After the Hall of Fame no boss is next, so no level gain counts.
-    assert readiness_target(SimpleNamespace(badges=0xff, hall_of_fame_count=1)) is None
+    assert target(0xff, 1) is None

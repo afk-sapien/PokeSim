@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokecore.gen2.ram import calculated_stats
+from pokesim.gen2.readiness import BOSS_TABLE, aces
 from pokesim.planning.losses import ace_slot
 from pokesim.planning.readiness import MATCHUP, Boss, Team, Train, judge, score
 
@@ -104,35 +105,36 @@ def test_without_the_cartridge_tables_the_gyms_keep_their_level_rules(real_data,
     party = (mon(real_data, 155, 13, (TACKLE, 0, 0, 0)),)
     goal = Goal('hive', 'Challenge Bugsy', 'AZALEA_GYM', 5, 8, 'up')
     assert policy.boss_training(at(real_data, 'AZALEA_TOWN', party), goal) is None
-    assert policy.boss_ace('hive') == policy.BOSS_ACES['hive']
+    assert boss_ace(real_data, 'hive') == BOSS_TABLE.row('hive').ace
+
+
+def boss_ace(data, key):
+    return aces(data)(BOSS_TABLE.row(key))
 
 
 def test_the_ace_levels_come_from_the_cartridge(real_data):
-    from pokesim.gen2.policy import Policy
     real_data.boss_parties = {**real_data.boss_parties, 3: [{**BUGSY[2], 'level': 21}]}
-    policy = Policy(real_data)
-    assert policy.boss_ace('hive') == 21
+    assert boss_ace(real_data, 'hive') == 21
     # The League's ace is the top one across the Elite Four and Lance.
-    assert policy.boss_ace('league_will') == 50
+    assert boss_ace(real_data, 'league_will') == 50
 
 
 def test_the_next_boss_in_story_order_sets_the_readiness_target(real_data):
-    from pokesim.gen2.policy import Policy
+    from pokesim.planning.league import readiness_target
     from pokesim.planning.readiness import MARGIN
-    policy = Policy(real_data)
-    target = lambda badges, hall_of_fame_count=0: policy.readiness_target(
-        SimpleNamespace(badges=badges, hall_of_fame_count=hall_of_fame_count))
+    target = lambda badges, hall_of_fame_count=0: readiness_target(
+        BOSS_TABLE, SimpleNamespace(badges=badges, hall_of_fame_count=hall_of_fame_count), aces(real_data))
     # Falkner has no matchup rule, so his level floor is the target. Bugsy's is ten over Scyther's Lv 16.
     assert (target(0), target(1)) == (14, 26)
     # Story order takes Chuck before Jasmine, whose badge comes first in the case.
-    assert target(0b1111) == policy.boss_ace('storm') + MARGIN
+    assert target(0b1111) == boss_ace(real_data, 'storm') + MARGIN
     # The League's target is its top ace, Lance's Lv 50 Dragonite.
     assert target(0xff) == 50
     # The Kanto gyms have no matchup rule, so a level gain there sets no target.
     assert target(0xff, 1) is None and target(0x7fff, 1) is None
     # With all sixteen badges Red at Mt. Silver is next, and gains count up to ten over Pikachu's Lv 81,
     # the most his loss bar asks.
-    assert policy.boss_ace('red') == 81 and target(0xffff, 1) == 91
+    assert boss_ace(real_data, 'red') == 81 and target(0xffff, 1) == 91
 
 
 def test_the_first_league_trains_until_the_team_matches_up_or_reaches_the_top_ace(real_data, walks):

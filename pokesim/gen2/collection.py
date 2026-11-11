@@ -460,25 +460,16 @@ def _prerequisites(data, snapshot):
 
 
 def league_run(policy, snapshot):
-    """A postgame League run and the team that would take it, as the oracle reads them (planning/readiness.py).
-
-    Nothing restores PP inside the League. A level 100 Vaporeon beside Pokémon too weak to face the
-    Elite Four ran out of attacks at Lance and the battle never ended. So the oracle counts the attacks
-    the Pokémon at the League's lowest level or over know, at full PP since the run heals first. A live
-    Crystal run took one level 71 Poliwhirl and its trainees back to Lance every twenty minutes and
-    lost each time, so a lost run leaves the depth of the team that lost for the next one to beat.
-    """
-    from dataclasses import replace
-    from types import SimpleNamespace
-    from ..planning.readiness import Boss, team
-    from .readiness import league_lineup
+    """A postgame League run and the team that would take it, as the oracle reads them (planning/league.run)."""
+    from ..planning import league
+    from ..planning.readiness import Boss
+    from .readiness import BOSS_TABLE, league_lineup
     moves = policy.data.moves
-    opponents, low = league_lineup(policy.data)
-    boss = policy.boss(snapshot, SimpleNamespace(key='league')) if hasattr(policy, 'boss') else Boss('league', league=True)
-    boss = replace(boss, opponents=opponents, low=low, lost=getattr(policy, 'collection', {}).get('league_lost'))
+    boss = policy.league_boss(snapshot) if hasattr(policy, 'league_boss') else Boss('league', league=True)
     power = lambda move: moves.get(move, {}).get('power')
     attack_pp = lambda move: moves.get(move, {}).get('pp', 0) if power(move) else 0
-    return boss, team(snapshot.party, getattr(policy, 'move_power', power), attack_pp, low)
+    return league.run(BOSS_TABLE, boss, snapshot.party, getattr(policy, 'move_power', power), attack_pp,
+                      league_lineup(policy.data), getattr(policy, 'collection', {}).get('league_lost'))
 
 
 def league_verdict(policy, snapshot):

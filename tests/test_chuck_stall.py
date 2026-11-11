@@ -31,7 +31,7 @@ def crystal(tmp_path):
     store.state_path = lambda key: None
     policy = SimpleNamespace(collection={}, decisions=100, menu=None, completed={}, pin=None, recoveries=0,
                              ladder_rung=None, goal=Goal('storm', 'Challenge Chuck', 'CIANWOOD_GYM', 4, 4),
-                             BOSSES=frozenset({'storm'}), in_league=lambda snapshot: False,
+                             in_league=lambda snapshot: False,
                              constant=lambda snapshot: '', on_restore=lambda: None)
     emu = SimpleNamespace(policy=policy, store=store, supervisor=Supervisor(store),
                           stall=StallWatch(game_minutes=120, real_minutes=0),
