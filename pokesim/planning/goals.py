@@ -49,10 +49,22 @@ class ParamWrite(TypeError):
 
 
 class Rules:
-    """A goal kind's rules. Each Gen I method has one subclass (policies/kinds.py)."""
+    """A goal kind's rules. Each Gen I method has one subclass (policies/kinds.py), and so has each Gen II
+    goal record (gen2/kinds.py)."""
     kind = ''
     # Fields written after the goal starts. Every other field is a param.
     run = frozenset()
+    # Fields the spec keeps as its kind and key rather than as params. A Gen I project names its kind
+    # in ``method`` and may carry its own ``key``.
+    spec_fields = frozenset({'key', 'method'})
+
+    def spec_kind(self, record):
+        """The kind of the goal ``record``. A kind with no rules of its own goes by the record's method."""
+        return self.kind or record['method']
+
+    def spec_key(self, record):
+        """The monitor key the goal ``record`` is kept under."""
+        return record.get('key', self.spec_kind(record))
 
     # One rules object serves every goal of its kind, so a copied goal keeps it.
     def __copy__(self):
@@ -79,12 +91,12 @@ class GoalRun(dict):
 
     @classmethod
     def from_dict(cls, record, rules):
-        """The run a save or an offer kept as ``record``. Its params are every field but the run fields,
-        the key and the method."""
-        method = record['method']
+        """The run a save or an offer kept as ``record``. Its params are every field but the run fields
+        and those the spec keeps as its kind and key."""
         params = {name: value for name, value in record.items()
-                  if name not in rules.run and name not in ('key', 'method')}
-        return _restore(GoalSpec.make(method, params, record.get('key', method)), rules, dict(record))
+                  if name not in rules.run and name not in rules.spec_fields}
+        spec = GoalSpec.make(rules.spec_kind(record), params, rules.spec_key(record))
+        return _restore(spec, rules, dict(record))
 
     def __reduce__(self):
         return _restore, (self.spec, self.rules, dict(self))

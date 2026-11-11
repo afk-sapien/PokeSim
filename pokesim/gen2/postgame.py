@@ -21,12 +21,12 @@ no Pokédex, trade, breeding or clock-gated work is left.
 from pokecore.gen2.ram import calculated_stats, experience_at
 
 from ..investment import GOOD_TAIL, MIN_UPGRADE, SEARCH_BUDGET
-from ..pcvalue import RARITY_STEP
 from ..planning import arbiter, values
 from ..planning.arbiter import Candidate, Tier
 from ..planning.values import QUALITY, quality_catch
 from ..policies.collection import HUNT_TIER
 from .standdown import DECISIONS_PER_BATTLE, forget, hunt_key, search_expected, stand_down, standing_down, train_key
+from . import kinds
 
 # What a better copy is worth, per unit of drop in the species' best DV tail (planner design S3).
 QUALITY_WEIGHT = QUALITY
@@ -135,9 +135,7 @@ def balls(policy, snapshot):
 def searching(policy):
     """The encounter row a better-DV or shiny search walks, or None."""
     activity = (policy.collection.get('postgame') or {}).get('activity')
-    if activity and activity['kind'] in {'quality', 'shiny'}:
-        return activity['row']
-    return None
+    return kinds.activity(activity).search_row(activity) if activity else None
 
 
 def quality_species(policy):
@@ -173,29 +171,14 @@ def observe(policy, snapshot):
     A marathon is observed on every step too, so its race clock runs on while other work suspends it.
     """
     activity = (policy.collection.get('postgame') or {}).get('activity')
-    if activity and activity['kind'] == 'marathon':
-        from . import marathon
-        marathon.observe(policy, snapshot, activity)
-        # The race ends here even while other work holds the plan, so it never outruns its budget.
-        if snapshot.valid and marathon.done(policy, snapshot, activity):
-            finish(policy)
-        return
-    if not activity or activity['kind'] != 'shiny':
-        return
-    wild = snapshot.in_battle == 1
-    if wild and not activity.get('in_battle') and shiny_session(policy, snapshot):
-        activity['encounters'] = activity.get('encounters', 0) + 1
-    activity['in_battle'] = wild
+    if activity:
+        kinds.activity(activity).observe(policy, snapshot, activity)
 
 
 def stall_key(policy):
     """The stand-down key of the search in progress, or None."""
     activity = (policy.collection.get('postgame') or {}).get('activity')
-    if not activity or activity['kind'] not in {'quality', 'shiny'}:
-        return None
-    if activity['kind'] == 'quality':
-        return hunt_key(activity['species'])
-    return f'shiny:{activity["row"]["map"]}'
+    return kinds.activity(activity).stall_key(activity) if activity else None
 
 
 def drop(policy):
@@ -209,20 +192,8 @@ def drop(policy):
 def finish(policy):
     data = state(policy)
     activity = data['activity']
-    if activity and activity['kind'] == 'marathon':
-        from . import marathon
-        marathon.finish(policy, activity)
-    elif activity:
-        data['finished'] += 1
-    if activity and activity['kind'] == 'quality':
-        searches = data['searches']
-        searches[str(activity['species'])] = searches.get(str(activity['species']), 0) + 1
-        data.setdefault('effort', {})[str(activity['species'])] = list(effort(policy, activity['species'], activity))
-        forget(policy, hunt_key(activity['species']))
-    if activity and activity['kind'] == 'shiny':
-        forget(policy, f'shiny:{activity["row"]["map"]}')
-    if activity and activity['kind'] == 'train' and (policy.collection.get('training') or {}).get('postgame'):
-        policy.collection['training'] = None
+    if activity:
+        kinds.activity(activity).finish(policy, data, activity)
     from .collection import LOADING
     forget(policy, LOADING)
     data['activity'] = None
@@ -239,7 +210,6 @@ def journey(policy, snapshot, mem, Goal, current_time):
 
 def step(policy, snapshot, mem, Goal, current_time):
     """The goal of the current activity, None when nothing is left, or False when an activity just ended."""
-    from .collection import while_waiting
     data = state(policy)
     activity = data['activity']
     if activity and (done(policy, snapshot, activity, current_time) or outranked(policy, snapshot, activity, current_time)):
@@ -249,73 +219,13 @@ def step(policy, snapshot, mem, Goal, current_time):
         activity = choose(policy, snapshot, mem, current_time)
         if activity is None:
             return None
-        data['activity'] = activity
-    kind = activity['kind']
-    if kind == 'league':
-        # The League loop in collection.journey carries the run on until its Hall of Fame entry.
-        data['activity'] = None
-        data['finished'] += 1
-        policy.collection['league_loop'] = snapshot.hall_of_fame_count + 1
-        policy.collection['phase'] = 'league'
-        from .collection import league_funding
-        return league_funding(policy, snapshot, Goal, again=True)
-    if kind == 'marathon':
-        # A race goes straight to the next checkpoint. Clock-gated filler waits until it is over.
-        from . import marathon
-        policy.collection['phase'] = 'racing'
-        return marathon.goal(policy, activity, Goal)
-    if kind == 'train':
-        goal = train(policy, snapshot, mem, Goal, activity)
-    else:
-        from .collection import hunt
-        name = policy.data.species[activity['species']]['name'] if kind == 'quality' else None
-        goal = hunt(policy, snapshot, Goal, target=activity['row'],
-                    label=f'Search for a stronger {name}' if name else 'Search for a shiny')
-        if data['activity'] is activity:
-            policy.collection['phase'] = 'upgrading' if kind == 'quality' else 'shiny hunting'
-            activity['suspended'] = goal is None
-    if goal is None:
-        finish(policy)
-        return False
-    return while_waiting(policy, snapshot, mem, goal, Goal)
+        activity = data['activity'] = kinds.start(kinds.activity(activity), activity)
+    return kinds.activity(activity).step(policy, snapshot, mem, Goal, data, activity)
 
 
 def done(policy, snapshot, activity, current_time):
-    kind = activity['kind']
-    if kind == 'train':
-        project = policy.collection.get('training')
-        return not project or not project.get('postgame') or project['identity'] != activity['identity']
-    if kind == 'league':
-        return True
-    if kind == 'marathon':
-        from . import marathon
-        return marathon.done(policy, snapshot, activity)
-    if policy.no_room(snapshot) or not snapshot.can_catch or balls(policy, snapshot) < 1:
-        return True
-    from .collection import matching_time
-    if not matching_time(activity['row']['time'], current_time):
-        return True
-    if kind == 'quality':
-        new = {repr(row) for row in activity['seen']}
-        species = activity['species']
-        # Older saves did not record the tail the hunt set out to beat, so they beat today's best.
-        start = activity.setdefault('tail', best_tail(policy.data, snapshot, species))
-        better = False
-        for mon in held(snapshot):
-            if mon.species == species and repr(ident(mon)) not in new:
-                activity['seen'].append(ident(mon))
-                activity['caught'] += 1
-                # Better as the PC counts it: at least RARITY_STEP times rarer (pcvalue.worth).
-                better = better or tail(policy.data, mon) * RARITY_STEP <= start
-        # The hunt ends at its first better copy, which makes the next one rarer, so the arbiter weighs
-        # it afresh. It also ends once the next catch is worth less per decision than WORTH, as at a hunt
-        # running dry. That ends it before the stand-down budget, which is left for stuck hunts.
-        activity['better'] = activity.get('better') or better
-        return (activity['better'] or standing_down(policy, hunt_key(species))
-                or not worth_hunting(best_tail(policy.data, snapshot, species), [activity['row']],
-                                     effort(policy, species, activity)))
-    shinies = sum(mon.shiny for mon in held(snapshot))
-    return shinies > activity['shinies'] or standing_down(policy, stall_key(policy))
+    """Whether the activity in progress has ended."""
+    return kinds.activity(activity).done(policy, snapshot, activity, current_time)
 
 
 def hunting(policy, snapshot):
@@ -348,9 +258,7 @@ def choose(policy, snapshot, mem, current_time):
         shadow.compare('postgame', lambda: options, pick.key)
     if pick is not None:
         activity = found[pick.key]
-        if activity['kind'] == 'shiny':
-            data = state(policy)
-            data['shiny_maps'] = (data['shiny_maps'] + [activity['row']['map']])[-3:]
+        kinds.activity(activity).picked(policy, activity)
         return activity
     # A League run is the fallback once nothing else is left. In the old rotation it took about one
     # turn in eleven but ran far longer than a hunt, so Gold spent 28% of its frames on rematches.
@@ -361,20 +269,8 @@ def choose(policy, snapshot, mem, current_time):
 
 
 def outranked(policy, snapshot, activity, current_time):
-    """Whether another offer outranks the shiny search in progress, asked once after each of its battles.
-
-    A shiny search has no end of its own short of a shiny, so this is what hands the turn back.
-    """
-    if activity['kind'] != 'shiny' or activity.get('in_battle') or snapshot.in_battle:
-        return False
-    met = activity.get('encounters', 0)
-    if met <= activity.get('asked', 0):
-        return False
-    activity['asked'] = met
-    found = offers(policy, snapshot, current_time, shiny_search=False)
-    options = [candidate(policy, snapshot, other) for other in found.values()] + [candidate(policy, snapshot, activity)]
-    pick = arbiter.choose(options, snapshot)
-    return pick is not None and pick.key != 'shiny'
+    """Whether another offer takes the turn from the activity in progress (a shiny search's rule)."""
+    return kinds.activity(activity).outranked(policy, snapshot, activity, current_time)
 
 
 # Estimates in decisions, the unit of the postgame's own search costs: ten levels of training, from a
@@ -558,9 +454,9 @@ def train(policy, snapshot, mem, Goal, activity):
     project = policy.collection.get('training')
     fresh = not project or not project.get('postgame')
     if fresh:
-        policy.collection['training'] = {'identity': activity['identity'], 'target': activity['species'], 'item': None,
-                                         'species': activity['species'], 'terminal': True,
-                                         'level_goal': activity['level_goal'], 'postgame': True}
+        policy.collection['training'] = kinds.start(kinds.TERMINAL, {
+            'identity': activity['identity'], 'target': activity['species'], 'item': None, 'species': activity['species'],
+            'terminal': True, 'level_goal': activity['level_goal'], 'postgame': True})
     goal = training.journey(policy, snapshot, mem, Goal, terminal=True)
     if goal is None and fresh:
         # The trainee could not even start, so it waits before it is picked again.

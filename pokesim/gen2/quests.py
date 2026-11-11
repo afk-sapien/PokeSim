@@ -1,6 +1,7 @@
 """Postgame gifts and legendary encounters driven by cartridge quest flags."""
 from .menus import ChangeBox, FieldMove, ShowPartner, Storage, Teach
 from .standdown import stand_down, standing_down
+from . import kinds
 from ..planning.ledger import FIELD_MOVES
 
 
@@ -219,8 +220,8 @@ def prepare_lead(policy, snapshot, wanted, Goal):
         if policy.memory is None:
             return None
         if not state.get('training'):
-            state['training'] = {'identity': identity(mon), 'target': mon.species, 'item': None,
-                                 'species': mon.species, 'terminal': True, 'level_goal': level}
+            state['training'] = kinds.project({'identity': identity(mon), 'target': mon.species, 'item': None,
+                                               'species': mon.species, 'terminal': True, 'level_goal': level})
         return train(policy, snapshot, Memory(policy.memory, data), Goal)
     state['roam_lead'] = identity(mon)
     if mon.box is not None:

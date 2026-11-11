@@ -77,14 +77,9 @@ def goal_key(policy):
     collection = getattr(policy, 'collection', None)
     if not isinstance(collection, dict):
         return None, ''
-    activity = (collection.get('postgame') or {}).get('activity')
-    if activity:
-        return activity['kind'], 'RACE' if activity['kind'] == 'marathon' else ''
-    if target := collection.get('target'):
-        return hunt_key(target['species']), ''
-    if training := collection.get('training'):
-        return train_key(training['identity']), ''
-    return None, ''
+    from .kinds import running
+    rules, record = running(collection)
+    return rules.goal_key(record) if rules else (None, '')
 
 
 def hunt(policy, snapshot):
@@ -96,19 +91,9 @@ def hunt(policy, snapshot):
     collection = getattr(policy, 'collection', None)
     if not isinstance(collection, dict):
         return None
-    activity = (collection.get('postgame') or {}).get('activity')
-    if activity:
-        if activity['kind'] == 'quality':
-            from .postgame import hunt_catch
-            species = activity['species']
-            return species, lambda raw: hunt_catch(policy, snapshot, species, raw)
-        if activity['kind'] == 'shiny':
-            from ..shiny import shiny_bytes
-            return None, shiny_bytes
-        return None
-    if target := collection.get('target'):
-        return target['species'], None
-    return None
+    from .kinds import running
+    rules, record = running(collection)
+    return rules.counters(policy, snapshot, record) if rules else None
 
 
 def site_key(mid):
