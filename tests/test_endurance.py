@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from tools import check_endurance as endurance
+from pokesim.replay import check_endurance as endurance
 
 
 def result(**changes):
@@ -41,3 +41,23 @@ def test_timeout_preserves_failure_report_and_inputs(tmp_path, monkeypatch):
     report = json.loads((output / 'summary.json').read_text())
     assert report['status'] == 'failed' and report['inputs_unchanged']
     assert 'timed out' in report['error']
+
+
+@pytest.mark.parametrize('old', [False, True])
+def test_a_baseline_from_before_the_move_replays_with_its_own_script(tmp_path, monkeypatch, old):
+    import subprocess
+    root = tmp_path / 'checkout'
+    (root / 'tools').mkdir(parents=True)
+    if old:
+        (root / 'tools' / 'validate_progress.py').write_text('')
+    seen = []
+
+    def run(command, **kwargs):
+        seen.append(command)
+        (tmp_path / 'out.json').write_text('{}')
+    monkeypatch.setattr(subprocess, 'run', run)
+    endurance.run_replay(root, tmp_path / 'r.gb', tmp_path / 's.state', 60, tmp_path / 'out.json', 5)
+    replay = [str(root / 'tools' / 'validate_progress.py')] if old else ['-m', 'pokesim.replay', 'validate-progress']
+    assert seen[0][1:len(replay) + 1] == replay
+    assert seen[0][len(replay) + 1:] == ['--rom', str(tmp_path / 'r.gb'), '--checkpoint', str(tmp_path / 's.state'),
+                                         '--frames', '60', '--output', str(tmp_path / 'out.json')]

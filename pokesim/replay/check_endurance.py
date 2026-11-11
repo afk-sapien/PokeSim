@@ -8,8 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+ROOT = Path(__file__).resolve().parents[2]
 
 from pokesim.build_info import source_info
 from pokesim.game_data import directory
@@ -46,8 +45,10 @@ def compare(baseline, candidate):
 
 
 def run_replay(root, rom, checkpoint, frames, output, timeout):
-    command = [sys.executable, str(root / 'tools' / 'validate_progress.py'),
-               '--rom', str(rom), '--checkpoint', str(checkpoint), '--frames', str(frames),
+    # A baseline checkout from before the replay tools moved into pokesim.replay still has the old script.
+    old = root / 'tools' / 'validate_progress.py'
+    replay = [str(old)] if old.is_file() else ['-m', 'pokesim.replay', 'validate-progress']
+    command = [sys.executable, *replay, '--rom', str(rom), '--checkpoint', str(checkpoint), '--frames', str(frames),
                '--output', str(output)]
     env = {**os.environ, 'GAME_DATA_DIR': str(directory().resolve())}
     with output.with_suffix('.log').open('w', encoding='utf-8') as log:
@@ -56,8 +57,8 @@ def run_replay(root, rom, checkpoint, frames, output, timeout):
     return json.loads(output.read_text(encoding='utf-8'))
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(argv=None, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__)
     parser.add_argument('--rom', type=Path, required=True)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True, help='New private result directory')

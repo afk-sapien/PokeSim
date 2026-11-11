@@ -2,7 +2,7 @@
 
 Each generation's planner calls ``Shadow.compare`` at the points where it already picks a goal, with a
 function that builds the arbiter's candidates and the key the old order chose. The comparison goes only
-to the log and to counters that ``tools/replay_audit.py`` reads. Nothing here changes a decision, draws
+to the log and to counters that ``python -m pokesim.replay audit`` reads. Nothing here changes a decision, draws
 a random number, steps the emulator or goes into a saved game.
 
 A candidate's ``goal`` holds its kind, such as ``collection new entry`` or ``heal``, for the audit's

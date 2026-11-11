@@ -590,7 +590,7 @@ Copy a live autosave and its matching JSON manifest into a scratch directory. Ke
 original pair unchanged. Use the matching user-supplied ROM and the installed PyBoy RS:
 
 ```sh
-python tools/validate_progress.py --rom /path/to/pokered.gb --checkpoint /scratch/auto-v1-example.state --frames 432000 --output /scratch/progress.json
+python -m pokesim.replay validate-progress --rom /path/to/pokered.gb --checkpoint /scratch/auto-v1-example.state --frames 432000 --output /scratch/progress.json
 ```
 
 The replay restores policy state as well as game state. It advances two simulated hours

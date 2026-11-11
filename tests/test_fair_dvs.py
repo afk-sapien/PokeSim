@@ -246,7 +246,7 @@ def test_a_headless_run_refuses_fair_dvs_on_an_unverified_cartridge():
 
 def test_the_audit_takes_fair_dvs_as_a_flag_or_an_adventure_key(monkeypatch):
     from pokesim.replay import rung
-    from tools import replay_audit
+    from pokesim.replay import audit as replay_audit
     seen = []
     monkeypatch.setattr(replay_audit, 'run_one', seen.append)
     replay_audit.main(['run', 'red.gb', 'a.state', '60', 'out.json', '--fair-wild-dvs'])

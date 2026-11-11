@@ -20,16 +20,12 @@ from functools import partial
 import json
 import os
 from pathlib import Path
-import sys
 import time
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
 
 from pokesim.ram import ITEM_NAMES, read_snapshot
 from pokesim.scenarios import Scenario, WorkerDied, discover, open_run, play, replay_all
 
-DEFAULT_ROOT = ROOT / 'data' / 'scenarios'
+DEFAULT_ROOT = Path(__file__).resolve().parents[2] / 'data' / 'scenarios'
 
 
 def show(args):
@@ -92,8 +88,8 @@ def run(args):
     return 1 if stuck else 0
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+def main(argv=None, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--rom', type=Path, action='append',
                         help='a cartridge to replay with, repeatable. By default ROM_PATH, BLUE_ROM_PATH, '
                              'YELLOW_ROM_PATH and the cartridges in GEN2_CARTRIDGE_DIR, chosen by the checkpoint ROM hash')
@@ -107,7 +103,7 @@ def main():
     running.add_argument('--jobs', type=int, default=max(1, (os.cpu_count() or 2) // 2))
     running.add_argument('--output', type=Path, help='write the full results as JSON')
     running.set_defaults(action=run)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     return args.action(args)
 
 

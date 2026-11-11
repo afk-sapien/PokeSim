@@ -157,8 +157,8 @@ def write_bundle(folder: Path, state: bytes, metadata: dict, report: dict, png: 
 
     It holds ``noticed.state`` with its manifest, ``before.state`` copied from ``before``, ``noticed.png``,
     each closed trace segment of ``segments`` linked under ``trace/``, and ``report.json``. The running
-    adventures, the ladder tools and tools/find_stalls.py all write it, and ``python -m pokesim.replay
-    capture`` turns one into a scenario.
+    adventures, the ladder tools and ``python -m pokesim.replay find-stalls`` all write it, and
+    ``python -m pokesim.replay capture`` turns one into a scenario.
     """
     folder.mkdir(parents=True)
     CheckpointStore(folder).write_checkpoint(state, metadata, name='noticed.state', compress=compress)

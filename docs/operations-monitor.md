@@ -51,7 +51,7 @@ in the [guide](guide.md) adjust or disable this.
 ## Find stalls before a release
 
 ```sh
-.venv/bin/python tools/find_stalls.py --rom roms/pokered.gb \
+.venv/bin/python -m pokesim.replay find-stalls --rom roms/pokered.gb \
   --output ~/pokesim-soak/red-seed7 --until-champion --seed 7
 ```
 
@@ -59,7 +59,7 @@ This plays a fresh cartridge, or a copied `--checkpoint`, at full speed with no 
 and no live data. One game hour takes about a minute. Every stall leaves a `stall-NN`
 folder holding the moment it was noticed, the rolling checkpoint from before it began,
 a screenshot and a report with the objective, position, money and recent failures.
-Both checkpoints replay with `tools/validate_progress.py`, so a candidate fix can be
+Both checkpoints replay with `python -m pokesim.replay validate-progress`, so a candidate fix can be
 compared with the baseline on identical input. The run stops after six game hours in
 one stall, at the Hall of Fame with `--until-champion`, or when `--hours` is spent, and
 exits nonzero when it found any stall. Run several seeds on Red, Blue and Yellow.

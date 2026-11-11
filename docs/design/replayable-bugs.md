@@ -12,7 +12,7 @@ The headless path is close. Production is not.
 2. The Gen I policy saves and restores its random generator (section 2).
 3. Gen II guards already count frames (`gen2/emulator.py:1067-1090`). Gen II picks a reload save by manifest frame (`reload_target`, `gen2/emulator.py:185`).
 4. The Gen II cartridge clock follows game time (`_sync_clock`, `gen2/emulator.py:341`). The host clock is read only for a save with no stored reading.
-5. Headless runs pass no clock to the policy (`headless.py:116`). Scenarios seed their runs (`scenarios.py:561`, `:569`). Gate rungs reseed the policy and the game's random bytes at every goal start (`GoalSeeds`, `tools/replay_audit.py:135`).
+5. Headless runs pass no clock to the policy (`headless.py:116`). Scenarios seed their runs (`scenarios.py:561`, `:569`). Gate rungs reseed the policy and the game's random bytes at every goal start (`GoalSeeds`, now `pokesim/replay/rung.py:117`).
 
 ## 2. Is the random generator restored on a reload?
 
@@ -191,7 +191,7 @@ A capture holds the save from before the stall, the trace segments from that sav
 
 The game-minute clock triggers a capture. The real-minute half of StallWatch (`stalls.py:21-24`) keeps pacing the alert and its repeat, so Max pace does not flood the journal, but a capture never waits for it.
 
-`python -m pokesim.replay capture BUNDLE` turns a capture into a scenario. The state stays in the private scenario folder that `tools/stuck_scenarios.py` uses today. A tracked `scenarios/index.toml` row holds the name, ROM SHA-1, state SHA-256, frame window, expectation and the issue or PR. A scenario for an open stall is expected to fail. The fix PR flips it, and the preflight runs every row it has a save for. That is how a fixed stall becomes a test.
+`python -m pokesim.replay capture BUNDLE` turns a capture into a scenario. The state stays in the private scenario folder that `python -m pokesim.replay stuck-scenarios` uses today. A tracked `scenarios/index.toml` row holds the name, ROM SHA-1, state SHA-256, frame window, expectation and the issue or PR. A scenario for an open stall is expected to fail. The fix PR flips it, and the preflight runs every row it has a save for. That is how a fixed stall becomes a test.
 
 ### 4.9 Left for v2 PR 6
 
@@ -218,7 +218,7 @@ python -m pokesim.replay bisect --rung silver/badges_6 --good 171176e --bad main
 
 A commit is bad when its waste is more than 2.0 points over the baseline (`GATE_WASTE_POINTS`, `tools/stage_ladder.py:89`) or when it has a stall the baseline lacks.
 
-#375 is not a confound for gate rungs. The gate always passes seed 7 (`tools/stage_ladder.py:539`, and `:536` at `171176e`). With seed 7, `GoalSeeds` keeps the key it had before #375 (`tools/replay_audit.py:145-148`). So both ends meet the same goal rolls. The reseed input records prove it on every run.
+#375 is not a confound for gate rungs. The gate always passes seed 7 (`tools/stage_ladder.py:539`, and `:536` at `171176e`). With seed 7, `GoalSeeds` keeps the key it had before #375 (now `pokesim/replay/rung.py:127-130`). So both ends meet the same goal rolls. The reseed input records prove it on every run.
 
 Outputs go to the private ladder folder, since ladders hold private game data. The report is JSON with a short Markdown summary beside it.
 
@@ -260,7 +260,7 @@ Done when steps 1 to 5 of section 5.2 hold.
 
 ## 6. PR plan
 
-The trace and the bisect tool go first. The gate rungs already run headless with seeds and no reload watchdog (`tools/replay_audit.py:39`), so they need no production change to be replayable. Putting these first unblocks the 26 rungs after about 12 agent-hours. The production clock work follows.
+The trace and the bisect tool go first. The gate rungs already run headless with seeds and no reload watchdog (now `pokesim/replay/audit.py:41`), so they need no production change to be replayable. Putting these first unblocks the 26 rungs after about 12 agent-hours. The production clock work follows.
 
 Each PR deletes the old call sites its new definition replaces, in the same PR.
 
@@ -273,7 +273,7 @@ Each PR deletes the old call sites its new definition replaces, in the same PR.
 | 5 | Supervision on frames | Gen I guards, battle timeout, invalid grace and autosave pause on frames. Autosave every 18,000 frames in both loops. `runtime/reload.py` with `reload_target` | The rows of section 3.1 except `:924` (PR 3) and `:1276` (PR 4), with the mtime pick at `emulator.py:907`. The write-only `stuck_ts` in Gen II. The wall deadlines in both preparation modules. The LoopGuard real-second scan at `stalls.py:147`. `participant.py:663` | 5 |
 | 6 | One loop | `runtime/game_loop.py` with the per-generation decider. Production and headless call it | The action code in `emulator.py:1292-1309`, `gen2/emulator.py:1268-1279`, `headless.py:114-125`, `gen2/headless.py:133-142` and `benchmark.py:116-117`. The tool loops in `play_gen2`, `playthrough`, `validate_progress`, `validate_legendary_recovery`, `verify_gen2_postgame`, `verify_cartridge gen2-trading` and `benchmark_decisions` move onto `HeadlessRun` | 6 |
 | 7 | Trace in production | Both loops write segments. Outside inputs are logged. `tests/test_determinism.py` | The five manifest builders (`emulator.py:800`, `gen2/emulator.py:540`, `headless.py:100` and `:107`, `gen2/headless.py:117`) become one shared builder that carries the header fields | 4 |
-| 8 | Automatic stall capture | Captures at every trigger in section 4.8, Gen II bundles, `replay capture` and `scenarios/index.toml` | `tools/stuck_scenarios.py add` (`:61-88`). The bundle writer in `tools/find_stalls.py`, which moves onto the shared capture | 5 |
+| 8 | Automatic stall capture | Captures at every trigger in section 4.8, Gen II bundles, `replay capture` and `scenarios/index.toml` | `stuck_scenarios.py add` (`:61-88`). The bundle writer in `find_stalls.py`, which moves onto the shared capture | 5 |
 
 That is 38 agent-hours, plus the pyboy session's 5 for the determinism test and one pyboy-rs version. The plan has 40 for phase 1. The extra 3 pay for the old-commit shim. The three cases then need about 1 agent-hour to start and read, plus machine time of 6 to 10 rung runs each. Each run plays 108,000 frames.
 
