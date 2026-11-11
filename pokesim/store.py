@@ -40,8 +40,10 @@ class Store:
         # The running emulator's goal for progress rows and encounter counters. None where none runs.
         self.goal_watch = None
         # Re-entrant, so a read from inside the same thread's transaction (a PC rating asked during
-        # the walking return check) does not wait on itself.
+        # the walking return check) does not wait on itself. A write there joins that transaction.
         self.lock = threading.RLock()
+        # How deep the lock holder's transactions are nested. Only the holder of self.lock changes it.
+        self._depth = 0
         self._read_local = threading.local()
         self._read_cache = {}
         self._read_epoch = None
@@ -91,7 +93,7 @@ class Store:
         with self.lock:
             attachments = []
             try:
-                with self.db:
+                with self.transaction():
                     cur = self.db.execute(
                         "INSERT INTO events(ts,type,title,body,notable,priority,map,playtime) VALUES (?,?,?,?,?,?,?,?)",
                         (ts, ev.type, ev.title, ev.body, int(ev.notable), int(ev.priority), snapshot.map_name,
@@ -136,7 +138,7 @@ class Store:
             partial = path.with_suffix(".png.tmp")
             partial.write_bytes(png)
             partial.replace(path)
-            with self.db:
+            with self.transaction():
                 self.db.execute("UPDATE events SET shot=? WHERE id=?", (path.name, eid))
 
     def events(self, limit=50, notable_only=False, types=None, before=None, min_priority=None) -> list[dict]:
@@ -217,7 +219,7 @@ class Store:
         return json.loads(r["v"]) if r else default
 
     def set(self, k, v):
-        with self.lock, self.db:
+        with self.transaction():
             self.db.execute("INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)", (k, json.dumps(v)))
 
     @contextmanager
@@ -225,9 +227,23 @@ class Store:
         """The store's lock and one transaction, for repository calls that commit together.
 
         The functions in ``pokesim.state`` take the handle it yields. An exception rolls it back.
+        Inside a transaction this thread already holds, it joins that one: it neither commits nor
+        rolls back, and only the outermost transaction does.
         """
-        with self.lock, self.db:
-            yield self.db
+        with self.lock:
+            if self._depth:
+                self._depth += 1
+                try:
+                    yield self.db
+                finally:
+                    self._depth -= 1
+                return
+            self._depth = 1
+            try:
+                with self.db:
+                    yield self.db
+            finally:
+                self._depth = 0
 
     @contextmanager
     def reading(self):
@@ -241,11 +257,14 @@ class Store:
 
         It starts with ``BEGIN IMMEDIATE``, so no other writer can come between its reads and its
         writes, and commits under ``synchronous=FULL``. The connection's own setting comes back after.
-        An exception rolls the whole transaction back.
+        An exception rolls the whole transaction back. It cannot run inside another transaction.
         """
         with self.lock:
+            if self._depth:
+                raise RuntimeError('A durable transaction cannot run inside another store transaction')
             previous = self.db.execute('PRAGMA synchronous').fetchone()[0]
             self.db.execute('PRAGMA synchronous=FULL')
+            self._depth = 1
             try:
                 self.db.execute('BEGIN IMMEDIATE')
                 try:
@@ -255,6 +274,7 @@ class Store:
                     raise
                 self.db.commit()
             finally:
+                self._depth = 0
                 self.db.execute(f'PRAGMA synchronous={int(previous)}')
 
     def restart(self, generation, values):
@@ -289,7 +309,7 @@ class Store:
     def _finish_restart(self):
         """Drop the old game's autosaves, then clear the marker the restart left for this step."""
         self.checkpoints.drop_autosaves()
-        with self.lock, self.db:
+        with self.transaction():
             self.db.execute('DELETE FROM kv WHERE k=?', (domains.RESTART_PENDING,))
 
     def trade_preferences(self):
@@ -311,7 +331,7 @@ class Store:
 
     def add_trade_partners(self, ids):
         from .trade.partners import add
-        with self.lock, self.db:
+        with self.transaction():
             self._trade_partners = add(self.db, ids)
             return self._trade_partners
 
@@ -327,7 +347,7 @@ class Store:
         return dict(self.get('release_requests', {}) or {})
 
     def _change_release_requests(self, change):
-        with self.lock, self.db:
+        with self.transaction():
             row = self.db.execute("SELECT v FROM kv WHERE k='release_requests'").fetchone()
             requests = dict(json.loads(row["v"]) if row else {})
             changed = change(dict(requests))
@@ -377,7 +397,7 @@ class Store:
         if now < getattr(self, '_trade_keys_retry_at', 0):
             return
         from .trade.preferences import upgrade
-        with self.lock, self.db:
+        with self.transaction():
             self._trade_keys_current = upgrade(self.db, collection())
         self._trade_keys_retry_at = now + TRADE_KEY_RETRY_SECONDS
 
@@ -386,7 +406,7 @@ class Store:
         from .trade.preferences import LEGACY, PREFIX, sync_legacy
         # One setting per Pokémon and no lock order: Can trade, Prefer to trade or Never trade.
         value = {**value, 'state': LEGACY.get(value['state'], value['state'])}
-        with self.lock, self.db:
+        with self.transaction():
             hold = self.db.execute("SELECT v FROM kv WHERE k='trade_hold'").fetchone()
             if hold and json.loads(hold[0]):
                 raise ValueError('An exchange is in progress. Try again when it finishes.')
@@ -438,7 +458,7 @@ class Store:
         if days <= 0:
             return 0
         cutoff = time.time() - days * 86400
-        with self.lock, self.db:
+        with self.transaction():
             rows = self.db.execute("SELECT id, shot, state FROM events WHERE ts < ?", (cutoff,)).fetchall()
             self.db.execute("DELETE FROM events WHERE ts < ?", (cutoff,))
         for row in rows:
@@ -484,7 +504,7 @@ class Store:
                         log.exception("Cannot remove the attachments of event %d", row["id"])
                         continue
                     cleared.append((row["id"],))
-                with self.db:
+                with self.transaction():
                     self.db.executemany("UPDATE events SET shot=NULL, state=NULL WHERE id=?", cleared)
                 removed += len(cleared)
                 if len(cleared) < len(rows):
