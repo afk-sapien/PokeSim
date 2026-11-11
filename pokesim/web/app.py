@@ -398,7 +398,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return Response(body, media_type="application/json", headers=headers)
 
     @app.get("/api/pokedex/status")
-    def pokedex_route(view: Literal['pc', 'dex', 'party'] | None = Query(None)):
+    def pokedex_route(view: Literal['pc', 'dex', 'party'] | None = Query(None), values: bool = Query(True)):
         payload = pokedex_status(plan=view not in ('pc', 'party'))
         if view == 'party':
             # The Live page's popup draws one party member as the PC does, lock included, never the boxes.
@@ -406,7 +406,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                               'viewer_only': view_only()})
         if view == 'pc':
             # The PC draws party and boxes in full but never the collection plan. It hides the lock for watchers.
-            return fast_json({**pc_values({key: value for key, value in payload.items() if key != 'plan'}),
+            return fast_json({**pc_values({key: value for key, value in payload.items() if key != 'plan'}, values),
                               'viewer_only': view_only()})
         if view == 'dex':
             # The Pokédex lists who holds each species, never their moves or stats.
@@ -417,13 +417,14 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                               'storage': storage})
         return fast_json(payload)
 
-    def pc_values(payload):
+    def pc_values(payload, live=True):
         """Add each boxed Pokémon's PC value (pcvalue.annotate), the owner's pending requests and the
-        Favor setting. The PC draws without them while the adventure is busy."""
+        Favor setting. The PC draws without them while the adventure is busy. The values wait on the
+        game, so ?values=0 leaves them out for a page that draws the boxes first or never shows them."""
         from ..pcvalue import DEADLOCK  # pcvalue loads Red and Blue data, which a Gold-only Library lacks
         storage = payload.get('storage')
         try:
-            values, deadlock = emu.pc_values() if hasattr(emu, 'pc_values') else ({}, False)
+            values, deadlock = emu.pc_values() if live and hasattr(emu, 'pc_values') else ({}, False)
         except (RuntimeError, TimeoutError, ValueError):
             values, deadlock = {}, False
         requests = store.release_requests()

@@ -298,32 +298,47 @@ async function showSaved() {
     party = [] }
 }
 
+// Draw one answer from the server. The first also opens the slot the address names.
+function apply(status) {
+  const first = !fresh
+  fresh = true
+  latest = status
+  show(status)
+  if (followActive && storage) { selectedBox = storage.active_box
+    followActive = false }
+  if (first) PokeSim.remember?.('pc', status)
+  $('#status').textContent = status.started ? 'Running' : 'Waiting'
+  $('#connection').title = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
+  $('#connection').classList.remove('is-offline')
+  render()
+  // An open popup shows the fresh lock unless a change is still saving.
+  const again = shown && $('#pc-detail').open && locking.key !== shown.trade_key && releasing.key !== shown.trade_key
+    && document.activeElement?.id !== 'pc-release-name' && current(shown.trade_key)
+  if (again) redraw(again)
+  if (first) openRequested()
+}
+
+// The PC values wait on the game, so until the first full answer the boxes are also asked for
+// without them, and whichever answer comes first is drawn. The values join a moment later.
+async function quick() {
+  try {
+    const response = await PokeSim.fetch('/api/pokedex/status?view=pc&values=0', {cache: 'no-store'})
+    const status = response.ok ? await response.json() : null
+    if (status && !fresh) apply(status)
+  } catch (_) {}
+}
+
 async function refresh() {
   // A fetch already in flight may carry an older state, so one more runs after it.
   if (busy) { refreshAgain = true
     return }
   busy = true
   refreshAgain = false
+  if (!fresh) quick()
   try {
     const response = await PokeSim.fetch('/api/pokedex/status?view=pc', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
-    const status = await response.json()
-    const first = !fresh
-    fresh = true
-    latest = status
-    show(status)
-    if (followActive && storage) { selectedBox = storage.active_box
-      followActive = false }
-    if (first) PokeSim.remember?.('pc', status)
-    $('#status').textContent = status.started ? 'Running' : 'Waiting'
-    $('#connection').title = status.started ? 'Adventure in progress' : 'Waiting for the adventure'
-    $('#connection').classList.remove('is-offline')
-    render()
-    // An open popup shows the fresh lock unless a change is still saving.
-    const again = shown && $('#pc-detail').open && locking.key !== shown.trade_key && releasing.key !== shown.trade_key
-      && document.activeElement?.id !== 'pc-release-name' && current(shown.trade_key)
-    if (again) redraw(again)
-    if (first) openRequested()
+    apply(await response.json())
   } catch (_) {
     $('#status').textContent = 'Reconnecting…'
     $('#connection').title = ''
