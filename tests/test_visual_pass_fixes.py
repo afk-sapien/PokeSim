@@ -132,6 +132,43 @@ def test_the_stream_opens_on_a_fresh_frame_and_repeats_a_quiet_one(tmp_path, mon
     assert again == first
 
 
+def test_the_stream_sends_a_new_frame_at_once_and_stops_waking_once_closed(tmp_path, monkeypatch):
+    import asyncio
+    import threading
+    import time
+    from pokesim import config
+    monkeypatch.setattr(config, 'STREAM_FPS', 1)     # a poll alone would wait up to a second
+    emu = gen2_emulator()
+    emu.frame_cond, emu.frame_seq, emu.frame_image, emu.watch = threading.Condition(), 1, b'one', lambda: None
+    emu.current_frame = lambda timeout=1: emu.frame_image
+
+    def publish(image):
+        with emu.frame_cond:
+            emu.frame_image, emu.frame_seq = image, emu.frame_seq + 1
+            emu.frame_cond.notify_all()
+    app = create_app(emu, Store(tmp_path))
+    endpoint = next(route.endpoint for route in app.routes if getattr(route, 'path', None) == '/stream')
+
+    async def watch():
+        body = (await endpoint()).body_iterator
+        try:
+            await anext(body)
+            threading.Timer(0.05, publish, (b'two',)).start()
+            started = time.monotonic()
+            frame = await anext(body)
+            bells = [thread for thread in threading.enumerate() if thread.name == 'pokesim-frame-bell']
+            return frame, time.monotonic() - started, bells
+        finally:
+            await body.aclose()
+
+    frame, waited, bells = asyncio.run(watch())
+    assert frame.endswith(b'\r\n\r\ntwo\r\n') and waited < 0.5
+    # With no stream open, the next frame lets the bell's thread end.
+    publish(b'three')
+    bells[0].join(2)
+    assert len(bells) == 1 and not bells[0].is_alive()
+
+
 def test_gen2_thumbnail_skips_blank_transition_frames():
     from pokesim.gen2.emulator import Emulator, solid
     white = Image.new('RGB', (160, 144), 'white')
