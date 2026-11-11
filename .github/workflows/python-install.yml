@@ -88,7 +88,7 @@ jobs:
       - name: Install wheel and test Library and native workers outside the checkout
         run: uv run --locked python tools/check_python_install.py --workspace-pokecore
       - name: Verify the user-facing installer and repeat installation
-        run: uv run --locked python tools/check_installer.py
+        run: uv run --locked python tools/check_installer.py --workspace-pokecore
   acceleration:
     timeout-minutes: 15
     runs-on: ubuntu-22.04

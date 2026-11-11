@@ -14,16 +14,29 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--package', help='Wheel path or URL, defaults to the current built wheel')
+    parser.add_argument('--workspace-pokecore', action='store_true',
+                        help='Install pokecore built from packages/pokecore in place of its pinned release')
     args = parser.parse_args()
     version = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     package = args.package or str(ROOT / 'dist' / f'pokesim-{version}-py3-none-any.whl')
-    with tempfile.TemporaryDirectory(prefix='pokesim installer ') as temporary:
+    with (tempfile.TemporaryDirectory(prefix='pokesim installer ') as temporary,
+          tempfile.TemporaryDirectory(prefix='pokesim-workspace-pokecore-') as workspace):
         root = Path(temporary)
         bin_dir = root / 'commands with spaces'
         env = {**os.environ, 'UV_TOOL_DIR': str(root / 'tools'), 'UV_TOOL_BIN_DIR': str(bin_dir),
                'POKESIM_INSTALL_PACKAGE': package}
         env.pop('PYTHONPATH', None)
         env.pop('VIRTUAL_ENV', None)
+        if args.workspace_pokecore:
+            # The installer runs uv tool install, which reads overrides from UV_OVERRIDE. uv splits that
+            # variable at spaces, so the file sits outside the test folder, whose name has spaces on purpose.
+            built = Path(workspace)
+            subprocess.run(['uv', 'build', '--package', 'pokecore', '--wheel', '--out-dir', str(built)],
+                           check=True, cwd=ROOT)
+            wheel, = built.glob('pokecore-*.whl')
+            overrides = built / 'overrides.txt'
+            overrides.write_text(f'pokecore @ {wheel.as_uri()}\n', encoding='utf-8')
+            env['UV_OVERRIDE'] = str(overrides)
         if sys.platform == 'win32':
             command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
                        '-File', str(ROOT / 'install.ps1')]
