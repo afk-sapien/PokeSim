@@ -49,15 +49,15 @@ def ladder_policy():
 
 
 def test_the_ladder_skips_a_rung_the_watchdog_blocked():
-    from pokesim.gen2.collection import Ladder
+    from pokesim.gen2.collection import Rungs
     from pokesim.gen2.standdown import rung_key, stand_down
     from pokesim.planning.arbiter import Tier
     run = ladder_policy()
     asked = []
     stand_down(run, rung_key('gifts'))
-    ladder = Ladder(run, SimpleNamespace(map=0))
-    ladder.offer('gifts', Tier.PROGRESS, 1.0, 100, lambda: asked.append('gifts'))
-    ladder.offer('stones', Tier.PROGRESS, 1.0, 100, lambda: asked.append('stones'))
+    rungs = Rungs(run, SimpleNamespace(map=0))
+    rungs.offer('gifts', Tier.PROGRESS, 1.0, 100, lambda: asked.append('gifts'))
+    rungs.offer('stones', Tier.PROGRESS, 1.0, 100, lambda: asked.append('stones'))
     assert asked == ['stones']
 
 

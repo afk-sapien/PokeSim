@@ -1,4 +1,4 @@
-"""The Gen II collection ladder: every rung offers a candidate and the utility arbiter picks one."""
+"""The Gen II collection rungs: each offers its goal to the decide pipeline as its own source."""
 import inspect
 import os
 from types import SimpleNamespace
@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.gen2 import collection, errands, tower
-from pokesim.gen2.collection import ERRAND_FRAMES, INTERRUPT_FRAMES, MAP_FRAMES, Ladder
+from pokesim.gen2.collection import ERRAND_FRAMES, INTERRUPT_FRAMES, MAP_FRAMES, Rungs
 from pokesim.planning import values
 from pokesim.planning.arbiter import Candidate, Tier
 
@@ -24,7 +24,13 @@ def policy(**extra):
 
 
 def ladder(owner):
-    return Ladder(owner, SimpleNamespace(map=1))
+    return Rungs(owner, SimpleNamespace(map=1))
+
+
+def picked(rungs):
+    """The rung the decision over ``rungs`` picks, or None."""
+    pick = rungs.decision().pick
+    return None if pick is None else pick.source
 
 
 def build(owner, key, result, tables=None, **changes):
@@ -35,7 +41,7 @@ def build(owner, key, result, tables=None, **changes):
     return run
 
 
-def test_the_cheaper_rung_wins_in_a_tier_and_the_losers_change_nothing():
+def test_the_cheaper_rung_wins_in_a_tier_and_only_the_pick_writes():
     owner = policy()
     rungs = ladder(owner)
     rungs.offer('far', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES,
@@ -43,13 +49,27 @@ def test_the_cheaper_rung_wins_in_a_tier_and_the_losers_change_nothing():
     rungs.offer('near', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, build(owner, 'near', goal('near', 'NEAR'), near=1))
     rungs.offer('later', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES,
                 build(owner, 'later', goal('later', 'FAR'), {'stood_down': {'later': 3}}, later=1))
-    assert rungs.rung == 'near' and rungs.goal.key == 'near'
-    # The far pick was beaten, so what it saved is undone. The later loser never kept its change.
+    # Each rung builds in a draft, so nothing is written until the decision picks.
+    assert owner.collection == {'target': None} and owner.monitor_tables == {}
+    pick = rungs.decision().pick
+    assert pick.source == 'near' and pick.goal.key == 'near' and pick.candidate.tier == Tier.PROGRESS
+    pick.commit()
+    # Only the pick's writes land. A budget a loser spent or a stand-down it wrote never does.
     assert owner.collection == {'target': None, 'near': 1}
-    # The same holds for a budget it spent or a stand-down it wrote.
     assert owner.monitor_tables == {}
     near = next(candidate for candidate in rungs.candidates if candidate.goal == 'near')
     assert near.expected_frames == ERRAND_FRAMES + MAP_FRAMES
+
+
+def test_a_later_rung_builds_from_the_starting_state():
+    owner = policy()
+    rungs = ladder(owner)
+    seen = []
+    rungs.offer('first', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES,
+                build(owner, 'first', goal('first'), target={'species': 7}))
+    rungs.offer('second', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES,
+                lambda: seen.append(owner.collection['target']) or goal('second', 'FAR'))
+    assert seen == [None]
 
 
 def test_a_higher_tier_wins_and_a_lower_rung_is_not_asked():
@@ -58,7 +78,7 @@ def test_a_higher_tier_wins_and_a_lower_rung_is_not_asked():
     asked = []
     rungs.offer('rod', Tier.UPKEEP, values.NEW_ENTRY, 10 ** 6, lambda: goal('rod', 'FAR'))
     rungs.offer('gift', Tier.PROGRESS, values.NEW_ENTRY, 1, lambda: asked.append('gift') or goal('gift'))
-    assert rungs.rung == 'rod' and not asked
+    assert picked(rungs) == 'rod' and not asked
 
 
 def test_the_collector_style_asks_a_hunt_rung_below_the_pick_and_ranks_it_with_progress(monkeypatch):
@@ -73,30 +93,40 @@ def test_the_collector_style_asks_a_hunt_rung_below_the_pick_and_ranks_it_with_p
         rungs.offer('train', Tier.UPGRADE, values.SMALL, 10 ** 6, lambda: goal('train', 'FAR'))
         rungs.offer('postgame', Tier.FILLER, values.SMALL, 1, lambda: asked.append(style) or goal('quality'),
                     price=lambda found: hunt)
-        assert rungs.rung == expected and bool(asked) == (style == 'collector')
+        assert picked(rungs) == expected and bool(asked) == (style == 'collector')
     # Under Collector a rung of a lower tier is still not asked once the pick is a story goal.
     owner = policy()
     rungs = ladder(owner)
     rungs.offer('story', Tier.STORY, values.NEW_ENTRY, 10 ** 6, lambda: goal('story', 'FAR'))
     rungs.offer('postgame', Tier.FILLER, values.SMALL, 1, lambda: pytest.fail('asked'), price=lambda found: hunt)
-    assert rungs.rung == 'story'
+    assert picked(rungs) == 'story'
 
 
 def test_a_rung_that_offers_nothing_keeps_its_stand_down():
     owner = policy()
     rungs = ladder(owner)
     rungs.offer('hunt', Tier.PROGRESS, values.NEW_ENTRY, 0, build(owner, 'hunt', None, {'stood_down': {'hunt:7': 3}}))
-    assert rungs.pick is None and owner.monitor_tables['stood_down'] == {'hunt:7': 3}
+    assert picked(rungs) is None and owner.monitor_tables['stood_down'] == {'hunt:7': 3}
 
 
 def test_the_day_care_walk_is_passive_and_runs_only_without_other_work():
     owner = policy()
     rungs = ladder(owner)
     rungs.offer('breed', Tier.PROGRESS, values.NEW_ENTRY, 0, lambda: goal('collection_hatch'))
-    assert rungs.pick is None and [g.key for g in rungs.passive] == ['collection_hatch']
+    assert picked(rungs) is None and [(name, g.key) for name, g in rungs.passive] == [('breed', 'collection_hatch')]
     rungs.offer('training', Tier.PROGRESS, values.NEW_ENTRY, 10 ** 6, lambda: goal('collection_train', 'FAR'))
-    assert rungs.rung == 'training'
+    assert picked(rungs) == 'training'
     assert any(candidate.passive for candidate in rungs.candidates)
+
+
+def test_two_rungs_that_offer_one_goal_are_one_offer():
+    owner = policy()
+    rungs = ladder(owner)
+    rungs.offer('gifts', Tier.PROGRESS, values.SMALL, ERRAND_FRAMES, lambda: goal('shared'))
+    rungs.offer('stones', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, lambda: goal('shared'))
+    assert [offered.source for offered in rungs.offers] == ['stones']
+    rungs.offer('phones', Tier.PROGRESS, values.SMALL, ERRAND_FRAMES, lambda: goal('shared'))
+    assert [offered.source for offered in rungs.offers] == ['stones'] and picked(rungs) == 'stones'
 
 
 def test_cutting_into_the_running_rung_pays_the_interrupt():
@@ -105,7 +135,7 @@ def test_cutting_into_the_running_rung_pays_the_interrupt():
     rungs.offer('hunt', Tier.PROGRESS, values.NEW_ENTRY, 3 * ERRAND_FRAMES, lambda: goal('collection_hunt'))
     # Cheaper by less than the walk back to the hunt, so the hunt goes on.
     rungs.offer('gift', Tier.PROGRESS, values.NEW_ENTRY, 3 * ERRAND_FRAMES - INTERRUPT_FRAMES // 2, lambda: goal('gift'))
-    assert rungs.rung == 'hunt'
+    assert picked(rungs) == 'hunt'
     gift = next(candidate for candidate in rungs.candidates if candidate.goal == 'gift')
     assert gift.interrupt_frames == INTERRUPT_FRAMES
 

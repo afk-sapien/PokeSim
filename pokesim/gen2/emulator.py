@@ -105,8 +105,9 @@ def solid(image):
 RELOAD_AFTER_PARK = True
 # The stalls that can set the goal that stopped aside, and the failure each one records.
 PARKS = {'stuck': decide.STUCK, 'no progress': decide.NO_PROGRESS, 'a menu task kept failing': decide.MENU_FAILED}
-# The pipeline sources of the collection's goal: an activity under way and the ladder's pick.
-PARK_SOURCES = frozenset({'holds', 'ladder'})
+# The pipeline sources of the collection's goal besides its rungs: an activity under way, and the Day Care
+# walk or the patrol when no rung has work.
+PARK_SOURCES = frozenset({'holds', 'collection'})
 
 
 @dataclass(frozen=True)
@@ -802,16 +803,17 @@ class Emulator(EmulatorBase):
     def _parking(self, why):
         """How a stall for ``why`` sets the goal that stopped aside in place of a reload, or None when it cannot.
 
-        Only the collection's goal parks: the activity under way or the ladder's pick, when the last
-        decision picked it, it is still the goal and it has objectives to stand down. A story goal, a
-        battle, a glitch and the League reload as before, since standing down gets none of them going.
+        Only the collection's goal parks: the activity under way or a rung's goal, when the last decision
+        picked it, it is still the goal and it has objectives to stand down. A story goal, a battle, a
+        glitch and the League reload as before, since standing down gets none of them going.
         """
+        from .collection import RUNGS
         failure = PARKS.get(why)
         policy, snapshot = getattr(self, 'policy', None), getattr(self, 'snapshot', None)
         goal, picked = getattr(policy, 'goal', None), getattr(policy, 'picked', None)
         if failure is None or goal is None or snapshot is None or picked is None:
             return None
-        if picked[0] not in PARK_SOURCES or picked[1] != goal.key:
+        if picked[0] not in PARK_SOURCES and picked[0] not in RUNGS or picked[1] != goal.key:
             return None
         if not (getattr(snapshot, 'valid', False) and getattr(snapshot, 'started', False)):
             return None

@@ -414,37 +414,39 @@ class Policy(protocol.Policy):
 
     def journey(self, snapshot, mem):
         """The journey goal: the story goal, or the boss training it needs. Both are offered on the step's
-        ballot, or outside a step on a ballot of their own, and the ballot's pick is the journey goal."""
+        ballot, or outside a step on a ballot of their own, and the ballot's pick is the journey goal. Once
+        the story is done, every collection rung offers its own goal (collection.Rungs)."""
         ballot = getattr(self, 'ballot', None)
         if ballot is None:
             from .pipeline import Ballot
             ballot = Ballot()
         goal = self.story(snapshot, mem)
         if goal is not None:
-            ballot.offer(goal, self.story_site(), kind=self.story_kind(), pinned=self.ladder_pinned())
+            site = self.story_site(goal)
+            if site == 'rung':
+                ballot.extend(self.collection_offers, self.collection_pinned)
+            else:
+                ballot.offer(goal, site, self.story_candidate(goal, site))
         training = self.boss_training(snapshot, goal)
         if training is not None:
-            ballot.offer(training, 'boss')
+            ballot.offer(training, 'boss', self.story_candidate(training, 'boss'))
         return ballot.goal
 
-    def story_site(self):
-        """The site of this decision's story goal: an activity under way that holds the collection, the
-        collection ladder's pick, or else the story."""
+    def story_site(self, goal):
+        """The site of this decision's story goal ``goal``: an activity under way that holds the collection,
+        the collection's rungs, or else the story."""
         if getattr(self, 'collection_decision', None) != self.decisions:
             return 'story'
-        return 'holds' if getattr(self, 'ladder_hold', None) is not None else 'ladder'
+        if getattr(self, 'ladder_hold', None) is not None:
+            return 'holds'
+        return 'rung' if goal is getattr(self, 'collection_goal', None) else 'story'
 
-    def ladder_pinned(self):
-        """Whether this decision's story goal is the ladder's pick of the goal a manager pinned."""
-        pin = getattr(self, 'pin', None)
-        return (pin is not None and pin.started and self.story_site() == 'ladder'
-                and pin.key == getattr(self, 'ladder_pick', None))
-
-    def story_kind(self):
-        """The ladder's rung as the kind of its pick, which the audit counts frames against."""
-        if self.story_site() != 'ladder':
-            return None
-        return getattr(self, 'ladder_rung', None)
+    def story_candidate(self, goal, kind):
+        """``goal`` priced as a story goal, in the story tier until Red falls and in the progress tier
+        after, as Gen I prices its story until the Champion falls."""
+        from ..planning.arbiter import Tier
+        from .pipeline import story_candidate
+        return story_candidate(goal, kind, Tier.PROGRESS if 'red' in self.completed else Tier.STORY)
 
     def story(self, snapshot, mem):
         # A saved postgame outing waits while an evolution, trade or other collection task takes
@@ -1513,7 +1515,7 @@ class Policy(protocol.Policy):
             elif errand is not None:
                 self.goal = ballot.resume(errand)
             else:
-                self.goal = ballot.offer(self.errand, 'heal')
+                self.goal = ballot.errand(self.errand, 'heal')
         if ballot is not None:
             # Only the offer the step ends with writes, so an offer a later site overrides leaves nothing.
             ballot.commit()
@@ -1611,12 +1613,12 @@ class Policy(protocol.Policy):
         from .pipeline import Ballot
         self.ballot = ballot = Ballot()
         if starting:
-            self.goal = journey_goal = ballot.offer(self.goal, 'current')
+            self.goal = journey_goal = ballot.offer(self.goal, 'current', self.story_candidate(self.goal, 'current'))
         else:
             self.goal = journey_goal = self.journey(snapshot, mem)
         release = self.release_goal(snapshot, mem, releasing)
         if release:
-            self.goal = journey_goal = ballot.offer(release, 'release')
+            self.goal = journey_goal = ballot.errand(release, 'release')
         self.pick = self.goal
         if isinstance(self.menu, Storage) and (self.menu.box_full or 'BOX is full' in snapshot.text):
             box = next((box for box, count in enumerate(snapshot.box_counts) if count < 20), None)
@@ -1655,7 +1657,7 @@ class Policy(protocol.Policy):
             if not starting and self.errand_allowed(snapshot, mem):
                 heal = self.healing(snapshot)
                 if heal:
-                    self.goal = ballot.offer(heal, 'talk_heal')
+                    self.goal = ballot.errand(heal, 'talk_heal')
             if self.talk_progress(snapshot):
                 return Action('b', 8, 36)
             answer = self.unknown_yes_no(snapshot)
@@ -1692,7 +1694,7 @@ class Policy(protocol.Policy):
                     if partner is not None:
                         def commit(move=move):
                             self.partner_move = move
-                        self.goal = ballot.offer(partner, 'partner', commit=commit)
+                        self.goal = ballot.errand(partner, 'partner', commit=commit)
                     break
                 if 'ice_path' in self.completed:
                     candidates = [i for i, mon in enumerate(snapshot.party) if not mon.egg
@@ -1701,7 +1703,7 @@ class Policy(protocol.Policy):
                         goal = self.person(snapshot, f'delete_hm_{candidates[0]}', f'Make room for {self.data.moves[move]["name"]}',
                                            'MOVE_DELETERS_HOUSE', 'MoveDeleter')
                         if goal is not None:
-                            self.goal = ballot.offer(goal, 'delete_hm')
+                            self.goal = ballot.errand(goal, 'delete_hm')
                         break
         lead = snapshot.party[0] if snapshot.party else None
         iron_tail = Teach(231, 0)
@@ -1727,7 +1729,7 @@ class Policy(protocol.Policy):
             errand, commit = (heal, None) if heal or prize_errand else self.shop(snapshot)
             self.errand = self.errand_offer = None
             if errand is not None:
-                self.goal = ballot.offer(errand, 'heal' if heal else 'shop', commit=commit)
+                self.goal = ballot.errand(errand, 'heal' if heal else 'shop', commit=commit)
                 if self.goal is errand:
                     self.errand, self.errand_offer = errand, ballot.running
         else:
@@ -1865,7 +1867,7 @@ class Policy(protocol.Policy):
             if tree is not None:
                 goal = Goal('sudowoodo', 'Clear the moving tree off Route 36', 'ROUTE_36', 35, 10, 'up')
                 ballot = getattr(self, 'ballot', None)
-                self.goal = goal if ballot is None else ballot.offer(goal, 'sudowoodo')
+                self.goal = goal if ballot is None else ballot.errand(goal, 'sudowoodo')
                 return tree, False
         return None, False
 

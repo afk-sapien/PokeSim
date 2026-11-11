@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from pokesim.gen2 import pipeline as gen2_pipeline
-from pokesim.planning import arbiter, decide
+from pokesim.planning import arbiter, decide, values
 from pokesim.planning.arbiter import Candidate, Tier
 from pokesim.planning.decide import Offer
 from pokesim.planning.shadow import Shadow
@@ -190,11 +190,16 @@ def test_a_pinned_offer_ranks_over_every_other_source_but_not_upkeep():
     assert under_way.offer(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), site='story') is hunt
     # A Gen II ballot ranks the same way.
     ballot = gen2_pipeline.Ballot()
-    ballot.offer(story, 'story')
-    assert ballot.offer(hunt, 'ladder', candidate=filler) is story
+    gen2_story(ballot, story)
+    assert ballot.offer(hunt, 'rung', filler) is story
     ballot = gen2_pipeline.Ballot()
-    ballot.offer(story, 'story')
-    assert ballot.offer(hunt, 'ladder', candidate=filler, pinned=True) is hunt
+    gen2_story(ballot, story)
+    assert ballot.offer(hunt, 'rung', filler, pinned=True) is hunt
+
+
+def gen2_story(ballot, goal, site='story'):
+    """Offer ``goal`` from ``site`` on a Gen II ballot as the step offers a story goal."""
+    return ballot.offer(goal, site, gen2_pipeline.story_candidate(goal, site))
 
 
 def test_an_errand_under_way_is_offered_again_as_it_was_picked_and_writes_nothing():
@@ -224,33 +229,55 @@ def test_an_errand_under_way_is_offered_again_as_it_was_picked_and_writes_nothin
 
 
 def test_the_gen2_needs_table_reads_the_chain_order():
-    for site in ('story', 'holds', 'ladder', 'current'):
+    for site in ('story', 'holds', 'rung', 'current'):
         assert gen2_pipeline.NEEDS[site] == ('healthy', 'supplies', 'field_move', 'room', 'trained')
     assert gen2_pipeline.NEEDS['boss'] == ('healthy', 'supplies', 'field_move', 'room')
     assert gen2_pipeline.NEEDS['shop'] == ('healthy',)
     assert gen2_pipeline.NEEDS['heal'] == gen2_pipeline.NEEDS['sudowoodo'] == ()
     tree = Goal('sudowoodo', 'Tree', 'Tree')
-    assert gen2_pipeline.offer('sudowoodo', tree).forced and gen2_pipeline.offer('holds', tree).hold
-    assert gen2_pipeline.offer('nowhere', tree).source == 'legacy'
-    assert gen2_pipeline.offer('ladder', tree, kind='hunt').kind == 'hunt'
+    candidate = Candidate('sudowoodo', Tier.UPKEEP, 0.05, 3000, goal='sudowoodo')
+    assert gen2_pipeline.offer('sudowoodo', tree, candidate).forced and gen2_pipeline.offer('holds', tree, candidate).hold
+    assert gen2_pipeline.offer('nowhere', tree, candidate).source == 'legacy'
+    # A rung offers under its own name, with its own tier.
+    hunt = Candidate('hunt:tree', Tier.PROGRESS, 1.0, 3000, goal='hunt')
+    rung = gen2_pipeline.offer('rung', tree, hunt, source='hunt')
+    assert (rung.source, rung.kind, rung.candidate.tier) == ('hunt', 'hunt', Tier.PROGRESS)
 
 
 def test_every_gen2_site_is_in_the_table():
     source = (ROOT / 'pokesim' / 'gen2' / 'policy.py').read_text(encoding='utf-8')
-    named = {site for line in source.splitlines() if 'ballot.offer(' in line for site in re.findall(r"'(\w+)'", line)}
-    # The story site is named by story_site, which returns the story, an activity that holds or the ladder.
-    assert named | {'story', 'holds', 'ladder'} == set(gen2_pipeline.SOURCES)
+    named = {site for line in source.splitlines() if 'ballot.offer(' in line or 'ballot.errand(' in line
+             for site in re.findall(r"'(\w+)'", line)}
+    # The story site is named by story_site, which returns the story, an activity that holds or a rung.
+    assert named | {'story', 'holds', 'rung'} == set(gen2_pipeline.SOURCES)
+
+
+def test_a_gen2_errand_takes_the_tier_of_the_goal_it_serves():
+    story, heal = Goal('zephyr', 'Beat Falkner', 'Badge'), Goal('heal', 'Heal', 'Heal')
+    ballot = gen2_pipeline.Ballot()
+    ballot.errand(heal, 'heal')
+    assert (ballot.running.candidate.tier, ballot.running.kind) == (Tier.UPKEEP, 'heal')
+    ballot = gen2_pipeline.Ballot()
+    gen2_story(ballot, story)
+    ballot.errand(heal, 'heal')
+    assert (ballot.running.candidate.tier, ballot.running.kind) == (Tier.STORY, 'heal')
+    hunt = Goal('collection_hunt', 'Hunt', 'Hunt')
+    ballot = gen2_pipeline.Ballot()
+    ballot.offer(hunt, 'rung', Candidate('hunt:collection_hunt', Tier.FILLER, 0.0, 3000, hunt='postgame', goal='hunt'))
+    ballot.errand(heal, 'heal')
+    assert ballot.running.candidate.tier == Tier.FILLER and ballot.running.candidate.value == values.SMALL
+    assert ballot.running.candidate.hunt == 'postgame'
 
 
 def test_a_gen2_ballot_picks_what_the_chain_picked():
     story, training = Goal('zephyr', 'Beat Falkner', 'Badge'), Goal('train', 'Train', 'Train')
     release, heal = Goal('collection_release', 'Release', 'Release'), Goal('heal', 'Heal', 'Heal')
     ballot = gen2_pipeline.Ballot()
-    assert ballot.goal is None and ballot.offer(story, 'story') is story
-    assert ballot.offer(training, 'boss') is training
+    assert ballot.goal is None and gen2_story(ballot, story) is story
+    assert gen2_story(ballot, training, 'boss') is training
     assert (ballot.decision.key, ballot.decision.rule) == ('train', decide.NEED)
-    ballot.offer(release, 'release')
-    assert ballot.offer(heal, 'heal') is heal
+    ballot.errand(release, 'release')
+    assert ballot.errand(heal, 'heal') is heal
     errand = ballot.running
     assert ballot.decision.key == 'heal' and decide.difference(ballot.decision, 'heal') is None
     # A heal with no route gives way to the release, which is the journey goal then.
@@ -259,17 +286,17 @@ def test_a_gen2_ballot_picks_what_the_chain_picked():
     # A goal the ballot was never offered leaves it as it was.
     assert ballot.park(Goal('elsewhere', 'Elsewhere', 'Elsewhere')) is release
     # The returned Sudowoodo is forced over every other offer.
-    ballot.offer(Goal('sudowoodo', 'Tree', 'Tree'), 'sudowoodo')
+    ballot.errand(Goal('sudowoodo', 'Tree', 'Tree'), 'sudowoodo')
     assert (ballot.decision.key, ballot.decision.rule) == ('sudowoodo', decide.FORCED)
     # A menu step of the heal offers it again as it was picked.
     menu = gen2_pipeline.Ballot()
-    menu.offer(story, 'story')
+    gen2_story(menu, story)
     menu.resume(errand)
     assert (menu.decision.key, menu.decision.rule) == ('heal', decide.NEED)
     # An activity under way still gives way to a heal it needs.
     contest = gen2_pipeline.Ballot()
-    contest.offer(Goal('contest_enter', 'Contest', 'Contest'), 'holds')
-    contest.offer(heal, 'talk_heal')
+    gen2_story(contest, Goal('contest_enter', 'Contest', 'Contest'), 'holds')
+    contest.errand(heal, 'talk_heal')
     assert (contest.decision.key, contest.decision.rule) == ('heal', decide.NEED)
 
 
@@ -278,9 +305,9 @@ def test_a_gen2_errand_with_no_route_now_runs_the_partner_trip_it_was_beside():
     # set. The pipeline runs the trip the journey goal needs.
     story, partner, heal = Goal('zephyr', 'Beat Falkner', 'Badge'), Goal('surf', 'Surf', 'Surf'), Goal('heal', 'Heal', 'Heal')
     ballot = gen2_pipeline.Ballot()
-    ballot.offer(story, 'story')
-    ballot.offer(partner, 'partner')
-    ballot.offer(heal, 'heal')
+    gen2_story(ballot, story)
+    ballot.errand(partner, 'partner')
+    ballot.errand(heal, 'heal')
     assert ballot.park(heal) is partner
     assert ballot.decision.key == 'surf' and decide.difference(ballot.decision, 'zephyr') == decide.NEED
 
@@ -290,27 +317,27 @@ def test_a_gen2_site_writes_only_when_its_goal_is_picked_and_once():
     story, shop, heal = Goal('zephyr', 'Beat Falkner', 'Badge'), Goal('buy_balls', 'Shop', 'Shop'), Goal('heal', 'Heal', 'Heal')
     writes = []
     ballot = gen2_pipeline.Ballot()
-    ballot.offer(story, 'story')
-    ballot.offer(shop, 'shop', commit=lambda: writes.append('shop'))
-    ballot.offer(heal, 'heal')
+    gen2_story(ballot, story)
+    ballot.errand(shop, 'shop', commit=lambda: writes.append('shop'))
+    ballot.errand(heal, 'heal')
     ballot.commit()
     assert ballot.goal is heal and writes == []
     parked = gen2_pipeline.Ballot()
-    parked.offer(story, 'story')
-    parked.offer(shop, 'shop', commit=lambda: writes.append('shop'))
+    gen2_story(parked, story)
+    parked.errand(shop, 'shop', commit=lambda: writes.append('shop'))
     parked.park(shop)
     parked.commit()
     assert parked.goal is story and writes == []
     # The picked restock writes once, though the step commits before the arrival and again at its end.
     picked = gen2_pipeline.Ballot()
-    picked.offer(story, 'story')
-    picked.offer(shop, 'shop', commit=lambda: writes.append('shop'))
+    gen2_story(picked, story)
+    picked.errand(shop, 'shop', commit=lambda: writes.append('shop'))
     picked.commit()
     picked.commit()
     assert writes == ['shop']
     # A menu step on the trip offers it again without its writes, which ran when it was picked.
     menu = gen2_pipeline.Ballot()
-    menu.offer(story, 'story')
+    gen2_story(menu, story)
     assert menu.resume(picked.running) is shop
     menu.commit()
     assert writes == ['shop']
