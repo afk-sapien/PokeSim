@@ -147,7 +147,7 @@ def test_a_refused_lugia_return_closes_until_the_next_milestone(world, monkeypat
     recovery = Recovery({'pending': {'249': 0}, 'attempts': {'249': 1}})
     for frame in range(0, 120 * 2000, 120):
         snap.frame = frame
-        assert recovery.observe(snap, world.memory, repeat=ready, blocked=closed) == []
+        assert recovery.observe(snap, world.memory, frame, repeat=ready, blocked=closed) == []
     assert world.event('EVENT_FOUGHT_LUGIA')
     world.walk(200)
     observe(world.store, snap, world.memory)
@@ -227,15 +227,15 @@ def test_recovery_repeats_returned_legendaries_and_rearms_missed_roamers(world):
     world.flag('EVENT_TIN_TOWER_ROOF_HO_OH')
     snap.owned = {250}
     recovery = Recovery({'pending': {'250': 0}, 'attempts': {'250': 1}})
-    assert recovery.observe(snap, world.memory) == []
-    assert recovery.observe(snap, world.memory, repeat={250}, blocked={250}) == []
+    assert recovery.observe(snap, world.memory, 0) == []
+    assert recovery.observe(snap, world.memory, 0, repeat={250}, blocked={250}) == []
     recovery.pending['250'] = 0
-    assert recovery.observe(snap, world.memory, repeat={250}) == [250]
+    assert recovery.observe(snap, world.memory, 0, repeat={250}) == [250]
     assert not world.event('EVENT_FOUGHT_HO_OH')
     world.flag('EVENT_RELEASED_THE_BEASTS')
     recovery = Recovery({'pending': {'244': 0}, 'attempts': {'244': 1}})
     snap.roamers = ({'species': 243, 'map': data.map_ids['ROUTE_42']},)
-    assert recovery.observe(snap, world.memory) == [244]
+    assert recovery.observe(snap, world.memory, 0) == [244]
     mid = data.map_ids[ROAMERS[244][1]]
     assert world.memory.raw[data.symbols['wRoamMon2'][1]:][:5] == bytes((244, 40, mid >> 8, mid & 0xFF, 0))
 
@@ -248,12 +248,30 @@ def test_recovery_waits_as_before_and_reads_older_saves(world, misses):
     saved = {'pending': {}, 'attempts': {'250': misses - 1}}
     recovery = Recovery(saved)
     assert recovery.state_dict() == saved
-    recovery.observe(snap, world.memory)
-    assert recovery.pending == {'250': min(180000, 36000 * misses)}
+    wait = min(180000, 36000 * misses)
+    recovery.observe(snap, world.memory, 1000)
+    assert recovery.pending == {'250': 1000 + wait}
     assert recovery.attempts == {'250': misses}
-    snap.frame = 120
-    recovery.observe(snap, world.memory)
-    assert Recovery(recovery.state_dict()).pending == {'250': min(180000, 36000 * misses) - 120}
+    # The wait ends at a PlayClock frame, so a reload keeps it as it was.
+    restored = Recovery(recovery.state_dict())
+    assert restored.observe(snap, world.memory, 1000 + wait - 1) == []
+    assert restored.pending == {'250': 1000 + wait}
+
+
+def test_recovery_moves_an_older_wait_onto_the_play_clock(world):
+    # An older checkpoint kept the frames each wait had left, and counted them only outside battle.
+    from pokesim.gen2.legendary import Recovery
+    world.flag('EVENT_FOUGHT_HO_OH')
+    snap = world.snapshot
+    saved = {'pending': {'250': 5000}, 'attempts': {'250': 2}}
+    recovery = Recovery(saved)
+    assert recovery.state_dict() == saved
+    snap.in_battle = True
+    recovery.observe(snap, world.memory, 90000)
+    snap.in_battle = False
+    recovery.observe(snap, world.memory, 90120)
+    assert recovery.state_dict() == {'pending': {'250': 95000}, 'attempts': {'250': 2}, 'clock': 'play'}
+    assert Recovery(recovery.state_dict()).pending == {'250': 95000}
 
 
 def test_recovery_restarts_the_gs_ball_quest_after_a_first_celebi_miss(world, monkeypatch):
@@ -266,18 +284,18 @@ def test_recovery_restarts_the_gs_ball_quest_after_a_first_celebi_miss(world, mo
         world.flag(flag)
     recovery = Recovery({'pending': {'251': 0}, 'attempts': {'251': 1}})
     # Without the custom GS Ball event there is no quest to restart.
-    assert recovery.observe(snap, world.memory) == []
+    assert recovery.observe(snap, world.memory, 0) == []
     monkeypatch.setattr(config, 'CELEBI_EVENT', True, raising=False)
     world.memory.raw[data.symbols['sGSBallFlag'][1]] = 0x0b
     snap.map = data.map_ids['ILEX_FOREST']
-    assert recovery.observe(snap, world.memory) == []
+    assert recovery.observe(snap, world.memory, 0) == []
     snap.map = data.map_ids['ROUTE_34']
-    assert recovery.observe(snap, world.memory) == [251]
+    assert recovery.observe(snap, world.memory, 0) == [251]
     assert not world.event('EVENT_GOT_GS_BALL_FROM_GOLDENROD_POKEMON_CENTER')
     assert not world.event('EVENT_GAVE_GS_BALL_TO_KURT')
     # A quest still in progress is left alone.
     recovery = Recovery({'pending': {'251': 0}, 'attempts': {'251': 1}})
-    assert recovery.observe(snap, world.memory) == [] and '251' not in recovery.pending
+    assert recovery.observe(snap, world.memory, 0) == [] and '251' not in recovery.pending
 
 
 def test_a_reload_does_not_repeat_return_or_retry_notices(world):
@@ -301,7 +319,7 @@ def test_a_reload_does_not_repeat_return_or_retry_notices(world):
     for _ in range(2):
         for flag in flags:
             world.flag(flag)
-        assert Recovery(state).observe(snap, world.memory, repeat={249}) == [249]
+        assert Recovery(state).observe(snap, world.memory, 0, repeat={249}) == [249]
     assert first_notice(world.store, 249, 1) and not first_notice(world.store, 249, 1)
     assert first_notice(world.store, 249, 2)
 

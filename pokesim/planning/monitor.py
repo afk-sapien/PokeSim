@@ -57,7 +57,7 @@ class Backoff:
 
 
 # A missed legendary encounter returns after 36000 frames for each miss in a row, at most 180000. Both
-# generations count it down only while no battle runs.
+# generations count it on the PlayClock (runtime.supervision.LegendaryRetries).
 LEGENDARY_RETRY = Backoff(36000, linear=True, limit=180000)
 
 

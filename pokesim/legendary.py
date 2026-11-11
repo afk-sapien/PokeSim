@@ -1,10 +1,9 @@
 """Restore missed static encounters without rewinding the adventure or its resources."""
-from copy import deepcopy
 from pokecore.resets import Flag, update_flags
 
 from .events import Event, LOW
-from .planning.monitor import LEGENDARY_RETRY
 from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
+from .runtime.supervision import LegendaryRetries
 from .strategy_data import DATA, EVENTS, MAPS, SPECIES, WORLD, event_set, object_hidden
 
 
@@ -23,21 +22,11 @@ def encounters():
 ENCOUNTERS = tuple(encounters())
 
 
-class LegendaryRecovery:
-    def __init__(self, state=None):
-        state = state or {}
-        self.pending = deepcopy(state.get('pending', {}))
-        self.attempts = deepcopy(state.get('attempts', {}))
-        self.last_frame = None
-
-    def state_dict(self):
-        return deepcopy({'pending': self.pending, 'attempts': self.attempts})
-
-    def observe(self, snapshot, memory, *, repeat=(), blocked=()):
-        """Only change flags for an unloaded room, after a bounded retry delay."""
+class LegendaryRecovery(LegendaryRetries):
+    def observe(self, snapshot, memory, now, *, repeat=(), blocked=()):
+        """Only change flags for an unloaded room, once the retry wait has passed at PlayClock frame ``now``."""
         s = snapshot
-        delta = max(0, min(120, s.frame - self.last_frame)) if self.last_frame is not None else 0
-        self.last_frame = s.frame
+        self.count_from(now)
         if not s.valid or not s.started:
             return [], False
         events = []
@@ -53,15 +42,12 @@ class LegendaryRecovery:
                 continue
             name = next(row['name'].title() for row in SPECIES.values() if row['dex'] == dex)
             if key not in self.pending:
-                count = self.attempts.get(key, 0) + 1
-                self.attempts[key] = count
-                self.pending[key] = LEGENDARY_RETRY.wait(count)
+                self.miss(key, now)
                 events.append(Event('legendary_retry', f'{name} will have another encounter',
                     'The encounter ended without a catch. Leave the area and prepare another attempt. '
                     'Used items, damage, and adventure progress are preserved.', priority=LOW))
                 continue
-            self.pending[key] = max(0, self.pending[key] - delta)
-            if self.pending[key] or s.map == room or s.textbox or s.start_menu:
+            if now < self.pending[key] or s.map == room or s.textbox or s.start_menu:
                 continue
             # EndTrainerBattle sets the event and hides the sprite. Clear both, leaving the
             # current map script alone. The cartridge reloads the sprite on the next visit.

@@ -724,7 +724,7 @@ class Emulator:
                 self.policy.collection.returned_legendaries = ready
                 self.policy.collection.closed_legendaries = closed
             recovery_events, recovered = self.legendary_recovery.observe(
-                snap, self.pb.memory, repeat=ready, blocked=closed)
+                snap, self.pb.memory, self.play_clock.frames, repeat=ready, blocked=closed)
             restored_legendary |= recovered
             events += recovery_events
             if restored_legendary:
