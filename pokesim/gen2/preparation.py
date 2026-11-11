@@ -6,6 +6,7 @@ from ..planning.ledger import FIELD_MOVES
 from .menus import ChangeBox, Give, Release, Storage, stack_pointer
 from .policy import Action
 from pokecore.gen2.ram import Memory, read_snapshot
+from .views import mon_view
 from .world import update as update_world
 
 KEY = 'interaction_preparation'
@@ -38,11 +39,11 @@ def cost(party, index):
 
 def selected(snapshot, preferences, key):
     matches = [('party', index, mon) for index, mon in enumerate(snapshot.party)
-               if same(identity(mon.to_dict(egg_view=True)), key)]
-    matches += [('box', mon.position, mon) for mon in snapshot.stored if same(identity(mon.to_dict(egg_view=True)), key)]
+               if same(identity(mon_view(mon, egg_view=True)), key)]
+    matches += [('box', mon.position, mon) for mon in snapshot.stored if same(identity(mon_view(mon, egg_view=True)), key)]
     if len(matches) != 1 or matches[0][2].egg:
         raise ValueError('The selected individual is missing or ambiguous')
-    if (preferences.get(identity(matches[0][2].to_dict(egg_view=True))) or preferences.get(key) or {}).get('state') in {'locked', 'withdrawn'}:
+    if (preferences.get(identity(mon_view(matches[0][2], egg_view=True))) or preferences.get(key) or {}).get('state') in {'locked', 'withdrawn'}:
         raise ValueError('The selected Pokémon is protected or withdrawn')
     return matches[0]
 

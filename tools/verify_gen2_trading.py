@@ -71,9 +71,10 @@ def main():
         runtime = SimpleNamespace(store=store, emulator=emu, settings=settings)
         participant = Participant(runtime, SimpleNamespace(adventure_id=args.game, generation=1))
         if args.offer_trained:
+            from pokesim.gen2.views import state_view
             from pokesim.gen2.web import live_status
             from pokesim.trade.preferences import apply, update
-            payload = apply(live_status(emu.snapshot.to_dict(egg_view=True)), store.trade_preferences())
+            payload = apply(live_status(state_view(emu.snapshot, egg_view=True)), store.trade_preferences())
             for mon in payload['storage']['pokemon']:
                 if mon['species'] == args.species and not mon['trade_ambiguous'] and tuple(mon['dvs']) != (15,) * 5:
                     update(store, payload, mon['trade_key'], 'offered')
