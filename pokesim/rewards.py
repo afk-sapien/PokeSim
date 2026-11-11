@@ -201,7 +201,8 @@ def rewound(store, metadata):
 
     For a League gift, the ownership barrier refuses most saves from before it, so this covers the
     ones it lets through. The gift's own result checkpoint carries its reward id and never reopens
-    its claim. A legendary or event return's flags are written into the cartridge again.
+    its claim. A legendary or event return's flags are written into the cartridge again, and a Mew
+    return is gifted again unless the PC still holds it.
     """
     frames = ((metadata or {}).get('play_clock') or {}).get('frames')
     if frames is None:

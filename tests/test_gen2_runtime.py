@@ -928,29 +928,41 @@ def test_interrupted_preparation_aborts_instead_of_waiting_on_a_paused_worker():
 
 def test_repeat_mew_requires_walking_then_a_later_win(tmp_path, monkeypatch):
     from pokesim import config, rewards
-    from pokesim.gen2.steps import RETURNS, consume, observe_mew, ready
+    from pokesim.gen2.steps import RETURNS, deliver, observe_mew, ready, status
     from pokesim.store import Store
     monkeypatch.setattr(config, 'MEW_EVENT', True, raising=False)
     monkeypatch.setattr(config, 'MEW_RETURN_STEPS', 10)
     store = Store(tmp_path)
+
+    def claim():
+        with store.reading() as db:
+            return ready(db)
     try:
         rewards.initialize(store, 2)
         snapshot = SimpleNamespace(valid=True, started=True, hall_of_fame_count=2, owned={151})
         observe_mew(store, snapshot, 100)
         assert store.get(RETURNS)['next_at'] == 110
         observe_mew(store, snapshot, 109)
-        assert not ready(store.get(RETURNS), 2)
+        assert not claim()
         observe_mew(store, snapshot, 110)
-        assert not ready(store.get(RETURNS), 2)
+        assert not claim()
         rewards.earn(store, 3, enabled=False)
-        assert ready(store.get(RETURNS), 3)
-        with store.lock, store.db:
-            consume(store.db, 112)
-        assert not ready(store.get(RETURNS), 3)
+        observe_mew(store, snapshot, 111)
+        assert claim()['key'] == '1' and status(store)['league_required']
+        with store.transaction() as db:
+            deliver(db, '1', 112, frame=40, seed='mew-seed', reward_id='gift')
+        assert not claim()
+        assert store.get(RETURNS)['next_at'] == 122
+        assert status(store)['delivered'] == 1
+        # A reload from before the gift opens the claim again with its seed, and the clock walks on.
+        assert rewards.rewound(store, {'play_clock': {'frames': 10}}) == [('mew', '1')]
+        assert claim()['seed'] == 'mew-seed'
+        with store.transaction() as db:
+            deliver(db, '1', 115, frame=50, seed='mew-seed', reasons='Already held')
         assert store.get(RETURNS)['next_at'] == 122
         monkeypatch.setattr(config, 'MEW_RETURN_STEPS', 0)
         observe_mew(store, snapshot, 200)
-        assert not ready(store.get(RETURNS), 4)
+        assert not claim()
         monkeypatch.setattr(config, 'MEW_RETURN_STEPS', 10)
         observe_mew(store, snapshot, 200)
         assert store.get(RETURNS)['next_at'] == 210

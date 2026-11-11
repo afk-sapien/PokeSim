@@ -411,8 +411,8 @@ One table, `claims` (`pokesim/state/claims.py`, schema version 2):
 
 | Field | Meaning |
 |---|---|
-| `source` | `league`, `legendary` and `event` today. `mew` joins in PR 5b-3 |
-| `key` | dex number, reward seed or event activity key |
+| `source` | `league`, `legendary`, `event` or `mew` |
+| `key` | dex number, reward seed, event activity key or Mew return number |
 | `state` | `open`, `delivered`, `declined`, or `consumed` once a delivered encounter is caught |
 | `frame` | PlayClock frame of the last change, or none for a claim moved from the old League ledger |
 | `species` | the Pokémon a delivery wrote |
@@ -438,6 +438,8 @@ PR 5a moves League rewards in both generations onto the `league` rows, and `stor
 A legendary return is delivered when its encounter is written into the cartridge, at a safe moment away from its room. The capture receipt consumes it and a refused catch declines it, and either stays closed until the next walking milestone. A reload to a save from before the delivery reopens it, so the encounter is written again, with no second notice. The claims reset on restart, so a new game's legendaries wait in their first homes whatever the last game caught. Schema version 3 moves each old kv ticket into a row with no frame, and the kv value keeps only the walking clock.
 
 An event return (a gift, an NPC trade, a fossil, the Dojo choice or a static encounter like Snorlax or Sudowoodo) follows the same rules on `event` rows keyed by its activity. It is delivered when a walking milestone clears its flags away from its room, and consumed when the gift, trade or capture is verified. In Gen II, one the PC would release is declined until the next milestone. A reload to a save from before the delivery reopens it, and the flags are cleared again with no second notice. A row is made only once the story has done the event, so after a restart the new game's events wait for its own story. Schema version 4 moves each old event ticket into a row with no frame. The kv value keeps the walking clock, the fossil and Dojo choice and, for Gen II, the last capture the journal reported.
+
+A Mew return is a `mew` row keyed by its number. The first League win after a finished walk opens it, and the gift delivers it with the gift's seed and reward id. The walking clock in kv waits while the row is open and walks again from the delivery. A reload to a save from before the gift reopens the row, except from the gift's own result save. The next delivery finds the same Mew by its seed and writes nothing, or writes it again. The clock is not restarted a second time. Schema version 5 moves each old delivered count into rows with no frame.
 
 ## 8. Frame budgets per tier
 

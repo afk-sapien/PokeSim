@@ -12,7 +12,7 @@ from ..seeds import gift_seed
 from ..state import claims, journal, kv
 from pokecore.gen2.ram import Memory, read_snapshot
 from pokecore.gen2.resets import box_gift
-from .steps import RETURNS, consume, ready
+from .steps import deliver as deliver_mew, ready
 
 MYTHICAL = 'gen2-mythical-gift-v1'
 
@@ -47,6 +47,7 @@ def deliver(emu):
     with emu.store.reading() as db:
         ledger = rewards.ledger(db)
         claim = rewards.next_claim(db, 2) if league else None
+        mew = ready(db)
     species = ordinal = None
     if claim:
         kind = 'league_reward'
@@ -54,13 +55,21 @@ def deliver(emu):
     championships = rewards.championship_count(ledger)
     if mythical and before.hall_of_fame_count and 151 not in before.owned and not emu.store.get(MYTHICAL):
         kind, species, seed = 'mew_event', 151, gift_seed(emu.adventure_seed, 'mew_event', championships)
-    if ready(emu.store.get(RETURNS), championships):
-        kind, species, seed = 'mew_return', 151, gift_seed(emu.adventure_seed, 'mew_return', championships)
+    if mew:
+        # A claim a reload reopened writes the same Mew again.
+        kind, species, ordinal = 'mew_return', 151, mew['key']
+        seed = mew['seed'] or gift_seed(emu.adventure_seed, 'mew_return', championships)
     if species is None:
         return None
+    from ..progress_events import frame
     if kind == 'league_reward' and rewards.held(before, seed, 2):
         # A claim a reload reopened finds its gift still in the PC, so it settles with no second copy.
         rewards.found_held(emu.store, seed, species)
+        return None
+    if kind == 'mew_return' and mew['seed'] and rewards.held(before, seed, 2):
+        with emu.store.transaction() as db:
+            deliver_mew(db, ordinal, emu.steps.value['total'], frame=frame(emu.store), seed=seed,
+                        reasons='Already held')
         return None
     space = next(((box, count) for box, count in enumerate(before.box_counts) if count < 20), None)
     if space is None:
@@ -97,15 +106,13 @@ def deliver(emu):
     record = {'id': identifier, 'phase': 'committed', 'decision': 'COMMIT', 'kind': kind,
               'species': species, 'ordinal': ordinal, 'sha256': metadata['sha256'],
               'metadata': metadata, 'trade_id': emu.store.get('trade_barrier')}
-    from ..progress_events import frame
     with emu.store.durable() as db:
         if kind == 'league_reward':
             rewards.settle(db, seed, claims.DELIVERED, frame=frame(emu.store), species=species,
                            reward_id=identifier)
         elif kind == 'mew_return':
-            if not ready(kv.get(db, RETURNS), rewards.championship_count(rewards.ledger(db))):
-                raise ValueError('The repeat Mew claim changed')
-            consume(db, emu.steps.value['total'])
+            deliver_mew(db, ordinal, emu.steps.value['total'], frame=frame(emu.store), seed=seed,
+                        reward_id=identifier)
         else:
             kv.put(db, MYTHICAL, identifier)
         if shiny_gift:
