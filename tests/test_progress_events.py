@@ -87,6 +87,24 @@ def test_a_journal_release_and_trade_write_their_rows(tmp_path):
         store.close()
 
 
+def test_a_cable_trade_row_takes_the_receiving_adventures_frame(tmp_path):
+    from test_managed_participant import committed
+    from pokesim.runtime.participant import _promote
+    store = Store(tmp_path)
+    try:
+        # A restart promotes the commit before the emulator starts, so the saved clock gives the frame.
+        store.set('play_clock', {'frames': 9000})
+        _promote(store, committed(store))
+        # A running adventure's live clock gives it, and a retried commit writes no second row.
+        store.clock = lambda: 12000
+        record = committed(store)
+        _promote(store, record)
+        _promote(store, record)
+        assert [(kind, frame) for kind, frame, *_ in rows(store, 'receive')] == [('receive', 9000), ('receive', 12000)]
+    finally:
+        store.close()
+
+
 def test_a_goal_row_comes_when_the_running_goal_changes(tmp_path):
     store = Store(tmp_path)
     try:
