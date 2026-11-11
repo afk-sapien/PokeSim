@@ -19,6 +19,8 @@ import subprocess
 import sys
 import warnings
 
+from pokecore.gen1 import W_BATTLE_MON_HP, W_BATTLE_MON_PP, W_BATTLE_MON_STATUS, W_PLAYER_MON_NUMBER
+
 from .checkpoints import read_manifest
 from .events import diff
 from .game_data import VARIANT_ENV, current_variant
@@ -32,11 +34,6 @@ from .trade.partners import valid as valid_partner
 from .yellow import YELLOW_SHA1
 
 STATUS = {'healthy': 0, 'asleep': 3, 'poisoned': 8, 'burned': 16, 'frozen': 32, 'paralyzed': 64}
-# The active battler is copied out of the party when it enters, so an edit during battle goes to both.
-W_PLAYER_MON_NUMBER = 0xCC2F
-W_BATTLE_MON_HP = 0xD015
-W_BATTLE_MON_STATUS = 0xD018
-W_BATTLE_MON_PP = 0xD02D
 BAG_CAPACITY = 20
 
 
@@ -48,6 +45,7 @@ def _bcd(value, size):
 def edit_party(mem, slot, status=None, hp=None, pp=None):
     """Change one partner. hp below 1 is a share of full health, pp is one number or four."""
     base = W_PARTY_MONS + slot * PARTY_STRUCT
+    # The active battler is copied out of the party when it enters, so an edit during battle goes to both.
     active = mem[W_IS_IN_BATTLE] in (1, 2) and mem[W_PLAYER_MON_NUMBER] == slot
     if status is not None:
         value = STATUS[status] if isinstance(status, str) else status

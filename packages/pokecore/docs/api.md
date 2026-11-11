@@ -222,11 +222,16 @@ tiles). `W_SPRITE_STATE_DATA2`, `SPRITE_STRUCT`, `SPRITE_MAP_Y` and `SPRITE_MAP_
 locate sprite positions, and `sprite_tile(memory, sprite, *, version=None)` returns
 the (x, y) tile of sprite slot `sprite`: 0 is the player and 1 to 15 the map's objects.
 For battles it names `W_BATTLE_MON` and `W_ENEMY_MON` (each `BATTLE_STRUCT` bytes),
-their nicknames, `W_ENEMY_HP`, `W_ENEMY_DVS`, `W_TRANSFORMED_ENEMY_DVS`,
+their nicknames, `W_BATTLE_MON_HP`, `W_BATTLE_MON_STATUS`, `W_BATTLE_MON_PP`,
+`W_ENEMY_HP`, `W_ENEMY_MAX_HP`, `W_ENEMY_DVS`, `W_TRANSFORMED_ENEMY_DVS`,
 `W_PLAYER_MON_NUMBER`, both sides' battle status 1 and 3 bytes with
 `BIT_USING_TRAPPING_MOVE` and `BIT_TRANSFORMED`, `W_LINK_STATE`, and the
 `BATTLE_TYPE_OLD_MAN`, `BATTLE_TYPE_SAFARI` and `BATTLE_TYPE_PIKACHU` values.
-Read Yellow through `yellow.red_layout` as with the other addresses.
+Menus and items use `W_CUR_ITEM`, `W_ITEM_QUANTITY`, `W_OPTIONS` and
+`H_VENDING_MACHINE_ITEM`. In-game trades use `W_IN_GAME_TRADE_GIVE_MON_SPECIES`,
+`W_IN_GAME_TRADE_TEXT_INDEX` and `W_COMPLETED_IN_GAME_TRADE_FLAGS`. `H_RANDOM_ADD`
+and `H_RANDOM_SUB` are the random number bytes, and `WRAM_START` and `WRAM_END`
+bound work RAM. Read Yellow through `yellow.red_layout` as with the other addresses.
 
 ## Game state
 

@@ -6,6 +6,9 @@ apart under ``GEN2_KEY`` with their own table and the 251-species Pokédex.
 import hashlib
 import time
 
+from pokecore.gen1 import (W_ENEMY_BATTLE_STATUS3, W_ENEMY_DVS, W_ENEMY_MON, W_IS_IN_BATTLE,
+                           WRAM_END, WRAM_START)
+
 from .state import kv, tracking
 
 KEY = 'shiny-statistics-v1'
@@ -119,16 +122,16 @@ class ShinyTracker:
             from .fair_dvs import reroll
             reroll(mem, self.fair_key)
         # Trainer battles and Transform do not create wild encounters.
-        if mem[0xd057] != 1 or mem[0xd069] & 8:
+        if mem[W_IS_IN_BATTLE] != 1 or mem[W_ENEMY_BATTLE_STATUS3] & 8:
             return
-        species = mem[0xcfe5]
+        species = mem[W_ENEMY_MON]
         if species not in SPECIES:
             return
-        dvs = bytes(mem[0xcff1:0xcff3])
+        dvs = bytes(mem[W_ENEMY_DVS:W_ENEMY_DVS + 2])
         from . import progress_events
         progress_events.encounter(self.store, SPECIES[species]['dex'], dvs)
         if not shiny_bytes(dvs):
             return
-        fingerprint = hashlib.sha256(bytes(mem[0xc000:0xe000])).hexdigest()
+        fingerprint = hashlib.sha256(bytes(mem[WRAM_START:WRAM_END])).hexdigest()
         with self.store.transaction() as db:
             record(db, 'seen', fingerprint, SPECIES[species]['dex'])
