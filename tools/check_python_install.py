@@ -16,6 +16,8 @@ def main():
     parser.add_argument('--acceleration', action='store_true', help='Install and verify optional Numba support')
     parser.add_argument('--dependency-wheel', type=Path, action='append', default=[],
                         help='Explicit local dependency wheel for unreleased stack validation')
+    parser.add_argument('--workspace-pokecore', action='store_true',
+                        help='Install pokecore built from packages/pokecore in place of its pinned release')
     args = parser.parse_args()
     version = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     wheels = list((ROOT / 'dist').glob(f'pokesim-{version}-*.whl'))
@@ -41,8 +43,19 @@ def main():
         executable = target / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
         launcher = target / ('Scripts/pokesim-desktop.exe' if os.name == 'nt' else 'bin/pokesim-desktop')
         package = str(wheels[0]) + ('[acceleration]' if args.acceleration else '')
-        subprocess.run([uv, 'pip', 'install', '--python', str(executable), package, *[str(p.resolve()) for p in args.dependency_wheel]],
-                       check=True, env=environment, cwd=root)
+        dependencies = [path.resolve() for path in args.dependency_wheel]
+        if args.workspace_pokecore:
+            subprocess.run([uv, 'build', '--package', 'pokecore', '--wheel', '--out-dir', str(root / 'pokecore')],
+                           check=True, cwd=ROOT)
+            dependencies += sorted((root / 'pokecore').glob('pokecore-*.whl'))
+        install = [uv, 'pip', 'install', '--python', str(executable)]
+        if dependencies:
+            # An override replaces the pinned release URL, which a second wheel of the same name would conflict with.
+            overrides = root / 'overrides.txt'
+            overrides.write_text(''.join(f'{wheel.name.split("-")[0]} @ {wheel.as_uri()}\n' for wheel in dependencies),
+                                 encoding='utf-8')
+            install += ['--override', str(overrides)]
+        subprocess.run([*install, package, *map(str, dependencies)], check=True, env=environment, cwd=root)
         if args.acceleration:
             subprocess.run([str(executable), '-c',
                 'from pokesim.policies.navigation_numba import kernel\nassert kernel() is not None'],
