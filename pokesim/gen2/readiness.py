@@ -15,6 +15,18 @@ CLASSES = {'zephyr': 1, 'hive': 3, 'plain': 2, 'fog': 4, 'storm': 7, 'mineral': 
            'brock': 17, 'misty': 18, 'surge': 19, 'erika': 21, 'janine': 26, 'sabrina': 35, 'blaine': 46,
            'blue': 64, 'red': 63}
 LEAGUE = ('league_will', 'league_koga', 'league_bruno', 'league_karen', 'league_lance')
+# A clean cartridge's League: the five battles field 26 Pokémon, all at level 40 or over.
+CLEAN_LINEUP = (26, 40)
+
+
+def league_lineup(data):
+    """The number of Pokémon the five League battles field and the lowest level among them.
+
+    A randomized cartridge reads its own from the trainer tables, and a clean one's stands in without them."""
+    parties = [getattr(data, 'boss_parties', {}).get(CLASSES[room]) for room in LEAGUE]
+    if not all(parties):
+        return CLEAN_LINEUP
+    return sum(map(len, parties)), min(mon['level'] for party in parties for mon in party)
 
 
 def boss_parties(rom_path, game):

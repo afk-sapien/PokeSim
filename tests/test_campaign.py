@@ -271,6 +271,7 @@ def test_every_training_place_has_somewhere_to_train():
     # Route 23 draws its grass with the Plateau tileset's tile. Looking for the overworld's found
     # nothing, so preparing for the League had no destination.
     from pokesim.policies.progression import GYMS, training_goal
-    for place in {row[6] for row in GYMS} | {'ROUTE_23', 'POKEMON_MANSION_1F'}:
+    routes = {(row[6],) if isinstance(row[6], str) else row[6] for row in GYMS}
+    for place in {name for route in routes for name in route} | {'ROUTE_23', 'POKEMON_MANSION_1F'}:
         goal = training_goal('x', place, '', place)
         assert goal.targets and all(target[0] == MAPS[place] for target in goal.targets), place

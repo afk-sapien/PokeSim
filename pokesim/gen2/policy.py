@@ -1070,56 +1070,53 @@ class Policy:
         return ace_level(self.data, key) or self.BOSS_ACES[key]
 
     def boss_bar(self, key):
-        """The level the best fighter trains to before the boss goal ``key``."""
+        """The level the best fighter trains to before the boss goal ``key``, its loss bar (planning/readiness.py)."""
+        from ..planning.readiness import Boss, loss_bar
         key = self.boss_key(key)
-        return self.losses.bar(key, self.BOSS_FLOORS.get(key, 0), self.boss_ace(key))
+        return loss_bar(Boss(key, self.boss_ace(key), floor=self.BOSS_FLOORS.get(key, 0)), self.losses)
+
+    # The gyms the oracle judges by the team's matchup with the leader's ace, as Red, Blue and Yellow
+    # do before every gym (planning/readiness.py). Falkner and the Kanto gyms have no matchup score, so
+    # the loss bar alone holds them, and Falkner keeps his level floor.
+    MATCHUP_GYMS = frozenset({'hive', 'plain', 'fog', 'storm', 'mineral', 'glacier', 'clair'})
+
+    def boss(self, snapshot, goal):
+        """The boss ``goal`` names, as the oracle sees it: its ace, floor and matchup scores."""
+        from ..planning.readiness import Boss
+        from .readiness import LEAGUE, readiness
+        key = self.boss_key(goal.key)
+        if key == 'league':
+            scores = tuple(readiness(self, snapshot.party, room) for room in LEAGUE)
+        elif key in self.MATCHUP_GYMS:
+            scores = (readiness(self, snapshot.party, goal.key),)
+        else:
+            scores = ()
+        inside = self.in_league(snapshot) if key == 'league' else self.BOSS_ROOMS.get(self.constant(snapshot)) == key
+        return Boss(key, self.boss_ace(key), floor=self.BOSS_FLOORS.get(key, 0), scores=scores,
+                    league=key == 'league', inside=inside)
 
     def boss_training(self, snapshot, goal):
-        """A walk that trains toward the bar before the boss ``goal`` names, or None once the team is ready.
+        """A walk that trains before the boss ``goal`` names, or None once the oracle finds the team ready.
 
         Inside the League nothing turns back, so its rooms carry on."""
         if goal is None or self.in_league(snapshot):
             return None
         if goal.key not in self.BOSSES:
             return self.story_training(snapshot, goal)
-        bar = self.boss_bar(goal.key)
-        if self.fighter_level(snapshot.party) >= bar:
-            return self.matchup_training(snapshot, goal)
-        key = self.boss_key(goal.key)
-        from .training import walk_goal
-        return walk_goal(self, snapshot, Goal, lambda: f'Train the team to level {bar} before {self.BOSS_NAMES[key]}',
-                         map_name=self.BOSS_TRAINING[key])
-
-    # The gyms the team trains for until it matches up with the leader's ace, as Red, Blue and Yellow
-    # do before every gym (planning/readiness.py). Falkner keeps his level floor.
-    MATCHUP_GYMS = frozenset({'hive', 'plain', 'fog', 'storm', 'mineral', 'glacier', 'clair'})
-
-    def matchup_training(self, snapshot, goal):
-        """A walk that trains before a Johto gym or the first League while the team does not match up, or None.
-
-        A gym trains until the best score reaches READY or the best fighter is MARGIN levels over the
-        leader's ace. The League trains until every room scores LEAGUE_READY or the best fighter reaches
-        the top League ace's level, Lv 50 on a clean cartridge, the twin of Red and Blue's Lv 65. Inside
-        the gym the battle carries on."""
-        from ..planning.readiness import MARGIN, league_unready, unready
-        from .readiness import LEAGUE, readiness
-        key, level = self.boss_key(goal.key), self.fighter_level(snapshot.party)
-        ace = self.boss_ace(key)
-        if key in self.MATCHUP_GYMS:
-            best = readiness(self, snapshot.party, goal.key)
-            if (self.BOSS_ROOMS.get(self.constant(snapshot)) == key or best is None
-                    or not unready(best, level, ace)):
-                return None
-            label = f'Prepare for {self.BOSS_NAMES[key]}: train until the team matches up or reaches level {ace + MARGIN}'
-        elif key == 'league':
-            scores = [readiness(self, snapshot.party, room) for room in LEAGUE]
-            if None in scores or not league_unready(scores, level, ace):
-                return None
-            label = f'Prepare for the Pokémon League: train until the team matches up or reaches level {ace}'
-        else:
+        from ..planning.readiness import LOSS, judge, team
+        boss = self.boss(snapshot, goal)
+        verdict = judge(boss, team(snapshot.party, self.move_power), self.losses)
+        if verdict is None:
             return None
+        name, target = self.BOSS_NAMES[boss.key], verdict.target
+        if verdict.reason == LOSS:
+            label = f'Train the team to level {target} before {name}'
+        elif boss.league:
+            label = f'Prepare for the Pokémon League: train until the team matches up or reaches level {target}'
+        else:
+            label = f'Prepare for {name}: train until the team matches up or reaches level {target}'
         from .training import walk_goal
-        return walk_goal(self, snapshot, Goal, lambda: label, map_name=self.BOSS_TRAINING[key])
+        return walk_goal(self, snapshot, Goal, lambda: label, map_name=self.BOSS_TRAINING[boss.key])
 
     # The badge each boss goal earns, in the order the story takes them. A story loss trains where
     # the team would before the first one not yet won, or the League before the first Hall of Fame.
@@ -1131,10 +1128,13 @@ class Policy:
     def story_training(self, snapshot, goal):
         """A walk that trains before a story goal the rival or a Rocket executive beat the team on, or None."""
         if goal.key not in self.losses.levels():
+            # Only a loss gives a story goal a bar, so with none the oracle has nothing to judge.
             return None
-        bar = self.losses.bar(goal.key, 0)
-        if self.fighter_level(snapshot.party) >= bar:
+        from ..planning.readiness import Boss, judge, team
+        verdict = judge(Boss(goal.key), team(snapshot.party, self.move_power), self.losses)
+        if verdict is None:
             return None
+        bar = verdict.target
         key = next((key for key, badge in self.BOSS_BADGES
                     if not (snapshot.badges & badge if badge else getattr(snapshot, 'hall_of_fame_count', 0))), 'red')
         from .training import walk_goal

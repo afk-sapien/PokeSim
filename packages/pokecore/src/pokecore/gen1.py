@@ -44,6 +44,11 @@ W_NUM_BAG_ITEMS = 0xD31D
 
 W_BAG_ITEMS = 0xD31E
 
+# wNumBoxItems: the item count of the PC's item storage, then wBoxItems as (item, quantity) pairs.
+W_NUM_BOX_ITEMS = 0xD53A
+W_BOX_ITEMS = 0xD53B
+PC_ITEM_CAPACITY = 50
+
 W_MONEY = 0xD347
 
 W_RIVAL_NAME = 0xD34A
@@ -81,6 +86,9 @@ W_EVENT_FLAGS = 0xD747
 W_STATUS_FLAGS1 = W_EVENT_FLAGS - 31
 
 W_PLAYTIME_H = 0xDA41
+# wPlayTimeMaxed sits between the hours and the minutes.
+W_PLAYTIME_M = W_PLAYTIME_H + 2
+W_PLAYTIME_S = W_PLAYTIME_H + 3
 
 # Overworld, menu and battle state, by pret/pokered name. Bits count from 0.
 # wSpritePlayerStateData1FacingDirection: a key of FACINGS.
@@ -106,6 +114,31 @@ BIT_STRENGTH_ACTIVE = 0
 BIT_GAVE_SAFFRON_GUARDS_DRINK = 6
 W_MOVEMENT_FLAGS = 0xD736
 BIT_SPINNING = 7    # riding the arrow tiles in the Rocket Hideout and Viridian Gym
+
+# Battle state, by pret/pokered name. W_IS_IN_BATTLE is 1 in a wild battle, 2 in a trainer battle,
+# and 0 or 0xFF outside one. wBattleMon and wEnemyMon are BATTLE_STRUCT bytes:
+# species, HP (2), party slot, status, two types, catch rate, four moves, DVs (2), level,
+# maximum HP, Attack, Defense, Speed and Special (2 each), then four PP bytes.
+BATTLE_STRUCT = 29
+W_PLAYER_MON_NUMBER = 0xCC2F    # wPlayerMonNumber: the party slot of the player's active mon, from 0
+W_TRANSFORMED_ENEMY_DVS = 0xCCEB    # wTransformedEnemyMonOriginalDVs, kept while the enemy is transformed
+W_ENEMY_MON_NICK = 0xCFDA
+W_ENEMY_HP = W_ENEMY_MON + 1
+W_ENEMY_DVS = W_ENEMY_MON + 12
+W_BATTLE_MON_NICK = 0xD009
+W_BATTLE_MON = 0xD014
+W_PLAYER_BATTLE_STATUS1 = 0xD062
+W_PLAYER_BATTLE_STATUS3 = 0xD064
+W_ENEMY_BATTLE_STATUS1 = 0xD067
+W_ENEMY_BATTLE_STATUS3 = 0xD069
+W_LINK_STATE = 0xD12B    # wLinkState: nonzero while a link is up, LINK_STATE_BATTLING (4) in a link battle
+# wBattleType values. BATTLE_TYPE_PIKACHU is Yellow's catch in Oak's lab.
+BATTLE_TYPE_OLD_MAN = 1
+BATTLE_TYPE_SAFARI = 2
+BATTLE_TYPE_PIKACHU = 4
+# Bits of the battle status bytes.
+BIT_USING_TRAPPING_MOVE = 5    # status 1: Wrap, Bind, Clamp or Fire Spin is holding the target
+BIT_TRANSFORMED = 3    # status 3
 
 PARTY_STRUCT = 44
 
@@ -202,9 +235,18 @@ def read_party(memory, move_data=None, *, version=None) -> list[dict]:
 
 def read_bag(memory, *, version=None) -> tuple[tuple[int, int], ...]:
     """Decode bag entries, limiting reads to the cartridge's twenty slots."""
-    memory = red_layout(memory, version)
-    count = min(memory[W_NUM_BAG_ITEMS], 20)
-    raw = bytes(memory[W_BAG_ITEMS:W_BAG_ITEMS + count * 2]) if count else b""
+    return _items(red_layout(memory, version), W_NUM_BAG_ITEMS, 20)
+
+
+def read_pc_items(memory, *, version=None) -> tuple[tuple[int, int], ...]:
+    """Decode the PC's item storage, limiting reads to its fifty slots."""
+    return _items(red_layout(memory, version), W_NUM_BOX_ITEMS, PC_ITEM_CAPACITY)
+
+
+def _items(memory, count_address, capacity):
+    count = min(memory[count_address], capacity)
+    start = count_address + 1
+    raw = bytes(memory[start:start + count * 2]) if count else b""
     return tuple((raw[index], raw[index + 1]) for index in range(0, len(raw), 2)
                  if raw[index] not in (0, 255))
 

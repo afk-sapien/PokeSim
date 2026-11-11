@@ -2,8 +2,9 @@
 from types import SimpleNamespace
 
 from pokesim.planning.losses import Losses, best_level
+from pokesim.planning.readiness import Boss, loss_bar
 from pokesim.play_clock import PlayClock
-from pokesim.policies.progression import boss_training, gym_goal
+from pokesim.policies.progression import boss_training
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.store import Store
 from pokesim.strategy_data import MAPS
@@ -22,19 +23,20 @@ def test_only_a_pokemon_with_a_damaging_move_is_a_fighter():
 
 
 def test_a_bar_rises_two_over_the_level_that_lost_up_to_ten_over_the_ace():
-    losses = Losses()
-    assert losses.bar('zephyr', 12, 9) == 12
+    losses, falkner = Losses(), Boss('zephyr', 9, floor=12)
+    assert loss_bar(falkner, losses) == 12
     losses.note('zephyr', 12)
     losses.note('zephyr', 11)
-    assert losses.bar('zephyr', 12, 9) == 14
+    assert loss_bar(falkner, losses) == 14
     losses.note('zephyr', 30)
-    assert losses.bar('zephyr', 12, 9) == 19
+    assert loss_bar(falkner, losses) == 19
 
 
 def test_a_gen1_level_cap_counts_only_fighters():
     # A Lv 30 Metapod with only Harden left a Lv 12 starter's cap met: Brock's gym took the team in.
     party = (mon(level=12), mon(level=60, moves=(HARDEN, 0, 0, 0), pp=(30, 0, 0, 0)))
-    assert gym_goal(snap(map=MAPS['ROUTE_24'], badges=1, party=party), 2).key == 'train_cascade'
+    s = snap(map=MAPS['ROUTE_24'], badges=1, party=party)
+    assert boss_training(s, SimpleNamespace(key='cascade'), Losses()).key == 'train_cascade'
 
 
 def test_a_gen1_loss_to_misty_trains_on_her_route_and_outlives_the_reload(tmp_path):
@@ -53,9 +55,39 @@ def test_a_gen1_loss_to_misty_trains_on_her_route_and_outlives_the_reload(tmp_pa
     s = snap(map=MAPS['CERULEAN_CITY'], badges=1, party=(mon(level=25),))
     goal = boss_training(s, SimpleNamespace(key='cascade'), reloaded.losses)
     assert goal.key == 'train_cascade' and 'level 26' in goal.reason
-    assert boss_training(snap(map=MAPS['CERULEAN_CITY'], badges=1, party=(mon(level=26),)),
+    # At the bar the matchup rule judges next, and a fighter that matches up with Starmie goes in.
+    ready = mon(level=26, hp=60, max_hp=60, attack=40, defense=40, special=55)
+    assert boss_training(snap(map=MAPS['CERULEAN_CITY'], badges=1, party=(ready,)),
                          SimpleNamespace(key='cascade'), reloaded.losses) is None
     store.close()
+
+
+def test_a_loss_saved_while_training_for_brock_loads_under_the_new_key(tmp_path):
+    # Red, Blue and Yellow trained for Brock under 'train_brock' before every gym trained under
+    # 'train_' and its key. A loss to the rival on Route 22 during that walk noted the old key.
+    store = Store(tmp_path)
+    store.set('boss_losses', {'train_brock': 12, 'cascade': 24})
+    store.set('boss_aces', {'train_brock': 9})
+    policy = StrategicPolicy(1)
+    store.attach(policy, 1)
+    assert policy.losses.levels() == {'train_boulder': 12, 'cascade': 24}
+    assert policy.losses.aces() == {'train_boulder': 9}
+    # The bar the old loss raised holds under the new key: Lv 13 trains, Lv 14 goes on.
+    goal = SimpleNamespace(key='train_boulder', title='Prepare for Brock')
+    assert boss_training(snap(map=MAPS['ROUTE_2'], party=(mon(level=13),)), goal, policy.losses)
+    assert boss_training(snap(map=MAPS['ROUTE_2'], party=(mon(level=14),)), goal, policy.losses) is None
+    # A new loss on the walk raises the renamed bar, and the store then keeps only the new key.
+    policy.losses.note('train_boulder', 13)
+    assert store.get('boss_losses') == {'train_boulder': 13, 'cascade': 24}
+    store.close()
+
+
+def test_an_old_and_a_new_key_for_one_boss_keep_the_higher_level():
+    losses = Losses()
+    losses._write('boss_losses', {'train_brock': 15, 'train_boulder': 12})
+    assert losses.levels() == {'train_boulder': 15}
+    losses._write('boss_losses', {'train_boulder': 16, 'train_brock': 12})
+    assert losses.levels() == {'train_boulder': 16}
 
 
 def test_a_gen1_stall_reload_inside_a_boss_battle_counts_as_a_loss_and_the_team_trains(tmp_path):

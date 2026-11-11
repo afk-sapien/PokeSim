@@ -9,13 +9,17 @@ from .team import readiness
 
 from ..game_data import current_variant
 from ..planning.losses import best_level
-from ..planning.readiness import league_unready, unready
+from ..planning.readiness import LOSS, PARTNER, Boss, judge, team
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set, object_hidden
+
+
+def power(move):
+    return MOVES.get(move, {}).get('power')
 
 
 def fighter_level(party):
     """The level of the best party Pokémon that can deal damage, the one each level cap measures."""
-    return best_level(party, lambda move: MOVES.get(move, {}).get('power'))
+    return best_level(party, power)
 
 
 @dataclass(frozen=True)
@@ -104,21 +108,12 @@ def story_goal(snapshot, starter="bulbasaur", fossil="HELIX_FOSSIL"):
             return at("pokedex", "Deliver Oak’s parcel", "Obtain the Pokédex and open the northward route", "OAKS_LAB", 5, 3, "up")
         return at("parcel", "Collect Oak’s parcel", "The Viridian clerk has a delivery for Oak", "VIRIDIAN_MART", 2, 5, "left")
     if not snapshot.badges & 1:
-        if readiness(snapshot, 1)['score'] < 75 and fighter_level(snapshot.party) < 22:
-            grass = []
-            for name in ("ROUTE_2", "VIRIDIAN_FOREST"):
-                m = MAPS[name]
-                w = WORLD[m]
-                grass.extend((m, x, y) for y, row in enumerate(w["tiles"]) for x, tile in enumerate(row)
-                             if tile == (0x52 if name == "ROUTE_2" else 0x20))
-            return Goal("train_brock", "Prepare for Brock", "Build a useful matchup against Brock before entering the gym", tuple(grass),
-                        kind=TRAIN)
         return at("boulder", "Challenge Brock", "Earn the Boulder Badge to continue east", "PEWTER_GYM", 4, 2, "up")
     return campaign_goal(snapshot, fossil)
 
 
 GYMS = (
-    (1, "boulder", "Brock", "PEWTER_GYM", "BROCK", 13, "ROUTE_2"),
+    (1, "boulder", "Brock", "PEWTER_GYM", "BROCK", 13, ("ROUTE_2", "VIRIDIAN_FOREST")),
     (2, "cascade", "Misty", "CERULEAN_GYM", "MISTY", 18, "ROUTE_24"),
     (4, "thunder", "Lt. Surge", "VERMILION_GYM", "LT_SURGE", 22, "ROUTE_11"),
     (8, "rainbow", "Erika", "CELADON_GYM", "ERIKA", 28, "ROUTE_7"),
@@ -145,15 +140,18 @@ GRASS_TILES = {'OVERWORLD': 0x52, 'FOREST': 0x20, 'PLATEAU': 0x45}
 
 
 def training_goal(key, title, reason, map_name):
-    m = MAPS[map_name]
-    w = WORLD[m]
-    # Outdoor grass and indoor encounter floors are navigated using the same graph. Each tileset
-    # draws grass with its own tile: Route 23 had no targets at all under the overworld's, and a run
-    # told to prepare for the League there drifted along Route 21 for seventeen hours of game time.
-    grass = GRASS_TILES.get(w["tileset"])
-    targets = tuple((m, x, y) for y, row in enumerate(w["tiles"]) for x, tile in enumerate(row)
-                    if tile == grass or (map_name == "POKEMON_MANSION_1F" and tile in w["passable"]))
-    return Goal("train_" + key, title, reason, targets, kind=TRAIN)
+    """Training on the grass of ``map_name``, one map name or a tuple of them."""
+    targets = []
+    for name in (map_name,) if isinstance(map_name, str) else map_name:
+        m = MAPS[name]
+        w = WORLD[m]
+        # Outdoor grass and indoor encounter floors are navigated using the same graph. Each tileset
+        # draws grass with its own tile: Route 23 had no targets at all under the overworld's, and a run
+        # told to prepare for the League there drifted along Route 21 for seventeen hours of game time.
+        grass = GRASS_TILES.get(w["tileset"])
+        targets.extend((m, x, y) for y, row in enumerate(w["tiles"]) for x, tile in enumerate(row)
+                       if tile == grass or (name == "POKEMON_MANSION_1F" and tile in w["passable"]))
+    return Goal("train_" + key, title, reason, tuple(targets), kind=TRAIN)
 
 
 # The League rooms share one loss bar, measured against the Champion's ace, and train on Route 23.
@@ -172,9 +170,11 @@ def boss_room(key, map_id):
 
 
 def boss_training(s, goal, losses):
-    """Training toward the bar a loss to the boss ``goal`` names raised (planning/losses.py), or None.
+    """Training before the boss or story goal ``goal``, or None once the team is ready.
 
-    Inside the League nothing turns back, so its rooms carry on."""
+    The oracle (planning/readiness.py) judges a gym or the League from its loss bar and the matchup
+    scores here, and any other goal from its loss bar alone. Inside the League nothing turns back,
+    so its rooms carry on."""
     if goal is None or losses is None:
         return None
     key = boss_key(goal.key)
@@ -183,33 +183,45 @@ def boss_training(s, goal, losses):
         return None
     if gym is None and key != "league":
         return story_training(s, goal, losses)
-    ace, route, name = (gym[5], gym[6], gym[2]) if gym else (LEAGUE_ACE, LEAGUE_TRAINING, "the Pokémon League")
-    bar = losses.bar(key, 0, ace)
-    if fighter_level(s.party) >= bar:
+    if gym:
+        bit, _, name, room, _, ace, route = gym
+        boss = Boss(key, ace, scores=(readiness(s, bit)['score'],), inside=s.map == MAPS[room])
+        partner = None
+    else:
+        name, ace, route = "the Pokémon League", LEAGUE_ACE, LEAGUE_TRAINING
+        boss = Boss(key, ace, scores=tuple(readiness(s, bit)['score'] for bit in range(256, 261)), league=True)
+        slot = league_partner(s)
+        partner = None if slot is None else s.party[slot].level
+    verdict = judge(boss, team(s.party, power, partner=partner), losses)
+    if verdict is None:
         return None
-    return training_goal(key, f"Prepare for {name}", f"Train the best fighter to level {bar} after a loss to {name}", route)
+    if verdict.reason == LOSS:
+        return training_goal(key, f"Prepare for {name}",
+                             f"Train the best fighter to level {verdict.target} after a loss to {name}", route)
+    if verdict.reason == PARTNER:
+        return training_goal('league_partner', 'Prepare a second League battler',
+                             'Build coverage for the League matchups that remain difficult', 'POKEMON_MANSION_1F')
+    if gym:
+        return training_goal(key, f"Prepare for {name}",
+                             f"Build usable damage and survival against {name}, then reassess the team", route)
+    return training_goal(key, 'Prepare for the Pokémon League',
+                         'Improve damage and survival across the final matchups', route)
 
 
 def story_training(s, goal, losses):
     """Training before a story goal the rival or Giovanni beat the team on, or None once it is ready.
 
     The team trains where it would before the next gym it has not won."""
-    if goal.key not in losses.levels():
-        return None
-    bar = losses.bar(goal.key, 0)
-    if fighter_level(s.party) >= bar:
+    verdict = judge(Boss(goal.key), team(s.party, power), losses)
+    if verdict is None:
         return None
     route = next((g[6] for g in GYMS if not s.badges & g[0]), LEAGUE_TRAINING)
     return training_goal(goal.key, "Train before another try",
-                         f"Train the best fighter to level {bar} after a loss on the way to: {goal.title}", route)
+                         f"Train the best fighter to level {verdict.target} after a loss on the way to: {goal.title}", route)
 
 
 def gym_goal(s, bit):
-    _, key, trainer, gym, obj, level, route = next(g for g in GYMS if g[0] == bit)
-    assessment = readiness(s, bit)
-    if unready(assessment['score'], fighter_level(s.party), level) and s.map != MAPS[gym]:
-        return training_goal(key, f"Prepare for {trainer}",
-                             f"Build usable damage and survival against {trainer}, then reassess the team", route)
+    _, key, trainer, gym, obj, *_ = next(g for g in GYMS if g[0] == bit)
     if key == "volcano":
         # Each locked door opens after beating the quiz trainer whose text follows the one before.
         # Super Nerd 2 opens the first door, so the first locked door names the trainer to face.
@@ -365,14 +377,6 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
         return Goal("champion", "Kanto Champion", "The team made it to the Hall of Fame", help="You won. Take a moment with the team.")
     league_maps = {MAPS[r[0]] for r in rooms}
     if s.map not in league_maps:
-        assessments = [readiness(s, bit) for bit in range(256, 261)]
-        partner = league_partner(s)
-        if partner is not None and s.party[partner].level < 55 and any(a['score'] < 75 for a in assessments):
-            return training_goal('league_partner', 'Prepare a second League battler',
-                                 'Build coverage for the League matchups that remain difficult', 'POKEMON_MANSION_1F')
-        if league_unready([a['score'] for a in assessments], fighter_level(s.party), LEAGUE_ACE):
-            return training_goal('league', 'Prepare for the Pokémon League',
-                                 'Improve damage and survival across the final matchups', 'ROUTE_23')
         if s.map != MAPS['INDIGO_PLATEAU_LOBBY']:
             return at('league_entrance', 'Return to the Pokémon League',
                       'Begin a new challenge through the lobby, where the game resets the previous attempt',
