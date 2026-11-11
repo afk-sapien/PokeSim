@@ -8,7 +8,7 @@ import pytest
 from pokesim.gen2.data import GameData
 from pokesim.planning.throws import THROW_BAR, gen2_throw
 
-TANGELA, CHANSEY, SNORLAX = 114, 113, 143
+TANGELA, CHANSEY, SNORLAX, ELECTRODE = 114, 113, 143, 101
 
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
@@ -89,6 +89,17 @@ def test_a_weakened_target_gets_throws_whatever_the_odds(real_data):
 
 def test_a_one_time_encounter_always_gets_throws(real_data):
     policy, snapshot, mem = meeting(real_data, SNORLAX, (LEAD,))
+    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+
+
+def test_a_battle_a_map_script_started_always_gets_throws(real_data):
+    # The transmitter's Electrodes in the Mahogany hideout are under 1 in 10 a Poké Ball. A run left
+    # each one and the story talked to it again, 90 game minutes without progress in
+    # silver-mahogany-pharmacist.
+    assert gen2_throw(60, 1, 60, 60, 0) < THROW_BAR
+    policy, snapshot, mem = meeting(real_data, ELECTRODE, (LEAD,))
+    snapshot.map = real_data.map_ids['TEAM_ROCKET_BASE_B2F']
+    mem.byte = lambda name: {'wMenuCursorX': 1, 'wMenuCursorY': 1, 'wBattleScriptFlags': 0x80}.get(name, 0)
     assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
 
 

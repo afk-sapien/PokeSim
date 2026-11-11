@@ -33,6 +33,8 @@ HEALING_MOVES = frozenset({'EFFECT_HEAL', 'EFFECT_MORNING_SUN', 'EFFECT_SYNTHESI
                            'EFFECT_LEECH_SEED'})
 # What long_odds answers when a catch should run and wait for a new move, member or ball.
 LEAVE = 'leave'
+# The bit the cartridge's loadwildmon script command sets in wBattleScriptFlags for the battle it starts.
+SCRIPTED_BATTLE = 0x80
 
 
 def transformed(mem, mon):
@@ -2272,12 +2274,14 @@ class Policy:
         and the target is untouched, or None to throw.
 
         A shiny, a legendary, a roamer, a one-time encounter and a contest catch always get throws, and
-        so does a battle with no escape. Paralysis adds nothing to a Gen II throw, so a member that can
-        only paralyze is not switched in for it.
+        so does a battle with no escape. So does a wild battle a map script started, which a run only
+        meets again by talking to it, as the story does with the transmitter's Electrodes. Paralysis
+        adds nothing to a Gen II throw, so a member that can only paralyze is not switched in for it.
         """
         from ..planning.throws import GEN2_BALLS, THROW_BAR, gen2_throw
         from .ledger import ONE_CHANCE
-        if self.wild_shiny(snapshot) or species in ONE_CHANCE or mem.byte('wStatusFlags2') & 4:
+        if (self.wild_shiny(snapshot) or species in ONE_CHANCE or mem.byte('wStatusFlags2') & 4
+                or mem.byte('wBattleScriptFlags') & SCRIPTED_BATTLE):
             return None
         held = {self.data.item_names.get(item, '').casefold() for item, count in snapshot.pockets['balls'] if count}
         ball = next((label for label in self.ball_labels(snapshot) if label.casefold() in held), None)

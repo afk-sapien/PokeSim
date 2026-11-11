@@ -4,7 +4,7 @@ A catch whose next throw is under ``THROW_BAR`` weakens its target first: the ba
 a switch to a party member that can hit it and leave it standing. Once the party can weaken it no
 further, the balls go whatever the odds. A target nobody can weaken at all is left for later, until
 the party or the ball pocket changes. A shiny, a legendary, a roamer and a one-time encounter always
-get throws.
+get throws, and so does a Gold, Silver or Crystal battle a map script started.
 """
 
 THROW_BAR = 0.1
