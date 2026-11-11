@@ -2,7 +2,7 @@
 from collections import Counter
 
 from ..planning import values
-from ..planning import arbiter, pin
+from ..planning import arbiter, decide, pin
 from ..planning.arbiter import Candidate, Tier
 from ..planning.cost import FRAMES_PER_BATTLE, FRAMES_PER_TILE
 from ..planning.ledger import FIELD_MOVES
@@ -614,9 +614,12 @@ class Ladder:
         self.undo = {}
         # The rung the last decision picked, which any other rung pays INTERRUPT_FRAMES to cut into.
         self.running = getattr(policy, 'ladder_rung', None)
-        # The next activity a manager set (planning/pin.py). Its rung is always asked.
+        # The next activity a manager set (planning/pin.py). Its rung is asked even below the pick's tier,
+        # since the pinned lane ranks it first, and passes the same checks as any other rung.
         self.pin = getattr(policy, 'pin', None)
         self.pin_rung = self.pin.key.split(':', 1)[0] if self.pin else None
+        # Why the pinned goal cannot run in this decision, a reason from planning/decide.py.
+        self.pin_parked = ''
         # A survey asks every rung, for the goal list a manager picks from, and changes nothing.
         self.survey = getattr(policy, 'ladder_survey', False)
         self.asked, self.labels = set(), {}
@@ -691,16 +694,20 @@ class Ladder:
             return
         if self.pick is not None and arbiter.ahead(self.pick, tier) and not self.survey and name != self.pin_rung:
             return
-        if (name != self.pin_rung and self.policy.monitor_tables.get(STOOD_DOWN)
-                and standing_down(self.policy, rung_key(name))):
-            # The watchdog gave up on this rung after its reloads did not help (emulator.py).
+        if self.policy.monitor_tables.get(STOOD_DOWN) and standing_down(self.policy, rung_key(name)):
+            # The watchdog gave up on this rung after its reloads did not help (emulator.py). A pin on it
+            # waits, and says why.
+            if name == self.pin_rung:
+                self.pin_parked = decide.STOOD_DOWN
             return
         self.asked.add(name)
         before = self.save()
         goal = build()
         waiting = getattr(self.policy, 'no_route_waiting', None)
-        if goal is not None and name != self.pin_rung and waiting is not None and waiting(goal):
+        if goal is not None and waiting is not None and waiting(goal):
             # The walk to this goal found no route lately (policy.no_route), so another rung runs first.
+            if self.pin is not None and f'{name}:{goal.key}' == self.pin.key:
+                self.pin_parked = decide.NO_ROUTE
             self.load(before)
             return
         if goal is None:
@@ -914,17 +921,25 @@ def settle_pin(policy, ladder):
     """Start, end or drop the manager's pin once a decision has weighed the rungs.
 
     The pin starts when the ladder picks its key and ends, done or not, when a later decision picks
-    something else. A pin whose rung was asked and offered another goal or none cannot run now, so it is
-    dropped with a journal entry. A pin that lost only to upkeep waits for the next decision.
+    something else. A run that ends because its goal was parked is journaled with the reason. A pin
+    whose goal is parked before it starts, because its rung stood down or its walk found no route
+    lately, waits with the reason, which the API state carries. A pin whose rung was asked and offered
+    another goal or none cannot run now, so it is dropped with a journal entry. A pin that lost only to
+    upkeep waits for the next decision.
     """
     current = ladder.pin
     if current is None or ladder.survey:
         return
+    current.parked = ladder.pin_parked
     pick = ladder.pick.key if ladder.pick is not None else None
     if pick == current.key:
         current.started = True
     elif current.started:
         policy.pin = None
+        if current.parked:
+            pin_events(policy).append(pin.gave_up(current.label, current.parked))
+    elif current.parked:
+        return
     elif ladder.pin_rung in ladder.asked and all(c.key != current.key for c in ladder.candidates):
         policy.pin = None
         pin_events(policy).append(pin.gave_up(current.label, pin.UNAVAILABLE))

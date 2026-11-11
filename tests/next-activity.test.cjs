@@ -61,6 +61,9 @@ test('the search box asks for goals by name, and the select never holds more tha
 test('the status line names the pinned goal', () => {
   const {NextActivity} = load()
   assert.equal(NextActivity.status({key: 'hunt', label: 'Find Clefairy'}), 'Next: Find Clefairy')
+  assert.equal(NextActivity.status({key: 'hunt', label: 'Find Clefairy', parked: ''}), 'Next: Find Clefairy')
+  assert.equal(NextActivity.status({key: 'hunt', label: 'Find Clefairy', parked: 'no route'}),
+    'Next: Find Clefairy, waiting (no route)')
   assert.equal(NextActivity.status(null), '')
 })
 

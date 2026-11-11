@@ -21,6 +21,9 @@ class Pin:
     label: str
     # True once the planner picked the pinned goal. Its end then clears the pin.
     started: bool = False
+    # Why the pinned goal cannot run now, one of the reasons in planning/decide.py, empty when it can.
+    # The API state carries it, so the manager sees why the pin waits.
+    parked: str = ''
 
     def to_dict(self):
         return asdict(self)
