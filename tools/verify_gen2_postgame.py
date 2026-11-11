@@ -77,7 +77,7 @@ def main():
             frame += count
 
     host = SimpleNamespace(pb=pb, policy=policy, frame=frame)
-    loop = GameLoop(host, Gen2(), tick)
+    loop = GameLoop(host, Gen2(lambda: frame), tick)
     transitions, training = [], []
     receipt = {'game': args.game, 'scope': 'focused postgame director with collection errands bypassed',
                'source_sha256': hashlib.sha256(args.load.read_bytes()).hexdigest()}

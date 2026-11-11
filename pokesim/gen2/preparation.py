@@ -179,7 +179,7 @@ class Preparation:
         mem = Memory(emu.pb.memory, data)
         mem.sp = sp = stack_pointer(emu.pb)
         if snapshot.in_battle or policy.in_league(snapshot):
-            return policy.step(snapshot, emu.pb.memory, sp)
+            return policy.step(snapshot, emu.pb.memory, sp, clock=emu.play_clock.frames)
         # A battle shortcut the policy started during that battle is never stepped again here.
         # Left in place, it would resume after an abort, wait on the open PC and freeze the screen.
         policy.menu = None
@@ -187,7 +187,7 @@ class Preparation:
         # A reset back to the opening reads map 0, which has no layout. Looking up its collision
         # crashed a live Crystal run during a Cable Club walk. The policy presses through the opening.
         if snapshot.map not in data.maps:
-            return policy.step(snapshot, emu.pb.memory, sp)
+            return policy.step(snapshot, emu.pb.memory, sp, clock=emu.play_clock.frames)
         policy.nav.regions.observe(snapshot.map, policy.nav.collision(snapshot, emu.pb.memory))
         policy.nav.observe(snapshot)
         if self.menu:

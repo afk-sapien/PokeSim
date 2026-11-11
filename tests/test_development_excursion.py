@@ -10,6 +10,7 @@ from pokesim.policies.progression import Goal
 from pokesim.policies.strategic import DEVELOPMENT_STALL, StrategicPolicy
 from pokesim.pcvalue import TRAINING_BATTLES
 from pokesim.policies.team import battles_to_level, development_candidate
+from pokesim.runtime.supervision import CHAT_REST, LOOK_AROUND, PARTNER_TRAINING
 from pokesim.strategy_data import MAPS
 from test_collection import state
 from test_strategy import mon
@@ -101,3 +102,30 @@ def test_a_route_whose_battles_cannot_raise_the_partner_starts_no_excursion():
     assert starts_an_excursion((STRONG, HIGH), grass(15)) is None
     assert starts_an_excursion((STRONG, HIGH), grass(40, base_exp=100)) == 'HIGH'
     assert starts_an_excursion((STRONG, HIGH, LOW), grass(15)) == 'LOW'
+
+
+def test_a_reload_keeps_the_wait_before_the_next_partner_training():
+    # A reload used to clear the five game minute wait, so the run could start training again at once.
+    # The wait counts on the play clock now, which a reload never sets back.
+    policy = StrategicPolicy(3)
+    policy.collection.wild = grass(40, base_exp=100)
+    policy.rng.random = lambda: 0.0
+    policy.clock = 10000
+    s = state(map=MAPS['ROUTE_1'], x=12, y=8, party=(STRONG, HIGH), frame=10000)
+    story = Goal('story', 'Story', 'Story')
+    policy._purposeful_detour(s, bytearray(65536), story)
+    assert policy.development_cooldown == PARTNER_TRAINING.until(10000)
+    policy.next_conversation = CHAT_REST.until(10000)
+    policy.on_restore()
+    assert policy.development is None
+    assert policy.next_conversation == CHAT_REST.until(10000)
+    assert policy.development_cooldown == PARTNER_TRAINING.until(10000)
+    reloaded = replace(s, frame=2000)
+    policy.clock = PARTNER_TRAINING.until(10000) - 1
+    policy._purposeful_detour(reloaded, bytearray(65536), story)
+    assert policy.development is None
+    # That look around set its own half minute wait, which ends after the training wait.
+    assert policy.next_conversation == LOOK_AROUND.until(policy.clock)
+    policy.clock, policy.excursion = policy.next_conversation, None
+    policy._purposeful_detour(reloaded, bytearray(65536), story)
+    assert policy.development['partner'][1] == 'HIGH'

@@ -58,7 +58,7 @@ class HeadlessRun:
         self.frame = self.screen_frame = 0
         self.screen_key = None
         self.clock = None
-        self.loop = GameLoop(self, Gen2(), self.tick)
+        self.loop = GameLoop(self, Gen2(lambda: self.frame), self.tick)
         if checkpoint:
             self._load(Path(checkpoint))
         else:

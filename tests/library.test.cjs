@@ -59,7 +59,7 @@ function library(options = {}) {
     },
   })
   vm.runInContext(source, context)
-  return {element, calls, context, poll, clicks, click(action, id) { listeners.click({target: {closest: () => ({dataset: {action, id}})}}) }}
+  return {element, calls, context, poll, clicks, listeners, click(action, id) { listeners.click({target: {closest: () => ({dataset: {action, id}})}}) }}
 }
 
 test('library opens automatically with a GET session and never submits fragment credentials', async () => {
@@ -888,4 +888,66 @@ test('the library lists watchdog problems and hides the list when there are none
   await settle()
   assert.equal(view.element('#attention').hidden, true)
   assert.equal(view.element('#attention-list').innerHTML, '')
+})
+
+const asked = (view, path) => view.calls.filter(call => call.path === path && !call.options.method).length
+
+test('the library reads the cartridge shelf once, and again only when it may have changed', async () => {
+  let games = [{id: 'a'.repeat(32), name: 'Red', version: 'red', rom_id: 'rom', state: 'running', summary: {}}]
+  const view = library({respond(path, opts) {
+    return path === '/api/v1/adventures' && !opts.method ? {ok: true, json: async () => ({adventures: games})} : null
+  }})
+  await settle()
+  assert.equal(asked(view, '/api/v1/cartridges'), 1)
+  for (const _ of [1, 2, 3]) {
+    view.poll()
+    await settle()
+  }
+  assert.equal(asked(view, '/api/v1/adventures'), 4)
+  assert.equal(asked(view, '/api/v1/cartridges'), 1)
+  // A renamed adventure changes who the shelf lists as using the Red cartridge.
+  games = [{...games[0], name: 'Renamed'}]
+  view.poll()
+  await settle()
+  assert.equal(asked(view, '/api/v1/cartridges'), 2)
+  // Back in view, the page catches up at once and reads the shelf again, in case another tab changed it.
+  view.listeners.visibilitychange()
+  await settle()
+  assert.equal(asked(view, '/api/v1/adventures'), 6)
+  assert.equal(asked(view, '/api/v1/cartridges'), 3)
+})
+
+test('settings reads the artwork every refresh only while a pack downloads', async () => {
+  let downloading = true
+  const view = library({page: 'settings', respond(path) {
+    return path === '/api/v1/portraits' ? {ok: true, json: async () => ({busy: downloading, completed: 3, total: 10, sets: {}})} : null
+  }})
+  await settle()
+  view.poll()
+  await settle()
+  assert.equal(asked(view, '/api/v1/portraits'), 2)
+  assert.equal(view.element('#portrait-state').textContent, 'Downloading 3 / 10')
+  downloading = false
+  for (const _ of [1, 2, 3]) {
+    view.poll()
+    await settle()
+  }
+  assert.equal(asked(view, '/api/v1/portraits'), 3)
+  assert.equal(view.element('#portrait-state').textContent, 'Default sprites active')
+  assert.equal(asked(view, '/api/v1/item-artwork'), 1)
+})
+
+test('settings asks for every panel at once instead of one after another', async () => {
+  let release
+  const held = new Promise(resolve => { release = resolve })
+  const view = library({page: 'settings', respond(path) {
+    return path === '/api/v1/settings' ? held.then(() => ({ok: true, json: async () => ({})})) : null
+  }})
+  await settle()
+  for (const path of ['/api/v1/running-caps', '/api/v1/backups', '/api/v1/portraits', '/api/v1/item-artwork', '/api/v1/adventures', '/api/v1/cartridges']) {
+    assert.equal(asked(view, path), 1, path)
+  }
+  release()
+  await settle()
+  assert.equal(view.element('#status').textContent, 'Connected')
 })

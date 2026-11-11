@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.gen2.data import GameData
+from pokesim.runtime.supervision import REFUSED_SHORTCUT
 
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
@@ -384,24 +385,24 @@ def test_an_item_task_the_game_keeps_refusing_stands_the_project_down(data):
     policy, state = shareless_policy(data, [lead(), trainee], trainee)
     policy.blocked, policy.decisions = {}, 1000
     policy.goal = Goal('collection_equip', 'Give Exp. Share to 90', 'GOLDENROD_POKECENTER_1F', 9, 2)
-    state.frame = 0
+    policy.clock = 0
     assert arrive(policy, state) == 'wait'
     task = policy.menu
     key = policy.task_key(task)
     for refusal in range(1, 3):
         # The game refused the shortcut, so the policy blocks it for a while and the plan waits it out.
         policy.menu = None
-        policy.blocked[key] = state.frame + policy.RETRY_FRAMES
+        policy.blocked[key] = REFUSED_SHORTCUT.until(policy.clock)
         assert arrive(policy, state) == 'wait' and policy.menu is None
-        state.frame += 1
+        policy.clock += 1
         assert arrive(policy, state) == 'wait'
         # Each block counts once however many steps it lasts.
         assert len(policy.collection['training']['refused']) == refusal
-        state.frame = policy.blocked[key]
+        policy.clock = policy.blocked[key]
         assert arrive(policy, state) == 'wait' and policy.menu is not None
     # The third refusal in a row drops the project for the stand-down period.
     policy.menu = None
-    policy.blocked[key] = state.frame + policy.RETRY_FRAMES
+    policy.blocked[key] = REFUSED_SHORTCUT.until(policy.clock)
     assert arrive(policy, state) is None
     assert policy.collection['training'] is None
     assert standing_down(policy, train_key(identity(trainee)))

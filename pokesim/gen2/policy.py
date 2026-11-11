@@ -11,6 +11,7 @@ from ..planning.ledger import FIELD_MOVES, LEARN_KEPT
 from ..planning.losses import ace_slot
 from ..planning.shadow import Shadow
 from ..planning.stance import FLEE, STORY, Encounter, stance
+from ..runtime.supervision import REFUSED_SHORTCUT
 from .navigation import DIRS, Navigator
 from pokecore.gen2.ram import Memory
 from pokecore.gen2.screens import ScreenText, mask_roster
@@ -118,8 +119,10 @@ class Policy:
         self.naming = Naming(seed)
         self.learning = False
         self.refusals = {}
-        # Core shortcuts the game refused, by key, with the frame they may be tried again.
+        # Core shortcuts the game refused, by key, with the PlayClock frame they may be tried again.
         self.blocked = {}
+        # The PlayClock frame of the latest decision, which the decider passes to step. Never saved.
+        self.clock = 0
         # The emulator replaces this with the store's trade preferences. Locked and offered partners are never released.
         self.trade_preferences = dict
         # And this with the store's linked adventure trainer ids (trade/partners.py), whose Pokémon may be released.
@@ -235,13 +238,13 @@ class Policy:
         name = type(menu).__name__
         if menu is not self.menu_ref:
             self.menu_ref, self.menu_steps = menu, 0
-            if hasattr(menu, 'key') and self.blocked.get(menu.key(), -1) > snapshot.frame:
+            if hasattr(menu, 'key') and self.blocked.get(menu.key(), -1) > self.clock:
                 # The game refused this shortcut recently, so it is not tried again yet.
                 return self.refused(f'The game keeps refusing the {name} shortcut')
             from .release import may_release
             if isinstance(menu, Release) and not may_release(self, snapshot, menu.box, menu.position):
                 # The one release rule refuses it, as a team member or a Keep, so it waits as a refused shortcut.
-                self.blocked[self.task_key(menu)] = snapshot.frame + self.RETRY_FRAMES
+                self.blocked[self.task_key(menu)] = REFUSED_SHORTCUT.until(self.clock)
                 self.menu = None
                 return self.refused('A release chose a Pokémon the PC values keep')
         self.menu_steps += 1
@@ -263,16 +266,14 @@ class Policy:
             elif getattr(menu, 'battle', False) and not isinstance(menu, Remedy) and not snapshot.in_battle:
                 pass  # The battle ended under the shortcut, which is no refusal.
             elif not getattr(menu, 'box_full', False):
-                self.blocked[self.task_key(menu)] = snapshot.frame + self.RETRY_FRAMES
+                self.blocked[self.task_key(menu)] = REFUSED_SHORTCUT.until(self.clock)
                 if len(self.blocked) > 64:
-                    self.blocked = {key: frame for key, frame in self.blocked.items() if frame > snapshot.frame}
+                    self.blocked = {key: frame for key, frame in self.blocked.items() if frame > self.clock}
                 self.refused(f'The game keeps refusing the {name} shortcut')
                 if self.menu is not menu:
                     return None
         return button
 
-    # A refused Core shortcut waits this long (about a minute of game time) before another try.
-    RETRY_FRAMES = 3600
     REFUSAL_LIMIT = 20
 
     @staticmethod
@@ -288,7 +289,7 @@ class Policy:
         """
         if getattr(self, 'sp', None) is None and self.unlisted_box(task, snapshot):
             return False
-        return self.blocked.get(self.task_key(task), -1) <= snapshot.frame
+        return self.blocked.get(self.task_key(task), -1) <= self.clock
 
     @staticmethod
     def unlisted_box(task, snapshot):
@@ -1379,8 +1380,13 @@ class Policy:
         self.shopping = (item, min(amount, (snapshot.money - reserve) // price))
         return self.person(snapshot, 'buy_balls', 'Restock adventure supplies', self.data.maps[mid]['constant'], script)
 
-    def step(self, snapshot, memory, sp=None):
-        """``sp`` is the CPU stack pointer, which Core's PC lists read to press through a <CONT> name."""
+    def step(self, snapshot, memory, sp=None, clock=None):
+        """``sp`` is the CPU stack pointer, which Core's PC lists read to press through a <CONT> name.
+
+        ``clock`` is the PlayClock frame the policy's waits count. A call without one keeps the last.
+        """
+        if clock is not None:
+            self.clock = clock
         self.pick, self.decided = None, False
         action = self._step(snapshot, memory, sp)
         if self.errand is not None and not self.decided and self.goal is self.pick and not snapshot.in_battle:

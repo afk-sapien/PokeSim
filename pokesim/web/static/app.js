@@ -1,9 +1,23 @@
 if (location.pathname === PokeSim.url('/') && location.hash === '#journal') location.replace(PokeSim.url('/journal'))
 const $ = (selector) => document.querySelector(selector)
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp', '<': '&lt', '>': '&gt', '"': '&quot', "'": '&#39'}[char] + String.fromCharCode(59)))
+// The live page draws its state every 2 seconds. Writing a value an element already shows still
+// costs the browser a mutation and a style pass, and markup also rebuilds its nodes, so skip it.
+const drawn = new WeakMap()
+function put(element, property, value) {
+  if (!element) return
+  if (property !== 'innerHTML') {
+    if (element[property] !== value) element[property] = value
+    return
+  }
+  // Markup reads back in the browser's own spelling, so remember what was written and what it became.
+  const last = drawn.get(element)
+  if (last?.markup === value && last.shown === element.innerHTML) return
+  element.innerHTML = value
+  drawn.set(element, {markup: value, shown: element.innerHTML})
+}
 function set(selector, property, value) {
-  const element = $(selector)
-  if (element) element[property] = value
+  put($(selector), property, value)
 }
 const fmt = (value) => Number(value || 0).toLocaleString()
 const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0))
@@ -158,8 +172,8 @@ function renderLease() {
   const status = leaseEnforced ? lease : null
   const manages = role === 'manager' || role === 'owner'
   // The box speaks only while someone plays by hand or waits to. What happens when control ends is in Settings.
-  if (box) box.hidden = !status || stoppedNow || !(status.holder || status.queued || status.idle_warning || status.queue?.length)
-  $('.controller')?.querySelectorAll('[data-b]').forEach((button) => { button.disabled = !holding() })
+  put(box, 'hidden', !status || stoppedNow || !(status.holder || status.queued || status.idle_warning || status.queue?.length))
+  $('.controller')?.querySelectorAll('[data-b]').forEach((button) => put(button, 'disabled', !holding()))
   const take = $('#take-control')
   if (take) {
     let action = ''
@@ -167,8 +181,8 @@ function renderLease() {
     if (status?.you_hold) [action, text] = ['release', status.end === 'pause' ? 'Stop playing' : 'Let AI play']
     else if (status?.holder) [action, text] = manages ? ['take', 'Take control back'] : status.queued ? ['release', 'Leave the line'] : ['request', 'Ask for control']
     else if (status) [action, text] = ['request', 'Take control']
-    take.dataset.lease = action
-    take.textContent = text
+    if (take.dataset.lease !== action) take.dataset.lease = action
+    put(take, 'textContent', text)
   }
   if (!status) return
   const holder = status.holder
@@ -182,7 +196,7 @@ function renderLease() {
   const decides = status.you_hold || manages
   const rows = decides ? (status.queue || []).filter((entry) => entry.id) : []
   if (queue) {
-    queue.hidden = !rows.length
+    put(queue, 'hidden', !rows.length)
     const signature = JSON.stringify([rows, status.you_hold])
     if (queue.dataset.signature !== signature && !queue.contains(document.activeElement)) {
       queue.dataset.signature = signature
@@ -289,7 +303,7 @@ async function refreshState() {
     const manages = role === 'manager' || role === 'owner'
     $('.game-card')?.classList.toggle('is-stopped', stopped)
     document.querySelectorAll('.controls > :not(#sound):not(#sound-status), .manual-controls, .controller, #restart').forEach((element) => {
-      element.hidden = viewerOnly
+      put(element, 'hidden', viewerOnly)
     })
     for (const selector of ['#take-control', '.manual-controls', '.controller']) set(selector, 'hidden', viewerOnly || role === 'viewer')
     for (const selector of ['#pause', '#save', '.controls > .live-speed']) set(selector, 'hidden', viewerOnly || !manages)
@@ -324,7 +338,7 @@ async function refreshState() {
     // The live page says what is playing once, under the screen. The rail speaks there only when the connection drops.
     $('#connection').classList.toggle('is-quiet', Boolean($('#control-mode')))
     set('#status', 'textContent', stopped ? 'Stopped' : manualMode ? 'In control' : paused ? 'Paused' : 'Running')
-    $('#connection').title = stopped ? 'Adventure stopped. Start it from the library.' : manualMode ? 'You’re in control' : paused ? 'Game paused' : 'Adventure in progress'
+    put($('#connection'), 'title', stopped ? 'Adventure stopped. Start it from the library.' : manualMode ? 'You’re in control' : paused ? 'Game paused' : 'Adventure in progress')
     set('#pause', 'textContent', paused && !manualMode ? 'Resume' : 'Pause')
     set('#pause', 'title', paused && !manualMode ? 'Resume AI play' : 'Pause the game and AI')
     const speedSelect = $('#simulation-speed')
@@ -385,7 +399,8 @@ async function refreshState() {
       set('#game-clock-period', 'textContent', cartridge.period || '')
       // A phone shows the game's own short words (MORN, DAY, NITE) so the place name keeps its room.
       const period = $('#game-clock-period')
-      if (period) period.dataset.short = ({ Morning: 'Morn', Night: 'Nite' })[cartridge.period] || cartridge.period || ''
+      const short = ({ Morning: 'Morn', Night: 'Nite' })[cartridge.period] || cartridge.period || ''
+      if (period && period.dataset.short !== short) period.dataset.short = short
       set('#game-clock', 'title', `In-game clock: ${cartridge.weekday} ${shown}, ${cartridge.period}. It runs on game time, so it moves at the simulation's speed.`)
     }
     set('#trainer-name', 'textContent', game.player_name || 'A new trainer')
@@ -418,7 +433,8 @@ const EVENT_LABELS = {trade: 'Trade', badge: 'Badge', catch: 'Caught', evolve: '
 // as well as read: milestones in signal, the team in green, a blackout in red.
 const EVENT_LAMPS = {badge: 'signal', champion: 'signal', catch: 'ok', obtain: 'ok', trade: 'ok', evolve: 'ok', level: 'ok', blackout: 'crit', trainer: 'warn'}
 function renderEvents() {
-  $('#events').innerHTML = eventRows.map((event) => {
+  // The journal reads again every 15 seconds. Unchanged entries keep their nodes and loaded pictures.
+  put($('#events'), 'innerHTML', eventRows.map((event) => {
     const date = new Date(event.ts * 1000)
     const lamp = EVENT_LAMPS[event.type] ? ` data-on="${EVENT_LAMPS[event.type]}"` : ''
     // A catch, hatch or evolution is usually logged mid-cutscene, while the screen is black or
@@ -431,7 +447,7 @@ function renderEvents() {
       ? `<img loading="lazy" src="${PokeSim.base}/shots/${encodeURIComponent(event.shot)}" alt="Game screen at ${esc(event.title)}" width="160" height="144">`
       : '<span class="no-frame">No screen kept</span>')
     return `<a class="event-card event-${esc(event.type)}" href="${PokeSim.base}/events/${event.id}"><div class="event-time"><i class="lamp"${lamp} aria-hidden="true"></i><time datetime="${date.toISOString()}"><span class="day">${date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</span><span class="clock">${date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}</span></time></div><div class="event-picture${art || !event.shot ? ' is-art' : ''}">${picture}</div><div class="event-copy"><span class="event-label">${EVENT_LABELS[event.type] || 'Journal'}</span><h3>${esc(event.title)}</h3>${event.map && !String(event.title).toLowerCase().includes(String(event.map).toLowerCase()) ? `<span class="event-where">${esc(event.map)}</span>` : ''}</div></a>`
-  }).join('') || '<div class="journal-empty"><p class="micro">Nothing logged yet</p><h3>The best pages are still unwritten.</h3><p>New moments will find their way here as the adventure unfolds.</p></div>'
+  }).join('') || '<div class="journal-empty"><p class="micro">Nothing logged yet</p><h3>The best pages are still unwritten.</h3><p>New moments will find their way here as the adventure unfolds.</p></div>')
   set('#load-more', 'hidden', !moreAvailable || !eventRows.length)
 }
 

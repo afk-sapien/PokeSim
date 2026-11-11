@@ -1186,8 +1186,8 @@ class Emulator:
     def _run(self):
         # The autosave counts game time, so a replay saves on the same frames at any pace. A reload
         # rewinds the frame and the cadence counts again from there.
-        loop = GameLoop(self, Gen2(), self._tick, guards=self._check_guards, autosave=self._autosave,
-                        ready=lambda: not getattr(self.policy, 'backing_out', False))
+        loop = GameLoop(self, Gen2(lambda: self.play_clock.frames), self._tick, guards=self._check_guards,
+                        autosave=self._autosave, ready=lambda: not getattr(self.policy, 'backing_out', False))
         self.consecutive_errors = 0
         tracer = getattr(self, 'tracer', None)
         try:

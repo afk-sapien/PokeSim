@@ -359,6 +359,8 @@ class Supervisor:
 
 Every timer counts PlayClock frames. The Gen I wall-clock guard at `emulator.py:851` moves to frames. `STUCK_RELOAD_SECONDS` and `BATTLE_TIMEOUT_SECONDS` become frame limits at 60 frames a second. Reload counts persist in the store, so a worker restart does not reset them.
 
+The policy's own waits are named `Budget`s in the supervisor, each a PlayClock frame count that a reload neither restarts nor stretches. `REFUSED_SHORTCUT` (3600, about a game minute) is each generation's wait before it tries a refused Core shortcut again. Gen I's own waits are `PARTNER_TRAINING` (18000) between development excursions, and `DETOUR_REST` (3600), `LOOK_AROUND` (1800) and `CHAT_REST` (900) between chats and curiosity detours. A policy reads the PlayClock through its decider (`Gen1(clock)`, `Gen2(clock)`). Caps on tries, such as `REFUSAL_LIMIT` and `STRANDED_LIMIT`, stay counts, since a slow screen or a long walk would spend frames without another try. A timer that restarts at every restore, such as a navigator's short timers, a curiosity detour's own end or the action watch, keeps the emulator frame, since it never sees a rewind. The trade preparation's runner keeps the emulator frame too, since each of its keys carries the frame it began on.
+
 `help_request` and `progress_status` are written once, in the supervisor (`Supervisor.help_request`, `Supervisor.progress`). Each generation only gathers what they read. Gen II keeps stall bundles through `runtime/capture.py`, the same as Gen I, so `Adapter.bundle` is not needed for them.
 
 ### Liveness, the one wall-clock check

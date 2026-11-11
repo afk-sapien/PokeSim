@@ -22,6 +22,7 @@ attempt holds the ladder until it ends, and a blackout or a reload out of it is 
 does not count.
 
 The status page's help request and progress line are written here too, once for both generations.
+So are the policy's own waits, each a named ``Budget`` on the PlayClock.
 """
 from __future__ import annotations
 
@@ -54,6 +55,32 @@ RECOVERING_SECONDS = 30
 FRESH_SECONDS = 120
 
 GIVE_UP, HOLD, RELOAD = 'give up', 'hold', 'reload'
+
+
+@dataclass(frozen=True)
+class Budget:
+    """A named wait the policy counts on the PlayClock, at 60 frames a second.
+
+    The PlayClock never goes back, so a reload neither restarts a wait nor stretches it. A cap on
+    tries stays a count, since a slow screen or a long walk would spend frames without another try.
+    """
+    name: str
+    frames: int
+
+    def until(self, now):
+        """The PlayClock frame at which a wait begun at ``now`` ends."""
+        return now + self.frames
+
+
+# A Core shortcut the game refused waits about a minute of game time before another try.
+REFUSED_SHORTCUT = Budget('refused shortcut', 3600)
+# Gen I trains a promising partner at most once every five game minutes.
+PARTNER_TRAINING = Budget('partner training', 18000)
+# Gen I's chats and detours: a minute's rest after a detour, half a minute after a look around, and
+# a quarter minute after a talk.
+DETOUR_REST = Budget('detour rest', 3600)
+LOOK_AROUND = Budget('look around', 1800)
+CHAT_REST = Budget('chat rest', 900)
 
 
 @dataclass(frozen=True)
