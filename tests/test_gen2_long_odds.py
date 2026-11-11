@@ -60,6 +60,14 @@ def test_a_long_shot_switches_to_a_member_that_can_weaken_it(real_data):
     assert policy.battle(snapshot, mem).button == ('Send', 1)
 
 
+def test_a_member_the_target_knocks_out_in_one_hit_is_not_switched_in(real_data):
+    # A level 40 Ursaring on Route 28 knocked out three low level members in turn this way.
+    policy, snapshot, mem = meeting(real_data, TANGELA, (LEAD, HELPER))
+    mem.read = lambda name, size: bytes([33, 0, 0, 0]) if name == 'wEnemyMonMoves' else bytes(size)
+    policy.move_score = lambda move, attacker, target: 40 if target.enemy_species == HELPER.species else 1
+    assert policy.battle(snapshot, mem).button == ('Flee',)
+
+
 def test_a_long_shot_nobody_can_weaken_is_left_for_a_new_move_member_or_ball(real_data):
     from pokesim.gen2.collection import deferred
     policy, snapshot, mem = meeting(real_data, TANGELA, (LEAD,))

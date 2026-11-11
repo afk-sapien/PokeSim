@@ -2287,8 +2287,17 @@ class Policy:
         chance = gen2_throw(rate, multiplier, snapshot.enemy_hp, snapshot.enemy_max_hp, mem.byte('wEnemyMonStatus'))
         if chance >= THROW_BAR:
             return None
+        foe = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level,
+            stats=tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef')))
+        attacks = [move for move in mem.read('wEnemyMonMoves', 4) if move]
         for slot, mon in enumerate(snapshot.party):
             if slot == active or mon.egg or mon.hp <= mon.max_hp // 2:
+                continue
+            # A member the target knocks out in one hit weakens nothing. A level 40 Ursaring on Route 28
+            # knocked out three members of level 26 or less in turn, and the run then left it anyway.
+            target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
+                                     enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
+            if max((self.move_score(move, foe, target) for move in attacks), default=0) >= mon.hp:
                 continue
             move = self.capture_move(snapshot, mem, slot=slot)
             if move is not None and self.data.moves.get(mon.moves[move], {}).get('effect') != 'EFFECT_PARALYZE':
