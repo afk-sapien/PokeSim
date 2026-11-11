@@ -9,6 +9,8 @@ and goes to the lead first.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 from ..planning import arbiter, decide, values
 from ..planning.arbiter import Candidate
 from ..planning.decide import Offer
@@ -28,7 +30,6 @@ SITES = (
     ('project', 'collection', ''),     # The collection project under way.
     ('pickup', 'pickup', ''),          # A ground item pickup under way.
     ('swap', 'party', 'reserve'),      # A reserve swap under way.
-    ('errand', 'errand', ''),          # The errand the last overworld decision picked, on the steps after it.
     ('release', 'party', 'room'),      # A release that makes room in storage.
     ('box', 'party', 'room'),          # A box change that makes room for catches.
     ('heal_latch', 'heal', 'healthy'),  # The heal under way, set by the step.
@@ -47,7 +48,7 @@ SITES = (
 )
 
 # Sites whose goal is under way, and sites the game forces by map.
-HOLDS = frozenset({'pickup', 'errand', 'tm_trip'})
+HOLDS = frozenset({'pickup', 'tm_trip'})
 FORCED = frozenset({'passage', 'elevator', 'ceremony'})
 
 
@@ -150,6 +151,14 @@ class Ballot:
                 or candidate.key == self.pick.key or candidate.goal == self.kind):
             self.offers.append(offered)
             self._decision = None
+        return self.goal
+
+    def resume(self, picked):
+        """Offer ``picked``, the errand an earlier decision picked, again as it was picked, and return the
+        goal that runs now. An enabler meets the same need, a forced move is forced again, and a goal is
+        under way. Its writes ran when it was picked, so it carries none."""
+        self.offers.append(replace(picked, hold=True, commit=None))
+        self._decision = None
         return self.goal
 
     def commit(self):

@@ -172,6 +172,32 @@ def test_a_goal_whose_step_is_won_by_another_writes_nothing():
     assert wrote == ['pickup']
 
 
+def test_an_errand_under_way_is_offered_again_as_it_was_picked_and_writes_nothing():
+    wrote = []
+    surf = Goal('party_surf', 'Surf partner', 'Fetch the Surf partner')
+    upgrade = Goal('party_upgrade', 'Upgrade', 'Swap a reserve')
+    picked = Ballot(surf, Candidate('party_surf', Tier.UPKEEP, 0.05, 3000, goal='party'), source='story')
+    picked.offer(upgrade, picked.errand_candidate('party_upgrade', 'party'), site='upgrade',
+                 commit=lambda: wrote.append('swap'))
+    assert picked.goal is upgrade and picked.decision.rule == decide.NEED
+    # A PC menu step of the swap. The story goal is a party goal too, and the swap is still the enabler it needs.
+    menu = Ballot(surf, Candidate('party_surf', Tier.UPKEEP, 0.05, 3000, goal='party'), source='story')
+    menu.offer(upgrade, menu.errand_candidate('party_upgrade', 'party'), site='swap')
+    assert menu.resume(picked.running) is upgrade
+    menu.commit()
+    assert wrote == []
+    # A lift exit tap on a restock trip. The lift is still forced, so the restock on the ballot does not run.
+    lift = Goal('hideout_elevator', 'Lift', 'Leave the lift')
+    ride = Ballot(surf, Candidate('party_surf', Tier.UPKEEP, 0.05, 3000, goal='party'), source='story')
+    ride.offer(lift, ride.errand_candidate('hideout_elevator', 'passage'), site='elevator')
+    tap = Ballot(surf, Candidate('party_surf', Tier.UPKEEP, 0.05, 3000, goal='party'), source='story')
+    tap.offer(Goal('restock', 'Restock', 'Buy balls'), tap.errand_candidate('restock', 'supplies'), site='supplies',
+              commit=lambda: wrote.append('restock'))
+    assert tap.resume(ride.running) is lift and tap.decision.rule == decide.FORCED
+    tap.commit()
+    assert wrote == []
+
+
 def test_the_shadow_counts_pipeline_decisions_by_source_and_frames():
     shadow = Shadow()
     story = offer('misty', Tier.STORY, source='story')

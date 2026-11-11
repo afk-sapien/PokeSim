@@ -320,10 +320,10 @@ class StrategicPolicy(Policy):
         # writes when the step ends.
         self.choice = None
         self.committing = None
-        # The errand the last overworld decision picked and its candidate, the step's pick before any
-        # errand, and whether this step reached the overworld decision.
+        # The errand the last overworld decision picked and its offer as it was picked, the step's pick
+        # before any errand, and whether this step reached the overworld decision.
         self.errand = None
-        self.errand_pick = None
+        self.errand_offer = None
         self.pick = None
         self.decided = False
         # The decide pipeline's pick at this step's overworld decision, for the trace, or None.
@@ -419,10 +419,10 @@ class StrategicPolicy(Policy):
                 and not ctx.snapshot.in_battle):
             # An errand under way is the goal until the next overworld decision ends it. Otherwise each
             # walking, warp, dialogue and menu step on the way ran under the pick behind it. The step has
-            # already decided under that pick, so menus read the same goal as before. It is offered as a
-            # goal under way, so the pick behind it gives way and an unmet need still comes first.
-            pick = self.errand_pick if getattr(self.errand_pick, 'key', None) == self.errand.key else None
-            self.goal = ballot.offer(self.errand, pick or goal_candidate(self.errand, self.collection), site='errand')
+            # already decided under that pick, so menus read the same goal as before. It is offered again
+            # as it was picked, so a reserve swap is still the enabler of the goal it serves and a lift
+            # exit is still forced.
+            self.goal = ballot.resume(self.errand_offer)
         if ballot is not None:
             # Only the offer the step ends with writes, so an offer a later site overrides leaves nothing.
             ballot.commit()
@@ -1061,18 +1061,19 @@ class StrategicPolicy(Policy):
             from .progression import at
             ceremony = at('collect_ceremony', 'Enter the Hall of Fame', 'Finish the Champion ceremony', 'HALL_OF_FAME', 4, 6)
             goal = choice.offer(ceremony, goal_candidate(ceremony, self.collection, 'ceremony'), site='ceremony')
-        shadow = self.shadow
-        if shadow is not None:
-            # The decision is the pipeline's, and the shadow keeps its record for the gate and the replays.
-            decision = shadow.weigh('pipeline', lambda: choice.decision, goal.key,
-                                    (self.collection.project or {}).get('key'), s.frame)
-            self.pipeline_pick = decision.record() if decision is not None else None
         self.goal = goal
         self.errand = goal if choice.errand else None
-        self.errand_pick = choice.pick if choice.errand else None
+        self.errand_offer = choice.running if choice.errand else None
         self.decided = True
         choice.commit()
         self.committing = None
+        shadow = self.shadow
+        if shadow is not None:
+            # The decision is the pipeline's, and the shadow keeps its record for the gate and the replays.
+            # It reads the project after the commit, so a project this step starts is one decision, not two.
+            decision = shadow.weigh('pipeline', lambda: choice.decision, goal.key,
+                                    (self.collection.project or {}).get('key'), s.frame)
+            self.pipeline_pick = decision.record() if decision is not None else None
         if self.next_goal and self.next_goal['id'] == goal.key:
             next_badge = next((row['title'] for row in self.journey if not row['done']), 'Celebrate the Champion victory')
             self.next_goal = {'id': 'milestone', 'title': next_badge}

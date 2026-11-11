@@ -75,6 +75,26 @@ def test_new_targets_under_the_same_goal_key_restart_the_stall_timer():
     assert policy.progress_targets == frozenset(moved.targets)
 
 
+def test_a_project_the_pick_starts_is_one_pipeline_decision():
+    policy = StrategicPolicy(7)
+    hunt = Goal('collect_hunt', 'Hunt', 'Find grass', ((255, 1, 1), (255, 2, 1)))
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.completed_champion = True
+
+    def start():
+        policy.collection.project = {'key': 'grass:1', 'method': 'hunt'}
+        policy.collection.remaining = 10 ** 6
+    policy.collection.pick = lambda *_: (hunt, None, start)
+    policy.collection.goal = lambda *_, **__: hunt
+    policy.nav.guided = lambda *args, **kwargs: 'up'
+    policy._overworld(snap(frame=0, party=(mon(),)), bytearray(65536))
+    policy._overworld(snap(frame=60, party=(mon(),)), bytearray(65536))
+    # The project starts in the step's commit, and the shadow reads it after, so the start is one decision.
+    assert policy.collection.project_key == 'grass:1'
+    assert policy.shadow.point('pipeline')['decisions'] == 1
+
+
 def test_hm_goal_starts_using_item_on_a_compatible_partner():
     policy = StrategicPolicy(7)
     shortcuts = Recorder.on(policy)
