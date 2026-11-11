@@ -82,17 +82,22 @@ def test_game_corner_funding_starts_the_league_run_in_the_same_decision(real_dat
     monkeypatch.setattr(npc_trades, 'requests', lambda *args: set())
     monkeypatch.setattr(quests, 'gifts', lambda *args: None)
     monkeypatch.setattr(quests, 'trade_items', lambda *args: None)
+    from pokesim.planning.arbiter import Tier
     policy = Policy(real_data)
-    policy.person = lambda snapshot, key, *args: key
+    policy.person = lambda snapshot, key, *args: Goal(key, key, 'NEW_BARK_TOWN', 0, 0)
     prize = prizes(real_data.game)[-1][0]
     snapshot = SimpleNamespace(map=real_data.map_ids['NEW_BARK_TOWN'], can_catch=True, box_counts=(5,) * 14,
         hall_of_fame_count=11, money=32980, coins=0, items=((real_data.items['COIN_CASE'], 1),),
         pockets={'balls': [(1, 14)]}, daycare=(None, None), party=(), stored=(),
         owned=set(range(1, 252)) - {prize}, event=lambda name: name != 'EVENT_WILLS_ROOM_ENTRANCE_CLOSED')
     policy.collection['funding'] = 11
-    assert journey(policy, snapshot, None, Goal) == 'funds_will'
+    assert journey(policy, snapshot, None, Goal).key == 'funds_will'
     assert policy.collection['funding'] == 12
-    assert journey(policy, snapshot, None, Goal) == 'funds_will'
+    # The League run is the collection's only offer, as upkeep from funding, and no rung's pick stands.
+    [offered] = policy.collection_offers
+    assert (offered.source, offered.candidate.tier) == ('funding', Tier.UPKEEP)
+    assert policy.ladder_rung == 'funding' and policy.ladder_pick is None
+    assert journey(policy, snapshot, None, Goal).key == 'funds_will'
 
 
 def test_game_corner_menu_survives_policy_reload(real_data):
