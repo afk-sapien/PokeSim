@@ -7,7 +7,7 @@ changes a database, a copy of it is kept beside it, since the older PokeSim cann
 
 Version 1 is the shape every database had before versions. A database from before them may lack
 any part of it, so migration 1 creates what is missing and runs the column checks and the one-time
-changes that each start used to run.
+changes that each start used to run. Version 2 adds the claims ledger (pokesim/state/claims.py).
 """
 from contextlib import closing
 import os
@@ -138,8 +138,17 @@ def _version_1(db):
     migrate_trade_settings(db)
 
 
-MIGRATIONS = {1: _version_1}
-VERSION = 1
+def _version_2(db):
+    """The claims ledger, with the League gifts the kv ledger counted moved into its rows."""
+    from . import claims
+    from ..rewards import adopt
+    db.execute(claims.TABLE)
+    db.execute(claims.INDEX)
+    adopt(db)
+
+
+MIGRATIONS = {1: _version_1, 2: _version_2}
+VERSION = 2
 
 
 def version(db):

@@ -98,7 +98,8 @@ def test_a_league_reward_with_every_box_full_is_declined_and_stays_owed(tmp_path
                 result = deliver(emu, league_rewards=True)
             else:
                 before = SimpleNamespace(valid=True, started=True, in_battle=False, tiles=[''] * 18,
-                                         box_counts=(20,) * 14, hall_of_fame_count=1, owned=frozenset())
+                                         box_counts=(20,) * 14, hall_of_fame_count=1, owned=frozenset(),
+                                         party=(), stored=())
                 monkeypatch.setattr(config, 'LEAGUE_REWARDS', True, raising=False)
                 monkeypatch.setattr(config, 'MEW_EVENT', False, raising=False)
                 monkeypatch.setattr(gen2_rewards, 'read_snapshot', lambda *_: before)
@@ -107,8 +108,8 @@ def test_a_league_reward_with_every_box_full_is_declined_and_stays_owed(tmp_path
                                       policy=SimpleNamespace(menu=None), pb=SimpleNamespace(memory='live'),
                                       data=None, frame=100)
                 result = gen2_rewards.deliver(emu)
-            ledger = rewards.ledger(store.db)
-            outcomes.append((result, ledger['earned'], ledger['delivered'], store.get(PENDING), store.events()))
+            found = rewards.status(store)
+            outcomes.append((result, found['earned'], found['delivered'], store.get(PENDING), store.events()))
         finally:
             store.close()
     assert outcomes[0] == outcomes[1] == (None, 1, 0, None, [])

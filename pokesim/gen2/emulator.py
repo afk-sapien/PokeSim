@@ -617,6 +617,9 @@ class Emulator:
         self.policy.load_state_dict(metadata.get('policy_state', {}))
         self.policy.on_restore()
         self.play_clock.restore(metadata.get('play_clock'))
+        # A League gift delivered after this save is not in it, so its claim opens again.
+        from .. import rewards
+        rewards.rewound(self.store, metadata)
         if 'gen2_history' in metadata:
             self.history = metadata['gen2_history']
         else:
@@ -637,7 +640,6 @@ class Emulator:
         self.snapshot = self._read()
         # A restart empties the gift ledger. Loading a game from before it would otherwise count
         # every earlier League win as new on the next win, and pay each gift out again.
-        from .. import rewards
         rewards.initialize(self.store, self.snapshot.hall_of_fame_count if self.snapshot else 0)
         self.audio.clear()
         self.options_applied = False

@@ -14,12 +14,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from pokesim import pcvalue, rewards  # noqa: E402
+from pokesim import pcvalue  # noqa: E402
 from pokesim.scenarios import Scenario, open_run  # noqa: E402
 from pokesim.store import Store  # noqa: E402
 
 
-def gen2_rows(run, store, value):
+def gen2_rows(run, store):
     from pokecore.gen2.breeding import breeding_stock
     from pokesim.gen2 import release
     from pokecore.gen2.ram import Memory
@@ -31,14 +31,14 @@ def gen2_rows(run, store, value):
     names = {sid: data['name'] for sid, data in run.data.species.items()}
     preferences = store.trade_preferences()
     rows = release.entries(snap, names, preferences, release.plan_partners(policy.collection), stock,
-                           owners(player, store.trade_partners()), rewards.marks(value, 2))
+                           owners(player, store.trade_partners()), store.league_marks(2))
     today = release.spares(snap, policy.demand, stock, preferences, release.plan_partners(policy.collection),
                            owners=owners(player, store.trade_partners()))
     old = [f'{names.get(mon.species, "?")} Lv {mon.level} box {mon.box + 1}' for mon in today]
     return snap, rows, pcvalue.Inputs(demand=dict(policy.demand), rarity=release.rarity(run.data)), old
 
 
-def gen1_rows(run, store, value):
+def gen1_rows(run, store):
     from pokesim.policies import team
     from pokesim.policies.storage import StorageController
     from pokesim.ram import read_snapshot
@@ -52,7 +52,7 @@ def gen1_rows(run, store, value):
         stock.add(project['give'])
     preferences = store.trade_preferences()
     partners = frozenset(store.trade_partners())
-    rows = team.entries(snap, preferences, (), stock, partners, collection.gift_species(), rewards.marks(value, 1))
+    rows = team.entries(snap, preferences, (), stock, partners, collection.gift_species(), store.league_marks(1))
     # Today's rule names one target at a time, so ask again with each answer set aside.
     old, avoid = [], set()
     while len(old) < 200:
@@ -77,10 +77,8 @@ def main():
     run, _ = open_run(scenario, sorted(args.rom_dir.glob('*.gb*')))
     # The folder is a copy, so opening it as a data dir, which adds its working folders, is harmless.
     store = Store(folder)
-    with store.lock:
-        value = rewards.ledger(store.db)
     generation = run.generation
-    snap, rows, inputs, old = (gen2_rows if generation == 2 else gen1_rows)(run, store, value)
+    snap, rows, inputs, old = (gen2_rows if generation == 2 else gen1_rows)(run, store)
     rated = pcvalue.rate(rows, inputs)
     line = pcvalue.queue(rated)
     free = sum(20 - count for count in snap.box_counts)

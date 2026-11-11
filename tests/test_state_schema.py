@@ -52,13 +52,13 @@ def read_version(path):
 def test_a_database_from_before_versions_gains_every_table_once(tmp_path):
     path = legacy(tmp_path / 'pokesim.sqlite')
     with closing(schema.connect(path)) as db:
-        assert schema.version(db) == schema.VERSION == 1
-        assert NAMES <= tables(db)
+        assert schema.version(db) == schema.VERSION == 2
+        assert NAMES | {'claims'} <= tables(db)
         assert db.execute('SELECT title, priority FROM events ORDER BY id').fetchall() == [
             ('Boulder Badge', 5), ('Route 1', 1)]
         assert db.execute('SELECT level100, perfect FROM progress').fetchall() == [(None, None)]
         assert 'ts' in schema._columns(db, 'shiny_receipts')
-    # Version 1 is the shape the file already had, so nothing was kept beside it.
+    # A file from before versions has no version for an older PokeSim to open, so nothing was kept.
     assert sorted(path.parent.iterdir()) == [path]
     with closing(schema.connect(path)) as db:
         assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 2
@@ -108,15 +108,16 @@ def test_a_failed_migration_leaves_the_database_at_its_old_version(tmp_path, mon
 def test_a_versioned_database_is_kept_whole_before_a_later_migration(tmp_path, monkeypatch):
     path = tmp_path / 'pokesim.sqlite'
     schema.connect(path).close()
-    monkeypatch.setattr(schema, 'VERSION', 2)
-    monkeypatch.setitem(schema.MIGRATIONS, 2, lambda db: db.execute('CREATE TABLE later (x)'))
+    later = schema.VERSION + 1
+    monkeypatch.setattr(schema, 'VERSION', later)
+    monkeypatch.setitem(schema.MIGRATIONS, later, lambda db: db.execute('CREATE TABLE later (x)'))
     with closing(schema.connect(path)) as db:
-        assert schema.version(db) == 2
+        assert schema.version(db) == later
         assert 'later' in tables(db)
-    kept = sorted(tmp_path.glob('pokesim.sqlite.pre-schema-2-*'))
+    kept = sorted(tmp_path.glob(f'pokesim.sqlite.pre-schema-{later}-*'))
     assert len(kept) == 1 and not list(tmp_path.glob('*.partial'))
     with closing(sqlite3.connect(kept[0])) as db:
-        assert schema.version(db) == 1
+        assert schema.version(db) == later - 1
         assert 'later' not in tables(db)
     # Once upgraded there is nothing more to keep.
     schema.connect(path).close()

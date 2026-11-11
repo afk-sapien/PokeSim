@@ -8,6 +8,7 @@ import pytest
 from pokesim.runtime.reward_delivery import BARRIER, PENDING, deliver, recover_storage, select_reward
 from pokesim.store import Store
 from pokesim import rewards
+from pokesim.state import claims
 from test_events import snap
 from test_strategy import flags
 
@@ -18,27 +19,33 @@ from test_strategy import flags
 ])
 def test_enabling_mew_after_the_milestone_grants_the_missed_event(progress):
     state = snap(**progress)
-    ledger = {'earned': 100, 'delivered': 0, 'seed': 'stable'}
-    assert select_reward(state, ledger, False) is None
-    selected = select_reward(state, ledger, False, mew_event=True, league_rewards=True)
+    claim = (1, 153, 'stable:1')
+    assert select_reward(state, None, 100, False) is None
+    selected = select_reward(state, claim, 100, False, mew_event=True, seed=7)
     assert selected[:3] == ('mew_event', None, 21)
-    assert ledger == {'earned': 100, 'delivered': 0, 'seed': 'stable'}
 
 
 def test_mew_requires_champion_and_never_reissues_after_ownership_or_receipt():
-    ledger = {'earned': 0, 'delivered': 0}
-    assert select_reward(snap(), ledger, False, mew_event=True) is None
+    assert select_reward(snap(), None, 0, False, mew_event=True) is None
     champion = snap(hall_of_fame_count=10)
-    assert select_reward(champion, ledger, 'delivered-before', mew_event=True) is None
-    assert select_reward(replace(champion, owned=frozenset({1, 151})), ledger, False,
+    assert select_reward(champion, None, 0, 'delivered-before', mew_event=True) is None
+    assert select_reward(replace(champion, owned=frozenset({1, 151})), None, 0, False,
                          mew_event=True) is None
 
 
-def test_league_backlog_continues_after_mew_or_when_event_is_disabled():
-    ledger = {'earned': 100, 'delivered': 2, 'seed': 'stable'}
+def test_league_backlog_continues_after_mew_or_when_event_is_disabled(tmp_path):
+    store = Store(tmp_path)
+    try:
+        with store.transaction() as db:
+            rewards.open_claims(db, 'stable', 100)
+            for number in (1, 2):
+                rewards.settle(db, f'stable:{number}', claims.DELIVERED)
+            claim = rewards.next_claim(db)
+    finally:
+        store.close()
     champion = snap(hall_of_fame_count=100)
     for received, enabled in [(False, False), ('delivered-before', True)]:
-        selected = select_reward(champion, ledger, received, mew_event=enabled, league_rewards=True)
+        selected = select_reward(champion, claim, 100, received, mew_event=enabled)
         assert selected[0:2] == ('league_reward', 3)
 
 
@@ -72,7 +79,10 @@ def committed(store, *, raw=b'committed-checkpoint'):
     store.set(PENDING, record)
     store.set(BARRIER, identifier)
     store.set('trade_barrier', 'trade-previous')
-    store.set(rewards.KEY, {'earned': 3, 'delivered': 1, 'seed': 'stable'})
+    with store.transaction() as db:
+        rewards.save(db, {'seed': 'stable', 'observed': 3, 'version': rewards.VERSION})
+        rewards.open_claims(db, 'stable', 3)
+        rewards.settle(db, 'stable:1', claims.DELIVERED)
     return record
 
 
@@ -84,7 +94,8 @@ def test_committed_reward_recovers_once_and_preserves_high_water(tmp_path):
         assert path.read_bytes() == b'committed-checkpoint'
         assert store.checkpoint_metadata(path)['reward_id'] == 'reward-1'
         assert store.get(PENDING)['phase'] == 'complete'
-        assert rewards.status(store) == {'earned': 3, 'delivered': 1, 'pending': 2, 'wins': 3, 'unlocks': []}
+        assert rewards.status(store) == {'earned': 3, 'delivered': 1, 'declined': 0, 'pending': 2,
+                                         'wins': 3, 'unlocks': []}
         path.unlink()
         # Completion must not recreate a superseded checkpoint after later play.
         assert recover_storage(store) is None
@@ -138,7 +149,7 @@ def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, f
         before = snap(hall_of_fame_count=1, box_counts=(0,) * 12)
         memory = populate(Memory(), contents=())
         clone_memory = populate(Memory(), contents=())
-        species = select_reward(before, rewards.ledger(store.db), True, league_rewards=True)[2] if kind == 'league_reward' else 21
+        species = rewards.next_claim(store.db)[1] if kind == 'league_reward' else 21
         if kind == 'mew_return':
             from pokesim import mew_returns
             from pokesim.legendary_returns import STEPS
@@ -210,7 +221,7 @@ def test_a_league_gift_the_pc_would_release_is_settled_without_sending_it(tmp_pa
         rewards.earn(store, 1)
         before = snap(hall_of_fame_count=1, box_counts=(0,) * 12)
         memory = populate(Memory(), contents=())
-        species = select_reward(before, rewards.ledger(store.db), True, league_rewards=True)[2]
+        species = rewards.next_claim(store.db)[1]
         from pokesim.strategy_data import SPECIES
         after = replace(before, box_counts=(1,) + (0,) * 11, owned=before.owned | {SPECIES[species]['dex']},
                         stored_pokemon=((0, species, 5, 'GIFT'),))
@@ -230,11 +241,12 @@ def test_a_league_gift_the_pc_would_release_is_settled_without_sending_it(tmp_pa
             clone.save_state = sent
             with pytest.raises(LookupError, match='sent'):
                 deliver(emu, league_rewards=True)
-            assert rewards.ledger(store.db)['skipped'] == 0
+            assert rewards.status(store)['declined'] == 0
             return
         assert deliver(emu, league_rewards=True) is None
-        value = rewards.ledger(store.db)
-        assert (value['delivered'], value['skipped']) == (1, 1)
+        found = rewards.status(store)
+        assert (found['declined'], found['pending']) == (1, 0)
+        assert claims.rows(store.db, rewards.SOURCE)[0]['reasons']
         assert store.events() == [] and store.get(PENDING) is None and saves == []
         # The claim is settled, so the next call has nothing to send.
         assert deliver(emu, league_rewards=True) is None
@@ -251,6 +263,7 @@ def test_a_gen2_league_gift_the_pc_would_release_is_settled_without_sending_it(t
     try:
         rewards.earn(store, 1)
         species = random.Random(f'{rewards.ledger(store.db)["seed"]}:1').choice((152, 155, 158))
+        assert rewards.next_claim(store.db, 2)[1] == species
         before = SimpleNamespace(valid=True, started=True, in_battle=False, tiles=[''] * 18, party=(), badges=0,
                                  items=(), event_flags=b'', owned=frozenset(), stored=(), box_counts=(0,) * 14,
                                  hall_of_fame_count=1, map_name='Goldenrod Pokémon Center')
@@ -270,16 +283,16 @@ def test_a_gen2_league_gift_the_pc_would_release_is_settled_without_sending_it(t
         emu = SimpleNamespace(store=store, paused=False, manual_mode=False, preparation=None, policy=policy,
                               pb=SimpleNamespace(memory='live'), data=None, frame=100, _autosave=lambda: saves.append(1))
         assert gen2_rewards.deliver(emu) is None
-        value = rewards.ledger(store.db)
-        assert (value['delivered'], value['skipped']) == (1, 1)
+        found = rewards.status(store)
+        assert (found['declined'], found['pending']) == (1, 0)
         assert store.events() == [] and store.get(PENDING) is None and saves == []
     finally:
         store.close()
 
 
-@pytest.mark.parametrize(('status', 'free', 'wasted'), [
+@pytest.mark.parametrize(('status', 'free', 'refused'), [
     ('spare', 100, True), ('kept', 100, False), ('kept', 3, True), ('floor', 3, False)])
-def test_a_league_gift_short_of_the_best_copy_is_wasted_when_the_pc_needs_room(status, free, wasted):
+def test_a_league_gift_short_of_the_best_copy_is_refused_when_the_pc_needs_room(status, free, refused):
     from pokesim import rewards
     rows = gift_rows((1, 1), status)
     policy = SimpleNamespace(pc_rated=lambda *_, **__: rows)
@@ -288,8 +301,8 @@ def test_a_league_gift_short_of_the_best_copy_is_wasted_when_the_pc_needs_room(s
         take = min(free, 20)
         counts[index] -= take
         free -= take
-    assert rewards.wasted(policy, SimpleNamespace(box_counts=tuple(counts)), (1, 1), 'seed:1') is wasted
-    assert rewards.wasted(policy, SimpleNamespace(box_counts=tuple(counts)), (2, 1), 'seed:1') is False
+    assert bool(rewards.refusal(policy, SimpleNamespace(box_counts=tuple(counts)), (1, 1), 'seed:1')) is refused
+    assert rewards.refusal(policy, SimpleNamespace(box_counts=tuple(counts)), (2, 1), 'seed:1') == ''
 
 
 @pytest.mark.parametrize('generation', [1, 2])
@@ -309,7 +322,7 @@ def test_a_staged_league_gift_is_rated_as_a_reward_not_a_traded_copy(generation,
         policy.pc_rated = lambda snapshot, marks=frozenset(): rate(policy, snapshot, marks)
     else:
         monkeypatch.setattr(release, 'release_rated', rate)
-    assert rewards.wasted(policy, SimpleNamespace(box_counts=(0,) * 12), (1, 1), 'seed:1', generation)
+    assert rewards.refusal(policy, SimpleNamespace(box_counts=(0,) * 12), (1, 1), 'seed:1', generation)
     # The mark goes to the rating, and the shared hook other readers use is never touched.
     assert seen == [frozenset({staged})] and policy.league_marks is hook
 
@@ -325,7 +338,7 @@ def test_a_shiny_gen1_league_gift_is_always_sent():
 
 
 @pytest.mark.parametrize('counts', [(20,) * 12, (2,) + (0,) * 11])
-def test_the_real_gen1_pc_rating_wastes_a_weak_gift_and_keeps_the_best_copy(counts):
+def test_the_real_gen1_pc_rating_refuses_a_weak_gift_and_keeps_the_best_copy(counts):
     """The tests above stub pc_rated. This one rates with the policy the worker plays."""
     from pokesim import rewards
     from pokesim.policies.strategic import StrategicPolicy
@@ -333,5 +346,5 @@ def test_the_real_gen1_pc_rating_wastes_a_weak_gift_and_keeps_the_best_copy(coun
     weak = stored(1, dvs=(2,) * 5)
     s = gen1_snapshot(best_and(weak), box_counts=counts)
     policy = StrategicPolicy(7)
-    assert rewards.wasted(policy, s, (0, 1), 'seed:1') is True
-    assert rewards.wasted(policy, s, (0, 0), 'seed:1') is False
+    assert rewards.refusal(policy, s, (0, 1), 'seed:1')
+    assert rewards.refusal(policy, s, (0, 0), 'seed:1') == ''

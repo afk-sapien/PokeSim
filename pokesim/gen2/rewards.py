@@ -1,7 +1,6 @@
 """Optional Gen II gifts with durable claims and verified checkpoint delivery."""
 import hashlib
 import io
-import random
 import time
 import uuid
 
@@ -10,7 +9,7 @@ from ..checkpoints import CheckpointStore
 from ..runtime import trace
 from ..runtime.reward_delivery import BARRIER, PENDING, recover_storage
 from ..seeds import gift_seed
-from ..state import journal, kv
+from ..state import claims, journal, kv
 from pokecore.gen2.ram import Memory, read_snapshot
 from pokecore.gen2.resets import box_gift
 from .steps import RETURNS, consume, ready
@@ -47,19 +46,24 @@ def deliver(emu):
         return None
     with emu.store.reading() as db:
         ledger = rewards.ledger(db)
-    species = None
-    ordinal = ledger['delivered'] + 1
-    if league and ordinal <= ledger['earned']:
-        seed = f'{ledger["seed"]}:{ordinal}'
-        species = random.Random(seed).choice((152, 155, 158))
+        claim = rewards.next_claim(db, 2) if league else None
+    species = ordinal = None
+    if claim:
         kind = 'league_reward'
+        ordinal, species, seed = claim
     championships = rewards.championship_count(ledger)
     if mythical and before.hall_of_fame_count and 151 not in before.owned and not emu.store.get(MYTHICAL):
         kind, species, seed = 'mew_event', 151, gift_seed(emu.adventure_seed, 'mew_event', championships)
     if ready(emu.store.get(RETURNS), championships):
         kind, species, seed = 'mew_return', 151, gift_seed(emu.adventure_seed, 'mew_return', championships)
+    if species is None:
+        return None
+    if kind == 'league_reward' and rewards.held(before, seed, 2):
+        # A claim a reload reopened finds its gift still in the PC, so it settles with no second copy.
+        rewards.found_held(emu.store, seed, species)
+        return None
     space = next(((box, count) for box, count in enumerate(before.box_counts) if count < 20), None)
-    if species is None or space is None:
+    if space is None:
         return None
     clone = clone_emulator(emu)
     try:
@@ -73,10 +77,10 @@ def deliver(emu):
             raise ValueError('The Gen II gift changed unrelated adventure state')
         shiny_gift = any(mon.shiny for mon in after.stored if (mon.box, mon.position) not in existing)
         slot = next((mon.box, mon.position) for mon in after.stored if (mon.box, mon.position) not in existing)
-        if kind == 'league_reward' and not shiny_gift and rewards.wasted(emu.policy, after, slot, seed, 2):
+        if kind == 'league_reward' and not shiny_gift and (why := rewards.refusal(emu.policy, after, slot, seed, 2)):
             # A copy the PC would release at once is never sent, so a League rerun cannot become a
             # gift and release loop.
-            rewards.skip(emu.store, ordinal)
+            rewards.decline(emu.store, seed, why)
             return None
         output = io.BytesIO()
         clone.save_state(output)
@@ -93,13 +97,11 @@ def deliver(emu):
     record = {'id': identifier, 'phase': 'committed', 'decision': 'COMMIT', 'kind': kind,
               'species': species, 'ordinal': ordinal, 'sha256': metadata['sha256'],
               'metadata': metadata, 'trade_id': emu.store.get('trade_barrier')}
+    from ..progress_events import frame
     with emu.store.durable() as db:
         if kind == 'league_reward':
-            current = rewards.ledger(db)
-            if current['delivered'] + 1 != ordinal or current['earned'] < ordinal:
-                raise ValueError('The League gift claim changed')
-            current['delivered'] = ordinal
-            rewards.save(db, current)
+            rewards.settle(db, seed, claims.DELIVERED, frame=frame(emu.store), species=species,
+                           reward_id=identifier)
         elif kind == 'mew_return':
             if not ready(kv.get(db, RETURNS), rewards.championship_count(rewards.ledger(db))):
                 raise ValueError('The repeat Mew claim changed')
@@ -116,7 +118,6 @@ def deliver(emu):
         entry = journal.add(db, time.time(), 'obtain', gift_title(emu.data.species[species]['name']),
                             'An optional custom gift joined the PC. This is separate from Cable Club trading.',
                             1, 4, before.map_name)
-        from ..progress_events import frame
         from .tracking import record_gift
         record_gift(db, entry, species, frame=frame(emu.store))
     try:

@@ -1,11 +1,24 @@
-"""Persistent Championship reward claims, independent of checkpoint rewinds."""
+"""Persistent Championship reward claims, independent of checkpoint rewinds.
+
+Each League win earns one claim in the claims ledger (pokesim/state/claims.py), keyed by the gift's
+seed. The kv value keeps only what the source needs to earn them: the adventure's reward seed, the
+wins already counted and the unlocked families. Both generations deliver through the same steps
+here: the oldest open claim is drawn, a copy the cartridge already holds settles it with no write,
+the worth oracle may decline it, and the commit marks it delivered. A reload to a save from before
+a delivery sends that claim back to open.
+"""
+from dataclasses import asdict
+import functools
 import hashlib
 import random
 import secrets
 
-from .state import kv
+from .state import claims, kv
 
 KEY = 'league-rewards-v1'
+SOURCE = 'league'
+# The kv value's shape once the claims are rows.
+VERSION = 3
 # Mew has its own walking and victory requirement, outside the starter pool.
 BASE_POOL = (153, 176, 177)
 UNLOCK_POOLS = {
@@ -16,6 +29,8 @@ UNLOCK_POOLS = {
     'jynx': (72,),
 }
 POOL = BASE_POOL
+# Gen II gifts one of the three Johto starters.
+JOHTO_POOL = (152, 155, 158)
 
 
 def progress_unlocks(snapshot):
@@ -58,7 +73,8 @@ def eligible_pool(value):
 
 
 def ledger(db):
-    return kv.get(db, KEY) or {'earned': 0, 'delivered': 0}
+    """The kv value: the reward ``seed``, the ``observed`` wins and the ``unlocks``."""
+    return kv.get(db, KEY) or {'observed': 0, 'version': VERSION}
 
 
 def save(db, value):
@@ -66,34 +82,131 @@ def save(db, value):
 
 
 def championship_count(value):
-    return value.get('observed', value['earned'])
+    return value.get('observed', 0)
 
 
-def _upgrade(value):
+def adopt(db):
+    """Move a League ledger from before claims rows into rows, and return the kv value left.
+
+    The rewards it settled become delivered claims with no frame, which never reopen. It did not
+    keep which of them it skipped, and its marks counted those as delivered too. The rest it earned
+    become open claims. A ledger from before version 2 first drops the victories it counted while
+    rewards were off, as that version did. Schema version 2 runs this once, and the writers run it
+    again for a ledger put back in the old shape. Returns None when there is no ledger.
+    """
+    value = kv.get(db, KEY)
+    if not value or value.get('version') == VERSION:
+        return value
     if value.get('version') != 2:
-        # Old claims included victories earned with rewards disabled.
-        value = {**value, 'version': 2, 'observed': value['earned'],
-                 'skipped': max(0, value['earned'] - value['delivered']),
-                 'earned': value['delivered']}
+        value = {**value, 'observed': value.get('earned', 0), 'earned': value.get('delivered', 0)}
+    if seed := value.get('seed'):
+        for ordinal in range(1, value.get('earned', 0) + 1):
+            key = f'{seed}:{ordinal}'
+            if claims.get(db, SOURCE, key) is None:
+                state = claims.DELIVERED if ordinal <= value.get('delivered', 0) else claims.OPEN
+                claims.put(db, SOURCE, key, state, seed=key)
+    value = {name: value[name] for name in ('seed', 'observed', 'unlocks') if name in value}
+    value = {'observed': 0, **value, 'version': VERSION}
+    save(db, value)
     return value
 
 
 def initialize(store, count):
     """Baseline existing victories without awarding retrospective League gifts."""
     with store.transaction() as db:
-        value = _upgrade(ledger(db))
+        value = adopt(db) or ledger(db)
         value['observed'] = max(value['observed'], count)
         save(db, value)
 
 
 def earn(store, count, *, enabled=True):
+    """Open one claim for each League win past the ones already counted, while gifts are on."""
+    from .progress_events import frame
     with store.transaction() as db:
-        value = _upgrade(ledger(db))
+        value = adopt(db) or ledger(db)
         value.setdefault('seed', secrets.token_hex(16))
         if enabled:
-            value['earned'] += max(0, count - value['observed'])
+            open_claims(db, value['seed'], max(0, count - value['observed']), frame=frame(store))
         value['observed'] = max(value['observed'], count)
         save(db, value)
+
+
+def open_claims(db, seed, count, *, frame=None):
+    """Open ``count`` League claims after the ones already made, each keyed by its gift's seed."""
+    made = sum(claims.counts(db, SOURCE).values())
+    for ordinal in range(made + 1, made + 1 + count):
+        key = f'{seed}:{ordinal}'
+        claims.put(db, SOURCE, key, claims.OPEN, frame=frame, seed=key)
+
+
+def ordinal(seed):
+    """The League reward number a claim's seed ends with."""
+    return int(seed.rsplit(':', 1)[1])
+
+
+def next_claim(db, generation=1):
+    """The oldest open League claim as (ordinal, species, seed), or None."""
+    row = next(iter(claims.rows(db, SOURCE, claims.OPEN)), None)
+    if row is None:
+        return None
+    seed = row['key']
+    return ordinal(seed), draw(seed, generation, ledger(db)), seed
+
+
+def draw(seed, generation=1, value=None):
+    """The species the League claim ``seed`` gifts, from the pool its ledger ``value`` opens."""
+    pool = JOHTO_POOL if generation == 2 else eligible_pool(value or {})
+    return random.Random(seed).choice(pool)
+
+
+def settle(db, seed, state, *, frame=None, species=None, reward_id=None, reasons=''):
+    """Mark the open claim ``seed`` delivered or declined inside the caller's transaction."""
+    row = claims.get(db, SOURCE, seed)
+    if row is None or row['state'] != claims.OPEN:
+        raise ValueError('The League gift claim changed')
+    claims.put(db, SOURCE, seed, state, frame=frame, species=species, seed=seed,
+               reward_id=reward_id, reasons=reasons)
+
+
+def decline(store, seed, reasons):
+    """Settle claim ``seed`` without a gift, for the worth oracle's ``reasons``."""
+    from .progress_events import frame
+    with store.transaction() as db:
+        settle(db, seed, claims.DECLINED, frame=frame(store), reasons=reasons)
+
+
+def found_held(store, seed, species):
+    """Settle claim ``seed`` as delivered with no write, since the cartridge already holds its gift."""
+    from .progress_events import frame
+    with store.transaction() as db:
+        settle(db, seed, claims.DELIVERED, frame=frame(store), species=species,
+               reasons='Already held')
+
+
+def held(snapshot, seed, generation=1):
+    """Whether the party or the boxes already hold the League gift drawn from ``seed``, found by its
+    mark as the release rules find it. A claim reopened by a reload can find its gift still there,
+    and then it is settled with no second copy."""
+    wanted = staged_mark(seed, generation)
+    if generation == 2:
+        found = ((mon.trainer_id, mon.dvs) for mon in (*snapshot.party, *snapshot.stored))
+    else:
+        found = ((mon.get('trainer_id'), mon.get('dvs'))
+                 for mon in (*map(asdict, snapshot.party), *snapshot.storage_entries()))
+    return any(trainer is not None and dvs and mark(trainer, dvs) == wanted for trainer, dvs in found)
+
+
+def rewound(store, metadata):
+    """Send the League claims delivered after the save ``metadata`` describes back to open.
+
+    The ownership barrier refuses most saves from before a gift, so this covers the ones it lets
+    through. The gift's own result checkpoint carries its reward id and never reopens its claim.
+    """
+    frames = ((metadata or {}).get('play_clock') or {}).get('frames')
+    if frames is None:
+        return ()
+    with store.transaction() as db:
+        return claims.reopen_after(db, frames, keep=(metadata or {}).get('reward_id'))
 
 
 def staged_shiny(seed, generation=1):
@@ -103,17 +216,18 @@ def staged_shiny(seed, generation=1):
     return shiny_bytes(bytes((first, second)))
 
 
+@functools.lru_cache(maxsize=4096)
 def staged_mark(seed, generation=1):
     """The reward mark of the League gift drawn from ``seed``, before the ledger counts it delivered."""
     trainer, first, second = _draw(seed, generation)
     return mark(trainer, (first >> 4, first & 15, second >> 4, second & 15))
 
 
-def wasted(policy, snapshot, slot, seed, generation=1):
-    """Whether the gift staged at ``slot`` from ``seed`` only costs a release: the worth oracle
-    (pcvalue.worth) does not keep it, as it would not keep the same copy caught. Such a gift either
-    goes itself or pushes out a rarer copy, so sending it turns every League win into a gift and a
-    release.
+def refusal(policy, snapshot, slot, seed, generation=1):
+    """Why the gift staged at ``slot`` from ``seed`` only costs a release, or '' when it is kept.
+    The worth oracle (pcvalue.worth) refuses it as it would refuse the same copy caught. Such a gift
+    either goes itself or pushes out a rarer copy, so sending it turns every League win into a gift
+    and a release.
 
     The gift is rated as the League reward it is. Until the ledger counts it, its mark is unknown, and
     an unmarked gift rates as a Pokémon traded in, the best copy of its species. The mark is passed to
@@ -130,25 +244,12 @@ def wasted(policy, snapshot, slot, seed, generation=1):
         rated = ()
     row = next((row for row in rated if row.entry.slot == slot), None)
     if row is None:
-        return False
+        return ''
     # Both generations hold 20 Pokémon per box, and the staged gift already fills one slot.
     free = sum(20 - count for count in snapshot.box_counts) + 1
-    return not worth([*(other for other in rated if other is not row), row], headroom=free,
-                     active_box=getattr(snapshot, 'active_box', None)).keep
-
-
-def skip(store, ordinal):
-    """Settle League reward ``ordinal`` without a gift, as rewards earned while they were off are."""
-    with store.transaction() as db:
-        value = ledger(db)
-        if value['delivered'] + 1 != ordinal or value['earned'] < ordinal:
-            raise ValueError('The League gift claim changed')
-        value['delivered'] = ordinal
-        value['skipped'] = value.get('skipped', 0) + 1
-        save(db, value)
-
-
-_MARKS = {}
+    found = worth([*(other for other in rated if other is not row), row], headroom=free,
+                  active_box=getattr(snapshot, 'active_box', None))
+    return '' if found.keep else found.reason or 'Not worth a slot'
 
 
 def _draw(seed, generation):
@@ -168,37 +269,22 @@ def mark(trainer_id, dvs):
     return trainer_id, tuple(dvs[-4:])
 
 
-def marks(value, generation=1):
-    """The marks of every League reward already delivered, from the ledger alone.
+def marks(db, generation=1):
+    """The marks of every League reward delivered so far, from the claims alone.
 
     This also finds rewards delivered before releases knew about them. A random trainer ID and DV pair
     matches another Pokémon about once in four billion.
     """
-    seed, delivered = (value or {}).get('seed'), (value or {}).get('delivered', 0)
-    if not seed or not delivered:
-        return frozenset()
-    # One entry per adventure seed, since several adventures can share a process.
-    if _MARKS.get((seed, generation), (None,))[0] != delivered:
-        found = set()
-        for ordinal in range(1, delivered + 1):
-            trainer, first, second = _draw(f'{seed}:{ordinal}', generation)
-            found.add(mark(trainer, (first >> 4, first & 15, second >> 4, second & 15)))
-        _MARKS[seed, generation] = delivered, frozenset(found)
-    return _MARKS[seed, generation][1]
+    return frozenset(staged_mark(row['key'], generation) for row in claims.rows(db, SOURCE, claims.DELIVERED))
 
 
 def status(store):
+    """The League gifts earned, delivered, declined and still open, with the wins and unlocks."""
     with store.reading() as db:
-        value = ledger(db)
-    return {key: value[key] for key in ('earned', 'delivered')} | {
-        'pending': max(0, value['earned'] - value['delivered']),
-        'wins': championship_count(value), 'unlocks': sorted(value.get('unlocks', ()))}
-
-
-def selection(value):
-    ordinal = value['delivered'] + 1
-    seed = f"{value['seed']}:{ordinal}"
-    return ordinal, random.Random(seed).choice(eligible_pool(value)), seed
+        value, found = ledger(db), claims.counts(db, SOURCE)
+    return {'earned': sum(found.values()), 'delivered': found[claims.DELIVERED],
+            'declined': found[claims.DECLINED], 'pending': found[claims.OPEN],
+            'wins': championship_count(value), 'unlocks': sorted(value.get('unlocks', ()))}
 
 
 def mew_enabled(policy):

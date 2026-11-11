@@ -7,7 +7,7 @@ from . import boxes, pair
 from .pair import verified
 from .execute import _boot, _publish, _state_bytes, register_arrival
 from ..policies.collection import champion
-from ..state import connect, kv, ledgers, schema
+from ..state import claims, connect, kv, ledgers, schema
 from ..state.journal import add as add_entry
 from ..strategy_data import MOVES, SPECIES
 from .. import rewards
@@ -58,7 +58,7 @@ def received(data):
 
 def stage(root, transaction, league_rewards=False):
     work = root / 'transactions' / transaction
-    sources, eligible, previous, claims = {}, {}, {}, {}
+    sources, eligible, previous, league = {}, {}, {}, {}
     for name in ('red', 'blue'):
         data = pair.PAIR_ROOT / name
         state = pair.CheckpointStore(data / 'states').latest_state()
@@ -70,8 +70,9 @@ def stage(root, transaction, league_rewards=False):
                       if count < boxes.BOX_CAPACITY), None)
         if league_rewards:
             with connect(data / 'pokesim.sqlite') as db:
-                claims[name] = rewards.ledger(db)
-            eligible[name] = space if claims[name]['earned'] > claims[name]['delivered'] else None
+                # The kv ledger and the oldest open League claim.
+                league[name] = rewards.ledger(db), rewards.next_claim(db)
+            eligible[name] = space if league[name][1] else None
         else:
             eligible[name] = space if champion(snapshot) and 151 not in snapshot.owned and not received(data) else None
         previous[name] = snapshot, metadata, slots
@@ -91,19 +92,17 @@ def stage(root, transaction, league_rewards=False):
         try:
             if eligible[name]:
                 box, position = eligible[name]
-                claim = {**claims.get(name, {}), 'unlocks': sorted(
-                    set(claims.get(name, {}).get('unlocks', ())) | rewards.progress_unlocks(before))}
-                ordinal, species, seed = (rewards.selection(claim) if league_rewards
+                ordinal, species, seed = (league[name][1] if league_rewards
                                           else (None, MEW, f'{EVENT_KEY}:{name}:{transaction}'))
                 gift = gift_slot(seed, species, random_name=league_rewards)
                 boxes.write_slot(pb.memory, box, position, gift)
                 register_arrival(pb.memory, species)
                 gifts.append({'instance': name, 'name': SPECIES[species]['name'].title(), 'species': species,
-                              'ordinal': ordinal, 'level': 5, 'box': box, 'position': position,
+                              'ordinal': ordinal, 'seed': seed, 'level': 5, 'box': box, 'position': position,
                               'dvs': list(gift.struct[27:29]), 'trainer_id': int.from_bytes(gift.struct[12:14], 'big')})
                 if league_rewards:
                     memory = dict(metadata.get('run_memory', {}))
-                    memory['championships'] = max(memory.get('championships', 0), rewards.championship_count(claims[name]))
+                    memory['championships'] = max(memory.get('championships', 0), rewards.championship_count(league[name][0]))
                     metadata = dict(metadata, run_memory=memory)
             target = work / 'after' / name / f'auto-v1-trade-{transaction}.state'
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -149,11 +148,10 @@ def journal(root, transaction):
                 kv.put(db, 'trade_barrier', transaction)
                 if name in recipients and result.get('kind') == 'league_reward':
                     gift = next(g for g in result['gifts'] if g['instance'] == name)
-                    value = rewards.ledger(db)
-                    if not value['delivered'] + 1 == gift['ordinal'] <= value['earned']:
-                        raise ValueError('Reward claim is out of order')
-                    value['delivered'] = gift['ordinal']
-                    rewards.save(db, value)
+                    # A result staged before claims rows names only the ordinal, which its seed ends with.
+                    seed = gift.get('seed') or f"{rewards.ledger(db)['seed']}:{gift['ordinal']}"
+                    # The pair path keeps no play clock, so this delivery never reopens on a reload.
+                    rewards.settle(db, seed, claims.DELIVERED, species=gift.get('species'), reward_id=transaction)
                     entry = add_entry(db, int(time.time()), 'obtain',
                                       f"Received {gift['name']} for Championship #{gift['ordinal']}",
                                       f"A level-5 {gift['name']} joined the PC. Each League victory earns a random PokeSim reward.",

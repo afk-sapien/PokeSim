@@ -62,11 +62,11 @@ def test_the_gen1_mew_event_seed_comes_from_the_adventure_seed(monkeypatch):
     from pokesim.runtime.reward_delivery import select_reward
     monkeypatch.setattr(collection, 'champion', lambda _: True)
     snapshot = SimpleNamespace(owned=frozenset())
-    ledger = {'earned': 1, 'delivered': 1, 'observed': 1}
-    first = select_reward(snapshot, ledger, False, mew_event=True, seed=7)
+    # One League win counted and no claim left open.
+    first = select_reward(snapshot, None, 1, False, mew_event=True, seed=7)
     assert first == ('mew_event', None, first[2], seeds.gift_seed(7, 'mew_event', 1))
-    assert select_reward(snapshot, ledger, False, mew_event=True, seed=7) == first
-    assert select_reward(snapshot, ledger, False, mew_event=True, seed=8)[3] != first[3]
+    assert select_reward(snapshot, None, 1, False, mew_event=True, seed=7) == first
+    assert select_reward(snapshot, None, 1, False, mew_event=True, seed=8)[3] != first[3]
 
 
 def test_adventure_choices_without_a_seed_are_the_same_every_time():

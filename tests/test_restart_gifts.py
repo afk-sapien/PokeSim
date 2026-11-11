@@ -84,7 +84,7 @@ def test_a_gen2_restart_sends_the_mythical_gift_only_to_a_game_without_mew(store
         return
     assert gen2_rewards.deliver(emu) is None
     assert store.get(gen2_rewards.MYTHICAL) is None and store.get(PENDING) is None
-    assert rewards.ledger(store.db)['delivered'] == 0
+    assert rewards.status(store)['delivered'] == 0
 
 
 @pytest.mark.parametrize(('owned', 'events', 'flag', 'gift'), [

@@ -399,28 +399,33 @@ One pipeline delivers every gift: League rewards, legendary returns, event retur
 
 ### Claims ledger
 
-One table, `claims`:
+One table, `claims` (`pokesim/state/claims.py`, schema version 2):
 
 | Field | Meaning |
 |---|---|
-| `source` | `league`, `legendary`, `event`, `mew` |
+| `source` | `league` today. `legendary`, `event` and `mew` join in PR 5b |
 | `key` | dex number or reward seed |
-| `state` | `open`, `staged`, `delivered`, `declined`, `consumed` |
-| `frame` | PlayClock frame of the last change |
-| `worth` | the oracle's score when it was offered |
+| `state` | `open`, `delivered`, `declined`. `consumed` arrives with PR 5b |
+| `frame` | PlayClock frame of the last change, or none for a claim moved from the old League ledger |
+| `species` | the Pokémon a delivery wrote |
+| `seed` | the gift seed, so a reopened claim writes the same Pokémon |
+| `reasons` | why the oracle declined it, or why it reopened |
+| `reward_id` | the delivery that settled it, so the gift's own result save never reopens it |
+
+PR 5a keeps no `staged` state in the table. A gift is staged and committed inside one delivery, so a crash between them leaves the claim `open` and the pending record finishes or rolls it back. Schema version 2 moves each old League ledger into rows once: the gifts it settled become `delivered` rows with no frame, which never reopen, and the rest become `open`.
 
 ### Pipeline
 
 1. A source makes a claim `open` when it is earned (wins, steps, return interval).
 2. Before staging, the pipeline calls `worth`. If `keep` is false, the claim goes to `declined` with the reasons. This replaces `wasted()` and `keeps_another`.
-3. If `keep` is true, it reserves a slot through S1 and goes to `staged`.
+3. If `keep` is true, it reserves a slot through S1 and stages the gift. PR 5a stages and commits in one step with no stored `staged` state.
 4. Delivery is idempotent. Before it writes, the generation reads party and boxes for the claim's identity (the reward seed sets the DVs and trainer id). If the mon is already there, the claim goes straight to `delivered` with no write.
 5. Otherwise the generation writes the mon into the cartridge. The claim goes to `delivered`.
-6. A rewind sends claims staged or delivered after `save_frame` back to `open`. The next delivery finds the cartridge without the mon and writes it again. A rewind to a save that already holds the mon finds it in step 4 and writes nothing.
+6. A rewind sends claims delivered after `save_frame` back to `open`, except the one whose own result save is being loaded. The next delivery finds the cartridge without the mon and writes it again. A rewind to a save that already holds the mon finds it in step 4 and writes nothing.
 
-Today the Gen II ledger takes the next ordinal from the stored `delivered` count (`gen2/rewards.py:44`) and raises it when the gift is written (`:95`). A reload does not move that count back. What keeps a gift from being lost today is the ownership barrier: after a delivery, `custom-reward-barrier-v1` refuses every save older than that gift (`emulator.py:348` in Gen I, `gen2/emulator.py:552` `_behind_barrier` in Gen II). The ledger keeps that barrier. Reopening a claim on rewind covers the saves the barrier lets through, and the idempotent check in step 4 makes a second delivery safe either way.
+Before PR 5a, both generations took the next League gift from a stored `delivered` count and raised it when the gift was written, and a reload never moved that count back. The ownership barrier is what kept a gift from being lost: after a delivery, `custom-reward-barrier-v1` refuses every save older than that gift (the restore check in `emulator.py` for Gen I, `_behind_barrier` in `gen2/emulator.py`). The ledger keeps that barrier. Reopening a claim on rewind covers the saves the barrier lets through, and the idempotent check in step 4 makes a second delivery safe either way.
 
-It replaces the pairs `runtime/reward_delivery.py` and `gen2/rewards.py`, `legendary_returns.py` and `gen2/returns.py`, and `mew_returns.py` and `gen2/steps.py`. `store.league_marks` becomes the `league` rows.
+PR 5a moves League rewards in both generations onto the `league` rows, and `store.league_marks` now reads them. PR 5b moves the pairs `legendary_returns.py` and `gen2/returns.py`, and `mew_returns.py` and `gen2/steps.py`. The single pipeline then replaces `runtime/reward_delivery.py` and `gen2/rewards.py`.
 
 ## 8. Frame budgets per tier
 

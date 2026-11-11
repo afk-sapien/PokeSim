@@ -10,7 +10,7 @@ import uuid
 from ..checkpoints import CheckpointStore
 from .. import rewards
 from ..seeds import gift_seed
-from ..state import journal, kv
+from ..state import claims, journal, kv
 from . import trace
 
 PENDING = 'custom-reward-pending-v1'
@@ -38,17 +38,17 @@ def schedule(emu, delivered):
     emu._reward_wait = SPACING_FRAMES if delivered else RETRY_FRAMES
 
 
-def select_reward(snapshot, ledger, mew_received, *, league_rewards=False, mew_event=False, seed=None):
-    """Catch up a missed Mew before draining repeatable League rewards. ``seed`` is the adventure seed."""
+def select_reward(snapshot, claim, championships, mew_received, *, mew_event=False, seed=None):
+    """Catch up a missed Mew before draining repeatable League rewards. ``claim`` is the oldest open
+    League claim (rewards.next_claim) and ``seed`` the adventure seed."""
     from ..policies.collection import champion
     from ..trade.event import MEW
 
     # Eligibility is persistent progress, so enabling the event after victory works too.
     if mew_event and champion(snapshot) and 151 not in snapshot.owned and not mew_received:
-        return 'mew_event', None, MEW, gift_seed(seed, 'mew_event', rewards.championship_count(ledger))
-    if league_rewards and ledger['earned'] > ledger['delivered']:
-        ordinal, species, seed = rewards.selection(ledger)
-        return 'league_reward', ordinal, species, seed
+        return 'mew_event', None, MEW, gift_seed(seed, 'mew_event', championships)
+    if claim:
+        return ('league_reward', *claim)
     return None
 
 
@@ -93,16 +93,21 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
     before = read_snapshot(emu.pb.memory, emu.frame)
     if not before.valid or not before.started or before.in_battle or before.textbox or before.start_menu:
         return None
-    space = next(((box, count + 1) for box, count in enumerate(before.box_counts, 1) if count < 20), None)
-    if space is None:
-        return None
     rewards.observe_progress(emu.store, before)
     with emu.store.reading() as db:
         value = rewards.ledger(db)
-    selected = select_reward(before, value, emu.store.get(EVENT_KEY),
-                             league_rewards=league_rewards, mew_event=mew_event, seed=emu.adventure_seed)
+        claim = rewards.next_claim(db) if league_rewards else None
+    if claim and rewards.held(before, claim[2]):
+        # A claim a reload reopened finds its gift still in the PC, so it settles with no second copy.
+        rewards.found_held(emu.store, claim[2], claim[1])
+        return None
+    space = next(((box, count + 1) for box, count in enumerate(before.box_counts, 1) if count < 20), None)
+    if space is None:
+        return None
     from .. import mew_returns
     championships = rewards.championship_count(value)
+    selected = select_reward(before, claim, championships, emu.store.get(EVENT_KEY),
+                             mew_event=mew_event, seed=emu.adventure_seed)
     if mew_event and mew_returns.ready(emu.store, championships):
         from ..trade.event import MEW
         selected = ('mew_return', None, MEW, gift_seed(emu.adventure_seed, 'mew_return', championships))
@@ -135,10 +140,11 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
             raise ValueError('The custom gift did not match the staged Pokémon')
         held = {(mon['box'], mon['position']) for mon in before.storage_entries()}
         slot = next((slot for mon in after.storage_entries() if (slot := (mon['box'], mon['position'])) not in held), None)
-        if kind == 'league_reward' and slot and not rewards.staged_shiny(seed) and rewards.wasted(emu.policy, after, slot, seed):
+        if (kind == 'league_reward' and slot and not rewards.staged_shiny(seed)
+                and (why := rewards.refusal(emu.policy, after, slot, seed))):
             # A copy the PC would release at once is never sent, so a League rerun cannot become a
             # gift and release loop.
-            rewards.skip(emu.store, ordinal)
+            rewards.decline(emu.store, seed, why)
             return None
         output = io.BytesIO()
         clone.save_state(output)
@@ -162,13 +168,11 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
               'ordinal': ordinal, 'species': species, 'sha256': metadata['sha256'],
               'metadata': metadata, 'trade_id': emu.store.get('trade_barrier')}
     emu.store.set(PENDING, record)
+    from ..progress_events import frame
     with emu.store.durable() as db:
         if kind == 'league_reward':
-            current = rewards.ledger(db)
-            if current['delivered'] + 1 != ordinal or current['earned'] < ordinal:
-                raise ValueError('Custom reward ownership changed before commitment')
-            current['delivered'] = ordinal
-            rewards.save(db, current)
+            rewards.settle(db, seed, claims.DELIVERED, frame=frame(emu.store), species=species,
+                           reward_id=identifier)
             title = gift_title(gift.nick, species, ordinal)
         else:
             if kind == 'mew_return' and not mew_returns.ready_db(db, rewards.championship_count(rewards.ledger(db))):
@@ -183,7 +187,6 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
                             'An optional custom PokeSim gift joined the PC. This is separate from Cable Club trading.',
                             1, 4, before.map_name)
         from ..catches import record_gift
-        from ..progress_events import frame
         record_gift(db, entry, species, gift, frame=frame(emu.store))
     try:
         path = recover_storage(emu.store)
