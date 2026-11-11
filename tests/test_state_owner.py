@@ -1,27 +1,37 @@
 """Section 3.1 of docs/design/adventure-state-store.md: pokesim/state and store.py own pokesim.sqlite.
 
-Every other module in the package reaches an adventure's database through a store's methods, or opens
-it with ``state.connect``, which checks the schema version first. A module fails this test when it uses
-a store's ``db`` or ``lock``, or opens a database with sqlite3 itself. The app's own databases are the
-one exception: the modules that own app.sqlite and auth.sqlite may open those, and nothing else.
+Every other module in the package, and every script in tools/, reaches an adventure's database through
+a store's methods, or opens it with ``state.connect``, which checks the schema version first. A module
+fails this test when it uses a store's ``db`` or ``lock``, or opens a database with sqlite3 itself. The
+app's own databases are the one exception: the modules that own app.sqlite and auth.sqlite, and the
+tools that read a copy of app.sqlite, may open those, and nothing else.
 """
 import ast
 from pathlib import Path
 
 import pytest
 
-PACKAGE = Path(__file__).resolve().parents[1] / 'pokesim'
-# Each module that opens one of the app's own databases, and the file it opens.
-APP_DATABASES = {'app/registry.py': 'app.sqlite', 'app/backup.py': 'app.sqlite', 'app/auth.py': 'auth.sqlite'}
+ROOT = Path(__file__).resolve().parents[1]
+PACKAGE = ROOT / 'pokesim'
+# Each module that opens one of the app's own databases, and the file it opens. A tool is named by its
+# path from the repository root, and a package module by its path inside pokesim/.
+APP_DATABASES = {'app/registry.py': 'app.sqlite', 'app/backup.py': 'app.sqlite', 'app/auth.py': 'auth.sqlite',
+                 'tools/live_soak.py': 'app.sqlite', 'tools/replay_progress.py': 'app.sqlite'}
 RAW = {'db', 'lock'}
 
 
+def path_of(name):
+    return ROOT / name if name.startswith('tools/') else PACKAGE / name
+
+
 def modules():
-    """Every module of the package outside its owners, pokesim/state and store.py."""
+    """Every module of the package outside its owners, pokesim/state and store.py, then every tool."""
     for path in sorted(PACKAGE.rglob('*.py')):
         name = path.relative_to(PACKAGE).as_posix()
         if not name.startswith('state/') and name != 'store.py':
             yield name, path.read_text(encoding='utf-8')
+    for path in sorted((ROOT / 'tools').glob('*.py')):
+        yield f'tools/{path.name}', path.read_text(encoding='utf-8')
 
 
 def a_store(owner):
@@ -82,10 +92,15 @@ def test_the_scan_lets_the_app_databases_and_state_connect_pass():
     assert breaches('app/registry.py', "import sqlite3\nsqlite3.connect(root / 'app.sqlite')") == []
     # An app database owner may not open an adventure's file either.
     assert breaches('app/registry.py', "import sqlite3\nsqlite3.connect(root / 'adventures' / aid / 'pokesim.sqlite')")
+    assert breaches('tools/live_soak.py', "import sqlite3\nsqlite3.connect(folder / 'pokesim.sqlite')")
+
+
+def test_the_scan_reads_every_tool():
+    assert 'tools/live_soak.py' in dict(modules())
 
 
 @pytest.mark.parametrize('name, database', APP_DATABASES.items())
 def test_each_app_database_owner_still_opens_its_own_file(name, database):
     """An owner that stops opening its database leaves the exception list, so the list never grows stale."""
-    source = (PACKAGE / name).read_text(encoding='utf-8')
+    source = path_of(name).read_text(encoding='utf-8')
     assert list(sqlite_connects(ast.parse(source))) and database in source
