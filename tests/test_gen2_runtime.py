@@ -292,6 +292,37 @@ def test_policy_checkpoint_retains_active_menu(real_data):
     assert restored.learning
 
 
+def test_each_errand_saves_its_own_state_under_the_save_version(real_data):
+    from pokesim.gen2.policy import SAVE_VERSION, Policy
+    policy = Policy(real_data, seed=3, starter='totodile')
+    policy.heal.map = 263
+    policy.shop.purchase, policy.shop.location = (4, 20), (1030, 'Clerk', 4)
+    state = json.loads(json.dumps(policy.state_dict()))
+    assert state['version'] == SAVE_VERSION
+    assert state['errands'] == {'heal': {'map': 263}, 'shop': {'purchase': [4, 20], 'location': [1030, 'Clerk', 4]}}
+    assert not {'healing_map', 'shopping', 'shop_location'} & set(state)
+    restored = Policy(real_data, starter='cyndaquil')
+    restored.load_state_dict(state)
+    assert (restored.starter, restored.rng.random()) == ('totodile', policy.rng.random())
+    assert restored.heal.map == 263
+    assert (restored.shop.purchase, restored.shop.location) == ((4, 20), (1030, 'Clerk', 4))
+
+
+def test_a_version_1_save_loads_its_errands_from_the_flat_keys(real_data):
+    from pokesim.gen2.policy import Policy
+    state = {key: value for key, value in Policy(real_data, starter='totodile').state_dict().items()
+             if key not in {'version', 'errands'}}
+    state.update(healing_map=263, shopping=[4, 20], shop_location=[1030, 'Clerk', 4])
+    restored = Policy(real_data, starter='cyndaquil')
+    restored.load_state_dict(state)
+    assert restored.starter == 'totodile' and restored.heal.map == 263
+    assert (restored.shop.purchase, restored.shop.location) == ((4, 20), (1030, 'Clerk', 4))
+    # A save from a later build is not read, so the policy starts afresh.
+    later = Policy(real_data, starter='cyndaquil')
+    later.load_state_dict({**state, 'version': 99})
+    assert later.starter == 'cyndaquil' and later.heal.map is None and later.completed == {}
+
+
 def test_lighthouse_route_does_not_walk_across_a_hole(real_data):
     from pokesim.gen2.routes import Regions
     source = real_data.map_ids['OLIVINE_LIGHTHOUSE_4F']

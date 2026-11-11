@@ -1,7 +1,7 @@
 """Observe and act through cartridge controls for Generation II adventures."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, fields, replace
 from collections import Counter, deque
 import random
 import re
@@ -70,6 +70,51 @@ class Goal:
     face: str | None = None
     # The goal kind the battle stance follows (planning/stance.py): story, travel, train or hunt.
     kind: str = STORY
+
+
+# The version Policy.state_dict writes. Version 1 kept the heal and shop errands in flat keys.
+SAVE_VERSION = 2
+
+
+@dataclass
+class Saved:
+    """The policy state a save keeps, written under ``SAVE_VERSION``.
+
+    Each errand keeps its own state under ``errands`` by its key. A save from before the version was
+    written is version 1, whose flat ``healing_map``, ``shopping`` and ``shop_location`` keys read as
+    the heal and shop errands' state. A version this build does not know reads as nothing. Other
+    readers find the ``menu`` (runtime/reload.py) and the ``collection`` (trade/pair.py) at the top.
+    """
+    starter: str | None = None
+    rng: object = None
+    completed: dict = field(default_factory=dict)
+    collection: dict = field(default_factory=lambda: {'target': None})
+    demand: dict = field(default_factory=dict)
+    decisions: int = 0
+    naming: dict = field(default_factory=dict)
+    learning: bool = False
+    partner_move: object = None
+    menu: dict | None = None
+    errands: dict = field(default_factory=dict)
+    interaction: object = None
+    resetting_puzzle: object = None
+    objects: dict = field(default_factory=dict)
+
+    def to_dict(self):
+        return {'version': SAVE_VERSION, **{entry.name: getattr(self, entry.name) for entry in fields(self)}}
+
+    @classmethod
+    def read(cls, state):
+        version = state.get('version', 1)
+        if version == 1:
+            errands = {'heal': {'map': state.get('healing_map')},
+                       'shop': {'purchase': state.get('shopping'), 'location': state.get('shop_location')}}
+        elif version == SAVE_VERSION:
+            errands = state.get('errands', {})
+        else:
+            return None
+        return cls(errands=errands, **{entry.name: state[entry.name] for entry in fields(cls)
+                                       if entry.name != 'errands' and entry.name in state})
 
 
 class Policy(protocol.Policy):
@@ -169,53 +214,56 @@ class Policy(protocol.Policy):
         self.picked = None
 
     def state_dict(self):
-        return {'version': 1, 'starter': self.starter, 'rng': self.rng.getstate(), 'completed': self.completed, 'collection': self.collection, 'demand': self.demand, 'decisions': self.decisions,
-                'naming': self.naming.state_dict(), 'learning': self.learning, 'partner_move': self.partner_move,
-                'menu': {'kind': type(self.menu).__name__, 'state': asdict(self.menu)} if self.menu else None,
-                'shopping': self.shop.purchase, 'shop_location': self.shop.location, 'healing_map': self.heal.map,
-                'interaction': self.interaction, 'resetting_puzzle': self.resetting_puzzle,
-                'objects': {str(mid): {str(index): point for index, point in objects.items()}
-                            for mid, objects in self.nav.objects.items()}}
+        return Saved(
+            starter=self.starter, rng=self.rng.getstate(), completed=self.completed, collection=self.collection,
+            demand=self.demand, decisions=self.decisions, naming=self.naming.state_dict(), learning=self.learning,
+            partner_move=self.partner_move,
+            menu={'kind': type(self.menu).__name__, 'state': asdict(self.menu)} if self.menu else None,
+            errands={errand.key: errand.state_dict() for errand in (self.heal, self.shop)},
+            interaction=self.interaction, resetting_puzzle=self.resetting_puzzle,
+            objects={str(mid): {str(index): point for index, point in objects.items()}
+                     for mid, objects in self.nav.objects.items()}).to_dict()
 
     def load_state_dict(self, state):
         from .gamecorner import Coins, Prize, Slots
         from .npc_trades import Trade
         # A pin belongs to the moment it was set, so it never outlives a load, even of a save it cannot read.
         self.pin = None
-        # A save from before the version was written is version 1.
-        if state.get('version', 1) != 1:
+        saved = Saved.read(state)
+        if saved is None:
             self.on_restore()
             return
-        self.starter = state.get('starter', self.starter)
-        if 'rng' in state:
+        if saved.starter is not None:
+            self.starter = saved.starter
+        if saved.rng is not None:
             # Saved as JSON lists, so the tuples the generator wants are rebuilt.
             def tuples(value):
                 return tuple(tuples(item) for item in value) if isinstance(value, (list, tuple)) else value
-            self.rng.setstate(tuples(state['rng']))
-        self.completed = state.get('completed', {})
-        self.collection = state.get('collection', {'target': None})
+            self.rng.setstate(tuples(saved.rng))
+        self.completed = saved.completed
+        self.collection = saved.collection
         from .standdown import migrate
-        migrate(self, state.get('decisions', 0))
+        migrate(self, saved.decisions)
         from .kinds import adopt
         adopt(self.collection)
-        self.demand = {int(key): value for key, value in state.get('demand', {}).items()}
-        self.decisions = state.get('decisions', 0)
-        self.naming.load_state_dict(state.get('naming', {}))
-        self.learning = state.get('learning', False)
-        self.partner_move = state.get('partner_move')
-        menu = state.get('menu')
+        self.demand = {int(key): value for key, value in saved.demand.items()}
+        self.decisions = saved.decisions
+        self.naming.load_state_dict(saved.naming)
+        self.learning = saved.learning
+        self.partner_move = saved.partner_move
+        menu = saved.menu
         kinds = {**TASKS, 'Trade': Trade}
         self.menu = restore(kinds[menu['kind']], menu['state']) if menu and menu.get('kind') in kinds else None
         if menu and menu.get('kind') in {'Coins', 'Prize', 'Slots'}:
             self.menu = {'Coins': Coins, 'Prize': Prize, 'Slots': Slots}[menu['kind']](**menu['state'])
-        self.shop.load_state_dict({'purchase': state.get('shopping'), 'location': state.get('shop_location')})
-        self.heal.load_state_dict({'map': state.get('healing_map')})
-        self.interaction = state.get('interaction')
-        self.resetting_puzzle = state.get('resetting_puzzle')
+        for errand in (self.heal, self.shop):
+            errand.load_state_dict(saved.errands.get(errand.key, {}))
+        self.interaction = saved.interaction
+        self.resetting_puzzle = saved.resetting_puzzle
         if isinstance(self.interaction, list):
             self.interaction = tuple(self.interaction)
         self.nav.objects = {int(mid): {int(index): tuple(point) for index, point in objects.items()}
-                            for mid, objects in state.get('objects', {}).items()}
+                            for mid, objects in saved.objects.items()}
         self.on_restore()
 
     STRANDED_LIMIT = 60
