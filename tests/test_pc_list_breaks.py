@@ -16,6 +16,7 @@ from pokesim.policies.strategic import StrategicPolicy
 from pokesim.policies.team import release_target
 from pokesim.ram import read_snapshot
 from pokesim.runtime import preparation
+from pokesim.runtime.policy import stack_pointer
 from pokesim.runtime.supervision import REFUSED_SHORTCUT
 from pokesim.shortcuts import gen1_ui
 from pokesim.trade import boxes
@@ -185,8 +186,8 @@ def test_gold_silver_and_crystal_pc_lists_get_the_stack_pointer(monkeypatch):
     assert seen == [{'sp': 0xDF00}, None, None]
     assert all(task.pc_list for task in (menus.Storage, menus.Release, menus.ChangeBox))
     assert not any(task.pc_list for task in (menus.Throw, menus.Remedy, menus.Use, menus.Buy))
-    assert menus.stack_pointer(SimpleNamespace(register_file=SimpleNamespace(SP=0xDFE0))) == 0xDFE0
-    assert menus.stack_pointer(SimpleNamespace()) is None
+    assert stack_pointer(SimpleNamespace(register_file=SimpleNamespace(SP=0xDFE0))) == 0xDFE0
+    assert stack_pointer(SimpleNamespace()) is None
 
 
 @pytest.mark.parametrize('code', (0x55, 0x00))

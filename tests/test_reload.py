@@ -41,7 +41,8 @@ def test_a_save_inside_a_menu_is_not_settled():
 
 def gen1_game(frame):
     return SimpleNamespace(frame=frame, last_reload_frame=-10 ** 9, stuck_frame=frame, invalid_frame=None,
-                           battle_frame=frame, policy=SimpleNamespace(), snapshot=None,
+                           battle_frame=frame, policy=SimpleNamespace(hopeless_battle=lambda snapshot: False),
+                           snapshot=None,
                            _unstick=Mock(), _check_stall=Mock())
 
 

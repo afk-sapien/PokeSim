@@ -496,9 +496,13 @@ def test_gen2_loading_a_save_clears_the_pin(tmp_path, monkeypatch):
     emu.store, emu.pb, emu.rom_sha1, emu.data = Store(tmp_path), Mock(), 'rom', None
     emu._sync_clock = Mock()
     seen = []
-    run = SimpleNamespace(pin=Pin('hunt:hunt', 'Label hunt'), on_restore=lambda: None,
-                          load_state_dict=lambda saved: seen.append(run.pin))
-    run.unpin_goal = lambda: Policy.unpin_goal(run)
+    run = SimpleNamespace(pin=Pin('hunt:hunt', 'Label hunt'), on_restore=lambda: None)
+
+    def load(saved):
+        seen.append(saved)
+        # The policy's own load clears the pin, even of a save whose version it cannot read.
+        Policy.load_state_dict(run, {'version': 0})
+    run.load_state_dict = load
     emu.policy, emu.play_clock, emu.audio, emu._reset_watch, emu._publish_frame = run, Mock(), Mock(), Mock(), Mock()
     emu.statistics = SimpleNamespace(previous=None)
     emu.history = {}
@@ -506,7 +510,7 @@ def test_gen2_loading_a_save_clears_the_pin(tmp_path, monkeypatch):
     metadata = {**checkpoint_metadata(rtc_clock=lock), 'generation': 2, 'rom_sha1': 'rom', 'frame': 9,
                 'policy_state': {}, 'run_memory': {}}
     emu._load_state_file(emu.store.write_checkpoint(b'state', metadata))
-    assert run.pin is None and seen == [None]
+    assert run.pin is None and seen == [{}]
     emu.store.close()
 
 
