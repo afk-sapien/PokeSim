@@ -4,7 +4,7 @@ from dataclasses import asdict
 from .battle import HEALING, damage, effectiveness, ranked_moves
 from ..events import LEGENDARY_DEX
 from ..game_data import current_variant
-from ..planning.readiness import READY, hp_stat, score as matchup, stat as trainer_stat
+from ..planning.readiness import hp_stat, matched, score as matchup, stat as trainer_stat
 from ..pokemon import experience_at_level
 from ..ram import BOX_CAPACITY, DEX_NAMES, PartyMon
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, event_set
@@ -342,7 +342,7 @@ def _readiness(s, bit):
     healing = sum(qty for item, qty in s.items if item in HEALING)
     revives = dict(s.items).get(ITEMS['REVIVE'], 0)
     concerns = []
-    if not best or best['score'] < READY:
+    if not best or not matched(best['score']):
         concerns.append('The strongest matchup still needs preparation')
     if any(p.status or not p.hp for p in s.party):
         concerns.append('Heal fainted partners or status conditions')

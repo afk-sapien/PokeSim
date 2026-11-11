@@ -454,38 +454,33 @@ def _prerequisites(data, snapshot):
     return needed
 
 
-# Every Elite Four and Champion Pokémon is level 40 or higher, and the five battles field 26 of them.
-LEAGUE_LEVEL, LEAGUE_OPPONENTS = 40, 26
-
-
-def league_ready(policy, snapshot):
-    """Whether the party is strong enough to choose a League run.
+def league_run(policy, snapshot):
+    """A postgame League run and the team that would take it, as the oracle reads them (planning/readiness.py).
 
     Nothing restores PP inside the League. A level 100 Vaporeon beside Pokémon too weak to face the
-    Elite Four ran out of attacks at Lance and the battle never ended. So the Pokémon at League
-    level need at least one attack for each opponent, counted at full PP since the run heals first.
+    Elite Four ran out of attacks at Lance and the battle never ended. So the oracle counts the attacks
+    the Pokémon at the League's lowest level or over know, at full PP since the run heals first. A live
+    Crystal run took one level 71 Poliwhirl and its trainees back to Lance every twenty minutes and
+    lost each time, so a lost run leaves the depth of the team that lost for the next one to beat.
     """
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from ..planning.readiness import Boss, team
+    from .readiness import league_lineup
     moves = policy.data.moves
-    lost = getattr(policy, 'collection', {}).get('league_lost')
-    if lost is not None and league_strength(snapshot) < min(lost + LEAGUE_REGROWTH, league_ceiling(snapshot)):
-        return False
-    return sum(moves.get(move, {}).get('pp', 0) for mon in snapshot.party
-               if not mon.egg and mon.level >= LEAGUE_LEVEL
-               for move in mon.moves if moves.get(move, {}).get('power')) >= LEAGUE_OPPONENTS
+    opponents, low = league_lineup(policy.data)
+    boss = policy.boss(snapshot, SimpleNamespace(key='league')) if hasattr(policy, 'boss') else Boss('league', league=True)
+    boss = replace(boss, opponents=opponents, low=low, lost=getattr(policy, 'collection', {}).get('league_lost'))
+    power = lambda move: moves.get(move, {}).get('power')
+    attack_pp = lambda move: moves.get(move, {}).get('pp', 0) if power(move) else 0
+    return boss, team(snapshot.party, getattr(policy, 'move_power', power), attack_pp, low)
 
 
-# A team that lost a postgame League run tries again only after this many more levels at League level.
-LEAGUE_REGROWTH = 10
-
-
-def league_strength(snapshot):
-    """The levels the party holds at League level, which grow as training brings it closer to winning."""
-    return sum(mon.level for mon in snapshot.party if not mon.egg and mon.level >= LEAGUE_LEVEL)
-
-
-def league_ceiling(snapshot):
-    """The most League strength the party can reach, so a team that lost at level 100 may try again."""
-    return 100 * len(snapshot.party)
+def league_verdict(policy, snapshot):
+    """None when the team may choose a postgame League run, or the oracle's Train verdict."""
+    from ..planning.readiness import judge
+    boss, fighters = league_run(policy, snapshot)
+    return judge(boss, fighters, getattr(policy, 'losses', None))
 
 
 def league_funding(policy, snapshot, Goal, *, again=False):
@@ -537,8 +532,8 @@ def league_loop(policy, snapshot, Goal):
         # each time, so the next run waits for the team to grow.
         state.pop('league_loop', None)
         state.pop('league_entered', None)
-        state['league_lost'] = league_strength(snapshot)
-    elif loop is not None and not policy.in_league(snapshot) and not league_ready(policy, snapshot):
+        state['league_lost'] = league_run(policy, snapshot)[1].depth
+    elif loop is not None and not policy.in_league(snapshot) and league_verdict(policy, snapshot) is not None:
         # A postgame run is optional, so a team too weak to finish it trains instead of trying.
         state.pop('league_loop', None)
     elif loop is not None:
@@ -1094,7 +1089,7 @@ def postgame_league(policy, snapshot, mem, current_time):
     """
     if 'champion' not in getattr(policy, 'completed', {}) or not snapshot.hall_of_fame_count:
         return False
-    return league_ready(policy, snapshot)
+    return league_verdict(policy, snapshot) is None
 
 
 HUNT_METHODS = {'grass', 'surf', 'old rod', 'good rod', 'super rod', 'headbutt', 'rock smash'}

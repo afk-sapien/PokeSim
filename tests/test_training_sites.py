@@ -209,7 +209,8 @@ def test_gen1_training_sites_have_wild_tables_and_tiles():
     from pokesim.strategy_data import MAPS
     for version, table in DATA['versions'].items():
         grass = {row['map'] for sources in table.values() for row in sources if row['method'] == 'grass'}
-        for place in {row[6] for row in GYMS} | {'ROUTE_23', 'POKEMON_MANSION_1F'}:
+        routes = {(row[6],) if isinstance(row[6], str) else row[6] for row in GYMS}
+        for place in {name for route in routes for name in route} | {'ROUTE_23', 'POKEMON_MANSION_1F'}:
             assert MAPS[place] in grass, (version, place)
             assert training_goal('x', place, '', place).targets, (version, place)
         for level in range(2, 101):

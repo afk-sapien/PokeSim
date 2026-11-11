@@ -15,6 +15,7 @@ from pokesim.gen2 import collection
 from pokesim.gen2 import policy as policy_module
 from pokesim.gen2.emulator import CANNOT_END, LEAGUE_CHECKPOINT, LEAGUE_RESTARTS, Emulator
 from pokesim.gen2.policy import SUBSTATUS_TRANSFORMED, Policy, transformed
+from pokesim.planning.readiness import DEPTH, STAMINA, Train
 from pokesim.play_clock import PlayClock
 
 HYDRO_PUMP, WATERFALL, REST, GROWL, PECK, SURF, TRANSFORM = 56, 127, 156, 45, 64, 57, 144
@@ -218,7 +219,8 @@ def test_a_league_attempt_restarted_again_and_again_is_called_off(monkeypatch):
     calls = []
     store = SimpleNamespace(autosaves=lambda: [Path('auto-v1-1.state')], checkpoint_metadata=lambda path: {'frame': 1, 'settled': True},
                             state_path=lambda name: league if name == LEAGUE_CHECKPOINT else None)
-    run = SimpleNamespace(recoveries=0, menu=None, collection={}, goal=None, decisions=0, in_league=lambda snapshot: True)
+    run = SimpleNamespace(data=DATA, recoveries=0, menu=None, collection={}, goal=None, decisions=0,
+                          in_league=lambda snapshot: True)
     emu = SimpleNamespace(unstick_streak=0, store=store, frame=100000, reloads=0, last_reload=0,
                           play_clock=PlayClock(), adventure_seed=7,
                           _behind_barrier=lambda metadata: False, policy=run,
@@ -269,15 +271,21 @@ def test_arriving_at_the_league_pokemon_center_keeps_the_entry_save(data):
     assert written == [LEAGUE_CHECKPOINT]
 
 
+def ready(run, snapshot):
+    """Whether the oracle lets the team take a postgame League run."""
+    return collection.league_verdict(run, snapshot) is None
+
+
 def test_a_postgame_league_run_waits_for_a_team_with_attacks_for_every_opponent(data, monkeypatch):
     monkeypatch.setattr(collection, 'clock_wait', lambda *args: None)
     carrier = mon(73, 39, 123, (SURF, 0, 0, 0), (15, 0, 0, 0))
     run = SimpleNamespace(data=data, completed={'champion': 1})
     # Hydro Pump and Waterfall give 20 attacks against 26 opponents, and the level 39 carrier is too weak to count.
     weak = lance((vaporeon(), carrier), in_battle=0)
-    assert not collection.league_ready(run, weak) and not collection.postgame_league(run, weak, None, 'day')
+    assert collection.league_verdict(run, weak) == Train(STAMINA, 26)
+    assert not collection.postgame_league(run, weak, None, 'day')
     strong = lance((vaporeon(), mon(73, 50, 150, (SURF, 0, 0, 0), (15, 0, 0, 0))), in_battle=0)
-    assert collection.league_ready(run, strong) and collection.postgame_league(run, strong, None, 'day')
+    assert ready(run, strong) and collection.postgame_league(run, strong, None, 'day')
 
 
 def test_a_postgame_league_run_lost_at_lance_waits_for_the_team_to_grow(monkeypatch):
@@ -292,19 +300,20 @@ def test_a_postgame_league_run_lost_at_lance_waits_for_the_team_to_grow(monkeypa
     def at(where, party=party, count=215):
         return SimpleNamespace(party=party, where=where, hall_of_fame_count=count)
 
-    assert collection.league_ready(run, at('INDIGO_PLATEAU_POKECENTER_1F'))
+    assert ready(run, at('INDIGO_PLATEAU_POKECENTER_1F'))
     assert collection.league_loop(run, at('INDIGO_PLATEAU_POKECENTER_1F'), None) == 'challenge'
     assert collection.league_loop(run, at('WILLS_ROOM'), None) == 'challenge'
     # Blacking out leaves the League without a Hall of Fame entry, which ends the run.
     assert collection.league_loop(run, at('INDIGO_PLATEAU_POKECENTER_1F'), None) is None
     assert 'league_loop' not in run.collection and run.collection['league_lost'] == 142
-    assert not collection.league_ready(run, at('ROUTE_29'))
+    # The next run waits until the Pokémon at Lv 40 or over have 10 more levels between them.
+    assert collection.league_verdict(run, at('ROUTE_29')) == Train(DEPTH, 152)
     grown = party + (mon(73, 45, 150, (SURF, 0, 0, 0), (15, 0, 0, 0)),)
-    assert collection.league_ready(run, at('ROUTE_29', grown))
+    assert ready(run, at('ROUTE_29', grown))
     # A run that reaches the Hall of Fame clears the memory of the loss.
     run.collection.update(league_loop=216, league_entered=True)
     assert collection.league_loop(run, at('HALL_OF_FAME', grown, 216), None) is None
-    assert 'league_lost' not in run.collection and collection.league_ready(run, at('ROUTE_29'))
+    assert 'league_lost' not in run.collection and ready(run, at('ROUTE_29'))
 
 
 def test_a_team_at_level_100_that_lost_the_league_may_try_again():
@@ -312,4 +321,4 @@ def test_a_team_at_level_100_that_lost_the_league_may_try_again():
     run = SimpleNamespace(data=DATA, completed={'champion': 1}, collection={'league_lost': 600},
                           in_league=lambda snapshot: False)
     party = tuple(mon(73, 100, 300, (SURF, 0, 0, 0), (15, 0, 0, 0)) for _ in range(6))
-    assert collection.league_ready(run, SimpleNamespace(party=party, where='ROUTE_29', hall_of_fame_count=215))
+    assert ready(run, SimpleNamespace(party=party, where='ROUTE_29', hall_of_fame_count=215))

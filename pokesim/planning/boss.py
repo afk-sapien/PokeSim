@@ -8,16 +8,16 @@ unready, and the journal says so once per leg. A leg runs from the last Pokémon
 boss, so trips spent in Victory Road leave the Indigo Plateau Center its own.
 
 Each generation reads its party into ``Fighter`` rows with ``fighter`` and its own move table, and
-asks one ``Gate`` per policy. The rule keeps no game knowledge of its own.
+asks one ``Gate`` per policy. The HP and PP a Pokémon needs are the readiness oracle's
+(planning/readiness.py short). The rule keeps no game knowledge of its own.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Callable, Mapping
 
-# A Pokémon under this share of its HP, or of its strong attacks' PP, is not ready for a boss.
-READY_HP = 0.5
-READY_PP = 0.5
+from .readiness import READY_HP, READY_PP, short_slots
+
 # An attack is one the Pokémon fights with when it hits at least this share as hard as its strongest.
 # A Typhlosion with Flamethrower and Strength spent still had 30 PP of Cut, so it never went to heal
 # and met Misty and Brock with Cut alone, and lost.
@@ -92,16 +92,6 @@ def fighter(hp, max_hp, strengths, pp, max_pp):
                    sum(strengths[index] * (max_pp[index] if index < len(max_pp) else pp[index]) for index in slots))
 
 
-def short(row):
-    """Whether one Pokémon is under READY_HP of its HP or READY_PP of its strong attacks' PP."""
-    return row.hp < row.max_hp * READY_HP or bool(row.strong_max) and row.strong_pp < row.strong_max * READY_PP
-
-
-def unready(fighters):
-    """The party slots that are not ready for a boss."""
-    return [index for index, row in enumerate(fighters) if short(row)]
-
-
 def restored(fighters):
     return all(row.hp >= row.max_hp and row.strong_pp >= row.strong_max for row in fighters)
 
@@ -151,7 +141,7 @@ class Gate:
             self.trips = 0
             self.noted = False
         self.was_restored = now
-        if key is None or not unready(fighters):
+        if key is None or not short_slots(fighters):
             if self.healing and key is not None:
                 self.done = True
             self.healing = False
@@ -310,7 +300,7 @@ def pp_heal_event(place):
 
 def unready_event(title, fighters, names=None):
     """The journal row, a planner entry like a dropped pin, for a party that goes into ``title`` unready."""
-    slots = unready(fighters)
+    slots = short_slots(fighters)
     names = names or [f'Slot {index + 1}' for index in range(len(fighters))]
     detail = ', '.join(names[index] for index in slots)
     return {'type': 'plan', 'title': f'Went in unready: {title}',
