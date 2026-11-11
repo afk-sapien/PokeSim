@@ -49,7 +49,7 @@ def test_locked_party_member_is_not_given_to_an_in_game_trader():
     s = snapshot([], party=(partner, mon(level=80)))
     policy = StrategicPolicy(7)
     policy.goal = Goal('collect_trade', 'Trade', 'Meet the trader')
-    policy.collection.project = {'give': partner.species, 'map': s.map}
+    policy.collection.project = {'method': 'trade', 'give': partner.species, 'map': s.map}
     choices = {identity(asdict(partner)): {'state': 'locked'}}
     policy.trade_preferences = lambda: choices
     memory = menu({1: '  BULBASAUR'}, (1, 1), top=(1, 1))
