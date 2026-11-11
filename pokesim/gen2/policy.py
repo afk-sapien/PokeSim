@@ -1147,9 +1147,18 @@ class Policy:
         return self.plain_boss(key)
 
     def readiness_target(self, snapshot):
-        """The level a Pokémon's gain counts toward as progress (planning/readiness.target), or None."""
+        """The level a Pokémon's gain counts toward as progress (planning/readiness.target), or None.
+
+        Red has no matchup rule, so the loss bar alone holds him, as it holds the Kanto gyms. His
+        gains still count toward the matchup level over his ace, Pikachu's Lv 81 plus MARGIN, which
+        is also the most a loss bar before him asks (planning/readiness.CEILING). Play does not
+        change, since only the progress rows read it."""
+        from dataclasses import replace
         from ..planning.readiness import target
-        return target(self.next_boss(snapshot))
+        boss = self.next_boss(snapshot)
+        if boss.key == 'red':
+            boss = replace(boss, scores=(None,))
+        return target(boss)
 
     def boss_training(self, snapshot, goal):
         """A walk that trains before the boss ``goal`` names, or None once the oracle finds the team ready.
