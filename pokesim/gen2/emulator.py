@@ -1224,7 +1224,8 @@ class Emulator:
                     elif not self.manual.empty():
                         loop.pending = [self.manual.get_nowait()]
                     elif self.manual_mode:
-                        loop.pending = [Action(None, 0, 4)]
+                        # One frame at a time, so a press waits at most a frame for the loop to pick it up.
+                        loop.pending = [Action(None, 0, 1)]
                     elif self.paused:
                         self.last_activity = time.monotonic()
                         self.consecutive_errors = 0
