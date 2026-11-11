@@ -235,4 +235,4 @@ def test_a_level_evolution_turn_that_gains_experience_is_progress_not_a_failure(
     assert c.project is None
     assert c.director.outcomes[-1]['status'] == 'advanced'
     assert 'dragonite' not in c.director.failures
-    assert not c.director.waiting('dragonite', c.elapsed)   # free to take the next turn straight away
+    assert not c.director.waiting('dragonite', c.clock)   # free to take the next turn straight away

@@ -296,9 +296,21 @@ class StrategicPolicy(Policy):
         self.on_restore()
 
     def reset(self):
-        moves, compatible = self.tm_moves, self.tm_compatible
+        moves, compatible, tables = self.tm_moves, self.tm_compatible, self.monitor_tables
         self.__init__(self.seed, self.starter_setting)
         self.tm_moves, self.tm_compatible = moves, compatible
+        # The new game keeps the store's tables, empty, as the restart emptied the store's copy.
+        tables.clear()
+        self.monitor_tables = tables
+
+    @property
+    def monitor_tables(self):
+        """The director's stand-downs and spent frames (runtime.supervision.Tables), which a reload keeps."""
+        return self.collection.director.progress
+
+    @monitor_tables.setter
+    def monitor_tables(self, tables):
+        self.collection.director.attach(tables)
 
     @property
     def hopeless_battle(self):
@@ -1606,7 +1618,7 @@ class StrategicPolicy(Policy):
         if not self.tm_moves or self.heal_latch or in_league or not choice.wins(teach):
             return goal, None
         monitor = self.collection.director.monitor
-        now = self.collection.elapsed
+        now = self.clock
         if self.tm_plan:
             key = 'tm:' + str(self.tm_plan['item'])
             delta = max(0, min(120, s.frame - self.tm_frame)) if self.tm_frame is not None else 0
@@ -1849,7 +1861,7 @@ class StrategicPolicy(Policy):
 
     def no_route_waiting(self, goal):
         """Whether ``goal`` found no route lately and waits before it is walked again."""
-        return self.unreachable().waiting(goal.key, self._place(goal), goal.targets, self.collection.elapsed)
+        return self.unreachable().waiting(goal.key, self._place(goal), goal.targets, self.clock)
 
     def _no_route(self, snapshot, goal):
         """End the turn of a walk with no route and record the failed attempt, with its map and targets.
@@ -1857,7 +1869,7 @@ class StrategicPolicy(Policy):
         Nothing reloads. A reload replayed the same missing route after a full stall timeout and fed the
         stall watchdog. A collection project stands down as well, so the director picks another one.
         """
-        self.unreachable().record(goal.key, self._place(goal), goal.targets, self.collection.elapsed, snapshot.map)
+        self.unreachable().record(goal.key, self._place(goal), goal.targets, self.clock, snapshot.map)
         if goal.key == 'collect_pickup':
             self.pickups.defer(self.collection.elapsed, 'No route to the pickup')
         elif goal.key.startswith('collect_') and self.collection.project:

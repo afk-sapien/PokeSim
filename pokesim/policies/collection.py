@@ -554,6 +554,7 @@ class Collection:
         self.peer_demand = {}
         self.demand_until = 0
         # The policy context clock at the last step, in game frames that never rewind. Never saved.
+        # The director's stand-downs count on it, so a reload neither restarts nor stretches them.
         self.clock = 0
         self.next_marathon = 0
         self.marathon_records = {}
@@ -672,16 +673,14 @@ class Collection:
         self.activity_events = data.get('activity_events', [])
         self.deferred_catches = data.get('deferred_catches', {})
         for key in self.state_dict():
-            if key in data and key != 'director':
+            if key in data and key not in ('director', 'remaining'):
                 setattr(self,key,data[key])
-        self.director.load(data.get('director', {}))
-        # Older saves kept the retry times and the idle count beside the director.
-        for key, deadline in (data.get('attempts') or {}).items():
-            self.director.resume(key, deadline, self.elapsed)
-        if 'idle_frames' in data and 'progress' not in data.get('director', {}):
+        # A reload keeps the frames each project spent, so the save's budget and idle count are taken
+        # only when the director had no tables yet. Older saves kept the retry times beside it.
+        fresh = self.director.load(data.get('director', {}), self.elapsed, data.get('attempts'))
+        if fresh and 'idle_frames' in data and 'progress' not in data.get('director', {}):
             self.idle_frames = data['idle_frames']
-        if self.project and budgeted(self.project) and 'remaining' in data:
-            # An older save kept the budget beside the director. A newer one agrees with the monitor.
+        if 'remaining' in data and (fresh or not (self.project and budgeted(self.project))):
             self.remaining = data['remaining']
         self.marathon_previous = None
         if self.eevee_choice not in (134, 135, 136):
@@ -713,7 +712,7 @@ class Collection:
         label = name(project['species']) if project.get('species') else project['method'].title()
         progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
         if stand_down:
-            self.director.finish(project, self.elapsed, False, reason, progressed)
+            self.director.finish(project, self.clock, False, reason, progressed)
         self.history = (self.history + [f'Changed plan: {label}. {reason}'])[-6:]
         self.project = None
         self.remaining = 0
@@ -797,7 +796,7 @@ class Collection:
         for chosen, flag in ((106, 'EVENT_GOT_HITMONLEE'), (107, 'EVENT_GOT_HITMONCHAN')):
             if event_set(s.event_flags, flag):
                 self.dojo_choice = chosen
-        self.director.forget_expired(self.elapsed)
+        self.director.forget_expired(self.clock)
         idle = CONTINUE
         if self.project and (not suspended or self.project['method'] in ('train', 'marathon')):
             project = self.project
@@ -948,7 +947,7 @@ class Collection:
                     label = f'{name(project["parent"])} toward level {project["target_level"]}'
                 self.history = (self.history + [f'{"Completed" if finished else "Will revisit"}: {label}'])[-6:]
                 progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
-                self.director.finish(project, self.elapsed, bool(finished),
+                self.director.finish(project, self.clock, bool(finished),
                                      'Target reached' if finished else 'Expedition time budget reached', progressed)
                 self.end_pin(self.project_key)
                 self.project = None
@@ -1086,7 +1085,7 @@ class Collection:
         from .ledger import funds_short
         stood = self.director.monitor._table(STOOD_DOWN)
         return (s.owned, s.items, s.stored_pokemon, tuple((p.species, p.level) for p in s.party), s.event_flags,
-                s.map, frozenset(key for key in stood if self.director.waiting(key, self.elapsed)),
+                s.map, frozenset(key for key in stood if self.director.waiting(key, self.clock)),
                 self.elapsed >= self.next_marathon, funds_short(s), tuple(sorted(self.demand().items())))
 
     def choose(self,s,nav,rng,main):
@@ -1170,7 +1169,7 @@ class Collection:
                 key = f'train:{project.get("trainee_key") or project["parent"]}:{project["target_level"]}'
                 if project.get('scoped_partner'):
                     key += ':' + str(project['parent']) + ':' + project.get('trainee_nick', '')
-            if not self.director.waiting(key, self.elapsed):
+            if not self.director.waiting(key, self.clock):
                 goal = self.goal(s, project)
                 distance = distance_to(goal.targets) if goal and goal.targets else None
                 if distance is not None:
@@ -1430,7 +1429,7 @@ class Collection:
         goals, reason = self.goal_list(s, nav, rng, limit=None)
         match = next((goal for goal in goals if goal['key'] == key), None)
         if match is None:
-            if key in self.director.monitor._table(STOOD_DOWN) and self.director.waiting(key, self.elapsed):
+            if key in self.director.monitor._table(STOOD_DOWN) and self.director.waiting(key, self.clock):
                 raise ValueError('It stood down after a failed try. Try again later')
             raise ValueError(reason or pin.UNAVAILABLE.capitalize())
         if self.project and self.project_key != key:

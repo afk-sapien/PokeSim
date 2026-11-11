@@ -27,6 +27,18 @@ def state(**kw):
     return snap(**base)
 
 
+def reloaded(c):
+    """A Collection that loads ``c``'s save and keeps ``c``'s monitor tables, as a reload of the same game does.
+
+    The save carries no stand-downs or spent frames. They sit in the supervisor's tables, which a reload keeps.
+    """
+    import json
+    restored = Collection()
+    restored.director.attach(c.director.progress)
+    restored.load(json.loads(json.dumps(c.state_dict())))
+    return restored
+
+
 def test_data_is_version_specific_and_has_evolution_methods():
     red=DATA['versions']['red']
     blue=DATA['versions']['blue']
@@ -76,7 +88,7 @@ def test_hunt_deadline_survives_restart_and_yields_to_story():
     restored.observe(state(frame=100))
     restored.observe(state(frame=160))
     assert restored.project is None
-    assert restored.director.waiting('hunt', restored.elapsed)
+    assert restored.director.waiting('hunt', restored.clock)
     # The stand-down is the only wait. The plan is drawn again at once, without the hunt.
     assert restored.idle_token is None
 
@@ -373,7 +385,7 @@ def test_moving_between_familiar_maps_cannot_extend_a_failed_expedition():
     for frame in range(0, 7500, 120):
         c.observe(state(frame=frame, map=MAPS['ROUTE_1'] if frame % 240 else MAPS['ROUTE_2'], x=frame % 20))
     assert c.project is None
-    assert c.director.waiting('ditto', c.elapsed)
+    assert c.director.waiting('ditto', c.clock)
     assert 'No encounter' in c.history[-1]
 
 
@@ -420,17 +432,17 @@ def test_a_walk_back_that_never_arrives_counts_again():
     assert c.project is None
 
 
-def test_training_gains_keep_an_expedition_alive_and_idle_budget_survives_restore():
+def test_training_gains_keep_an_expedition_alive_and_a_reload_keeps_the_idle_count():
     c = Collection()
     c.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
     c.remaining = 36000
     for frame in range(0, 9000, 120):
         c.observe(state(frame=frame, party=(mon(experience=frame // 3000),)))
     assert c.project is not None
-    saved = c.state_dict()
-    restored = Collection()
-    restored.load(saved)
-    assert restored.idle_frames == c.idle_frames
+    idle = c.idle_frames
+    assert idle
+    restored = reloaded(c)
+    assert restored.idle_frames == idle
     assert restored.project_maps == c.project_maps
 
 
@@ -440,7 +452,7 @@ def test_stationary_recovery_abandons_project_without_losing_game_progress():
     p.collection.elapsed = 10000
     p.recover_stall(state(frame=300))
     assert p.collection.project is None
-    assert p.collection.director.waiting('ditto', p.collection.elapsed)
+    assert p.collection.director.waiting('ditto', p.collection.clock)
     assert p.collection.idle_token is None
     assert p.recoveries == 1
 
@@ -453,7 +465,7 @@ def test_repeated_flags_do_not_count_as_fresh_expedition_progress():
         events = flags('EVENT_GOT_POKEDEX', 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1') if frame % 240 else flags('EVENT_GOT_POKEDEX')
         c.observe(state(frame=frame, event_flags=events, x=frame % 20))
     assert c.project is None
-    assert c.director.waiting('ditto', c.elapsed)
+    assert c.director.waiting('ditto', c.clock)
 
 
 def test_unreachable_evolution_and_trainer_candidates_are_not_selected():

@@ -58,7 +58,7 @@ def gen1_walk():
     # While it waits, the walk looks around instead of recording the same target again.
     policy._overworld(where, bytearray(65536))
     assert explored and len(NoRoute(policy.collection.director.progress, FRAMES).attempts()) == 1
-    policy.collection.elapsed += FRAMES.wait(1)
+    policy.clock += FRAMES.wait(1)
     assert not policy.no_route_waiting(policy.goal)
     return policy, NoRoute(policy.collection.director.progress, FRAMES).attempts(), (str(target[0]), [list(target)], MAPS['PALLET_TOWN'])
 
