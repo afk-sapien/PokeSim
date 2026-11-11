@@ -12,12 +12,10 @@ from ..planning.throws import THROW_BAR, gen1_throw
 from ..ram import PartyMon
 from ..strategy_data import ITEMS, MAPS, MATCHUPS, MOVES, PRICES, SPECIES
 
-W_BATTLE_MON = 0xD014
-W_ENEMY_MON = 0xCFE5
-W_ENEMY_SPECIES2 = 0xCFD8
-W_ENEMY_STATUS3 = 0xD069
-TRANSFORMED = 8
-W_PLAYER_DISABLED_MOVE = 0xD06D
+from pokecore.gen1 import BIT_TRANSFORMED, W_BATTLE_MON, W_ENEMY_MON, W_ENEMY_SPECIES2, W_PLAYER_DISABLED_MOVE
+from pokecore.gen1 import W_ENEMY_BATTLE_STATUS3 as W_ENEMY_STATUS3
+
+TRANSFORMED = 1 << BIT_TRANSFORMED
 BALLS = (ITEMS["POKE_BALL"], ITEMS["GREAT_BALL"], ITEMS["ULTRA_BALL"])
 # Attacks a catch never weakens with: they cost the user, knock out at once, or hit too often to judge.
 RISKY_CHIPS = ('EXPLODE_EFFECT', 'RECOIL_EFFECT', 'OHKO_EFFECT', 'TWO_TO_FIVE_ATTACKS_EFFECT')

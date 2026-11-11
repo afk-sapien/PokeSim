@@ -5,6 +5,8 @@ import time
 import uuid
 from dataclasses import replace
 
+from pokecore.gen1 import W_WALK_COUNTER
+
 from .. import champion_shop, tm_shop
 from ..checkpoints import CheckpointStore, sync_directory
 from ..ram import W_BAG_ITEMS, W_CUR_MAP, W_MONEY, W_NUM_BAG_ITEMS, W_X, W_Y, read_snapshot
@@ -30,7 +32,7 @@ def purchase(emu):
         emu.step_tracker.flush(force=True)
     before = read_snapshot(emu.pb.memory, emu.frame)
     if (not before.valid or not before.started or before.in_battle or before.textbox or before.start_menu
-            or emu.pb.memory[0xcfc5] or (before.map, before.x, before.y) != tm_shop.COUNTER
+            or emu.pb.memory[W_WALK_COUNTER] or (before.map, before.x, before.y) != tm_shop.COUNTER
             or policy.goal.key != 'buy_tm' or getattr(policy, 'heal_latch', False)
             or not tm_shop.valid_plan(before, plan, policy.tm_moves, policy.tm_compatible, champion_shop.ready(emu.store))):
         return None

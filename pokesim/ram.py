@@ -52,10 +52,11 @@ from .game_data import load
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
 from pokecore.storage import decode_box, read_box_counts as read_box_counts, read_box_records
+from pokecore.gen1 import BIT_TRANSFORMED, W_ENEMY_BATTLE_STATUS3
 
 # Yellow's opening scene, where Oak catches Pikachu before the player has a party.
 BATTLE_TYPE_PIKACHU = 4
-W_ENEMY_STATUS3, TRANSFORMED = 0xD069, 8
+W_ENEMY_STATUS3, TRANSFORMED = W_ENEMY_BATTLE_STATUS3, 1 << BIT_TRANSFORMED
 
 TABLES = load("tables.json")
 MAP_NAMES = {int(k): place_name(v) for k, v in TABLES["maps"].items()}   # display spelling

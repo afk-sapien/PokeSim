@@ -39,6 +39,9 @@ from .team import (development_candidate, held_identities, potential, readiness,
 from ..pcvalue import VisitTeam
 from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
+from pokecore.gen1 import (BIT_SPINNING, BIT_STRENGTH_ACTIVE, BIT_TRAINER_BATTLE, W_FACING, W_MOVE_NUM,
+                           W_MOVEMENT_FLAGS, W_STATUS_FLAGS1, W_STATUS_FLAGS7, W_WALK_BIKE_SURF_STATE,
+                           W_WALK_COUNTER, W_WHICH_POKEMON)
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
 from ..pc_list import guarded
 from ..shortcuts import ShortcutRunner, gen1_ui
@@ -57,12 +60,7 @@ HM_TEACH_ITEMS = frozenset((ITEMS['HM03'], ITEMS['HM04']))
 # pass without the partner gaining any experience, so grass without encounters cannot hold it.
 DEVELOPMENT_STALL = 2400
 
-W_WALK_COUNTER = 0xCFC5
-# wFlags_D733 bit 3 is set while a trainer who spotted the player engages them.
-W_FLAGS_D733, TRAINER_ENGAGING = 0xD733, 0x08
-W_FACING = 0xC109
-W_WHICH_POKEMON = 0xCF92
-W_MOVE_NUM = 0xD0E0
+TRAINER_ENGAGING = 1 << BIT_TRAINER_BATTLE
 W_REPEL_STEPS = W_MOVE_NUM - 5  # wRepelRemainingSteps precedes the four-byte wMoves array
 FACING = {"down": 0, "up": 4, "left": 8, "right": 12}
 HM_ITEM_MOVES = {ITEMS[f'HM0{number}']: move for number, move in zip(range(1, 6), (15, 19, 57, 70, 148))}
@@ -662,7 +660,7 @@ class StrategicPolicy(Policy):
             if expected == signature and frame - sent < 48:
                 return wait()
             self.confirming = None
-        if not s.in_battle and mem[0xD736] & 0x80:
+        if not s.in_battle and mem[W_MOVEMENT_FLAGS] & (1 << BIT_SPINNING):
             self.mode = "riding the arrow tiles"
             self.progress_frame = frame
             return wait()
@@ -670,11 +668,11 @@ class StrategicPolicy(Policy):
         # A trainer who spots the player holds them still until the battle starts. A step tried then did not
         # meet a wall. Counted as failed steps, they blocked every side of the player while a Route 25 trainer
         # walked up, and the walk to Bill found no route.
-        held = bool(mem[W_FLAGS_D733] & TRAINER_ENGAGING)
+        held = bool(mem[W_STATUS_FLAGS7] & TRAINER_ENGAGING)
         self.nav.observe(pos, frame, walking, interrupted=kind != "overworld" or bool(s.in_battle) or held)
         if walking and kind == "overworld":
             return wait()
-        walking_state = mem[0xD700] | ((mem[0xD728] & 1) << 2)
+        walking_state = mem[W_WALK_BIKE_SURF_STATE] | ((mem[W_STATUS_FLAGS1] >> BIT_STRENGTH_ACTIVE & 1) << 2)
         failure = self.watch.observe(s, kind, scr.cursor, walking_state,
                                      self.goal.key.startswith(('train_', 'catch_', 'collect_hunt', 'collect_train')) or self.developing)
         if failure:
@@ -1198,7 +1196,7 @@ class StrategicPolicy(Policy):
             task = seafoam_current_task(s, self.nav)
             direction = self.boulders.route(s, self.nav, task) if task else None
             if direction:
-                if not mem[0xD728] & 1:
+                if not mem[W_STATUS_FLAGS1] & (1 << BIT_STRENGTH_ACTIVE):
                     target = next((i for i, p in enumerate(s.party) if 70 in p.moves), None)
                     actions = self._field(s, 'STRENGTH', target, 'Use Strength to slow the Seafoam current')
                     if actions:
@@ -1220,7 +1218,7 @@ class StrategicPolicy(Policy):
                 # Plan the push before reaching for Strength. A boulder in another section of the
                 # floor is only reachable by ladder, so there is no push to make from here, and
                 # activating Strength first opened the menu on every step without moving anything.
-                if not mem[0xD728] & 1:
+                if not mem[W_STATUS_FLAGS1] & (1 << BIT_STRENGTH_ACTIVE):
                     target = next((i for i, p in enumerate(s.party) if 70 in p.moves), None)
                     actions = self._field(s, 'STRENGTH', target, 'Use Strength to move the boulder')
                     if actions:
@@ -1371,7 +1369,7 @@ class StrategicPolicy(Policy):
             if any(item == ITEMS["CARD_KEY"] and qty for item, qty in s.items):
                 self.mode = "unlocking a door"
                 return tap(direction, 4, 12) if mem[W_FACING] != FACING[direction] else tap("a")
-        if self.nav.can_surf and world.get("tileset") in WATER_TILESETS and tree in (0x14, 0x32, 0x48) and mem[0xD700] != 2:
+        if self.nav.can_surf and world.get("tileset") in WATER_TILESETS and tree in (0x14, 0x32, 0x48) and mem[W_WALK_BIKE_SURF_STATE] != 2:
             here = mem[W_TILEMAP + 9 * 20 + 8]
             ts = world["tileset"]
             if (live_tile not in (0x14, 0x32, 0x48)
