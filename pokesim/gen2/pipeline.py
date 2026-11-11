@@ -107,7 +107,7 @@ class Ballot:
         """Offer ``picked``, the errand an earlier decision picked, again as it was picked, and return the
         goal that runs now. An enabler meets the same need, a forced move is forced again, and a goal is
         under way. Its writes ran when it was picked, so it carries none."""
-        return self._add(replace(picked, hold=True, parked='', commit=None))
+        return self._add(replace(picked, hold=True, parked=None, commit=None))
 
     def commit(self):
         """Run the writes of the offer that runs. Each offer's writes run once, so the step can commit

@@ -57,6 +57,10 @@ PREPARING = {'travelling', 'storage', 'rendezvous'}
 RELOAD_QUIET_FRAMES = 60 * FRAMES_PER_SECOND
 INVALID_GRACE_FRAMES = 5 * FRAMES_PER_SECOND
 CENTER_GRACE_FRAMES = 60 * FRAMES_PER_SECOND
+# A stall away from battle sets the running project aside with no reload, every time. Red, Blue and
+# Yellow never reload after a park (runtime/supervision.py), and the project comes back once its
+# stand-down on the PlayClock runs out (policies/director.RETRY).
+RELOAD_AFTER_PARK = False
 
 log = logging.getLogger("pokesim.emu")
 
@@ -988,7 +992,8 @@ class Emulator:
             self._unstick(self.invalid_frame, "game state glitched")
         elif config.STUCK_RELOAD_SECONDS and frame - self.stuck_frame > config.STUCK_RELOAD_SECONDS * FRAMES_PER_SECOND:
             recover = getattr(self.policy, 'recover_stall', None)
-            if recover and self.snapshot and self.snapshot.valid and not self.snapshot.in_battle:
+            if (recover and self.snapshot and self.snapshot.valid and not self.snapshot.in_battle
+                    and self.supervisor.may_park(RELOAD_AFTER_PARK)):
                 self._drop_pin(pin.STUCK)
                 recover(self.snapshot)
                 self.stuck_frame = frame

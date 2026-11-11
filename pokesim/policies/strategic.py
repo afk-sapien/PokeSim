@@ -29,6 +29,7 @@ from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TR
 from . import kinds
 from ..planning import values
 from ..planning import boss
+from ..planning import decide
 from .pipeline import ERRAND_FRAMES, ERRANDS, Ballot
 from .ledger import battle_room, fighters, league_treatment
 from ..planning.ledger import PP
@@ -1894,7 +1895,7 @@ class StrategicPolicy(Policy):
         if self.pickups.active:
             self.pickups.defer(self.clock, 'Pickup approach was stationary too long')
         else:
-            self.collection.abandon('The run was stationary too long')
+            self.collection.abandon('The run was stationary too long', failure=decide.STUCK.kind)
         self.collection.idle_token = None
         self._remember_failure(snapshot, 'Stationary objective abandoned without reloading')
         self.on_restore()

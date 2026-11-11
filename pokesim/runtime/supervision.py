@@ -6,6 +6,9 @@ restart does not start the ladder again. An owner restart empties them with the 
 
 The rungs, in order:
 
+0. Park the goal that stopped, when the generation can set it aside: it stands down with its failure
+   and the planner picks again, with no reload. A park counts as a rung. With ``reload_after_park``,
+   as in Gold, Silver and Crystal, only the first stall of a streak parks and the next one reloads.
 1. Reload a save from before the trouble. The third reload in a row without new progress reports
    the run as stalled.
 2. Inside the League, from the second reload on, or at once for a battle that cannot end, restart
@@ -58,7 +61,7 @@ RECOVERING_SECONDS = 30
 # Real seconds after an achievement that the status page says the run is making progress.
 FRESH_SECONDS = 120
 
-GIVE_UP, HOLD, RELOAD = 'give up', 'hold', 'reload'
+GIVE_UP, HOLD, PARK, RELOAD = 'give up', 'hold', 'park', 'reload'
 
 
 @dataclass(frozen=True)
@@ -240,12 +243,19 @@ class Supervisor:
             self.reloads, self.exhausted = 0, False
             self._save()
 
-    def climb(self, why, give_up, *, looping=lambda: None, in_league=lambda: False):
+    def may_park(self, reload_after_park):
+        """Whether a stall may park its goal rather than reload. With ``reload_after_park``, only the
+        first stall since new progress may."""
+        return not reload_after_park or self.reloads == 0
+
+    def climb(self, why, give_up, *, looping=lambda: None, in_league=lambda: False, park=None,
+              reload_after_park=True):
         """The next rung for a run stuck because of ``why``.
 
         ``give_up`` stands down whatever every reload left stuck and says whether there was anything.
         ``looping`` gives the loop guard's reason, if any, and ``in_league`` whether the party is inside
         the League. Each is asked only when the rung depends on it, since a loop scan reads the journal.
+        ``park``, when the stall can park, sets the goal that stopped aside and says whether it did.
         """
         if self.reloads >= MAX_RELOADS and give_up():
             reloads = self.reloads
@@ -256,6 +266,10 @@ class Supervisor:
             if first:
                 self._save()
             return Rung(HOLD, self.reloads, first=first)
+        if park is not None and self.may_park(reload_after_park) and park():
+            self.reloads += 1
+            self._save()
+            return Rung(PARK, self.reloads)
         self.reloads += 1
         self._save()
         league = (self.reloads >= LEAGUE_RELOADS or why == CANNOT_END) and bool(in_league())

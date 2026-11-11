@@ -235,14 +235,14 @@ def test_a_waiting_pin_says_why_beside_its_label(page, live_game, width):
     url, emu = live_game
     shown = emu.status
     pin = {'key': 'hunt', 'label': 'Find Clefairy', 'started': False,
-           'parked': 'no route found lately, so the planner tries again after the next badge'}
+           'parked': {'kind': 'no_route', 'detail': 'no route found lately, so the planner tries again after the next badge'}}
     emu.status = lambda: {**shown(), 'strategy': {**shown()['strategy'], 'pin': pin}}
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(url)
     line = page.locator('#next-activity-status')
-    expect(line).to_have_text(f'Next: Find Clefairy (waiting: {pin["parked"]})')
+    expect(line).to_have_text(f'Next: Find Clefairy (waiting: {pin["parked"]["detail"]})')
     expect(page.locator('#next-activity-cancel')).to_be_visible()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     # A pin with no reason, as every pin is until the server sends one, shows only its label.
-    pin['parked'] = ''
+    pin['parked'] = None
     expect(line).to_have_text('Next: Find Clefairy', timeout=5000)

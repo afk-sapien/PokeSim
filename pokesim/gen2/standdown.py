@@ -115,8 +115,10 @@ def pc_key(team):
     return 'pc:' + json.dumps(list(team))
 
 
-def stand_down(policy, key, backoff=BACKOFF):
-    return monitor(policy, backoff).stand_down(key, policy.clock)
+def stand_down(policy, key, backoff=BACKOFF, failure=None):
+    """Set ``key`` aside and return when it may be tried again. ``failure`` is the kind of failure
+    (planning/decide.py) that set it aside."""
+    return monitor(policy, backoff).stand_down(key, policy.clock, failure=failure)
 
 
 def standing_down(policy, key, backoff=BACKOFF):
@@ -174,14 +176,15 @@ def stalled_objectives(policy):
     return {'keys': sorted(keys), 'team': team}
 
 
-def carry_over(policy, stalled):
-    """Stand the stalled objectives down in the policy a reload just restored.
+def carry_over(policy, stalled, failure=None):
+    """Stand the stalled objectives down in the policy a reload just restored, or in the running one when
+    the stall parks them, each with the kind of ``failure`` that stopped them.
 
     The earlier stand-downs need no carrying, since the reload keeps the monitor's tables.
     """
     state = policy.collection
     for key in stalled['keys']:
-        stand_down(policy, key)
+        stand_down(policy, key, failure=failure)
     target = state.get('target')
     if target and hunt_key(target['species']) in stalled['keys']:
         state['target'] = None

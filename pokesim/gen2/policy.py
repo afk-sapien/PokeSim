@@ -166,6 +166,9 @@ class Policy:
         self.ballot = None
         self.errand_offer = None
         self.pipeline_pick = None
+        # The source and goal key of the last decision's pick, which tells the stuck guard whether the
+        # goal that stopped is the collection's and can be set aside. Never saved.
+        self.picked = None
 
     def state_dict(self):
         return {'starter': self.starter, 'rng': self.rng.getstate(), 'completed': self.completed, 'collection': self.collection, 'demand': self.demand, 'decisions': self.decisions,
@@ -1448,6 +1451,8 @@ class Policy:
         if ballot is not None:
             # Only the offer the step ends with writes, so an offer a later site overrides leaves nothing.
             ballot.commit()
+            running = ballot.running
+            self.picked = None if running is None else (running.source, running.key)
         shadow = getattr(self, 'shadow', None)
         if ballot is not None and shadow is not None and self.goal is not None:
             # The decision is the pipeline's, and the shadow keeps its record for the gate and the replays.

@@ -97,7 +97,9 @@ class AdventureDirector:
         pick = arbiter.choose(candidates, pinned=pinned)
         return None if pick is None else projects[pick.key]
 
-    def finish(self, project, clock, success, reason, progressed=False):
+    def finish(self, project, clock, success, reason, progressed=False, failure=None):
+        """Record how ``project`` ended. One that did not succeed stands down, with the kind of ``failure``
+        that ended it when there was one, and comes back once its stand-down runs out (RETRY)."""
         key = project.get('key', project['method'])
         kind = category(project)
         if success:
@@ -107,7 +109,8 @@ class AdventureDirector:
             retry = 0
         else:
             # The key moves to the newest end so trimming drops the projects left alone longest.
-            retry = self.monitor.stand_down(key, clock, progressed=progressed, most=RETRY.doublings + 1)
+            retry = self.monitor.stand_down(key, clock, progressed=progressed, most=RETRY.doublings + 1,
+                                            failure=failure)
             self.trim()
         self.outcomes = (self.outcomes + [{
             'key': key, 'category': kind, 'status': 'completed' if success else 'advanced' if progressed else 'deferred',
