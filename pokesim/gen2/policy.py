@@ -33,6 +33,10 @@ REST, GRASS = 156, 22
 # Moves that win back HP, so a foe's attacks may never knock out the Pokémon that knows one.
 HEALING_MOVES = frozenset({'EFFECT_HEAL', 'EFFECT_MORNING_SUN', 'EFFECT_SYNTHESIS', 'EFFECT_MOONLIGHT',
                            'EFFECT_LEECH_SEED'})
+# What long_odds answers when a catch should run and wait for a new move, member or ball.
+LEAVE = 'leave'
+# The bit the cartridge's loadwildmon script command sets in wBattleScriptFlags for the battle it starts.
+SCRIPTED_BATTLE = 0x80
 
 
 def transformed(mem, mon):
@@ -1974,6 +1978,19 @@ class Policy:
                     candidates = [row for row in candidates if row[0] is not None and self.data.moves.get(
                         snapshot.party[row[1]].moves[row[0]], {}).get('effect') == 'EFFECT_SLEEP']
                 switch = next((i for move, i in candidates if move is not None), None)
+            if catch and weaken is None and switch is None and not (partner or trapped):
+                odds = self.long_odds(snapshot, mem, catch_species, active, escape=can_escape)
+                if odds == LEAVE:
+                    # Nobody can weaken it, so the balls are kept and the species waits for a new
+                    # move, member or ball (planning.throws). A refused run fights the battle out.
+                    from .collection import defer
+                    defer(self, snapshot, catch_species)
+                    catch = False
+                    action = self.battle_task(Flee(), snapshot, mem)
+                    if action:
+                        return action
+                else:
+                    switch = odds
             if switch is None and not catch and not trapped and self.collection.get('tower'):
                 switch = self.tower_switch(snapshot, mem, active)
             fighters = [transformed(mem, mon) if index == active else mon for index, mon in enumerate(snapshot.party)]
@@ -2283,6 +2300,47 @@ class Policy:
                    'HEAVY BALL', 'LEVEL BALL', 'LOVE BALL', 'FRIEND BALL', 'MOON BALL')
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
         return master + regular if roaming else regular + master
+
+    def long_odds(self, snapshot, mem, species, active, *, escape):
+        """What a catch does when its battler cannot weaken the target and the next throw is under
+        1 in 10 (planning.throws): the slot of a party member that can weaken it, LEAVE when nobody can
+        and the target is untouched, or None to throw.
+
+        A shiny, a legendary, a roamer, a one-time encounter and a contest catch always get throws, and
+        so does a battle with no escape. So does a wild battle a map script started, which a run only
+        meets again by talking to it, as the story does with the transmitter's Electrodes. Paralysis
+        adds nothing to a Gen II throw, so a member that can only paralyze is not switched in for it.
+        """
+        from ..planning.throws import GEN2_BALLS, THROW_BAR, gen2_throw
+        from .ledger import ONE_CHANCE
+        if (self.wild_shiny(snapshot) or species in ONE_CHANCE or mem.byte('wStatusFlags2') & 4
+                or mem.byte('wBattleScriptFlags') & SCRIPTED_BATTLE):
+            return None
+        held = {self.data.item_names.get(item, '').casefold() for item, count in snapshot.pockets['balls'] if count}
+        ball = next((label for label in self.ball_labels(snapshot) if label.casefold() in held), None)
+        if ball is None:
+            return None
+        rate, multiplier = self.data.species[species]['catch_rate'], GEN2_BALLS.get(ball, 1)
+        chance = gen2_throw(rate, multiplier, snapshot.enemy_hp, snapshot.enemy_max_hp, mem.byte('wEnemyMonStatus'))
+        if chance >= THROW_BAR:
+            return None
+        foe = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level,
+            stats=tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef')))
+        attacks = [move for move in mem.read('wEnemyMonMoves', 4) if move]
+        for slot, mon in enumerate(snapshot.party):
+            if slot == active or mon.egg or mon.hp <= mon.max_hp // 2:
+                continue
+            # A member the target knocks out in one hit weakens nothing. A level 40 Ursaring on Route 28
+            # knocked out three members of level 26 or less in turn, and the run then left it anyway.
+            target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
+                                     enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
+            if max((self.move_score(move, foe, target) for move in attacks), default=0) >= mon.hp:
+                continue
+            move = self.capture_move(snapshot, mem, slot=slot)
+            if move is not None and self.data.moves.get(mon.moves[move], {}).get('effect') != 'EFFECT_PARALYZE':
+                return slot
+        untouched = chance <= gen2_throw(rate, multiplier, snapshot.enemy_max_hp, snapshot.enemy_max_hp, 0)
+        return LEAVE if escape and untouched else None
 
     def capture_move(self, snapshot, mem, slot=None):
         master = self.data.items['MASTER_BALL']

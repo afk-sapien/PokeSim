@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from pokecore.dvs import hp_dv
 
 from ..planning.stance import FLEE, HUNT, STORY, TRAVEL, Encounter, stance
+from ..planning.throws import THROW_BAR, gen1_throw
 from ..ram import PartyMon
 from ..strategy_data import ITEMS, MAPS, MATCHUPS, MOVES, PRICES, SPECIES
 
@@ -18,6 +19,8 @@ W_ENEMY_STATUS3 = 0xD069
 TRANSFORMED = 8
 W_PLAYER_DISABLED_MOVE = 0xD06D
 BALLS = (ITEMS["POKE_BALL"], ITEMS["GREAT_BALL"], ITEMS["ULTRA_BALL"])
+# Attacks a catch never weakens with: they cost the user, knock out at once, or hit too often to judge.
+RISKY_CHIPS = ('EXPLODE_EFFECT', 'RECOIL_EFFECT', 'OHKO_EFFECT', 'TWO_TO_FIVE_ATTACKS_EFFECT')
 # Balls a hunt stocks while the purse stays above funds_needed. Postgame hunts on three Red saves threw
 # about five Ultra Balls a catch, so the collecting 15 sent them to a mart after every catch.
 HUNT_STOCK = 30
@@ -169,6 +172,12 @@ def move_score(move_id, attacker, defender, used_status=()):
     return -0.25
 
 
+def long_odds(rate, ball, enemy):
+    """Whether one throw of ``ball`` catches ``enemy`` as it stands less than one time in ten."""
+    name = ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')[BALLS.index(ball)]
+    return gen1_throw(rate, name, enemy.hp, enemy.max_hp, enemy.status) < THROW_BAR
+
+
 def ranked_moves(me, enemy, used_status=()):
     return sorted([(move_score(mid, me, enemy, used_status), slot) for slot, (mid, pp)
                    in enumerate(zip(me.moves, me.pp))
@@ -305,6 +314,8 @@ class Decision:
     partner_key: str | None = None
     # A run the battle stance chose, which the policy counts as a flee attempt.
     stance: bool = False
+    # A run from a catch nobody can weaken, which leaves its species for a new move, member or ball.
+    defer: bool = False
 
 
 # Why the battle stance runs, by goal kind, with the shiny case first.
@@ -399,11 +410,25 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
                         and p.hp > max((damage(mid,enemy,p) for mid in enemy.moves),default=0)]
             if catchers:
                 return Decision('switch',max(catchers)[1],reason='Bring in a healthy catcher with sleep or paralysis')
-        weakening = [(score,i) for score,i in moves if MOVES[me.moves[i]]['effect'] not in
-                     ('EXPLODE_EFFECT','RECOIL_EFFECT','OHKO_EFFECT','TWO_TO_FIVE_ATTACKS_EFFECT')
+        weakening = [(score,i) for score,i in moves if MOVES[me.moves[i]]['effect'] not in RISKY_CHIPS
                      and 0 < damage(me.moves[i],me,enemy) * 2.5 < enemy.hp]
         if not legendary and not shiny and enemy.hp > enemy.max_hp*0.4 and weakening and not enemy.status:
             return Decision('fight',max(weakening)[1],reason='Use a gentle attack with a margin for critical damage')
+        one_time = known.get('dex') == 143 or known.get('dex') in (100, 101) and snapshot.map == MAPS['POWER_PLANT']
+        if (not (legendary or shiny or one_time) and enemy.hp > enemy.max_hp * 0.4 and not enemy.status
+                and long_odds(known.get('catch_rate', 255), balls[-1][1], enemy)):
+            # Under 1 in 10 a throw and the battler cannot weaken it (planning.throws).
+            chippers = [(p.hp, i) for i, p in enumerate(snapshot.party) if i != active and p.hp > p.max_hp * 0.5
+                        and not p.status and p.hp > max((damage(mid, enemy, p) for mid in enemy.moves), default=0)
+                        and any(mid and pp and MOVES.get(mid, {}).get('effect') not in RISKY_CHIPS
+                                and damage_division_safe(mid, p, enemy)
+                                and 0 < damage(mid, p, enemy) * 2.5 < enemy.hp for mid, pp in zip(p.moves, p.pp))]
+            if can_switch and chippers:
+                return Decision('switch', max(chippers)[1],
+                                reason='Bring in a partner that can weaken the target without a knockout')
+            if can_switch and not status_moves and enemy.hp >= enemy.max_hp:
+                return Decision('run', reason='Leave a catch under 1 in 10 a throw that nobody here can weaken',
+                                defer=True)
         return Decision('item',balls[-1][0],reason='Catch the shiny without risking a knockout' if shiny else 'Catch the returned legendary' if repeat_target and legendary
                         else 'Catch another partner for the collection or a useful trade' if repeat_target
                         else 'Catch the missing Pokédex entry without risking a knockout')
