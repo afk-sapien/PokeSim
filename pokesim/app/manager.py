@@ -30,7 +30,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 from starlette.routing import Match, Mount
 
-from .. import game_data, stall_truth
+from .. import config, game_data, stall_truth
 from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
@@ -145,6 +145,19 @@ class Manager:
         # this process reads them where the app keeps them, as its adventure and cable workers do.
         if 'GAME_DATA_DIR' not in os.environ and not (game_data.directory() / 'current.json').exists():
             os.environ['GAME_DATA_DIR'] = str(self.assets.game_data_dir)
+        # That rating also reads the TMs each species learns from the cartridge at ROM_PATH. The image
+        # names one it does not hold, so this process reads the library's own cartridge of the version
+        # its game data is, as each adventure reads its own. A library without one rates by the HMs
+        # alone, as a run without a cartridge does.
+        if not config.ROM_PATH.is_file():
+            versions = ('yellow',) if game_data.current_variant() == 'yellow' else ('red', 'blue')
+            owned = [self.assets.root / 'roms' / row['id'] / 'rom.gb' for row in self.registry.roms()
+                     if row['version'] in versions]
+            config.ROM_PATH = next((path for path in owned if path.is_file()), config.ROM_PATH)
+            if config.ROM_PATH.is_file():
+                os.environ['ROM_PATH'] = str(config.ROM_PATH)
+            else:
+                os.environ.pop('ROM_PATH', None)
         self.supervisor = Supervisor(self.registry, self.assets, self.public_url,
                                      **({'child_factory': child_factory} if child_factory else {}))
         from .notifications import NotificationCenter

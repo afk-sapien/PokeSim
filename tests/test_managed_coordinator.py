@@ -727,9 +727,17 @@ import json, sys
 from pathlib import Path
 from pokesim.app.manager import Manager
 
+if sys.argv[3]:
+    # The cartridge is in the library before this start, as on a restart.
+    first = Manager(Path(sys.argv[1]), game_data_dir=sys.argv[2])
+    try:
+        first.assets.install_rom(Path(sys.argv[3]).read_bytes())
+    finally:
+        first.close()
 manager = Manager(Path(sys.argv[1]), game_data_dir=sys.argv[2])
 try:
     manager.assets.prepare()
+    from pokesim import config, investment
     from pokesim.trade.worth import gain, spares
     mon = lambda box, position, dvs: {'dex': 25, 'name': 'Pikachu', 'level': 20, 'dvs': dvs, 'egg': False,
                                       'box': box, 'position': position, 'experience': 6400}
@@ -737,29 +745,42 @@ try:
                  'storage': {'pokemon': [mon(1, position, [position] * 5) for position in (1, 2, 3)]}}
     offer = {'dex': 25, 'name': 'Pikachu', 'level': 20, 'dvs': [15] * 5, 'experience': 6400}
     print(json.dumps({'points': gain(inventory, offer).points,
-                      'spares': len(spares(inventory['party'], inventory['storage']['pokemon'], inventory))}))
+                      'spares': len(spares(inventory['party'], inventory['storage']['pokemon'], inventory)),
+                      'problem': investment.rating_problem(),
+                      'library': config.ROM_PATH.is_relative_to(manager.assets.root)}))
 finally:
     manager.close()
 '''
 
 
-def test_the_app_process_rates_red_offers_with_the_game_data_it_keeps(tmp_path):
+@pytest.mark.parametrize('cartridge', [False, True], ids=['no cartridge', 'red cartridge'])
+def test_the_app_process_rates_red_offers_with_the_game_data_it_keeps(tmp_path, cartridge):
     """The image runs the app with DATA_DIR set to its data folder and no GAME_DATA_DIR, and keeps the
     Gen I tables in that folder's assets. Live, the first Red or Blue offer the trade pass rated
-    looked for them in DATA_DIR/game-data, which does not exist there, and every pass failed."""
+    looked for them in DATA_DIR/game-data, which does not exist there, and every pass failed.
+
+    The image also sets ROM_PATH to a cartridge it does not hold. A trial of the image found the first
+    rating logged an error and rated no PC, so the app now reads the library's own cartridge."""
     import subprocess
     import sys
     from pathlib import Path
     from pokesim import game_data
+    red = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
+    if cartridge and not red.is_file():
+        pytest.skip('Set ROM_PATH to a Red cartridge')
     data = tmp_path / 'data'
     env = {key: value for key, value in os.environ.items() if key != 'GAME_DATA_DIR'}
-    env.update(DATA_DIR=str(data), PYTHONPATH=os.pathsep.join(filter(None, (
-        str(Path(__file__).resolve().parents[1]), os.environ.get('PYTHONPATH')))))
-    done = subprocess.run([sys.executable, '-c', APP_PROCESS_RATING, str(data), str(game_data.directory())],
+    env.update(DATA_DIR=str(data), ROM_PATH=str(tmp_path / 'roms' / 'pokered.gb'), PYTHONPATH=os.pathsep.join(
+        filter(None, (str(Path(__file__).resolve().parents[1]), os.environ.get('PYTHONPATH')))))
+    done = subprocess.run([sys.executable, '-c', APP_PROCESS_RATING, str(data), str(game_data.directory()),
+                           str(red.resolve()) if cartridge else ''],
                           env=env, cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert done.returncode == 0, done.stderr[-3000:]
+    assert 'could not be read' not in done.stderr
     result = json.loads(done.stdout.splitlines()[-1])
     assert result['points'] > 0 and result['spares'] > 0
+    assert result['problem'] is None
+    assert result['library'] is cartridge
 
 
 def trade_display_fixture(setup, nickname='HAUNTER'):
