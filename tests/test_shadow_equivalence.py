@@ -56,11 +56,12 @@ def replay(loaded, enabled, frames=FRAMES):
 
 
 # Each case, the shadow points it reaches and the frames it needs to reach them. The Silver run first
-# frees seven box slots, up to the refill mark, before it trains.
+# frees seven box slots, up to the refill mark, then trains and heals, so its postgame rotation first
+# decides after about 57400 frames.
 CASES = [('red-partial-training-20260915', 1, {'pipeline', 'collection'}, FRAMES),
          ('red-cerulean-cave-hunt-20261008', 1, {'pipeline', 'collection'}, FRAMES),
          ('gold-expshare-full-bag-20261027', 2, {'ladder'}, FRAMES),
-         ('silver-np-gate-corner-20261020', 2, {'ladder', 'postgame'}, 55000)]
+         ('silver-np-gate-corner-20261020', 2, {'ladder', 'postgame'}, 60000)]
 
 
 @pytest.mark.slow
