@@ -14,6 +14,7 @@ from ..audio import AudioFeed
 from ..build_info import build_info
 from ..checkpoints import open_state
 from ..events import HIGH, LOW
+from ..progress_events import mon_identity
 from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
@@ -123,6 +124,9 @@ class Event:
     progress: str = ''
     # For an ``item`` row, whether the item was needed: True for a key item or HM, False for a purchase.
     needed: bool | None = None
+    # For a level gain's row, the Pokémon's identity (progress_events.mon_identity) and its new level.
+    identity: str | None = None
+    score: int | None = None
 
 
 
@@ -183,6 +187,8 @@ class Emulator:
         store.clock = lambda: self.play_clock.frames
         from ..progress_events import GoalWatch
         self.goal_watch = store.goal_watch = self.policy.goal_watch = GoalWatch()
+        # A restart replaces the policy, so the hook asks for the current one each time.
+        self.goal_watch.readiness = lambda snapshot: getattr(self.policy, 'readiness_target', lambda _: None)(snapshot)
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.commands = queue.Queue()
@@ -769,7 +775,9 @@ class Emulator:
                     self._event(Event('evolve', f'{old.name} evolved into {mon.name}', priority=4), snapshot)
                 elif mon.level > old.level and not mon.egg:
                     self._event(Event('level', f'{mon.nick} grew to level {mon.level}',
-                                      priority=4 if mon.level in (50, 100) else 2, notable=mon.level % 10 == 0), snapshot)
+                                      priority=4 if mon.level in (50, 100) else 2, notable=mon.level % 10 == 0,
+                                      species=mon.species, identity=mon_identity(mon.trainer_id, mon.dvs, mon.species),
+                                      score=mon.level), snapshot)
         now = time.time()
         self._watch_boss(before, snapshot)
         self._watch_progress(snapshot)

@@ -225,13 +225,15 @@ Every tier writes typed progress events to one store table, `progress_events`. T
 | `receive` | no | gifts, returns, trades, hatches |
 | `release` | no | every release, with the reason from the oracle |
 | `room` | no | S1 make_room |
-| `level` | no | any battle. A training goal whose score rises writes its own `improve` |
+| `level` | no | any battle. A gain toward the next boss's readiness target writes `improve` instead, below |
 | `goal` | no | every goal start, done, stop, expire and stand-down |
 | `plan` | no | diagnostics, such as boss ready's "Went in unready", and every reload or power cycle, with `identity` naming the reason, such as `reload:battle cannot end` |
 
 Net comes only from `dex`, `improve`, a needed `item`, and the STORY and RACE kinds. A catch or a receive is never net by itself. A duplicate catch raises the held count, so counting held rises as progress would count churn as progress. When a caught or received Pokémon is kept because it fills family demand or a plan need, the oracle writes a separate `improve` row for it. LoopGuard still counts receive and release cycles by species from the `receive` and `release` rows.
 
 In shadow mode the journal entry that reports a new owned entry, a badge, a League win, a new area or an item also writes its row, under the goal running at the time. An `event` row is a story flag this run has not seen set before, and its score is the count of flags seen. These rows follow the journal, so a reload can write one again. The rewind event (section 6) marks the ones a reload undoes.
+
+A level gain writes one row with the Pokémon's `identity` and its new level as `score`. It is `improve` the first time that Pokémon reaches the level, and only at or under the readiness target of the next boss (`planning/readiness.target`): a gym's ace plus the margin, or the League's top ace. Any other gain is `level`. Training toward a boss is progress, so a team that grinds for a gym is not a stall. A loop of losses cannot move the target, since only the next boss sets it, so such a loop adds at most the levels left to the target and then goes quiet. After the Hall of Fame no boss is next, so no gain counts.
 
 ### Encounter counters
 
@@ -607,7 +609,7 @@ The bar to switch: every labeled stall caught, at most one false alarm per adven
 The first run did not meet the bar, so the switch to `net` is held.
 
 1. Every adventure with real play time failed. The `net` model raised 23 to 168 false alarms in 14 days, where the old checks raised 6 to 40. It also missed more stalls on four of them.
-2. Most false alarms are a gap in the input, not in the model. Training and marathon progress count only through `improve` rows a goal writes and RACE `checkpoint` rows. Old journals have neither, so the replay cannot rebuild them, and the hours before each false alarm show only level-ups, rematches, evolutions and races. The net kinds stay as they are, since counting level-ups would count churn as progress again.
+2. Most false alarms are a gap in the input, not in the model. Training and marathon progress count only through `improve` rows a goal writes and RACE `checkpoint` rows. Old journals have neither, so the replay cannot rebuild them, and the hours before each false alarm show only level-ups, rematches, evolutions and races. The net kinds stay as they are, since counting every level-up would count churn as progress again. The second run found training with no `improve` row to be a gap in the model, so a level gain toward the next boss's readiness target now writes one (section 4).
 3. The ground truth was weak. It was the old StallWatch's own alerts plus 14 stall bundles, since each adventure keeps only its newest 5. Help requests and owner restarts were not stored.
 
 The switch decision moves to after PR 7. Then the replay runs on the dev instance's own shadow rows, which will have real `improve`, `checkpoint` and `encounter_counts` rows, with a backup copy of the hosted app as a second check. The bar stays the same.
