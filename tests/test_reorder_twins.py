@@ -24,10 +24,10 @@ def test_a_failed_reorder_of_one_twin_does_not_block_the_other():
 def test_a_finished_reorder_restarts_partner_development_from_the_lead():
     policy = StrategicPolicy(7)
     shortcuts = Recorder.on(policy)
-    policy.development_index = 2
+    policy.detour.development_index = 2
     policy._reorder(snap(party=(mon(), mon(level=9), mon(level=30))), 2, 'Train')
     shortcuts.finish(True)
-    assert policy.development_index == 0
+    assert policy.detour.development_index == 0
 
 
 def test_individuals_of_one_species_are_distinguished():

@@ -30,14 +30,14 @@ def test_withdrawn_reserve_heals_before_rematch_and_remains_invalid_until_healed
     policy.goal = Goal('collect_rematch', 'Return for a League rematch', '',
                        ((MAPS['INDIGO_PLATEAU_LOBBY'], 8, 10),))
     policy._overworld(state, bytearray(65536))
-    assert policy.heal_latch
+    assert policy.heal.latched
     assert policy.nav.target
     assert all(target[0] == state.map for target in policy.nav.target)
     healed = replace(state, party=tuple(replace(p, hp=p.max_hp) for p in state.party))
     assert healed.valid and not healed.hp_overflow_only
     assert not needs_healing(healed.party)
     policy._overworld(healed, bytearray(65536))
-    assert not policy.heal_latch
+    assert not policy.heal.latched
 
 
 @pytest.mark.parametrize('change', [dict(map=999), dict(playtime=(0, 77, 0)), dict(in_battle=7),
@@ -52,7 +52,7 @@ START = 100 * FRAMES_PER_SECOND
 
 
 def guard(snapshot, *, speed=1):
-    return SimpleNamespace(snapshot=snapshot, policy=SimpleNamespace(heal_latch=True), speed=speed,
+    return SimpleNamespace(snapshot=snapshot, policy=SimpleNamespace(heal=SimpleNamespace(latched=True)), speed=speed,
                            frame=START, last_reload_frame=-10 ** 9, invalid_frame=START, stuck_frame=START,
                            battle_frame=None, _unstick=Mock(), _check_stall=Mock())
 

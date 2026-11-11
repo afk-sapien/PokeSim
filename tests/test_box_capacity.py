@@ -332,14 +332,14 @@ def test_a_release_the_heal_overrides_leaves_no_spare_and_keeps_the_swap():
     p = StrategicPolicy(7)
     p.pc.species = 17
     p.pc.destination = MAPS['LAVENDER_POKECENTER']
-    p.heal_latch = True
+    p.heal.latched = True
     s = stuffed(textbox=True)
     p.observed_map = s.map
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
     p.step(PolicyContext(s, 0, memory))
     assert p.goal.key == 'heal'
     assert p.release_spare is None and p.pc.species == 17
-    p.heal_latch = False
+    p.heal.latched = False
     p.step(PolicyContext(s, 0, memory))
     assert p.goal.key == 'party_release'
     assert p.release_spare == release_target(s) is not None and p.pc.species is None

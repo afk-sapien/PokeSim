@@ -151,17 +151,17 @@ def test_gen1_logs_a_pp_heal_once_the_nurse_restores_spent_attacks():
     from test_events import snap
     policy = StrategicPolicy(7)
     spent = (replace(gen1_mon(180, (0, 0, 0, 0)), max_pp=MAX_PP),)
-    policy._update_heal_latch(snap(party=spent))
-    assert policy.heal_latch and policy.pp_heal
+    policy.heal.update(policy, snap(party=spent))
+    assert policy.heal.latched and policy.heal.pp
     center = MAPS['CERULEAN_POKECENTER']
-    policy._update_heal_latch(snap(party=(gen1_mon(180, MAX_PP),), map=center))
+    policy.heal.update(policy, snap(party=(gen1_mon(180, MAX_PP),), map=center))
     rows = [row for row in policy.collection.activity_events if row['title'].startswith('PP heal')]
     assert len(rows) == 1 and rows[0]['title'] == f'PP heal at {snap(map=center).map_name}'
     assert rows[0]['priority'] == 1 and rows[0]['notable'] is False
-    assert not policy.heal_latch and not policy.pp_heal
+    assert not policy.heal.latched and not policy.heal.pp
     # A heal for HP alone writes no PP row.
-    policy._update_heal_latch(snap(party=(gen1_mon(30, MAX_PP),)))
-    policy._update_heal_latch(snap(party=(gen1_mon(180, MAX_PP),), map=center))
+    policy.heal.update(policy, snap(party=(gen1_mon(30, MAX_PP),)))
+    policy.heal.update(policy, snap(party=(gen1_mon(180, MAX_PP),), map=center))
     assert len([row for row in policy.collection.activity_events if row['title'].startswith('PP heal')]) == 1
 
 
@@ -182,7 +182,7 @@ def test_gen1_writes_the_unready_journal_row_when_no_nurse_is_in_reach():
     s = snap(party=(replace(gen1_mon(60, (15, 15, 30, 20)), nick='SPARKY'),))
     goal = SimpleNamespace(key='marsh', title='Challenge Sabrina')
     assert policy._boss_check(s, goal, in_league=True) == boss.UNREADY
-    assert not policy.boss_heal
+    assert not policy.heal.before_boss
     policy._boss_check(s, goal, in_league=True)
     rows = [row for row in policy.collection.activity_events if row['title'].startswith('Went in unready')]
     assert len(rows) == 1 and rows[0]['title'] == 'Went in unready: Challenge Sabrina'
@@ -196,7 +196,7 @@ def test_gen1_latches_the_heal_when_a_nurse_is_in_reach():
     policy.nav.distance_lookup = lambda pos, frame: (lambda targets: 12)
     s = snap(party=(gen1_mon(60, (15, 15, 30, 20)),))
     assert policy._boss_check(s, SimpleNamespace(key='marsh', title='Challenge Sabrina'), False) == boss.HEAL
-    assert policy.boss_heal
+    assert policy.heal.before_boss
     # A goal that is not a boss challenge never heals for the boss check.
     assert policy._boss_check(s, SimpleNamespace(key='marsh', title='Answer the quiz'), False) == boss.READY
 

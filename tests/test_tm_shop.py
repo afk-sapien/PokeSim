@@ -177,9 +177,9 @@ def test_tm_trips_wait_for_healing_league_and_new_entry_projects(shop_data):
     goal = Goal('collect_plan', 'Plan', 'Choose a project')
     s = shopper()
     assert policy._tm_development(s, goal, True) == (goal, None)
-    policy.heal_latch = True
+    policy.heal.latched = True
     assert policy._tm_development(s, goal, False) == (goal, None)
-    policy.heal_latch = False
+    policy.heal.latched = False
     # A project for a new entry is a higher tier than any move.
     policy.collection.project = {'method': 'grass', 'species': 1, 'key': 'grass:1'}
     hunt = Goal('collect_catch', 'Catch', 'Catch a new entry')
