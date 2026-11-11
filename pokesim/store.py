@@ -317,7 +317,7 @@ class Store:
         """The marks of every League reward delivered so far (rewards.marks)."""
         from . import rewards
         with self.lock:
-            return rewards.marks(rewards.ledger(self.db), generation)
+            return rewards.marks(self.db, generation)
 
     def release_requests(self):
         """The owner's pending PC releases: trade identity to 'release', or pcvalue.LAST_COPY when the

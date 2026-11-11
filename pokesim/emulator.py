@@ -452,6 +452,8 @@ class Emulator:
         self._reset_transient(clear_observation=True)
         self.legendary_recovery = LegendaryRecovery((metadata or {}).get('legendary_recovery'))
         self.play_clock.restore(metadata.get("play_clock") if metadata else None)
+        # A League gift delivered after this save is not in it, so its claim opens again.
+        rewards.rewound(self.store, metadata)
         if repaired := repair_party_nicknames(self.pb.memory):
             log.warning('Ended the damaged nicknames of party slots %s at their first text command', repaired)
         self.snapshot = read_snapshot(self.pb.memory, self.frame)

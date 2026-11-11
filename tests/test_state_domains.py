@@ -12,7 +12,7 @@ import re
 
 import pytest
 
-from pokesim.state import domains, schema
+from pokesim.state import claims, domains, schema
 
 PACKAGE = Path(__file__).resolve().parents[1] / 'pokesim'
 # The store's own get and set, and the kv helpers, take any key. The calls to them are where the keys are named.
@@ -385,7 +385,8 @@ def test_every_declared_key_is_still_used(scanned):
 
 
 def test_the_declared_tables_are_the_schema_tables():
-    tables = {re.search(r'EXISTS (\w+)', statement).group(1) for statement in schema.TABLES}
+    # Version 2 adds the claims ledger after the first tables.
+    tables = {re.search(r'EXISTS (\w+)', statement).group(1) for statement in (*schema.TABLES, claims.TABLE)}
     assert set(domains.TABLES) | {'kv'} == tables
 
 

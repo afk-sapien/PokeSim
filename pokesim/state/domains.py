@@ -138,7 +138,9 @@ DOMAINS = (
     Domain('trade-statistics-v1', 'pokesim.trade_statistics', SURVIVES),
     Domain('capture-gift-backfill-v1', 'pokesim.catches', SURVIVES, GEN1),
 
-    # Tables. The restart empties the capture and shiny receipts and the encounter rows.
+    # Tables. The restart empties the capture and shiny receipts, the encounter rows and the claims.
+    # A reload keeps the claims but sends a gift delivered after the save back to open (rewards.rewound).
+    _table('claims', 'pokesim.state.claims', RESETS_ON_RESTART, policy_reads=True),
     _table('capture_receipts', 'pokesim.catches', RESETS_ON_RESTART),
     _table('progress_events', 'pokesim.progress_events', RESETS_ON_RESTART),
     _table('encounter_counts', 'pokesim.progress_events', RESETS_ON_RESTART),

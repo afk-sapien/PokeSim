@@ -6,6 +6,7 @@ import pytest
 
 from pokesim import rewards
 from pokesim.events import RunMemory, diff
+from pokesim.state import claims
 from pokesim.store import Store
 from pokesim.trade import event, pair, service
 from pokesim.strategy_data import SPECIES, MOVES
@@ -68,8 +69,13 @@ def test_unlocks_survive_restore_without_awarding_old_victories(tmp_path):
 
 
 def test_locked_species_never_appear_in_base_reward_draws():
-    draws = {rewards.selection({'seed': 'base', 'delivered': i})[1] for i in range(200)}
+    draws = {rewards.draw(f'base:{i}') for i in range(200)}
     assert draws == set(rewards.BASE_POOL)
+
+
+def status(earned=0, delivered=0, declined=0, pending=0, wins=0):
+    return {'earned': earned, 'delivered': delivered, 'declined': declined, 'pending': pending,
+            'wins': wins, 'unlocks': []}
 
 
 def test_enabling_after_past_victories_only_rewards_the_next_win(tmp_path):
@@ -78,9 +84,9 @@ def test_enabling_after_past_victories_only_rewards_the_next_win(tmp_path):
         rewards.initialize(with_store, 100)
         rewards.earn(with_store, 101, enabled=False)
         rewards.initialize(with_store, 101)
-        assert rewards.status(with_store) == {'earned': 0, 'delivered': 0, 'pending': 0, 'wins': 101, 'unlocks': []}
+        assert rewards.status(with_store) == status(wins=101)
         rewards.earn(with_store, 102, enabled=True)
-        assert rewards.status(with_store) == {'earned': 1, 'delivered': 0, 'pending': 1, 'wins': 102, 'unlocks': []}
+        assert rewards.status(with_store) == status(earned=1, pending=1, wins=102)
         rewards.earn(with_store, 102, enabled=True)
         rewards.earn(with_store, 99, enabled=True)
         assert rewards.status(with_store)['pending'] == 1
@@ -89,19 +95,51 @@ def test_enabling_after_past_victories_only_rewards_the_next_win(tmp_path):
         with_store.close()
 
 
-def test_upgrade_discards_historical_backlog_but_keeps_delivered_rewards(tmp_path):
+@pytest.mark.parametrize('old', [
+    # Version 1 counted every victory as earned, so the ones past the delivered gifts are dropped.
+    {'earned': 107, 'delivered': 5, 'seed': 'existing-seed', 'unlocks': ['eevee']},
+    # Version 2 kept the victories apart and earned only the gifts it would give.
+    {'version': 2, 'observed': 107, 'earned': 7, 'delivered': 5, 'skipped': 1, 'seed': 'existing-seed',
+     'unlocks': ['eevee']},
+])
+def test_an_old_ledger_becomes_claims_rows_and_keeps_its_open_gifts(tmp_path, old):
     store = Store(tmp_path)
     try:
-        with store.db:
-            rewards.save(store.db, {'earned': 107, 'delivered': 5, 'seed': 'existing-seed'})
+        with store.transaction() as db:
+            rewards.save(db, old)
         rewards.initialize(store, 107)
-        assert rewards.status(store) == {'earned': 5, 'delivered': 5, 'pending': 0, 'wins': 107, 'unlocks': []}
-        value = rewards.ledger(store.db)
-        assert value['skipped'] == 102 and value['seed'] == 'existing-seed'
+        pending = old['earned'] - old['delivered'] if old.get('version') == 2 else 0
+        assert rewards.status(store) == {**status(earned=5 + pending, delivered=5, pending=pending, wins=107),
+                                         'unlocks': ['eevee']}
+        assert rewards.ledger(store.db) == {'seed': 'existing-seed', 'observed': 107, 'unlocks': ['eevee'],
+                                            'version': rewards.VERSION}
+        rows = claims.rows(store.db, rewards.SOURCE)
+        assert [row['key'] for row in rows] == [f'existing-seed:{n}' for n in range(1, 6 + pending)]
+        # A moved delivery has no frame, so no reload reopens it.
+        assert all(row['frame'] is None for row in rows)
+        with store.transaction() as db:
+            assert claims.reopen_after(db, 0) == []
         rewards.earn(store, 108, enabled=True)
-        assert rewards.status(store)['pending'] == 1
+        assert rewards.status(store)['pending'] == pending + 1
+        assert claims.rows(store.db, rewards.SOURCE)[-1]['key'] == f'existing-seed:{6 + pending}'
         rewards.initialize(store, 108)
-        assert rewards.status(store)['pending'] == 1
+        assert rewards.status(store)['pending'] == pending + 1
+    finally:
+        store.close()
+
+
+def test_the_schema_moves_an_old_ledger_once_when_the_database_opens(tmp_path):
+    store = Store(tmp_path)
+    store.close()
+    with sqlite3.connect(tmp_path / 'pokesim.sqlite') as db:
+        db.execute('DROP TABLE claims')
+        db.execute('PRAGMA user_version = 1')
+        db.execute('INSERT OR REPLACE INTO kv(k, v) VALUES (?, ?)',
+                   (rewards.KEY, json.dumps({'earned': 3, 'delivered': 1, 'seed': 'old'})))
+    store = Store(tmp_path)
+    try:
+        assert rewards.status(store) == status(earned=1, delivered=1, wins=3)
+        assert rewards.ledger(store.db)['version'] == rewards.VERSION
     finally:
         store.close()
 
@@ -115,7 +153,54 @@ def test_disabled_victories_never_become_claims_after_reenabling(tmp_path):
         rewards.earn(store, 3, enabled=False)
         rewards.initialize(store, 3)
         rewards.earn(store, 4, enabled=True)
-        assert rewards.status(store) == {'earned': 2, 'delivered': 0, 'pending': 2, 'wins': 4, 'unlocks': []}
+        assert rewards.status(store) == status(earned=2, pending=2, wins=4)
+    finally:
+        store.close()
+
+
+def test_a_reload_reopens_only_the_gifts_delivered_after_its_save(tmp_path):
+    store = Store(tmp_path)
+    try:
+        with store.transaction() as db:
+            rewards.save(db, {'seed': 's', 'observed': 3, 'version': rewards.VERSION})
+            rewards.open_claims(db, 's', 3, frame=10)
+            rewards.settle(db, 's:1', claims.DELIVERED, frame=100, reward_id='first')
+            rewards.settle(db, 's:2', claims.DELIVERED, frame=200, reward_id='second')
+            rewards.settle(db, 's:3', claims.DECLINED, frame=300, reasons='Not worth a slot')
+        # The gift's own result checkpoint never reopens its claim.
+        assert rewards.rewound(store, {'play_clock': {'frames': 150}, 'reward_id': 'second'}) == []
+        assert rewards.rewound(store, {}) == ()
+        assert rewards.rewound(store, {'play_clock': {'frames': 150}}) == [('league', 's:2')]
+        rows = {row['key']: row for row in claims.rows(store.db, rewards.SOURCE)}
+        assert rows['s:2']['state'] == claims.OPEN and rows['s:2']['reward_id'] is None
+        assert rows['s:1']['state'] == claims.DELIVERED
+        # A declined gift stays declined, since the save before it would decline it again.
+        assert rows['s:3']['state'] == claims.DECLINED
+        # The reopened claim keeps its place, so it is the next gift drawn, with the same seed.
+        assert rewards.next_claim(store.db) == (2, rewards.draw('s:2'), 's:2')
+    finally:
+        store.close()
+
+
+def test_a_reopened_gift_the_pc_still_holds_settles_without_a_second_copy(tmp_path):
+    from dataclasses import replace as changed
+    store = Store(tmp_path)
+    try:
+        with store.transaction() as db:
+            rewards.open_claims(db, 's', 1)
+        seed = rewards.next_claim(store.db)[2]
+        trainer, first, second = rewards._draw(seed, 1)
+        dvs = (0, first >> 4, first & 15, second >> 4, second & 15)
+        empty = snap()
+        assert not rewards.held(empty, seed)
+        holding = changed(empty, party=(changed(empty.party[0], trainer_id=trainer, dvs=dvs),))
+        assert rewards.held(holding, seed)
+        rewards.found_held(store, seed, 153)
+        found = claims.get(store.db, rewards.SOURCE, seed)
+        assert (found['state'], found['reasons'], found['species']) == (claims.DELIVERED, 'Already held', 153)
+        assert rewards.next_claim(store.db) is None
+        with pytest.raises(ValueError, match='claim changed'):
+            rewards.found_held(store, seed, 153)
     finally:
         store.close()
 
@@ -135,7 +220,7 @@ def test_repeated_championships_count_beyond_cartridge_cap_and_restore_safely(tm
     restored = RunMemory.from_dict(checkpoint)
     diff(outside, hall, restored)
     rewards.earn(store, restored.championships)
-    assert rewards.status(store) == {'earned': 2, 'delivered': 0, 'pending': 2, 'wins': 2, 'unlocks': []}
+    assert rewards.status(store) == status(earned=2, pending=2, wins=2)
     assert RunMemory.from_dict(memory.to_dict()).championships == 2
     store.close()
 
@@ -143,10 +228,10 @@ def test_repeated_championships_count_beyond_cartridge_cap_and_restore_safely(tm
 def test_league_pool_has_only_three_starters_with_playable_level_five_data():
     assert {SPECIES[s]['dex'] for s in rewards.POOL} == {1, 4, 7}
     selected = set()
-    for number in range(300):
-        value = {'seed': 'test adventure', 'delivered': number, 'unlocks': list(rewards.UNLOCK_POOLS)}
-        ordinal, species, seed = rewards.selection(value)
-        assert rewards.selection(value) == (ordinal, species, seed)
+    for number in range(1, 301):
+        seed = f'test adventure:{number}'
+        species = rewards.draw(seed, 1, {'unlocks': list(rewards.UNLOCK_POOLS)})
+        assert rewards.draw(seed) == species and rewards.ordinal(seed) == number
         selected.add(species)
         gift = event.gift_slot(seed, species)
         assert gift.species == species and gift.level == 5
@@ -254,11 +339,10 @@ def test_mew_is_never_in_any_repeatable_reward_pool():
     groups = tuple(rewards.UNLOCK_POOLS)
     for size in range(len(groups) + 1):
         for unlocked in combinations(groups, size):
-            value = {'unlocks': unlocked, 'seed': 'mew-exclusion', 'delivered': 0}
+            value = {'unlocks': unlocked}
             assert MEW not in rewards.eligible_pool(value)
-            for ordinal in range(100):
-                value['delivered'] = ordinal
-                assert rewards.selection(value)[1] != MEW
+            for ordinal in range(1, 101):
+                assert rewards.draw(f'mew-exclusion:{ordinal}', 1, value) != MEW
 
 
 def test_existing_mew_closes_event_claim_even_after_restore(tmp_path):
@@ -271,9 +355,10 @@ def test_existing_mew_closes_event_claim_even_after_restore(tmp_path):
     store = Store(tmp_path)
     restored = snap(hall_of_fame_count=1, owned=frozenset({1}))
     rewards.observe_progress(store, restored)
-    assert select_reward(restored, {'earned': 0, 'delivered': 0}, store.get(EVENT_KEY), mew_event=True) is None
-    selected = select_reward(restored, {'earned': 2, 'delivered': 0, 'seed': 'old-save'},
-                             store.get(EVENT_KEY), mew_event=True, league_rewards=True)
+    assert select_reward(restored, None, 0, store.get(EVENT_KEY), mew_event=True) is None
+    with store.transaction() as db:
+        rewards.open_claims(db, 'old-save', 2)
+    selected = select_reward(restored, rewards.next_claim(store.db), 2, store.get(EVENT_KEY), mew_event=True)
     assert selected[0] == 'league_reward' and selected[2] != MEW
     store.close()
 

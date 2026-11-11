@@ -905,12 +905,10 @@ def add_rung(manager, rung, info, rom):
     store = Store(folder)
     try:
         with store.lock, store.db:
-            # A version 2 ledger, so the worker's upgrade of an old one does not settle the backlog as skipped.
-            ledger = rewards.ledger(store.db)
-            delivered = ledger.get('delivered', 0)
-            rewards.save(store.db, {**ledger, 'version': 2, 'seed': f'live-soak:{rung.name}', 'delivered': delivered,
-                                    'earned': delivered + info['backlog'], 'observed': ledger.get('observed', 0),
-                                    'skipped': ledger.get('skipped', 0)})
+            # A fixed seed and a backlog of open League claims, so every soak draws the same gifts.
+            seed = f'live-soak:{rung.name}'
+            rewards.save(store.db, {**rewards.ledger(store.db), 'seed': seed})
+            rewards.open_claims(store.db, seed, info['backlog'])
     finally:
         store.close()
     return adventure['id']
