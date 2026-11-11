@@ -1,7 +1,11 @@
 """A phone call that rings while the player walks holds the pad, so the presses it ignores mark no walls."""
 from types import SimpleNamespace
 
-from pokesim.gen2.navigation import Navigator, script_running
+import pytest
+from pokecore.gen2.memory_map import symbols
+from pokecore.gen2.state import script_running
+
+from pokesim.gen2.navigation import Navigator
 
 ROOM = 1
 
@@ -35,12 +39,21 @@ def test_a_press_into_a_wall_still_marks_it_once_the_call_ends():
     assert (ROOM, 2, 4) in nav.blocked
 
 
-def test_script_running_reads_the_engine_bit():
-    flags = {}
-    mem = SimpleNamespace(byte=lambda name: flags[name])
-    flags['wScriptFlags'] = 0
-    assert not script_running(mem)
-    flags['wScriptFlags'] = 4
-    assert script_running(mem)
-    flags['wScriptFlags'] = 3
-    assert not script_running(mem)
+class Banked:
+    """Banked memory holding one byte, read as ``memory[bank, start:stop]``."""
+
+    def __init__(self, bank, address, value):
+        self.bank, self.address, self.value = bank, address, value
+
+    def __getitem__(self, key):
+        bank, span = key
+        return [self.value if (bank, address) == (self.bank, self.address) else 0
+                for address in range(span.start, span.stop)]
+
+
+@pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
+def test_script_running_reads_the_engine_bit(version):
+    bank, address = symbols(version)['wScriptFlags']
+    assert not script_running(Banked(bank, address, 0), version)
+    assert script_running(Banked(bank, address, 4), version)
+    assert not script_running(Banked(bank, address, 3), version)

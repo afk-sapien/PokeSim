@@ -45,7 +45,7 @@ def policy_on_route(data, monkeypatch):
     policy = Policy(data, seed=1, starter='cyndaquil')
     policy.naming.step = lambda snapshot, mem: None
     policy.unloaded = lambda snapshot, mem: False
-    policy.nav.observe = lambda snapshot: None
+    policy.nav.observe = lambda snapshot, interrupted=False: None
     policy.release_goal = lambda *args: None
     planned = []
 

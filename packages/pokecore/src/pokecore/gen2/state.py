@@ -226,6 +226,14 @@ def read_roamers(memory, version):
     return tuple(roamers)
 
 
+def script_running(memory, version):
+    """Whether an overworld script holds the pad, as an incoming phone call does while it rings.
+
+    The script engine sets bit 2 of ``wScriptFlags`` while a script runs, in all three games.
+    """
+    return bool(memory_reader(memory, version).byte('wScriptFlags') & 0b100)
+
+
 def npc_trade_flags(memory, version):
     """The ``wTradeFlags`` byte. Bit ``trade.index`` is set once that in-game trade has happened."""
     return memory_reader(memory, version).byte('wTradeFlags')

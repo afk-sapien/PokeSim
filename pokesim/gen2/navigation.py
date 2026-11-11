@@ -8,14 +8,6 @@ from pokecore.gen2.maps import (DIRS, OPPOSITE, WALLS, blocked_side, decode_bloc
 from pokecore.gen2.ram import Memory, Snapshot
 from .routes import CARPETS, Regions, Search, walk_crossings, walk_links
 
-# The script engine sets this bit of wScriptFlags while a script runs, in all three games.
-SCRIPT_RUNNING = 1 << 2
-
-
-def script_running(mem):
-    """Whether a running script holds the pad, as an incoming phone call does while it rings."""
-    return bool(mem.byte('wScriptFlags') & SCRIPT_RUNNING)
-
 
 def field_moves(snapshot):
     """The field moves the player can use, as a frozenset of 'cut' and 'surf'."""

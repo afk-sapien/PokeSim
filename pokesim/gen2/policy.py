@@ -11,9 +11,10 @@ from ..planning.ledger import FIELD_MOVES, LEARN_KEPT
 from ..planning.losses import ace_slot
 from ..planning.shadow import Shadow
 from ..planning.stance import FLEE, STORY, Encounter, stance
-from .navigation import DIRS, Navigator, script_running
+from .navigation import DIRS, Navigator
 from pokecore.gen2.ram import Memory
 from pokecore.gen2.screens import ScreenText, mask_roster
+from pokecore.gen2.state import script_running
 from .puzzles import push_plan
 from .world import update as update_world
 from .naming import Naming
@@ -1460,7 +1461,7 @@ class Policy:
             return self.battle(snapshot, mem)
         if not ('┌' in snapshot.tiles[12] or mem.byte('wScriptRunning')):
             self.talk_key, self.talk_frames = None, 0
-        self.nav.observe(snapshot, interrupted=script_running(mem))
+        self.nav.observe(snapshot, interrupted=script_running(memory, self.data.game))
         if self.resetting_puzzle is not None and self.resetting_puzzle != snapshot.map:
             self.resetting_puzzle = None
         releasing = self.goal is not None and self.goal.key == 'collection_release'
