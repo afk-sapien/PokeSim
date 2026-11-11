@@ -471,8 +471,7 @@ python -m pokesim.benchmark --policies strategic --seeds 1 --frames 30000 \
 Checkpoint paths are relative to the scenario file. Each checkpoint starts with fresh policy
 memory, which makes comparisons independent of prior exploration. Reports distinguish
 milestones already present in a checkpoint from later progress. Omit `target` to use the
-whole frame budget for a battle, shopping, or navigation scenario. `tools/replay.py` exposes
-the same command-line interface.
+whole frame budget for a battle, shopping, or navigation scenario.
 
 Replays use emulated time for policy contexts and recovery guards, fixed input cadence, and
 seeded randomness. Keep the ROM, emulator version, starting state, frame budget, and battle

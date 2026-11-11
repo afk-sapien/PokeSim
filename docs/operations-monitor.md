@@ -22,10 +22,6 @@ rotate the history as needed. It does not impose a retention limit or schedule
 itself. For a container deployment, run it where the Library address and data
 mount are accessible.
 
-`tools/sample_live.py` is retained for the [historical two-container
-installation. Its fixed ports and filesystem paths
-are not the managed Library monitoring procedure.
-
 Compare container start times and image revisions before comparing counters. A restart
 begins a new endurance interval. Read previous samples, not only the latest position.
 

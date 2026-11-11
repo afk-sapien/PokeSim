@@ -155,7 +155,7 @@ Phase 1 files the state store never touches: `runtime/game_loop.py` and `runtime
 1. What a reload keeps, stand-downs across a reload and persisted reload counts. Those are v2 PR 6. Its new domains, and the PR 5 claims table, get declared in `domains.py`.
 2. `app.sqlite` and `adventure.json`. The registry already has its own version.
 3. Loading a named checkpoint from before a restart. Today `rewards.initialize` guards the gift ledger after such a load (`emulator.py:428-430`, `gen2/emulator.py:642-645`). Other `resets_on_restart` domains stay reset, as they do today.
-4. The scripts in `tools/`. They check, soak and profile copies or live folders, outside any worker. Eight of them open `pokesim.sqlite` with sqlite3 or use a store's `db`: `check_managed_app.py`, `check_managed_cable.py`, `live_soak.py`, `pc_dry_run.py`, `profile_simulation.py`, `quality_hunt_watch.py`, `replay_progress.py` and `sample_live.py`, whose remote script does it on the server. The owner test does not cover them.
+4. The scripts in `tools/`. They check, soak and profile copies or live folders, outside any worker. Six of them open `pokesim.sqlite` with sqlite3 or use a store's `db`: `check_managed_app.py`, `check_managed_cable.py`, `live_soak.py`, `profile_simulation.py`, `quality_hunt_watch.py` and `replay_progress.py`. The owner test does not cover them. Two more, `pc_dry_run.py` and `sample_live.py`, were deleted.
 
 ## 8. Rulings
 
