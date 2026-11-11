@@ -86,21 +86,29 @@ def test_an_older_schema_is_refused_even_as_a_rollback(tmp_path, repo):
         assert "data schema 1, older than the live data's 2" in result.stderr
 
 
-def soaked(tmp_path, repo, revision, sha, report, *args):
-    """Runs the script with green gates and a docker that fails, so a commit past every check stops at the build."""
+def passing_trial(sha, **fields):
+    return {'commit': sha, 'passed': True, 'finished': time.time(), 'image_id': 'sha256:built',
+            'compose_sha256': 'c' * 64, **fields}
+
+
+def soaked(tmp_path, repo, revision, sha, report, *args, trial=None):
+    """Runs the script with green gates and a docker that knows one image and fails anything else, so a commit
+    past every check stops at the image check or the build."""
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir(exist_ok=True)
     (bin_dir / 'ssh').write_text(f'#!/bin/sh\ncat >/dev/null\nprintf "%s\\n%s\\n" {revision} 1\n')
     (bin_dir / 'gh').write_text('#!/bin/sh\necho success\n')
-    (bin_dir / 'docker').write_text('#!/bin/sh\necho "docker reached" >&2\nexit 1\n')
+    (bin_dir / 'docker').write_text('#!/bin/sh\nif [ "$1 $2" = "image inspect" ]; then echo sha256:built; exit 0; fi\n'
+                                    'echo "docker reached" >&2\nexit 1\n')
     for tool in ('ssh', 'gh', 'docker'):
         (bin_dir / tool).chmod(0o755)
     reports = tmp_path / 'reports'
-    (reports / 'smoke').mkdir(parents=True, exist_ok=True)
-    (reports / 'smoke' / f'{sha}.json').unlink(missing_ok=True)
-    if report is not None:
-        import json
-        (reports / 'smoke' / f'{sha}.json').write_text(json.dumps(report))
+    import json
+    for kind, body in (('smoke', report), ('image-trial', trial)):
+        (reports / kind).mkdir(parents=True, exist_ok=True)
+        (reports / kind / f'{sha}.json').unlink(missing_ok=True)
+        if body is not None:
+            (reports / kind / f'{sha}.json').write_text(json.dumps(body))
     env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}', 'DEPLOY_HOST': 'host',
            'DEPLOY_DIR': '/srv/app', 'LIVE_SOAK_REPORTS': str(reports), 'MIN_FREE_GB': '0'}
     return subprocess.run(['sh', str(SCRIPT), *args, sha], cwd=repo, env=env, capture_output=True, text=True)
@@ -120,10 +128,32 @@ def test_a_commit_without_a_passing_live_soak_is_refused(tmp_path, repo):
     assert 'has no passing live soak' in result.stderr
 
 
-def test_a_commit_with_a_passing_live_soak_goes_on_to_the_build(tmp_path, repo):
+def test_a_commit_without_a_passing_image_trial_is_refused(tmp_path, repo):
     repo, shas = repo
-    result = soaked(tmp_path, repo, shas['base'], shas['main'], {'commit': shas['main'], 'passed': True})
+    sha = shas['main']
+    for trial in (None, passing_trial(sha, passed=False), passing_trial(sha, finished=time.time() - 2 * 86400),
+                  passing_trial(sha, image_id='sha256:rebuilt')):
+        result = soaked(tmp_path, repo, shas['base'], sha, {'commit': sha, 'passed': True}, trial=trial)
+        assert result.returncode == 1
+        assert 'live soak' not in result.stderr
+        assert f'{sha[:7]} has no passing image trial' in result.stderr
+        assert 'docker reached' not in result.stderr
+
+
+def test_a_commit_with_a_passing_image_trial_goes_on_to_the_image_check(tmp_path, repo):
+    repo, shas = repo
+    sha = shas['main']
+    result = soaked(tmp_path, repo, shas['base'], sha, {'commit': sha, 'passed': True}, trial=passing_trial(sha))
     assert 'live soak' not in result.stderr
+    assert 'image trial' not in result.stderr
+    assert 'docker reached' in result.stderr
+
+
+def test_a_rollback_builds_its_image_without_an_image_trial(tmp_path, repo):
+    repo, shas = repo
+    sha = shas['base']
+    result = soaked(tmp_path, repo, shas['main'], sha, {'commit': sha, 'passed': True}, '--rollback-to')
+    assert 'image trial' not in result.stderr
     assert 'docker reached' in result.stderr
 
 

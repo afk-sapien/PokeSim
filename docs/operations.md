@@ -242,13 +242,38 @@ from the watch's own clone, never a working checkout. Add `--enable` to start th
 
 ### Deploying a commit to a hosted app
 
-`DEPLOY_HOST=<ssh alias> DEPLOY_DIR=<app folder> sh tools/deploy_host.sh <full commit sha>` builds that commit,
-takes a cold backup and starts the new image. It refuses a commit without green `ci gate`
+A deploy has four steps, in this order:
+
+1. Take a fresh cold backup of the app folder: stop the app, archive the folder and start it again.
+2. Run `tools/live_soak.py smoke` on the commit with inputs prepared from that backup (see
+   [testing](testing.md#live-soak-before-a-deploy)).
+3. Run the image trial on the commit and that backup, described below.
+4. Run `tools/deploy_host.sh`, then check the session endpoint at once, before the post-deploy watch.
+
+`python3 tools/image_trial.py run --candidate <full commit sha> --backup <cold backup .tar.gz> --work <empty folder>`
+builds the image the deploy will ship and runs it for 30 minutes as a container, with the host's
+`compose.yaml` from the backup, on a copy of the backup's `app` folder. The copy keeps every adventure
+the backup runs and never takes the backup's `.env`, `auth.sqlite` or tokens. An override puts the
+container on an internal network with no route out, so it reaches no trade partner, notification
+service or public name, and caps it at 12 CPUs and 12 GB as the local sims are capped. It holds the
+heavy load lock. It passes when every adventure runs at every probe after a 5 minute boot, the container
+never restarts and stays healthy, the log has no line matching `traceback`, `error`, `exception` or
+`critical`, no trade scheduler pass fails, and at least 3 passes rate offers for Red, Blue or Yellow and
+3 for Gold, Silver or Crystal. The report goes to `data/live-soak/reports/image-trial/<commit>.json`.
+
+The trial's known gaps against production: the trusted-proxy value is a placeholder, there is no
+reverse proxy, and it boots in setup mode with no auth.sqlite. So the session check right after the
+switch, which must show the same accounts mode and sign-in methods as before, carries accounts mode.
+
+`DEPLOY_HOST=<ssh alias> DEPLOY_DIR=<app folder> sh tools/deploy_host.sh <full commit sha>` ships the
+image a passing trial under a day old ran, without building it again, takes a cold backup and starts the
+new image. It refuses a commit without that trial, or when the host's `compose.yaml` is not the file the
+trial ran. It refuses a commit without green `ci gate`
 and `install gate` checks, a commit without a passing `tools/live_soak.py smoke` (see
 [testing](testing.md#live-soak-before-a-deploy)), or a host short of space. It also refuses a commit that does
 not contain the one the host runs, read from the running image's revision label, so a
 deploy never drops work. Use `--rollback-to <full commit sha>` to deploy an older commit
-on purpose. It always refuses a commit whose data schema is older than the live
+on purpose. A rollback builds its image and needs no trial. It always refuses a commit whose data schema is older than the live
 `app.sqlite`, because that app would not start on the data. It lists the `main` commits
 the candidate lacks and refuses when one of them is over a day old, so merge `main` in
 first, or pass `--behind-main` to deploy it anyway. Merge a PR that syncs `main` into a
