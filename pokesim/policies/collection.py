@@ -394,6 +394,7 @@ NO_STEP = decide.Failure(decide.NOT_NOW, 'it cannot start from here yet')
 NO_PARTNER = decide.Failure(decide.NOT_NOW, 'no Pokémon to trade for it yet')
 TOO_STRONG = decide.Failure(decide.NOT_NOW, 'the wild Pokémon there are too strong for the party')
 DEFERRED = decide.Failure(decide.NOT_NOW, 'it waits for a new move, party member or ball to catch it')
+SEARCHED = decide.Failure(decide.NOT_NOW, 'its searches for a better copy are spent')
 TRAINS_FIRST = decide.Failure(decide.NOT_NOW, 'a Pokémon in the party trains first')
 
 
@@ -1344,6 +1345,14 @@ class Collection:
                                    catch_goal=1 if project['needed_capture'] else 3,
                                    dv_hunt=not project['needed_capture'],
                                    last_hunt=self.last_hunt.get(str(sid), -1))
+                    if project['dv_hunt'] and self.quality_searches.get(str(sid), 0) >= SEARCH_BUDGET:
+                        # A species gets SEARCH_BUDGET searches for a better copy in all, wherever it is
+                        # found, as in Gen II (gen2/postgame.py). Each place keeps its own budget and
+                        # stand-down, so without this a hunt whose hooked copies never beat the held ones
+                        # moved from one Safari Zone area to the next with no catch, and Blue stopped
+                        # making progress.
+                        skip(project, SEARCHED)
+                        continue
                 if offered is not None:
                     project.update(parent=source['give'], box=offered.get('box'),
                                    give_key=identity(offered))

@@ -1147,6 +1147,10 @@ class StrategicPolicy(Policy):
         if goal.key == 'collect_ceremony' and s.map == MAPS['CHAMPIONS_ROOM']:
             self.mode = "continuing after the Champion"
             self.reason = "Finish the Hall of Fame ceremony and continue the saved adventure"
+            # The game walks the new Champion to the Hall of Fame, so there is no route to search for. A walk
+            # with no route stands the project down, and every League rematch Blue won ended that way, each
+            # waiting longer than the last, until nothing left made progress.
+            return tap('a', 6, 24)
         elif goal.key == "champion":
             self.mode = "continuing after the Champion"
             self.reason = "Finish the Hall of Fame ceremony and continue the saved adventure"
