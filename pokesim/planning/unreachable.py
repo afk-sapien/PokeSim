@@ -7,7 +7,7 @@ shared progress monitor (monitor.py), one key per goal and target, so the wait d
 target keeps failing and the picker passes it over until the wait runs out.
 
 Each caller passes ``now`` in its own unit, as the monitor does: decisions for Gold, Silver and Crystal
-and frames for Red, Blue and Yellow.
+and PlayClock frames for Red, Blue and Yellow.
 """
 from .monitor import SPENT, STAND_DOWNS, STOOD_DOWN, Backoff, Monitor
 

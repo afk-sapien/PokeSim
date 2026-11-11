@@ -51,7 +51,7 @@ def test_autosaves_stop_rotating_during_a_battle_that_may_never_end():
                             prune_autosaves=lambda n: None, prune_events=lambda n: None)
     frame = 10 ** 6
     game = SimpleNamespace(store=store, play_clock=SimpleNamespace(state_dict=dict), snapshot=None, frame=frame,
-                           battle_frame=frame - config.BATTLE_TIMEOUT_SECONDS * FRAMES_PER_SECOND)
+                           battle_frame=frame - config.BATTLE_TIMEOUT_SECONDS * FRAMES_PER_SECOND, policy=None)
     Emulator._autosave(game)
     assert writes == [], 'the save from before the battle must survive until the timeout reloads it'
 

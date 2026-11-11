@@ -826,6 +826,9 @@ class Emulator:
         if self.store.get("trade_hold") and not trade_prepare:
             return
         self.store.set("play_clock", self.play_clock.state_dict())
+        # The goals' stand-downs and spent frames sit beside the clock they count on, not in the save.
+        if (tables := getattr(self.policy, 'monitor_tables', None)) is not None:
+            tables.flush()
         if hasattr(self, 'step_tracker'):
             self.step_tracker.flush(force=True)
         if hasattr(self, 'statistics'):
