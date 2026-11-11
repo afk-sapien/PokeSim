@@ -113,8 +113,8 @@ def test_gen2_battle_catch_of_an_owned_species_asks_verdict(refuse, real_data, r
     else:
         policy.returned = {157}
     snapshot = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
-        in_battle=1, enemy_species=157, owned={157}, can_catch=True, badges=65535, money=10000,
-        pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
+        in_battle=1, enemy_species=157, enemy_hp=1, enemy_max_hp=60, owned={157}, can_catch=True, badges=65535,
+        money=10000, pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
     mem = SimpleNamespace(byte=lambda name: 0, read=lambda name, size: b'\xff' * size)
     throw = ('Throw', real_data.items['POKE_BALL'])
     assert keeps_another(policy, snapshot, 157, dvs=(15,) * 5)
@@ -139,8 +139,8 @@ def test_gen2_a_missing_entry_waits_when_only_the_upgrade_slot_is_free(real_data
     party = (Mon(16, 'PIDGEY', 50, 150, 150, 0, 0, (33, 0, 0, 0), (35, 0, 0, 0), (0,) * 4,
                  (150, 80, 80, 80, 80, 80), 125000, (8,) * 4, (0,) * 5, 1, 70),) * 6
     snapshot = SimpleNamespace(party=party, stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
-        in_battle=1, enemy_species=157, owned={16}, can_catch=True, badges=65535, money=10000,
-        box_counts=(20,) * 13 + (19,), active_box=13, pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
+        in_battle=1, enemy_species=157, enemy_hp=1, enemy_max_hp=60, owned={16}, can_catch=True, badges=65535,
+        money=10000, box_counts=(20,) * 13 + (19,), active_box=13, pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
     mem = SimpleNamespace(byte=lambda name: 0, read=lambda name, size: b'\xff' * size)
     throw = ('Throw', real_data.items['POKE_BALL'])
     assert room(snapshot) == pcvalue.UPGRADE_RESERVE

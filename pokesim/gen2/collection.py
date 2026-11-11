@@ -353,6 +353,22 @@ def wanted(policy, snapshot, species):
             or species in item_hunts(policy, snapshot))
 
 
+def throw_signature(snapshot):
+    """What can change a throw's odds: the party's species and moves and the kinds of ball held."""
+    party = sorted((mon.species, tuple(sorted(move for move in mon.moves if move))) for mon in snapshot.party if not mon.egg)
+    return repr((party, sorted(item for item, count in snapshot.pockets['balls'] if count)))
+
+
+def defer(policy, snapshot, species):
+    """Leave ``species`` uncaught until the party or the ball pocket changes (planning.throws)."""
+    policy.collection.setdefault('deferred', {})[str(species)] = throw_signature(snapshot)
+
+
+def deferred(policy, snapshot, species):
+    """Whether a catch of ``species`` waits for a new move, member or ball, so no hunt goes for it."""
+    return policy.collection.get('deferred', {}).get(str(species)) == throw_signature(snapshot)
+
+
 def lapras(policy, snapshot, mem, Goal):
     """Meet the Union Cave Lapras, which surfaces on Fridays until the day's battle sets its flag."""
     if (not wanted(policy, snapshot, LAPRAS) or mem.byte('wCurDay') % 7 != FRIDAY
@@ -1016,7 +1032,8 @@ def pokedex_hunt(policy, snapshot, Goal, current_time):
     # With every box full and nothing to release, a hunt could never keep a catch.
     room = not policy.no_room(snapshot)
     if (target and (not wanted(policy, snapshot, target['species']) or not matching_time(target['time'], current_time)
-                   or not room or standing_down(policy, hunt_key(target['species'])))):
+                   or not room or standing_down(policy, hunt_key(target['species']))
+                   or deferred(policy, snapshot, target['species']))):
         if not wanted(policy, snapshot, target['species']):
             # Caught, or its item found: the search is done, so its spent decisions go too.
             forget(policy, hunt_key(target['species']))
@@ -1026,7 +1043,8 @@ def pokedex_hunt(policy, snapshot, Goal, current_time):
         items = dict(snapshot.items)
         for row in data.encounters if room else ():
             if (not wanted(policy, snapshot, row['species']) or not matching_time(row['time'], current_time)
-                    or standing_down(policy, hunt_key(row['species'])) or not usable(policy, snapshot, row, items)):
+                    or standing_down(policy, hunt_key(row['species'])) or not usable(policy, snapshot, row, items)
+                    or deferred(policy, snapshot, row['species'])):
                 continue
             method = row['method']
             key = (row['map'], method, row['species'], row['time'] == 'rare trees')

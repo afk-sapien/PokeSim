@@ -796,6 +796,14 @@ class StrategicPolicy(Policy):
                                             keeps=self._keeps(s, enemy.species, mem),
                                             reserve=self._reserve(s, enemy.species, mem))
                 self.intent_since = s.frame
+                if self.intent.defer:
+                    # Nobody here can weaken a catch under 1 in 10 a throw, so its species waits for a
+                    # new move, member or ball, and a hunt that came for it ends (planning.throws).
+                    self.collection.defer(s, enemy.species)
+                    project = self.collection.project
+                    if project and project.get('species') == enemy.species and project['method'] in ('grass', 'surf', 'fish'):
+                        self.collection.abandon('Leave a catch nobody here can weaken for a new move, member or ball',
+                                                stand_down=False)
             self.mode = f"battle: {self.intent.kind}"
             self.reason = self.intent.reason
             return self._battle_shortcut(s, me, enemy)

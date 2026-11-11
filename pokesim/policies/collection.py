@@ -250,6 +250,13 @@ CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'
 CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
 LEAGUE = {MAPS[n] for n in ('LORELEIS_ROOM','BRUNOS_ROOM','AGATHAS_ROOM','LANCES_ROOM','CHAMPIONS_ROOM','HALL_OF_FAME')}
 REPEATABLE = {'grass', 'surf', 'fish', 'safari'}
+
+
+def throw_signature(s):
+    """What can change a throw's odds: the party's species and moves and the kinds of ball held."""
+    party = sorted((mon.species, tuple(sorted(move for move in mon.moves if move))) for mon in s.party)
+    balls = {ITEMS[name] for name in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')}
+    return repr((party, sorted(item for item, count in s.items if count and item in balls)))
 # Goals the adventure runs for a project while the project stays chosen: a heal after its battles,
 # supplies for its catches, a box with room for them, or a reserve swapped in at the Center on the way.
 SUPPORT_TRIPS = ('heal', 'restock', 'party_box', 'party_upgrade')
@@ -540,6 +547,8 @@ class Collection:
         self.last_repeat = {}
         self.last_hunt = {}
         self.quality_searches = {}
+        # Species left for a new move, member or ball, by throw_signature (planning.throws).
+        self.deferred_catches = {}
         self.peer_demand = {}
         self.demand_until = 0
         # The policy context clock at the last step, in game frames that never rewind. Never saved.
@@ -587,8 +596,16 @@ class Collection:
         return target
 
     def state_dict(self):
-        return {**{k:getattr(self,k) for k in ('project','remaining','elapsed','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','next_marathon','marathon_records','activity_events')},
+        return {**{k:getattr(self,k) for k in ('project','remaining','elapsed','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','deferred_catches','next_marathon','marathon_records','activity_events')},
                 'director': self.director.state_dict()}
+
+    def defer(self, s, species):
+        """Leave ``species`` uncaught until the party or the balls held change (planning.throws)."""
+        self.deferred_catches[str(species)] = throw_signature(s)
+
+    def deferred(self, s, species):
+        """Whether a catch of ``species`` waits for a new move, member or ball, so no hunt goes for it."""
+        return self.deferred_catches.get(str(species)) == throw_signature(s)
 
     @property
     def project_key(self):
@@ -651,6 +668,7 @@ class Collection:
         self.next_marathon = data.get('next_marathon', 0)
         self.marathon_records = data.get('marathon_records', {})
         self.activity_events = data.get('activity_events', [])
+        self.deferred_catches = data.get('deferred_catches', {})
         for key in self.state_dict():
             if key in data and key != 'director':
                 setattr(self,key,data[key])
@@ -1209,6 +1227,8 @@ class Collection:
                 if mode == 'trade' and offered is None:
                     continue
                 if mode == 'grass' and source.get('level',100) > max(p.level for p in s.party)+3:
+                    continue
+                if mode in ('grass', 'surf', 'fish') and self.deferred(s, sid):
                     continue
                 search_key = (sid,source['map'],mode,source.get('rod'))
                 if search_key in searched:
