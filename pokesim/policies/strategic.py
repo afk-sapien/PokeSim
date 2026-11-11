@@ -7,7 +7,7 @@ from functools import partial
 from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositPokemon, FieldMove, LearnMove, ReleasePokemon,
                                     ReorderParty, RunAway, SellItem, SwitchPokemon, UseItem, WithdrawPokemon, item_kind)
 
-from .base import Action, Policy
+from ..runtime.policy import Action, Policy
 from ..planning.ledger import box_wanted
 from pokecore.textmatch import ScreenText
 from .battle import (BALLS, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
@@ -239,9 +239,9 @@ class StrategicPolicy(Policy):
     def monitor_tables(self, tables):
         self.collection.director.attach(tables)
 
-    @property
-    def hopeless_battle(self):
-        """The battle under way cannot end, so waiting out the battle timeout gains nothing."""
+    def hopeless_battle(self, snapshot):
+        """The battle under way cannot end, so waiting out the battle timeout gains nothing. The battle
+        decision already found it, so the snapshot is not read again."""
         return bool(self.intent and self.intent.reason == HOPELESS)
 
     def on_restore(self):
@@ -356,6 +356,9 @@ class StrategicPolicy(Policy):
     def drop_pin(self):
         return self.collection.drop_pin()
 
+    def restore_pin(self, pin):
+        self.collection.pin = pin
+
     def catalogue(self, snapshot, query=None, limit=catalogue.LIMIT):
         """The goal catalogue (planning/catalogue.py). Serving it draws on a copy of the RNG and writes
         no state."""
@@ -412,7 +415,10 @@ class StrategicPolicy(Policy):
                 "pickups": self.pickups.state_dict(), "escape_attempted": self.escape_attempted}
 
     def load_state_dict(self, data):
+        # A pin belongs to the moment it was set, so it never outlives a load, even of a save it cannot read.
+        self.collection.clear_pin()
         if data.get("version") != 1:
+            self.on_restore()
             return
         self.collection.load(data.get("collection", {}))
         self.fossil = data.get('fossil', self.fossil)

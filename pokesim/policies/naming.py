@@ -2,7 +2,7 @@
 import random
 from pokecore.naming import name_step
 
-from .base import Action
+from ..runtime.policy import Action
 from pokecore.textmatch import ScreenText
 
 

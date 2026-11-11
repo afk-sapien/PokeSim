@@ -7,7 +7,7 @@ import time
 from pokecore.gen1 import W_FACING, W_LINK_STATE, W_WALK_COUNTER
 from pokecore.shortcuts import ChangeBox, DepositPokemon, WithdrawPokemon
 
-from ..policies.base import Action, stack_pointer
+from .policy import Action, stack_pointer
 from pokecore.centers import CENTERS
 from ..pc_list import guarded
 from ..policies.navigation import Navigator

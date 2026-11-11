@@ -25,11 +25,6 @@ SLOT_MAX_STEPS = 12000
 PRE_GAME = ('title', 'main_menu')
 
 
-def stack_pointer(pb):
-    """The CPU stack pointer, as policies.base reads it, without loading the Gen 1 policies."""
-    return getattr(getattr(pb, 'register_file', None), 'SP', None)
-
-
 def core_ui(mem):
     """Observation hints for a Core machine. With the stack pointer, a Bill's PC list presses
     A through the wait that a traded nickname holding <CONT> starts."""

@@ -12,7 +12,7 @@ from pokesim.gen2 import kinds
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
 from pokesim.gen2.views import state_view
-from pokesim.runtime.game_loop import GameLoop, Gen2
+from pokesim.runtime.game_loop import GEN2_WAIT, Decider, GameLoop
 from pokecore.gen2.ram import Memory, read_snapshot
 
 
@@ -191,7 +191,7 @@ def main(argv=None, prog=None):
             pb.tick(count, True)
             frame += count
 
-    loop = GameLoop(SimpleNamespace(pb=pb, policy=policy, frame=frame), Gen2(lambda: frame), tick)
+    loop = GameLoop(SimpleNamespace(pb=pb, policy=policy, frame=frame), Decider(lambda: frame, wait=GEN2_WAIT), tick)
     try:
         if args.load:
             with args.load.open('rb') as source:
@@ -271,7 +271,7 @@ def main(argv=None, prog=None):
                         and '┌' not in snapshot.tiles[12]):
                     break
                 loop.act()
-                if frame % 10000 < action.hold + action.gap:
+                if frame % 10000 < action.frames(GEN2_WAIT):
                     pb.screen.image.save(args.output / 'latest.png')
                     with (args.output / 'latest.state').open('wb') as output:
                         pb.save_state(output)

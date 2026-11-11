@@ -19,8 +19,9 @@ from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
 from ..runtime import capture, trace
-from ..runtime.game_loop import GameLoop, Gen2
+from ..runtime.game_loop import GEN2_WAIT, Decider, GameLoop
 from ..runtime.manifest import checkpoint_manifest
+from ..runtime.policy import BUTTONS, Action
 from ..runtime.reload import FRAMES_PER_SECOND, reload_target
 from ..runtime.restart import restart
 from ..planning import decide
@@ -31,7 +32,7 @@ from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elap
 from pokecore.emulator_state import validate_runtime
 from .data import GameData
 from . import journal
-from .policy import Action, Policy
+from .policy import Policy
 from pokecore.gen2.ram import BADGES, read_snapshot
 from .store_stock import StoreStock
 from .views import mon_view, state_view
@@ -116,7 +117,6 @@ PARK_SOURCES = frozenset({'holds', 'ladder'})
 LEAGUE_CHECKPOINT = 'league-entry.state'
 BEFORE_LOAD_CHECKPOINT = 'before-load.state'
 BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
-BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
 
 
 @dataclass(frozen=True)
@@ -593,10 +593,8 @@ class Emulator:
         for button in BUTTONS:
             self.pb.button_release(button)
         self.frame = metadata.get('frame', 0)
-        # A pin belongs to the moment it was set, so it never outlives a load.
-        self.policy.unpin_goal()
+        # The load clears the pin, which belongs to the moment it was set, and discards in-flight actions.
         self.policy.load_state_dict(metadata.get('policy_state', {}))
-        self.policy.on_restore()
         self.play_clock.restore(metadata.get('play_clock'))
         # A League gift, legendary return or event return delivered after this save is not in it, so its claim opens again.
         from .. import rewards
@@ -1259,7 +1257,7 @@ class Emulator:
     def _run(self):
         # The autosave counts game time, so a replay saves on the same frames at any pace. A reload
         # rewinds the frame and the cadence counts again from there.
-        loop = GameLoop(self, Gen2(lambda: self.play_clock.frames), self._tick, guards=self._check_guards,
+        loop = GameLoop(self, Decider(lambda: self.play_clock.frames, wait=GEN2_WAIT), self._tick, guards=self._check_guards,
                         autosave=self._autosave, ready=lambda: not getattr(self.policy, 'backing_out', False))
         self.consecutive_errors = 0
         tracer = getattr(self, 'tracer', None)

@@ -11,6 +11,7 @@ from pokesim.gen2.data import GameData
 from pokecore.gen2.screens import mask_hud, mask_roster
 from pokesim.nicknames import MENU_WORDS, name_pool, validate_parts
 from pokesim.play_clock import PlayClock
+from pokesim.runtime.policy import PolicyContext
 from pokesim.runtime.supervision import REFUSED_SHORTCUT
 from pokecore.textmatch import ScreenText, has_word
 
@@ -265,7 +266,7 @@ def test_rescue_buttons_are_played_before_the_normal_plan(real_data):
     snapshot = screen(['Huh?'] * 18, started=True, valid=True, in_battle=0)
     pressed = []
     for _ in range(3):
-        pressed.append(policy.step(snapshot, memory()).button)
+        pressed.append(policy.step(PolicyContext(snapshot, policy.clock, memory()))[0].button)
     assert pressed == ['b', 'b', 'b']
     assert policy.recoveries == 1
 
@@ -531,14 +532,14 @@ def test_gen2_preparation_hands_an_unloaded_map_to_the_policy(monkeypatch):
     """
     import time
     from pokesim.gen2 import preparation
-    from pokesim.gen2.policy import Action
+    from pokesim.runtime.policy import Action
     monkeypatch.setattr(preparation, 'Memory', lambda memory, data: SimpleNamespace())
     monkeypatch.setattr(preparation, 'update_world', lambda regions, snapshot: None)
     pressed = Action('a', 8, 52)
     regions = SimpleNamespace(observe=lambda mid, grid: None)
     nav = SimpleNamespace(regions=regions, collision=lambda snapshot, memory: pytest.fail('collision read for an unloaded map'))
     policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False,
-                             step=lambda snapshot, memory, sp=None, clock=None: pressed)
+                             step=lambda ctx: [pressed])
     emu = SimpleNamespace(policy=policy, data=SimpleNamespace(maps={1: {}}), pb=SimpleNamespace(memory=None), frame=10,
                           play_clock=SimpleNamespace(frames=10))
     prep = preparation.Preparation(emu, {'started_frame': 0, 'protect': [], 'wished': []})

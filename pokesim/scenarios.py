@@ -442,7 +442,7 @@ class Gen1Watch(PlannerMarks):
         return (since or frame) if snapshot.in_battle and snapshot.started else None
 
     def hopeless(self, snapshot):
-        return bool(self.run.policy.hopeless_battle)
+        return self.run.policy.hopeless_battle(snapshot)
 
     def in_league(self, snapshot):
         return False

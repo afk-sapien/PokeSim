@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from pokesim.policies.base import Action, PolicyContext
+from pokesim.runtime.policy import Action, PolicyContext
 from pokesim.runtime import preparation
 from pokesim.store import Store
 from pokesim.trade.preferences import identity

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.gen2.data import GameData
+from pokesim.runtime.policy import PolicyContext
 from pokecore.textmatch import ScreenText
 
 PC_LIST = [
@@ -70,7 +71,7 @@ def test_policy_backs_out_of_an_ownerless_pc_and_reports_it(data, monkeypatch):
     monkeypatch.setattr(ruins, 'control', lambda *args: None)
     monkeypatch.setattr(contest, 'control', lambda *args: None)
     monkeypatch.setattr(tower, 'control', lambda *args: None)
-    action = policy.step(snapshot, memory)
+    action, = policy.step(PolicyContext(snapshot, policy.clock, memory))
     assert action.button == 'b'
     assert policy.mode == 'Close the PC' and policy.backing_out
 

@@ -14,7 +14,7 @@ from collections import deque
 
 from ..ram import MAP_NAMES, MOVES, Snapshot
 from ..screen import Screen, W_ENEMY_HP, W_ENEMY_MAX_HP, W_PLAYER_MON_NUMBER
-from .base import Action, Policy, PolicyContext, Stillness
+from ..runtime.policy import Action, Policy, PolicyContext, Stillness
 from .naming import NamingController
 
 log = logging.getLogger("pokesim.policy")

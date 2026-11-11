@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from pokesim.runtime.policy import PolicyContext
 from pokesim.runtime.supervision import REFUSED_SHORTCUT
 from pokesim.stalls import StallWatch
 from pokesim.store import Store
@@ -272,12 +273,12 @@ def test_a_refused_hm_lesson_is_not_asked_for_again_at_once(teaching_policy, rea
     policy = teaching_policy
     lead = SimpleNamespace(species=155, egg=False, moves=(33, 43, 0, 0))
     snapshot = teaching_snapshot(real_data, lead, events={'EVENT_GOT_HM01_CUT'})
-    policy.step(snapshot, ZEROS)
+    policy.step(PolicyContext(snapshot, policy.clock, ZEROS))
     assert policy.menu == Teach(15, 0)
     policy.menu = None
     policy.blocked[policy.task_key(Teach(15, 0))] = REFUSED_SHORTCUT.until(policy.clock)
     with pytest.raises(Onward):
-        policy.step(snapshot, ZEROS)
+        policy.step(PolicyContext(snapshot, policy.clock, ZEROS))
     assert policy.menu is None
 
 
@@ -286,12 +287,12 @@ def test_a_refused_iron_tail_lesson_is_not_asked_for_again_at_once(teaching_poli
     policy = teaching_policy
     lead = SimpleNamespace(species=25, egg=False, moves=(33, 0, 0, 0))
     snapshot = teaching_snapshot(real_data, lead, items=[(real_data.items['TM23'], 1)], badges=128)
-    policy.step(snapshot, ZEROS)
+    policy.step(PolicyContext(snapshot, policy.clock, ZEROS))
     assert policy.menu == Teach(231, 0)
     policy.menu = None
     policy.blocked[policy.task_key(Teach(231, 0))] = REFUSED_SHORTCUT.until(policy.clock)
     with pytest.raises(Onward):
-        policy.step(snapshot, ZEROS)
+        policy.step(PolicyContext(snapshot, policy.clock, ZEROS))
     assert policy.menu is None
 
 

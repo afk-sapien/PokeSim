@@ -17,7 +17,7 @@ import pytest
 from pokesim.app.coordinator import Coordinator
 from pokesim.app.registry import Registry, identifier
 from pokesim.cartridges import by_version
-from pokesim.policies.base import PolicyContext
+from pokesim.runtime.policy import PolicyContext
 from pokesim.runtime import preparation
 from pokesim.store import Store
 from pokesim.trade.preferences import identity

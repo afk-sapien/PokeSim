@@ -359,7 +359,7 @@ class Participant:
         # Only the owning runtime imports game-specific data to derive offers.
         from .preparation import SEALED, sealed
         from ..pc_list import guarded
-        from ..policies.base import stack_pointer
+        from .policy import stack_pointer
         sp = stack_pointer(getattr(self.emu, 'pb', None))
         candidates = []
         blocked = SEALED if sealed(getattr(self.emu, 'snapshot', None), self.store.trade_preferences(),

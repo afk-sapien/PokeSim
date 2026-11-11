@@ -1,7 +1,7 @@
 """Policies read time only from the context clock in PlayClock frames, never from the wall."""
 import pytest
 
-from pokesim.policies.base import PolicyContext, Stillness
+from pokesim.runtime.policy import PolicyContext, Stillness
 from pokesim.policies.collection import DEMAND_FRAMES, Collection
 from pokesim.policies.guided_random import STUCK_FRAMES as GUIDED_FRAMES, GuidedRandomPolicy
 from pokesim.policies.smart_random import STUCK_FRAMES as SMART_FRAMES, SmartRandomPolicy

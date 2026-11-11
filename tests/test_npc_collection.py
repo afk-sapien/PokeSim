@@ -227,7 +227,7 @@ def test_legacy_dojo_project_keeps_its_selected_gift():
 
 
 def test_npc_project_does_not_steal_field_move_party_selection_during_travel():
-    from pokesim.policies.base import PolicyContext
+    from pokesim.runtime.policy import PolicyContext
     p = StrategicPolicy(1)
     p.collection.project = trade(p.collection, 124)
     p.goal = Goal('collect_trade', 'Trade', 'Reach the trader')

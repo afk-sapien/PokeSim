@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from pokesim.policies.base import PolicyContext
+from pokesim.runtime.policy import PolicyContext
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import journey, milestones, story_goal
 from pokesim.policies.strategic import StrategicPolicy

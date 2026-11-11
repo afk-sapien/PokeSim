@@ -5,7 +5,7 @@ restock and the story goal at every warp, and the mart purchases were credited t
 """
 from pokesim.planning import values
 from pokesim.planning.arbiter import Candidate, Tier
-from pokesim.policies.base import PolicyContext
+from pokesim.runtime.policy import PolicyContext
 from pokesim.policies.pickups import Pickups
 from pokesim.policies.pipeline import ERRAND_FRAMES, offer
 from pokesim.policies.progression import Goal

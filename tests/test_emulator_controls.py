@@ -4,7 +4,7 @@ import pytest
 
 from pokesim.emulator import Emulator
 from pokesim.play_clock import PlayClock
-from pokesim.policies.base import Action
+from pokesim.runtime.policy import Action
 from pokesim.runtime.reward_delivery import RETRY_FRAMES, SPACING_FRAMES, reward_due, schedule
 from pokesim.runtime.supervision import Supervisor
 from test_events import snap
@@ -104,7 +104,7 @@ def test_restore_discards_policy_intent_and_refreshes_snapshot(tmp_path, monkeyp
     assert emu.snapshot == expected and emu.input_epoch == 8
     assert emu.pending == [] and emu.prev_snapshot is None
     emu.policy.on_restore.assert_called_once()
-    from pokesim.policies.base import BUTTONS
+    from pokesim.runtime.policy import BUTTONS
     from unittest.mock import call
     assert emu.pb.button_release.call_args_list == [call(button) for button in BUTTONS]
     assert emu.pb.method_calls[0][0] == 'load_state'

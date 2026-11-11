@@ -3,7 +3,7 @@ import json
 import pytest
 
 from pokesim.policies import POLICIES, make_policy
-from pokesim.policies.base import PolicyContext
+from pokesim.runtime.policy import PolicyContext
 from pokesim.policies.naming import NamingController, POKEMON_NAMES, TRAINER_NAMES
 from pokesim.screen import Screen, W_CURRENT_MENU_ITEM, W_TILEMAP
 from test_events import snap

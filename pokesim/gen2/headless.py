@@ -18,12 +18,13 @@ from .. import config
 from ..checkpoints import CheckpointStore, open_state
 from ..experimental.gen2 import identify
 from ..runtime import trace as trace_module
-from ..runtime.game_loop import GameLoop, Gen2
+from ..runtime.game_loop import GEN2_WAIT, Decider, GameLoop
 from ..runtime.manifest import checkpoint_manifest
+from ..runtime.policy import BUTTONS
 from ..runtime.supervision import Tables
 from ..seeds import RELOAD_IDLE, reload_idle
 from .data import GameData
-from .emulator import BUTTONS, SCREEN_FRAMES, count_league
+from .emulator import SCREEN_FRAMES, count_league
 from .policy import Policy
 from .store_stock import StoreStock
 
@@ -62,7 +63,7 @@ class HeadlessRun(trace_module.HeadlessPins):
         self.frame = self.screen_frame = 0
         self.screen_key = None
         self.clock = None
-        self.loop = GameLoop(self, Gen2(lambda: self.frame), self.tick)
+        self.loop = GameLoop(self, Decider(lambda: self.frame, wait=GEN2_WAIT), self.tick)
         if checkpoint:
             self._load(Path(checkpoint), first=True)
         else:
@@ -105,10 +106,8 @@ class HeadlessRun(trace_module.HeadlessPins):
             self.frame = metadata.get('frame', 0)
         self.screen_frame = self.frame
         self.screen_key = None
+        # The load clears the pin and discards in-flight actions, as in the application.
         self.policy.load_state_dict(metadata.get('policy_state', {}))
-        self.policy.on_restore()
-        # A pin belongs to the moment it was set, so it never outlives a load, as in the application.
-        self.policy.unpin_goal()
         self.history = metadata.get('gen2_history') or self.history
         self._options()
         return metadata
@@ -157,10 +156,6 @@ class HeadlessRun(trace_module.HeadlessPins):
         if frames > 0:
             self.pb.tick(frames, render=self.render)
             self.frame += frames
-
-    def restore_pin(self, data):
-        from ..planning.pin import Pin
-        self.policy.pin = Pin.from_dict(data)
 
     def step(self, snapshot):
         """One decision and its action, through the loop the application plays."""

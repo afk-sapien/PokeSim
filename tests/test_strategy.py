@@ -2,7 +2,7 @@ from dataclasses import replace
 import json
 
 from pokesim.benchmark import Metrics, aggregate
-from pokesim.policies.base import PolicyContext
+from pokesim.runtime.policy import PolicyContext
 from pokesim.policies.battle import (Decision, choose_battle, damage, effectiveness, healing_item,
                                     needs_healing, ranked_moves, replacement_slot, shopping_item)
 from pokesim.policies.navigation import Navigator
@@ -280,7 +280,7 @@ def test_strength_is_only_used_when_a_boulder_push_is_actually_planned():
     # Victory Road's floors are linked by ladders, so a boulder in another section cannot be
     # reached on foot. Reaching for Strength before planning meant every step reopened the menu.
     from unittest.mock import patch
-    from pokesim.policies.base import PolicyContext
+    from pokesim.runtime.policy import PolicyContext
     from pokesim.policies.strategic import StrategicPolicy
     from pokesim.strategy_data import MAPS
     from shortcut_fakes import Recorder

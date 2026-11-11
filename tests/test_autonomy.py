@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 from pokesim.emulator import Emulator
 from pokesim.play_clock import PlayClock
-from pokesim.policies.base import Action, PolicyContext
+from pokesim.runtime.policy import Action, PolicyContext
 from pokesim.policies.progression import Goal, story_goal
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.strategy_data import ITEMS
