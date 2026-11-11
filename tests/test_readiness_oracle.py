@@ -150,3 +150,34 @@ def test_both_generations_get_one_verdict_from_the_same_facts(cartridge, verdict
     if red_verdict:
         assert red_verdict.reason == gold_verdict.reason
         assert red_verdict.target - red_ace == gold_verdict.target - gold_ace
+
+
+def test_the_readiness_target_is_the_level_the_matchup_rules_train_to():
+    gym, league = oracle.Boss('hive', 16, scores=(None,)), oracle.Boss('league', 50, scores=(None,) * 5, league=True)
+    assert (oracle.target(gym), oracle.target(league)) == (16 + oracle.MARGIN, 50)
+    # The matchup verdict trains to the same level, so a gain counts only while it trains toward the boss.
+    assert oracle.judge(replace(gym, scores=(0,)), oracle.Team(level=20)) == oracle.Train(oracle.MATCHUP, 26)
+    assert oracle.judge(replace(league, scores=(0,) * 5), oracle.Team(level=45)) == oracle.Train(oracle.MATCHUP, 50)
+    # A floor over the matchup level stands. A boss with no matchup rule has its floor alone, or no target.
+    assert oracle.target(oracle.Boss('zephyr', 9, floor=14, scores=(None,))) == 19
+    assert oracle.target(oracle.Boss('zephyr', 9, floor=24, scores=(None,))) == 24
+    assert oracle.target(oracle.Boss('zephyr', 9, floor=14)) == 14
+    assert oracle.target(oracle.Boss('surge', 46)) is None
+    assert oracle.target(oracle.Boss('hive', None, scores=(None,))) is None
+    assert oracle.target(None) is None
+    # A loss can raise the training bar over the target, but never the target, so a loop of losses cannot move it.
+    losses = Losses()
+    losses.note('league', 55)
+    assert oracle.judge(replace(league, scores=(0,) * 5), oracle.Team(level=45), losses) == oracle.Train(oracle.LOSS, 57)
+    assert oracle.target(league) == 50
+
+
+def test_gen1_targets_the_next_gym_in_badge_order_then_the_league():
+    from pokesim.policies.progression import GYMS, LEAGUE_ACE, readiness_target
+    assert readiness_target(SimpleNamespace(badges=0)) == GYMS[0][5] + oracle.MARGIN
+    # A gym won out of order leaves the first one not won as the next boss.
+    assert readiness_target(SimpleNamespace(badges=0b101)) == GYMS[1][5] + oracle.MARGIN
+    assert readiness_target(SimpleNamespace(badges=0x7f)) == GYMS[7][5] + oracle.MARGIN
+    assert readiness_target(SimpleNamespace(badges=0xff)) == LEAGUE_ACE
+    # After the Hall of Fame no boss is next, so no level gain counts.
+    assert readiness_target(SimpleNamespace(badges=0xff, hall_of_fame_count=1)) is None

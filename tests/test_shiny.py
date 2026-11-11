@@ -252,7 +252,7 @@ def test_npc_trader_cannot_take_shiny_partner():
     state = snapshot([], party=(partner, mon(level=80)))
     policy = StrategicPolicy(7)
     policy.goal = Goal('collect_trade', 'Trade', 'Meet the trader')
-    policy.collection.project = {'give': partner.species, 'map': state.map}
+    policy.collection.project = {'method': 'trade', 'give': partner.species, 'map': state.map}
     memory = menu({1: '  BULBASAUR'}, (1, 1), top=(1, 1))
     assert policy._dispatch(state, Screen(memory), 'party', memory)[0].button == 'b'
     state = replace(state, party=(replace(partner, dvs=(8,)*5), mon(level=80)))

@@ -129,6 +129,8 @@ class Emulator:
         # A reset replaces the clock, so the store asks for the current one each time.
         store.clock = lambda: self.play_clock.frames
         self.goal_watch = store.goal_watch = self.policy.goal_watch = progress_events.GoalWatch()
+        from .policies.progression import readiness_target
+        self.goal_watch.readiness = readiness_target
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
         # The newest autosave's manifest replaces this, and the policy's state, when start() loads it.

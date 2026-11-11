@@ -1123,20 +1123,47 @@ class Policy:
     # the loss bar alone holds them, and Falkner keeps his level floor.
     MATCHUP_GYMS = frozenset({'hive', 'plain', 'fog', 'storm', 'mineral', 'glacier', 'clair'})
 
+    def plain_boss(self, key):
+        """The boss ``key`` names with its ace, floor and League flag, and a matchup rule whose scores are not read."""
+        from ..planning.readiness import Boss
+        from .readiness import LEAGUE
+        key = self.boss_key(key)
+        scores = (None,) * len(LEAGUE) if key == 'league' else (None,) if key in self.MATCHUP_GYMS else ()
+        return Boss(key, self.boss_ace(key), floor=self.BOSS_FLOORS.get(key, 0), scores=scores, league=key == 'league')
+
     def boss(self, snapshot, goal):
         """The boss ``goal`` names, as the oracle sees it: its ace, floor and matchup scores."""
-        from ..planning.readiness import Boss
+        from dataclasses import replace
         from .readiness import LEAGUE, readiness
-        key = self.boss_key(goal.key)
-        if key == 'league':
+        boss = self.plain_boss(goal.key)
+        if boss.league:
             scores = tuple(readiness(self, snapshot.party, room) for room in LEAGUE)
-        elif key in self.MATCHUP_GYMS:
+        elif boss.scores:
             scores = (readiness(self, snapshot.party, goal.key),)
         else:
             scores = ()
-        inside = self.in_league(snapshot) if key == 'league' else self.BOSS_ROOMS.get(self.constant(snapshot)) == key
-        return Boss(key, self.boss_ace(key), floor=self.BOSS_FLOORS.get(key, 0), scores=scores,
-                    league=key == 'league', inside=inside)
+        inside = self.in_league(snapshot) if boss.league else self.BOSS_ROOMS.get(self.constant(snapshot)) == boss.key
+        return replace(boss, scores=scores, inside=inside)
+
+    def next_boss(self, snapshot):
+        """The first boss in the order the story takes them (BOSS_BADGES) not yet won, then Red."""
+        key = next((key for key, badge in self.BOSS_BADGES
+                    if not (snapshot.badges & badge if badge else getattr(snapshot, 'hall_of_fame_count', 0))), 'red')
+        return self.plain_boss(key)
+
+    def readiness_target(self, snapshot):
+        """The level a Pokémon's gain counts toward as progress (planning/readiness.target), or None.
+
+        Red has no matchup rule, so the loss bar alone holds him, as it holds the Kanto gyms. His
+        gains still count toward the matchup level over his ace, Pikachu's Lv 81 plus MARGIN, which
+        is also the most a loss bar before him asks (planning/readiness.CEILING). Play does not
+        change, since only the progress rows read it."""
+        from dataclasses import replace
+        from ..planning.readiness import target
+        boss = self.next_boss(snapshot)
+        if boss.key == 'red':
+            boss = replace(boss, scores=(None,))
+        return target(boss)
 
     def boss_training(self, snapshot, goal):
         """A walk that trains before the boss ``goal`` names, or None once the oracle finds the team ready.
@@ -1178,11 +1205,9 @@ class Policy:
         if verdict is None:
             return None
         bar = verdict.target
-        key = next((key for key, badge in self.BOSS_BADGES
-                    if not (snapshot.badges & badge if badge else getattr(snapshot, 'hall_of_fame_count', 0))), 'red')
         from .training import walk_goal
         return walk_goal(self, snapshot, Goal, lambda: f'Train the team to level {bar} before another try at: {goal.label}',
-                         map_name=self.BOSS_TRAINING[key])
+                         map_name=self.BOSS_TRAINING[self.next_boss(snapshot).key])
 
     def note_boss_loss(self, snapshot):
         """Remember the best fighter level that lost to the boss the goal names, which raises its bar.

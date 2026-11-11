@@ -225,13 +225,15 @@ Every tier writes typed progress events to one store table, `progress_events`. T
 | `receive` | no | gifts, returns, trades, hatches |
 | `release` | no | every release, with the reason from the oracle |
 | `room` | no | S1 make_room |
-| `level` | no | any battle. A training goal whose score rises writes its own `improve` |
+| `level` | no | any battle. A gain toward the next boss's readiness target writes `improve` instead, below |
 | `goal` | no | every goal start, done, stop, expire and stand-down |
 | `plan` | no | diagnostics, such as boss ready's "Went in unready", and every reload or power cycle, with `identity` naming the reason, such as `reload:battle cannot end` |
 
 Net comes only from `dex`, `improve`, a needed `item`, and the STORY and RACE kinds. A catch or a receive is never net by itself. A duplicate catch raises the held count, so counting held rises as progress would count churn as progress. When a caught or received Pokémon is kept because it fills family demand or a plan need, the oracle writes a separate `improve` row for it. LoopGuard still counts receive and release cycles by species from the `receive` and `release` rows.
 
 In shadow mode the journal entry that reports a new owned entry, a badge, a League win, a new area or an item also writes its row, under the goal running at the time. An `event` row is a story flag this run has not seen set before, and its score is the count of flags seen. These rows follow the journal, so a reload can write one again. The rewind event (section 6) marks the ones a reload undoes.
+
+A level gain writes one row with the Pokémon's `identity` and its new level as `score`. It is `improve` the first time that Pokémon reaches the level, and only at or under the readiness target of the next boss (`planning/readiness.target`): a gym's ace plus the margin, or the League's top ace. Any other gain is `level`. Training toward a boss is progress, so a team that grinds for a gym is not a stall. A loop of losses cannot move the target, since only the next boss sets it, so such a loop adds at most the levels left to the target and then goes quiet. After the Hall of Fame, Red, Blue and Yellow have no boss left, so no gain counts. Gold, Silver and Crystal count none in Kanto, whose gyms have no matchup rule, and then count gains toward Red at Mt. Silver once all sixteen badges are won: ten over his Lv 81 Pikachu, the most his loss bar asks.
 
 ### Encounter counters
 
@@ -580,12 +582,12 @@ This checks the progress model on real history before the stall tiers switch to 
 `python -m pokesim.replay progress`, in `pokesim/replay/progress.py`:
 
 ```
-python -m pokesim.replay progress run STORES_DIR --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10]
+python -m pokesim.replay progress run STORES_DIR --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10] [--rows stored|rebuilt]
 python -m pokesim.replay progress report REPORT_JSON
 ```
 
-1. Input is two read-only copies on the desktop. The main one is the hosted app's newest cold backup, extracted outside the repo, for two weeks of real play. The second is a copy of the local dev instance's data folder, for the stall hunt games and their fresh stall events. The tool never opens a live data folder. It reads `events`, `capture_receipts`, `progress`, `kv` and the stall bundle reports. It never reads save state.
-2. It rebuilds `progress_events` rows from the journal and receipts, as the new writers would have written them.
+1. Input is two read-only copies on the desktop. The main one is the hosted app's newest cold backup, extracted outside the repo, for two weeks of real play. The second is a copy of the local dev instance's data folder, for the stall hunt games and their fresh stall events. The tool never opens a live data folder. It reads `events`, `capture_receipts`, `progress`, `progress_events`, `kv` and the stall bundle reports. It never reads save state.
+2. An adventure whose window holds `progress_events` rows replays the rows the writers stored. On the statistics axis each row keeps its own PlayClock frame, and a row a reload undid counts no net progress. An adventure with none rebuilds the rows from the journal and receipts, as the new writers would have written them. `--rows stored` or `--rows rebuilt` picks one for every adventure, and each adventure's line in the report says which it used.
 3. It runs the old checks (StallWatch, LoopGuard and the watchdog fingerprint) and the new model side by side over the same rows.
 4. Ground truth is each stall bundle, help request, give-up, owner restart and the optional labels file.
 5. It runs as one process under `nice -n 10`, inside the load gate.
@@ -607,7 +609,7 @@ The bar to switch: every labeled stall caught, at most one false alarm per adven
 The first run did not meet the bar, so the switch to `net` is held.
 
 1. Every adventure with real play time failed. The `net` model raised 23 to 168 false alarms in 14 days, where the old checks raised 6 to 40. It also missed more stalls on four of them.
-2. Most false alarms are a gap in the input, not in the model. Training and marathon progress count only through `improve` rows a goal writes and RACE `checkpoint` rows. Old journals have neither, so the replay cannot rebuild them, and the hours before each false alarm show only level-ups, rematches, evolutions and races. The net kinds stay as they are, since counting level-ups would count churn as progress again.
+2. Most false alarms are a gap in the input, not in the model. Training and marathon progress count only through `improve` rows a goal writes and RACE `checkpoint` rows. Old journals have neither, so the replay cannot rebuild them, and the hours before each false alarm show only level-ups, rematches, evolutions and races. The net kinds stay as they are, since counting every level-up would count churn as progress again. The second run found training with no `improve` row to be a gap in the model, so a level gain toward the next boss's readiness target now writes one (section 4).
 3. The ground truth was weak. It was the old StallWatch's own alerts plus 14 stall bundles, since each adventure keeps only its newest 5. Help requests and owner restarts were not stored.
 
 The switch decision moves to after PR 7. Then the replay runs on the dev instance's own shadow rows, which will have real `improve`, `checkpoint` and `encounter_counts` rows, with a backup copy of the hosted app as a second check. The bar stays the same.
@@ -624,8 +626,9 @@ Each PR is proved by the live soak gate and by behavioral parity tests. The soak
 | 4 | Worth oracle with locks, family demand and the `full_locked` state. Every call site in section 5 moves to it | 6 hours | parity tests, soak, the bred Squirtle case as a test, a full box of locked mons parks producers and fires one alert |
 | 5 | Claims ledger and shared gift pipeline, with idempotent delivery | 6 hours | parity tests, soak, staged and delivered claims reopen after a rewind, a second delivery of a held mon writes nothing |
 | 6 | `runtime/supervision.py`, one ladder, the rewind event, frame clocks, the liveness check in the supervisor and the watchdog, Gen II stall bundles | 6 hours | parity tests, soak, both generations give the same ladder for the same scripted stall, a frozen PlayClock raises one liveness alert after 15 real minutes |
-| 7 | Goal record with the `what` hash in the key, hunt template, stop when in active frames, per-tier budgets with support children charged to the root's tier, the shared goal shape in `state.strategy` | 8 hours | the three test goals as headless tests, soak, the `state.strategy` entry leaves ALLOWED |
-| 8 | Hidden Pokémon and Stop when fields, share codes | 4 hours | round-trip tests for codes, a page test for the form |
+| 7 | Typed goal records, typed failures that park a goal in place of a reload, the goal catalogue, the director on catalogue goals, the shared goal shape in `state.strategy`, in five slices ([Typed goals](typed-goals.md)) | 16 hours plus 5 hours of gate and replays | the gate and the 51 stuck replays per slice, the `state.strategy` entry leaves ALLOWED |
+| 8 | The `what` hash in the key, the hunt template, Hidden Pokémon and Stop when fields in active frames, share codes | 8 hours | round-trip tests for codes, a page test for the form, the three test goals as headless tests |
+| 8a | Per-tier budgets with support children charged to the root's tier, and `interrupt_frames` commitment | 4 hours | the gate and the replays, every rung whose play changes named |
 | 9 | Report button, `stall-report.yml`, redaction test, guide and self-hosting text | 4 hours | `tests/test_stall_report.py`, `tests/test_no_private_strings.py` |
 
 Total agent time is about 45 hours plus about 2.5 hours of soak time. Boss ready and the live soak land first, as Steps 2h and 3 already plan.

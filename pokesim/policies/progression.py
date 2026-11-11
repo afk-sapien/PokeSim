@@ -9,7 +9,7 @@ from .team import readiness
 
 from ..game_data import current_variant
 from ..planning.losses import best_level
-from ..planning.readiness import LOSS, PARTNER, Boss, judge, team
+from ..planning.readiness import LOSS, PARTNER, Boss, judge, target, team
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set, object_hidden
 
 
@@ -160,6 +160,22 @@ LEAGUE_ACE, LEAGUE_TRAINING = 65, "ROUTE_23"
 
 def boss_key(key):
     return "league" if key.startswith("league_") else key
+
+
+def next_boss(s):
+    """The next boss the story takes on, with a matchup rule whose scores are not read: the first gym
+    in badge order not won, then the League. None after the Hall of Fame."""
+    if getattr(s, "hall_of_fame_count", 0):
+        return None
+    gym = next((g for g in GYMS if not s.badges & g[0]), None)
+    if gym:
+        return Boss(gym[1], gym[5], scores=(None,))
+    return Boss("league", LEAGUE_ACE, scores=(None,) * 5, league=True)
+
+
+def readiness_target(s):
+    """The level a Pokémon's gain counts toward as progress (planning/readiness.target), or None."""
+    return target(next_boss(s))
 
 
 def boss_room(key, map_id):

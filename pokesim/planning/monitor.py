@@ -202,6 +202,10 @@ class Monitor:
         """The caller's own table ``name`` inside the same state, such as the no-route attempts."""
         return self._table(name)
 
+    def rows(self, name):
+        """The caller's own table ``name`` inside the same state, such as the no-route attempts."""
+        return self._table(name)
+
     def shares(self):
         """Share of the frames counted this session, per goal key."""
         total = sum(self.frames.values())

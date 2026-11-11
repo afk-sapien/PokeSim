@@ -259,8 +259,8 @@
     return () => navigator.clipboard?.writeText($(selector).value).catch(() => $(selector).select())
   }
 
-  async function start(event) {
-    session = event.detail
+  async function start(given) {
+    session = given || {}
     csrf = session.csrf_token || ''
     if (session.auth !== 'accounts' || !session.user) return
     $('#account-panel').hidden = false
@@ -292,6 +292,9 @@
       await attempt('#people-result', showPeople)
     }
   }
-  // The Library page loads the session and hands it over.
-  document.addEventListener('pokesim:session', event => start(event).catch(() => {}), {once: true})
+  // The Library page loads the session and hands it over. On a slow load it can arrive before this
+  // deferred script runs, and then the event has passed, so the session it kept is used instead.
+  const begin = given => start(given).catch(() => {})
+  if (document.pokesimSession) begin(document.pokesimSession)
+  else document.addEventListener('pokesim:session', event => begin(event.detail), {once: true})
 })()

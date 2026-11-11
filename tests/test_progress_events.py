@@ -405,3 +405,105 @@ def test_both_write_one_improve_row_for_a_copy_the_worth_oracle_kept_better(tmp_
     finally:
         first.close()
         second.close()
+
+
+MON = progress_events.identity(4321, bytes((0x9a, 0xbc)), 157)
+
+
+def gain(store, level, mon=MON):
+    """A level gain's journal entry, as both emulators write it, and the row it left."""
+    store.add_event(Event('level', f'TYPHLOSION grew to level {level}', species=157, identity=mon, score=level),
+                    SNAPSHOT, None, None)
+    return tuple(rows(store, 'level', 'improve')[-1])
+
+
+def test_a_level_gain_toward_the_readiness_target_is_an_improve_row(tmp_path, caplog):
+    store = watched(tmp_path)
+    store.goal_watch.readiness = lambda snapshot: 23
+    try:
+        assert gain(store, 12) == ('improve', 42, '', '', 157, MON, 12, 1)
+        # A level counts once for each Pokémon, so a reload that gains it again writes a plain level row.
+        assert [gain(store, level)[0] for level in (12, 13)] == ['level', 'improve']
+        assert gain(store, 12, progress_events.identity(4321, bytes((0x11, 0x11)), 157))[0] == 'improve'
+        # Past the target, or under the best level the Pokémon already reached, a gain is no progress.
+        assert [gain(store, level)[0] for level in (24, 23)] == ['level', 'level']
+        # With no next boss, or a hook that fails, the gain still writes its entry and a level row.
+        store.goal_watch.readiness = lambda snapshot: None
+        assert gain(store, 25)[0] == 'level'
+        store.goal_watch.readiness = lambda snapshot: 1 / 0
+        assert gain(store, 26)[0] == 'level' and 'Cannot read the readiness target' in caplog.text
+        assert store.db.execute("SELECT COUNT(*) FROM events WHERE type = 'level'").fetchone()[0] == 8
+    finally:
+        store.close()
+
+
+def test_a_gen1_level_gain_names_the_pokemon_and_its_new_level():
+    from dataclasses import replace
+    from pokesim.events import RunMemory, diff
+    from pokesim.ram import PartyMon
+    from test_events import snap
+    before = PartyMon(0x99, 20, 20, 5, 'BULBASAUR', dvs=(10, 9, 10, 11, 12), trainer_id=4321)
+    grew = [event for event in diff(snap(party=(before,)), snap(party=(replace(before, level=6),)),
+                                    RunMemory(seen_maps={1})) if event.type == 'level']
+    assert [(event.species, event.identity, event.score) for event in grew] == [
+        (1, progress_events.identity(4321, bytes((0x9a, 0xbc)), 1), 6)]
+
+
+# Silver's League loop from the a7a83b0 soak, by play time: the rooms entered for the first time, the
+# ace's level gains and the blackouts, with the room each happened in. The live StallWatch raised it at
+# the blackout at 25:15:14, 133 game minutes after the first one.
+LANCE_LOOP = (
+    ('22:54:46', 'map', "Karen's Room", None), ('22:56:33', 'level', "Karen's Room", 66),
+    ('22:58:42', 'map', "Lance's Room", None), ('23:02:12', 'blackout', "Lance's Room", None),
+    ('23:07:40', 'level', "Koga's Room", 67), ('23:14:43', 'level', "Karen's Room", 68),
+    ('23:21:50', 'blackout', "Lance's Room", None), ('23:25:33', 'level', "Will's Room", 69),
+    ('23:35:14', 'blackout', "Bruno's Room", None), ('23:37:17', 'level', "Will's Room", 70),
+    ('23:45:24', 'level', "Bruno's Room", 71), ('23:55:12', 'blackout', "Lance's Room", None),
+    ('23:57:51', 'level', "Will's Room", 72), ('24:06:00', 'level', "Bruno's Room", 73),
+    ('24:14:01', 'blackout', "Lance's Room", None), ('24:19:26', 'level', "Koga's Room", 74),
+    ('24:27:43', 'level', "Karen's Room", 75), ('24:38:08', 'blackout', "Lance's Room", None),
+    ('24:56:53', 'level', "Will's Room", 76), ('25:06:12', 'level', "Karen's Room", 77),
+    ('25:15:14', 'blackout', "Lance's Room", None), ('25:19:52', 'level', "Koga's Room", 78),
+    ('25:28:55', 'level', "Karen's Room", 79), ('25:38:40', 'blackout', "Lance's Room", None))
+
+
+def lance_loop(tmp_path, aim):
+    """The new model's flags on the loop with the writer's rows when the readiness target is ``aim``,
+    as game minutes after the first blackout."""
+    from pokesim.replay.progress import Adventure, Axis, Entry, Row, replay
+    from pokesim.stalls import FRAMES_PER_GAME_MINUTE
+    store = watched(tmp_path / str(aim))
+    store.goal_watch.readiness = lambda snapshot: aim
+    start, entries, found = 1_700_000_000, [], []
+    try:
+        for i, (played, kind, room, level) in enumerate(LANCE_LOOP, 1):
+            hours, minutes, seconds = map(int, played.split(':'))
+            at = (hours * 60 + minutes) * 60 + seconds
+            ts, frame = start + at, at * 60
+            title = {'map': f'Arrived at {room}', 'level': f'TYPHLOSION grew to level {level}',
+                     'blackout': 'Blacked out!'}[kind]
+            entries.append(Entry(i, ts, kind, title, '', room, played))
+            if kind == 'map':
+                found.append(Row(ts, frame, 'area', 1))
+            elif kind == 'level':
+                store.clock = lambda frame=frame: frame
+                row = gain(store, level)
+                found.append(Row(ts, frame, row[0], row[-1]))
+    finally:
+        store.close()
+    axis = Axis([(entry.ts, (entry.ts - start) * 60) for entry in entries], 'playtime')
+    _, flags, _ = replay(Adventure('silver', 'silver', entries, [], [], [], [], []), axis, found,
+                         entries[0].ts, entries[-1].ts)
+    first = axis(next(entry.ts for entry in entries if entry.type == 'blackout'))
+    return [(flag.check, round((flag.frame - first) / FRAMES_PER_GAME_MINUTE, 1)) for flag in flags]
+
+
+def test_a_loop_of_league_losses_is_still_caught_with_level_gains_counted(tmp_path):
+    # Every gain is over Lance's Lv 50 ace, the League's target, so none counts and the loop is caught
+    # as before: the watchdog an hour after the last new room and StallWatch two game hours after
+    # Lance's room, both before the live StallWatch at 133 minutes.
+    assert lance_loop(tmp_path, 50) == [('watchdog', 93.6), ('stallwatch', 116.6)]
+    # A target over every gain would hide the loop. The rule caps a loop at the levels left to the
+    # target, so with a target of 70 the loop goes quiet after Lv 70 and is caught two game hours on.
+    assert lance_loop(tmp_path, 99) == []
+    assert lance_loop(tmp_path, 70) == [('watchdog', 145.6), ('stallwatch', 155.6)]
