@@ -42,7 +42,7 @@ def exhausted(policy, key, budget, amount=1, events=()):
     tracker.start(key, budget=budget)
     if not tracker.observe(key, amount, events).stand_down:
         return False
-    tracker._table(SPENT).pop(key, None)
+    tracker.set_spent(key, 0)
     return True
 
 
@@ -57,7 +57,7 @@ def spend(policy, key, expected, events=(), amount=1, progressed=False):
 
 def forget(policy, key):
     """Drop what ``key`` spent toward its budget, as when its goal is met or abandoned."""
-    monitor(policy)._table(SPENT).pop(key, None)
+    monitor(policy).set_spent(key, 0)
 
 
 def hunt_key(species):

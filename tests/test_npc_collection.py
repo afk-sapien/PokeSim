@@ -37,7 +37,8 @@ def test_npc_project_retrieves_selected_boxed_partner_then_visits_npc(target, gi
     p = StrategicPolicy(1)
     reserve = stored(give)
     s = with_storage(state(), reserve)
-    p.collection.project = trade(p.collection, target)
+    # The offers draw keys a project before it starts.
+    p.collection.project = dict(trade(p.collection, target), key='npc')
     goal = p.collection.goal(s)
     assert goal.key == 'party_collection'
     assert p.collection.project['box'] == 2
@@ -55,7 +56,6 @@ def test_npc_project_retrieves_selected_boxed_partner_then_visits_npc(target, gi
     assert p._dispatch(s, Screen(mem), 'party', mem)[0].button == 'a'
     assert p.pending_trade_key == identity(asdict(reserve))
     p.collection.remaining = 100
-    p.collection.project['key'] = 'npc'
     p.collection.observe(replace(s, owned=s.owned | {target}))
     assert p.collection.project is None
 
@@ -245,7 +245,8 @@ def test_npc_goals_target_the_trader_instead_of_the_other_resident(target, npc):
     from pokesim.strategy_data import WORLD
     c = Collection()
     project = trade(c, target)
-    actual = c.project_goal(state(), project)
+    from pokesim.policies import kinds
+    actual = kinds.rules('trade').target(kinds.View(c, state()), project)
     expected = object_goal('trade', 'Trade', 'Trade', WORLD[project['map']]['symbol'], npc)
     assert actual.targets == expected.targets
     assert actual.approaches == expected.approaches

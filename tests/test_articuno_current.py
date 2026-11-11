@@ -1,6 +1,7 @@
 """Reach Articuno through ordinary Strength pushes and the game's current flags."""
 from dataclasses import replace
 
+from pokesim.policies import kinds
 from pokesim.policies.collection import Collection
 from pokesim.policies.navigation import DIRS, SEAFOAM_HOLES, Navigator
 from pokesim.policies.puzzles import BoulderPlanner, seafoam_current_task
@@ -19,11 +20,13 @@ SECOND = 'EVENT_SEAFOAM4_BOULDER2_DOWN_HOLE'
 def test_articuno_goal_requires_both_boulders_before_surf():
     c = Collection()
     project = {'method': 'static', 'species': sid(144), 'map': MAPS['SEAFOAM_ISLANDS_B4F'], 'fragment': 'ARTICUNO'}
+    def target(s):
+        return kinds.rules('static').target(kinds.View(c, s), project)
     for done in ((), (FIRST,), (SECOND,)):
-        goal = c.project_goal(state(event_flags=flags(*done)), project)
+        goal = target(state(event_flags=flags(*done)))
         assert goal.key == 'collect_seafoam_current'
         assert goal.targets == ((MAPS['SEAFOAM_ISLANDS_B3F'], 6, 15),)
-    assert c.project_goal(state(event_flags=flags(FIRST, SECOND)), project).key == 'collect_static'
+    assert target(state(event_flags=flags(FIRST, SECOND))).key == 'collect_static'
 
 
 def test_articuno_expedition_requires_a_strength_partner():

@@ -7,6 +7,7 @@ from pokesim.policies.collection import Collection, candidate, training_targets
 from pokesim.policies.director import AdventureDirector
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
+from pokesim.planning.monitor import STAND_DOWNS
 from pokesim.runtime.supervision import MONITOR_KEY, Tables
 from pokesim.strategy_data import ITEMS, MAPS, WORLD
 from test_collection import reloaded, sid, state
@@ -18,6 +19,11 @@ class Kv(dict):
 
     def set(self, key, value):
         self[key] = json.loads(json.dumps(value))
+
+
+def stand_downs(director):
+    """The director's stand-downs in a row per project key, as the monitor keeps them."""
+    return director.monitor.rows(STAND_DOWNS)
 
 
 def pick(director, *projects):
@@ -41,7 +47,7 @@ def test_restarts_preserve_repeated_failure_backoff_and_ignore_the_old_recent_pi
     assert second_retry - first_retry == 120000
     assert restored.outcomes[-1]['reason'] == 'No encounter'
     restored.finish(catch, second_retry, True, 'Caught Pidgey')
-    assert 'pidgey' not in restored.failures
+    assert 'pidgey' not in stand_downs(restored)
     assert restored.completed == {'collection': 1}
 
 
@@ -72,7 +78,7 @@ def test_productive_training_hard_limit_is_advanced_and_does_not_escalate_failur
     assert c.project is None
     assert c.director.outcomes[-1]['status'] == 'advanced'
     assert c.director.outcomes[-1]['gains']['experience'] == 500
-    assert not c.director.failures
+    assert not stand_downs(c.director)
     assert not c.director.completed
 
 
@@ -100,7 +106,7 @@ def test_productive_training_still_stops_when_idle_and_preserves_partial_progres
     c.project = {'method': 'train', 'parent': sid(113), 'family': [sid(113)],
                  'initial_level': 65, 'target_level': 70, 'key': 'train:chansey:70'}
     c.remaining = 72000
-    c.director.failures[c.project['key']] = 3
+    stand_downs(c.director)[c.project['key']] = 3
     start = state(party=(mon(species=sid(113), level=65, experience=10000),))
     c.observe(start)
     gained = replace(start, frame=120, party=(replace(start.party[0], experience=10524),))
@@ -115,7 +121,7 @@ def test_productive_training_still_stops_when_idle_and_preserves_partial_progres
     assert outcome['gains'] == {'experience': 524, 'levels': 0}
     assert 'No trainee experience gain' in outcome['reason']
     assert outcome['retry_at'] - outcome['clock'] == 60000
-    assert not restored.director.failures
+    assert not stand_downs(restored.director)
     assert not restored.director.completed
 
 
@@ -172,7 +178,7 @@ def test_director_records_are_bounded_and_snapshots_do_not_alias_live_state():
     director = AdventureDirector()
     for index in range(200):
         director.finish({'method': 'explore', 'key': str(index)}, index, False, 'Unreachable')
-    assert len(director.failures) == 128
+    assert len(stand_downs(director)) == 128
     assert len(director.outcomes) == 24
     saved = director.state_dict()
     saved['outcomes'].clear()
@@ -186,7 +192,7 @@ def test_an_older_save_keeps_its_retry_times_counts_and_idle_frames():
              'director': {'recent': [], 'outcomes': [], 'failures': {'pidgey': 3}}}
     c = Collection()
     c.load(json.loads(json.dumps(older)))
-    assert c.director.failures == {'pidgey': 3}
+    assert stand_downs(c.director) == {'pidgey': 3}
     assert c.director.waiting('pidgey', 1000 + 239999)
     assert not c.director.waiting('pidgey', 1000 + 240000)
     assert not c.director.waiting('spent', 1000)
@@ -221,14 +227,14 @@ def test_a_project_budget_survives_a_restart_and_a_catch_makes_it_whole_again():
 
 def test_new_maps_reset_the_idle_count_but_not_the_failures_in_a_row():
     c = Collection()
-    c.director.failures['ditto'] = 2
+    stand_downs(c.director)['ditto'] = 2
     c.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}
     c.remaining = 36000
     for frame in range(0, 600, 120):
         c.observe(state(frame=frame, map=MAPS['ROUTE_1'] if frame % 240 else MAPS['ROUTE_2']))
-    assert c.director.failures['ditto'] == 2
+    assert stand_downs(c.director)['ditto'] == 2
     c.abandon('No encounter')
-    assert c.director.failures['ditto'] == 3
+    assert stand_downs(c.director)['ditto'] == 3
     assert c.director.outcomes[-1]['retry_at'] - c.clock == 240000
 
 
@@ -263,7 +269,7 @@ def test_an_older_save_waits_out_what_was_left_of_its_stand_downs_on_the_play_cl
     # It stood down 600 frames before the save, so 59400 of its 60000 are left from the PlayClock's 90000.
     assert c.director.waiting('ditto', 90000 + 59399)
     assert not c.director.waiting('ditto', 90000 + 59400)
-    assert c.director.failures == {'ditto': 1}
+    assert stand_downs(c.director) == {'ditto': 1}
     # A second load of the same save keeps the tables the first one took.
     c.load(json.loads(json.dumps(older)))
     assert c.director.monitor.until('ditto') == 90000 + 59400
