@@ -103,7 +103,7 @@ upload ROMs, save files, or private traces as CI artifacts.
 
 ## Compare longer copied-save runs
 
-`tools/check_endurance.py` runs the existing checkpoint validator in child processes.
+`python -m pokesim.replay check-endurance` runs the existing checkpoint validator in child processes.
 It defaults to two hours of game time per run, with a 30-minute wall-clock timeout.
 It records progress, policy recoveries, project gains, and event gaps. Ten-game-minute
 samples separate preparation from active training. Inputs are hashed before and after.
@@ -114,7 +114,7 @@ checkpoint under the baseline and current source:
 ```sh
 mkdir -p /tmp/pokesim-baseline
 git archive BASELINE_COMMIT | tar -x -C /tmp/pokesim-baseline
-uv run --locked python tools/check_endurance.py \
+uv run --locked python -m pokesim.replay check-endurance \
   --rom roms/pokered.gb \
   --checkpoint data/private-reproduction/checkpoint.state \
   --baseline /tmp/pokesim-baseline \
@@ -151,7 +151,7 @@ comes for `STALL_ALERT_GAME_MINUTES` of game time, when the player gives up on a
 when a retry loop trips. A bundle holds `noticed.state` from the moment the stall was noticed,
 `before.state`, the first autosave after the last achievement outside a battle, the trace segments
 from that save on under `trace/`, a screenshot and `report.json`, whose `kind` says what noticed
-it. `tools/find_stalls.py` plays an isolated adventure at full speed and writes the same bundles,
+it. `python -m pokesim.replay find-stalls` plays an isolated adventure at full speed and writes the same bundles,
 and so do the stage ladder and its gate.
 
 `python -m pokesim.replay capture` keeps a bundle as a scenario. The save goes to the private
@@ -161,9 +161,9 @@ preflight counts a row that expects `stuck` as a known failure. The pull request
 stall flips the row to `passes`, so the stall becomes a test.
 
 ```sh
-uv run --locked python tools/find_stalls.py --rom roms/pokered.gb --output data/operations/stall-hunt/run-1 --until-champion
+uv run --locked python -m pokesim.replay find-stalls --rom roms/pokered.gb --output data/operations/stall-hunt/run-1 --until-champion
 uv run --locked python -m pokesim.replay capture data/operations/stall-hunt/run-1/stall-01 --name seafoam-boulders
-uv run --locked python tools/stuck_scenarios.py run
+uv run --locked python -m pokesim.replay stuck-scenarios run
 POKESIM_SCENARIO_TESTS=1 uv run --locked --extra dev pytest tests/test_scenarios.py -q
 ```
 
@@ -196,7 +196,7 @@ holds.
 uv run --locked python tools/stage_ladder.py snapshot roms/pokered.gb data/ladder/red
 uv run --locked python tools/stage_ladder.py snapshot roms/pokered.gb data/ladder/red-randomized --randomizer PSR1-RED-WS-1
 uv run --locked python tools/stage_ladder.py adopt data/ladder/blue post_game hall-of-fame.state
-uv run --locked python tools/stuck_scenarios.py --root data/ladder/red run
+uv run --locked python -m pokesim.replay stuck-scenarios --root data/ladder/red run
 ```
 
 A randomized ladder's rungs replay on the cartridge its `ladder.json` names only with `RANDOMIZER`

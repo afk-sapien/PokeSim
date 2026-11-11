@@ -13,7 +13,7 @@ kanto_entry (off the S.S. Aqua in Vermilion), red (first arrival outside Mt. Sil
 beaten) and post_game after Red. A randomized ladder keeps new_game, badges_4, badges_8 and league_first.
 
 Each rung is a scenario folder (scenario.json, start.state, start.json) under LADDER/<rung>, written
-compressed, so tools/stuck_scenarios.py and the ladder batch replay it. LADDER/ladder.json names the
+compressed, so ``python -m pokesim.replay stuck-scenarios`` and the ladder batch replay it. LADDER/ladder.json names the
 game and the share code of a randomized ladder. A rung already present is kept unless --refresh names it.
 
 ``snapshot`` plays as the headless runners do and watches for stalls the way the scenarios do: nothing
@@ -29,7 +29,7 @@ holds, the way pokecore's own ladder test does, and pokecore.save_summary names 
 
 ``gate`` plays 108000 frames (30 game minutes) from every rung under ROOT with the replay audit, ten
 rungs at once at niceness 10, and takes the load gate's heavy lock first. A randomized ladder plays on
-its own share code. Goals are reseeded as in ``replay_audit.py run --reseed-goals``, so two code versions
+its own share code. Goals are reseeded as in ``python -m pokesim.replay audit run --reseed-goals``, so two code versions
 meet the same rolls. A run ends at its first stall, nothing achieved for 20 game minutes, one battle
 running 20 game minutes or a retry loop, and keeps a bundle. The gate compares each rung's stall, errors,
 story milestones and wasted share with the tracked tools/ladder/gate-baseline.json. It exits 1 on a

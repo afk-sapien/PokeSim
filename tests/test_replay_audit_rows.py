@@ -8,7 +8,7 @@ import pytest
 
 from pokesim.randomized import ENV
 from pokesim.replay.rung import _goal_events, describe, randomize, row
-from tools.replay_audit import ALL_TARGETS, load, report
+from pokesim.replay.audit import ALL_TARGETS, load, report
 
 
 def test_gold_silver_and_crystal_hunts_split_by_kind_and_target():

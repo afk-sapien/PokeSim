@@ -1,7 +1,7 @@
 """Stuck scenarios: saved moments the player once could not get out of, replayed as regression tests.
 
 A scenario is a folder holding scenario.json and a checkpoint. The checkpoint is a moment shortly
-before a stall (kept by the application or by tools/find_stalls.py), optionally edited into a
+before a stall (kept by the application or by ``python -m pokesim.replay find-stalls``), optionally edited into a
 harder situation: a frozen lead, an empty bag, no money. It passes when the player achieves
 something again within the budget without going quiet for too long.
 

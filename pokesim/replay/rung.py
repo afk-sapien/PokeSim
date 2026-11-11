@@ -1,6 +1,6 @@
 """Play one ladder rung or checkpoint headless and audit where its frames go.
 
-``run_one`` is the runner behind ``tools/replay_audit.py run``, and ``gate_rung`` the one behind
+``run_one`` is the runner behind ``python -m pokesim.replay audit run``, and ``gate_rung`` the one behind
 ``tools/stage_ladder.py gate-rung``, which the ladder gate and ``python -m pokesim.replay`` start in a
 process of their own. The policy modules load inside ``run_one``, after ``randomize`` or ``prepare`` has
 set the worker's environment, since Gen I modules read their tables at import time. Only the standard

@@ -3,8 +3,8 @@
 Starts from a fresh cartridge or a copied checkpoint, never from live data. A stall is a
 stretch of game time with no new best. Each one leaves stall-NN/ in the output folder:
 the moment it was noticed, the rolling checkpoint from before it began, a screenshot and
-a report. Both checkpoints replay with tools/validate_progress.py. Outputs contain
-private game data and must remain outside the checkout.
+a report. Both checkpoints replay with python -m pokesim.replay validate-progress. Outputs
+contain private game data and must remain outside the checkout.
 """
 import argparse
 from collections import Counter, deque
@@ -12,10 +12,7 @@ from pokecore.emulator_state import runtime_provenance
 import io
 import json
 from pathlib import Path
-import sys
 import time
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pokesim.events import diff
 from pokesim.headless import HeadlessRun
@@ -34,8 +31,8 @@ def clock(frames):
     return f'{frames // (60 * MINUTE)}:{frames // MINUTE % 60:02d}'
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+def main(argv=None, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--rom', type=Path, required=True)
     parser.add_argument('--checkpoint', type=Path, help='copied checkpoint to continue, fresh cartridge if omitted')
     parser.add_argument('--output', type=Path, required=True)
@@ -47,10 +44,10 @@ def main():
     parser.add_argument('--seed', type=int, default=7, help='vary the choices, including from a checkpoint')
     parser.add_argument('--fair-wild-dvs', nargs='?', const=True, type=bytes.fromhex, metavar='KEY',
                         help='play Fair wild DVs, keyed by the seed or by an adventure\'s hex key')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.hours <= 0 or args.stall_minutes <= 0 or args.give_up_minutes < 0:
         parser.error('--hours and --stall-minutes must be positive')
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     if args.output.resolve().is_relative_to(root) and not args.output.resolve().is_relative_to(root / 'data'):
         parser.error('Outputs contain private game data. Choose a folder outside the checkout.')
     args.output.mkdir(parents=True, exist_ok=True)

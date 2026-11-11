@@ -397,3 +397,18 @@ def test_the_command_line_takes_its_folders_from_the_data_folder(monkeypatch, tm
     assert options.data_dir == tmp_path
     assert options.data_root is None
     assert args.jobs == 4 and args.pyboy == 'current'
+
+
+@pytest.mark.parametrize('name', sorted(cli.TOOLS))
+def test_each_tool_command_runs_its_own_parser(name, capsys):
+    with pytest.raises(SystemExit) as stop:
+        cli.main([name, '--help'])
+    assert stop.value.code == 0
+    assert capsys.readouterr().out.startswith(f'usage: python -m pokesim.replay {name}')
+
+
+def test_the_command_list_names_each_tool(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(['--help'])
+    out = capsys.readouterr().out
+    assert all(name in out for name in cli.TOOLS)

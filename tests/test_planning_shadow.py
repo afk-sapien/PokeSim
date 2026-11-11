@@ -12,7 +12,7 @@ from pokesim.planning import cost
 from pokesim.policies.collection import EXPECTED_FRAMES, FRAMES_PER_EXPERIENCE, Collection, candidate
 from pokesim.policies.progression import Goal
 from pokesim.policies.strategic import ERRAND_FRAMES, Choice, StrategicPolicy, goal_candidate
-from tools.replay_audit import load, shadow_lines
+from pokesim.replay.audit import load, shadow_lines
 
 
 def test_the_approved_weights_live_in_one_place():

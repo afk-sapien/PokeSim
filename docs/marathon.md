@@ -87,7 +87,7 @@ rewinds them along with its other planner state. A new adventure starts fresh.
 
 ## Judging a change on a save that races
 
-`tools/replay_audit.py` counts frames by goal. A marathon never produces a find,
+`python -m pokesim.replay audit` counts frames by goal. A marathon never produces a find,
 so the audit counts every race frame as wasted. On a save that races, judge the
 two point bar on the frames wasted outside the marathon as a share of all
 frames. Taking the race out of the frame total as well would count the time a

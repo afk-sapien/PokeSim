@@ -5,11 +5,8 @@ import hashlib
 from pokecore.emulator_state import runtime_provenance, validate_runtime
 import json
 from pathlib import Path
-import sys
 import time
 from types import SimpleNamespace
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pokecore.emulator import Emulator as PyBoy
 from pokesim.benchmark import policy_fingerprint
@@ -107,13 +104,13 @@ def run(rom, checkpoint, frames):
         pb.stop(save=False)
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(argv=None, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__)
     parser.add_argument('--rom', type=Path, required=True)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--frames', type=int, default=432000)
     parser.add_argument('--output', type=Path, required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.frames <= 0:
         parser.error('--frames must be positive')
     if args.output.resolve() in (args.rom.resolve(), args.checkpoint.resolve(), args.checkpoint.with_suffix('.json').resolve()):
@@ -121,3 +118,7 @@ if __name__ == '__main__':
     result = run(args.rom, args.checkpoint, args.frames)
     args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({key: result[key] for key in ('edition', 'frames', 'initial_owned', 'final_owned', 'policy_recoveries', 'final_map')}))
+
+
+if __name__ == '__main__':
+    main()

@@ -4,15 +4,22 @@
     python -m pokesim.replay diverge A B --rung silver/badges_6 --roms ROMS [--a-pyboy own]
     python -m pokesim.replay bisect --rung silver/badges_6 --good A --bad B --suspects 344,346 --roms ROMS
     python -m pokesim.replay capture BUNDLE --name seafoam-boulders [--issue N]
+    python -m pokesim.replay find-stalls --rom ROM --output OUT [--checkpoint STATE] [--until-champion]
+    python -m pokesim.replay stuck-scenarios run [WORD...] | show SCENARIO
+    python -m pokesim.replay audit run ROM STATE FRAMES OUT_JSON | report BEFORE_DIR AFTER_DIR
+    python -m pokesim.replay check-endurance --rom ROM --checkpoint STATE --output OUT [--baseline CHECKOUT]
+    python -m pokesim.replay validate-progress --rom ROM --checkpoint STATE --output OUT_JSON
 
 Each run plays the rung as the ladder gate does, with the commit's own code and lock, and keeps
 its trace. pyboy-rs is held at the running checkout's version unless ``--pyboy own`` asks for
 each commit's own. Reports go beside the runs as JSON and Markdown. ``capture`` keeps a stall
-bundle as a stuck scenario with its row in scenarios/index.toml.
+bundle as a stuck scenario with its row in scenarios/index.toml. The last five commands keep
+their own options, which ``--help`` after the command lists.
 """
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -22,6 +29,15 @@ from . import capture, diverge
 from .envs import CURRENT, DEFAULT_CACHE, OWN, ROOT, resolve
 from .rung import GATE_FRAMES, GATE_WASTE_POINTS
 from .search import BOTH, STALL, WASTE, Options, bisect, markdown, record, twice
+
+# Commands with their own options, by module in this package. Each loads only when it runs.
+TOOLS = {
+    'find-stalls': ('find_stalls', 'play an isolated adventure and keep a replayable bundle for every stall'),
+    'stuck-scenarios': ('stuck_scenarios', 'replay the stuck scenarios, or describe one'),
+    'audit': ('audit', 'replay copied checkpoints forward and audit where the frames go'),
+    'check-endurance': ('check_endurance', 'compare bounded checkpoint replays of two checkouts'),
+    'validate-progress': ('validate_progress', 'replay a copied checkpoint without rewinds and report progress'),
+}
 
 
 def _options(args):
@@ -130,10 +146,16 @@ def parse(argv=None):
     search.add_argument('--no-self-check', action='store_true', help='skip recording each end twice')
     search.set_defaults(action=cmd_bisect)
     capture.arguments(commands.add_parser('capture', help='keep a stall bundle as a stuck scenario in scenarios/index.toml'))
+    for name, (_, summary) in TOOLS.items():
+        commands.add_parser(name, help=summary, add_help=False)  # main() runs these before parsing.
     return parser.parse_args(argv)
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv and argv[0] in TOOLS:
+        module = importlib.import_module(f'{__package__}.{TOOLS[argv[0]][0]}')
+        return module.main(argv[1:], prog=f'python -m pokesim.replay {argv[0]}')
     args = parse(argv)
     return args.action(args)
 

@@ -1,6 +1,6 @@
 """``python -m pokesim.replay capture``: keep a stall bundle as a stuck scenario and list it in scenarios/index.toml.
 
-The save goes to the private scenarios folder that tools/stuck_scenarios.py replays. The tracked index row
+The save goes to the private scenarios folder that ``stuck-scenarios`` replays. The tracked index row
 names it by its cartridge and save hash, with the frames from that save to the moment the stall was noticed,
 what the replay is expected to do and the issue or pull request. A scenario for an open stall expects
 ``stuck``. The fix flips it to ``passes``, and from then on the preflight fails when it gets stuck again.
@@ -164,7 +164,7 @@ def capture(args):
     if args.issue:
         row['issue'] = args.issue
     write_index(args.index, [entry for entry in entries if entry.get('name') != args.name] + [row])
-    print(f'wrote {folder} and its row in {args.index}. tools/stuck_scenarios.py show {folder} describes it.')
+    print(f'wrote {folder} and its row in {args.index}. python -m pokesim.replay stuck-scenarios show {folder} describes it.')
     return 0
 
 

@@ -1,8 +1,8 @@
 """Replay copied checkpoints forward and audit where the frames go.
 
-    replay_audit.py run ROM STATE FRAMES OUT_JSON [--data-root DIR] [--seed N] [--reseed-goals] [--lead-in N]
-                        [--randomizer CODE] [--fair-wild-dvs [KEY]]
-    replay_audit.py report BEFORE_DIR AFTER_DIR
+    python -m pokesim.replay audit run ROM STATE FRAMES OUT_JSON [--data-root DIR] [--seed N] [--reseed-goals]
+                        [--lead-in N] [--randomizer CODE] [--fair-wild-dvs [KEY]]
+    python -m pokesim.replay audit report BEFORE_DIR AFTER_DIR
 
 ``run`` plays one checkpoint headless with the checkout's own policy, from the working directory, and
 writes the frame share per goal from ``Monitor.shares()``, the stand-downs, and the frames spent in goal
@@ -182,8 +182,8 @@ def report(args):
         print('-', line)
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+def main(argv=None, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__.split('\n')[0])
     commands = parser.add_subparsers(dest='command', required=True)
     one = commands.add_parser('run')
     one.add_argument('rom')
