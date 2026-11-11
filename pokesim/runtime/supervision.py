@@ -74,6 +74,13 @@ class Budget:
 
 # A Core shortcut the game refused waits about a minute of game time before another try.
 REFUSED_SHORTCUT = Budget('refused shortcut', 3600)
+# Gen I trains a promising partner at most once every five game minutes.
+PARTNER_TRAINING = Budget('partner training', 18000)
+# Gen I's chats and detours: a minute's rest after a detour, half a minute after a look around, and
+# a quarter minute after a talk.
+DETOUR_REST = Budget('detour rest', 3600)
+LOOK_AROUND = Budget('look around', 1800)
+CHAT_REST = Budget('chat rest', 900)
 
 
 @dataclass(frozen=True)

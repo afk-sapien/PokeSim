@@ -16,7 +16,8 @@ from pokesim.policies.strategic import StrategicPolicy
 from pokesim.policies.team import release_target
 from pokesim.ram import read_snapshot
 from pokesim.runtime import preparation
-from pokesim.shortcuts import RETRY_FRAMES, gen1_ui
+from pokesim.runtime.supervision import REFUSED_SHORTCUT
+from pokesim.shortcuts import gen1_ui
 from pokesim.trade import boxes
 from pokesim.trade.preferences import identity
 from test_duplicates import snapshot, stored
@@ -105,12 +106,16 @@ def test_a_failed_release_lets_another_spare_go_first():
     policy = StrategicPolicy(7)
     s = replace(snapshot([stored(0, level=30), stored(1, level=5), stored(2, level=6)]), frame=1000)
     assert policy._release_target(s) == (0, 1)
-    policy.shortcut.failures[('release', 0, 1)] = s.frame + RETRY_FRAMES
+    policy.clock = 50000
+    policy.shortcut.failures[('release', 0, 1)] = REFUSED_SHORTCUT.until(policy.clock)
     assert policy._release_target(s) == (0, 2)
     decision = policy.pc.step(s, SimpleNamespace(cursor=None), 'pc', 'party_release', None, {}, policy.collection)
     assert decision.request == ('release', 2)
-    # The failed slot is offered again once its retry time has passed.
-    assert policy._release_target(replace(s, frame=s.frame + RETRY_FRAMES)) == (0, 1)
+    # A reload sets the emulator frame back, but the wait counts on the play clock.
+    assert policy._release_target(replace(s, frame=0)) == (0, 2)
+    # The failed slot is offered again once its retry time has passed on the play clock.
+    policy.clock = REFUSED_SHORTCUT.until(50000)
+    assert policy._release_target(s) == (0, 1)
 
 
 def test_a_trade_offers_a_partner_behind_a_breaking_name_only_with_sp(participant, monkeypatch):

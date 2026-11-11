@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 
 from pokesim.policies.base import Action
+from pokesim.runtime.supervision import REFUSED_SHORTCUT
 from pokesim.shortcuts import ShortcutRunner
 
 PRESS = Action('a', 8, 36)
@@ -22,14 +23,14 @@ class Recorder:
             policy.mem = bytearray(65536)
         return cls(policy.shortcut, refuse)
 
-    def start(self, machine, key, frame, memory, ui=None, purpose='', on_done=None):
-        if self.runner.blocked(key, frame):
+    def start(self, machine, key, clock, memory, ui=None, purpose='', on_done=None):
+        if self.runner.blocked(key, clock):
             return None
         self.started.append(machine)
         runner = self.runner
         runner.machine, runner.key, runner.purpose, runner.on_done = machine, key, purpose, on_done
         if machine.kind in self.refuse:
-            self.finish(False, 'refused', frame)
+            self.finish(False, 'refused', clock)
             return None
         return [PRESS]
 
@@ -40,13 +41,13 @@ class Recorder:
     def kinds(self):
         return [machine.kind for machine in self.started]
 
-    def finish(self, completed=True, outcome='done', frame=0):
+    def finish(self, completed=True, outcome='done', clock=0):
         runner = self.runner
         machine, callback = runner.machine, runner.on_done
         runner.cancel()
         result = SimpleNamespace(outcome=outcome, completed=completed, settled=True, details={})
         if not completed:
-            runner.failures[runner.key] = frame + 3600
+            runner.failures[runner.key] = REFUSED_SHORTCUT.until(clock)
         if callback is not None:
             callback(result, machine)
 

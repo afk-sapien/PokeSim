@@ -107,19 +107,22 @@ def test_policy_opens_hm_menu_for_specific_partner_and_bounds_retries():
     policy = StrategicPolicy(1)
     shortcuts = Recorder.on(policy)
     policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.clock = s.frame
     policy._overworld(s, bytearray(65536))
     assert policy.goal.key == 'teach_battle'
     assert (shortcuts.last.kind, shortcuts.last.item, shortcuts.last.target) == ('use_item', ITEMS['HM03'], 0)
     # A teach that failed is not tried again for the same partner and moves, however long it waits.
-    shortcuts.finish(False, 'refused', s.frame)
+    shortcuts.finish(False, 'refused', policy.clock)
     shortcuts.started.clear()
     policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.clock = s.frame + 20000
     policy._overworld(replace(s, frame=s.frame + 20000), bytearray(65536))
     assert policy.goal.key != 'teach_battle'
     assert not any(getattr(machine, 'item', None) == ITEMS['HM03'] for machine in shortcuts.started)
     # New moves make it a new teach.
     other = replace(s.party[0], moves=(33, 98, 0, 0), pp=(35, 30, 0, 0))
     policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.clock = s.frame + 20100
     policy._overworld(replace(s, party=(other,), frame=s.frame + 20100), bytearray(65536))
     assert policy.goal.key == 'teach_battle'
 

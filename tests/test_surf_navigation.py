@@ -28,7 +28,7 @@ def test_rejected_surf_blocks_that_shoreline_instead_of_repeating_the_move():
     state = snap(party=(mon(moves=(57, 0, 0, 0)),), x=4, y=5)
     assert policy._field(state, 'SURF', 0, 'Use Surf', 'up', 'Surf was rejected')
     assert (shortcuts.last.move, shortcuts.last.slot) == ('SURF', 0)
-    shortcuts.finish(False, frame=state.frame)
+    shortcuts.finish(False, clock=policy.clock)
     assert ((state.map, 4, 5), 'up') in policy.nav.blocked
     assert policy.reason == 'Surf was rejected'
     assert policy._field(state, 'SURF', 0, 'Use Surf', 'up') is None

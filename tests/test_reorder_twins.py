@@ -15,7 +15,7 @@ def test_a_failed_reorder_of_one_twin_does_not_block_the_other():
     shortcuts = Recorder.on(policy)
     state = snap(party=(mon(level=50), strong, weak))
     assert policy._reorder(state, 1, 'Lead with the best available matchup')
-    shortcuts.finish(False, frame=state.frame)
+    shortcuts.finish(False, clock=policy.clock)
     assert policy._reorder(state, 1, 'Lead with the best available matchup') is None
     assert policy._reorder(state, 2, 'Lead with the best available matchup')
     assert shortcuts.last.first == 2
