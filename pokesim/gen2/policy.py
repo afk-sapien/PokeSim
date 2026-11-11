@@ -28,11 +28,11 @@ STUCK_WAITS = 40  # consecutive 24-frame waits (about 16 seconds of game time) b
 SUBSTATUS_TRANSFORMED = 8
 # Moves with no power of their own that use another move, which may be an attack.
 BORROWED_MOVES = frozenset({'EFFECT_TRANSFORM', 'EFFECT_MIMIC', 'EFFECT_METRONOME', 'EFFECT_MIRROR_MOVE', 'EFFECT_SLEEP_TALK'})
+# Rest heals with EFFECT_HEAL like Recover, then sleeps two turns. Leech Seed fails on a Grass foe.
+REST, GRASS = 156, 22
 # Moves that win back HP, so a foe's attacks may never knock out the Pokémon that knows one.
 HEALING_MOVES = frozenset({'EFFECT_HEAL', 'EFFECT_MORNING_SUN', 'EFFECT_SYNTHESIS', 'EFFECT_MOONLIGHT',
                            'EFFECT_LEECH_SEED'})
-# Rest heals with EFFECT_HEAL like Recover, then sleeps two turns. Leech Seed fails on a Grass foe.
-REST, GRASS = 156, 22
 
 
 def transformed(mem, mon):
@@ -2219,12 +2219,13 @@ class Policy:
         Rest heals fully and then sleeps two turns, so it wins back a third of the maximum each turn.
         Recover and the other full heals win back half, Morning Sun, Synthesis and Moonlight a quarter
         at least, and Leech Seed an eighth of the foe's maximum, unless the foe is Grass. Without the
-        battle memory the foe's moves are unknown, so any healer counts.
+        battle memory the foe's moves are unknown, so no healer counts and the battle timeout decides.
+        A scenario asks before the policy's first step, when it holds no memory yet.
         """
         heals = [(move, self.data.moves[move]['effect']) for move, pp in zip(mon.moves, mon.pp)
                  if pp and self.data.moves.get(move, {}).get('effect') in HEALING_MOVES]
         if not heals or mem is None:
-            return bool(heals)
+            return False
         stats = tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef'))
         grass = GRASS in self.data.species.get(snapshot.enemy_species, {}).get('types', ())
 

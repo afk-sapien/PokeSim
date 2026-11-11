@@ -72,12 +72,17 @@ def lance(party, items=(), in_battle=2):
 def policy(data):
     fake = SimpleNamespace(data=data)
     fake.move_score = lambda mid, mon, snapshot: Policy.move_score(fake, mid, mon, snapshot)
+    fake.outlasts = lambda snapshot, mem, mon: Policy.outlasts(fake, snapshot, mem, mon)
     return fake
 
 
-def test_a_party_with_nothing_but_rest_and_growl_cannot_end_the_battle(data):
+def test_a_party_with_nothing_but_rest_and_growl_cannot_end_the_battle(data, monkeypatch):
+    fake = policy(data)
+    fake.memory = object()
+    monkeypatch.setattr(policy_module, 'Memory', lambda memory, data: BattleMemory())
+
     def hopeless(snapshot):
-        return Policy.hopeless_battle(policy(data), snapshot)
+        return Policy.hopeless_battle(fake, snapshot)
     fainted = mon(84, 20, 0, (PECK, GROWL, 0, 0), (35, 40, 0, 0))
     assert hopeless(lance((fainted, vaporeon())))
     # One Waterfall left, an Elixir in the bag or a standing partner that can attack still has a way to win.
@@ -156,9 +161,9 @@ def test_a_healer_the_foe_outhits_blacks_out_instead_of_reloading(data, monkeypa
     # Vaporeon's Rest wins back a third of 359 HP a turn, more than Surf takes, so it outlasts him.
     assert Policy.hopeless_battle(fake, chuck((fainted, vaporeon())))
     assert Policy.hopeless_battle(fake, chuck((hoppip(), vaporeon())))
-    # Without the battle memory the foe's moves are unknown, so any healer counts as before.
+    # Without the battle memory the foe's moves are unknown, so the battle timeout decides.
     fake.memory = None
-    assert Policy.hopeless_battle(fake, chuck((fainted, hoppip())))
+    assert not Policy.hopeless_battle(fake, chuck((fainted, vaporeon())))
 
 
 def test_a_transformed_battler_takes_the_foes_species_moves_and_pp():
