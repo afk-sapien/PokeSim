@@ -129,6 +129,25 @@ def test_a_gen1_step_tried_while_a_trainer_engages_is_not_a_failed_step():
     assert tried(True) == (None, False)
 
 
+def test_the_champion_ceremony_is_the_game_s_walk_and_keeps_the_won_rematch():
+    """Blue's League rematches each ended with no route to the Hall of Fame and stood down, longer each time,
+    until nothing left could make progress. The game walks the new Champion there, so the step presses on
+    through the ceremony text, records no failed walk and keeps the rematch running until it is finished."""
+    from pokesim.policies.progression import Goal
+    from pokesim.policies.strategic import StrategicPolicy
+    from pokesim.strategy_data import MAPS
+    from test_collection import state
+    policy = StrategicPolicy(42)
+    policy.goal = Goal('champion', 'Kanto Champion', 'The team made it to the Hall of Fame')
+    policy.nav.guided = lambda *args, **kwargs: None
+    project = {'method': 'rematch', 'key': '0:rematch:0:', 'hof_count': 1}
+    policy.collection.project = project
+    action = policy._overworld(state(map=MAPS['CHAMPIONS_ROOM'], x=4, y=2, frame=1000), bytearray(65536))
+    assert [step.button for step in action] == ['a']
+    assert policy.collection.project == project and not policy.collection.director.outcomes
+    assert not NoRoute(policy.collection.director.progress, FRAMES).attempts()
+
+
 def test_a_target_that_keeps_failing_waits_longer_each_time():
     record = NoRoute({}, FRAMES)
     first = record.record('olivine', 'OLIVINE_CITY', [(5, 6)], 0)

@@ -112,6 +112,17 @@ def test_collection_defers_poor_farmable_partner_then_allows_it_after_budget():
     assert any(p['method'] == 'train' for _, p in rows)
 
 
+def test_a_species_with_its_searches_spent_gets_no_dv_hunt_in_any_place():
+    mon = replace(individual(5, 1, 10), dvs=POOR)
+    s = postgame(party=(mon,))
+
+    def hunts(rows):
+        return {p['key'] for _, p in rows if p.get('dv_hunt') and p['species'] == mon.species}
+
+    assert len(hunts(candidates(s, searches=2))) > 1
+    assert not hunts(candidates(s, searches=3))
+
+
 def test_api_uses_same_assessment_for_party_and_boxed_individuals():
     mon = replace(individual(5, 1, 1), dvs=RARE)
     boxed = stored(0, level=5, dvs=RARE, trainer_id=2)
