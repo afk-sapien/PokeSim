@@ -21,6 +21,14 @@ all three native Gen II cable pairings and all six Red/Blue Time Capsule pairing
 campaign uses Cyndaquil and seed 1. These checks close the fresh-campaign and private cable
 evidence gaps for that configuration, without claiming every starter, seed or platform.
 
+## Before the next PokeSim release
+
+The next PokeSim release needs pokecore 0.11.1 or later published first. The
+[state layer slices](docs/design/pokecore-state-layer.md) make PokeSim import pokecore names that
+pokecore 0.11.0 does not have, starting with `pokecore.storage.read_box_counts`. Cut the release from
+`packages/pokecore` and pin it as [Publishing](docs/publishing.md#pokecore-releases) describes. Pull request
+checks install the workspace pokecore, so only the release workflow proves PokeSim against a published one.
+
 ## Known limits, deliberately not addressed here
 
 - **Recovery never gives up.** An exchange that cannot be finished is retried forever, now slowly.

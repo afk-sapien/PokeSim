@@ -86,7 +86,7 @@ jobs:
       - name: Check package resources and exclude private data
         run: uv run --locked python tools/check_package.py
       - name: Install wheel and test Library and native workers outside the checkout
-        run: uv run --locked python tools/check_python_install.py
+        run: uv run --locked python tools/check_python_install.py --workspace-pokecore
       - name: Verify the user-facing installer and repeat installation
         run: uv run --locked python tools/check_installer.py
   acceleration:
@@ -111,7 +111,7 @@ jobs:
         run: uv run --locked --extra dev --extra acceleration pytest -q tests/test_navigation_numba.py tests/test_navigation_equivalence.py
       - run: uv build
       - name: Test installed workers with optional acceleration
-        run: uv run --locked --extra acceleration python tools/check_python_install.py --acceleration
+        run: uv run --locked --extra acceleration python tools/check_python_install.py --acceleration --workspace-pokecore
   gate:
     # The one check the branch ruleset requires, so a new or renamed job above cannot be skipped by accident.
     name: install gate
