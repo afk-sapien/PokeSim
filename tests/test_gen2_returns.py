@@ -620,6 +620,40 @@ def test_a_return_or_gift_the_pc_would_release_is_skipped_and_journaled_once(wor
     assert rows and all(row['state'] == ledger.DELIVERED for row in rows)
 
 
+def test_the_emulators_pc_rating_does_not_freeze_the_return_check(world, monkeypatch):
+    # A Gold adventure froze and stopped answering once a walking return came due: the PC rating
+    # the emulator passes reads the store, and it ran inside the return check's own transaction.
+    import threading
+    from pokesim.gen2.release import BOX_CAPACITY, keeps_another
+    from pokesim.gen2.returns import observe_events
+    monkeypatch.setattr('pokecore.gen2.breeding.breeding_stock', lambda data, species: set())
+    snap = world.snapshot
+    snap.party, snap.owned, snap.active_box, snap.box_counts = (), {185}, 0, (BOX_CAPACITY,) * 14
+    snap.stored = (SimpleNamespace(species=185, egg=False, box=0, position=0, trainer_id=4321, dvs=(3,) * 5,
+                                   level=20, held_item=0, experience=8000, stat_exp=(0,) * 5),)
+    policy = SimpleNamespace(data=SimpleNamespace(species={185: {'name': 'Sudowoodo'}}, game='gold'), demand={},
+                             collection={})
+    world.store.attach(policy, 2)
+    world.flag('EVENT_FOUGHT_SUDOWOODO')
+    world.walk(10)
+    observe_events(world.store, snap, world.memory, keeps=lambda species: False)
+    world.walk(60)
+
+    def keeps(dex):
+        # The emulator's own wiring (gen2/emulator.py), with the store's release inputs attached.
+        return keeps_another(policy, snap, dex)
+    done = []
+    check = threading.Thread(target=lambda: done.append(observe_events(world.store, snap, world.memory, keeps=keeps)),
+                             daemon=True)
+    check.start()
+    check.join(10)
+    if not done and type(world.store.lock) is type(threading.Lock()):
+        # A plain Lock can be released from any thread, so the stuck check ends and teardown can close.
+        world.store.lock.release()
+    assert done, 'the return check waited on its own store lock'
+    assert [event.title for event in done[0][0]] == ['Skipped the returning Sudowoodo']
+
+
 def test_kims_aerodactyl_trade_reopens_and_makes_aerodactyl_worth_trading_for(world):
     from pokesim.gen2.npc_trades import trades, worth_trading
     from pokesim.gen2.returns import observe_events, returned_events
