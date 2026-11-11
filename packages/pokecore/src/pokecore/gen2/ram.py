@@ -209,8 +209,12 @@ def caught_details(word, data):
 
 
 def max_pp(base, pp_ups):
-    """Maximum PP of a move with ``base`` PP after ``pp_ups`` PP Ups."""
-    return min(61, base * (5 + pp_ups) // 5)
+    """Maximum PP of a move with ``base`` PP after ``pp_ups`` PP Ups.
+
+    Each PP Up adds a fifth of the base, at most 7, as pokecrystal's ComputeMaxPP does,
+    so a 40 PP move reaches 47, 54 and 61.
+    """
+    return base + min(7, base // 5) * pp_ups
 
 
 def decode_mon(raw, name, data, *, egg=False, box=None, position=None):
