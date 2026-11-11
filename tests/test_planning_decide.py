@@ -3,6 +3,7 @@ import logging
 import re
 from pathlib import Path
 
+from pokesim.gen2 import pipeline as gen2_pipeline
 from pokesim.planning import arbiter, decide
 from pokesim.planning.arbiter import Candidate, Tier
 from pokesim.planning.decide import Offer
@@ -196,6 +197,64 @@ def test_an_errand_under_way_is_offered_again_as_it_was_picked_and_writes_nothin
     assert tap.resume(ride.running) is lift and tap.decision.rule == decide.FORCED
     tap.commit()
     assert wrote == []
+
+
+def test_the_gen2_needs_table_reads_the_chain_order():
+    for site in ('story', 'holds', 'ladder', 'current'):
+        assert gen2_pipeline.NEEDS[site] == ('healthy', 'supplies', 'field_move', 'room', 'trained')
+    assert gen2_pipeline.NEEDS['boss'] == ('healthy', 'supplies', 'field_move', 'room')
+    assert gen2_pipeline.NEEDS['shop'] == ('healthy',)
+    assert gen2_pipeline.NEEDS['heal'] == gen2_pipeline.NEEDS['sudowoodo'] == ()
+    tree = Goal('sudowoodo', 'Tree', 'Tree')
+    assert gen2_pipeline.offer('sudowoodo', tree).forced and gen2_pipeline.offer('holds', tree).hold
+    assert gen2_pipeline.offer('nowhere', tree).source == 'legacy'
+    assert gen2_pipeline.offer('ladder', tree, kind='hunt').kind == 'hunt'
+
+
+def test_every_gen2_site_is_in_the_table():
+    source = (ROOT / 'pokesim' / 'gen2' / 'policy.py').read_text(encoding='utf-8')
+    named = {site for line in source.splitlines() if 'ballot.offer(' in line for site in re.findall(r"'(\w+)'", line)}
+    # The story site is named by story_site, which returns these two besides the story.
+    assert named | {'holds', 'ladder'} == set(gen2_pipeline.SOURCES)
+
+
+def test_a_gen2_ballot_picks_what_the_chain_picks():
+    story, training = Goal('zephyr', 'Beat Falkner', 'Badge'), Goal('train', 'Train', 'Train')
+    release, heal = Goal('collection_release', 'Release', 'Release'), Goal('heal', 'Heal', 'Heal')
+    ballot = gen2_pipeline.Ballot()
+    ballot.offer(story, 'story')
+    ballot.offer(training, 'boss')
+    assert (ballot.decision.key, ballot.decision.rule) == ('train', decide.NEED)
+    ballot.offer(release, 'release')
+    errand = ballot.offer(heal, 'heal')
+    assert ballot.decision.key == 'heal' and decide.difference(ballot.decision, 'heal') is None
+    # A heal with no route gives way to the release, which is the journey goal then.
+    ballot.park(heal)
+    assert ballot.decision.key == 'collection_release' and ballot.decision.parked[-1].parked == decide.NO_ROUTE
+    # The returned Sudowoodo is forced over every other offer.
+    ballot.offer(Goal('sudowoodo', 'Tree', 'Tree'), 'sudowoodo')
+    assert (ballot.decision.key, ballot.decision.rule) == ('sudowoodo', decide.FORCED)
+    # A menu step of the heal offers it again as it was picked.
+    menu = gen2_pipeline.Ballot()
+    menu.offer(story, 'story')
+    menu.resume(errand)
+    assert (menu.decision.key, menu.decision.rule) == ('heal', decide.NEED)
+    # An activity under way still gives way to a heal it needs.
+    contest = gen2_pipeline.Ballot()
+    contest.offer(Goal('contest_enter', 'Contest', 'Contest'), 'holds')
+    contest.offer(heal, 'talk_heal')
+    assert (contest.decision.key, contest.decision.rule) == ('heal', decide.NEED)
+
+
+def test_a_gen2_errand_with_no_route_and_a_partner_trip_is_the_one_known_difference():
+    # The chain goes back to the journey goal, past the partner trip it set. The pipeline runs the trip.
+    story, partner, heal = Goal('zephyr', 'Beat Falkner', 'Badge'), Goal('surf', 'Surf', 'Surf'), Goal('heal', 'Heal', 'Heal')
+    ballot = gen2_pipeline.Ballot()
+    ballot.offer(story, 'story')
+    ballot.offer(partner, 'partner')
+    ballot.offer(heal, 'heal')
+    ballot.park(heal)
+    assert ballot.decision.key == 'surf' and decide.difference(ballot.decision, 'zephyr') == decide.NEED
 
 
 def test_the_shadow_counts_pipeline_decisions_by_source_and_frames():

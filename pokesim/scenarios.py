@@ -691,7 +691,7 @@ def play(scenario, rom=None, progress=None):
             failure = f'{flees.get("attempts", 0)} run attempts, fewer than {owed}, in {others} other wild battles'
         final = read()
         details = run.policy.details()
-        # The Gen I decide pipeline's agreement with the chain, which a switch PR states.
+        # The decide pipeline's agreement with the chain in either generation, which a switch PR states.
         shadow = getattr(run.policy, 'shadow', None)
         pipeline = shadow.point('pipeline') if hasattr(shadow, 'point') else None
         return {'name': scenario.name, 'generation': run.generation, 'passed': failure is None, 'failure': failure,

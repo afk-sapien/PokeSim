@@ -412,7 +412,7 @@ def run_one(args, watch=None):
     }
     if shadow is not None:
         result['shadow'] = {**shadow.summary(), 'frames_by_pick': dict(would)}
-        # The Gen I decide pipeline's agreement with the chain, which the gate reports per rung.
+        # The decide pipeline's agreement with the chain in either generation, which the gate reports per rung.
         pipeline = shadow.point('pipeline') if hasattr(shadow, 'point') else None
         if pipeline is not None:
             result['pipeline'] = pipeline
