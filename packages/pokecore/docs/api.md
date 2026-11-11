@@ -526,6 +526,18 @@ returns a frozen `BoxRecords(box, structs, names)` for each box that holds
 Pokémon. Its `mons` property is `decode_box` of those bytes. A box whose bank the
 memory cannot serve is left out. Neither reader switches banks or writes memory.
 
+## Repairs
+
+`repairs` holds named writes that fix damaged Gen I memory, apart from the
+read-only decoders. Call it only while the emulator is paused or under its
+exclusive lock.
+
+- `repair_party_nicknames(memory, *, version=None)` ends each party nickname at
+  its first text command byte (below 0x60 and not the 0x50 terminator), which the
+  naming screen can never type but a trade can copy in. It returns the party slots
+  it changed, and an empty list when nothing needed it. `version='yellow'` repairs
+  raw Yellow memory.
+
 ## Trusted resets
 
 `resets` is deliberately separate from read-only facts and controller actions.
