@@ -117,19 +117,19 @@ def test_a_reload_out_of_a_boss_attempt_is_a_loss():
     assert supervisor.reloads == 1 and stall.frame == 10
 
 
-def test_trainer_wins_before_a_blackout_do_not_reset_the_reload_count(tmp_path):
+def test_trainer_wins_before_a_blackout_do_not_end_a_loop(tmp_path):
     store, clock = Store(tmp_path), Clock()
     try:
         guard, stall, supervisor = LoopGuard(clock=clock), StallWatch(), Supervisor(store)
-        for _ in range(LOOP_LIMIT - 1):
-            guard.reloaded('league-entry.state')
+        for _ in range(LOOP_LIMIT):
+            add(store, 'obtain', 'Received Totodile from a custom PokeSim gift')
+            add(store, 'release', 'Said goodbye to a spare Totodile')
         supervisor.watch_boss(True, False, stall, guard)
         add(store, 'trainer', 'Defeated Elite Four Will')
         add(store, 'level', 'TYPHLOSION grew to level 57')
         supervisor.watch_boss(False, True, stall, guard)
-        guard.reloaded('league-entry.state')
         clock.now += SCAN_FRAMES
-        assert 'reloaded league-entry.state 6 times' in guard.looping(store)
+        assert 'received and released Totodile 6 times' in guard.looping(store)
         # A won battle outside any boss attempt is real progress again.
         add(store, 'badge', 'Earned the Rising Badge')
         clock.now += SCAN_FRAMES

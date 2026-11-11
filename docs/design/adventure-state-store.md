@@ -21,7 +21,7 @@ An adventure's state is its checkpoints plus `pokesim.sqlite`. This note gives t
 |---|---|---|
 | Checkpoint manifest | `policy_state`, `run_memory`, `frame`, `play_clock`, `gen2_history`, `legendary_recovery`, `trade_id`, `reward_id` | `emulator.py:800`, `gen2/emulator.py:540`, `headless.py:100` and `:107`, `gen2/headless.py:117` |
 | kv copies of manifest fields | `policy_state`, `run_memory`, `gen2-history`, `play_clock` | `emulator.py:418`, `:732`, `:814`, `:845`, `gen2/emulator.py:582-584` |
-| kv ledgers | About 45 keys, such as `league-rewards-v1`, `trade_hold`, `capture-statistics-v1`, `loop-guard-reloads-v1` | Their own modules, through `store.set` or raw SQL |
+| kv ledgers | About 45 keys, such as `league-rewards-v1`, `trade_hold`, `capture-statistics-v1`, `supervisor-ladder-v1` | Their own modules, through `store.set` or raw SQL |
 | Tables | `events` and `kv` (`store.py:35-52`), then `progress`, `statistics_history`, `activity_counts`, `activity_receipts`, `pokemon_trade_receipts`, `progress_events`, `encounter_counts`, `stall_truth`, `capture_receipts`, the shiny tables, `completed_trades`, `completed_events` | `Store.__init__` (`store.py:96-108`) and 12 modules, listed under S1 |
 
 Boot reads the kv copies first (`emulator.py:104`, `:110`, `:117`, `gen2/emulator.py:222`, `:268`). Then the newest autosave replaces all of them, except `play_clock`, whose restore keeps the larger count, and the announced playtime milestones inside `run_memory` (`emulator.py:411-417`).
@@ -98,7 +98,6 @@ The proposed rule: a restart starts a new cartridge game. State that a new game 
 | League partner records (`league-partners-v2`, `gen2-league-partners-v1`) | Keeps | Resets (`gen2/emulator.py:1192-1195`) | Resets. They describe the cartridge's Hall of Fame, which a new game empties |
 | Mew walking returns (`mew-returns-v1`, `gen2-mew-returns-v1`) | Keeps | Resets | Resets. A return is earned and redeemed in one game |
 | Mythical gift markers (`pokesim-mew-v1`, `gen2-mythical-gift-v1`, `gen2-gs-ball-distribution-v1`) | Keeps | Resets | Resets. The new game holds no gift |
-| Loop guard reload counts (`loop-guard-reloads-v1`) | Keeps | Keeps. The new `LoopGuard` (`:1223`) reads them back from kv (`stalls.py:239`) | Resets. The counts are for the old game's places |
 | Goal time (`goal-time-v1`) | Keeps | Keeps | Resets. Its shares and stand-downs are the old game's |
 | Supervisor ladder counts (`supervisor-ladder-v1`) | Resets | Resets | Resets. A reload keeps them, but a new game starts the ladder from the bottom |
 | Supervisor progress bests (`supervisor-best-v1`) | Resets | Resets | Resets. A reload keeps them, so a replay is not new progress, but a new game starts from nothing |
