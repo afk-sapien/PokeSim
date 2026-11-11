@@ -304,7 +304,7 @@ def test_shiny_log_lists_each_shiny_newest_first_with_its_date(page, game, width
     url, store, _, _ = game
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(url + '/stats')
-    expect(page.locator('#stats-catch-pace')).not_to_have_text('Loading')
+    expect(page.locator('#stats-catch-pace')).not_to_have_text('—')
     assert page.locator('#shiny-log').is_hidden()
     with store.lock, store.db:
         shiny.initialize(store.db)
