@@ -1,5 +1,6 @@
 """Short, verified ground-item detours that preserve the main expedition."""
 from copy import deepcopy
+from functools import partial
 
 from .progression import object_goal
 from .shopping import DUNGEON_KEY_SLOTS, DUNGEONS, SAFARI_INTERIOR, SAFARI_PRIZE_SLOTS
@@ -80,11 +81,28 @@ class Pickups:
                            WORLD[target['map']]['symbol'], target['fragment'])
 
     def choose(self, s, nav, main, now):
+        """The pickup goal against ``main``, starting a new pickup at once."""
+        picked = self.pick(s, nav, main, now)
+        if picked is None:
+            return None
+        goal, start = picked
+        if start is not None:
+            start()
+        return goal
+
+    def pick(self, s, nav, main, now):
+        """The pickup against ``main``, the goal it is handed, as ``(goal, start)``, or None.
+
+        A new pickup is found here but not started: ``start`` makes it the pickup under way, which the
+        overworld decision runs only when the step ends with the pickup running (decide pipeline rule A).
+        The scan and its wait are observations, so they are written here. A pickup under way has nothing
+        to start.
+        """
         if (not nav.use_world or not s.party or s.in_battle
                 or main.key.startswith(('heal', 'restock', 'party_', 'teach_', 'league', 'champion'))):
             return None
         if self.active:
-            return self.goal(self.active)
+            return self.goal(self.active), None
         if now < self.next_scan:
             return None
         self.next_scan = PICKUP_SCAN.until(now)
@@ -107,7 +125,10 @@ class Pickups:
                 candidates.append((0 if pos in goal.targets else len(nav.path), index, target))
         if not candidates:
             return None
-        self.active = min(candidates, key=lambda row: row[:2])[2]
-        self.active['expires'] = PICKUP_DETOUR.until(now)
+        target = min(candidates, key=lambda row: row[:2])[2]
+        return self.goal(target), partial(self._start, target, nav, now)
+
+    def _start(self, target, nav, now):
+        self.active = target
+        target['expires'] = PICKUP_DETOUR.until(now)
         nav.path.clear()
-        return self.goal(self.active)

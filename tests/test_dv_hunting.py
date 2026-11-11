@@ -105,10 +105,11 @@ def test_collection_hunts_are_marked_for_the_collector_style():
 def test_the_plan_placeholder_and_its_errands_rank_as_the_plan():
     from types import SimpleNamespace
     from pokesim.planning.arbiter import STORY, Candidate, Tier, choose
-    from pokesim.policies.strategic import Choice, goal_candidate
+    from pokesim.policies.pipeline import Ballot
+    from pokesim.policies.strategic import goal_candidate
     plan = goal_candidate(SimpleNamespace(key='collect_plan'), None, kind='plan')
     assert plan.plan and plan.tier == Tier.FILLER
-    errand = Choice(SimpleNamespace(key='collect_plan'), plan).errand_candidate('buy', 'buy')
+    errand = Ballot(SimpleNamespace(key='collect_plan'), plan).errand_candidate('buy', 'buy')
     assert errand.plan and errand.tier == Tier.FILLER
     # A filler side project beats the worthless plan placeholder unless the style puts the story first.
     side = Candidate('buy_tm', Tier.FILLER, 1.0, 1000)
@@ -226,8 +227,8 @@ def test_postgame_restocks_before_ball_count_blocks_future_dv_hunts():
     policy.completed['pokedex'] = True
     policy.collection.completed_champion = True
     policy.goal = Goal('collect_plan', '', '')
-    policy.collection.choose = lambda *args: None
-    policy.pickups.choose = lambda *args: None
+    policy.collection.pick = lambda *args: None
+    policy.pickups.pick = lambda *args: None
     s = replace(postgame(party=(individual(100, 1),)),
                 items=((ITEMS['GREAT_BALL'], 3), (ITEMS['POTION'], 3)))
     policy._overworld(s, fake_mem({}))
@@ -245,8 +246,10 @@ def test_hunt_reaches_remote_puzzle_by_an_accessible_ladder():
     prepare_navigation(p, s)
     goal = Goal('collect_hunt', 'Find Caterpie', '', ((51, 17, 40),))
     p.collection.project = {'method':'grass', 'species':sid(10)}
-    p.collection.choose = lambda *args: goal
-    p.pickups.choose = lambda *args: None
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    p.goal = Goal('collect_plan', 'Plan', 'Plan')
+    p.collection.pick = lambda *args: (goal, None, None)
+    p.pickups.pick = lambda *args: None
     p.boulders.route = Mock(return_value=None)
     assert p._overworld(s, fake_mem({}))[0].button == 'right'
     assert p.nav._open_navigation.path[-1][2] == (198, 23, 7)

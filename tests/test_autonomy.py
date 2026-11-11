@@ -60,7 +60,9 @@ def test_new_targets_under_the_same_goal_key_restart_the_stall_timer():
     policy = StrategicPolicy(7)
     first = Goal('collect_hunt', 'Hunt', 'Find grass', ((255, 1, 1), (255, 2, 1)))
     moved = Goal('collect_hunt', 'Hunt', 'Find grass', ((255, 9, 9), (255, 9, 8)))
-    policy.collection.choose = lambda *_: goals.pop(0)
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *_: (goals.pop(0), None, None)
     goals = [first, first, moved]
     policy._overworld(snap(frame=0, party=(mon(),)), bytearray(65536))
     assert policy.progress_frame == 0

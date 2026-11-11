@@ -1,14 +1,15 @@
-"""The Gen I overworld chain weighs its goal sources on the arbiter instead of key-prefix exclusion lists."""
-from pokesim.planning import arbiter, values
+"""The Gen I overworld decision weighs its goal sources on the decide pipeline instead of key-prefix exclusion lists."""
+from pokesim.planning import decide, values
 from pokesim.planning.arbiter import Candidate, Tier
 from pokesim.policies.collection import Collection
+from pokesim.policies.pipeline import ERRAND_FRAMES, Ballot
 from pokesim.policies.progression import Goal
-from pokesim.policies.strategic import ERRAND_FRAMES, Choice, goal_candidate, goal_kind
+from pokesim.policies.strategic import goal_candidate, goal_kind
 
 
 def choice_for(key, collection=None):
     goal = Goal(key, key, key)
-    return Choice(goal, goal_candidate(goal, collection or Collection()))
+    return Ballot(goal, goal_candidate(goal, collection or Collection()))
 
 
 def test_goal_kinds_come_from_one_table():
@@ -25,7 +26,7 @@ def test_an_errand_serves_the_story_but_never_cuts_into_another_errand():
     restock = choice_for('restock')
     teach = restock.errand_candidate('teach_battle', 'moves')
     assert teach.interrupt_frames == ERRAND_FRAMES and not restock.wins(teach)
-    assert restock.offer(Goal('teach_battle', 'Teach', 'Teach'), teach).key == 'restock'
+    assert restock.offer(Goal('teach_battle', 'Teach', 'Teach'), teach, site='teach').key == 'restock'
 
 
 def test_the_plan_placeholder_loses_to_any_real_goal():
@@ -50,15 +51,16 @@ def test_goals_that_pick_their_party_take_no_party_upgrade():
     assert not choice_for('misty').owns_party and not choice_for('restock').owns_party
 
 
-def test_a_failed_precondition_replaces_the_pick_and_the_arbiter_agrees_with_the_chain():
+def test_an_errand_under_way_leaves_out_another_kind_and_an_enabler_runs_for_the_goal_it_serves():
     choice = choice_for('collect_plan')
-    choice.offer(Goal('collect_pickup', 'Pick up', 'Pick up'), choice.errand_candidate('collect_pickup', 'pickup'))
-    choice.offer(Goal('buy_tm', 'Buy', 'Buy'), Candidate('buy_tm', Tier.UPGRADE, 1.0, 1, goal='moves'))
-    assert choice.goal.key == 'collect_pickup'
-    assert arbiter.choose(choice.candidates) is choice.pick
-    choice.replace(Goal('heal', 'Heal', 'Heal'), choice.errand_candidate('heal', 'heal'))
-    assert choice.goal.key == 'heal' and choice.candidates == [choice.pick]
-    assert choice.errand
+    choice.offer(Goal('collect_pickup', 'Pick up', 'Pick up'), choice.errand_candidate('collect_pickup', 'pickup'),
+                 site='pickup_new')
+    choice.offer(Goal('buy_tm', 'Buy', 'Buy'), Candidate('buy_tm', Tier.UPGRADE, 1.0, 1, goal='moves'), site='tm')
+    assert choice.goal.key == 'collect_pickup' and choice.decision.rule == decide.RANK
+    assert [offered.key for offered in choice.offers] == ['collect_plan', 'collect_pickup']
+    hurt = choice_for('collect_plan')
+    assert hurt.offer(Goal('heal', 'Heal', 'Heal'), hurt.errand_candidate('heal', 'heal'), site='heal').key == 'heal'
+    assert hurt.decision.rule == decide.NEED and hurt.decision.serving.key == 'collect_plan' and hurt.errand
 
 
 def test_the_same_goal_offered_again_is_its_update():
@@ -66,4 +68,4 @@ def test_the_same_goal_offered_again_is_its_update():
     collection.project = {'method': 'grass', 'species': 1, 'key': 'grass:1'}
     choice = choice_for('collect_catch', collection)
     newer = Goal('collect_catch', 'Catch', 'Walk to the next patch')
-    assert choice.offer(newer, goal_candidate(newer, collection)) is newer
+    assert choice.offer(newer, goal_candidate(newer, collection), site='project') is newer

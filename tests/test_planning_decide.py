@@ -9,7 +9,7 @@ from pokesim.planning.decide import Offer
 from pokesim.planning.shadow import Shadow
 from pokesim.policies import pipeline
 from pokesim.policies.progression import Goal
-from pokesim.policies.strategic import Choice
+from pokesim.policies.pipeline import Ballot
 from pokesim.replay.rung import agreement, share
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,45 +109,67 @@ def test_every_chain_site_is_in_the_table():
     assert named == set(pipeline.SOURCES)
 
 
-def test_a_choice_records_each_offer_with_its_site():
+def test_every_ballot_site_offers_under_its_own_name():
+    # Every Gen I overworld site offers on a Ballot with its site name, so none falls back to the legacy row.
+    source = (ROOT / 'pokesim' / 'policies' / 'strategic.py').read_text(encoding='utf-8')
+    assert 'legacy' not in source and 'Choice' not in source
+
+
+def test_a_ballot_records_each_offer_with_its_site():
     story = Goal('misty', 'Beat Misty', 'Badge')
-    choice = Choice(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
-    choice.enable(Goal('heal', 'Heal', 'Heal'), choice.errand_candidate('heal', 'heal'), site='heal')
+    choice = Ballot(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
+    choice.offer(Goal('heal', 'Heal', 'Heal'), choice.errand_candidate('heal', 'heal'), site='heal')
     # An errand under way refuses another kind of offer, and the refused offer is not recorded.
     choice.offer(Goal('collect_pickup', 'Pick up', 'Pick up'), choice.errand_candidate('collect_pickup', 'pickup'),
                  site='pickup_new')
     assert [(found.source, found.key, found.serves) for found in choice.offers] == [
         ('story', 'misty', ''), ('heal', 'heal', 'healthy')]
-    decision = decide.decide(choice.offers)
+    decision = choice.decision
     assert (decision.key, decision.rule) == ('heal', decide.NEED) and decide.difference(decision, 'heal') is None
 
 
-def test_a_choice_runs_the_latest_enabler_its_goal_needs_and_only_that_one_writes():
+def test_a_ballot_runs_the_latest_enabler_its_goal_needs_and_only_that_one_writes():
     wrote = []
     story = Goal('misty', 'Beat Misty', 'Badge')
-    choice = Choice(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
-    choice.enable(Goal('party_box', 'Box', 'Box'), choice.errand_candidate('party_box', 'party'), site='box',
-                  commit=lambda: wrote.append('box'))
+    choice = Ballot(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
+    choice.offer(Goal('party_box', 'Box', 'Box'), choice.errand_candidate('party_box', 'party'), site='box',
+                 commit=lambda: wrote.append('box'))
     assert choice.goal.key == 'party_box' and choice.errand
-    choice.enable(Goal('heal', 'Heal', 'Heal'), choice.errand_candidate('heal', 'heal'), site='heal',
-                  commit=lambda: wrote.append('heal'))
-    assert choice.goal.key == 'heal' and choice.candidates == [choice.pick]
+    choice.offer(Goal('heal', 'Heal', 'Heal'), choice.errand_candidate('heal', 'heal'), site='heal',
+                 commit=lambda: wrote.append('heal'))
+    assert choice.goal.key == 'heal'
+    # A forced move puts its goal over every enabler before it, and none of them writes.
+    choice.offer(Goal('collect_passage', 'Leave', 'Leave'), choice.errand_candidate('collect_passage', 'passage'),
+                 site='passage', commit=lambda: wrote.append('passage'))
+    assert choice.goal.key == 'collect_passage' and choice.decision.rule == decide.FORCED
     choice.commit()
-    assert wrote == ['heal']
-    # A later replace puts its goal over every enabler before it, and none of them writes.
-    choice.replace(Goal('collect_passage', 'Leave', 'Leave'), choice.errand_candidate('collect_passage', 'passage'),
-                   site='passage')
-    assert choice.goal.key == 'collect_passage'
+    assert wrote == ['passage']
+    # An enabler runs for the project that ranks over the story.
+    hunt = Ballot(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
+    hunt.offer(Goal('collect_catch', 'Catch', 'Catch'), Candidate('grass:1', Tier.STORY, 2.0, 10, goal='collection'),
+               site='collection', commit=lambda: wrote.append('catch'))
+    assert hunt.goal.key == 'collect_catch'
+    hunt.offer(Goal('party_release', 'Release', 'Release'), hunt.errand_candidate('party_release', 'party'),
+               site='release', commit=lambda: wrote.append('release'))
+    # The collection's pick needs no room, so the release does not run for it.
+    assert hunt.goal.key == 'collect_catch'
+    hunt.commit()
+    assert wrote == ['passage', 'catch']
+
+
+def test_a_goal_whose_step_is_won_by_another_writes_nothing():
+    wrote = []
+    story = Goal('misty', 'Beat Misty', 'Badge')
+    choice = Ballot(story, Candidate('misty', Tier.FILLER, 0.0, 1000, plan=True, goal='plan'), source='plan')
+    choice.offer(Goal('collect_catch', 'Catch', 'Catch'),
+                 Candidate('grass:1', Tier.PROGRESS, 1.0, 10 ** 6, goal='collection'),
+                 site='collection', commit=lambda: wrote.append('project'))
+    assert choice.goal.key == 'collect_catch'
+    choice.offer(Goal('collect_pickup', 'Pick up', 'Pick up'), choice.errand_candidate('collect_pickup', 'pickup'),
+                 site='pickup_new', commit=lambda: wrote.append('pickup'))
+    assert choice.goal.key == 'collect_pickup'
     choice.commit()
-    assert wrote == ['heal']
-    # An enabler after a replace still runs for the goal it put first.
-    hunt = Choice(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
-    hunt.replace(Goal('collect_catch', 'Catch', 'Catch'), Candidate('grass:1', Tier.PROGRESS, 1.0, 10, goal='collection'),
-                 site='project')
-    hunt.enable(Goal('party_release', 'Release', 'Release'), hunt.errand_candidate('party_release', 'party'),
-                site='release')
-    assert hunt.goal.key == 'party_release' and hunt.chosen.key == 'collect_catch'
-    assert decide.decide(hunt.offers).key == 'party_release'
+    assert wrote == ['pickup']
 
 
 def test_the_shadow_counts_pipeline_decisions_by_source_and_frames():

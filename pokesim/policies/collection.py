@@ -7,7 +7,7 @@ from pokecore.identity import same
 from .move_development import evolution_wait, move_name
 from ..pokemon import experience_at_level
 from ..investment import automatic_trade_protected, training_investment, potential_power, rarity, SEARCH_BUDGET
-from functools import lru_cache
+from functools import lru_cache, partial
 from ..game_data import current_variant, load
 
 from .progression import GRASS_TILES, Goal, object_goal, at
@@ -562,6 +562,9 @@ class Collection:
         self.marathon_previous = None
         # The arbiter's picks beside the director's, for the log and the replay audit. Never saved.
         self.shadow = Shadow()
+        # The key of the project the pick last started, its arbiter candidate and the candidates it was
+        # weighed with, by key, which the overworld decision weighs the project under way by. Never saved.
+        self.weighed = None
         # The next activity a manager set (planning/pin.py). Never saved.
         self.pin = None
 
@@ -1098,7 +1101,35 @@ class Collection:
                 s.map, frozenset(key for key in stood if self.director.waiting(key, self.clock)),
                 self.clock >= self.next_marathon, funds_short(s), tuple(sorted(self.demand().items())))
 
-    def choose(self,s,nav,rng,main):
+    def choose(self, s, nav, rng, main):
+        """The collection's goal against ``main``, starting a new project at once."""
+        picked = self.pick(s, nav, rng, main)
+        if picked is None:
+            return None
+        goal, _, start = picked
+        if start is not None:
+            start()
+        return goal
+
+    def candidate(self):
+        """The arbiter candidate of the project under way, as the pick weighed it, or None."""
+        key = (self.project or {}).get('key')
+        if key is None or self.weighed is None:
+            return None
+        started, inner, built = self.weighed
+        return inner if started == key else built.get(key)
+
+    def pick(self, s, nav, rng, main):
+        """The collection's pick against ``main``, the goal it is handed, as ``(goal, inner, start)``, or
+        None.
+
+        A new project is weighed here but not started: ``inner`` is its arbiter candidate, and ``start``
+        writes the project and what it reads, which the overworld decision runs only when the step ends
+        with the project's goal running (decide pipeline rule A). The abandon before the Champion, the idle
+        plan, the offers draw and a pin that dropped out are observations, so they are written here. A
+        project under way and the passage out of Victory Road have nothing to start. A new project with
+        no first goal starts at once, so it ends on the next check as before.
+        """
         if s.map in LEAGUE or not s.party or not s.owned or not event_set(s.event_flags,'EVENT_GOT_POKEDEX') or main.key.startswith(('heal','party_','teach_','restock')):
             return None
         if not self.completed_champion:
@@ -1110,13 +1141,14 @@ class Collection:
             self.abandon('The story comes before side projects until the Champion is beaten')
             return None
         if self.project:
-            return self.goal(s)
+            goal = self.goal(s)
+            return None if goal is None else (goal, None, None)
         token = self.plan_token(s)
         if token == self.idle_token:
             return None
         offered = self.offers(s, nav, rng)
         if isinstance(offered, Goal):
-            return offered
+            return offered, None, None
         options, projects, travel, _ = offered
         pinned = self.pin.key if self.pin else None
         if pinned is not None and pinned not in projects:
@@ -1124,41 +1156,52 @@ class Collection:
             self.activity_events.append(pin.gave_up(self.drop_pin(), pin.UNAVAILABLE))
             pinned = None
         if pinned is None:
-            self.project = self.director.select(options, projects)
+            project = self.director.select(options, projects)
         else:
-            self.project = self.director.select(options, projects, pinned=pinned)
-        if self.project is None:
+            project = self.director.select(options, projects, pinned=pinned)
+        if project is None:
             # Nothing to do until the game changes, so the plan is not drawn again until then.
             self.idle_token = token
             return None
-        if self.pin and self.project['key'] == self.pin.key:
-            self.pin.started = True
+        # The offers draw builds a new dict for each project, so these fields are written on it only.
         # A catch is progress that gives the budget back, so a hunt's budget covers its first catch.
-        self.project['expected_frames'] = ((travel.get(self.project['key']) or 0) * FRAMES_PER_TILE
-                                           + kind_frames({**self.project, 'catch_goal': 1}, self.wild))
-        shadow = getattr(self, 'shadow', None)
-        if shadow is not None:
-            # The arbiter decides here, so this point always agrees. The overworld chain around it
-            # still reuses these candidates for its own comparison.
-            shadow.changed('collection', self.project['key'])
-            shadow.compare('collection', lambda: options, self.project['key'])
-        if self.project['method'] == 'rematch':
-            self.prepare_league_rotation(s)
-        if self.project['method'] == 'marathon':
+        project['expected_frames'] = ((travel.get(project['key']) or 0) * FRAMES_PER_TILE
+                                      + kind_frames({**project, 'catch_goal': 1}, self.wild))
+        appearances = (self.league_rotation(s, project, self.league_appearances)
+                       if project['method'] == 'rematch' else None)
+        project['initial_owned'] = list(s.owned)
+        goal = self.goal(s, project, appearances)
+        inner = arbiter.choose(options)
+        start = partial(self._start, s, nav, project, appearances,
+                        (project['key'], inner, {c.key: c for c in options}))
+        if goal is None:
+            # The goal is read again after the start, as a prize the purse cannot pay for ends its budget.
+            start()
+            goal = self.goal(s)
+            return None if goal is None else (goal, None, None)
+        return goal, inner, start
+
+    def _start(self, s, nav, project, appearances, weighed):
+        """Start ``project``, the pick's new project, with the League ``appearances`` it counted."""
+        self.project = project
+        if appearances is not None:
+            self.league_appearances = appearances
+        if self.pin and project['key'] == self.pin.key:
+            self.pin.started = True
+        if project['method'] == 'marathon':
             self.next_marathon = self.clock + marathon.INTERVAL
             self.marathon_previous = None
-        if self.project.get('dv_hunt'):
-            self.last_hunt[str(self.project['species'])] = self.clock
-        self.project['initial_owned'] = list(s.owned)
+        if project.get('dv_hunt'):
+            self.last_hunt[str(project['species'])] = self.clock
         self.idle_frames = 0
         self.project_maps = [s.map]
         self.project_flags = list(s.event_flags)
         self.progress_token = None
         # Any other project's budget lives on the monitor and keeps what it spent before.
-        if not budgeted(self.project):
-            self.remaining = training.TRAINING_BUDGET if self.project['method'] == 'train' else marathon.BUDGET
+        if not budgeted(project):
+            self.remaining = training.TRAINING_BUDGET if project['method'] == 'train' else marathon.BUDGET
         nav.path.clear()
-        return self.goal(s)
+        self.weighed = weighed
 
     def offers(self, s, nav, rng):
         """The projects the plan can start now, as the arbiter's options, the projects by key, the travel
@@ -1617,33 +1660,42 @@ class Collection:
         return min(candidates, key=quality) if candidates else None
 
     def prepare_league_rotation(self, s):
+        self.league_appearances = self.league_rotation(s, self.project, self.league_appearances)
+
+    def league_rotation(self, s, project, appearances):
+        """The League appearance counts of the held Pokémon, carried over from ``appearances``. The reserve
+        the rematch ``project`` brings out is written on the project."""
         from ..trade.preferences import identity
         held = [asdict(mon) for mon in s.party] + s.storage_entries()
         keys = {identity(mon) for mon in held} - {None}
-        appearances = {}
-        for key, count in self.league_appearances.items():
+        counts = {}
+        for key, count in appearances.items():
             if key not in keys:
                 # A count saved before trade keys named the evolution family follows its Pokémon
                 # when exactly one held Pokémon has that trainer and those stats.
                 matches = [held_key for held_key in keys if same(held_key, key)]
                 key = matches[0] if len(matches) == 1 else None
             if key:
-                appearances[key] = max(count, appearances.get(key, 0))
-        self.league_appearances = appearances
+                counts[key] = max(count, counts.get(key, 0))
         for mon in s.party:
             key = identity(asdict(mon))
             if key:
-                self.league_appearances.setdefault(key, 1)
+                counts.setdefault(key, 1)
         if not storage_exchange_possible(s):
-            return
-        reserve = league_rotation.select_reserve(s, self.trade_preferences(), self.league_appearances)
+            return counts
+        reserve = league_rotation.select_reserve(s, self.trade_preferences(), counts)
         if reserve:
-            self.project.update(parent=reserve['species'], trainee_key=identity(reserve),
-                                trainee_nick=reserve['nick'], family=[reserve['species']],
-                                scoped_partner=True, box=reserve['box'], league_rotation=True)
+            project.update(parent=reserve['species'], trainee_key=identity(reserve),
+                           trainee_nick=reserve['nick'], family=[reserve['species']],
+                           scoped_partner=True, box=reserve['box'], league_rotation=True)
+        return counts
 
-    def league_rotation_goal(self, s, project):
+    def league_rotation_goal(self, s, project, appearances=None):
+        """The goal that brings the rematch ``project``'s reserve out, or None. ``appearances`` is the count
+        it adds to, the collection's own unless given."""
         from ..trade.preferences import identity
+        if appearances is None:
+            appearances = self.league_appearances
         if not project.get('league_rotation') or project.get('rotation_ready'):
             return None
         matches = self.partner_matches(s, project)
@@ -1656,10 +1708,10 @@ class Collection:
             for mon in s.party:
                 key = identity(asdict(mon))
                 if key:
-                    self.league_appearances[key] = self.league_appearances.get(key, 0) + 1
+                    appearances[key] = appearances.get(key, 0) + 1
             return None
         if (not storage_exchange_possible(s) or len(s.party) >= 6
-                and league_rotation.deposit_target(s, self.trade_preferences(), self.league_appearances) is None):
+                and league_rotation.deposit_target(s, self.trade_preferences(), appearances) is None):
             project['rotation_ready'] = True
             return None
         project['box'] = partner['box']
@@ -1667,13 +1719,15 @@ class Collection:
                     'Bring ' + (partner.get('nick') or name(partner['species'])) + ' out for the next rematch',
                     CENTERS, 'up', True)
 
-    def goal(self,s,project=None):
+    def goal(self, s, project=None, appearances=None):
+        """The goal of ``project``, the one under way unless given. ``appearances`` is the League count a
+        rematch adds to, the collection's own unless given."""
         from ..trade.preferences import identity
         p=self.project if project is None else project
         if not p:
             return None
         if p['method'] == 'rematch' and s.map not in LEAGUE:
-            rotation = self.league_rotation_goal(s, p)
+            rotation = self.league_rotation_goal(s, p, appearances)
             if rotation:
                 return rotation
         if p['method'] == 'trade':

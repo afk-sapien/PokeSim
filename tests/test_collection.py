@@ -303,7 +303,7 @@ def test_evolution_training_leaves_gym_without_competing_lead_swaps():
     parent=sid(17)
     p.collection.project={'method':'evolve','parent':parent,'species':sid(18),'evolution':EVOS[parent][0]}
     p.goal=Goal('collect_train','Train Pidgeotto','Evolution',((MAPS['ROUTE_1'],10,10),))
-    p.collection.choose=Mock(return_value=p.goal)
+    p.collection.pick=Mock(return_value=(p.goal,None,None))
     p.readiness={'lead':1}
     p.development_index=1
     p.excursion=(Goal('train_partner','Train','Train',((MAPS['ROUTE_1'],10,10),)),None,'development')
