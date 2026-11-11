@@ -40,6 +40,51 @@ ROLE = contextvars.ContextVar('pokesim_role', default='owner')
 PLAYER_CONTROLS = frozenset({'press', 'take_control', 'resume'})
 
 
+class FrameBell:
+    """Wakes each open screen stream as soon as the game publishes a frame.
+
+    One thread waits on the emulator's frame condition while a stream is open and ends after the last
+    one closes. An emulator without that condition never rings, and its streams poll as before."""
+
+    def __init__(self, emu):
+        cond = getattr(emu, 'frame_cond', None)
+        self.emu, self.cond = emu, cond if isinstance(cond, threading.Condition) else None
+        self.lock = threading.Lock()
+        self.streams = {}
+        self.thread = None
+
+    def join(self):
+        event = asyncio.Event()
+        if self.cond is not None:
+            with self.lock:
+                self.streams[event] = asyncio.get_running_loop()
+                if self.thread is None:
+                    self.thread = threading.Thread(target=self._ring, name='pokesim-frame-bell', daemon=True)
+                    self.thread.start()
+        return event
+
+    def leave(self, event):
+        with self.lock:
+            self.streams.pop(event, None)
+
+    def _ring(self):
+        seq = self.emu.frame_seq
+        while True:
+            with self.cond:
+                fresh = self.cond.wait_for(lambda: self.emu.frame_seq != seq, timeout=1)
+                seq = self.emu.frame_seq
+            with self.lock:
+                if not self.streams:
+                    self.thread = None
+                    return
+                waiting = list(self.streams.items()) if fresh else []
+            for event, loop in waiting:
+                try:
+                    loop.call_soon_threadsafe(event.set)
+                except RuntimeError:    # that stream's loop has closed
+                    self.leave(event)
+
+
 def view_only():
     """True when this request may not change the adventure itself: a view link, a player, or VIEWER_ONLY."""
     return config.VIEWER_ONLY or VIEWING.get() or ROLE.get() in {'viewer', 'player'}
@@ -774,6 +819,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return Response(still() if callable(still) else emu.current_frame(), media_type="image/png",
                         headers={"Cache-Control": "no-store"})
 
+    frame_bell = FrameBell(emu)
+
     @app.get("/stream")
     async def stream():
         boundary = "pokesimframe"
@@ -784,20 +831,30 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         async def gen():
             delay = 1.0 / max(1, config.STREAM_FPS)
             clock = asyncio.get_running_loop().time
-            # The first part is the frame a poll would get, so a paused Gold or Silver draws it fresh.
-            data = await asyncio.to_thread(emu.current_frame)
-            seq, sent = emu.frame_seq, clock()
-            if data:
-                yield part(data)
-            while True:
-                emu.watch()     # keep frames being produced for as long as this stream is open
-                # A paused game draws nothing new. Sending its frame again now and then keeps the
-                # library's proxy and any reverse proxy from closing a quiet stream.
-                if emu.frame_seq != seq or clock() - sent >= STREAM_KEEPALIVE_SECONDS:
-                    seq, sent = emu.frame_seq, clock()
-                    if emu.frame_image:
-                        yield part(emu.frame_image)
-                await asyncio.sleep(delay)
+            bell = frame_bell.join()
+            try:
+                # The first part is the frame a poll would get, so a paused Gold or Silver draws it fresh.
+                data = await asyncio.to_thread(emu.current_frame)
+                seq, sent = emu.frame_seq, clock()
+                if data:
+                    yield part(data)
+                while True:
+                    emu.watch()     # keep frames being produced for as long as this stream is open
+                    # A paused game draws nothing new. Sending its frame again now and then keeps the
+                    # library's proxy and any reverse proxy from closing a quiet stream.
+                    if emu.frame_seq != seq or clock() - sent >= STREAM_KEEPALIVE_SECONDS:
+                        seq, sent = emu.frame_seq, clock()
+                        if emu.frame_image:
+                            yield part(emu.frame_image)
+                    bell.clear()
+                    if emu.frame_seq == seq:
+                        # A new frame goes out at once. The poll stays as the fallback and the keepalive.
+                        try:
+                            await asyncio.wait_for(bell.wait(), delay)
+                        except TimeoutError:
+                            pass
+            finally:
+                frame_bell.leave(bell)
 
         return StreamingResponse(gen(), media_type=f"multipart/x-mixed-replace; boundary={boundary}",
                                  headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
