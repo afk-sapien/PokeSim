@@ -73,14 +73,42 @@ def test_catching_a_species_the_pokedex_already_has_is_still_progress():
     assert held(SimpleNamespace(party=(1,), box_counts=(), boxed_pokemon=((1, 5), (2, 6)))) == 3
 
 
-def test_earned_experience_is_progress_but_a_party_swap_is_not():
-    from pokesim.stalls import advanced
-    mon = lambda xp: SimpleNamespace(experience=xp)
-    before = SimpleNamespace(party=(mon(1000), mon(500)), box_counts=(3,), boxed_pokemon=())
-    assert advanced(before, SimpleNamespace(party=(mon(1040), mon(500)), box_counts=(3,), boxed_pokemon=()))
-    assert not advanced(before, SimpleNamespace(party=(mon(1000), mon(500)), box_counts=(3,), boxed_pokemon=()))
-    # Withdrawing a stronger partner raises the party's total without anything being earned.
-    assert not advanced(before, SimpleNamespace(party=(mon(1000), mon(500), mon(90000)), box_counts=(2,), boxed_pokemon=()))
+def test_holding_more_pokemon_is_a_rise_only_between_two_valid_snapshots():
+    from pokesim.stalls import GEN1_HELD_RISE, held_rose
+    hunting = SimpleNamespace(party=(1, 2, 3), box_counts=(20, 4), boxed_pokemon=(), valid=True)
+    caught = SimpleNamespace(party=(1, 2, 3), box_counts=(20, 5), boxed_pokemon=(), valid=True)
+    assert GEN1_HELD_RISE and held_rose(hunting, caught)
+    assert not held_rose(caught, hunting) and not held_rose(hunting, hunting) and not held_rose(None, caught)
+    assert not held_rose(hunting, SimpleNamespace(**{**vars(caught), 'valid': False}))
+
+
+def test_red_blue_and_yellow_restart_the_stall_on_a_new_best_or_more_pokemon_held_and_never_on_a_replay():
+    from dataclasses import replace
+    from test_events import snap
+    from test_strategy import mon
+    stall = StallWatch()
+    game = SimpleNamespace(stall=stall, supervisor=Supervisor(), play_clock=SimpleNamespace(frames=0),
+                           mem=SimpleNamespace(seen_maps={1, 2}, championships=0))
+
+    def note(before, after, frame):
+        game.play_clock.frames = frame
+        Emulator._note_progress(game, before, after)
+        return stall.frame
+
+    first = snap(party=(mon(experience=1000), mon(experience=500, species=0x99, dvs=(1, 2, 3, 4))))
+    assert note(None, first, 10) == 10
+    assert note(first, first, 20) == 10
+    trained = replace(first, party=(mon(experience=1040), first.party[1]))
+    assert note(first, trained, 30) == 30 and game.supervisor.reloads == 0
+    # A reload back to before the training replays experience that already counted.
+    game.supervisor.reloads = 1
+    assert note(trained, first, 40) == 30 and note(first, trained, 50) == 30 and game.supervisor.reloads == 1
+    # A catch of a species the Pokédex already has is not a new best, but it is more Pokémon held.
+    boxed = replace(trained, box_counts=(1,))
+    assert note(trained, boxed, 60) == 60 and game.supervisor.reloads == 1
+    # A new area is a new best, which also starts the ladder again.
+    game.mem.seen_maps.add(3)
+    assert note(boxed, boxed, 70) == 70 and game.supervisor.reloads == 0
 
 
 def test_a_stalled_red_blue_or_yellow_run_asks_for_help():

@@ -253,6 +253,8 @@ The five lists in section 1 become one function, `progress.counts(event) -> bool
 
 This switch happens in two steps (section 13). First the rows are written in shadow mode and nothing reads them for decisions. The five readers move to `net` only after the two-week replay meets its bar.
 
+Until the switch, the stall clock in all six games moves on the supervisor's high-water rule (`Supervisor.progressed`). Red, Blue and Yellow also move it on a rise in Pokémon held, so a long hunt is not a stall while the hunt rate is in shadow. That rise is one setting, `stalls.GEN1_HELD_RISE`, read by `stalls.held_rose` and the replay's `OldChecks.receipt`. The switch deletes all three, because a held rise is churn and the healthy hunt rate takes its place. Gold, Silver and Crystal never count it.
+
 ### The Kanto Marathon case
 
 Each marathon checkpoint writes a `checkpoint` row with `tier=RACE` and `net=1`. Gen I queues it through `activity_events` (`policies/collection.py:585`). Gen II queues it through `take_events` (`gen2/marathon.py:132`). A run that is racing now shows a fresh `net` row every checkpoint, so the watchdog sees it move.
