@@ -67,7 +67,7 @@ PRESS_WAIT_SECONDS = 2
 CONTROL_WAIT_SECONDS = 10
 GAME_READ_PATHS = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon', 'stats/items', 'trading',
                    'api/pokedex', 'api/pokedex/status', 'api/trading', 'api/interactions',
-                   'api/audio', 'api/lease', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'api/goals', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
+                   'api/audio', 'api/lease', 'api/state', 'api/events', 'api/progress', 'api/statistics', 'api/statistics/activity', 'api/states', 'api/goals', 'api/catalogue', 'healthz', 'frame.jpg', 'stream', 'feed.xml', 'item-artwork'}
 
 # Pages a person opens. A stopped adventure answers these with its status page, not raw JSON.
 GAME_PAGES = {'', 'pokedex', 'team', 'journey', 'pc', 'journal', 'journal/stats', 'stats', 'stats/pokemon',

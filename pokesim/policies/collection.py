@@ -18,7 +18,7 @@ REFUSES_EVOLUTION = {25} if YELLOW else set()
 from .navigation import DIRS
 from .director import AdventureDirector, category, new_entry
 from ..planning import values
-from ..planning import arbiter, pin
+from ..planning import arbiter, catalogue, decide, pin
 from ..planning.arbiter import NOT_HUNT, Candidate, Tier, hunt
 from ..planning import cost
 from ..planning.cost import FRAMES_PER_TILE
@@ -385,6 +385,24 @@ ANY_BALL = Count(tuple(ITEMS[n] for n in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL
 # A repeat hunt for an owned species throws more than one ball, and the Master Ball is never one of them.
 HUNT_BALLS = Count(tuple(ITEMS[n] for n in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')), 5)
 SAFARI_ENTRY = Need(money=800)
+# Plain words for each condition source_requires asks, for the goal catalogue's why_not.
+NEED_WORDS = {Can('catch'): 'room to keep a catch', ANY_BALL: 'a Poké Ball', Can('surf'): 'a Pokémon that can use Surf',
+              Can('take'): 'room to take it', HUNT_BALLS: 'five Poké Balls',
+              **{Item(ITEMS[rod]): 'the ' + rod.replace('_', ' ').title() for rod in RODS}}
+# Why the catalogue lists a source the offers draw left out, beside the failures in planning/decide.py.
+NO_STEP = decide.Failure(decide.NOT_NOW, 'it cannot start from here yet')
+NO_PARTNER = decide.Failure(decide.NOT_NOW, 'no Pokémon to trade for it yet')
+TOO_STRONG = decide.Failure(decide.NOT_NOW, 'the wild Pokémon there are too strong for the party')
+DEFERRED = decide.Failure(decide.NOT_NOW, 'it waits for a new move, party member or ball to catch it')
+TRAINS_FIRST = decide.Failure(decide.NOT_NOW, 'a Pokémon in the party trains first')
+
+
+def needs(found):
+    """The Failure that names what a source's ``found`` Feasibility is missing."""
+    words = [NEED_WORDS.get(condition, 'something it needs') for condition in found.missing]
+    if found.shortfall is not None:
+        words.append('more money')
+    return decide.Failure(decide.NEEDS, 'needs ' + ' and '.join(words))
 
 
 class CollectionWorld:
@@ -1205,30 +1223,47 @@ class Collection:
         nav.path.clear()
         self.weighed = weighed
 
-    def offers(self, s, nav, rng):
+    def offers(self, s, nav, rng, skipped=None):
         """The projects the plan can start now, as the arbiter's options, the projects by key, the travel
-        to each and a label for each. A Goal instead when the plan must first reopen Victory Road."""
+        to each and a label for each. A Goal instead when the plan must first reopen Victory Road.
+
+        ``skipped``, a dict, gets each project the draw leaves out for now, by key, as ``(project, Failure,
+        Candidate or None)``. The candidate is there when the draw priced the project before it left it
+        out. The goal catalogue passes one and a decision passes none. A source the game will not offer
+        again, or one the dojo choice closed, is left out of it too.
+        """
         from ..trade.preferences import identity
         bag = dict(s.items)
         held = [(p.species,p.level,None) for p in s.party] + [(sid,level,box) for box,sid,level,nick in s.stored_pokemon]
         candidates = []
         travel = {}
         labels = {}
+        def skip(project, failure):
+            if skipped is not None:
+                skipped.setdefault(kinds.rules(project['method']).key(project), (project, failure, None))
         def add(project):
             key = kinds.rules(project['method']).key(project)
-            if not self.director.waiting(key, self.clock):
-                goal = self.goal(s, project)
-                distance = distance_to(goal.targets) if goal and goal.targets else None
-                if distance is not None:
-                    if project['method'] == 'train':
-                        work_distance = distance_to(training_targets(self.version, project['initial_level']))
-                        if work_distance is None:
-                            return
-                        preparation = distance + 80 if project.get('box') is not None else 0
-                        project['travel_distance'] = work_distance + preparation
-                    travel[key] = project.get('travel_distance', distance)
-                    labels[key] = goal.title
-                    candidates.append({**project,'key':key})
+            if self.director.waiting(key, self.clock):
+                skip(project, decide.FAILURES.get(self.director.monitor.failure(key, self.clock), decide.STOOD_DOWN))
+                return
+            goal = self.goal(s, project)
+            if not goal or not goal.targets:
+                skip(project, NO_STEP)
+                return
+            distance = distance_to(goal.targets)
+            if distance is None:
+                skip(project, decide.NO_ROUTE)
+                return
+            if project['method'] == 'train':
+                work_distance = distance_to(training_targets(self.version, project['initial_level']))
+                if work_distance is None:
+                    skip(project, decide.NO_ROUTE)
+                    return
+                preparation = distance + 80 if project.get('box') is not None else 0
+                project['travel_distance'] = work_distance + preparation
+            travel[key] = project.get('travel_distance', distance)
+            labels[key] = goal.title
+            candidates.append({**project,'key':key})
         sources = self.sources()
         held_individuals = [asdict(mon) for mon in s.party] + s.storage_entries()
         # A quality hunt is valued by the species' best copy as the PC rates it (investment.rarity).
@@ -1266,17 +1301,22 @@ class Collection:
                 if not self.available(s,source):
                     continue
                 mode = source['method']
-                if not feasible(source_requires(source, dex(sid) in s.owned), world, books, key='collection'):
-                    continue
                 selected_dojo = getattr(self, 'returned_events', {}).get('dojo', {}).get('dex', self.dojo_choice)
                 if mode == 'gift' and dex(sid) in (106, 107) and dex(sid) != selected_dojo:
                     continue
+                found = feasible(source_requires(source, dex(sid) in s.owned), world, books, key='collection')
+                if not found:
+                    skip(dict(source, species=sid), needs(found))
+                    continue
                 offered = self.trade_candidate(s, source) if mode == 'trade' else None
                 if mode == 'trade' and offered is None:
+                    skip(dict(source, species=sid), NO_PARTNER)
                     continue
                 if mode == 'grass' and source.get('level',100) > max(p.level for p in s.party)+3:
+                    skip(dict(source, species=sid), TOO_STRONG)
                     continue
                 if mode in ('grass', 'surf', 'fish') and self.deferred(s, sid):
+                    skip(dict(source, species=sid), DEFERRED)
                     continue
                 search_key = (sid,source['map'],mode,source.get('rod'))
                 if search_key in searched:
@@ -1307,9 +1347,10 @@ class Collection:
                                        needed_capture=dex(sid) not in s.owned)
                 goal = kinds.rules(project['method']).target(kinds.View(self, s), project)
                 if not goal or not goal.targets:
+                    skip(project, NO_STEP)
                     continue
-                distance = distance_to(goal.targets)
-                if distance is None:
+                if distance_to(goal.targets) is None:
+                    skip(project, decide.NO_ROUTE)
                     continue
                 add(project)
         individuals = [dict(asdict(mon), box=None) for mon in s.party] + s.storage_entries()
@@ -1436,10 +1477,67 @@ class Collection:
             add({'method': 'return_fossil', 'map': fossil['room'], 'item': fossil['item'],
                  'event_return': 'fossil'})
         projects = {project['key']: project for project in candidates}
-        options = party_first([candidate(project, travel.get(project['key']), best_tails, short, s.owned, self.wild,
-                                         champion=self.completed_champion)
-                               for project in candidates], projects)
+        priced = [candidate(project, travel.get(project['key']), best_tails, short, s.owned, self.wild,
+                            champion=self.completed_champion)
+                  for project in candidates]
+        options = party_first(priced, projects)
+        if skipped is not None:
+            kept = {option.key for option in options}
+            for option in priced:
+                if option.key not in kept:
+                    skipped.setdefault(option.key, (projects[option.key], TRAINS_FIRST, option))
         return options, projects, travel, labels
+
+    def closed(self, s):
+        """Why a manager cannot pick a collection goal now, or None when they can."""
+        if not self.completed_champion:
+            return 'The story comes first until the Champion is beaten'
+        if s.map in LEAGUE or not s.party or not s.owned or not event_set(s.event_flags, 'EVENT_GOT_POKEDEX'):
+            return 'Not available now'
+        return None
+
+    def _drawn(self, s, nav, rng, skipped=None):
+        """The offers draw on a copy of ``rng``, so reading it never changes what the run does."""
+        copy = random.Random()
+        copy.setstate(rng.getstate())
+        return self.offers(s, nav, copy, skipped)
+
+    def catalogue(self, s, nav, rng):
+        """The collection goals for the goal catalogue (planning/catalogue.py), best first, and why there
+        are none.
+
+        The goals the draw ranks come first in rank order, with the cost and worth their candidates
+        priced. The goals it left out follow, each with why. Reading it draws on a copy of ``rng`` and
+        writes no state.
+        """
+        reason = self.closed(s)
+        if reason:
+            return [], reason
+        skipped = {}
+        offered = self._drawn(s, nav, rng, skipped)
+        if isinstance(offered, Goal):
+            return [], offered.reason
+        options, projects, _, labels = offered
+        listed = [(projects[option.key], None, option) for option in arbiter.rank(options)]
+        listed += [entry for key, entry in skipped.items() if key not in projects or entry[2] is not None]
+        named = []
+        for project, failure, option in listed:
+            rules = kinds.rules(project['method'])
+            key = option.key if option else rules.key(project)
+            title = picker_group(project, labels.get(key) or rules.label(project), s.owned)[1]
+            named.append((key, project, rules, failure, option, title))
+        # A species found in several places is one row for each, so a shared title names its place.
+        shared = Counter(row[-1] for row in named)
+        rows = []
+        for key, project, rules, failure, option, title in named:
+            if shared[title] > 1 and project.get('map') is not None:
+                title = f'{title}, {place(project["map"])}'
+            if option is None:
+                rows.append(catalogue.goal(key, project['method'], rules.values(project), title, failure=failure))
+            else:
+                rows.append(catalogue.goal(key, project['method'], rules.values(project), title, option.tier, failure,
+                                           option.expected_frames, option.value))
+        return rows, (None if rows else 'Nothing to do until the game changes')
 
     def goal_list(self, s, nav, rng, query=None, limit=pin.LIMIT):
         """The goals a manager can set as the next activity, best first, and why the list is empty.
@@ -1449,13 +1547,10 @@ class Collection:
         pin.grouped. The plan is drawn on a copy of ``rng``, so listing the goals never changes what the
         run does.
         """
-        if not self.completed_champion:
-            return [], 'The story comes first until the Champion is beaten'
-        if s.map in LEAGUE or not s.party or not s.owned or not event_set(s.event_flags, 'EVENT_GOT_POKEDEX'):
-            return [], 'Not available now'
-        copy = random.Random()
-        copy.setstate(rng.getstate())
-        offered = self.offers(s, nav, copy)
+        reason = self.closed(s)
+        if reason:
+            return [], reason
+        offered = self._drawn(s, nav, rng)
         if isinstance(offered, Goal):
             return [], offered.reason
         options, projects, _, labels = offered

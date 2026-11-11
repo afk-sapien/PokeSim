@@ -74,7 +74,7 @@ def managed(tmp_path, monkeypatch):
     ('GET', ''), ('GET', 'api/state'), ('GET', 'api/events'), ('GET', 'api/events/42'), ('GET', 'events/42'),
     ('GET', 'api/progress'), ('GET', 'api/pokedex/status'), ('GET', 'api/trading'), ('GET', 'pc'),
     ('GET', 'journal'), ('GET', 'stats'), ('GET', 'static/app.js'), ('GET', 'shots/42.png'),
-    ('GET', 'stream'), ('HEAD', 'frame.jpg'), ('GET', 'feed.xml'),
+    ('GET', 'stream'), ('HEAD', 'frame.jpg'), ('GET', 'feed.xml'), ('GET', 'api/catalogue'),
 ])
 def test_view_link_reads_reach_the_game_marked_view_only(managed, method, path):
     response = managed.client.request(method, f'/view/{managed.aid}/{path}?after=3')

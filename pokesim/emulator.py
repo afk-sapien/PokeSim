@@ -280,6 +280,13 @@ class Emulator:
         goals, reason = self.policy.goals(self.snapshot, query)
         return pin.listing(goals, self.policy.pin, reason)
 
+    def catalogue(self, query=None, limit=None):
+        """The goal catalogue (planning/catalogue.py), named like ``query`` if given. Runs on the game
+        thread and changes nothing the run does."""
+        if limit is None:
+            return self.policy.catalogue(self.snapshot, query)
+        return self.policy.catalogue(self.snapshot, query, limit)
+
     def pin_goal(self, key):
         """Set the next activity. A ValueError says why the planner cannot take it now."""
         trace.note(self, 'pin', {'key': key})

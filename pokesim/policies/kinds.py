@@ -22,6 +22,11 @@ from .progression import Goal, at, object_goal
 # Run fields every kind may write: what it gained, its last progress mark, a support trip under way,
 # the supplies it prepared and the closest it came to its target.
 BASE_RUN = frozenset({'gains', 'progress_mark', 'support_trip', 'supplies_prepared', 'closest_distance'})
+# The params the goal catalogue lists, each (name, type, about). A species param is a Pokédex number.
+SPECIES = ('species', 'species', 'the Pokémon to get')
+MAP = ('map', 'map', 'the map it is on')
+ITEM = ('item', 'item', 'the item to get')
+PARENT = ('parent', 'species', 'the held Pokémon it works with')
 
 
 @dataclass
@@ -47,6 +52,9 @@ class Kind(Rules):
     wild = False
     # A repeat of the kind brings its own balls, which the Safari Zone gives instead.
     own_balls = False
+    # Plain words for the kind and its params, for the goal catalogue.
+    about = 'a collection goal'
+    params = ()
 
     # A pickled goal finds its kind's one rules object again by name.
     def __reduce__(self):
@@ -110,11 +118,20 @@ class Kind(Rules):
         target, item = run.get('species'), run.get('item')
         return c.name(target) if target else item.replace('_', ' ').title() if item else run['method'].title()
 
+    def values(self, p):
+        """The catalogue's params of the project ``p``, with each species as its Pokédex number."""
+        found = {}
+        for name, type_, _ in self.params:
+            value = p.get(name)
+            found[name] = c.dex(value) if type_ == 'species' and value is not None else value
+        return found
+
 
 class Hunt(Kind):
     """Wild encounters on a map, until the catch."""
     wild = True
     own_balls = True
+    params = (SPECIES, MAP)
 
     def battle_progress(self, p):
         return True
@@ -133,25 +150,30 @@ class Hunt(Kind):
 
 class Grass(Hunt):
     kind = 'grass'
+    about = 'catch a wild Pokémon in the grass'
 
 
 class Surf(Hunt):
     kind = 'surf'
+    about = 'catch a wild Pokémon on the water'
 
 
 class Fish(Hunt):
     kind = 'fish'
+    about = 'catch a Pokémon with a fishing rod'
 
 
 class Safari(Hunt):
     kind = 'safari'
     own_balls = False
+    about = 'catch a Pokémon in the Safari Zone'
 
 
 class Source(Kind):
     """A Pokémon a person, a ball on the floor or the lab hands over in one room."""
     # The kind puts the Pokémon in the party, so a full party first stores a reserve.
     received = False
+    params = (SPECIES, MAP)
 
     def fragment(self, view, p, room):
         return p['fragment']
@@ -201,6 +223,7 @@ class Static(Source):
     """A Pokémon standing in the world, a legendary or Snorlax among them."""
     kind = 'static'
     run = BASE_RUN | {'initial_held'}
+    about = 'battle and catch a Pokémon standing in the world'
 
     def key(self, p):
         if c.legendary_project(p):
@@ -242,6 +265,7 @@ class Gift(Source):
     kind = 'gift'
     run = BASE_RUN | {'initial_held'}
     received = True
+    about = 'receive a Pokémon someone gives away'
 
     def fragment(self, view, p, room):
         fragment, number = p['fragment'], c.dex(p.get('species'))
@@ -261,6 +285,7 @@ class Gift(Source):
 class Trade(Source):
     kind = 'trade'
     run = BASE_RUN | {'parent', 'box', 'give_key'}
+    about = 'trade a held Pokémon to a person for theirs'
 
     def battle_progress(self, p):
         return True
@@ -286,6 +311,8 @@ class Trade(Source):
 class Fossil(Source):
     kind = 'fossil'
     received = True
+    about = 'revive a fossil at the Cinnabar lab'
+    params = (SPECIES,)
 
     def wait(self, view, p):
         if event_set(view.s.event_flags, 'EVENT_LAB_STILL_REVIVING_FOSSIL'):
@@ -302,6 +329,8 @@ class Fossil(Source):
 
 class ReturnFossil(Kind):
     kind = 'return_fossil'
+    about = 'pick up the fossil left behind again'
+    params = (ITEM,)
 
     def target(self, view, p):
         room = WORLD[p['map']]['symbol']
@@ -314,6 +343,7 @@ class Marathon(Kind):
     run = BASE_RUN | {'checkpoint', 'race_frames', 'healed_here'}
     category = 'recreation'
     clock = marathon.BUDGET
+    about = 'run the sightseeing race around the region'
 
     def target(self, view, p):
         return marathon.goal(p)
@@ -328,6 +358,7 @@ class Rematch(Kind):
     run = BASE_RUN | {'parent', 'trainee_key', 'trainee_nick', 'family', 'scoped_partner', 'box',
                       'league_rotation', 'rotation_ready'}
     category = 'supplies'
+    about = 'battle the Elite Four and the Champion again'
 
     def step(self, view, p):
         if view.s.map not in c.LEAGUE:
@@ -353,6 +384,8 @@ class Rematch(Kind):
 class Trainer(Kind):
     kind = 'trainer'
     category = 'exploration'
+    about = 'battle a trainer not yet beaten'
+    params = (MAP,)
 
     def target(self, view, p):
         return object_goal('collect_trainer', 'Meet an unbeaten trainer', 'Explore and earn experience and supplies',
@@ -366,6 +399,8 @@ class Trainer(Kind):
 class Explore(Kind):
     kind = 'explore'
     category = 'exploration'
+    about = 'visit an area not yet explored'
+    params = (MAP,)
 
     def target(self, view, p):
         return Goal('collect_explore', 'Explore ' + c.place(p['map']), 'Visit an area that has not been explored',
@@ -379,6 +414,8 @@ class Explore(Kind):
 
 class Prize(Kind):
     kind = 'prize'
+    about = 'exchange Game Corner coins for a Pokémon'
+    params = (SPECIES,)
 
     def target(self, view, p):
         s, collection = view.s, view.collection
@@ -396,6 +433,8 @@ class Prize(Kind):
 class Rod(Kind):
     kind = 'rod'
     category = 'supplies'
+    about = 'get a fishing rod'
+    params = (ITEM,)
 
     def target(self, view, p):
         return object_goal('collect_rod', 'Obtain ' + p['item'].replace('_', ' ').title(), 'Unlock more fishing encounters',
@@ -404,6 +443,8 @@ class Rod(Kind):
 
 class Amber(Kind):
     kind = 'amber'
+    about = 'collect the Old Amber from the museum'
+    params = (ITEM,)
 
     def target(self, view, p):
         return object_goal('collect_amber', 'Collect Old Amber', 'Revive Aerodactyl at the Cinnabar lab', 'MUSEUM_1F', 'SCIENTIST2')
@@ -438,6 +479,8 @@ class Evolve(Partner):
     kind = 'evolve'
     run = BASE_RUN | {'initial_experience', 'box'}
     category = 'evolution'
+    about = 'evolve a held Pokémon'
+    params = (SPECIES, PARENT)
 
     def key(self, p):
         key = super().key(p)
@@ -470,6 +513,8 @@ class Train(Partner):
     run = BASE_RUN | {'parent', 'initial_experience', 'training_session', 'box'}
     category = 'training'
     clock = training.TRAINING_BUDGET
+    about = 'train a held Pokémon to a level'
+    params = (PARENT, ('target_level', 'level', 'the level to reach'))
 
     def key(self, p):
         key = f'train:{p.get("trainee_key") or p["parent"]}:{p["target_level"]}'

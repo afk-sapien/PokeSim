@@ -30,6 +30,7 @@ from . import kinds
 from ..planning import values
 from ..planning import boss
 from ..planning import decide
+from ..planning import catalogue
 from .pipeline import ERRAND_FRAMES, ERRANDS, Ballot
 from .ledger import battle_room, fighters, league_treatment
 from ..planning.ledger import PP
@@ -329,6 +330,8 @@ class StrategicPolicy(Policy):
         self.decided = False
         # The decide pipeline's pick at this step's overworld decision, for the trace, or None.
         self.pipeline_pick = None
+        # The offer the goal ran under when a ballot last chose it, which the goal record reads.
+        self.goal_offer = None
 
     def describe(self):
         return f"strategic ({self.mode})"
@@ -353,9 +356,37 @@ class StrategicPolicy(Policy):
     def drop_pin(self):
         return self.collection.drop_pin()
 
+    def catalogue(self, snapshot, query=None, limit=catalogue.LIMIT):
+        """The goal catalogue (planning/catalogue.py). Serving it draws on a copy of the RNG and writes
+        no state."""
+        kinds_list = [catalogue.kind(name, rules.about, rules.params) for name, rules in kinds.RULES.items()]
+        if snapshot is None or not snapshot.valid:
+            rows, reason = [], 'Not available now'
+        else:
+            rows, reason = self.collection.catalogue(snapshot, self.nav, self.rng)
+        return catalogue.body(1, kinds_list, rows, self.collection.pin, reason, query, limit)
+
+    def goal_record(self):
+        """The goal that runs now in the shape both generations share (docs/design/typed-goals.md
+        section 4). A collection goal is known by its project, and the offer's kind and tier count only
+        while the goal is still the one its ballot chose."""
+        goal = self.goal
+        if goal is None:
+            return None
+        offer = self.goal_offer if self.goal_offer is not None and self.goal_offer.goal is goal else None
+        project = self.collection.project
+        if offer is not None and offer.kind == 'collection' and project:
+            key, kind = self.collection.project_key, project['method']
+        else:
+            key, kind = goal.key, None if offer is None else offer.kind
+        return {"key": key, "kind": kind, "title": goal.title,
+                "tier": None if offer is None else catalogue.tier_name(offer.candidate.tier),
+                "done": False, "stop": None, "parked": None if offer is None else catalogue.why(offer.parked)}
+
     def details(self):
         pin = self.collection.pin
-        return {"collection": self.collection.details(), "objective": self.goal.to_dict(), "action": self.mode, "reason": self.reason,
+        return {"collection": self.collection.details(), "objective": self.goal.to_dict(), "goal": self.goal_record(),
+                "action": self.mode, "reason": self.reason,
                 "pin": pin.to_dict() if pin else None,
                 "milestones": self.completed.copy(), "recoveries": self.recoveries,
                 "decisions": self.decisions, "visited_tiles": len(self.nav.visits),
@@ -426,6 +457,7 @@ class StrategicPolicy(Policy):
             self.goal = ballot.resume(self.errand_offer)
         if ballot is not None:
             # Only the offer the step ends with writes, so an offer a later site overrides leaves nothing.
+            self.goal_offer = ballot.running
             ballot.commit()
         return actions
 
@@ -1065,6 +1097,7 @@ class StrategicPolicy(Policy):
         self.goal = goal
         self.errand = goal if choice.errand else None
         self.errand_offer = choice.running if choice.errand else None
+        self.goal_offer = choice.running
         self.decided = True
         choice.commit()
         self.committing = None
