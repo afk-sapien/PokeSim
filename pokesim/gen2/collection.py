@@ -13,8 +13,8 @@ from .menus import ChangeBox, FieldMove, Storage, Teach, Use
 from .navigation import DIRS
 from pokecore.gen2.ram import Memory
 from ..planning.monitor import STOOD_DOWN
-from .standdown import (DECISION_FRAMES, exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down,
-                        standing_down)
+from .standdown import (DECISION_FRAMES, exhausted, forget, hold_key, hunt_key, rung_key, search_expected, spend,
+                        stand_down, standing_down)
 from .standdown import monitor as standdown_monitor
 from . import kinds
 
@@ -849,6 +849,15 @@ def holds(policy, snapshot, mem, Goal):
     return league_loop(policy, snapshot, Goal)
 
 
+def held(policy, snapshot, mem, Goal):
+    """The goal holds() gives, unless a park set it aside after it stalled (emulator._park), so the rungs run
+    until its stand-down runs out."""
+    goal = holds(policy, snapshot, mem, Goal)
+    if goal and policy.monitor_tables.get(STOOD_DOWN) and standing_down(policy, hold_key(goal.key)):
+        return None
+    return goal
+
+
 def start_funding(policy, snapshot, Goal):
     """Start a League run for prize money when the purse is short of what wanted work needs, or None."""
     state = policy.collection
@@ -897,7 +906,7 @@ def journey(policy, snapshot, mem, Goal):
     policy.collection_offers, policy.collection_pinned, policy.collection_goal = [], None, None
     from .npc_trades import requests as trade_requests
     state['prerequisites'] = sorted(prerequisites(data, snapshot) | trade_requests(policy, snapshot, getattr(mem, 'memory', None)))
-    goal = holds(policy, snapshot, mem, Goal)
+    goal = held(policy, snapshot, mem, Goal)
     policy.ladder_hold = goal or None
     if goal:
         policy.ladder_rung, policy.ladder_offers, policy.ladder_pick = None, [], None

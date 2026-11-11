@@ -12,7 +12,7 @@ import json
 # search_expected is shared now. Hunts and the postgame still take it from here.
 from ..planning.cost import DECISIONS_PER_BATTLE, DECISIONS_PER_MAP, FRAMES_PER_BATTLE
 from ..planning.cost import search_expected as search_expected
-from ..planning.monitor import SPENT, STAND_DOWNS, STOOD_DOWN, Backoff, Monitor
+from ..planning.monitor import SPENT, STAND_DOWNS, STOOD_DOWN, Backoff, Monitor, hold_key
 from ..planning.unreachable import ATTEMPTS
 
 # Frames per decision, the unit of the hunt and postgame estimates: a wild battle takes about 1500
@@ -153,12 +153,20 @@ def migrate(policy, decisions):
     policy.monitor_tables.adopt(saved, decisions, DECISION_FRAMES)
 
 
-def stalled_objectives(policy):
-    """Keys of the objectives in progress, which a reload for lack of progress stands down."""
+def stalled_objectives(policy, source=None):
+    """Keys of the objectives in progress, which a reload for lack of progress stands down.
+
+    A park passes ``source``, the pipeline source of the goal that stopped, and gets only that goal's keys,
+    so it never sets aside another goal while the one that stopped comes straight back. An activity that
+    holds the collection, such as the box goal, goes by its own key (hold_key), the hunt rung by its
+    target and the postgame rung by its search.
+    """
     state, goal = policy.collection, policy.goal
+    if source == 'holds':
+        return {'keys': [hold_key(goal.key)], 'team': None}
     keys = set()
     target = state.get('target')
-    if target:
+    if target and source in (None, 'hunt'):
         keys.add(hunt_key(target['species']))
     training = state.get('training')
     if training and goal is not None and goal.key.startswith('collection_train'):
@@ -167,7 +175,7 @@ def stalled_objectives(policy):
             # A reload for lack of progress ends the stint, and a stint with no experience fails its site.
             keys.add(site_key(policy.data.map_ids[training['site']]))
     from .postgame import stall_key
-    search = stall_key(policy) if not target else None
+    search = stall_key(policy) if source == 'postgame' or source is None and not target else None
     if search:
         keys.add(search)
     team = state.get('activity_team') if goal is not None and goal.key == 'collection_activity_team' else None

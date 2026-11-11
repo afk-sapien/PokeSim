@@ -157,6 +157,53 @@ def test_a_stall_the_collection_cannot_park_reloads_as_before(setup):
     assert not [event for event in events if event.title.startswith('Set aside')]
 
 
+BOX = Goal('collection_box', 'Make room for new catches', 'Azalea Pokémon Center', 5, 5)
+
+
+def boxing():
+    """A run walking to make room in the box that stopped moving, with a hunt target left from before."""
+    emu, loaded, events = hunting()
+    emu.policy.goal, emu.policy.picked = BOX, ('holds', BOX.key)
+    return emu, loaded, events
+
+
+def test_a_stalled_box_goal_is_set_aside_and_the_hunt_is_left_alone():
+    emu, loaded, events = boxing()
+    Emulator._check_guards(emu)
+    assert not loaded and emu.reloads == 0
+    policy = emu.policy
+    assert failure(policy, standdown.hold_key(BOX.key)) == decide.STUCK.kind
+    # The park sets aside the goal that stopped, never the hunt that was not running.
+    assert policy.collection['target'] == {'species': ZUBAT}
+    assert not standdown.standing_down(policy, standdown.hunt_key(ZUBAT))
+    assert [event.title for event in events] == ['Set aside: Make room for new catches']
+
+
+def test_a_parked_box_goal_does_not_come_straight_back():
+    from pokesim.gen2 import collection
+    emu, _, _ = boxing()
+    Emulator._check_guards(emu)
+    policy = emu.policy
+    snapshot = SimpleNamespace(can_catch=False, box_counts=[20, 3])
+    policy.in_league = lambda snapshot: False
+    policy.storage_goal = lambda snapshot: BOX
+    assert collection.holds(policy, snapshot, None, Goal).key == BOX.key
+    # The next decision runs the rungs, and the box goal holds the collection again once its stand-down runs out.
+    assert collection.held(policy, snapshot, None, Goal) is None
+    policy.clock += standdown.STAND_DOWN
+    assert collection.held(policy, snapshot, None, Goal).key == BOX.key
+
+
+@pytest.mark.parametrize('source', ['training', 'collection'])
+def test_a_stall_under_another_rung_does_not_set_the_hunt_aside(source):
+    emu, loaded, events = hunting()
+    goal = Goal('collection_gift', 'Receive a gift Pokémon', 'Route 32', 5, 5)
+    emu.policy.goal, emu.policy.picked = goal, (source, goal.key)
+    Emulator._check_guards(emu)
+    # The goal that stopped has nothing of its own to stand down, so the stall reloads.
+    assert loaded == [SAVE] and not [event for event in events if event.title.startswith('Set aside')]
+
+
 def test_a_park_takes_the_first_rung_of_the_ladder():
     parks = []
 
@@ -199,6 +246,46 @@ def test_a_failure_is_kept_only_while_its_key_stands_down():
     assert list(tables[FAILURES]) == ['y', 'z']
 
 
+@pytest.mark.slow
+def test_a_box_goal_parked_from_a_real_checkpoint_stays_aside():
+    """The private Gold checkpoint from the stuck watchdog's park on Slowpoke Well B2F, kept as a stuck scenario
+    under the data folder. The box goal had stopped there and the park used to set aside a hunt instead."""
+    import os
+    from pokesim.scenarios import Scenario, find_rom, gen2_data_root, open_run, rom_candidates
+    from pokesim.scenarios import cartridge as checkpoint_cartridge
+    root = Path(__file__).resolve().parents[1]
+    folder = Path(os.environ.get('POKESIM_SCENARIOS') or Path(os.environ.get('DATA_DIR', root / 'data')) / 'scenarios')
+    folder /= 'gold-slowpoke-well-boulder-20261111'
+    if not os.environ.get('GEN2_CARTRIDGE_DIR'):
+        pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
+    if not (folder / 'scenario.json').is_file():
+        pytest.skip(f'No private {folder.name} scenario')
+    if not (gen2_data_root() / 'gen2').is_dir():
+        pytest.skip('Set GEN2_DATA_DIR to generated Gen II game data')
+    scenario = Scenario.load(folder)
+    if find_rom(checkpoint_cartridge(scenario.checkpoint)[1], rom_candidates()) is None:
+        pytest.skip('No Gold cartridge for the scenario')
+    run, _ = open_run(scenario)
+    try:
+        policy, events = run.policy, []
+        run.step(run.read())
+        assert policy.picked == ('holds', BOX.key)
+        emu = SimpleNamespace(policy=policy, snapshot=run.read(), failure_streak=0,
+                              _event=lambda event, snapshot: events.append(event), _reset_watch=lambda: None)
+        Emulator._parking(emu, 'stuck')()
+        assert [event.title for event in events] == ['Set aside: Make room for new catches']
+        assert failure(policy, standdown.hold_key(BOX.key)) == decide.STUCK.kind
+        picks = set()
+        for _ in range(300):
+            run.step(run.read())
+            picks.add(policy.picked)
+        assert not [pick for pick in picks if pick and pick[1] == BOX.key], picks
+        # The goals that run instead walk out of the well.
+        assert 'Slowpoke Well' not in run.read().map_name, picks
+    finally:
+        run.stop()
+
+
 def test_red_sets_a_stationary_project_aside_with_its_failure():
     from pokesim.policies.strategic import StrategicPolicy
     from test_collection import sid, state
@@ -207,6 +294,38 @@ def test_red_sets_a_stationary_project_aside_with_its_failure():
     p.collection.clock = 10000
     p.recover_stall(state(frame=300))
     assert p.collection.director.monitor.failure('ditto', p.collection.clock) == decide.STUCK.kind
+
+
+def test_red_sets_a_stalled_box_visit_aside_and_keeps_the_project():
+    from dataclasses import replace
+    from pokesim.planning.monitor import hold_key
+    from pokesim.policies.strategic import StrategicPolicy
+    from pokesim.runtime.policy import PolicyContext
+    from pokesim.strategy_data import MAPS
+    from test_box_capacity import full_box
+    from test_collection import sid
+    from test_strategy import menu
+    p = StrategicPolicy(7)
+    s = full_box(textbox=True)
+    p.observed_map = s.map
+    memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
+    p.step(PolicyContext(s, 0, memory))
+    assert p.goal.key == 'party_box'
+    p.collection.project = {'method': 'grass', 'species': sid(16), 'map': MAPS['ROUTE_1'], 'key': 'hunt'}
+    p.recover_stall(s)
+    # The visit that stopped is set aside, never the project that was not running.
+    key = hold_key('party_box')
+    monitor = p.collection.director.monitor
+    assert monitor.failure(key, p.collection.clock) == decide.STUCK.kind
+    assert p.collection.project['key'] == 'hunt'
+    # The first step after the recovery waits for the map to settle, and the next one chooses a goal.
+    for frame in (400, 500):
+        p.step(PolicyContext(replace(s, frame=s.frame + frame), 0, memory))
+    assert p.mode != 'waiting for map transition'
+    assert p.goal.key != 'party_box'
+    # The visit comes back once its wait runs out.
+    p.collection.clock = monitor.until(key)
+    assert not p._room_parked('party_box')
 
 
 def test_red_sets_a_stationary_project_aside_even_after_a_reload():
