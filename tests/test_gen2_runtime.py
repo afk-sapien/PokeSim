@@ -651,8 +651,8 @@ def test_burned_tower_fall_finishes_the_beast_scene_before_supply_trips(real_dat
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
     snapshot = SimpleNamespace(map=real_data.map_ids['BURNED_TOWER_B1F'], event=lambda name: False)
-    assert policy.healing(snapshot) is None
-    assert policy.shop(snapshot) == (None, None)
+    assert policy.heal.offer(policy, snapshot) == (None, None)
+    assert policy.shop.offer(policy, snapshot) == (None, None)
 
 
 def test_postgame_restocking_reaches_a_mart_beyond_the_local_map_limit(real_data):
@@ -667,7 +667,7 @@ def test_postgame_restocking_reaches_a_mart_beyond_the_local_map_limit(real_data
     snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_ROOM_2'], items=(), party=(),
         pockets={'balls': ()}, money=20000, can_catch=True, badges=65535, hall_of_fame_count=1,
         event=lambda name: True, owned=set())
-    assert policy.shop(snapshot)[0].map_name == 'VIOLET_MART'
+    assert policy.shop.offer(policy, snapshot)[0].map_name == 'VIOLET_MART'
 
 
 def test_restock_does_not_walk_to_a_mart_through_ice_path(real_data):
@@ -679,7 +679,7 @@ def test_restock_does_not_walk_to_a_mart_through_ice_path(real_data):
     policy.completed.update(ice_path=1)
     ids = real_data.map_ids
     blackthorn, ecruteak = ids['BLACKTHORN_MART'], ids['ECRUTEAK_MART']
-    policy.shop_location = (blackthorn, 'BlackthornMartClerkScript', real_data.items['POKE_BALL'])
+    policy.shop.location = (blackthorn, 'BlackthornMartClerkScript', real_data.items['POKE_BALL'])
     policy.travel_region = lambda snapshot: real_data.maps[blackthorn]['region']
     cave = [(None, (ids['ICE_PATH_1F'], 0), None, 'warp'), (None, (blackthorn, 0), None, 'warp')]
     policy.nav.regions.route = lambda snapshot, target, *args, **kwargs: (
@@ -689,7 +689,7 @@ def test_restock_does_not_walk_to_a_mart_through_ice_path(real_data):
         pockets={'balls': ()}, money=18000, can_catch=True, badges=255, hall_of_fame_count=1,
         event=lambda name: True)
     assert len(policy.nav.walk(snapshot, blackthorn)) < len(policy.nav.walk(snapshot, ecruteak))
-    goal, _ = policy.shop(snapshot)
+    goal, _ = policy.shop.offer(policy, snapshot)
     assert goal is not None and goal.map_name != 'BLACKTHORN_MART'
 
 
@@ -706,16 +706,16 @@ def test_a_ledge_hop_keeps_the_shop_already_chosen(real_data):
     snapshot = SimpleNamespace(map=ids['ROUTE_39'], x=12, y=24, items=(), party=(), owned=set(),
         pockets={'balls': ((real_data.items['POKE_BALL'], 3),)}, money=10356, can_catch=True, badges=15,
         hall_of_fame_count=0, event=lambda name: True)
-    landed, commit = policy.shop(snapshot)
+    landed, commit = policy.shop.offer(policy, snapshot)
     assert landed is not None and landed.map_name == 'OLIVINE_MART'
     # The shop is chosen when the trip is picked.
     commit()
-    chosen = policy.shop_location, policy.shopping
+    chosen = policy.shop.location, policy.shop.purchase
     hop = SimpleNamespace(**{**vars(snapshot), 'y': 25})
     assert policy.nav.regions.between(hop, True, True)
-    goal, commit = policy.shop(hop)
+    goal, commit = policy.shop.offer(policy, hop)
     assert goal is not None and goal.map_name == 'OLIVINE_MART'
-    assert commit is None and (policy.shop_location, policy.shopping) == chosen
+    assert commit is None and (policy.shop.location, policy.shop.purchase) == chosen
 
 
 @pytest.mark.parametrize('owned,expected', [({243, 245, 249, 250}, ('BLACKTHORN_MART', 'ULTRA_BALL')),
@@ -736,13 +736,13 @@ def test_restock_prefers_ultra_balls_while_a_legendary_is_uncaught(real_data, ow
     snapshot = SimpleNamespace(map=ids['ECRUTEAK_CITY'], items=(), party=(), owned=owned,
         pockets={'balls': [(real_data.items['GREAT_BALL'], 20)]}, money=30000, can_catch=True,
         badges=65535, hall_of_fame_count=1, event=lambda name: True)
-    goal, commit = policy.shop(snapshot)
+    goal, commit = policy.shop.offer(policy, snapshot)
     if expected is None:
         assert goal is None
         return
     assert goal.map_name == expected[0]
     commit()
-    assert policy.shopping == (real_data.items[expected[1]], 20)
+    assert policy.shop.purchase == (real_data.items[expected[1]], 20)
 
 
 def test_capture_weakening_rejects_a_lethal_lead_move(real_data):
@@ -1034,7 +1034,7 @@ def test_trade_preparation_heals_poison_before_freezing_the_source(real_data, mo
     monkeypatch.setattr(preparation, 'Memory', lambda *args: SimpleNamespace(
         byte=lambda name: 4 if name == 'wPlayerDirection' else 0))
     policy = SimpleNamespace(in_league=lambda snapshot: False,
-        healing=lambda snapshot: SimpleNamespace(map_name='VIOLET_POKECENTER_1F', x=3, y=3),
+        heal=SimpleNamespace(offer=lambda policy, snapshot: (SimpleNamespace(map_name='VIOLET_POKECENTER_1F', x=3, y=3), None)),
         nav=SimpleNamespace(observe=lambda snapshot: None, collision=lambda *args: [],
             toward=lambda *args, **kwargs: [], regions=SimpleNamespace(observe=lambda *args: None)))
     emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}))
@@ -1064,7 +1064,7 @@ def test_time_capsule_preparation_heals_before_depositing_the_last_pokemon_that_
         return [] if points[0] == spot['at'] else ['walk']
 
     policy = SimpleNamespace(in_league=lambda snapshot: False, mode=None,
-        healing=lambda snapshot: SimpleNamespace(map_name='PEWTER_POKECENTER_1F', x=5, y=2),
+        heal=SimpleNamespace(offer=lambda policy, snapshot: (SimpleNamespace(map_name='PEWTER_POKECENTER_1F', x=5, y=2), None)),
         walk=lambda snapshot, memory, path: SimpleNamespace(button='down'),
         nav=SimpleNamespace(observe=lambda snapshot: None, collision=lambda *args: [],
             toward=toward, regions=SimpleNamespace(observe=lambda *args: None,
@@ -2170,7 +2170,7 @@ def test_a_sale_skips_a_shop_whose_clerk_has_left(real_data, monkeypatch):
     monkeypatch.setattr(policy.nav.regions, 'route', lambda snap, mid, *args, **kwargs: [] if mid == mart else None)
     monkeypatch.setattr(policy, 'person', lambda snap, key, label, name, script: chosen.append(script)
                         or Goal(key, script, name, 3, 3, 'left'))
-    goal, _ = policy.shop(snapshot)
+    goal, _ = policy.shop.offer(policy, snapshot)
     assert (goal.key, goal.label) == ('sell_supplies', granny['script'])
     assert pharmacist['script'] not in chosen
     # Before the hideout falls the pharmacist runs the shop, so both counters stay open.

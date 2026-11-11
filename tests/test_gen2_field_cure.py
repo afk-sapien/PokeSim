@@ -54,10 +54,12 @@ def policy_with_center(data, monkeypatch):
 
 def test_a_status_a_cure_in_the_bag_clears_sends_no_heal_walk(data, monkeypatch):
     policy = policy_with_center(data, monkeypatch)
-    assert policy.healing(snapshot(data, 'ROUTE_34', [('ANTIDOTE', 1)])) is None
+    def healing(state):
+        return policy.heal.offer(policy, state)[0]
+    assert healing(snapshot(data, 'ROUTE_34', [('ANTIDOTE', 1)])) is None
     # A Full Restore is kept for the HP it restores, and an Antidote does not wake a sleeper.
-    assert policy.healing(snapshot(data, 'ROUTE_34', [('FULL_RESTORE', 3)])).key == 'heal'
-    assert policy.healing(snapshot(data, 'ROUTE_34', [('ANTIDOTE', 1)], status=2)).key == 'heal'
+    assert healing(snapshot(data, 'ROUTE_34', [('FULL_RESTORE', 3)])).key == 'heal'
+    assert healing(snapshot(data, 'ROUTE_34', [('ANTIDOTE', 1)], status=2)).key == 'heal'
 
 
 def test_the_field_cure_is_the_cheapest_cure_and_keeps_full_restores(data, monkeypatch):

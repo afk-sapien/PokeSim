@@ -220,16 +220,23 @@ def test_gen2_heals_before_red_when_a_center_is_in_reach(gen2, monkeypatch):
     mid = gen2.map_ids['SILVER_CAVE_POKECENTER_1F']
     nurse = next(obj for obj in gen2.maps[mid]['objects'] if obj['sprite'] == 'SPRITE_NURSE')
     policy = gen2_policy(gen2, monkeypatch, (mid, nurse))
-    goal = policy.healing(gen2_snapshot(gen2, 60))
+    goal = healing(policy, gen2_snapshot(gen2, 60))
     assert goal is not None and goal.map_name == 'SILVER_CAVE_POKECENTER_1F'
-    assert policy.healing(gen2_snapshot(gen2, 180)) is None
+    assert healing(policy, gen2_snapshot(gen2, 180)) is None
+
+
+def healing(policy, snapshot):
+    """The heal goal Gold, Silver and Crystal offer now, or None."""
+    goal, commit = policy.heal.offer(policy, snapshot)
+    assert commit is None
+    return goal
 
 
 def test_gen2_writes_the_unready_journal_row_when_no_center_is_in_reach(gen2, monkeypatch):
     from pokesim.gen2.collection import pin_events
     policy = gen2_policy(gen2, monkeypatch, None)
-    assert policy.healing(gen2_snapshot(gen2, 60)) is None
-    assert policy.healing(gen2_snapshot(gen2, 59)) is None
+    assert healing(policy, gen2_snapshot(gen2, 60)) is None
+    assert healing(policy, gen2_snapshot(gen2, 59)) is None
     rows = [row for row in pin_events(policy) if row['title'].startswith('Went in unready')]
     assert len(rows) == 1 and rows[0]['title'] == 'Went in unready: Battle Red'
 
@@ -244,10 +251,10 @@ def test_gen2_starts_a_leg_at_the_indigo_plateau_center(gen2, monkeypatch):
     policy.boss_gate = boss.Gate()
     policy.boss_gate.key, policy.boss_gate.trips = 'league_will', boss.TRIPS
     road = replace_map(gen2_snapshot(gen2, 60), gen2.map_ids['VICTORY_ROAD'])
-    assert policy.healing(road) is None
+    assert healing(policy, road) is None
     lobby = replace_map(gen2_snapshot(gen2, 60), mid)
-    assert policy.healing(lobby).map_name == 'INDIGO_PLATEAU_POKECENTER_1F'
-    assert policy.healing(replace_map(gen2_snapshot(gen2, 180), mid)) is None
+    assert healing(policy, lobby).map_name == 'INDIGO_PLATEAU_POKECENTER_1F'
+    assert healing(policy, replace_map(gen2_snapshot(gen2, 180), mid)) is None
     rows = [row['title'] for row in pin_events(policy)]
     assert 'Healed before Will' in rows
 
@@ -267,9 +274,9 @@ def test_gen2_logs_a_pp_heal_at_the_center(gen2, monkeypatch):
     monkeypatch.setattr(policy, 'center', lambda snapshot: (mid, nurse))
     spent = gen2_snapshot(gen2, 180)
     spent.party = (gen2_mon(180, (0, 0, 30, 20)),)
-    assert policy.healing(spent).map_name == 'SILVER_CAVE_POKECENTER_1F'
-    assert policy.pp_heal
-    assert policy.healing(replace_map(gen2_snapshot(gen2, 180), mid)) is None
+    assert healing(policy, spent).map_name == 'SILVER_CAVE_POKECENTER_1F'
+    assert policy.heal.pp
+    assert healing(policy, replace_map(gen2_snapshot(gen2, 180), mid)) is None
     rows = [row for row in pin_events(policy) if row['title'].startswith('PP heal')]
     assert len(rows) == 1 and rows[0]['title'] == f"PP heal at {gen2.maps[mid]['name']}"
     assert rows[0]['priority'] == 1 and rows[0]['notable'] is False
