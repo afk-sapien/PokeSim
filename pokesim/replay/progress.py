@@ -29,7 +29,6 @@ from urllib.parse import quote
 
 from pokesim import config, state
 from pokesim.app.watchdog import Limits, Watchdog
-from pokesim.gen2.journal import NOT_PROGRESS
 from pokesim.progress_events import HOUR, JOURNAL, NET
 from pokesim.stalls import (FRAMES_PER_GAME_MINUTE, GEN1_HELD_RISE, LOOP_EVENTS, LOOP_LIMIT, PROGRESS_EVENTS,
                             REAL_PROGRESS, LoopGuard, StallWatch, _RECEIVED, _RELEASED, species_key)
@@ -462,6 +461,8 @@ class NewChecks:
 
 def replay(adventure, axis, rows, start, end, churn_n=10):
     """Run both models over the same history. Returns the old flags, the new flags and the churn flags."""
+    # The journal reads the game data as it loads, so --help works on a machine without game data.
+    from pokesim.gen2.journal import NOT_PROGRESS
     stream = ([(e.ts, 0, 'entry', e) for e in adventure.events]
               + [(r[0], 1, 'receipt', r) for r in adventure.receipts]
               + [(p[0], 2, 'progress', p) for p in adventure.progress]

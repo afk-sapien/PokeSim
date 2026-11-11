@@ -9,15 +9,16 @@ import time
 from types import SimpleNamespace
 
 from pokecore.emulator import Emulator as PyBoy
-from pokesim.benchmark import policy_fingerprint
 from pokesim.checkpoints import CheckpointStore
-from pokesim.events import RunMemory, diff
-from pokesim.policies.strategic import StrategicPolicy
-from pokesim.ram import read_snapshot
 from pokesim.runtime.game_loop import GameLoop, Gen1
 
 
 def run(rom, checkpoint, frames):
+    # These modules read the game data as they load, so --help works on a machine without game data.
+    from pokesim.benchmark import policy_fingerprint
+    from pokesim.events import RunMemory, diff
+    from pokesim.policies.strategic import StrategicPolicy
+    from pokesim.ram import read_snapshot
     metadata = CheckpointStore(checkpoint.parent).checkpoint_metadata(checkpoint)
     if not metadata:
         raise ValueError('A checkpoint manifest is required for a faithful replay')

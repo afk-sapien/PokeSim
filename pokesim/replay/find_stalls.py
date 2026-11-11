@@ -14,17 +14,11 @@ import json
 from pathlib import Path
 import time
 
-from pokesim.events import diff
-from pokesim.headless import HeadlessRun
-from pokesim.policies.progression import milestones
-from pokesim.ram import read_snapshot
 from pokesim.runtime.capture import keep_run
-from pokesim.screen import Screen
 from pokesim.runtime.supervision import Supervisor
 from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, held_rose
-from pokesim.strategy_data import MAPS
 
-LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
+LEAGUE_ROOMS = ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')
 
 
 def clock(frames):
@@ -50,6 +44,14 @@ def main(argv=None, prog=None):
     root = Path(__file__).resolve().parents[2]
     if args.output.resolve().is_relative_to(root) and not args.output.resolve().is_relative_to(root / 'data'):
         parser.error('Outputs contain private game data. Choose a folder outside the checkout.')
+    # These modules read the game data as they load, so --help works on a machine without game data.
+    from pokesim.events import diff
+    from pokesim.headless import HeadlessRun
+    from pokesim.policies.progression import milestones
+    from pokesim.ram import read_snapshot
+    from pokesim.screen import Screen
+    from pokesim.strategy_data import MAPS
+    league = {MAPS[name] for name in LEAGUE_ROOMS}
     args.output.mkdir(parents=True, exist_ok=True)
     rolling = args.output / 'rolling'
     rolling.mkdir(exist_ok=True)
@@ -83,7 +85,7 @@ def main(argv=None, prog=None):
             snapshot = read_snapshot(run.pb.memory, run.frame)
             events = [event for event in pending if event.still(snapshot)]
             if (previous is not None and snapshot.valid and snapshot.map == MAPS['LORELEIS_ROOM']
-                    and previous.map not in LEAGUE and not snapshot.in_battle):
+                    and previous.map not in league and not snapshot.in_battle):
                 run.save(league_entry)          # the application keeps the same save to restart a lost attempt
             new = diff(previous, snapshot, run.memory)
             pending = [event for event in new if event.still is not None]
@@ -130,7 +132,7 @@ def main(argv=None, prog=None):
                     # foe that only uses Agility. The application reloads a save from before the battle,
                     # and restarts the League attempt if that did not help.
                     escapes += 1
-                    restart = escapes >= 2 and snapshot.map in LEAGUE and league_entry.exists()
+                    restart = escapes >= 2 and snapshot.map in league and league_entry.exists()
                     run.reload(league_entry if restart else calm or folder / 'before.state')
                     open_stall['escape'] = 'restarted the League attempt' if restart else 'reloaded a checkpoint from before the battle'
                     kept = json.loads((folder / 'report.json').read_text(encoding='utf-8'))
