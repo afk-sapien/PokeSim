@@ -222,8 +222,11 @@ jobs:
       - uses: ./.github/actions/uv-sync
         with:
           args: --extra dev --extra browser-test
+      # The runner image already has every library Chromium needs, so this downloads only the
+      # browser. --with-deps ran apt-get, which failed whenever the Ubuntu mirrors could not be
+      # resolved. All it added were fallback fonts for scripts the pages never use.
       - name: Install browser test runtime
-        run: uv run --locked --extra browser-test python -m playwright install --with-deps chromium
+        run: uv run --locked --extra browser-test python -m playwright install chromium
       - run: uv run --locked python -m pokesim.prepare_data .reference/pokered
       - name: Exercise real browser flows
         env:
