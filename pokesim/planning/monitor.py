@@ -20,6 +20,8 @@ from dataclasses import dataclass
 STOOD_DOWN = 'stood_down'
 STAND_DOWNS = 'stand_downs'
 SPENT = 'progress_frames'
+# The kind of failure that set a key aside (planning/decide.py), kept while it stands down.
+FAILURES = 'failures'
 
 
 @dataclass(frozen=True)
@@ -125,14 +127,18 @@ class Monitor:
         """A copy of when each key last stood down, oldest first."""
         return dict(self._table(STOOD_DOWN))
 
-    def stand_down(self, key, now, progressed=False, most=None):
+    def stand_down(self, key, now, progressed=False, most=None, failure=None):
         """Set ``key`` aside from ``now`` and return when it may be tried again.
 
         A goal that made some progress before it stopped waits the base time and starts its count of
         stand-downs again. Otherwise each stand-down in a row doubles the wait. With ``most``, the count
         kept is capped there and the key moves to the newest end, so ``trim`` drops the keys left alone
-        longest. The wait returned still counts this stand-down in full.
+        longest. The wait returned still counts this stand-down in full. ``failure`` is the kind of
+        failure that set it aside, which ``failure`` answers while it waits.
         """
+        self._forget_failure(key)
+        if failure:
+            self._table(FAILURES)[key] = failure
         counts = self._table(STAND_DOWNS)
         if most is not None and key in counts:
             counts[key] = counts.pop(key)
@@ -151,6 +157,13 @@ class Monitor:
         stood = self._table(STOOD_DOWN)
         for key in [key for key in stood if not self.standing_down(key, now)]:
             del stood[key]
+            self._forget_failure(key)
+
+    def _forget_failure(self, key):
+        # The failures table is made only by a failure, so a run that never parks keeps the tables it had.
+        failures = self.state.get(FAILURES)
+        if isinstance(failures, dict):
+            failures.pop(key, None)
 
     def trim(self, limit):
         """Keep the newest ``limit`` keys in each table."""
@@ -158,6 +171,10 @@ class Monitor:
             table = self._table(name)
             for key in list(table)[:-limit]:
                 del table[key]
+        failures = self.state.get(FAILURES)
+        if isinstance(failures, dict):
+            for key in list(failures)[:-limit]:
+                del failures[key]
 
     def until(self, key):
         """When ``key`` may be tried again, or None when it has not stood down."""
@@ -170,10 +187,16 @@ class Monitor:
         until = self.until(key)
         return until is not None and now < until
 
+    def failure(self, key, now):
+        """The kind of failure ``key`` stands down for at ``now``, or None when it is not standing down
+        or stood down for no named failure."""
+        return self._table(FAILURES).get(key) if self.standing_down(key, now) else None
+
     def clear(self, key):
-        """Forget ``key``'s stand-downs and spent frames, as when its goal is done."""
+        """Forget ``key``'s stand-downs, failure and spent frames, as when its goal is done."""
         for name in (STOOD_DOWN, STAND_DOWNS, SPENT):
             self._table(name).pop(key, None)
+        self._forget_failure(key)
 
     def rows(self, name):
         """The caller's own table ``name`` inside the same state, such as the no-route attempts."""

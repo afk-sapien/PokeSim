@@ -23,7 +23,8 @@ from ..runtime.game_loop import GameLoop, Gen2
 from ..runtime.manifest import checkpoint_manifest
 from ..runtime.reload import FRAMES_PER_SECOND, reload_target
 from ..runtime.restart import restart
-from ..runtime.supervision import CANNOT_END, GIVE_UP, HOLD, LEAGUE_RESTARTS, Supervisor
+from ..planning import decide
+from ..runtime.supervision import CANNOT_END, GIVE_UP, HOLD, LEAGUE_RESTARTS, PARK, Supervisor
 from ..runtime.supervision import report as stuck_report
 from ..stalls import LoopGuard, StallWatch
 from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
@@ -104,6 +105,13 @@ def solid(image):
     return all(low == high for low, high in bands)
 # A screen that has not changed for half a game minute is a loop, not a pause.
 SCREEN_FRAMES = 1800
+# The first stall of the collection's goal sets it aside in place of a reload, and a second stall before
+# any new progress reloads as before (runtime/supervision.py).
+RELOAD_AFTER_PARK = True
+# The stalls that can set the goal that stopped aside, and the failure each one records.
+PARKS = {'stuck': decide.STUCK, 'no progress': decide.NO_PROGRESS, 'a menu task kept failing': decide.MENU_FAILED}
+# The pipeline sources of the collection's goal: an activity under way and the ladder's pick.
+PARK_SOURCES = frozenset({'holds', 'ladder'})
 # Written on arriving at the Indigo Plateau Pokémon Center, the last place before an Elite Four attempt.
 LEAGUE_CHECKPOINT = 'league-entry.state'
 BEFORE_LOAD_CHECKPOINT = 'before-load.state'
@@ -898,6 +906,50 @@ class Emulator:
         self._reset_watch()
         return True
 
+    def _parking(self, why):
+        """How a stall for ``why`` sets the goal that stopped aside in place of a reload, or None when it cannot.
+
+        Only the collection's goal parks: the activity under way or the ladder's pick, when the last
+        decision picked it, it is still the goal and it has objectives to stand down. A story goal, a
+        battle, a glitch and the League reload as before, since standing down gets none of them going.
+        """
+        failure = PARKS.get(why)
+        policy, snapshot = getattr(self, 'policy', None), getattr(self, 'snapshot', None)
+        goal, picked = getattr(policy, 'goal', None), getattr(policy, 'picked', None)
+        if failure is None or goal is None or snapshot is None or picked is None:
+            return None
+        if picked[0] not in PARK_SOURCES or picked[1] != goal.key:
+            return None
+        if not (getattr(snapshot, 'valid', False) and getattr(snapshot, 'started', False)):
+            return None
+        if getattr(snapshot, 'in_battle', 0) or policy.in_league(snapshot):
+            return None
+        from .standdown import stalled_objectives
+        stalled = stalled_objectives(policy)
+        if not stalled['keys']:
+            return None
+        return lambda: Emulator._park(self, failure, stalled)
+
+    def _park(self, failure, stalled):
+        """Set the collection's goal aside for ``failure`` and let the next decision pick again, with no reload.
+
+        Its objectives stand down with the failure as a reload's would (standdown.carry_over), and each
+        comes back once its stand-down on the PlayClock runs out (standdown.STAND_DOWN). The run keeps
+        everything it did since the last save.
+        """
+        from .standdown import carry_over
+        policy, snapshot = self.policy, self.snapshot
+        label = policy.goal.label
+        carry_over(policy, stalled, failure=failure.kind)
+        log.warning('%s, setting %s aside', failure.detail, label)
+        self._event(Event('stall', f'Set aside: {label}',
+                          f'{failure.detail.capitalize()} at {snapshot.map_name}, so it waits while other goals '
+                          'run and comes back later.', priority=LOW), snapshot)
+        policy.goal = policy.menu = None
+        self.failure_streak = 0
+        self._reset_watch()
+        return True
+
     def _looping(self):
         """Why the loop guard saw the same gift and release repeating, or None.
 
@@ -908,14 +960,16 @@ class Emulator:
         return guard.reason if guard else None
 
     def _unstick(self, since_frame, why):
-        """Go back to an autosave from before the trouble started, or power-cycle when there is none."""
+        """Set the collection's goal that stopped aside, or go back to an autosave from before the trouble
+        started, or power-cycle when there is none."""
         from ..planning.pin import STUCK
         Emulator._drop_pin(self, STUCK)
         # A reload out of a boss attempt loses it, so the progress it made does not start the ladder again.
         self.supervisor.lost(getattr(self, 'stall', None), getattr(self, 'loop_guard', None))
         rung = self.supervisor.climb(why, lambda: Emulator._give_up(self, why), looping=lambda: Emulator._looping(self),
-                                     in_league=lambda: self.snapshot is not None and self.policy.in_league(self.snapshot))
-        if rung.kind == GIVE_UP:
+                                     in_league=lambda: self.snapshot is not None and self.policy.in_league(self.snapshot),
+                                     park=Emulator._parking(self, why), reload_after_park=RELOAD_AFTER_PARK)
+        if rung.kind in (GIVE_UP, PARK):
             return
         if rung.kind == HOLD:
             # Reloading again would only replay the same trouble. Leave the run as it is, flagged as

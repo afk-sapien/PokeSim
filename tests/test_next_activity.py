@@ -316,7 +316,7 @@ def test_gen2_a_pinned_rung_passes_every_check_and_a_parked_pin_says_why(monkeyp
     assert rungs.rung == 'hunt' and 'league' not in rungs.asked
     settle_pin(owner, rungs)
     assert owner.pin.to_dict() == {'key': 'league:league', 'label': 'Label league', 'started': False,
-                                   'parked': decide.STOOD_DOWN}
+                                   'parked': {'kind': 'stood_down', 'detail': 'stood down'}}
     owner.monitor_tables.clear()
     owner.no_route_waiting = lambda goal: goal.key == 'league'
     rungs = weigh(owner)
@@ -326,7 +326,7 @@ def test_gen2_a_pinned_rung_passes_every_check_and_a_parked_pin_says_why(monkeyp
     assert not ladder_module.pin_events(owner)
     owner.no_route_waiting = lambda goal: False
     settle_pin(owner, weigh(owner))
-    assert owner.pin.started and owner.pin.parked == ''
+    assert owner.pin.started and owner.pin.parked is None
     owner.no_route_waiting = lambda goal: goal.key == 'league'
     settle_pin(owner, weigh(owner))
     assert owner.pin is None

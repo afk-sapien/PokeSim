@@ -619,8 +619,8 @@ class Ladder:
         # since the pinned lane ranks it first, and passes the same checks as any other rung.
         self.pin = getattr(policy, 'pin', None)
         self.pin_rung = self.pin.key.split(':', 1)[0] if self.pin else None
-        # Why the pinned goal cannot run in this decision, a reason from planning/decide.py.
-        self.pin_parked = ''
+        # Why the pinned goal cannot run in this decision, a Failure from planning/decide.py.
+        self.pin_parked = None
         # A survey asks every rung, for the goal list a manager picks from, and changes nothing.
         self.survey = getattr(policy, 'ladder_survey', False)
         self.asked, self.labels = set(), {}

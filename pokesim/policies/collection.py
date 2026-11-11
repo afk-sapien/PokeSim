@@ -727,9 +727,10 @@ class Collection:
         self.was_in_battle = False
         self.idle_token = None
 
-    def abandon(self, reason, stand_down=True):
+    def abandon(self, reason, stand_down=True, failure=None):
         """Leave the running project. ``stand_down`` False leaves it free to start again at once, for a
-        project a manager set aside rather than one that failed."""
+        project a manager set aside rather than one that failed. ``failure`` is the kind of failure
+        (planning/decide.py) its stand-down records."""
         if not self.project:
             return False
         project = self.project
@@ -739,7 +740,7 @@ class Collection:
         label = project_label(project)
         progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
         if stand_down:
-            self.director.finish(project, self.clock, False, reason, progressed)
+            self.director.finish(project, self.clock, False, reason, progressed, failure=failure)
         self.history = (self.history + [f'Changed plan: {label}. {reason}'])[-6:]
         self.project = None
         self.remaining = 0

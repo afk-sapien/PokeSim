@@ -24,10 +24,10 @@
   const put = (element, property, value) => { if (element && element[property] !== value) element[property] = value }
 
   // A pin the planner cannot run now says why after its label, so a waiting pin never looks like one
-  // that does nothing. A pin without the reason, or with an empty one, shows only its label.
+  // that does nothing. The reason is a failure's kind and detail, and a pin without one shows only its label.
   const status = pin => {
     if (!pin) return ''
-    const parked = spell(pin.parked).trim()
+    const parked = spell(pin.parked?.detail).trim()
     return `Next: ${spell(pin.label)}${parked ? ` (waiting: ${parked})` : ''}`
   }
   // The game's own spelling, whatever the label source wrote.

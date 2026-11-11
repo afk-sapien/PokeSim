@@ -19,6 +19,7 @@ What moves out of PR 7, as agreed with the lead:
 - The hunt template, stop when and the `what` hash in the key move to PR 8 with the form and the share codes. Today's key strings stay, so the stand-down, spent and no-route tables keyed by them keep working.
 - Per-tier budgets (goal-system section 8) and an `interrupt_frames` commitment move to a follow-up, since both change play.
 - The PR 3 replay bar re-runs after slice 5.
+- A mode in the scenario runner that runs the stuck guards, so a stuck replay can reach a park or a reload. Neither the gate nor the replays run the guards today. It is its own PR after slice 5.
 
 ## 2. The goal record (slices 1 and 2)
 

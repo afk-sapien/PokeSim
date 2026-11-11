@@ -21,10 +21,25 @@ HOLD = 'hold'       # A goal under way, weighed only against its own steps.
 NEED = 'need'       # The enabler of the best goal's first unmet need.
 RANK = 'rank'       # The arbiter's best goal, with nothing it needs left unmet.
 
+@dataclass(frozen=True)
+class Failure:
+    """Why a goal cannot run now: one of the kinds below, and plain words for the journal and the pin."""
+    kind: str
+    detail: str
+
+    def __str__(self):
+        return self.detail
+
+
 # Why an offer was parked, which a director reads.
-STOOD_DOWN = 'stood down'   # The supervisor stood it down or its budget ran out.
-NO_ROUTE = 'no route'       # Its walk found no route lately.
-CLAIM_HELD = 'claim held'   # Its gift claim is held.
+STOOD_DOWN = Failure('stood_down', 'stood down')   # The supervisor stood it down or its budget ran out.
+NO_ROUTE = Failure('no_route', 'no route')         # Its walk found no route lately.
+CLAIM_HELD = Failure('claim_held', 'claim held')   # Its gift claim is held.
+# Why a goal that ran was set aside. The stand-down keeps the kind (planning/monitor.py).
+STUCK = Failure('stuck', 'it stopped moving')
+NO_PROGRESS = Failure('no_progress', 'it stopped making progress')
+MENU_FAILED = Failure('menu_failed', 'a menu task for it kept failing')
+FAILURES = {failure.kind: failure for failure in (STOOD_DOWN, NO_ROUTE, CLAIM_HELD, STUCK, NO_PROGRESS, MENU_FAILED)}
 
 # The chain chose a goal the filter parked.
 PARKED = 'parked'
@@ -39,7 +54,7 @@ class Offer:
     serves: str = ''         # For an enabler, the need it meets.
     hold: bool = False       # A goal under way.
     forced: bool = False     # A move the game forces now.
-    parked: str = ''         # Why it cannot run now, empty when it can.
+    parked: Failure | None = None   # Why it cannot run now, None when it can.
     commit: object = field(default=None, compare=False)
 
     @property

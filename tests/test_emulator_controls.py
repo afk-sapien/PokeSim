@@ -223,6 +223,7 @@ def test_stationary_strategic_run_replans_without_rewinding():
     emu.frame = 10 ** 6
     emu.stuck_frame = emu.frame - (config.STUCK_RELOAD_SECONDS + 1) * FRAMES_PER_SECOND
     emu.play_clock = PlayClock()
+    emu.supervisor = Supervisor()
     emu.input_epoch = 0
     emu._unstick = Mock()
     emu._check_guards()
