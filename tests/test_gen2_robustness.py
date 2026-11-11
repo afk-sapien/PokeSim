@@ -11,6 +11,7 @@ from pokesim.gen2.data import GameData
 from pokecore.gen2.screens import mask_hud, mask_roster
 from pokesim.nicknames import MENU_WORDS, name_pool, validate_parts
 from pokesim.play_clock import PlayClock
+from pokesim.runtime.supervision import REFUSED_SHORTCUT
 from pokecore.textmatch import ScreenText, has_word
 
 # Words the Gen 2 policy, menus and Gen 1 screen classifiers search for. A mon nicknamed with
@@ -294,10 +295,28 @@ def test_a_release_the_pc_values_keep_is_refused_before_its_first_press(real_dat
     policy = Policy(real_data, seed=1, starter='cyndaquil')
     asked = []
     monkeypatch.setattr(release, 'may_release', lambda policy, snapshot, box, position: asked.append((box, position)))
-    policy.menu = Release(2, 7, [141, 4321, [3, 4, 5, 6, 7]])
+    policy.menu, policy.clock = Release(2, 7, [141, 4321, [3, 4, 5, 6, 7]]), 100
     policy.menu_step(SimpleNamespace(frame=100), None)
     assert asked == [(2, 7)] and policy.menu is None
-    assert policy.blocked[policy.task_key(Release(2, 7))] == 100 + policy.RETRY_FRAMES
+    assert policy.blocked[policy.task_key(Release(2, 7))] == REFUSED_SHORTCUT.until(100)
+
+
+def test_a_refused_shortcut_waits_one_game_minute_across_a_reload(real_data, monkeypatch):
+    # The wait used to count the emulator frame, which a reload sets back, so it lasted a minute
+    # plus however far the reload went back.
+    from pokesim.gen2 import release
+    from pokesim.gen2.menus import Release
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data, seed=1, starter='cyndaquil')
+    monkeypatch.setattr(release, 'may_release', lambda *args: False)
+    policy.sp, policy.clock = 0xDFF0, 90000
+    policy.menu = Release(2, 7, [141, 4321, [3, 4, 5, 6, 7]])
+    policy.menu_step(SimpleNamespace(frame=90000), None)
+    reloaded = SimpleNamespace(frame=1000)
+    policy.clock += REFUSED_SHORTCUT.frames - 1
+    assert not policy.allowed(Release(2, 7), reloaded)
+    policy.clock += 1
+    assert policy.allowed(Release(2, 7), reloaded)
 
 
 def test_every_menu_task_has_a_step_limit():
@@ -518,8 +537,10 @@ def test_gen2_preparation_hands_an_unloaded_map_to_the_policy(monkeypatch):
     pressed = Action('a', 8, 52)
     regions = SimpleNamespace(observe=lambda mid, grid: None)
     nav = SimpleNamespace(regions=regions, collision=lambda snapshot, memory: pytest.fail('collision read for an unloaded map'))
-    policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False, step=lambda snapshot, memory, sp=None: pressed)
-    emu = SimpleNamespace(policy=policy, data=SimpleNamespace(maps={1: {}}), pb=SimpleNamespace(memory=None), frame=10)
+    policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False,
+                             step=lambda snapshot, memory, sp=None, clock=None: pressed)
+    emu = SimpleNamespace(policy=policy, data=SimpleNamespace(maps={1: {}}), pb=SimpleNamespace(memory=None), frame=10,
+                          play_clock=SimpleNamespace(frames=10))
     prep = preparation.Preparation(emu, {'started_frame': 0, 'protect': [], 'wished': []})
     snapshot = SimpleNamespace(map=0, started=True, in_battle=False)
     assert prep.advance(snapshot) is pressed

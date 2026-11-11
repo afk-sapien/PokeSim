@@ -45,6 +45,7 @@ def main():
         if count > 0:
             emu.pb.tick(count, True)
             emu.frame += count
+            emu.play_clock.advance(count)
 
     try:
         with args.load.open('rb') as source:
@@ -56,7 +57,9 @@ def main():
             # Close any open text before the policy starts. These presses are not game time.
             play(emu.pb, Action('b', 8, 32), lambda count: emu.pb.tick(count, True))
         emu.snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)
-        loop = GameLoop(emu, Gen2(), tick)
+        # The policy and the preparation count their waits on the PlayClock, as the managed worker does.
+        emu.play_clock.seed(emu.snapshot.playtime_seconds)
+        loop = GameLoop(emu, Gen2(lambda: emu.play_clock.frames), tick)
         for _ in range(6000):
             from pokecore.gen2.ram import Memory
             snapshot = read_snapshot(emu.pb.memory, emu.data, emu.frame)

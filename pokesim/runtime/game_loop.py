@@ -63,7 +63,10 @@ class Gen1:
 
 
 class Gen2:
-    """Asks a Gold, Silver or Crystal policy for its one next action."""
+    """Asks a Gold, Silver or Crystal policy for its one next action. ``clock`` is as in ``Gen1``."""
+
+    def __init__(self, clock):
+        self.clock = clock
 
     def options(self, pb):
         # Gen II sets its options once after each load. A write before every decision would add a
@@ -72,7 +75,7 @@ class Gen2:
 
     def ask(self, policy, snapshot, pb):
         from ..gen2.menus import stack_pointer
-        return [policy.step(snapshot, pb.memory, stack_pointer(pb))]
+        return [policy.step(snapshot, pb.memory, stack_pointer(pb), clock=self.clock())]
 
 
 class GameLoop:

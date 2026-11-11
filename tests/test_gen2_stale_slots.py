@@ -103,8 +103,9 @@ def test_trade_preparation_drops_the_battle_shortcut_once_the_battle_ends(monkey
         raise Stop
 
     policy = SimpleNamespace(menu=Attack(2), nav=SimpleNamespace(regions=None), in_league=lambda snapshot: False,
-                             step=lambda snapshot, memory, sp=None: 'battle step')
-    emu = SimpleNamespace(policy=policy, frame=10, data=None, pb=SimpleNamespace(memory=None))
+                             step=lambda snapshot, memory, sp=None, clock=None: 'battle step')
+    emu = SimpleNamespace(policy=policy, frame=10, data=None, pb=SimpleNamespace(memory=None),
+                          play_clock=SimpleNamespace(frames=10))
     prep = preparation.Preparation(emu, {'started_frame': 0})
     monkeypatch.setattr(preparation, 'Memory', lambda memory, data: SimpleNamespace())
     monkeypatch.setattr(preparation, 'update_world', stop)
