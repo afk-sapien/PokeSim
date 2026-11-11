@@ -238,8 +238,8 @@ The state is built from those decoders, reads the same bytes and never writes.
 
 `GameState` has `game`, `generation`, `player` (`Player`), `map` (`MapState`),
 `party` (`Party`, a sequence of `Mon`), `bag` (`Bag`), `seen` and `owned` as
-national Pokédex numbers, and `battle` (`BattleState`). Gen I drops an owned flag
-whose seen flag is clear, as the snapshot reader does.
+national Pokédex numbers, `battle` (`BattleState`) and `ui` (`UiState`). Gen I
+drops an owned flag whose seen flag is clear, as the snapshot reader does.
 
 - `Mon` has `species` (the cartridge's ID), `dex`, `nick`, `ot_name`, `level`, `hp`,
   `status`, `moves`, `pp`, `pp_ups`, `max_pp`, `stats`, `experience`, `dvs`,
@@ -261,6 +261,17 @@ whose seen flag is clear, as the snapshot reader does.
 - `BattleMon` has `species`, `dex`, `nick`, `level`, `hp`, `status`, `types`,
   `moves`, `pp`, `stats`, `dvs`, `held_item` and `transformed`, plus `max_hp`.
   `stats` reflects Transform, while `dvs` stay the mon's own.
+- `UiState` has `screen` (a name from `shortcuts.screens.SCREENS`, as the shortcuts
+  name it), `text_box`, `start_menu`, `cursor` (the active menu cursor's tile as x
+  and y, or None), `menu_item`, `scroll`, `facing`, `movement` (`walking`, `biking`,
+  `surfing` or None) and the raw `movement_state`. `state.read_ui(memory, game)`
+  reads it alone.
+
+`menu_item` counts from the top entry shown. `scroll` counts the entries a screen in
+`state.LIST_SCREENS` has scrolled past, and is 0 on any other screen, so the list
+entry is `scroll + menu_item`. `start_menu` is False in a battle. In Gen I it stays
+True under a menu the start menu opened, as the snapshot reader has it. Gen II's
+unused skating state has no `movement`.
 
 `tutorial` is Gen I's old man and Gen II's catching lesson. `scripted` is Yellow's
 Pikachu in Oak's lab, and Gen II's shiny Gyarados, Headbutt trees, trap battles,

@@ -5,7 +5,8 @@ Red, Blue and Yellow and :mod:`pokecore.gen2.state` for Gold, Silver and Crystal
 and reads the same bytes they do. It never writes memory. The state holds the
 cartridge's IDs and no tables, so species, move and item names stay with the
 caller. A field a generation does not have is ``None``, and :data:`ABSENT` gives
-the reason for each one. :func:`read_battle` reads the battle part alone.
+the reason for each one. :func:`read_battle` reads the battle part alone, and
+:func:`read_ui` the screen part.
 """
 from __future__ import annotations
 
@@ -13,9 +14,12 @@ from dataclasses import dataclass
 
 from . import gen1
 from .dvs import hp_dv
+from .gen1_ui import read_screen
 from .gen2 import state as gen2_state
 from .gen2.ram import max_pp
 from .identity import GEN1_DEX
+from .shortcuts import gen2ui
+from .shortcuts.screens import current_screen
 from .yellow import red_layout
 
 GENERATIONS = {'red': 1, 'blue': 1, 'yellow': 1, 'gold': 2, 'silver': 2, 'crystal': 2}
@@ -204,6 +208,38 @@ class BattleState:
         return None if self.enemy is None else self.enemy.hp
 
 
+# The screens where ``UiState.scroll`` counts the entries a list has scrolled past.
+LIST_SCREENS = ('bag', 'mart_list', 'pc_items', 'pc_party', 'pc_box')
+# Gen II wPlayerState values by movement. Skating has no name, as the games never use it.
+GEN2_MOVEMENT = {0: 'walking', 1: 'biking', 4: 'surfing', 8: 'surfing'}
+
+
+@dataclass(frozen=True, slots=True)
+class UiState:
+    """What the screen shows and how the player moves.
+
+    ``screen`` is one of ``shortcuts.screens.SCREENS``, named as the shortcuts
+    name it. ``text_box`` is a text box framed at the bottom of the screen.
+    ``start_menu`` is the start menu outside a battle. In Gen I it stays True
+    under a menu the start menu opened, as the snapshot reader has it. ``cursor``
+    is the active menu cursor's (x, y) tile, or None. ``menu_item`` is the
+    highlighted entry counted from the top one shown, and ``scroll`` counts the
+    entries a screen in :data:`LIST_SCREENS` has scrolled past, so the list entry
+    is ``scroll + menu_item``. ``facing`` is down, up, left or right. ``movement``
+    is walking, biking or surfing, or None for a state without a name, and
+    ``movement_state`` is the cartridge's raw byte.
+    """
+    screen: str
+    text_box: bool
+    start_menu: bool
+    cursor: tuple[int, int] | None
+    menu_item: int
+    scroll: int
+    facing: str
+    movement: str | None
+    movement_state: int
+
+
 @dataclass(frozen=True, slots=True)
 class GameState:
     """The typed state. ``seen`` and ``owned`` are national Pokédex numbers."""
@@ -216,6 +252,7 @@ class GameState:
     seen: frozenset[int]
     owned: frozenset[int]
     battle: BattleState
+    ui: UiState
 
 
 def read_state(memory, game, move_data=None) -> GameState:
@@ -238,6 +275,39 @@ def read_battle(memory, game) -> BattleState:
     if generation == 1:
         return _gen1_battle(red_layout(memory, game))
     return _gen2_battle(gen2_state.memory_reader(memory, game))
+
+
+def read_ui(memory, game) -> UiState:
+    """The screen and movement state of ``game`` in ``memory``, read as :func:`read_state` reads."""
+    game, generation = _game(game)
+    if generation == 1:
+        return _gen1_ui(red_layout(memory, game), game)
+    return _gen2_ui(memory, game)
+
+
+def _gen1_ui(mem, game):
+    shown = read_screen(mem)
+    screen = current_screen(mem, version=game)
+    movement = mem[gen1.W_WALK_BIKE_SURF_STATE]
+    return UiState(
+        screen=screen, text_box=shown['textbox'], start_menu=shown['pause'] and not mem[gen1.W_IS_IN_BATTLE],
+        cursor=shown['cursor'], menu_item=shown['menu_index'],
+        scroll=shown['scroll'] if screen in LIST_SCREENS else 0, facing=gen1.FACINGS[mem[gen1.W_FACING] & 12],
+        movement=gen1.WALK_BIKE_SURF.get(movement), movement_state=movement,
+    )
+
+
+def _gen2_ui(memory, game):
+    view = gen2ui.View(memory, game)
+    screen, extra = gen2ui.classify(view)
+    scroll = gen2ui.list_scroll(view, screen)
+    movement = view.byte('wPlayerState')
+    return UiState(
+        screen=screen, text_box=gen2ui.text_box_top(view) is not None, start_menu=screen == 'pause',
+        cursor=extra['cursor'], menu_item=max(gen2ui.list_index(view, screen) - scroll, 0), scroll=scroll,
+        facing=gen2_state.FACING[(view.byte('wPlayerDirection') >> 2) & 3],
+        movement=GEN2_MOVEMENT.get(movement), movement_state=movement,
+    )
 
 
 def _game(game):
@@ -391,7 +461,8 @@ def _gen1(memory, game, move_data):
     owned = frozenset(gen1.flag_bits(bytes(mem[gen1.W_DEX_OWNED:gen1.W_DEX_OWNED + 19]))) & seen
     return GameState(game=game, generation=1, player=player,
                      map=MapState(map=number, group=None, number=number, x=mem[gen1.W_X], y=mem[gen1.W_Y]),
-                     party=Party(tuple(party)), bag=bag, seen=seen, owned=owned, battle=_gen1_battle(mem))
+                     party=Party(tuple(party)), bag=bag, seen=seen, owned=owned, battle=_gen1_battle(mem),
+                     ui=_gen1_ui(mem, game))
 
 
 def _gen2_mon(row, move_data):
@@ -428,4 +499,5 @@ def _gen2(memory, game, move_data):
         bag=Bag(items=items['items'], pc_items=items['pc'], balls=items['balls'],
                 key_items=tuple(item for item, _ in items['key']), tms_hms=items['tms_hms']),
         seen=dex['seen'], owned=dex['caught'], battle=_gen2_battle(gen2_state.memory_reader(memory, game)),
+        ui=_gen2_ui(memory, game),
     )
