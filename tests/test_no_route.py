@@ -72,7 +72,7 @@ def gen2_guards(policy):
                               waiting=lambda snapshot: False, recover=lambda level: None, details=lambda: {})
     emu = SimpleNamespace(paused=False, manual_mode=False, preparation=None, store=SimpleNamespace(get=lambda key: None),
                           snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 23'), frame=frame,
-                          last_reload_frame=0, policy=watched, failure_streak=0, invalid_frame=None, battle_frame=None,
+                          play_clock=SimpleNamespace(frames=frame), last_reload_frame=0, policy=watched, failure_streak=0, invalid_frame=None, battle_frame=None,
                           stuck_frame=frame, screen_frame=frame, progress_frame=frame,
                           stall=StallWatch(), waiting=False)
     emu._unstick = lambda since, why: reloads.append(why)
@@ -87,8 +87,8 @@ def gen1_guards(policy):
     """Run Gen I's stall watchdog once over ``policy``. The stall events it reports."""
     from pokesim.emulator import Emulator
     events = []
-    emu = SimpleNamespace(snapshot=SimpleNamespace(valid=True, started=True), frame=1000, stall=StallWatch(),
-                          policy=policy)
+    emu = SimpleNamespace(snapshot=SimpleNamespace(valid=True, started=True), play_clock=SimpleNamespace(frames=1000),
+                          stall=StallWatch(), policy=policy)
     emu._handle_events = lambda batch, snapshot: events.extend(batch)
     Emulator._check_stall(emu, time.time())
     return [], events

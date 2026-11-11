@@ -70,7 +70,7 @@ def emulator(streak, frame=1000):
     from pokesim.gen2.emulator import Emulator
     from test_supervision import ladder
     events = []
-    emu = SimpleNamespace(supervisor=ladder(streak), best_progress=(0,) * 5, frame=frame, history={'maps': []},
+    emu = SimpleNamespace(supervisor=ladder(streak), play_clock=SimpleNamespace(frames=frame), history={'maps': []},
                           stall=SimpleNamespace(progress=lambda frame, now: None))
     emu._note_progress = lambda snapshot, now: Emulator._note_progress(emu, snapshot, now)
     return emu, events

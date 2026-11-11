@@ -24,7 +24,7 @@ from ..runtime.reload import FRAMES_PER_SECOND, reload_target
 from ..runtime.restart import restart
 from ..runtime.supervision import CANNOT_END, GIVE_UP, HOLD, LEAGUE_RESTARTS, Supervisor
 from ..runtime.supervision import report as stuck_report
-from ..stalls import LoopGuard, StallWatch, boss_attempt, stalled_state
+from ..stalls import LoopGuard, StallWatch, stalled_state
 from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import validate_runtime
 from .data import GameData
@@ -125,28 +125,6 @@ class Event:
 
 
 
-def hatch_progress(best, snapshot):
-    """Whether a carried egg lost a cycle or hatched since the best seen, updating ``best``.
-
-    A level 100 party walking stored eggs to hatching earns no experience, and a hatchling of a
-    registered species adds nothing either, yet each egg can take hours of game time and a box of
-    them days. Each egg counts once per cycle below its lowest seen and once on hatching, so a
-    reload back to a fuller egg replays steps that already counted.
-    """
-    walked = False
-    for mon in snapshot.party:
-        key = (getattr(mon, 'trainer_id', None), tuple(getattr(mon, 'dvs', ()) or ()), getattr(mon, 'species', None))
-        # A hatched egg stays on record below any cycle count, so its hatching counts only once.
-        cycles = mon.friendship if getattr(mon, 'egg', False) else -1
-        if key not in best:
-            if cycles >= 0:
-                best[key] = cycles
-        elif cycles < best[key]:
-            best[key] = cycles
-            walked = True
-    return walked
-
-
 def progress_key(tiles, maps, snapshot):
     """What must change within the no-progress limit for a run to count as getting somewhere.
 
@@ -220,7 +198,6 @@ class Emulator:
         self.last_reload = 0.0
         self.supervisor = Supervisor(store)
         self.waiting = False
-        self.best_progress = (0,) * 6
         self.failure_streak = 0
         self.invalid_frame = self.battle_frame = None
         self.screen_key = None
@@ -837,7 +814,7 @@ class Emulator:
         self.battle_opponents = opponents
 
     def _watch_boss(self, before, snapshot):
-        """Hold back the progress of a boss attempt, which a blackout drops (stalls.boss_attempt).
+        """Hold back the progress of a boss attempt, which a loss drops (Supervisor.watch_boss).
 
         An attempt runs while the party is inside the League or in the room of the boss its goal names.
         """
@@ -849,30 +826,12 @@ class Emulator:
             policy.in_league(snapshot) and policy.constant(snapshot) != 'HALL_OF_FAME'
             or goal is not None and goal.key in policy.BOSSES and self.data.map_ids.get(goal.map_name) == snapshot.map)
         blackout = before is not None and snapshot.all_fainted and not before.all_fainted
-        boss_attempt(stall, getattr(self, 'loop_guard', None), self.store, boss, blackout)
+        self.supervisor.watch_boss(boss, blackout, stall, getattr(self, 'loop_guard', None))
 
     def _note_progress(self, snapshot, now):
-        # Wandering to new tiles is not progress, and a reload rewinds to an older save, so only a
-        # new high for badges, events, Pokédex entries, areas, experience or League wins ends a run
-        # of reloads. A finished run with a full Pokédex and a level 100 team still wins the League.
-        score = (snapshot.badges.bit_count(), sum(byte.bit_count() for byte in snapshot.event_flags), len(snapshot.owned),
-                 len(self.history['maps']), sum(getattr(mon, 'experience', 0) or 0 for mon in snapshot.party),
-                 self.history.get('league', 0))
-        # The party total drops when a trained Pokémon is swapped for a new trainee, so experience
-        # also counts per Pokémon: any party member beating its own best is progress.
-        best_experience = self.__dict__.setdefault('best_experience', {})
-        trained = False
-        for mon in snapshot.party:
-            key = (getattr(mon, 'trainer_id', None), tuple(getattr(mon, 'dvs', ()) or ()), getattr(mon, 'species', None))
-            experience = getattr(mon, 'experience', 0) or 0
-            if experience > best_experience.get(key, experience):
-                trained = True
-            best_experience[key] = max(experience, best_experience.get(key, 0))
-        trained = hatch_progress(self.__dict__.setdefault('best_egg_cycles', {}), snapshot) or trained
-        if trained or any(new > old for new, old in zip(score, self.best_progress)):
-            self.best_progress = tuple(max(new, old) for new, old in zip(score, self.best_progress))
-            self.stall.progress(self.frame, now)
-            self.supervisor.reset()
+        """Restart the stall clocks on a new high (Supervisor.progressed), which also starts the ladder again."""
+        if self.supervisor.progressed(snapshot, len(self.history['maps']), self.history.get('league', 0)):
+            self.stall.progress(self.play_clock.frames, now)
 
     def _watch_progress(self, snapshot):
         """Restart the progress clocks and the failure streak when the run achieves something new.
@@ -901,7 +860,6 @@ class Emulator:
         # never seen and its progress clock never restarted, and the first check then reloaded it.
         self.guard_frame = self.frame
         self.waiting = False
-        self.stall.frame = None
 
     def _give_up(self, why):
         """Block the collection rung that every reload left stuck, so the next goal runs instead.
@@ -941,6 +899,8 @@ class Emulator:
         """Go back to an autosave from before the trouble started, or power-cycle when there is none."""
         from ..planning.pin import STUCK
         Emulator._drop_pin(self, STUCK)
+        # A reload out of a boss attempt loses it, so the progress it made does not start the ladder again.
+        self.supervisor.lost(getattr(self, 'stall', None), getattr(self, 'loop_guard', None))
         rung = self.supervisor.climb(why, lambda: Emulator._give_up(self, why), looping=lambda: Emulator._looping(self),
                                      in_league=lambda: self.snapshot is not None and self.policy.in_league(self.snapshot))
         if rung.kind == GIVE_UP:
@@ -1082,11 +1042,11 @@ class Emulator:
         snapshot = self.snapshot
         if snapshot is None or not snapshot.valid or not snapshot.started:
             return
-        now = time.time()
-        quiet = self.stall.check(self.frame, now)
-        if self.stall.capture_due(self.frame):
+        now, frames = time.time(), self.play_clock.frames
+        quiet = self.stall.check(frames, now)
+        if self.stall.capture_due(frames):
             # Kept as soon as game time says it is a stall. The alert waits for real time as well.
-            capture.keep(self, 'quiet', f'no progress for {self.stall.game_minutes(self.frame)} game minutes', now)
+            capture.keep(self, 'quiet', f'no progress for {self.stall.game_minutes(frames)} game minutes', now)
         if quiet is None:
             return
         details = self.policy.details()
@@ -1218,8 +1178,6 @@ class Emulator:
         self.paused = self.manual_mode = False
         # The old run's bests and reload streak would hold the new one stalled for good, and the
         # watch clocks still pointed at its frames, which kept the guards and reward checks off.
-        self.best_progress = (0,) * 6
-        self.best_experience, self.best_egg_cycles = {}, {}
         self.supervisor = Supervisor(self.store)
         self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
@@ -1314,7 +1272,7 @@ class Emulator:
         live = not self.paused and not self.manual_mode
         waiting = live and self.waiting
         loop = live and Emulator._looping(self)
-        stalled = stalled_state(live, waiting, self.stall.stalled(self.frame) or self.supervisor.stalled, loop)
+        stalled = stalled_state(live, waiting, self.stall.stalled(self.play_clock.frames) or self.supervisor.stalled, loop)
         recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
                 'stopped': self.frozen,

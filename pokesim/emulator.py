@@ -38,7 +38,7 @@ from .runtime.restart import restart
 from .runtime.supervision import CANNOT_END, GIVE_UP, HOLD, Supervisor
 from .runtime.supervision import report as stuck_report
 from .screen import W_OPTIONS
-from .stalls import BEFORE_STALL_CHECKPOINT, PROGRESS_EVENTS, LoopGuard, StallWatch, advanced, boss_attempt  # noqa: F401
+from .stalls import BEFORE_STALL_CHECKPOINT, PROGRESS_EVENTS, LoopGuard, StallWatch, advanced  # noqa: F401
 from .strategy_data import MAPS
 
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
@@ -359,7 +359,7 @@ class Emulator:
         guard = getattr(self, 'loop_guard', None)
         if loop := guard and guard.reason:
             return {'reason': f'The run is caught in a loop. {loop}', 'action': strategy.get('action', '')}
-        if not stall or not stall.stalled(self.frame):
+        if not stall or not stall.stalled(self.play_clock.frames):
             # A missing entry left uncaught for want of a slot, with nothing in the PC that may go.
             from .pcvalue import BOXES_FULL, boxes_full
             from .policies.collection import catch_room
@@ -375,10 +375,10 @@ class Emulator:
         mode = self.policy.details().get('action', '')
         state = 'recovering' if (self.invalid_frame is not None or time.time() - self.last_reload < 30
                                  or mode == 'finding another approach') else 'making_progress' if age is not None and age < 120 else 'exploring'
-        stall = getattr(self, 'stall', None)
-        if stall and stall.stalled(self.frame) or self.supervisor.stalled:
+        stall, frames = getattr(self, 'stall', None), self.play_clock.frames
+        if stall and stall.stalled(frames) or self.supervisor.stalled:
             state = 'stalled'
-        return {'state': state, 'quiet_game_minutes': stall.game_minutes(self.frame) if stall else 0,
+        return {'state': state, 'quiet_game_minutes': stall.game_minutes(frames) if stall else 0,
                 'last_achievement': {
                     'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
                     'age_seconds': age,
@@ -650,7 +650,7 @@ class Emulator:
             self._observe_snapshot()
 
     def _watch_boss(self, before, snap):
-        """Hold back the progress of a boss attempt, which a blackout drops (stalls.boss_attempt).
+        """Hold back the progress of a boss attempt, which a loss drops (Supervisor.watch_boss).
 
         An attempt runs while the party is inside the League or on the map of the boss its goal challenges.
         """
@@ -663,7 +663,7 @@ class Emulator:
                 or goal is not None and goal.key in BOSSES and goal.title.startswith('Challenge')
                 and any(target[0] == snap.map for target in goal.targets))
         blackout = before is not None and before.valid and snap.all_fainted and not before.all_fainted
-        boss_attempt(stall, getattr(self, 'loop_guard', None), self.store, boss, blackout)
+        self.supervisor.watch_boss(boss, blackout, stall, getattr(self, 'loop_guard', None))
 
     def _observe_snapshot(self):
         snap = read_snapshot(self.pb.memory, self.frame)
@@ -676,8 +676,10 @@ class Emulator:
                 and advanced(self.prev_snapshot, snap) and getattr(self, 'stall', None)):
             # A long hunt catches plenty that the Pokédex already has, and training earns experience
             # between level milestones. Neither is a stall.
-            self.stall.progress(self.frame, time.time())
+            self.stall.progress(self.play_clock.frames, time.time())
         new = diff(self.prev_snapshot, snap, self.mem)
+        if snap.valid and snap.started:
+            self.supervisor.progressed(snap, len(self.mem.seen_maps), self.mem.championships)
         if snap.valid and snap.started and (watch := getattr(self, 'goal_watch', None)):
             watch.story(self.store, snap.event_flags)
         if (snap.valid and snap.map == LEAGUE_ENTRY and came_from is not None and came_from not in LEAGUE
@@ -787,12 +789,10 @@ class Emulator:
             if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
                 self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
             guard = getattr(self, 'loop_guard', None)
-            if ev.type == 'obtain' and guard and guard.looping(self.store):
-                pass   # a gift in a gift and release loop is not progress
-            elif ev.type in PROGRESS_EVENTS:
-                self.supervisor.reset()
-            if ev.type in PROGRESS_EVENTS and getattr(self, 'stall', None) and not (ev.type == 'obtain' and guard and guard.reason):
-                self.stall.progress(self.frame, time.time())
+            # A gift in a gift and release loop is not progress.
+            looped = ev.type == 'obtain' and guard and guard.looping(self.store)
+            if ev.type in PROGRESS_EVENTS and getattr(self, 'stall', None) and not looped:
+                self.stall.progress(self.play_clock.frames, time.time())
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
             if blank:
                 # Badges, warps and catches often land during a fade. Keep the entry now and
@@ -922,6 +922,8 @@ class Emulator:
             # before it goes back in. note_boss_loss ignores trainers outside a boss gym.
             note(snapshot)
         guard = getattr(self, 'loop_guard', None)
+        # A reload out of a boss attempt loses it, so the progress it made does not start the ladder again.
+        self.supervisor.lost(getattr(self, 'stall', None), guard)
         rung = self.supervisor.climb(why, lambda: Emulator._give_up(self, why),
                                      looping=lambda: guard and guard.looping(self.store),
                                      in_league=lambda: snapshot is not None and snapshot.map in LEAGUE)
@@ -1018,11 +1020,11 @@ class Emulator:
         snap = self.snapshot
         if snap is None or not snap.valid or not snap.started:
             return
-        stall = getattr(self, 'stall', None)
-        quiet = stall.check(self.frame, now) if stall else None
-        if stall and stall.capture_due(self.frame):
+        stall, frames = getattr(self, 'stall', None), self.play_clock.frames
+        quiet = stall.check(frames, now) if stall else None
+        if stall and stall.capture_due(frames):
             # Kept as soon as game time says it is a stall. The alert waits for real time as well.
-            capture.keep(self, 'quiet', f'no progress for {stall.game_minutes(self.frame)} game minutes', now)
+            capture.keep(self, 'quiet', f'no progress for {stall.game_minutes(frames)} game minutes', now)
         if quiet is None:
             return
         details = self.policy.details() if hasattr(self.policy, 'details') else {}

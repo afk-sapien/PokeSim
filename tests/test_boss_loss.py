@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from pokesim.emulator import Emulator
 from pokesim.gen2.emulator import Emulator as Gen2Emulator
 from pokesim.runtime.supervision import Supervisor
-from pokesim.stalls import LOOP_LIMIT, SCAN_FRAMES, LoopGuard, StallWatch, advanced, boss_attempt
+from pokesim.stalls import LOOP_LIMIT, SCAN_FRAMES, LoopGuard, StallWatch, advanced
 from pokesim.store import Store
 from pokesim.strategy_data import MAPS
 from test_events import snap
@@ -23,7 +23,7 @@ def blackout_emu(stall):
     policy = SimpleNamespace(in_league=lambda snapshot: snapshot.where in LEAGUE, constant=lambda snapshot: snapshot.where,
                              goal=None, BOSSES=frozenset())
     return SimpleNamespace(stall=stall, loop_guard=None, store=None, policy=policy, data=SimpleNamespace(map_ids={}),
-                           history={'maps': set(), 'league': 0}, best_progress=(0,) * 6, frame=0,
+                           history={'maps': set(), 'league': 0}, play_clock=SimpleNamespace(frames=0),
                            supervisor=Supervisor())
 
 
@@ -35,14 +35,14 @@ def test_repeated_gen2_league_blackouts_trip_the_stall_while_experience_keeps_ri
     def tick(where, fainted=False, gain=0):
         nonlocal experience, before
         experience += gain
-        emu.frame += 3600 * 5
+        emu.play_clock.frames += 3600 * 5
         party = (SimpleNamespace(species=TYPHLOSION, trainer_id=1, dvs=(9,), experience=experience, egg=False),)
         snapshot = SimpleNamespace(valid=True, started=True, where=where, all_fainted=fainted, badges=255,
                                    event_flags=b'\x01', owned={1}, party=party)
         Gen2Emulator._watch_boss(emu, before, snapshot)
         Gen2Emulator._note_progress(emu, snapshot, 0.0)
         before = snapshot
-        alerts.append(stall.check(emu.frame, 1e9))
+        alerts.append(stall.check(emu.play_clock.frames, 1e9))
 
     tick('INDIGO_PLATEAU_POKECENTER_1F')
     for _ in range(12):
@@ -55,7 +55,8 @@ def test_repeated_gen2_league_blackouts_trip_the_stall_while_experience_keeps_ri
 
 def test_repeated_gen1_league_blackouts_trip_the_stall_while_experience_keeps_rising():
     stall = StallWatch(game_minutes=120, real_minutes=0)
-    emu = SimpleNamespace(stall=stall, loop_guard=None, store=None, policy=SimpleNamespace(goal=None))
+    emu = SimpleNamespace(stall=stall, loop_guard=None, store=None, policy=SimpleNamespace(goal=None),
+                          supervisor=Supervisor())
     experience, before, alerts, frame = 100000, None, [], 0
 
     def tick(room, fainted=False, gain=0):
@@ -81,28 +82,51 @@ def test_repeated_gen1_league_blackouts_trip_the_stall_while_experience_keeps_ri
 
 
 def test_a_boss_won_keeps_its_progress():
-    stall = StallWatch()
+    stall, supervisor = StallWatch(), Supervisor()
     stall.progress(10, 1.0)
-    boss_attempt(stall, None, None, True, False)
+    supervisor.watch_boss(True, False, stall)
     stall.progress(20, 2.0)
-    boss_attempt(stall, None, None, False, False)
+    supervisor.watch_boss(False, False, stall)
     assert stall.held is None and (stall.frame, stall.since) == (20, 2.0)
-    boss_attempt(stall, None, None, True, False)
+    supervisor.watch_boss(True, False, stall)
     stall.progress(30, 3.0)
-    boss_attempt(stall, None, None, False, True)
+    supervisor.watch_boss(False, True, stall)
     assert stall.held is None and (stall.frame, stall.since) == (20, 2.0)
+
+
+def test_a_boss_lost_puts_the_ladder_back_where_the_attempt_began():
+    stall, supervisor = StallWatch(), Supervisor()
+    supervisor.reloads = 2
+    supervisor.watch_boss(True, False, stall)
+    supervisor.reset()
+    supervisor.watch_boss(True, True, stall)
+    assert supervisor.reloads == 2 and supervisor.held is None
+
+
+def test_a_reload_out_of_a_boss_attempt_is_a_loss():
+    stall, supervisor = StallWatch(), Supervisor()
+    stall.progress(10, 1.0)
+    supervisor.reloads = 1
+    supervisor.watch_boss(True, False, stall)
+    stall.progress(20, 2.0)
+    supervisor.reset()
+    supervisor.lost(stall)
+    assert supervisor.reloads == 1 and stall.held is None and stall.frame == 10
+    # Outside an attempt there is nothing to lose.
+    supervisor.lost(stall)
+    assert supervisor.reloads == 1 and stall.frame == 10
 
 
 def test_trainer_wins_before_a_blackout_do_not_reset_the_reload_count(tmp_path):
     store, clock = Store(tmp_path), Clock()
     try:
-        guard, stall = LoopGuard(clock=clock), StallWatch()
+        guard, stall, supervisor = LoopGuard(clock=clock), StallWatch(), Supervisor(store)
         for _ in range(LOOP_LIMIT - 1):
             guard.reloaded('league-entry.state')
-        boss_attempt(stall, guard, store, True, False)
+        supervisor.watch_boss(True, False, stall, guard)
         add(store, 'trainer', 'Defeated Elite Four Will')
         add(store, 'level', 'TYPHLOSION grew to level 57')
-        boss_attempt(stall, guard, store, False, True)
+        supervisor.watch_boss(False, True, stall, guard)
         guard.reloaded('league-entry.state')
         clock.now += SCAN_FRAMES
         assert 'reloaded league-entry.state 6 times' in guard.looping(store)

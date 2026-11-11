@@ -98,6 +98,8 @@ DOMAINS = (
     Domain('loop-guard-reloads-v1', 'pokesim.stalls', RESETS_ON_RESTART),
     # A reload keeps the ladder's counts, so reloading cannot start the climb again.
     Domain('supervisor-ladder-v1', 'pokesim.runtime.supervision', RESETS_ON_RESTART),
+    # A reload keeps the run's bests, so the replay after it cannot count as new progress.
+    Domain('supervisor-best-v1', 'pokesim.runtime.supervision', RESETS_ON_RESTART),
     Domain('goal-time-v1', 'pokesim.goal_time', RESETS_ON_RESTART),
 
     Domain(RESTART_PENDING, 'pokesim.store', SURVIVES),

@@ -216,6 +216,7 @@ def test_stationary_strategic_run_replans_without_rewinding():
     # The stuck limit is in game seconds, so it counts emulator frames.
     emu.frame = 10 ** 6
     emu.stuck_frame = emu.frame - (config.STUCK_RELOAD_SECONDS + 1) * FRAMES_PER_SECOND
+    emu.play_clock = PlayClock()
     emu.input_epoch = 0
     emu._unstick = Mock()
     emu._check_guards()
@@ -232,6 +233,7 @@ def test_live_progress_uses_achievement_age_and_recovery_state(monkeypatch):
     emu.invalid_frame = None
     emu.last_reload = 0
     emu.supervisor = Supervisor()
+    emu.play_clock = PlayClock()
     monkeypatch.setattr('pokesim.emulator.time.time', lambda: 1050)
     assert emu.progress_status()['state'] == 'making_progress'
     monkeypatch.setattr('pokesim.emulator.time.time', lambda: 1500)
@@ -249,6 +251,7 @@ def _stuck_emulator():
     emu.policy = StrategicPolicy(7)
     emu.snapshot = snap(frame=1000)
     emu.supervisor = ladder(MAX_RELOADS)
+    emu.play_clock = PlayClock()
     emu.input_epoch = 0
     emu.events = []
     emu._handle_events = lambda events, snapshot: emu.events.extend(events)

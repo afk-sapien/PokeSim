@@ -15,12 +15,20 @@ The rungs, in order:
 3. After twelve reloads, give up on the goal every reload left stuck. When there is nothing to give
    up, or the loop guard sees the run repeating itself, stop reloading and stay flagged as stalled
    until the run makes progress again.
+
+Progress is one rule in both generations: a new high, kept under ``BEST_KEY``. A reload rewinds the
+game, and the replay journals the same maps, trainers and levels again, which is not progress. A boss
+attempt holds the ladder until it ends, and a blackout or a reload out of it is a loss whose progress
+does not count.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 KEY = 'supervisor-ladder-v1'
+BEST_KEY = 'supervisor-best-v1'
+# Pokémon whose own bests are kept. A gift and release loop brings a new one each time.
+KEEP_MONS = 64
 # Reloads in a row without new progress before the run is reported as stalled.
 STALL_RELOADS = 3
 # The reload from which a run stuck inside the League restarts the attempt from its entry save.
@@ -55,6 +63,20 @@ def report(why, place):
             f'{why.capitalize()} at {place} and {STALL_RELOADS - 1} reloads did not help.')
 
 
+def mon_key(mon):
+    """One key per Pokémon that a reload or a swap does not change: its trainer, DVs and species."""
+    dvs = ','.join(str(dv) for dv in (getattr(mon, 'dvs', ()) or ()))
+    return f"{getattr(mon, 'trainer_id', None)}/{dvs}/{getattr(mon, 'species', None)}"
+
+
+def _trim(table, party):
+    """Forget the oldest Pokémon past ``KEEP_MONS``, never one in the party."""
+    extra = len(table) - KEEP_MONS
+    if extra > 0:
+        for key in [key for key in table if key not in party][:extra]:
+            del table[key]
+
+
 class Supervisor:
     """The reload ladder of one adventure, the same in Red, Blue and Yellow and in Gold, Silver and Crystal.
 
@@ -69,6 +91,13 @@ class Supervisor:
         # The most Hall of Fame entries seen, and the League restarts since the last new one.
         seen, restarts = saved.get('league', (0, 0))
         self.league = (int(seen), int(restarts))
+        best = (store.get(BEST_KEY) if store is not None else None) or {}
+        self.best = tuple(int(count) for count in best.get('score', ()))
+        # Each Pokémon's most experience, and each egg's fewest cycles left, or -1 once it hatched.
+        self.trained = {str(key): int(value) for key, value in (best.get('trained') or {}).items()}
+        self.eggs = {str(key): int(value) for key, value in (best.get('eggs') or {}).items()}
+        # The ladder's counts as a boss attempt under way began. Kept in memory only, like the clocks it holds with.
+        self.held = None
 
     @property
     def stalled(self):
@@ -115,6 +144,91 @@ class Supervisor:
         self.league = (max(wins, seen), 0 if call_off else count)
         self._save()
         return call_off
+
+    def progressed(self, snapshot, areas, wins):
+        """Whether the run beat its own best, which starts the ladder again.
+
+        Wandering to new tiles is not progress, so only a new high counts: badges, event flags, Pokédex
+        entries, ``areas`` visited, party experience or ``wins`` in the League. A finished run with a
+        full Pokédex and a level 100 team still wins the League. The party total drops when a trained
+        Pokémon is swapped for a trainee, so each Pokémon also counts against its own best experience.
+        A level 100 party walking eggs to hatching earns no experience, so each egg counts once per
+        cycle below its fewest seen and once on hatching. A reload back to a fuller egg replays steps
+        that already counted.
+        """
+        party = snapshot.party
+        score = (snapshot.badges.bit_count(), sum(byte.bit_count() for byte in snapshot.event_flags),
+                 len(snapshot.owned), areas, sum(getattr(mon, 'experience', 0) or 0 for mon in party), wins)
+        best = self.best if len(self.best) == len(score) else (0,) * len(score)
+        gained = any(new > old for new, old in zip(score, best))
+        changed = gained or best is not self.best
+        trained = False
+        keys = set()
+        for mon in party:
+            key = mon_key(mon)
+            keys.add(key)
+            experience = getattr(mon, 'experience', 0) or 0
+            most = self.trained.get(key)
+            if most is None or experience > most:
+                trained |= most is not None
+                self.trained[key], changed = experience, True
+            # A hatched egg stays on record below any cycle count, so its hatching counts only once.
+            cycles = mon.friendship if getattr(mon, 'egg', False) else -1
+            fewest = self.eggs.get(key)
+            if fewest is None and cycles >= 0 or fewest is not None and cycles < fewest:
+                trained |= fewest is not None
+                self.eggs[key], changed = cycles, True
+        if changed:
+            self.best = tuple(max(new, old) for new, old in zip(score, best))
+            _trim(self.trained, keys)
+            _trim(self.eggs, keys)
+            if self.store is not None:
+                self.store.set(BEST_KEY, {'score': list(self.best), 'trained': self.trained, 'eggs': self.eggs})
+        if gained or trained:
+            self.reset()
+        return gained or trained
+
+    def watch_boss(self, boss, blackout, stall=None, guard=None):
+        """Hold back the progress of a boss attempt until it ends, and drop it when the attempt is lost.
+
+        A team too weak for the Elite Four lost to Lance for 12 hours, and each run earned experience,
+        levels and trainer wins on the way, so the stall alert never fired. A loss to a boss is never
+        progress. ``boss`` says an attempt is under way, ``blackout`` that the party just fainted. The
+        stall watch and the loop guard hold their own clocks with the ladder's counts.
+        """
+        if blackout and self.held is not None:
+            self.lost(stall, guard)
+        elif boss and self.held is None:
+            self.held = (self.reloads, self.exhausted)
+            if stall is not None:
+                stall.attempt()
+            if guard is not None:
+                guard.hold(self.store)
+        elif not boss and self.held is not None:
+            self.held = None
+            if stall is not None:
+                stall.settle()
+            if guard is not None:
+                guard.settle()
+
+    def lost(self, stall=None, guard=None):
+        """End a boss attempt as a loss, by a blackout or by a reload out of it.
+
+        Its progress does not count, so the ladder, the stall clocks and the loop guard go back to where
+        they stood as it began. At Chuck's gym in Crystal each reload left an attempt whose experience
+        started the ladder again, and the run reloaded six times without a report.
+        """
+        if self.held is None:
+            return
+        reloads, exhausted = self.held
+        self.held = None
+        if reloads > self.reloads or exhausted and not self.exhausted:
+            self.reloads, self.exhausted = max(reloads, self.reloads), exhausted or self.exhausted
+            self._save()
+        if stall is not None:
+            stall.lost()
+        if guard is not None:
+            guard.lost(self.store)
 
     def _save(self):
         if self.store is not None:
