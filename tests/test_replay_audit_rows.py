@@ -229,14 +229,17 @@ def _walk(in_battle=0, experience=8000, items=()):
     return at
 
 
-def _audit(monkeypatch, out, steps):
-    """The run file ``out`` of the audit loop over ``steps``, each a goal key and the read that step leaves."""
+def _audit(monkeypatch, out, steps, completed=None):
+    """The run file ``out`` of the audit loop over ``steps``, each a goal key and the read that step leaves.
+    ``completed`` holds the policy's story milestones after each step."""
     from pokesim.replay import rung
     reads = [_walk()] + [after for _, after in steps]
     policy = SimpleNamespace(goal=None, recoveries=0, collection=SimpleNamespace(director=SimpleNamespace(outcomes=[])))
     run = SimpleNamespace(frame=0, generation=1, policy=policy, stop=lambda: None)
 
     def step(snapshot):
+        if completed:
+            policy.completed = completed[run.frame // 100]
         policy.goal = SimpleNamespace(key=steps[run.frame // 100][0], title=steps[run.frame // 100][0], reason='')
         run.frame += 100
     run.step = step
@@ -259,6 +262,20 @@ def test_a_battle_on_an_errands_way_does_not_cut_the_errand_short(monkeypatch, t
               ('story', won), ('story', won)]
     result = _audit(monkeypatch, tmp_path / 'turned.json', turned)
     assert result['wasted'] == {'restock': 200} and result['spans'] == {'restock': 1, 'party_surf': 1}
+
+
+def test_a_run_counts_only_the_story_milestones_it_earned_after_its_first_goal(monkeypatch, tmp_path):
+    # The gate ranks a rung by the milestones it earned. The save already holds the ones before its first
+    # goal, so those are not counted, and a contest or a tower visit is no story.
+    # Red, Blue and Yellow start on a boot goal and read the milestones on the next decision. The gate's
+    # first run counted every badge in the save as earned.
+    held = {'starter': True, 'parcel': True, 'boulder': True, 'cascade': False, 'thunder': False}
+    cascade = {**held, 'cascade': True}
+    steps = [('boot', _walk()), ('story', _walk()), ('story', _walk()), ('story', _walk())]
+    completed = [{}, held, cascade, {**cascade, 'thunder': True, 'contest': 1200}]
+    result = _audit(monkeypatch, tmp_path / 'story.json', steps, completed)
+    assert result['story'] == ['cascade', 'thunder']
+    assert _audit(monkeypatch, tmp_path / 'none.json', steps)['story'] == []
 
 
 RED_ROM = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
