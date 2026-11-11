@@ -30,7 +30,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 from starlette.routing import Match, Mount
 
-from .. import stall_truth
+from .. import game_data, stall_truth
 from ..capability import CoreBackendCapabilityError
 from ..checkpoints import CheckpointStore
 from ..desktop_setup import MAX_ROM, user_directory
@@ -140,6 +140,11 @@ class Manager:
         if self.auth_mode == 'accounts' and self.auth.setup_done():
             self.bind_library_owner()
         self.assets = Assets(self.registry, game_data_dir, reference_archive)
+        # Rating a Red, Blue or Yellow trade in this process imports the Gen I tables, which load from
+        # GAME_DATA_DIR or DATA_DIR/game-data. The image sets neither to a folder that holds them, so
+        # this process reads them where the app keeps them, as its adventure and cable workers do.
+        if 'GAME_DATA_DIR' not in os.environ and not (game_data.directory() / 'current.json').exists():
+            os.environ['GAME_DATA_DIR'] = str(self.assets.game_data_dir)
         self.supervisor = Supervisor(self.registry, self.assets, self.public_url,
                                      **({'child_factory': child_factory} if child_factory else {}))
         from .notifications import NotificationCenter
