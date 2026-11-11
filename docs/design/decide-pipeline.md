@@ -83,7 +83,7 @@ class Offer:
 
 `decide(sources, view, pinned=None, style=None)` returns a `Decision` with the pick, every offer, the parked offers with their reasons, and the rule that picked. It runs these steps in order.
 
-1. **Gather.** Each source returns its offers. A source only reads: it changes no saved state and draws no random number. Writes it makes today while choosing, such as `supplies_prepared` or a project abandon, move to its `commit`. A test runs every source twice on one state and checks that `state_dict()` and the random state are unchanged.
+1. **Gather.** Each source returns its offers. A source only reads, and its writes move to its `commit` (section 5, rule A). The collection pick is the one source that draws a random number, its shuffle at `policies/collection.py:1386`. It keeps that draw at the same point of the decision as today, so the run's random sequence does not change. A test runs every source twice on one state and checks that `state_dict()` is unchanged and that no other source drew.
 2. **Filter.** One check for every source, with no exemptions. An offer is parked with a reason when the supervisor stood it down or spent its budget (PR 6), when its walk found no route lately (`no_route`), or when its gift claim is held (PR 5). The reasons are constants in `decide.py`, so a director can read them.
 3. **Forced.** A forced offer is the pick. The ceremonies, the elevator, the passage, the victory walk and Sudowoodo are forced, each with the map or event that forces it. The game allows nothing else there, so this is no override, and the trace names it.
 4. **Hold.** A goal under way stays the pick. It gives way only to its own steps and to the enablers of its needs. This is today's rule in `Choice.wins` and in Gen II `holds`, written once. It replaces the heal latch and the errand restores (strategic.py:489, gen2/policy.py:1399).
@@ -92,6 +92,8 @@ class Offer:
 7. **Commit.** The pick's `commit` runs, and nothing else does. Shadow mode never commits.
 
 The needs table is read off today's chain, so the switch starts from today's behaviour. A goal needs every enabler that replaces it today, which is every enabler whose replace comes later in the chain. Slice 1 writes the table for Gen I and slice 4 for Gen II. Any later change to the table is a behaviour change and goes to the lead first.
+
+Item uses where the party stands take one action and end the step before the chain finishes. They are the League treatment, field cures, vitamins in a full bag, medicine during a heal and teaching from TM development (strategic.py:986-1052, L1639-1655). They stay in the step until phase 3 makes them task objects. A step that ends in one is not a decision, and shadow does not count it.
 
 Until a group of sources switches on, the chain that is left runs as one source, `legacy`, which offers its own pick. So a switch moves one group at a time, and every switch PR deletes the chain sites of its group.
 
@@ -108,7 +110,7 @@ A director is one more source. It holds at most one standing choice, a goal key 
 
 ### How it runs
 
-On each decision, after the chain sets the goal, `decide` runs on the same state. Its sources read only and no commit runs, so shadow changes no state and draws no random number. In slice 1 the chain's sites call the same source functions, and each source runs once per decision. The chain and the pipeline see the same offers, and nothing runs twice. Gen II's ladder stays one source in shadow and reuses the pick and the candidates the ladder already built, so no rung is asked twice.
+On each decision, after the chain sets the goal, `decide` runs on the same state. No commit runs, so shadow changes no state and draws no random number. In slice 1 each chain site records its offer, named by its source, when it calls `offer` or `replace` or sets the goal. At the end of the decision the pipeline ranks those offers. So it weighs what the chain weighed, nothing runs twice and no source draws again. Guards that read the chain's pick at that moment, such as `not choice.errand`, stay at their sites in slice 1. Each switch slice turns its sites into source functions, moves those guards into the hold rule, and measures again in shadow before it switches. Gen II's ladder stays one source in shadow and reuses the pick and the candidates the ladder already built, so no rung is asked twice.
 
 ### What it records
 
@@ -125,7 +127,7 @@ A decision counts when either key changes since the last one, as the `overworld`
 
 ### The switch bar
 
-The data comes from the ladder gate (59 rungs, about 3 minutes) plus local runs on origin/main of 24 game hours per generation. TyNet is never used. A source group switches on when all four hold.
+The data comes first from the ladder gate (59 rungs, about 3 minutes) and the 51 stuck-scenario replays, then from local dev soak runs on origin/main of 24 game hours per generation. TyNet is never used. Each switch PR states its measured numbers in its body. If a rung sits under 95%, the lead hears which rung and why before anything is tuned to pass. A source group switches on when all four hold.
 
 1. No `unlisted` difference. The pipeline sees every goal the chain picks.
 2. STORY and UPKEEP picks agree on every decision. A disagreement left here is named in the switch PR and goes to the lead before merge.
@@ -140,9 +142,28 @@ If shadow adds more than 5% to gate time, it runs on every fourth decision and o
 
 Slices 1 to 4 aim for no behaviour change, and the switch bar checks it. These choices change behaviour on purpose.
 
-1. **Writes only for the pick** (slices 2, 3 and 4). Today a source writes while choosing even when a later site overrides it. Supplies sets `supplies_prepared` and can abandon the project (strategic.py:1024, 1026), and `collection.choose` abandons the project before the Champion (`policies/collection.py:1110`). These move to `commit` and run only when that offer is picked. Gen II already works this way, since the ladder undoes the losers. This follows Gen II over the Gen I reference, because a goal that loses should leave nothing behind.
-2. **A pin passes the checks** (slice 5). A pinned Gen II rung no longer skips the stand-down check (`gen2/collection.py:704`) or the no-route check (L712). A rung the watchdog gave up on is parked, and the goal list shows why, where today the pin asks it again.
-3. **A pin keeps the project** (slice 5). Setting a pin in Gen I no longer abandons the running project (`policies/collection.py:1446`). The pin wins by its lane, and the project resumes after it. The project's budget counts only the frames it runs.
+The lead approved all three on 2026-11-11.
+
+**A. A source writes only when its goal is picked** (slices 2, 3 and 4). Today a site writes while choosing even when a later site overrides its goal. Under this rule each write below moves to its source's `commit` and runs only when that offer is picked. It is a deliberate difference from the Gen I reference. Gen II already works this way, since the ladder undoes the losers, and a goal that loses should leave nothing behind. Do not move one of these writes back before the pick.
+
+| Write | Today | Source |
+|---|---|---|
+| the swap's `pc.species` and `pc.destination` | strategic.py:978-979, before its offer | party upgrade |
+| `release_spare`, and clearing the swap | strategic.py:629, L632-633 | party release |
+| clearing the swap | strategic.py:638-639 | party box |
+| `supplies_prepared` on the project | strategic.py:1024 | supplies |
+| the supplies abandon | strategic.py:1026 | supplies |
+| the abandon before the Champion | `policies/collection.py:1110` | collection |
+| the committed `project`, `idle_token` and marathon timer | `policies/collection.py:1127-1132`, L1148 | collection |
+| the pickup's `active` and its `expires` | `policies/pickups.py:110-111` | pickup |
+| `tm_plan` and `tm_frame` for a TM purchase | strategic.py:1664-1665 | TM development |
+| `next_goal`, the goal shown behind an errand | strategic.py:1067, L1075 | collection, pickup |
+
+Observations that every decision makes stay where they are, such as the heal latch update (L959), the pickup scan timer (`pickups.py:90`) and clearing a finished swap (L599). Slice 4a adds the Gen II `_step` writes to this table before 4b moves them.
+
+**B. A pin passes the checks** (slice 5). A pinned Gen II rung no longer skips the stand-down check (`gen2/collection.py:704`) or the no-route check (L712). A rung the watchdog gave up on is parked, where today the pin asks it again. A pin comes from the owner in the UI, and a pin that silently does nothing is a bug. So the same PR puts the parked reason into the adventure's API state and shows it in the UI where the pin is set. The UI part is agreed with pokesim-ui through the lead.
+
+**C. A pin keeps the project** (slice 5). Setting a pin in Gen I no longer abandons the running project (`policies/collection.py:1446`). The pin wins by its lane, and the project resumes after it. The project's budget counts only the frames it runs. A test checks that the project resumes with its progress intact after the pin ends.
 
 ## 6. Slices
 
@@ -150,11 +171,11 @@ Each switch slice deletes the old call sites it replaces in the same PR. Estimat
 
 | # | Slice | Deletes | Time |
 |---|---|---|---|
-| 1 | Pipeline and Gen I shadow: `planning/decide.py`, Gen I sources for every site in section 1 that the chain calls, the Gen I needs table, the trace field, the `pipeline` point and the report | the `overworld` shadow point (strategic.py:1104-1106), which agrees by construction | 5 hours |
+| 1 | Pipeline and Gen I shadow: `planning/decide.py`, every Gen I chain site recording its offer with its source, the Gen I needs table, the trace field, the `pipeline` point and the report | the `overworld` shadow point (strategic.py:1104-1106), which agrees by construction | 5 hours |
 | 2 | Gen I upkeep and party switch: heal, upgrade, release, box, supplies and trash become needs and UPKEEP offers. Holds replace the heal latch and the errand restore | replaces at L603, L634, L640, L650, L967, L1022, L1056, the offer at L980, the heal latch, the restore at L489 | 3 hours |
 | 3 | Gen I story and collection switch: base goal and boss training, the project, `collection.choose`, pickups, teaching, TM development and the forced moves | `Choice` (L168-230) with `offer` and `replace`, replaces at L594, L1068, L1083, L1098, offers at L596, L1045, L1076, L1640-1666, direct assignments at L518, L582-587, L1047, L1138-1139, L1286, L1288, L1294, the `legacy` source, the `collection` shadow point (`collection.py:1144`) | 4 hours |
 | 4 | Gen II, in two PRs. 4a is shadow: story, holds, ladder and the `_step` sites as sources, with the Gen II needs table. 4b switches them | 4a: the `ladder` shadow point (policy.py:1489-1496). 4b: boss training (L368-369), release (L1486), heal (L1532, L1593-1594), partner and HM (L1564, L1570), the no-route fallback (L1601), Sudowoodo (L1720), the errand restore (L1399), the `holds` return (`collection.py:811`) | 4 hours |
-| 5 | Director source: the manager pin becomes the director in both generations, and its choices go into the trace | the pin exemptions (`gen2/collection.py:627-629`, L702, L704, L712), the Gen I pin abandon (`policies/collection.py:1446`) | 2 hours |
+| 5 | Director source: the manager pin becomes the director in both generations, and its choices go into the trace. A parked pin's reason reaches the API state and the UI, and a test checks that a Gen I project resumes intact after a pin | the pin exemptions (`gen2/collection.py:627-629`, L702, L704, L712), the Gen I pin abandon (`policies/collection.py:1446`) | 2 hours |
 
 The total is 18 agent hours, plus the shadow runs before each switch. Slices 2 and 3 wait for slice 1's shadow data, and 4b waits for 4a's.
 
