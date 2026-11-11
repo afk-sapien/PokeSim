@@ -12,8 +12,9 @@ and hashes every input into manifest.json.
 
 ``smoke`` is the deploy gate. It builds the candidate from a git archive of it and boots every copied
 adventure and rung through the real Manager and worker processes. Each one plays five game minutes,
-saves when it is stopped, and loads that save again. A failed worker, a missing save, an older save on
-reload or an error line in a worker log fails it. Pass or fail is absolute, with no baseline. It writes
+saves when it is stopped, and loads that save again. Then all of them boot at once for one automatic
+trade pass (``trade_pass``). A failed worker, a missing save, an older save on reload, a trade pass that
+raises or an error line in a worker log fails it. Pass or fail is absolute, with no baseline. It writes
 reports/smoke/<candidate>.json, and tools/deploy_host.sh refuses a commit without a passing one.
 
 ``run`` builds each commit from a git archive of it, so each plays its own code, and plays identical
@@ -57,6 +58,9 @@ SEED = 7
 SMOKE_FRAMES = 5 * 60 * 60
 SMOKE_PARALLEL = 6
 SMOKE_TIMEOUT = 5 * 60
+# The smoke's trade pass boots every adventure at once, and gives them this long to load, trade and play on.
+TRADE_PASS_TIMEOUT = 10 * 60
+TRADE_PASS = 'trade-pass'
 # Worker log lines a healthy run never writes. The soak's two hour runs write none.
 WORKER_ERROR = re.compile(r' ERROR |^Traceback')
 # The smoke also fails a refused save. Gen 1 logs one as a warning and falls back to an older save.
@@ -892,6 +896,139 @@ def smoke_one(manager, aid, frames, progress):
     return result
 
 
+def _log_mark(folder):
+    """Where a worker's log ends now, as its file's inode and size."""
+    path = folder / 'logs' / 'worker.log'
+    return (path.stat().st_ino, path.stat().st_size) if path.exists() else (None, 0)
+
+
+def _errors_since(folder, mark):
+    """The lines matching SMOKE_ERROR that a worker logged after ``mark``. The supervisor rotates a
+    full worker.log to worker.previous.log, so the marked file may now carry that name."""
+    inode, offset = mark
+    lines = []
+    for name in ('worker.previous.log', 'worker.log'):
+        path = folder / 'logs' / name
+        if not path.exists() or name != 'worker.log' and path.stat().st_ino != inode:
+            continue
+        with path.open('rb') as log:
+            log.seek(offset if path.stat().st_ino == inode else 0)
+            lines += log.read().decode('utf-8', errors='replace').splitlines()
+    return [line[:300] for line in lines if SMOKE_ERROR.search(line)]
+
+
+def trade_pass(manager, ids, progress):
+    """Boot every adventure at once and run one automatic trade pass over them, as the live coordinator
+    does every ten seconds (Coordinator.schedule_once).
+
+    Auto trading is on for every copy, so each offer is rated for every other adventure of its owner,
+    and the receiver is asked whether it would keep the best one. The trade the pass picks never starts.
+    Every offer is then rated for every other adventure of its owner directly as well. Every adventure
+    must give its inventory, the pass must rate an offer when there is one, and every adventure must
+    play on past the pass, so its own decisions run beside it. A pass or a rating that raises, or an
+    error line in a worker log after it starts, fails it.
+    """
+    from pokesim.app import coordinator as cable, trade_settings
+    from pokesim.app.registry import identifier
+    coordinator = manager.coordinator
+    result = {'id': TRADE_PASS, 'name': 'Trade pass', 'version': '', 'failed': None}
+    began = time.monotonic()
+    deadline = began + TRADE_PASS_TIMEOUT
+    folders = {aid: manager.registry.root / 'adventures' / aid for aid in ids}
+    marks = {aid: _log_mark(folder) for aid, folder in folders.items()}
+    rate, rated, picked, running = cable.gain, [], [], []
+
+    def name(aid):
+        return manager.registry.adventure(aid)['name']
+
+    def counted(inventory, mon):
+        rated.append(mon.get('dex'))
+        return rate(inventory, mon)
+
+    def propose(data, **_):
+        picked.append(data)
+        raise cable.Waiting('the smoke starts no trade')
+
+    def inventory(aid):
+        while True:
+            try:
+                return coordinator.inventory(aid)
+            except (RuntimeError, OSError) as error:
+                # A worker whose game thread is busy answers 409, and the coordinator asks again later.
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(f'{name(aid)} gave no inventory, {error}') from error
+                time.sleep(POLL_SECONDS)
+
+    def playing(aid, after):
+        while True:
+            status, why = _game_state(manager, aid, deadline)
+            if why:
+                return None, why
+            if (status.get('frame') or 0) > after and manager.registry.adventure(aid)['state'] == 'running':
+                return status.get('frame'), None
+            time.sleep(POLL_SECONDS)
+
+    def steps():
+        manager.registry.set_setting('max_running', len(ids))
+        for aid in ids:
+            trade_settings.update(manager.registry, aid, enabled=True)
+            manager.registry.request_lifecycle(aid, 'start', identifier())
+            manager.start_adventure(aid)
+            running.append(aid)
+        frames = {}
+        for aid in ids:
+            frames[aid], why = playing(aid, -1)
+            if why:
+                return f'{name(aid)} did not load, {why}'
+        inventories = {aid: inventory(aid) for aid in ids}
+        result.update(inventories=len(inventories),
+                      offers=sum(len(inv.get('offers') or ()) for inv in inventories.values()))
+        cable.gain, coordinator.propose = counted, propose
+        try:
+            coordinator.schedule_once()
+        finally:
+            cable.gain = rate
+            del coordinator.propose
+        result.update(rated=len(rated), picked=bool(picked))
+        # Then every offer for every other adventure of its owner, which the pass above leaves out for
+        # an adventure that traded in the last few minutes or a Pokémon a hand-picked trade holds.
+        owners = {aid: manager.registry.adventure(aid).get('owner_id') for aid in ids}
+        pairs = 0
+        for left_id, left in inventories.items():
+            for right_id, right in inventories.items():
+                if left_id != right_id and owners[left_id] == owners[right_id]:
+                    for offer in left.get('offers') or ():
+                        rate(right, coordinator._offer_for(offer, right))
+                        pairs += 1
+        result['offers_rated'] = pairs
+        if pairs and not rated:
+            return f'the pass rated none of the {pairs} offers between adventures of one owner'
+        for aid in ids:
+            frames[aid], why = playing(aid, frames[aid])
+            if why:
+                return f'{name(aid)} stopped playing after the pass, {why}'
+        return None
+
+    try:
+        result['failed'] = steps()
+    except Exception as error:
+        result['failed'] = f'{type(error).__name__}: {error}'
+    finally:
+        for aid in running:
+            try:
+                manager.registry.request_lifecycle(aid, 'stop', identifier())
+                manager.supervisor.stop(aid)
+            except Exception as error:
+                result['failed'] = result['failed'] or f'{name(aid)} did not stop, {error}'
+    errors = [f'{name(aid)}: {line}' for aid in ids for line in _errors_since(folders[aid], marks[aid])]
+    result.update(wall_seconds=round(time.monotonic() - began, 1), errors=len(errors), error_lines=errors[:5])
+    if errors and not result['failed']:
+        result['failed'] = (f'{len(errors)} error {"line" if len(errors) == 1 else "lines"} in the worker logs, '
+                            f'the first {errors[0]}')
+    progress(smoke_line(result))
+    return result
+
+
 def add_rung(manager, rung, info, rom):
     """Create a seeded rung as a new adventure with its gift backlog, as the create route would."""
     from pokesim import rewards
@@ -917,7 +1054,8 @@ def add_rung(manager, rung, info, rom):
 
 
 def runner(args):
-    """Play every copied adventure and rung with `args.play`, play_one for ``run`` or smoke_one for ``smoke``."""
+    """Play every copied adventure and rung with `args.play`, play_one for ``run`` or smoke_one for ``smoke``.
+    The smoke then runs its trade pass over all of them."""
     from pokesim.app.manager import Manager
     manifest = json.loads((args.inputs / 'manifest.json').read_text(encoding='utf-8'))
     manager = Manager(args.work / 'app', game_data_dir=args.game_data)
@@ -933,6 +1071,8 @@ def runner(args):
             return args.play(manager, aid, args.frames, lambda line: print(line, flush=True))
         with ThreadPoolExecutor(args.parallel) as pool:
             results = list(pool.map(play, ids))
+        if args.trade:
+            results.append(trade_pass(manager, ids, lambda line: print(line, flush=True)))
     finally:
         manager.close()
     (args.work / 'results.json').write_text(json.dumps(results) + '\n', encoding='utf-8')
@@ -1267,6 +1407,11 @@ def run(args):
 
 
 def smoke_line(row):
+    if row['id'] == TRADE_PASS:
+        return (f'{row["name"]:<28} {row.get("inventories", 0)} inventories, {row.get("offers", 0)} offers, '
+                f'{row.get("rated", 0)} rated by the pass and {row.get("offers_rated", 0)} for every adventure, '
+                f'{"a trade picked" if row.get("picked") else "no trade picked"}, {row.get("wall_seconds")}s'
+                + (f', failed: {row["failed"]}' if row['failed'] else ''))
     played = row.get('played', 0) - row.get('loaded', 0)
     return (f'{row["name"]:<28} {played:6d} frames, saved at {row.get("saved")}, reloaded at {row.get("reloaded")}, '
             f'{row.get("wall_seconds")}s' + (f', failed: {row["failed"]}' if row['failed'] else ''))
@@ -1284,9 +1429,12 @@ def smoke(args):
     env = stage(candidate, work / 'candidate', inputs, manifest)
     results = play_staged(work / 'candidate', env, 'smoke-runner', inputs, args)
     problems = [f'{row["name"]}: {row["failed"]}' for row in results if row['failed']]
+    played = [row for row in results if row['id'] != TRADE_PASS]
     expected = len(manifest['adventures']) + len(manifest['rungs'])
-    if len(results) != expected:
-        problems.append(f'played {len(results)} of {expected} adventures')
+    if len(played) != expected:
+        problems.append(f'played {len(played)} of {expected} adventures')
+    if len(results) == len(played):
+        problems.append('the trade pass did not run')
     if hashes(inputs) != before:
         problems.append(f'the smoke changed its inputs in {inputs}')
     report = {'commit': candidate, 'frames': args.frames, 'passed': not problems,
@@ -1446,8 +1594,8 @@ def main(argv=None):
         playing.add_argument('--nice', type=int, default=10)
         playing.add_argument('--work', type=Path)
         playing.set_defaults(action=action)
-    for name, play, frames, parallel in (('runner', play_one, FRAMES, PARALLEL),
-                                         ('smoke-runner', smoke_one, SMOKE_FRAMES, SMOKE_PARALLEL)):
+    for name, play, frames, parallel, trade in (('runner', play_one, FRAMES, PARALLEL, False),
+                                                ('smoke-runner', smoke_one, SMOKE_FRAMES, SMOKE_PARALLEL, True)):
         inner = commands.add_parser(name, help=argparse.SUPPRESS)
         inner.add_argument('inputs', type=Path)
         inner.add_argument('work', type=Path)
@@ -1455,7 +1603,7 @@ def main(argv=None):
         inner.add_argument('--game-data', type=Path)
         inner.add_argument('--frames', type=int, default=frames)
         inner.add_argument('--parallel', type=int, default=parallel)
-        inner.set_defaults(action=runner, play=play)
+        inner.set_defaults(action=runner, play=play, trade=trade)
     rating = commands.add_parser('rate-copies', help=argparse.SUPPRESS)
     rating.set_defaults(action=rate_copies)
     judging = commands.add_parser('rejudge', help='judge a finished run folder again and rewrite its report')

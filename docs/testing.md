@@ -269,9 +269,12 @@ uv run --locked python tools/live_soak.py check HEAD
 than the copied data, and take the heavy load lock.
 
 `smoke` is the deploy gate. Every adventure and rung loads its newest save on the candidate, plays 5
-game minutes, saves when it is stopped, and loads that save again. It fails on a failed worker or stop,
-a save older than the frame the adventure stopped at, a reload older than that save, or an `ERROR`
-line, a traceback or a refused save in a worker log. Pass or fail does not depend on the deployed
+game minutes, saves when it is stopped, and loads that save again. Then all of them run at once for one
+automatic trade pass, as the app's trade scheduler runs every ten seconds. Every offer is rated for
+every other adventure of its owner and no trade starts. It fails on a failed worker or stop, a save
+older than the frame the adventure stopped at, a reload older than that save, a trade pass or rating
+that raises, an adventure that stops playing after the pass, or an `ERROR` line, a traceback or a
+refused save in a worker log. Pass or fail does not depend on the deployed
 commit. The report goes to `data/live-soak/reports/smoke/<commit>.json`, and `tools/deploy_host.sh`
 refuses a commit, a rollback included, without a passing one for it or for a commit with the same git
 tree.

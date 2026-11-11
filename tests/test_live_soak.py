@@ -617,6 +617,96 @@ def test_the_smoke_fails_an_error_or_a_refused_save_in_the_worker_log(tmp_path, 
     assert outcome['failed'] == f'1 error line in its worker log, the first {line}'
 
 
+class TradeWorkers:
+    """A Manager with two Crystal adventures of one owner that each offer a Pikachu. Its coordinator rates
+    each offer for the other adventure and proposes a trade, as Coordinator.schedule_once does. `log` is
+    what a worker logs once it starts."""
+
+    def __init__(self, root, log=''):
+        import threading
+        from pokecore.formulas import experience_progress
+        from pokesim.app import coordinator as cable
+        self.ids, self.log, self.frames, self.running = ['a' * 32, 'b' * 32], log, {}, set()
+        mon = {'dex': 25, 'species': 25, 'name': 'Pikachu', 'level': 20, 'dvs': [8] * 5, 'stat_exp': [0] * 5,
+               'experience': experience_progress(6400, 20, 'FAST')}
+        self.inventories = {aid: {'version': 'crystal', 'cartridge_generation': 2, 'owned': [25], 'party': [mon],
+                                  'storage': {'pokemon': [{**mon, 'box': 1, 'position': 1}]},
+                                  'offers': [{**mon, 'trade_key': aid}]} for aid in self.ids}
+        settings = {}
+        self.registry = SimpleNamespace(
+            root=root, lock=threading.Lock(), setting=lambda key, default=None: settings.get(key, default),
+            set_setting=settings.__setitem__, request_lifecycle=lambda aid, kind, who: None,
+            adventure=lambda aid: {'name': aid[:1], 'owner_id': 'owner',
+                                   'state': 'running' if aid in self.running else 'stopped'})
+        self.supervisor = SimpleNamespace(child=self.child, stop=self.running.discard)
+        workers = self
+
+        class Coordinator:
+            _offer_for = staticmethod(cable.Coordinator._offer_for)
+
+            def inventory(self, aid):
+                return workers.inventories[aid]
+
+            def schedule_once(self):
+                left, right = (workers.inventories[aid] for aid in workers.ids)
+                for give, recipient in ((left['offers'][0], right), (right['offers'][0], left)):
+                    cable.gain(recipient, self._offer_for(give, recipient))
+                try:
+                    self.propose({'left_id': workers.ids[0], 'right_id': workers.ids[1]})
+                except cable.Waiting:
+                    return None
+
+            def propose(self, data, **_):
+                raise AssertionError('the smoke started a trade')
+        self.coordinator = Coordinator()
+        for aid in self.ids:
+            (root / 'adventures' / aid / 'logs').mkdir(parents=True)
+            (root / 'adventures' / aid / 'logs' / 'worker.log').write_text('12:00:00 ERROR before the pass\n')
+
+    def start_adventure(self, aid):
+        self.running.add(aid)
+        self.frames[aid] = 1000
+        with (self.registry.root / 'adventures' / aid / 'logs' / 'worker.log').open('a') as log:
+            log.write(self.log)
+
+    def child(self, aid):
+        if aid not in self.running:
+            raise RuntimeError('not running')
+        frame = self.frames[aid]
+        self.frames[aid] += 10000
+        return SimpleNamespace(request=lambda method, path: {'frame': frame, 'game': {'party': []}})
+
+
+def pass_trades(tmp_path, monkeypatch, **changes):
+    monkeypatch.setattr(live_soak, 'POLL_SECONDS', 0)
+    workers = TradeWorkers(tmp_path, **changes)
+    return workers, live_soak.trade_pass(workers, workers.ids, lambda line: None)
+
+
+def test_the_trade_pass_rates_every_offer_and_starts_no_trade(tmp_path, monkeypatch):
+    workers, outcome = pass_trades(tmp_path, monkeypatch)
+    assert outcome['failed'] is None
+    assert (outcome['inventories'], outcome['offers'], outcome['rated'], outcome['offers_rated']) == (2, 2, 2, 2)
+    assert outcome['picked'] and not workers.running
+    # The error line logged before the pass is the smoke's own.
+    assert outcome['errors'] == 0
+
+
+def test_the_trade_pass_fails_a_rating_that_raises(tmp_path, monkeypatch):
+    """A Gold, Silver or Crystal record's experience once reached pcvalue.rate as pokecore's progress dict."""
+    from pokesim.trade import worth
+    monkeypatch.setattr(worth, 'experience', lambda mon: mon.get('experience', 0))
+    workers, outcome = pass_trades(tmp_path, monkeypatch)
+    assert outcome['failed'].startswith('TypeError: ') and "unhashable type: 'dict'" in outcome['failed']
+    assert not workers.running
+
+
+def test_the_trade_pass_fails_an_error_line_after_it_starts(tmp_path, monkeypatch):
+    workers, outcome = pass_trades(tmp_path, monkeypatch, log='12:00:01 ERROR inventory failed\n')
+    assert outcome['errors'] == 2
+    assert outcome['failed'] == '2 error lines in the worker logs, the first a: 12:00:01 ERROR inventory failed'
+
+
 def test_check_takes_a_passing_report_for_a_commit_with_the_same_tree(tmp_path, monkeypatch, capsys):
     # A merge commit identical to its soaked head once needed a second 10 minute soak to deploy.
     repo, reports = tmp_path / 'repo', tmp_path / 'reports'
