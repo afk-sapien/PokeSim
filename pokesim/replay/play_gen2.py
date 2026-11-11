@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 from pokecore.gen2.clock import FIXED_CLOCK_EPOCH, boot, follow_game_time, lock_clock
 
+from pokesim.gen2 import kinds
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
 from pokesim.gen2.views import state_view
@@ -136,7 +137,7 @@ def main(argv=None, prog=None):
                             options.append((len(route), row['map'], row))
                     if not options:
                         return Goal('collection_wait', 'Wait for the field map to settle', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
-                    policy.collection['target'] = dict(min(options, key=lambda row: row[:2])[-1], started=policy.decisions)
+                    policy.collection['target'] = kinds.target(dict(min(options, key=lambda row: row[:2])[-1], started=policy.decisions))
                     goal = collection.hunt(policy, snapshot, Goal)
             if goal is None and args.focus == 'gamecorner' and policy.collection.get('funding') is not None:
                 return Goal('collection_wait', 'Prepare to earn prize money', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)

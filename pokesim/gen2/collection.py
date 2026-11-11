@@ -13,6 +13,7 @@ from pokecore.gen2.ram import Memory
 from ..planning.monitor import STOOD_DOWN
 from .standdown import (DECISION_FRAMES, exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down,
                         standing_down)
+from . import kinds
 
 
 def matching_time(value, current):
@@ -1081,7 +1082,7 @@ def pokedex_hunt(policy, snapshot, Goal, current_time):
         if choices:
             target = dict(min(choices, key=lambda row: row[:-1])[-1], started=policy.decisions)
             target['expected'] = target_expected(policy, snapshot, target, distances.get(target['map'], 0) % 9999)
-            state['target'] = target
+            state['target'] = target = kinds.target(target)
             shadow = getattr(policy, 'shadow', None)
             if shadow is not None:
                 shadow.compare('hunt', lambda: hunt_candidates(choices), choice_key(target))

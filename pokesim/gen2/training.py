@@ -5,6 +5,7 @@ from ..planning.ledger import FIELD_MOVES
 from ..planning.stance import TRAIN
 from .ledger import fits, tidy_goal
 from .standdown import TRAINING_DECISIONS, exhausted, site_key, spend, stand_down, standing_down, train_key
+from . import kinds
 
 # Mt. Silver provides renewable experience for the trained champion and its partner.
 SITE = 'SILVER_CAVE_ROOM_1'
@@ -254,7 +255,8 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         if not choices:
             return None
         _, _, species, key, target, item = min(choices)
-        project = state['training'] = {'identity': key, 'target': target, 'item': item, 'species': species, 'terminal': terminal_project}
+        project = state['training'] = kinds.project(
+            {'identity': key, 'target': target, 'item': item, 'species': species, 'terminal': terminal_project})
     mon = next((mon for mon in snapshot.party + snapshot.stored if identity(mon) == project['identity']), None)
     if (mon is None or mon.species != project['species'] and not project.get('terminal')
             or not project.get('item') and mon.level >= project.get('level_goal', 100)):

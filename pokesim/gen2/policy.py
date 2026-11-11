@@ -190,6 +190,8 @@ class Policy:
         self.collection = state.get('collection', {'target': None})
         from .standdown import migrate
         migrate(self, state.get('decisions', 0))
+        from .kinds import adopt
+        adopt(self.collection)
         self.demand = {int(key): value for key, value in state.get('demand', {}).items()}
         self.decisions = state.get('decisions', 0)
         self.naming.load_state_dict(state.get('naming', {}))

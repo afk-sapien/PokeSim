@@ -8,6 +8,7 @@ from ..planning.ledger import FIELD_MOVES
 from ..planning.monitor import STAND_DOWNS, STOOD_DOWN, Backoff
 from ..planning.stance import TRAVEL
 from .standdown import DECISION_FRAMES, monitor, stand_down, standing_down
+from . import kinds
 from .teams import assemble, assembled, key, no_room
 
 MACHINES = ((70, 'HM04'), (57, 'HM03'), (19, 'HM02'), (94, 'TM29'), (89, 'TM26'), (188, 'TM36'), (247, 'TM30'))
@@ -230,8 +231,8 @@ def journey(policy, snapshot, Goal):
         partner = next((mon for mon in snapshot.party + snapshot.stored
                         if key(mon) in state['team'] and mon.level < state['cap']), None)
         if partner:
-            policy.collection['training'] = {'identity': identity(partner), 'target': partner.species,
-                'item': None, 'species': partner.species, 'terminal': True, 'level_goal': state['cap']}
+            policy.collection['training'] = kinds.project({'identity': identity(partner), 'target': partner.species,
+                'item': None, 'species': partner.species, 'terminal': True, 'level_goal': state['cap']})
             goal = train(policy, snapshot, mem, Goal)
             if goal:
                 return goal
