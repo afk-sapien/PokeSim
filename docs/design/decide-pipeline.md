@@ -127,7 +127,7 @@ A decision counts when either key changes since the last one, as the `overworld`
 
 ### The switch bar
 
-The data comes first from the ladder gate (59 rungs, about 3 minutes) and the 51 stuck-scenario replays, then from local dev soak runs on origin/main of 24 game hours per generation. TyNet is never used. Each switch PR states its measured numbers in its body. If a rung sits under 95%, the lead hears which rung and why before anything is tuned to pass. A source group switches on when all four hold.
+The data comes first from the ladder gate (59 rungs, about 3 minutes) and the 51 stuck-scenario replays, then from local dev soak runs on origin/main of 24 game hours per generation. The live server is never used. Each switch PR states its measured numbers in its body. If a rung sits under 95%, the lead hears which rung and why before anything is tuned to pass. A source group switches on when all four hold.
 
 1. No `unlisted` difference. The pipeline sees every goal the chain picks.
 2. STORY and UPKEEP picks agree on every decision. A disagreement left here is named in the switch PR and goes to the lead before merge.
