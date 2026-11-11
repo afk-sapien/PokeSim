@@ -551,6 +551,8 @@ a.pick-item { text-decoration: none }
    matches the heading row, so the chip and its glyph sit level with the slot middle. */
 .builder-arrow { align-self: center; margin-top: calc(var(--s6) + var(--s2)); }
 .slot-body { display: grid; gap: var(--s2); }
+/* Holds the empty Choose card's height until the script draws it, so the Trade key does not jump. */
+.slot-body:empty { min-height: 132px; }
 .slot-body .pick-chosen-grid { grid-template-columns: minmax(0, 1fr); max-width: 380px; }
 .slot-empty {
   display: grid;

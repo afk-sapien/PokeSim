@@ -345,6 +345,9 @@
       busy = false
     }
   }
+  // Red, Blue and Yellow keep fair wild DVs off unless chosen, so their note shows from the start
+  // and the first answer rarely moves the page.
+  document.querySelector('#stats-wild-dv-note').hidden = document.querySelector('meta[name="pokesim-dex-total"]')?.content !== '151'
   refresh()
   setInterval(() => { if (!document.hidden) refresh() }, 30000)
 })()

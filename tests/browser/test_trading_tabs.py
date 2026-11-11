@@ -735,3 +735,31 @@ def test_only_the_owner_sees_the_offer_and_across_owner_switches(page, game):
     expect(page.locator('#auto-switch')).to_be_disabled()
     expect(page.locator('#offers-switch')).to_be_hidden()
     expect(page.locator('#across-switch')).to_be_hidden()
+
+
+@pytest.mark.parametrize('width', [1280, 390])
+def test_the_first_answer_leaves_the_trade_key_where_it_was(page, game, width):
+    library = Library(page, game[0])
+    held, released = [], []
+
+    # Hold every data request until the empty page is measured, then hand each to the library above.
+    def hold(route):
+        if released:
+            route.fallback()
+        else:
+            held.append(route)
+
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.route('**/api/**', hold)
+    library.open()
+    page.wait_for_timeout(300)
+    confirm = page.locator('#pick-confirm')
+    before = confirm.bounding_box()
+    expect(page.locator('#current-exchange-section')).to_be_hidden()
+    released.append(True)
+    for route in held:
+        route.fallback()
+    expect(page.locator('#slot-send')).to_contain_text('Choose a Pokémon')
+    expect(page.locator('#trade-history')).to_contain_text('Second Red')
+    page.wait_for_timeout(300)
+    assert confirm.bounding_box()['y'] == before['y']
