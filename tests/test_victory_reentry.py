@@ -50,8 +50,10 @@ def test_legendary_expedition_leaves_closed_east_pocket_by_accessible_ladder():
     prepare_navigation(policy, s)
     goal = Goal('collect_static', 'Collect Zapdos', '', ((MAPS['POWER_PLANT'], 4, 10),))
     policy.collection.project = {'method': 'static', 'species': 75}
-    policy.collection.choose = lambda *args: goal
-    policy.pickups.choose = lambda *args: None
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *args: (goal, None, None)
+    policy.pickups.pick = lambda *args: None
     action = policy._overworld(s, fake_mem({}))[0]
     assert action.button in ('down', 'right')
     assert policy.nav._open_navigation is not None
@@ -68,8 +70,10 @@ def test_return_corridor_drops_accessible_boulder_before_unreachable_upper_switc
     policy.nav.live_positions[-2] = (22, 10)
     goal = Goal('collect_static', 'Collect Zapdos', '', ((MAPS['POWER_PLANT'], 4, 10),))
     policy.collection.project = {'method': 'static', 'species': 75}
-    policy.collection.choose = lambda *args: goal
-    policy.pickups.choose = lambda *args: None
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *args: (goal, None, None)
+    policy.pickups.pick = lambda *args: None
     memory = fake_mem({})
     memory[0xD728] = 1
     action = policy._overworld(s, memory)[0]
@@ -89,8 +93,10 @@ def test_after_lower_return_switch_climb_to_upper_puzzle_not_back_to_east_pocket
     policy.nav.live_positions[-1] = (9, 16)
     goal = Goal('collect_static', 'Collect Zapdos', '', ((MAPS['POWER_PLANT'], 4, 10),))
     policy.collection.project = {'method': 'static', 'species': 75}
-    policy.collection.choose = lambda *args: goal
-    policy.pickups.choose = lambda *args: None
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *args: (goal, None, None)
+    policy.pickups.pick = lambda *args: None
     policy._overworld(s, fake_mem({}))
     assert policy.nav._open_navigation.path[-1][2] == (MAPS['VICTORY_ROAD_3F'], 23, 7)
 
@@ -108,8 +114,10 @@ def test_open_upper_switch_continues_to_western_ladder_for_southern_expedition()
     policy.nav.live_positions[-4] = (3, 5)
     goal = Goal('collect_static', 'Collect Zapdos', '', ((MAPS['POWER_PLANT'], 4, 10),))
     policy.collection.project = {'method': 'static', 'species': 75}
-    policy.collection.choose = lambda *args: goal
-    policy.pickups.choose = lambda *args: None
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *args: (goal, None, None)
+    policy.pickups.pick = lambda *args: None
     policy._overworld(s, fake_mem({}))
     assert policy.nav._open_navigation.path[-1][2] == (MAPS['VICTORY_ROAD_2F'], 1, 1)
 
@@ -124,8 +132,10 @@ def test_open_middle_switch_continues_to_first_floor_for_southern_expedition():
     policy.nav.live_positions[-3] = (1, 16)
     goal = Goal('collect_static', 'Collect Zapdos', '', ((MAPS['POWER_PLANT'], 4, 10),))
     policy.collection.project = {'method': 'static', 'species': 75}
-    policy.collection.choose = lambda *args: goal
-    policy.pickups.choose = lambda *args: None
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *args: (goal, None, None)
+    policy.pickups.pick = lambda *args: None
     policy._overworld(s, fake_mem({}))
     assert policy.nav._open_navigation.path[-1][2] == (MAPS['VICTORY_ROAD_1F'], 1, 1)
 
@@ -139,8 +149,10 @@ def test_western_return_ladder_pushes_its_own_boulder_onto_the_entrance_switch()
     prepare_navigation(policy, s)
     goal = Goal('collect_static', 'Collect Zapdos', '', ((MAPS['POWER_PLANT'], 4, 10),))
     policy.collection.project = {'method': 'static', 'species': 75}
-    policy.collection.choose = lambda *args: goal
-    policy.pickups.choose = lambda *args: None
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *args: (goal, None, None)
+    policy.pickups.pick = lambda *args: None
     memory = fake_mem({})
     memory[0xD728] = 1
     policy._overworld(s, memory)
@@ -158,8 +170,10 @@ def test_first_floor_return_clears_corridor_before_reopening_exit():
     prepare_navigation(policy, s)
     goal = Goal('collect_static', 'Collect Zapdos', '', ((MAPS['POWER_PLANT'], 4, 10),))
     policy.collection.project = {'method': 'static', 'species': 75}
-    policy.collection.choose = lambda *args: goal
-    policy.pickups.choose = lambda *args: None
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *args: (goal, None, None)
+    policy.pickups.pick = lambda *args: None
     memory = fake_mem({})
     memory[0xD728] = 1
     policy._overworld(s, memory)
@@ -201,8 +215,10 @@ def test_east_corridor_pushes_its_boulder_aside_toward_a_ladder_that_leads_south
     policy = StrategicPolicy(0)
     prepare_navigation(policy, s)
     goal = Goal('collect_passage', 'Return to Kanto', '', ((MAPS['ROUTE_23'], 8, 138),))
-    policy.collection.choose = lambda *args: goal
-    policy.pickups.choose = lambda *args: None
+    # The collection pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *args: (goal, None, None)
+    policy.pickups.pick = lambda *args: None
     memory = fake_mem({})
     memory[0xD728] = 1
     action = policy._overworld(s, memory)[0]

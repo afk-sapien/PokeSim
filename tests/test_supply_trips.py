@@ -10,8 +10,8 @@ def supply_goal(money, location='INDIGO_PLATEAU', sale=False, balls=1):
     policy = StrategicPolicy(7)
     policy.completed['pokedex'] = True
     policy.goal = Goal('collect_train', 'Train a partner', 'Gain experience', ((MAPS['INDIGO_PLATEAU'], 10, 15),))
-    policy.collection.choose = lambda *args: None
-    policy.pickups.choose = lambda *args: None
+    policy.collection.pick = lambda *args: None
+    policy.pickups.pick = lambda *args: None
     items = ((ITEMS['GREAT_BALL'], balls), (ITEMS['ANTIDOTE'], 1))
     if sale:
         items += ((ITEMS['NUGGET'], 1),)

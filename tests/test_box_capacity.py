@@ -139,6 +139,8 @@ def test_seafoam_current_cannot_be_used_as_a_route_to_the_pc():
 def collection_with_full_box(party_size=5):
     from pokesim.policies.collection import EVOS
     p = StrategicPolicy(7)
+    # Projects start once the Champion is beaten, so the project under way outranks the plan placeholder.
+    p.collection.completed_champion = True
     p.collection.project = {'method': 'evolve', 'parent': 124, 'species': 125,
                             'box': 0, 'evolution': EVOS[124][0], 'key': 'butterfree'}
     p.collection.remaining = 36000
@@ -452,10 +454,10 @@ def test_a_party_member_trains_when_its_stronger_copy_cannot_leave_the_box():
                 stored_pokemon=((1, 0x08, 30, 'BOX'),), stored_details=(stronger,))
     trained = []
     goal = p.collection.goal
-    def spy(snapshot, project=None):
+    def spy(snapshot, project=None, appearances=None):
         if project and project.get('method') == 'train':
             trained.append((project['parent'], project['box']))
-        return goal(snapshot, project)
+        return goal(snapshot, project, appearances)
     p.collection.goal = spy
     p.collection.project = None
     p.collection.last_choice = -100000

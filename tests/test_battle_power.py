@@ -130,7 +130,8 @@ def test_policy_opens_hm_menu_for_specific_partner_and_bounds_retries():
 def test_hm_teach_is_worth_the_move_it_gives():
     from pokesim.planning import values
     from pokesim.planning.arbiter import Tier
-    from pokesim.policies.strategic import TEACH_FRAMES, Choice, goal_candidate
+    from pokesim.policies.pipeline import Ballot as Choice
+    from pokesim.policies.strategic import TEACH_FRAMES, goal_candidate
     s = state(party=(live(partner()),), items=((ITEMS['HM03'], 1),), map=MAPS['PALLET_TOWN'], frame=10000)
     policy = StrategicPolicy(1)
     upgrade = hm_upgrade(s)
@@ -148,7 +149,8 @@ def test_hm_teach_is_worth_the_move_it_gives():
 
 
 def test_a_small_hm_gain_does_not_cut_into_the_story():
-    from pokesim.policies.strategic import Choice, goal_candidate
+    from pokesim.policies.pipeline import Ballot as Choice
+    from pokesim.policies.strategic import goal_candidate
     s = state(party=(live(partner()),), items=((ITEMS['HM03'], 1),), map=MAPS['PALLET_TOWN'], frame=10000)
     policy = StrategicPolicy(1)
     gain, target, item, move, before = hm_upgrade(s)

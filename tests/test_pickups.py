@@ -40,7 +40,7 @@ def test_pickup_works_in_victory_road_during_a_collection_objective():
     p = StrategicPolicy(1)
     p.collection.project = {'method': 'grass', 'species': sid(132), 'map': MAPS['ROUTE_15'], 'key': 'ditto'}
     p.goal = p.collection.goal(s)
-    p.collection.choose = Mock(return_value=p.goal)
+    p.collection.pick = Mock(return_value=(p.goal, None, None))
     p.nav.update_story(s)
     p._overworld(s, bytearray(65536))
     assert p.goal.key == 'collect_pickup'

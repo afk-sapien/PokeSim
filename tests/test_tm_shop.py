@@ -191,8 +191,7 @@ def project_pick(policy, key, tier, value, frames):
     from pokesim.planning.arbiter import Candidate
     policy.collection.project = {'method': 'train', 'key': key}
     pick = Candidate(key, tier, value, frames, goal='collection training')
-    policy.collection.shadow.compare('collection', lambda: [pick], key)
-    policy.collection.shadow.changed('collection', key)
+    policy.collection.weighed = (key, pick, {key: pick})
 
 
 def test_a_tm_purchase_is_worth_the_move_it_gives(shop_data):
@@ -376,8 +375,8 @@ def test_tm_trip_is_not_overridden_by_collection_or_ground_pickups(shop_data, mo
                 party=(live(partner(moves=[57, 105, 33, 0])),))
     def unexpected(*args, **kwargs):
         raise AssertionError('A TM trip should keep its own destination')
-    monkeypatch.setattr(policy.collection, 'choose', unexpected)
-    monkeypatch.setattr(policy.pickups, 'choose', unexpected)
+    monkeypatch.setattr(policy.collection, 'pick', unexpected)
+    monkeypatch.setattr(policy.pickups, 'pick', unexpected)
     action = policy._overworld(s, bytearray(65536))
     assert policy.goal.key == 'buy_tm'
     assert action[0].button is None

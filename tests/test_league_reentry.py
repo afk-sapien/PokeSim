@@ -74,7 +74,7 @@ def postgame_policy(**changes):
     p = StrategicPolicy(7)
     p.observed_map = s.map
     # A plan with nothing to do, as when every project stands down.
-    p.collection.choose = lambda *args: None
+    p.collection.pick = lambda *args: None
     return p, s
 
 
@@ -89,7 +89,7 @@ def test_an_empty_postgame_plan_does_not_start_an_accidental_league_attempt():
 
 def test_postgame_planning_still_selects_the_next_expedition():
     p, s = postgame_policy()
-    del p.collection.choose
+    del p.collection.pick
     p.step(PolicyContext(s, 0, bytearray(65536)))
     assert p.collection.project is not None
     assert p.goal.key != 'collect_plan'

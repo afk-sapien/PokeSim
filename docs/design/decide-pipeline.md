@@ -1,6 +1,6 @@
 # Decide pipeline
 
-Status: accepted on 2026-11-11. Slices 1 and 2 are built. Every line number was read from main at `2d02e6c2`. This is phase 2 item 4 of the architecture plan of 2026-11-09, the new PR before [Goal system v2](goal-system.md) PR 7. Shadow mode reuses `planning/shadow.py`, and the trace is the one in [Replayable bugs](replayable-bugs.md).
+Status: accepted on 2026-11-11. Slices 1, 2 and 3 are built. Every line number was read from main at `2d02e6c2`. This is phase 2 item 4 of the architecture plan of 2026-11-09, the new PR before [Goal system v2](goal-system.md) PR 7. Shadow mode reuses `planning/shadow.py`, and the trace is the one in [Replayable bugs](replayable-bugs.md).
 
 Today each generation rebuilds its goal on every decision through an ordered chain. A source low in the chain wins because it comes later in the file, not because it is worth more, and nothing records that two sources fought. This note replaces both chains with one pipeline. Every source offers, one filter decides what can run, and the arbiter ranks everything that is left in one call.
 
@@ -155,15 +155,35 @@ The lead approved all three on 2026-11-11.
 | clearing the swap | strategic.py:638-639 | party box |
 | `supplies_prepared` on the project, when the supplies plan offers its own goal | strategic.py:1024 | supplies |
 | the supplies abandon, when the supplies plan offers its own goal | strategic.py:1026 | supplies |
-| the abandon before the Champion | `policies/collection.py:1110` | collection |
-| the committed `project`, `idle_token` and marathon timer | `policies/collection.py:1127-1132`, L1148 | collection |
-| the pickup's `active` and its `expires` | `policies/pickups.py:110-111` | pickup |
-| `tm_plan` and `tm_frame` for a TM purchase | strategic.py:1664-1665 | TM development |
-| `next_goal`, the goal shown behind an errand | strategic.py:1067, L1075 | collection, pickup |
+| a new project and what it reads: `project`, `league_appearances` for a rematch, `pin.started`, the marathon timer and `marathon_previous`, `last_hunt` for a DV hunt, `idle_frames`, `project_maps`, `project_flags`, `progress_token`, the budget in `remaining`, the cleared walk, and `weighed`, the candidate it won with | `policies/collection.py:1127-1148`, now `Collection._start` | collection (slice 3) |
+| the pickup's `active`, its `expires` and the cleared walk | `policies/pickups.py:110-112`, now `Pickups._start` | pickup (slice 3) |
+| `tm_plan` and `tm_frame` for a TM purchase | strategic.py:1664-1665, now `_commit_purchase` | TM development (slice 3) |
+| `next_goal`, the goal shown behind an errand | strategic.py:1067, L1075, now `_commit_pick` | collection, pickup (slice 3) |
 
 Observations that every decision makes stay where they are, such as the heal latch update (L959), the pickup scan timer (`pickups.py:90`) and clearing a finished swap (L599). Two more stay in slice 2. With no spare to let go, `release_spare` is cleared on every decision. A supplies plan that keeps the goal, because the legendary's supplies are ready or the hunt cannot pay for its balls, writes `supplies_prepared` and its abandon at once, since no goal of its own can be picked. Slice 4a adds the Gen II `_step` writes to this table before 4b moves them.
 
+Slice 3 keeps these collection and TM writes in place, since each one is made when the source offers no goal, or reads the game rather than a goal:
+
+- The abandon before the Champion (`policies/collection.py:1110`). The collection offers nothing until the Champion is beaten, so no offer could carry it.
+- The idle plan, `idle_token`, when the director has nothing to start. Nothing is offered then either.
+- The offers draw, with its shuffle and a prize that the purse cannot pay for setting `remaining` to 0. The draw stays at the same point of the decision, so the random sequence of a step that starts its project does not change.
+- A pin that dropped out of the list, which gives up the pin at once.
+- A new project with no first goal starts at once, so it ends on the next check as before.
+- The TM teach drops `tm_plan` before it uses the item. A teach that fails would otherwise leave its plan behind, which holds the collection's frames and blocks purchases.
+
+Three Victory Road and legendary writes stay in the walk, outside the decision: the ascent to the upper boulder puzzle and the drop to the final switch (L1286, L1288), and the legendary give-up that sets the plan (L1294). The walk sets them after the decision, for its own step, so they are not offers.
+
 So in slice 2 a release that loses to a heal leaves its spare unmarked, and a trade may still offer that spare until the release runs. A box change or a release that loses no longer ends a swap under way. A legendary plan that gives up during a lift ride, or on the League side of Victory Road, abandons the project once the ride or the passage out is done.
+
+In slice 3 these change, all from rule A:
+
+- A project the collection picks in a step that a new pickup or a lift wins is not started. A later step draws the offers again, so that draw takes more random numbers than before.
+- A teach of a supply, a TM or an HM that cannot start is not offered, so it no longer sets the goal for that step.
+- In the Champion's room the ceremony is the decision's goal. The progress timer and the check that shows the next milestone read the ceremony, not the beaten Champion.
+- A project under way and the collection's pick rank against the goal before them. Projects start only after the Champion is beaten, when that goal is the plan placeholder, which any real goal outranks. So only a save or a test that starts a project before the Champion sees the story win.
+- On a step that makes no overworld decision, such as a lift exit tap, the errand under way runs. So a restock that the step offers writes its plan and its abandon on the next decision that picks it, not on that step.
+
+Do not offer the errand under way as a fresh goal. The gate caught two goals that change then. A reserve swap at the PC ranks below a story goal of its own kind, such as fetching the Surf partner, so the PC menus show the Surf partner. A restock on the ballot meets the fresh goal's supplies need, so a lift exit on a restock trip shows the restock.
 
 **B. A pin passes the checks** (slice 5). A pinned Gen II rung no longer skips the stand-down check (`gen2/collection.py:704`) or the no-route check (L712). A rung the watchdog gave up on is parked, where today the pin asks it again. A pin comes from the owner in the UI, and a pin that silently does nothing is a bug. So the same PR puts the parked reason into the adventure's API state and shows it in the UI where the pin is set. The UI part is agreed with pokesim-ui through the lead.
 
@@ -177,7 +197,7 @@ Each switch slice deletes the old call sites it replaces in the same PR. Estimat
 |---|---|---|---|
 | 1 | Pipeline and Gen I shadow: `planning/decide.py`, every Gen I chain site recording its offer with its source, the Gen I needs table, the trace field, the `pipeline` point and the report | the `overworld` shadow point (strategic.py:1104-1106), which agrees by construction | 5 hours |
 | 2 | Gen I upkeep and party switch: heal, upgrade, release, box, supplies and trash become enablers that the need walk (`decide.serve`) runs, and their writes move to commits (rule A). The heal latch stays the party's observation, and its site offers the heal as an enabler. The errand restore stays, since it sets the goal on battle, menu and dialogue steps that make no overworld decision, so no hold can replace it before the errand is a goal under way in slice 3 | replaces at L603, L634, L640, L650, L967, L1022, L1056, the offer at L980 | 3 hours |
-| 3 | Gen I story and collection switch: base goal and boss training, the project, `collection.choose`, pickups, teaching, TM development and the forced moves. Holds replace the errand restore | `Choice` (L168-230) with `offer` and `replace`, replaces at L594, L1068, L1083, L1098, offers at L596, L1045, L1076, L1640-1666, direct assignments at L518, L582-587, L1047, L1138-1139, L1286, L1288, L1294, the restore at L489, the `legacy` source, the `collection` shadow point (`collection.py:1144`) | 4 hours |
+| 3 | Gen I story and collection switch: base goal and boss training, the project, `collection.choose`, pickups, teaching, TM development and the forced moves. Every Gen I overworld goal is picked by `decide.decide` over the step's `Ballot` (`policies/pipeline.py`). The errand restore becomes `Ballot.resume`: the errand the last decision picked is offered again, as it was picked, at the end of each step that makes no overworld decision. An enabler meets the same need, a forced move is forced again, and a goal is under way. It carries no writes, since they ran when it was picked | `Choice` (L168-230) with `offer` and `replace`, replaces at L594, L1068, L1083, L1098, offers at L596, L1045, L1076, L1640-1666, direct assignments at L518, L582-587, L1047, L1138-1139, L1286, L1288, L1294, the restore at L489, the `legacy` source, the `collection` shadow point (`collection.py:1144`) | 4 hours |
 | 4 | Gen II, in two PRs. 4a is shadow: story, holds, ladder and the `_step` sites as sources, with the Gen II needs table. 4b switches them | 4a: the `ladder` shadow point (policy.py:1489-1496). 4b: boss training (L368-369), release (L1486), heal (L1532, L1593-1594), partner and HM (L1564, L1570), the no-route fallback (L1601), Sudowoodo (L1720), the errand restore (L1399), the `holds` return (`collection.py:811`) | 4 hours |
 | 5 | Director source: the manager pin becomes the director in both generations, and its choices go into the trace. A parked pin's reason reaches the API state and the UI, and a test checks that a Gen I project resumes intact after a pin | the pin exemptions (`gen2/collection.py:627-629`, L702, L704, L712), the Gen I pin abandon (`policies/collection.py:1446`) | 2 hours |
 
