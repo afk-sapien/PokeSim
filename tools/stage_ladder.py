@@ -31,11 +31,16 @@ holds, the way pokecore's own ladder test does, and pokecore.save_summary names 
 rungs at once at niceness 10, and takes the load gate's heavy lock first. A randomized ladder plays on
 its own share code. Goals are reseeded as in ``replay_audit.py run --reseed-goals``, so two code versions
 meet the same rolls. A run ends at its first stall, nothing achieved for 20 game minutes, one battle
-running 20 game minutes or a retry loop, and keeps a bundle. The gate compares each rung's stall, errors
-and wasted share with the tracked tools/ladder/gate-baseline.json and exits 1 on a stall the baseline
-lacks, more errors, or a wasted share more than two points higher. ``--write-baseline`` stores the run
-there, for a pull request that names the play change it accepts. The runs, bundles and gate-report.json
-go under ROOT/gate/<time>.
+running 20 game minutes or a retry loop, and keeps a bundle. The gate compares each rung's stall, errors,
+story milestones and wasted share with the tracked tools/ladder/gate-baseline.json. It exits 1 on a
+stall the baseline lacks, more errors, fewer story milestones, or a wasted share more than two points
+higher. A rung that earns more story milestones passes while its wasted share is at most ten points
+higher, and the gate lists it under past_baseline, since its baseline then wants a reviewed rewrite.
+The story milestones are the ones the policy keeps in story order, ``progression.milestones`` in Red,
+Blue and Yellow and the checkpoints the Gold, Silver and Crystal story notes as it passes them. The gate
+counts the ones a rung earned in its window. ``--write-baseline`` stores the run there, for a pull
+request that names the play change it accepts. The runs, bundles and gate-report.json go under
+ROOT/gate/<time>.
 
 Red, Blue and Yellow pick their game data from the cartridge, so no POKESIM_GEN1_VARIANT is needed.
 Gold, Silver and Crystal need --data-root or GEN2_DATA_DIR. Ladder folders hold private game data and
@@ -61,7 +66,7 @@ sys.path.insert(0, str(ROOT))
 # Policy modules load after ``prepare``, once the cartridge has set the Gen I variant and the randomizer.
 # The gate's rung runner and its comparison live in pokesim.replay.rung, which the replay bisect shares.
 from pokesim.replay.rung import (GATE_FRAMES, GATE_QUIET, GATE_TIMEOUT, GATE_WASTE_POINTS, _bundle, _cartridges, compare,
-                                 gate_rung, prepare)
+                                 gate_rung, past_baseline, prepare)
 
 GEN1_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'post_game')
 GEN2_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'champion_first',
@@ -445,7 +450,8 @@ def _gate_line(result, base):
         return f'{name:<30} failed: {result["failed"]}'
     change = f'{result["waste"] - base["waste"]:+5.1f}' if base else '  new'
     stall = f', stall: {result["stall"]["reason"]}' if result['stall'] else ''
-    return f'{name:<30} {result["waste"]:5.1f}% wasted ({change}), {result["errors"]} errors{stall}'
+    story = f', earned {", ".join(result["story"])}' if result.get('story') else ''
+    return f'{name:<30} {result["waste"]:5.1f}% wasted ({change}), {result["errors"]} errors{story}{stall}'
 
 
 def attempt(folder, commit):
@@ -507,10 +513,12 @@ def gate(args):
     with ThreadPoolExecutor(args.jobs) as pool:
         results = list(pool.map(play, jobs))
     problems = compare(results, baseline, args.waste_points)
+    further = past_baseline(results, baseline)
     commit = _commit()
     report = {'commit': commit, 'attempt': attempt(args.root / 'gate', commit), 'frames': args.frames,
               'wall_seconds': round(time.monotonic() - began, 1),
-              'baseline': str(baseline_path) if stored else None, 'problems': problems, 'results': results}
+              'baseline': str(baseline_path) if stored else None, 'problems': problems,
+              'past_baseline': further, 'results': results}
     out.mkdir(parents=True, exist_ok=True)
     (out / 'gate-report.json').write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
     stalls = [result for result in results if result.get('stall')]
@@ -523,7 +531,7 @@ def gate(args):
             return 1
         rungs = {f'{result["ladder"]}/{result["rung"]}': {
             'stall': result['stall'] and result['stall']['reason'], 'errors': result['errors'],
-            'waste': result['waste']} for result in results}
+            'waste': result['waste'], 'story': result.get('story', [])} for result in results}
         baseline_path.write_text(json.dumps({'commit': report['commit'], 'attempt': report['attempt'],
                                              'taken': time.strftime('%Y-%m-%d'), 'frames': args.frames, 'rungs': rungs},
                                             indent=1) + '\n', encoding='utf-8')
@@ -532,6 +540,8 @@ def gate(args):
     if stored is None:
         print(f'no baseline at {baseline_path}. Take one on main with --write-baseline.')
         return 1
+    for line in further:
+        print(line)
     for problem in problems:
         print(problem)
     return 1 if problems else 0

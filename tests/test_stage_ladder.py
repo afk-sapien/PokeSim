@@ -243,9 +243,45 @@ def test_check_fails_on_a_rung_whose_save_reads_as_another_stage(tmp_path, monke
     assert main(['check', str(roms), str(tmp_path / 'ladders')]) == 1
 
 
-def _result(rung, waste=10.0, errors=0, stall=None, ladder='gold'):
-    return {'ladder': ladder, 'rung': rung, 'waste': waste, 'errors': errors,
-            'stall': stall and {'reason': stall, 'bundle': 'stalls/stall-00010m'}}
+def _result(rung, waste=10.0, errors=0, stall=None, ladder='gold', story=None):
+    result = {'ladder': ladder, 'rung': rung, 'waste': waste, 'errors': errors,
+              'stall': stall and {'reason': stall, 'bundle': 'stalls/stall-00010m'}}
+    if story is not None:
+        result['story'] = list(story)
+    return result
+
+
+GOLD_BASE = {'gold/badges_6': {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog', 'storm']}}
+
+
+def test_a_rung_past_its_baseline_goal_passes_with_a_flag_up_to_ten_points_more_waste():
+    # Further along the story is better play, so up to ten more points of waste pass and the flag asks
+    # for a reviewed rewrite of the baseline.
+    further = _result('badges_6', waste=17.0, story=['fog', 'storm', 'mineral'])
+    assert stage_ladder.compare([further], GOLD_BASE) == []
+    assert stage_ladder.past_baseline([further], GOLD_BASE) == [
+        'gold/badges_6: earned mineral past the baseline, at 17.0% wasted, 10.0% before. '
+        'Rewrite its baseline in a reviewed change.']
+    assert stage_ladder.compare([_result('badges_6', waste=21.0, story=['fog', 'storm', 'mineral'])], GOLD_BASE) == [
+        'gold/badges_6: 21.0% wasted, 10.0% before, more than 10 points up past the baseline to mineral']
+
+
+def test_a_rung_short_of_its_baseline_goal_fails_and_names_the_goal_it_stopped_before():
+    assert stage_ladder.compare([_result('badges_6', waste=5.0, story=['fog'])], GOLD_BASE) == [
+        'gold/badges_6: stopped before storm, which the baseline reached']
+    assert stage_ladder.past_baseline([_result('badges_6', waste=5.0, story=['fog'])], GOLD_BASE) == []
+
+
+def test_a_rung_level_with_its_baseline_keeps_the_two_point_rule_and_a_stall_fails_past_it():
+    assert stage_ladder.compare([_result('badges_6', waste=12.5, story=['storm', 'fog'])], GOLD_BASE) == [
+        'gold/badges_6: 12.5% wasted, 10.0% before']
+    stalled = _result('badges_6', waste=11.0, stall='quiet', story=['fog', 'storm', 'mineral'])
+    assert stage_ladder.compare([stalled], GOLD_BASE) == ['gold/badges_6: a new stall, quiet']
+    assert stage_ladder.past_baseline([stalled], GOLD_BASE) == []
+    # A baseline taken before the gate counted milestones ranks every run level with it.
+    old = {'gold/badges_6': {'stall': None, 'errors': 0, 'waste': 10.0}}
+    assert stage_ladder.compare([_result('badges_6', waste=17.0, story=['fog', 'storm', 'mineral'])], old) == [
+        'gold/badges_6: 17.0% wasted, 10.0% before']
 
 
 def test_the_gate_fails_on_a_new_stall_more_errors_or_waste_up_more_than_two_points():
@@ -319,7 +355,8 @@ def test_the_tracked_baseline_is_the_default_and_names_every_rung_once():
         allowed = stage_ladder.RANDOMIZED_RUNGS if ladder.endswith('-randomized') else \
             rungs['2' if ladder.split('-')[0] in ('gold', 'silver', 'crystal') else '1']
         assert stage in allowed, name
-        assert set(rung) == {'stall', 'errors', 'waste'} and 0 <= rung['waste'] <= 100, name
+        assert set(rung) - {'story'} == {'stall', 'errors', 'waste'} and 0 <= rung['waste'] <= 100, name
+        assert all(isinstance(key, str) for key in rung.get('story', [])), name
 
 
 @pytest.mark.skipif(shutil.which('flock') is None, reason='needs flock')

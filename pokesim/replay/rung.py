@@ -26,12 +26,19 @@ TRAINING = frozenset({'collection_train', 'collect_train'})
 # The reason a Red, Blue or Yellow hunt gives for its trip, and the hunt kind it stands for.
 GEN1_PURPOSES = {'a partner another adventure needs': 'partner', 'more chances to find high DV partners': 'quality',
                  'another partner for the collection': 'repeat', 'a missing Pokédex entry': 'completion'}
-# The gate plays 30 game minutes from every rung and fails on a new stall, more errors, or a wasted
-# share up by more than two points. Its stall watch is shorter than the snapshot's to fit the batch.
+# The gate plays 30 game minutes from every rung. It fails on a new stall, more errors, or fewer story
+# milestones than the baseline earned. At the baseline's count of milestones, a wasted share up by more
+# than two points fails. A rung that earns more passes up to ten points, since a run that gets further
+# also meets more of the game, and the gate names it for a reviewed baseline rewrite. Its stall watch is
+# shorter than the snapshot's to fit the batch.
 GATE_FRAMES = 108000
 GATE_QUIET = 20
 GATE_WASTE_POINTS = 2.0
+GATE_FURTHER_POINTS = 10.0
 GATE_TIMEOUT = 1800
+# Gold, Silver and Crystal also note their last Bug-Catching Contest and Battle Tower visit among the
+# milestones. Both repeat, and neither is story.
+ACTIVITIES = frozenset({'contest', 'tower'})
 
 
 def describe(goal):
@@ -57,6 +64,14 @@ def _hunt(description):
         kind = GEN1_PURPOSES.get(match[2], 'other')
         return kind, match[1], f'Find {match[1]} for {match[2]}'
     return None
+
+
+def story_milestones(policy):
+    """The story milestones ``policy`` holds, in story order. Red, Blue and Yellow check each one every
+    decision, from the starter through the eight badges to the Champion. Gold, Silver and Crystal note
+    each story checkpoint with its frame as their story passes it, from the starter to Red."""
+    return [key for key, held in getattr(policy, 'completed', {}).items()
+            if held is not False and key not in ACTIVITIES]
 
 
 def row(key, description):
@@ -308,6 +323,11 @@ def run_one(args, watch=None):
         if not done[2]:
             wasted[done[0]] += done[1]
     seeded = None  # The goal key the last reseed was for. Seeds follow goal keys, not rows.
+    # The story milestones held when the policy first read them, so the run counts what it earned after.
+    # Gold, Silver and Crystal note the checkpoints a checkpoint state has passed as their story picks
+    # the first goal. Red, Blue and Yellow start on a boot goal and read every milestone at once on
+    # their first decision after it.
+    held = None
     released = []
     # The shadow arbiter's picks, read only (planner design S3): frames by the kind it would have chosen.
     shadow = getattr(run.policy, 'shadow', None)
@@ -330,6 +350,8 @@ def run_one(args, watch=None):
         except Exception:  # A snapshot read can fail mid transition. The next one counts.
             current = None
         goal = run.policy.goal
+        if held is None and goal is not None and (run.generation == 2 or getattr(run.policy, 'completed', None)):
+            held = story_milestones(run.policy)
         key = goal.key if goal is not None else 'none'
         line, title = row(key, describe(goal))
         titles.setdefault(line, title)
@@ -372,6 +394,7 @@ def run_one(args, watch=None):
             break
     run.stop()
     party.append(_levels(snapshot))
+    story = story_milestones(run.policy)
     frames = dict(monitor.frames)
     result = {
         'state': str(args.state), 'game': game, 'frames': sum(frames.values()), 'errors': errors,
@@ -382,6 +405,7 @@ def run_one(args, watch=None):
         'released': released, 'reseed_goals': bool(seeds), 'lead_in': args.lead_in, 'rows': True,
         'flees': {line: dict(counts) for line, counts in flees.items()}, 'randomizer': randomizer,
         'fair_wild_dvs': bool(args.fair_wild_dvs),
+        'story': [key for key in story if key not in (story if held is None else held)],
     }
     if shadow is not None:
         result['shadow'] = {**shadow.summary(), 'frames_by_pick': dict(would)}
@@ -481,14 +505,26 @@ def gate_rung(args):
     result = run_one(audit, watch)
     summary = {'ladder': args.ladder.name, 'rung': args.rung, 'randomizer': code, 'frames': result['frames'],
                'errors': result['errors'], 'stall': watch.stall,
-               'waste': round(100 * sum(result['wasted'].values()) / max(result['frames'], 1), 2)}
+               'waste': round(100 * sum(result['wasted'].values()) / max(result['frames'], 1), 2),
+               'story': result['story']}
     (args.out / 'summary.json').write_text(json.dumps(summary, indent=1) + '\n', encoding='utf-8')
     return 0
 
 
-def compare(results, baseline, points=GATE_WASTE_POINTS):
+def reach(result, base):
+    """1 when ``result`` earned more story milestones than the baseline, -1 fewer, 0 as many. A baseline
+    or result without the count is level. The count ranks them, not the names, so two runs that earn
+    the same number of Kanto badges in a different order are level."""
+    earned, before = result.get('story'), base.get('story')
+    if earned is None or before is None:
+        return 0
+    return (len(earned) > len(before)) - (len(earned) < len(before))
+
+
+def compare(results, baseline, points=GATE_WASTE_POINTS, further=GATE_FURTHER_POINTS):
     """What a gate run did worse than the baseline: a run that failed, a stall on a rung that had none, more
-    errors, or a wasted share up by more than ``points``. A rung the baseline lacks is only reported."""
+    errors, fewer story milestones, or a wasted share up by more than ``points``. A rung that earned more
+    milestones may rise by ``further``. A rung the baseline lacks is only reported."""
     problems = []
     for result in results:
         name = f'{result["ladder"]}/{result["rung"]}'
@@ -500,6 +536,27 @@ def compare(results, baseline, points=GATE_WASTE_POINTS):
                 problems.append(f'{name}: a new stall, {result["stall"]["reason"]}')
             if result['errors'] > base['errors']:
                 problems.append(f'{name}: {result["errors"]} errors, {base["errors"]} before')
-            if result['waste'] - base['waste'] > points:
-                problems.append(f'{name}: {result["waste"]:.1f}% wasted, {base["waste"]:.1f}% before')
+            ahead = reach(result, base)
+            if ahead < 0:
+                missed = next((key for key in base['story'] if key not in result['story']), base['story'][-1])
+                problems.append(f'{name}: stopped before {missed}, which the baseline reached')
+            elif result['waste'] - base['waste'] > (further if ahead else points):
+                past = f', more than {further:g} points up past the baseline to {result["story"][-1]}' if ahead else ''
+                problems.append(f'{name}: {result["waste"]:.1f}% wasted, {base["waste"]:.1f}% before{past}')
     return problems
+
+
+def past_baseline(results, baseline, further=GATE_FURTHER_POINTS):
+    """The rungs that passed with more story milestones than the baseline. Each asks for a reviewed
+    rewrite of its baseline, which the gate never writes on its own."""
+    found = []
+    for result in results:
+        name = f'{result["ladder"]}/{result["rung"]}'
+        base = baseline.get(name)
+        if (base is None or result.get('failed') or reach(result, base) <= 0
+                or compare([result], baseline, further=further)):
+            continue
+        earned = ', '.join(key for key in result['story'] if key not in base['story'])
+        found.append(f'{name}: earned {earned} past the baseline, at {result["waste"]:.1f}% wasted, '
+                     f'{base["waste"]:.1f}% before. Rewrite its baseline in a reviewed change.')
+    return found
