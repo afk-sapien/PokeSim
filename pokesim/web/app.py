@@ -30,6 +30,8 @@ from ..trade import preferences
 
 STATIC = Path(__file__).parent / "static"
 BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
+# The longest an open screen stream stays silent. The library's proxy gives up on a child after 30.
+STREAM_KEEPALIVE_SECONDS = 10
 # Set for each request that arrived through a /view/ link.
 VIEWING = contextvars.ContextVar('pokesim_viewing', default=False)
 # The adventure role the library named for this request. Without accounts everyone is the owner.
@@ -755,15 +757,25 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     async def stream():
         boundary = "pokesimframe"
 
+        def part(data):
+            return (f"--{boundary}\r\nContent-Type: image/png\r\nContent-Length: {len(data)}\r\n\r\n").encode() + data + b"\r\n"
+
         async def gen():
-            seq = -1
             delay = 1.0 / max(1, config.STREAM_FPS)
+            clock = asyncio.get_running_loop().time
+            # The first part is the frame a poll would get, so a paused Gold or Silver draws it fresh.
+            data = await asyncio.to_thread(emu.current_frame)
+            seq, sent = emu.frame_seq, clock()
+            if data:
+                yield part(data)
             while True:
                 emu.watch()     # keep frames being produced for as long as this stream is open
-                if emu.frame_seq != seq:
-                    seq = emu.frame_seq
-                    data = emu.frame_image
-                    yield (f"--{boundary}\r\nContent-Type: image/png\r\nContent-Length: {len(data)}\r\n\r\n").encode() + data + b"\r\n"
+                # A paused game draws nothing new. Sending its frame again now and then keeps the
+                # library's proxy and any reverse proxy from closing a quiet stream.
+                if emu.frame_seq != seq or clock() - sent >= STREAM_KEEPALIVE_SECONDS:
+                    seq, sent = emu.frame_seq, clock()
+                    if emu.frame_image:
+                        yield part(emu.frame_image)
                 await asyncio.sleep(delay)
 
         return StreamingResponse(gen(), media_type=f"multipart/x-mixed-replace; boundary={boundary}",
