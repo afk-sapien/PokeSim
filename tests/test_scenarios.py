@@ -280,10 +280,11 @@ def test_a_seed_varies_a_checkpoint_run_only_when_the_caller_asks(tmp_path, monk
     # A checkpoint carries the policy's own random state, so four postgame hunts with four seeds
     # were one hunt repeated four times. Replaying a saved stall still wants the original choices.
     import random
-    from pokesim import headless
-    from pokesim.headless import HeadlessRun
+    from types import SimpleNamespace
+
+    from pokesim.runtime import headless
+    from pokesim.runtime.headless import HeadlessRun
     saved = random.Random(99).getstate()
-    monkeypatch.setattr(headless, 'RunMemory', type('M', (), {'from_dict': staticmethod(lambda d: d)}))
     monkeypatch.setattr(headless.CheckpointStore, 'checkpoint_metadata',
                         lambda self, path: {'policy_state': {}, 'run_memory': {}, 'frame': 5,
                                             'rom_sha1': 'rom', 'pyboy_version': '2.7.0'})
@@ -293,6 +294,8 @@ def test_a_seed_varies_a_checkpoint_run_only_when_the_caller_asks(tmp_path, monk
     def rolled(reseed):
         run = HeadlessRun.__new__(HeadlessRun)
         run.rom_sha1, run.seed, run.rng = 'rom', 4321, None
+        run.adapter = SimpleNamespace(check=lambda metadata: None, before_load=lambda run, first: None,
+                                      after_load=lambda run, metadata, first: None)
         run.policy = type('P', (), {'rng': random.Random(), 'unpin_goal': lambda self: None,
                                     'load_state_dict': lambda self, data: self.rng.setstate(saved)})()
         released = []

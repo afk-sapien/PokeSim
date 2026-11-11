@@ -46,7 +46,7 @@ def main(argv=None, prog=None):
         parser.error('Outputs contain private game data. Choose a folder outside the checkout.')
     # These modules read the game data as they load, so --help works on a machine without game data.
     from pokesim.events import diff
-    from pokesim.headless import HeadlessRun
+    from pokesim.runtime.headless import HeadlessRun
     from pokesim.policies.progression import milestones
     from pokesim.ram import read_snapshot
     from pokesim.screen import Screen

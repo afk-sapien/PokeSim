@@ -26,6 +26,8 @@ SYMBOL = re.compile(r'^[wsh][A-Z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)?$')
 ALLOWED = {
     'pokesim/experimental/gen2.py': (18, 0),
     'pokesim/gen2/activity.py': (1, 21),
+    # Moved from gen2/headless.py with this read.
+    'pokesim/gen2/adapter.py': (0, 1),
     'pokesim/gen2/cable_verification.py': (0, 5),
     'pokesim/gen2/celebi.py': (0, 4),
     'pokesim/gen2/collection.py': (0, 8),
@@ -33,7 +35,6 @@ ALLOWED = {
     'pokesim/gen2/emulator.py': (0, 5),
     'pokesim/gen2/flight.py': (0, 2),
     'pokesim/gen2/gamecorner.py': (0, 1),
-    'pokesim/gen2/headless.py': (0, 1),
     'pokesim/gen2/item_sources.py': (0, 5),
     'pokesim/gen2/kanto.py': (0, 2),
     'pokesim/gen2/legendary.py': (0, 2),

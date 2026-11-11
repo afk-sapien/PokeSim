@@ -31,13 +31,9 @@ def cartridge(generation):
 
 
 def headless(generation, rom, checkpoint=None, trace=None):
-    if generation == 1:
-        from pokesim.headless import HeadlessRun
-        from pokesim.ram import read_snapshot
-        run = HeadlessRun(rom, checkpoint, seed=7, trace=trace)
-        return run, lambda: read_snapshot(run.pb.memory, run.frame)
-    from pokesim.gen2.headless import HeadlessRun
-    run = HeadlessRun(rom, checkpoint, seed=7, trace=trace, data_root=os.environ['GEN2_DATA_DIR'])
+    from pokesim.runtime.headless import HeadlessRun
+    data_root = os.environ['GEN2_DATA_DIR'] if generation == 2 else None
+    run = HeadlessRun(rom, checkpoint, seed=7, trace=trace, data_root=data_root)
     return run, run.read
 
 

@@ -236,15 +236,10 @@ def post_game(generation):
 def play(generation, rom, checkpoint, folder, read):
     """Play ``REPLAY_FRAMES`` from ``checkpoint``, serving the catalogue every ``READ_EVERY`` frames when
     ``read``. Gives the trace head, the frame, the policy's save and tables, and the catalogues served."""
-    if generation == 1:
-        from pokesim.headless import HeadlessRun
-        from pokesim.ram import read_snapshot
-        run = HeadlessRun(rom, checkpoint, seed=7, trace=folder)
-        snapshot = lambda: read_snapshot(run.pb.memory, run.frame)  # noqa: E731
-    else:
-        from pokesim.gen2.headless import HeadlessRun
-        run = HeadlessRun(rom, checkpoint, seed=7, trace=folder, data_root=os.environ['GEN2_DATA_DIR'])
-        snapshot = run.read
+    from pokesim.runtime.headless import HeadlessRun
+    data_root = os.environ['GEN2_DATA_DIR'] if generation == 2 else None
+    run = HeadlessRun(rom, checkpoint, seed=7, trace=folder, data_root=data_root)
+    snapshot = run.read
     served = []
     try:
         assert run.tracer.recording

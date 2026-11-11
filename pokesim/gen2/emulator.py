@@ -30,6 +30,7 @@ from ..runtime.supervision import report as stuck_report
 from ..stalls import LoopGuard, StallWatch
 from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import validate_runtime
+from .adapter import SCREEN_FRAMES, new_history
 from .data import GameData
 from . import journal
 from .policy import Policy
@@ -41,11 +42,6 @@ log = logging.getLogger('pokesim.gen2')
 
 # The running cartridge clock's latest reading, in seconds since its zero point (see core.clock_elapsed).
 CLOCK_KEY = 'gen2-clock-v1'
-
-
-def new_history():
-    """The maps, Pokédex and League progress a new game's journal starts from."""
-    return {'maps': [], 'owned': [], 'badges': 0, 'league': 0}
 
 
 # pret engine/events/halloffame.asm: the cartridge stops counting Hall of Fame entries at
@@ -104,8 +100,6 @@ def solid(image):
     extrema = image.getextrema()
     bands = extrema if isinstance(extrema[0], tuple) else (extrema,)
     return all(low == high for low, high in bands)
-# A screen that has not changed for half a game minute is a loop, not a pause.
-SCREEN_FRAMES = 1800
 # The first stall of the collection's goal sets it aside in place of a reload, and a second stall before
 # any new progress reloads as before (runtime/supervision.py).
 RELOAD_AFTER_PARK = True

@@ -151,7 +151,8 @@ def wrap_seeds(module):
     cls.start = traced_start
 
 
-AFTER = {'pokesim.headless': wrap_run, 'pokesim.gen2.headless': wrap_run,
+# A bisect runs older checkouts too, so the runners' names before the shared headless run stay.
+AFTER = {'pokesim.runtime.headless': wrap_run, 'pokesim.headless': wrap_run, 'pokesim.gen2.headless': wrap_run,
          'pokesim.replay.rung': wrap_seeds, 'tools.replay_audit': wrap_seeds}
 
 

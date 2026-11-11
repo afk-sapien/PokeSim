@@ -346,7 +346,7 @@ def test_the_shim_records_the_run_emulator_and_logs_decides_before_presses(state
             state.recorder.events.append(('press', *actions))
 
     shim.wrap_emulator(Emulator)
-    module = types.ModuleType('pokesim.headless')
+    module = types.ModuleType('pokesim.runtime.headless')
     module.HeadlessRun = HeadlessRun
     shim.wrap_run(module)
     shim.wrap_run(module)

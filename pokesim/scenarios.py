@@ -24,9 +24,9 @@ from pokecore.gen1 import W_BATTLE_MON_HP, W_BATTLE_MON_PP, W_BATTLE_MON_STATUS,
 from .checkpoints import read_manifest
 from .events import diff
 from .game_data import VARIANT_ENV, current_variant
-from .headless import HeadlessRun
 from .ram import (PARTY_STRUCT, W_BADGES, W_BAG_ITEMS, W_DEX_OWNED, W_EVENT_FLAGS, W_IS_IN_BATTLE, W_MONEY, W_NUM_BAG_ITEMS,
-                  W_PARTY_COUNT, W_PARTY_MONS, read_snapshot)
+                  W_PARTY_COUNT, W_PARTY_MONS)
+from .runtime.headless import HeadlessRun
 from .runtime.supervision import Supervisor
 from .stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, held_rose
 from .strategy_data import EVENTS, ITEMS
@@ -562,17 +562,16 @@ def open_run(scenario, rom=None):
     partners = frozenset(value for value in scenario.trade_partners if valid_partner(value))
     if generation == 2:
         check_gen2_edits(scenario.edits)
-        from .gen2.headless import HeadlessRun as Gen2Run
-        run = Gen2Run(path, scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed), data_root=gen2_data_root())
-        run.policy.trade_partners = lambda: partners
+    run = HeadlessRun(path, scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed),
+                      data_root=gen2_data_root() if generation == 2 else None)
+    run.policy.trade_partners = lambda: partners
+    if generation == 2:
         try:
             apply_gen2_edits(run, scenario.edits)
         except Exception:
             run.stop()
             raise
         return run, Gen2Watch(run)
-    run = HeadlessRun(path, scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed))
-    run.policy.trade_partners = lambda: partners
     apply_edits(run.pb.memory, scenario.edits)
     return run, Gen1Watch(run)
 
@@ -609,7 +608,7 @@ def play(scenario, rom=None, progress=None):
     if variant is not None and variant != current_variant():
         return _play_elsewhere(scenario, rom, variant)
     run, watch = open_run(scenario, rom)
-    read = run.read if run.generation == 2 else lambda: read_snapshot(run.pb.memory, run.frame)
+    read = run.read
     try:
         start = progress_frame = run.frame
         budget = scenario.budget_game_minutes * MINUTE

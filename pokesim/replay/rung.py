@@ -97,16 +97,13 @@ def _partners(run):
 
 
 def _open(rom, state, data_root, seed, fair_wild_dvs=None):
-    if rom.suffix == '.gbc':
-        if fair_wild_dvs:
-            raise ValueError('Fair wild DVs is only for Red, Blue and Yellow')
-        from pokesim.gen2.headless import HeadlessRun
-        run = _partners(HeadlessRun(rom, state, seed=seed, data_root=Path(data_root) if data_root else None))
-        return run, run.read, run.game
-    from pokesim.headless import HeadlessRun
-    from pokesim.ram import read_snapshot
-    run = _partners(HeadlessRun(rom, state, seed=seed, reseed=True, fair_wild_dvs=fair_wild_dvs))
-    return run, lambda: read_snapshot(run.pb.memory, run.frame), run.policy.collection.version
+    from pokesim.runtime.headless import HeadlessRun
+    if rom.suffix == '.gbc' and fair_wild_dvs:
+        raise ValueError('Fair wild DVs is only for Red, Blue and Yellow')
+    # A Gen I rung plays with the rung's seed, and a Gen II rung with the random state its save holds.
+    run = _partners(HeadlessRun(rom, state, seed=seed, reseed=rom.suffix != '.gbc', fair_wild_dvs=fair_wild_dvs,
+                                data_root=Path(data_root) if data_root else None))
+    return run, run.read, run.game
 
 
 def random_bytes(run):

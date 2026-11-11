@@ -150,8 +150,8 @@ def test_strategic_opening_receives_pikachu_without_reloads():
 
 def test_a_headless_run_refuses_a_cartridge_the_loaded_game_data_does_not_match():
     """Yellow replayed under Red data read menus at Red's addresses, so each battle shortcut timed out."""
-    from pokesim.headless import HeadlessRun
     from pokesim.policies.progression import YELLOW
+    from pokesim.runtime.headless import HeadlessRun
     rom, variant = (RED_ROM, 'red') if YELLOW else (YELLOW_ROM, 'yellow')
     if not rom.exists():
         pytest.skip('no ROM')

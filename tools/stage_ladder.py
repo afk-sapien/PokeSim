@@ -168,16 +168,12 @@ def write_ladder(folder, cartridge, code):
 
 
 def open_fresh(rom, generation, seed, data_root):
+    from pokesim.runtime.headless import HeadlessRun
+    from pokesim.scenarios import Gen1Watch, Gen2Watch, gen2_data_root
     if generation == 2:
-        from pokesim.gen2.headless import HeadlessRun
-        from pokesim.scenarios import Gen2Watch, gen2_data_root
-        run = HeadlessRun(rom, None, seed=seed, rng=random.Random(seed), data_root=data_root or gen2_data_root())
-        return run, Gen2Watch(run), run.read
-    from pokesim.headless import HeadlessRun
-    from pokesim.ram import read_snapshot
-    from pokesim.scenarios import Gen1Watch
-    run = HeadlessRun(rom, seed=seed, rng=random.Random(seed))
-    return run, Gen1Watch(run), lambda: read_snapshot(run.pb.memory, run.frame)
+        data_root = data_root or gen2_data_root()
+    run = HeadlessRun(rom, seed=seed, rng=random.Random(seed), data_root=data_root)
+    return run, (Gen2Watch if generation == 2 else Gen1Watch)(run), run.read
 
 
 def snapshot(args):
