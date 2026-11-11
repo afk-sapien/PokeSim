@@ -6,13 +6,29 @@ from pathlib import Path
 import time
 from types import SimpleNamespace
 
-from pokecore.gen2.clock import boot, follow_game_time, lock_clock
+from pokecore.gen2.clock import FIXED_CLOCK_EPOCH, boot, follow_game_time, lock_clock
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
 from pokesim.gen2.views import state_view
 from pokesim.runtime.game_loop import GameLoop, Gen2
 from pokecore.gen2.ram import Memory, read_snapshot
+
+
+def resume_clock(pb, state):
+    """Freeze a loaded state's clock where the run that saved it stopped.
+
+    A raw state keeps only the clock's zero point, so each state this tool writes has a sibling
+    .clock.json with the frozen instant. A state without one resumes at the host clock, as the
+    managed runtime opens it, because Gen II reads a clock earlier than its saved time as a reset.
+    """
+    record = state.with_suffix('.clock.json')
+    at = json.loads(record.read_text(encoding='utf-8'))['clock'] if record.exists() else time.time()
+    lock_clock(pb, at=at)
+
+
+def save_clock(pb, path):
+    path.write_text(json.dumps({'clock': pb.clock_now()}), encoding='utf-8')
 
 
 def main(argv=None, prog=None):
@@ -158,7 +174,9 @@ def main(argv=None, prog=None):
             config.EXTRA_STORE_ITEMS = True
             StoreStock(data).attach(pb)
     pb.set_emulation_speed(0)
-    lock_clock(pb, not args.real_clock)
+    # A fresh cartridge freezes at one fixed instant reading zero elapsed time, so two runs with
+    # the same seed end in the same final.state.
+    lock_clock(pb, not args.real_clock, at=FIXED_CLOCK_EPOCH, rebase=True)
     from pokesim.gen2.legendary import Recovery
     recovery = Recovery()
     frame, previous = 0, None
@@ -177,6 +195,8 @@ def main(argv=None, prog=None):
         if args.load:
             with args.load.open('rb') as source:
                 pb.load_state(source)
+            if not args.real_clock:
+                resume_clock(pb, args.load)
             metadata = args.load.with_suffix('.policy.json')
             if metadata.exists():
                 policy.load_state_dict(json.loads(metadata.read_text(encoding='utf-8')))
@@ -254,6 +274,7 @@ def main(argv=None, prog=None):
                     pb.screen.image.save(args.output / 'latest.png')
                     with (args.output / 'latest.state').open('wb') as output:
                         pb.save_state(output)
+                    save_clock(pb, args.output / 'latest.clock.json')
                     (args.output / 'latest.policy.json').write_text(json.dumps(policy.state_dict()), encoding='utf-8')
                     (args.output / 'progress.json').write_text(json.dumps({
                         'game': state_view(snapshot, egg_view=True), 'mode': policy.mode,
@@ -262,6 +283,7 @@ def main(argv=None, prog=None):
         pb.screen.image.save(args.output / 'final.png')
         with (args.output / 'final.state').open('wb') as output:
             pb.save_state(output)
+        save_clock(pb, args.output / 'final.clock.json')
         (args.output / 'final.policy.json').write_text(json.dumps(policy.state_dict()), encoding='utf-8')
         (args.output / 'final.json').write_text(json.dumps({'game': state_view(snapshot, egg_view=True), 'policy': policy.state_dict(),
                                                          'seconds': time.monotonic() - start, 'stopped': stopped}, indent=2), encoding='utf-8')

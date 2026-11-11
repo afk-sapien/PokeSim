@@ -223,6 +223,10 @@ Run a complete isolated campaign:
 ```
 
 `--load PATH` resumes a cartridge checkpoint and its sibling `.policy.json`.
+The cartridge clock stays frozen. A fresh run starts it at one fixed instant, so two runs with
+the same arguments end in the same `final.state`. Each saved state gets a sibling `.clock.json`
+that `--load` resumes the clock from, and a state without one resumes at the host clock.
+`--real-clock` runs on the host clock instead.
 Focused scenarios include ruins, tower, celebi, contest, gifts, legends, breeding, stones, trade_items, gamecorner, restore,
 Headbutt, Rock Smash and a specified encounter. The test suite covers runtime
 APIs, capture accounting, portable saves, trade preparation, durable exchange,
