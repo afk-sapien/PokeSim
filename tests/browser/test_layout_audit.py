@@ -368,7 +368,7 @@ LIBRARY_PAGES = [
 @pytest.mark.parametrize('name,path,ready,opener,dialog', LIBRARY_PAGES, ids=[row[0] for row in LIBRARY_PAGES])
 def test_library_pages_have_clean_layout(page, library, name, path, ready, opener, dialog):
     url, frame = library
-    page.route('**/frame.jpg', lambda route: route.fulfill(body=frame, content_type='image/jpeg'))
+    page.route('**/frame.jpg*', lambda route: route.fulfill(body=frame, content_type='image/jpeg'))
     found = []
     for width, height in WIDTHS:
         visit(page, width, height, url + path, ready)

@@ -33,7 +33,7 @@ def test_library_usage_updates_without_replacing_cards(page, tmp_path, monkeypat
         return create_app(manager)
     image = io.BytesIO()
     Image.new('RGB', (160, 144), '#99aa77').save(image, 'JPEG')
-    page.route('**/frame.jpg', lambda route: route.fulfill(body=image.getvalue(), content_type='image/jpeg'))
+    page.route('**/frame.jpg*', lambda route: route.fulfill(body=image.getvalue(), content_type='image/jpeg'))
     with serve(factory) as url:
         page.set_viewport_size({'width': width, 'height': 1000})
         page.goto(url)
