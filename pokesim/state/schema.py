@@ -8,6 +8,7 @@ changes a database, a copy of it is kept beside it, since the older PokeSim cann
 Version 1 is the shape every database had before versions. A database from before them may lack
 any part of it, so migration 1 creates what is missing and runs the column checks and the one-time
 changes that each start used to run. Version 2 adds the claims ledger (pokesim/state/claims.py).
+Version 3 moves the legendary returns' tickets into its rows (pokesim/return_claims.py).
 """
 from contextlib import closing
 import os
@@ -147,8 +148,14 @@ def _version_2(db):
     adopt(db)
 
 
-MIGRATIONS = {1: _version_1, 2: _version_2}
-VERSION = 2
+def _version_3(db):
+    """The legendary returns' tickets, both generations, moved from their kv values into claims rows."""
+    from ..return_claims import adopt
+    adopt(db)
+
+
+MIGRATIONS = {1: _version_1, 2: _version_2, 3: _version_3}
+VERSION = 3
 
 
 def version(db):

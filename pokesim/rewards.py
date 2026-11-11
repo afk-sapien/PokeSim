@@ -197,10 +197,11 @@ def held(snapshot, seed, generation=1):
 
 
 def rewound(store, metadata):
-    """Send the League claims delivered after the save ``metadata`` describes back to open.
+    """Send every claim delivered after the save ``metadata`` describes back to open.
 
-    The ownership barrier refuses most saves from before a gift, so this covers the ones it lets
-    through. The gift's own result checkpoint carries its reward id and never reopens its claim.
+    For a League gift, the ownership barrier refuses most saves from before it, so this covers the
+    ones it lets through. The gift's own result checkpoint carries its reward id and never reopens
+    its claim. A legendary return's encounter is written into the cartridge again.
     """
     frames = ((metadata or {}).get('play_clock') or {}).get('frames')
     if frames is None:

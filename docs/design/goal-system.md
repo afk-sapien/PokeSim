@@ -403,9 +403,9 @@ One table, `claims` (`pokesim/state/claims.py`, schema version 2):
 
 | Field | Meaning |
 |---|---|
-| `source` | `league` today. `legendary`, `event` and `mew` join in PR 5b |
+| `source` | `league` and `legendary` today. `event` and `mew` join in PRs 5b-2 and 5b-3 |
 | `key` | dex number or reward seed |
-| `state` | `open`, `delivered`, `declined`. `consumed` arrives with PR 5b |
+| `state` | `open`, `delivered`, `declined`, or `consumed` once a delivered encounter is caught |
 | `frame` | PlayClock frame of the last change, or none for a claim moved from the old League ledger |
 | `species` | the Pokémon a delivery wrote |
 | `seed` | the gift seed, so a reopened claim writes the same Pokémon |
@@ -425,7 +425,9 @@ PR 5a keeps no `staged` state in the table. A gift is staged and committed insid
 
 Before PR 5a, both generations took the next League gift from a stored `delivered` count and raised it when the gift was written, and a reload never moved that count back. The ownership barrier is what kept a gift from being lost: after a delivery, `custom-reward-barrier-v1` refuses every save older than that gift (the restore check in `emulator.py` for Gen I, `_behind_barrier` in `gen2/emulator.py`). The ledger keeps that barrier. Reopening a claim on rewind covers the saves the barrier lets through, and the idempotent check in step 4 makes a second delivery safe either way.
 
-PR 5a moves League rewards in both generations onto the `league` rows, and `store.league_marks` now reads them. PR 5b moves the pairs `legendary_returns.py` and `gen2/returns.py`, and `mew_returns.py` and `gen2/steps.py`. The single pipeline then replaces `runtime/reward_delivery.py` and `gen2/rewards.py`.
+PR 5a moves League rewards in both generations onto the `league` rows, and `store.league_marks` now reads them. PR 5b goes in three parts. 5b-1 moves the legendary returns of both generations (`legendary_returns.py` and `gen2/returns.py`) onto `legendary` rows through `return_claims.py`. 5b-2 moves the event returns (`step_events.py` and the event half of `gen2/returns.py`). 5b-3 moves Mew (`mew_returns.py` and `gen2/steps.py`). The single pipeline then replaces `runtime/reward_delivery.py` and `gen2/rewards.py`.
+
+A legendary return is delivered when its encounter is written into the cartridge, at a safe moment away from its room. The capture receipt consumes it and a refused catch declines it, and either stays closed until the next walking milestone. A reload to a save from before the delivery reopens it, so the encounter is written again, with no second notice. The claims reset on restart, so a new game's legendaries wait in their first homes whatever the last game caught. Schema version 3 moves each old kv ticket into a row with no frame, and the kv value keeps only the walking clock.
 
 ## 8. Frame budgets per tier
 
