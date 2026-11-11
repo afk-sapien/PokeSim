@@ -45,6 +45,7 @@ This index separates current instructions, future plans, and historical evidence
 - [Goal system v2](design/goal-system.md): proposal for a goal tree with hunt templates, typed progress events, one worth oracle, shared supervision and a report button, with the PR order to build it.
 - [Replayable bugs](design/replayable-bugs.md): approved design for phase 1, with frame clocks, seeded randomness, an action trace with a replay verifier, a bisect tool and automatic stall capture, with the PR order to build it.
 - [Adventure state store](design/adventure-state-store.md): approved design for one owner of each adventure's database, a schema version and atomic restart resets, with the PR order to build it beside phase 1.
+- [pokecore state layer](design/pokecore-state-layer.md): proposal for one typed state layer in pokecore for both generations, with Gen I boxes and names moved into pokecore and a guard against raw RAM reads, in mergeable slices.
 - [Distribution readiness](distribution-readiness.md): historical release-process review.
 
 - [Multi-adventure application plan](multi-adventure-app-plan.md) and
