@@ -53,7 +53,8 @@
     if (Grid) holder.outerHTML = Grid.toolbar(holder.dataset.monToolbar)
   }
   const fit = root => globalThis.Panel?.fitSprites?.(root)
-  // Full PC records, by trade key, so cards show types, DVs, moves and stats.
+  // Full PC records, by trade key, so cards show types, DVs, moves and stats. Cards never show the
+  // PC values, and those wait on the game, so each path asks for the records without them.
   async function records(path, viaApi) {
     try {
       const response = viaApi ? await PokeSim.api(path, {cache: 'no-store'}) : await PokeSim.fetch(path, {cache: 'no-store'})
@@ -69,7 +70,7 @@
   let ownRecords = null
   let ownRecordsRead = null
   function readOwn(force = false) {
-    if (!ownRecordsRead || force) ownRecordsRead = records('/api/pokedex/status?view=pc', false).then(found => {
+    if (!ownRecordsRead || force) ownRecordsRead = records('/api/pokedex/status?view=pc&values=0', false).then(found => {
       if (found) ownRecords = found
       return ownRecords
     })
@@ -207,8 +208,10 @@
     if (!globalThis.TradeUI?.status?.()) globalThis.TradeUI?.refresh?.()
     loadGames()
     try {
+      // Both requests start together. Neither waits for the other.
       const [data, found] = await Promise.all([
-        json(await PokeSim.api(`${OFFERS}/pokemon?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'}), 'Could not read this adventure’s Pokémon.'),
+        PokeSim.api(`${OFFERS}/pokemon?adventure_id=${encodeURIComponent(aid)}`, {cache: 'no-store'})
+          .then(response => json(response, 'Could not read this adventure’s Pokémon.')),
         readOwn()])
       if (found?.generation && Grid) Grid.generation('pick-mine', found.generation)
       pick.mine = data.pokemon || []
@@ -281,7 +284,7 @@
     pick.theirReason = ''
     if (!pick.theirs.length) $('#pick-theirs').innerHTML = '<p class="dex-empty">Reading their Pokémon…</p>'
     // Their full PC records arrive on their own. The cards fill in when they do.
-    if (!pick.theirRecords) records(`/games/${encodeURIComponent(id)}/api/pokedex/status?view=pc`, true).then(found => {
+    if (!pick.theirRecords) records(`/games/${encodeURIComponent(id)}/api/pokedex/status?view=pc&values=0`, true).then(found => {
       if (pick.game !== id || !found) return
       pick.theirRecords = found
       if (Grid) Grid.generation('pick-theirs', found.generation)

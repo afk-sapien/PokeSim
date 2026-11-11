@@ -737,6 +737,28 @@ def test_only_the_owner_sees_the_offer_and_across_owner_switches(page, game):
     expect(page.locator('#across-switch')).to_be_hidden()
 
 
+def test_the_pick_list_asks_for_its_pc_records_while_its_pokemon_are_still_coming(page, game):
+    library = Library(page, game[0])
+    held, released = [], []
+
+    # This adventure's Pokémon wait on the game, so hold them and watch the PC records go out anyway.
+    def hold(route):
+        if released:
+            route.fallback()
+        else:
+            held.append(route)
+
+    page.route(re.compile(rf'/api/v1/interactions/trade-offers/pokemon\?adventure_id={FROM}'), hold)
+    with page.expect_request(lambda request: 'view=pc' in request.url, timeout=5000) as asked:
+        library.open()
+    # The cards never show PC values, so the records come without them.
+    assert asked.value.url.endswith('/api/pokedex/status?view=pc&values=0')
+    released.append(True)
+    for route in held:
+        route.fallback()
+    expect(page.locator('#pick-mine .pc-mon').filter(has_text='BUD')).to_have_count(1)
+
+
 @pytest.mark.parametrize('width', [1280, 390])
 def test_the_first_answer_leaves_the_trade_key_where_it_was(page, game, width):
     library = Library(page, game[0])

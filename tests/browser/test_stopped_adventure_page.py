@@ -72,7 +72,7 @@ def test_failed_adventure_page_explains_and_offers_retry(page, tmp_path, monkeyp
 
 @pytest.mark.parametrize('width', [320, 1280])
 # The trading page asks for trade status and PC records, which a stopped adventure refuses.
-@pytest.mark.expected_errors(*refused('/api/trading', 409), *refused('/api/pokedex/status?view=pc', 409))
+@pytest.mark.expected_errors(*refused('/api/trading', 409), *refused('/api/pokedex/status?view=pc&values=0', 409))
 def test_stopped_adventure_page_starts_in_one_click(page, tmp_path, monkeypatch, width):
     factory, ids = build(tmp_path, monkeypatch, {'Quiet Cove': ('stopped', None, 'stopped')})
     with serve(factory) as url:
@@ -86,7 +86,7 @@ def test_stopped_adventure_page_starts_in_one_click(page, tmp_path, monkeypatch,
         SHOTS.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(SHOTS / f'stopped-{width}.png'), full_page=True, animations='disabled')
         with (page.expect_response(lambda response: response.url.endswith('/api/trading')),
-              page.expect_response(lambda response: response.url.endswith('/api/pokedex/status?view=pc'))):
+              page.expect_response(lambda response: response.url.endswith('/api/pokedex/status?view=pc&values=0'))):
             page.get_by_role('link', name='Cable Club trading').click()
         expect(page).to_have_url(f'{url}/games/{ids["Quiet Cove"]}/trading')
 
