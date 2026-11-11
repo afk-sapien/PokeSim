@@ -72,7 +72,6 @@ ALLOWED = {
     'pokesim/step_events.py': (1, 0),
     'pokesim/trade/boxes.py': (1, 0),
     'pokesim/trade_statistics.py': (5, 0),
-    'pokesim/yellow.py': (23, 0),
 }
 
 

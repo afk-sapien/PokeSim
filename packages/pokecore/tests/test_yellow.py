@@ -165,3 +165,21 @@ def test_yellow_emulator_reads_red_addresses(monkeypatch):
     assert emulator.memory[gen1.W_PARTY_COUNT] == 3
     assert emulator.tick_read(5, gen1.W_PLAYER_NAME, gen1.W_PLAYER_NAME + 1) == bytes([5])
     assert gen1.read_party(emulator.memory) == gen1.read_party(emulator.raw_memory, version='yellow')
+
+
+def test_open_emulator_keeps_one_yellow_class_and_obeys_the_variant(tmp_path, monkeypatch):
+    import io
+    # A second lookup must not build a new class, or isinstance checks fail on later emulators.
+    assert yellow.__getattr__('YellowEmulator') is yellow.YellowEmulator
+    seen = []
+    monkeypatch.setitem(vars(yellow), 'YellowEmulator', lambda rom, **kw: seen.append('yellow'))
+
+    def default(rom, **kw):
+        seen.append('default')
+
+    patched = tmp_path / 'patched.gb'
+    patched.write_bytes(bytes(32))
+    yellow.open_emulator(patched, default=default)
+    yellow.open_emulator(patched, default=default, yellow=True)
+    yellow.open_emulator(io.BytesIO(bytes(32)), default=default, yellow=False)
+    assert seen == ['default', 'yellow', 'default']
