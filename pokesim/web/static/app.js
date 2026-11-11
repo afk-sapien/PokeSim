@@ -81,6 +81,35 @@ let pendingControl = null
 // The library's generation for that Pause or Resume, so the page sees when another change replaced it.
 let pendingGeneration = null
 const PENDING = {pause: 'Pausing once the game can', resume: 'Resuming once the game can', take_control: 'Taking control once the game can'}
+// A control answers once the game finishes its current step, often half a second later. Until then its
+// button says what it is doing, and the state redraws in between leave that label alone.
+const WORKING = {'Take control': 'Taking control…', 'Take control back': 'Taking control…', 'Ask for control': 'Asking…',
+  'Let AI play': 'Handing back…', 'Stop playing': 'Stopping…', 'Leave the line': 'Leaving the line…',
+  Pause: 'Pausing…', Resume: 'Resuming…', 'Save now': 'Saving…'}
+const working = new Map()
+function startWorking(button) {
+  if (!button) return
+  button.disabled = true
+  button.setAttribute('aria-busy', 'true')
+  const label = button.textContent
+  const text = WORKING[label.trim()]
+  if (text) {
+    working.set(button, {text, label})
+    button.textContent = text
+  }
+}
+function stopWorking(button) {
+  if (!button) return
+  button.disabled = false
+  button.removeAttribute('aria-busy')
+  const busy = working.get(button)
+  if (!busy) return
+  working.delete(button)
+  // Take control and Pause then show the state the game answered with.
+  if (button.textContent === busy.text) button.textContent = busy.label
+  renderLease()
+  renderPause()
+}
 let stoppedNow = false
 // This person's role on the adventure. Without accounts everyone is the owner.
 let role = 'owner'
@@ -147,7 +176,7 @@ async function refreshLease() {
 
 async function leaseAction(button, action, userId) {
   releaseControls()
-  if (button) button.disabled = true
+  startWorking(button)
   try {
     const response = await PokeSim.fetch('/api/lease', {method: 'POST', headers: {'content-type': 'application/json'},
       body: JSON.stringify(userId ? {action, user_id: userId} : {action})})
@@ -162,7 +191,7 @@ async function leaseAction(button, action, userId) {
   } catch (error) {
     toast(error.message, true)
   } finally {
-    if (button) button.disabled = false
+    stopWorking(button)
   }
 }
 
@@ -182,7 +211,7 @@ function renderLease() {
     else if (status?.holder) [action, text] = manages ? ['take', 'Take control back'] : status.queued ? ['release', 'Leave the line'] : ['request', 'Ask for control']
     else if (status) [action, text] = ['request', 'Take control']
     if (take.dataset.lease !== action) take.dataset.lease = action
-    put(take, 'textContent', text)
+    put(take, 'textContent', working.get(take)?.text || text)
   }
   if (!status) return
   const holder = status.holder
@@ -205,9 +234,15 @@ function renderLease() {
   }
 }
 
+function renderPause() {
+  const pause = $('#pause')
+  put(pause, 'textContent', working.get(pause)?.text || (paused && !manualMode ? 'Resume' : 'Pause'))
+  put(pause, 'title', paused && !manualMode ? 'Resume AI play' : 'Pause the game and AI')
+}
+
 async function control(button, action, value, message) {
   releaseControls()
-  button.disabled = true
+  startWorking(button)
   try {
     const reply = await post(action, value)
     if (reply?.applied === false && reply.detail) {
@@ -225,7 +260,7 @@ async function control(button, action, value, message) {
   } catch (error) {
     toast(error.message, true)
   } finally {
-    button.disabled = false
+    stopWorking(button)
   }
 }
 
@@ -339,8 +374,7 @@ async function refreshState() {
     $('#connection').classList.toggle('is-quiet', Boolean($('#control-mode')))
     set('#status', 'textContent', stopped ? 'Stopped' : manualMode ? 'In control' : paused ? 'Paused' : 'Running')
     put($('#connection'), 'title', stopped ? 'Adventure stopped. Start it from the library.' : manualMode ? 'You’re in control' : paused ? 'Game paused' : 'Adventure in progress')
-    set('#pause', 'textContent', paused && !manualMode ? 'Resume' : 'Pause')
-    set('#pause', 'title', paused && !manualMode ? 'Resume AI play' : 'Pause the game and AI')
+    renderPause()
     const speedSelect = $('#simulation-speed')
     if (speedSelect && !speedBusy && Number.isFinite(state.speed)) {
       currentSpeed = state.speed
