@@ -224,8 +224,12 @@ class StrategicPolicy(Policy):
 
     def reset(self):
         moves, compatible, tables = self.tm_moves, self.tm_compatible, self.monitor_tables
+        # What the emulator read from the cartridge once: the version, its encounter odds and
+        # whether the world map fits it. A new game plays the same cartridge, so it keeps them.
+        version, wild, world = self.collection.version, self.collection.wild, self.nav.use_world
         self.__init__(self.seed, self.starter_setting)
         self.tm_moves, self.tm_compatible = moves, compatible
+        self.collection.version, self.collection.wild, self.nav.use_world = version, wild, world
         # The new game keeps the store's tables, empty, as the restart emptied the store's copy.
         tables.clear()
         self.monitor_tables = tables

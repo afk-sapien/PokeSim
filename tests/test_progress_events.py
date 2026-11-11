@@ -312,7 +312,8 @@ def test_both_reloads_write_the_reload_row(tmp_path, monkeypatch):
                                                  checkpoint_metadata=store.checkpoint_metadata),
                            snapshot=SimpleNamespace(map=emulator.MAPS['ROUTE_1']), reloads=0, frame=10 ** 6,
                            play_clock=PlayClock(), adventure_seed=7, supervisor=Supervisor(),
-                           _restore_first_valid=lambda paths: None, _tick=lambda n: None)
+                           _restore_first_valid=lambda paths: None, _tick=lambda n: None,
+                           _behind_barrier=lambda metadata: False)
     emulator.Emulator._unstick(game, game.frame, 'battle cannot end')
     gen2 = SimpleNamespace(supervisor=Supervisor(), snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'),
                            store=SimpleNamespace(autosaves=lambda: []), play_clock=PlayClock(), adventure_seed=7,

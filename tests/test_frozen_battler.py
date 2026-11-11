@@ -72,7 +72,8 @@ def test_a_league_attempt_is_checkpointed_on_entry_and_restarted_when_a_battle_r
                                                  checkpoint_metadata=store.checkpoint_metadata),
                            snapshot=SimpleNamespace(map=emulator.MAPS['LANCES_ROOM']), reloads=0, frame=10 ** 6,
                            play_clock=PlayClock(), adventure_seed=7, supervisor=Supervisor(),
-                           _restore_first_valid=lambda paths: restored.append(paths[0].name), _tick=lambda n: None)
+                           _restore_first_valid=lambda paths: restored.append(paths[0].name), _tick=lambda n: None,
+                           _behind_barrier=lambda metadata: False)
     emulator.Emulator._unstick(game, game.frame, 'battle never ended')
     emulator.Emulator._unstick(game, game.frame, 'battle never ended')
     assert restored == [recent.name, emulator.LEAGUE_CHECKPOINT]

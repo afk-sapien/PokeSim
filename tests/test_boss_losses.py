@@ -108,6 +108,7 @@ def test_a_gen1_stall_reload_inside_a_boss_battle_counts_as_a_loss_and_the_team_
                            policy=policy, snapshot=snap(map=MAPS['CERULEAN_GYM'], badges=1, in_battle=2,
                                                         party=(mon(level=24, hp=30),)),
                            _restore_first_valid=lambda paths: restored.append(paths[0].name), _tick=lambda n: None,
+                           _behind_barrier=lambda metadata: False,
                            play_clock=PlayClock(), adventure_seed=7, supervisor=Supervisor())
     Emulator._unstick(game, 0, 'battle never ended')
     assert restored and policy.losses.levels() == {'cascade': 24}
@@ -139,6 +140,7 @@ def test_a_gen1_stall_reload_in_a_rival_battle_counts_against_the_goal_under_way
     game = SimpleNamespace(store=SimpleNamespace(autosaves=saves.autosaves, state_path=saves.state_path,
                                                  checkpoint_metadata=saves.checkpoint_metadata), reloads=0, frame=0,
                            policy=policy, snapshot=rival, _restore_first_valid=lambda paths: None, _tick=lambda n: None,
+                           _behind_barrier=lambda metadata: False,
                            play_clock=PlayClock(), adventure_seed=7, supervisor=Supervisor())
     Emulator._unstick(game, 0, 'battle never ended')
     assert policy.losses.levels() == {'cut': 18} and policy.losses.aces() == {'cut': 20}

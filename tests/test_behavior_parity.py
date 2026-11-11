@@ -136,6 +136,7 @@ def gen1_ladder():
                           store=SimpleNamespace(autosaves=lambda: [save()], checkpoint_metadata=lambda path: {'frame': 0},
                                                 state_path=lambda key: None),
                           _restore_first_valid=lambda candidates: steps.append('reload'), _tick=lambda frames: None,
+                          _behind_barrier=lambda metadata: False,
                           _handle_events=lambda events, snap: steps.extend(step(e.title) for e in events))
     for _ in range(20):
         Emulator._unstick(emu, emu.frame, 'no progress')
