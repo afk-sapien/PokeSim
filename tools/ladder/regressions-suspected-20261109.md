@@ -150,15 +150,20 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   error value moved. 16 rungs earn at least one milestone: every new_game rung, the champion_first and
   kanto_entry rungs of Gold, Silver and Crystal, and gold/red and crystal/red. A rung that later earns more passes with a flag while its waste
   stays within 10.0 points of this baseline, and one that earns fewer fails.
+- The ledge-hop restock, #469, 2026-11-10: in a ledge hop the player stands on the wall tile, which is
+  in no region, and the Gen II shop dropped the chosen mart for that decision. The walk to Olivine Mart
+  drops three ledges on Route 39, so gold/badges_4 cut its restock into four spans. The shop already
+  chosen now stays the goal until the player lands. gold/badges_4 is back at its 0.0% baseline, and
+  silver/badges_6 and crystal/red fell to 0.0%, so the baseline moved for those two.
 
 ## Where each rung ended
 
-Now is the gate baseline after #463. The cause names the merge that brought the rise, where one did.
+Now is the gate baseline after #469. The cause names the merge that brought the rise, where one did.
 
 | Rung | 171176e | 2026-11-09 | Now | Cause | Fixed by |
 | --- | ---: | ---: | ---: | --- | --- |
 | crystal/post_game | 0.0% | 32.1% | 0.0% | training judged reach from a ledge's wall tile (#376) | #441 |
-| silver/badges_6 | 1.3% | 25.9% | 1.3% | a Gen II ledge jump read the wall tile (#389) | #439 |
+| silver/badges_6 | 1.3% | 25.9% | 0.0% | a Gen II ledge jump read the wall tile (#389) | #439, #469 |
 | gold/new_game | 5.7% | 23.7% | 5.7% | the ledge wall tile (#389) | #439 |
 | gold/badges_6 | 0.0% | 17.3% | 0.0% | the ledge wall tile (#389) | #439 |
 | gold/red | 0.0% | 15.5% | 0.0% | postgame play past Red (#346), a box change the audit missed, no field cure | #447, #453 |
@@ -172,7 +177,7 @@ Now is the gate baseline after #463. The cause names the merge that brought the 
 | red/post_game | 9.1% | 17.8% | 3.6% | the trainer step (#389), a deposit for the Eevee gift (#358), a taught move | #445, #450, #457 |
 | crystal/badges_2 | 0.0% | 8.5% | 0.0% | the ledge wall tile (#389) | #439 |
 | gold/badges_2 | 0.0% | 8.5% | 0.0% | the ledge wall tile (#389) | #439 |
-| crystal/red | 0.0% | 8.2% | 0.3% | the ledge wall tile (#389), postgame play past Red (#346), a box change | #439, #447 |
+| crystal/red | 0.0% | 8.2% | 0.0% | the ledge wall tile (#389), postgame play past Red (#346), a box change | #439, #447, #469 |
 | yellow/badges_6 | 13.4% | 21.5% | 19.0%, open | heal trips for a status with no field cure (#358), long partner training, a taught move and a split restock | #451, #454, #457, #459 |
 | silver/red | 12.6% | 17.3% | 0.0% | the ledge wall tile (#389) | #439 |
 | crystal/kanto_entry | 0.0% | 4.5% | 0.0% | the ledge wall tile (#389) | #439 |
@@ -184,8 +189,6 @@ Now is the gate baseline after #463. The cause names the merge that brought the 
 | yellow/badges_2 | 3.9% | 6.1% | 2.6% | the trainer step (#389) | #445 |
 | red/badges_6 | 12.6% | 14.8% | 5.3% | a sale the audit missed, no field cure, a taught move, a split restock | #449, #451, #457, #459 |
 
-crystal/red keeps 0.3% of postgame play that the 171176e run never reached, so it is not open.
-
 ## Open strategy items
 
 None of these is a regression. Each is play the 171176e runs did not reach, or did the same way.
@@ -196,5 +199,5 @@ None of these is a regression. Each is play the 171176e runs did not reach, or d
 3. The Rocket Hideout elevator: 19984 frames in blue/badges_4 and 5612 in yellow/badges_4.
 4. red/badges_6: train_partner 3480 frames and teach_surf 1332. red/badges_2 is at 4.0% against a 3.5%
    baseline on main, with bill 2404 and surge_switches 1804, inside the gate.
-5. Gen II ball restocks: with #463, 1216 frames of them count as waste in gold/badges_4 and 3220 in
-   silver/badges_6. Why those spans gained nothing is not traced yet.
+5. Gen II ball restocks: closed by #469. Each restock span that gained nothing was cut by a ledge hop,
+   and gold/badges_4, silver/badges_6 and crystal/red now count no restock waste.
