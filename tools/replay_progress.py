@@ -33,16 +33,16 @@ from pokesim import config
 from pokesim.app.watchdog import Limits, Watchdog
 from pokesim.gen2.journal import NOT_PROGRESS
 from pokesim.progress_events import HOUR, JOURNAL, NET
-from pokesim.stalls import (FRAMES_PER_GAME_MINUTE, LOOP_EVENTS, LOOP_LIMIT, PROGRESS_EVENTS, REAL_PROGRESS, LoopGuard,
-                            StallWatch, _RECEIVED, _RELEASED, species_key)
+from pokesim.stalls import (FRAMES_PER_GAME_MINUTE, GEN1_HELD_RISE, LOOP_EVENTS, LOOP_LIMIT, PROGRESS_EVENTS,
+                            REAL_PROGRESS, LoopGuard, StallWatch, _RECEIVED, _RELEASED, species_key)
 
 GEN2 = frozenset({'gold', 'silver', 'crystal'})
 # Gen I's last achievement, emulator.py: the progress events plus a trade.
 ACHIEVEMENTS = (*PROGRESS_EVENTS, 'trade')
-# Gen II's stall clock moves on a new high in badges, event flags, Pokédex entries, areas, experience
-# or League wins (gen2/emulator.py _note_progress). The journal shows these entries for them, and a
-# rise in owned comes from the progress table.
-GEN2_PROGRESS = frozenset({'badge', 'champion', 'map', 'level', 'trainer', 'hatch', 'item'})
+# The stall clock moves on a new high in badges, event flags, Pokédex entries, areas, experience or
+# League wins (Supervisor.progressed, from _note_progress in both emulators). The journal shows these
+# entries for them, and a rise in owned comes from the progress table.
+NEW_HIGH = frozenset({'badge', 'champion', 'map', 'level', 'trainer', 'hatch', 'item'})
 # The guard checks run about once a minute.
 TICK = 60
 # A gap with no journal entry, receipt or statistics bucket this long means the worker was stopped.
@@ -397,22 +397,16 @@ class OldChecks:
         self.watch, self.loop, self.quiet = watchdog(), None, False
 
     def entry(self, entry, frame):
-        if self.gen2:
-            if entry.type in GEN2_PROGRESS:
-                self.stall.progress(frame, entry.ts)
-            return
-        reason = self.guard.looping(self.journal) if entry.type == 'obtain' else None
-        if entry.type in PROGRESS_EVENTS and not (entry.type == 'obtain' and reason):
+        if entry.type in NEW_HIGH:
             self.stall.progress(frame, entry.ts)
 
     def receipt(self, ts, frame):
-        # Gen I counts any rise in the Pokémon held, Gen II only a new owned entry.
-        if not self.gen2:
+        # Gen I also counts any rise in the Pokémon held, until GEN1_HELD_RISE goes.
+        if not self.gen2 and GEN1_HELD_RISE:
             self.stall.progress(frame, ts)
 
     def owned(self, ts, frame):
-        if self.gen2:
-            self.stall.progress(frame, ts)
+        self.stall.progress(frame, ts)
 
     def tick(self, ts, frame):
         flags = []

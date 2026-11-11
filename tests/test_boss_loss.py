@@ -3,12 +3,13 @@
 A live Gen II run lost at Lance for 12 hours. Each run earned experience, levels and trainer wins before
 the blackout, so the stall alert never fired.
 """
+import time
 from types import SimpleNamespace
 
 from pokesim.emulator import Emulator
 from pokesim.gen2.emulator import Emulator as Gen2Emulator
 from pokesim.runtime.supervision import Supervisor
-from pokesim.stalls import LOOP_LIMIT, SCAN_FRAMES, LoopGuard, StallWatch, advanced
+from pokesim.stalls import LOOP_LIMIT, SCAN_FRAMES, LoopGuard, StallWatch
 from pokesim.store import Store
 from pokesim.strategy_data import MAPS
 from test_events import snap
@@ -56,21 +57,22 @@ def test_repeated_gen2_league_blackouts_trip_the_stall_while_experience_keeps_ri
 def test_repeated_gen1_league_blackouts_trip_the_stall_while_experience_keeps_rising():
     stall = StallWatch(game_minutes=120, real_minutes=0)
     emu = SimpleNamespace(stall=stall, loop_guard=None, store=None, policy=SimpleNamespace(goal=None),
-                          supervisor=Supervisor())
+                          supervisor=Supervisor(), play_clock=SimpleNamespace(frames=0),
+                          mem=SimpleNamespace(seen_maps=set(), championships=0))
     experience, before, alerts, frame = 100000, None, [], 0
 
     def tick(room, fainted=False, gain=0):
         nonlocal experience, before, frame
         experience += gain
         frame += 3600 * 5
+        emu.play_clock.frames = frame
         party = (mon(level=56, hp=0 if fainted else 100, max_hp=100, experience=experience),)
         s = snap(map=MAPS[room], party=party, badges=255)
+        # As Emulator._observe_snapshot does.
         Emulator._watch_boss(emu, before, s)
-        # As Emulator._observe_snapshot does after the boss watch.
-        if before is None or advanced(before, s):
-            stall.progress(frame, 0.0)
+        Emulator._note_progress(emu, before, s)
         before = s
-        alerts.append(stall.check(frame, 1e9))
+        alerts.append(stall.check(frame, time.time() + 60))
 
     tick('INDIGO_PLATEAU_LOBBY')
     for _ in range(12):

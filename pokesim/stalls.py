@@ -12,8 +12,14 @@ log = logging.getLogger(__name__)
 FRAMES_PER_GAME_MINUTE = 3600
 # The first autosave after progress, kept under this name so a capture can start from before the stall.
 BEFORE_STALL_CHECKPOINT = 'before-stall.state'
-# A managed trade is arranged by the coordinator, so it says nothing about the run's own progress.
+# The journal kinds a Red, Blue or Yellow scenario report lists as achievements. A managed trade is
+# arranged by the coordinator, so it says nothing about the run's own progress.
 PROGRESS_EVENTS = ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map')
+# Red, Blue and Yellow also restart the stall clock when the run holds more Pokémon, so a long hunt
+# that catches species the Pokédex already has is not a stall. A held rise is churn (goal-system.md
+# section 4), and the hunt's encounter rate is what should tell a healthy hunt apart. This setting goes
+# when that rate leaves shadow, in the switch to net rows. Gold, Silver and Crystal never count it.
+GEN1_HELD_RISE = True
 
 
 class StallWatch:
@@ -99,16 +105,10 @@ def held(snapshot):
     return len(snapshot.party) + (sum(snapshot.box_counts) if snapshot.box_counts else len(snapshot.boxed_pokemon))
 
 
-def experience(snapshot):
-    """Experience across the party. Grinding for a gym earns it steadily between level milestones,
-    while a menu loop or a battle that cannot end earns none."""
-    return sum(getattr(mon, 'experience', 0) or 0 for mon in snapshot.party)
-
-
-def advanced(previous, snapshot):
-    """True when the run caught something or earned experience since the previous snapshot."""
-    return held(snapshot) > held(previous) or (len(snapshot.party) == len(previous.party)
-                                               and experience(snapshot) > experience(previous))
+def held_rose(previous, snapshot):
+    """True when a Red, Blue or Yellow run holds more Pokémon than at the previous snapshot (GEN1_HELD_RISE)."""
+    return (GEN1_HELD_RISE and previous is not None and previous.valid and snapshot.valid
+            and held(snapshot) > held(previous))
 
 
 def stalled_state(live, waiting, stuck, loop):
