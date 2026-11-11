@@ -95,6 +95,31 @@ def test_share_an_adventure_with_a_role(page, tmp_path, monkeypatch):
         assert manager.auth.grants_for(bob['id']) == {aid: 'manager'}
 
 
+def test_settings_still_draw_when_the_session_arrives_before_accounts_js(page, tmp_path, monkeypatch):
+    """On a slow load library.js sends the session before the deferred accounts.js and inbox.js run.
+
+    accounts.js is held until the session event has gone, so both scripts start after it. They
+    still draw Sharing and the Inbox button from the session library.js kept.
+    """
+    from playwright.sync_api import expect
+    factory, holder = library(tmp_path, monkeypatch)
+    with serve(factory) as url:
+        manager = holder['manager']
+        manager.registry.add_rom('fixture', 'sha1', 'red')
+        admin = manager.auth.user_by_name('admin')
+        manager.registry.create('Red', 'fixture', {}, identifier(), owner=admin['id'])
+        page.add_init_script("document.addEventListener('pokesim:session', () => { window.sessionSent = true })")
+        held = []
+        page.route(lambda address: '/static/accounts.js' in address, lambda route: held.append(route))
+        log_in(page, url, 'admin', OLD)
+        page.wait_for_function('window.sessionSent === true')
+        assert len(held) == 1
+        held[0].continue_()
+        expect(page.locator('#sharing-panel')).to_be_visible()
+        expect(page.locator('#share-adventure option', has_text='Red')).to_have_count(1)
+        expect(page.locator('#inbox-open')).to_be_visible()
+
+
 def test_set_running_limits_from_settings(page, tmp_path, monkeypatch):
     from playwright.sync_api import expect
     factory, holder = library(tmp_path, monkeypatch)
