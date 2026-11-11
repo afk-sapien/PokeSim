@@ -10,6 +10,11 @@ opens it again. A reload to a save from before the delivery sends the claim back
 An ``event`` claim is keyed by its activity, such as ``snorlax``, ``fossil`` or ``trade_6``. Clearing
 its flags in the cartridge delivers it, a completed visit or a capture consumes it, and a gift the
 PC would release declines it. Each activity's walking clock stays in its generation's kv value.
+
+A ``mew`` claim is keyed by its number, from 1. The League win after a finished walk opens it, and
+the gift delivers it. The walking clock waits while a claim is open and starts again once that claim
+is delivered. A reload to a save from before the gift reopens the claim with its seed, so the next
+delivery finds the same Mew in the PC or writes it again.
 """
 from . import config
 from .state import claims as ledger
@@ -25,6 +30,10 @@ STATES = {'pending': ledger.OPEN, 'available': ledger.DELIVERED, 'caught': ledge
 # The kv keys whose event tickets schema version 4 moved into rows. Gen II notes a capture on its
 # next safe frame, so its clocks also keep the last cycle the journal reported.
 EVENT_KEYS = (('step-events-v1', False), ('gen2-event-returns-v1', True))
+MEW = 'mew'
+MEW_SPECIES = 151
+# The Gen I and Gen II Mew clocks in kv, in that order. Schema version 5 moved their counts into rows.
+MEW_KEYS = ('mew-returns-v1', 'gen2-mew-returns-v1')
 
 
 def rows(db):
@@ -131,4 +140,59 @@ def adopt_events(db):
             if claim and ledger.get(db, EVENT, name) is None:
                 ledger.put(db, EVENT, name, claim, species=ticket.get('dex'),
                            reasons=SKIPPED if claim == ledger.DECLINED else '')
+        kv.put(db, key, value)
+
+
+def open_mew(db):
+    """The open Mew claim, or None."""
+    return next(iter(ledger.rows(db, MEW, ledger.OPEN)), None)
+
+
+def earn_mew(db, generation, frame):
+    """Open the next Mew claim when the generation's clock finished its walk before the League win
+    counted now, and stop that clock until the claim is delivered. Returns whether it opened one."""
+    from .rewards import championship_count, ledger as league
+    from .state import kv
+    key = MEW_KEYS[generation - 1]
+    clock = kv.get(db, key)
+    armed = (clock or {}).get('armed_after_win')
+    if armed is None or championship_count(league(db)) <= armed or open_mew(db):
+        return False
+    number = sum(ledger.counts(db, MEW).values()) + 1
+    ledger.put(db, MEW, str(number), ledger.OPEN, frame=frame, species=MEW_SPECIES)
+    kv.put(db, key, {**clock, 'next_at': None, 'armed_after_win': None})
+    return True
+
+
+def deliver_mew(db, number, generation, *, frame, seed, reward_id=None, total, every, reasons=''):
+    """Mark the open Mew claim ``number`` delivered, and start the generation's stopped clock again
+    from step ``total``. A claim a reload reopened finds its clock already walking."""
+    from .state import kv
+    key = MEW_KEYS[generation - 1]
+    row = ledger.get(db, MEW, number)
+    if row is None or row['state'] != ledger.OPEN:
+        raise ValueError('The Mew return claim changed')
+    ledger.put(db, MEW, number, ledger.DELIVERED, frame=frame, species=MEW_SPECIES, seed=seed,
+               reward_id=reward_id, reasons=reasons)
+    clock = kv.get(db, key) or {}
+    if clock.get('next_at', 0) is None:
+        kv.put(db, key, {**clock, 'next_at': total + every})
+
+
+def mew_delivered(db):
+    """How many Mew returns this game delivered."""
+    return ledger.counts(db, MEW)[ledger.DELIVERED]
+
+
+def adopt_mew(db):
+    """Move each Mew clock's delivered count into delivered rows once. A moved row has no frame, so a
+    reload never reopens it."""
+    from .state import kv
+    for key in MEW_KEYS:
+        value = kv.get(db, key)
+        if not value or 'delivered' not in value:
+            continue
+        for number in range(1, value.pop('delivered') + 1):
+            if ledger.get(db, MEW, str(number)) is None:
+                ledger.put(db, MEW, str(number), ledger.DELIVERED, species=MEW_SPECIES)
         kv.put(db, key, value)

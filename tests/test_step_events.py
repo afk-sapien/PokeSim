@@ -205,22 +205,75 @@ def test_mew_requires_steps_then_a_new_league_win_and_no_backlog(world):
     rewards.earn(store, 301)
     steps(store, 5099)
     mew_returns.observe(store, snapshot)
-    assert not mew_returns.ready(store, 301)
+    assert not mew_returns.ready(store)
     steps(store, 5100)
     mew_returns.observe(store, snapshot)
-    assert not mew_returns.ready(store, 301)
+    assert not mew_returns.ready(store)
     rewards.earn(store, 302)
-    assert mew_returns.ready(store, 302)
+    mew_returns.observe(store, snapshot)
+    assert mew_returns.ready(store)['key'] == '1'
+    # The clock waits while the claim is open, and walks again from the gift.
     steps(store, 20000)
     mew_returns.observe(store, snapshot)
-    with store.db:
-        mew_returns.consume(store.db)
-    assert not mew_returns.ready(store, 302)
+    assert store.get(mew_returns.KEY)['next_at'] is None
+    with store.transaction() as db:
+        mew_returns.deliver(db, '1', frame=50, seed='mew-seed', reward_id='gift')
+    assert not mew_returns.ready(store)
     assert store.get(mew_returns.KEY)['next_at'] == 20100
+    assert mew_returns.status(store)['delivered'] == 1
     # Replaying an old Hall of Fame snapshot does not earn another gift.
     rewards.earn(store, 301)
     mew_returns.observe(store, snapshot)
-    assert not mew_returns.ready(store, 302)
+    assert not mew_returns.ready(store)
+
+
+def test_a_reload_from_before_the_mew_gift_opens_it_again_with_the_same_seed(world):
+    store, snapshot, _ = world
+    rewards.initialize(store, 1)
+    mew_returns.observe(store, snapshot)
+    steps(store, 5100)
+    mew_returns.observe(store, snapshot)
+    rewards.earn(store, 2)
+    mew_returns.observe(store, snapshot)
+    with store.transaction() as db:
+        mew_returns.deliver(db, '1', frame=500, seed='mew-seed', reward_id='gift')
+    # The gift's own result save keeps it delivered.
+    assert rewards.rewound(store, {'play_clock': {'frames': 100}, 'reward_id': 'gift'}) == []
+    assert rewards.rewound(store, {'play_clock': {'frames': 100}}) == [('mew', '1')]
+    claim = mew_returns.ready(store)
+    assert (claim['key'], claim['seed']) == ('1', 'mew-seed')
+    # Its second delivery leaves the clock that already walks from the first.
+    steps(store, 5150)
+    with store.transaction() as db:
+        mew_returns.deliver(db, '1', frame=600, seed='mew-seed', reasons='Already held')
+    assert store.get(mew_returns.KEY)['next_at'] == 5200
+    assert mew_returns.status(store)['delivered'] == 1
+
+
+def test_the_schema_moves_mew_counts_into_claims_rows_once(tmp_path):
+    import json
+    import sqlite3
+    from pokesim import return_claims
+    from pokesim.gen2.steps import RETURNS
+    from pokesim.state import claims as ledger
+    Store(tmp_path).close()
+    clock = {'interval': 100, 'next_at': 300, 'armed_after_win': None}
+    with sqlite3.connect(tmp_path / 'pokesim.sqlite') as db:
+        db.execute('PRAGMA user_version = 4')
+        for key, delivered in ((mew_returns.KEY, 2), (RETURNS, 0)):
+            db.execute('INSERT OR REPLACE INTO kv(k, v) VALUES (?, ?)',
+                       (key, json.dumps({**clock, 'delivered': delivered})))
+    store = Store(tmp_path)
+    try:
+        with store.reading() as db:
+            moved = [(row['key'], row['state'], row['frame']) for row in ledger.rows(db, return_claims.MEW)]
+        assert moved == [('1', ledger.DELIVERED, None), ('2', ledger.DELIVERED, None)]
+        assert store.get(mew_returns.KEY) == store.get(RETURNS) == clock
+        assert mew_returns.status(store)['delivered'] == 2
+        # A moved row has no frame, so no reload reopens it.
+        assert rewards.rewound(store, {'play_clock': {'frames': 0}}) == []
+    finally:
+        store.close()
 
 
 def test_mew_disable_and_reenable_starts_fresh_requirement(world, monkeypatch):
@@ -232,7 +285,7 @@ def test_mew_disable_and_reenable_starts_fresh_requirement(world, monkeypatch):
     monkeypatch.setattr(config, 'MEW_EVENT', True, raising=False)
     mew_returns.observe(store, snapshot)
     assert store.get(mew_returns.KEY)['next_at'] == 10100
-    assert not mew_returns.ready(store, 1000)
+    assert not mew_returns.ready(store)
 
 
 def test_fossil_restore_protects_previous_amber_after_switching_to_helix(world, monkeypatch):

@@ -94,23 +94,31 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
     if not before.valid or not before.started or before.in_battle or before.textbox or before.start_menu:
         return None
     rewards.observe_progress(emu.store, before)
+    from .. import mew_returns
     with emu.store.reading() as db:
         value = rewards.ledger(db)
         claim = rewards.next_claim(db) if league_rewards else None
+        mew = mew_returns.ready_db(db) if mew_event else None
     if claim and rewards.held(before, claim[2]):
         # A claim a reload reopened finds its gift still in the PC, so it settles with no second copy.
         rewards.found_held(emu.store, claim[2], claim[1])
         return None
+    if mew and mew['seed'] and rewards.held(before, mew['seed']):
+        from ..progress_events import frame
+        with emu.store.transaction() as db:
+            mew_returns.deliver(db, mew['key'], frame=frame(emu.store), seed=mew['seed'], reasons='Already held')
+        return None
     space = next(((box, count + 1) for box, count in enumerate(before.box_counts, 1) if count < 20), None)
     if space is None:
         return None
-    from .. import mew_returns
     championships = rewards.championship_count(value)
     selected = select_reward(before, claim, championships, emu.store.get(EVENT_KEY),
                              mew_event=mew_event, seed=emu.adventure_seed)
-    if mew_event and mew_returns.ready(emu.store, championships):
+    if mew:
+        # A claim a reload reopened writes the same Mew again.
         from ..trade.event import MEW
-        selected = ('mew_return', None, MEW, gift_seed(emu.adventure_seed, 'mew_return', championships))
+        selected = ('mew_return', mew['key'], MEW,
+                    mew['seed'] or gift_seed(emu.adventure_seed, 'mew_return', championships))
     if selected is None:
         return None
     kind, ordinal, species, seed = selected
@@ -175,9 +183,8 @@ def deliver(emu, *, league_rewards=False, mew_event=False):
                            reward_id=identifier)
             title = gift_title(gift.nick, species, ordinal)
         else:
-            if kind == 'mew_return' and not mew_returns.ready_db(db, rewards.championship_count(rewards.ledger(db))):
-                raise ValueError('The Mew walking opportunity is no longer available')
-            mew_returns.consume(db)
+            if kind == 'mew_return':
+                mew_returns.deliver(db, ordinal, frame=frame(emu.store), seed=seed, reward_id=identifier)
             kv.put(db, EVENT_KEY, identifier)
             title = ('Received Mew after walking and winning the League' if kind == 'mew_return'
                      else 'Received Mew from the custom PokeSim event')

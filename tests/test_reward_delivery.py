@@ -155,7 +155,8 @@ def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, f
             from pokesim.legendary_returns import STEPS
             store.set('pokesim-mew-v1', 'previous-Mew')
             store.set(STEPS, {'available': True, 'total': 1000000})
-            store.set(mew_returns.KEY, {'interval': 1000000, 'next_at': 1000000, 'armed_after_win': 0, 'delivered': 0})
+            store.set(mew_returns.KEY, {'interval': 1000000, 'next_at': 1000000, 'armed_after_win': 0})
+            mew_returns.earn(store)
         from pokesim.strategy_data import SPECIES
         after = replace(before, box_counts=(1,) + (0,) * 11, owned=before.owned | {SPECIES[species]['dex']})
         monkeypatch.setattr(ram, 'read_snapshot', lambda mem, _: before if mem is memory else after)
@@ -177,14 +178,15 @@ def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, f
             assert store.events() == []
             assert store.get(PENDING)['decision'] is None
             if kind == 'mew_return':
-                assert mew_returns.ready(store, 1)
+                assert mew_returns.ready(store)
         else:
             result = deliver(emu, league_rewards=kind == 'league_reward', mew_event=kind != 'league_reward')
             assert result['decision'] == 'COMMIT'
             assert rewards.status(store)['delivered'] == (1 if kind == 'league_reward' else 0)
             if kind == 'mew_return':
-                assert not mew_returns.ready(store, 1)
+                assert not mew_returns.ready(store)
                 assert store.get(mew_returns.KEY)['next_at'] == 2000000
+                assert mew_returns.status(store)['delivered'] == 1
             assert status(store)['counts'] == {str(SPECIES[species]['dex']): 1}
             assert reward_delivery.recover_storage(store) is None
             CatchTracker(store, sorted(SUPPORTED)[0])

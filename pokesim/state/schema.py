@@ -8,8 +8,8 @@ changes a database, a copy of it is kept beside it, since the older PokeSim cann
 Version 1 is the shape every database had before versions. A database from before them may lack
 any part of it, so migration 1 creates what is missing and runs the column checks and the one-time
 changes that each start used to run. Version 2 adds the claims ledger (pokesim/state/claims.py).
-Version 3 moves the legendary returns' tickets into its rows (pokesim/return_claims.py), and
-version 4 the event returns' tickets.
+Version 3 moves the legendary returns' tickets into its rows (pokesim/return_claims.py), version 4
+the event returns' tickets, and version 5 the Mew returns' delivered counts.
 """
 from contextlib import closing
 import os
@@ -161,8 +161,14 @@ def _version_4(db):
     adopt_events(db)
 
 
-MIGRATIONS = {1: _version_1, 2: _version_2, 3: _version_3, 4: _version_4}
-VERSION = 4
+def _version_5(db):
+    """The Mew returns' delivered counts, both generations, moved into claims rows."""
+    from ..return_claims import adopt_mew
+    adopt_mew(db)
+
+
+MIGRATIONS = {1: _version_1, 2: _version_2, 3: _version_3, 4: _version_4, 5: _version_5}
+VERSION = 5
 
 
 def version(db):
