@@ -420,7 +420,7 @@ class OldChecks:
         quiet = Watchdog._quiet(self.watch, 'replay', {
             'watch': {'owned': s.owned, 'badges': s.badges, 'hall_of_fame': s.league, 'map': s.place},
             'progress': {'last_achievement': {'id': s.achievement}}, 'league_rewards': {'wins': s.league},
-            'areas_discovered': s.areas}, ts)
+            'areas_discovered': s.areas, 'play_clock': {'seconds': int(frame // 60)}}, ts)
         if quiet and not self.quiet:
             flags.append(Flag(ts, frame, 'watchdog'))
         self.quiet = quiet
@@ -453,7 +453,8 @@ class NewChecks:
         if self.stall.check(frame, ts) is not None:
             flags.append(Flag(ts, frame, 'stallwatch'))
         quiet = Watchdog._quiet(self.watch, 'replay', {'watch': {'map': self.status.place},
-                                                       'progress': {'last_achievement': {'id': self.status.net}}}, ts)
+                                                       'progress': {'last_achievement': {'id': self.status.net}},
+                                                       'play_clock': {'seconds': int(frame // 60)}}, ts)
         if quiet and not self.quiet:
             flags.append(Flag(ts, frame, 'watchdog'))
         self.quiet = quiet

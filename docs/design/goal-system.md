@@ -368,6 +368,8 @@ Frames cannot see a hung worker, because a hung worker runs no frames. So there 
 3. The watchdog runs the same check from outside the worker, from the `play_clock` field in status. A worker that stops answering status counts as not moving.
 4. Not live raises one liveness alert. It is not a stall and it does not climb the reload ladder. The fix is a worker restart.
 
+PR 6 runs the check in the watchdog only (`Watchdog._live`, `Limits.not_live`). A worker whose game loop hangs still answers status with a clock that stands still, and a worker that hangs entirely stops answering, so the watchdog sees both. A second copy in the worker would only send the same alert twice. The library's monitor still restarts a worker whose frame count stands still for a minute (`app/supervisor.py` `check`), so the alert means a restart did not help. The watchdog's quiet window, `Limits.no_progress`, counts PlayClock seconds.
+
 The stall rule in section 4 runs only while the adventure is live. Stalls and liveness are reported as different alert types.
 
 ### The rewind event

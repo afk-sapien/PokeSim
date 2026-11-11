@@ -47,8 +47,9 @@ def sweep(tmp_path):
         supervisor=SimpleNamespace(children={}, worker_output=None),
         coordinator=SimpleNamespace(reserved=lambda aid: False),
         notifications=SimpleNamespace(alert=lambda title, body, adventure_id=None: sent.append((title, body)) and None))
-    # Only the sweep may speak here: the hour-long quiet check reads worker summaries these tests keep still.
-    watchdog = Watchdog(manager, clock=clock, limits=Limits(no_progress=10 ** 9, sweep=0), environ={})
+    # Only the sweep may speak here: the quiet and liveness checks read worker summaries these tests keep still.
+    watchdog = Watchdog(manager, clock=clock, limits=Limits(no_progress=10 ** 9, not_live=10 ** 9, sweep=0),
+                        environ={})
     adventure = Adventure(tmp_path)
 
     def start(now, version='red', seen=None):
