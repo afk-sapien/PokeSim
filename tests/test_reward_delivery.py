@@ -350,3 +350,76 @@ def test_the_real_gen1_pc_rating_refuses_a_weak_gift_and_keeps_the_best_copy(cou
     policy = StrategicPolicy(7)
     assert rewards.refusal(policy, s, (0, 1), 'seed:1')
     assert rewards.refusal(policy, s, (0, 0), 'seed:1') == ''
+
+
+def gen2_gift_run(tmp_path, monkeypatch, store, kind, stored=()):
+    """A Gen II emulator at a safe point with empty boxes. The live cartridge reads ``stored`` and
+    the clone reads one new Pokémon in box 1."""
+    from pokesim import config
+    from pokesim.gen2 import rewards as gen2_rewards
+    claim = rewards.next_claim(store.db, 2)
+    species = claim[1] if kind == 'league_reward' else 151
+    before = SimpleNamespace(valid=True, started=True, in_battle=False, tiles=[''] * 18, box_counts=(0,) * 14,
+                             hall_of_fame_count=1, owned=frozenset(), party=(), stored=tuple(stored), badges=0,
+                             items=(), event_flags=frozenset(), map_name='Route 29')
+    new = SimpleNamespace(box=0, position=len(stored), species=species, shiny=False, trainer_id=1, dvs=(1, 2, 3, 4))
+    after = SimpleNamespace(**{**vars(before), 'owned': frozenset({species}), 'stored': (*stored, new)})
+    clone = SimpleNamespace(memory='clone', save_state=lambda stream: stream.write(b'gen2-reward'),
+                            stop=lambda **_: None)
+    monkeypatch.setattr(config, 'LEAGUE_REWARDS', kind == 'league_reward', raising=False)
+    monkeypatch.setattr(config, 'MEW_EVENT', kind == 'mew_event', raising=False)
+    monkeypatch.setattr(gen2_rewards, 'read_snapshot', lambda memory, *_: before if memory == 'live' else after)
+    monkeypatch.setattr(gen2_rewards, 'Memory', lambda *_: SimpleNamespace(byte=lambda _: 0))
+    monkeypatch.setattr(gen2_rewards, 'gift', lambda *_: None)
+    monkeypatch.setattr(gen2_rewards, 'clone_emulator', lambda _: clone)
+    monkeypatch.setattr(store, 'checkpoint_metadata', lambda _: {'run_memory': {}})
+    loads = []
+    emu = SimpleNamespace(store=store, paused=False, manual_mode=False, preparation=None,
+                          policy=SimpleNamespace(menu=None, pc_rated=lambda *_, **__: ()),
+                          pb=SimpleNamespace(memory='live'), data=SimpleNamespace(species={species: {'name': 'GIFT'}}),
+                          frame=100, _autosave=lambda: tmp_path / 'source.state', _load_state_file=loads.append,
+                          adventure_seed=7)
+    return emu, loads
+
+
+@pytest.mark.parametrize('kind', ['league_reward', 'mew_event'])
+def test_a_gen2_gift_takes_the_same_staged_and_committed_steps_as_gen1(tmp_path, monkeypatch, kind):
+    from pokesim.gen2 import rewards as gen2_rewards
+    store = Store(tmp_path)
+    try:
+        rewards.earn(store, 1)
+        emu, loads = gen2_gift_run(tmp_path, monkeypatch, store, kind)
+        result = gen2_rewards.deliver(emu)
+        assert (result['kind'], result['phase'], result['decision']) == (kind, 'complete', 'COMMIT')
+        assert store.get(PENDING)['phase'] == 'complete'
+        assert store.get(BARRIER) == result['id']
+        assert [path.name for path in loads] == [f"auto-v1-reward-{result['id']}.state"]
+        assert loads[0].read_bytes() == b'gen2-reward'
+        assert rewards.status(store)['delivered'] == (1 if kind == 'league_reward' else 0)
+        assert store.get(gen2_rewards.MYTHICAL) == (result['id'] if kind == 'mew_event' else None)
+        assert [event['title'] for event in store.events()] == [gen2_rewards.gift_title('GIFT')]
+        assert recover_storage(store) is None
+        # The settled claim, or the recorded Mew, sends nothing more.
+        assert gen2_rewards.deliver(emu) is None
+        assert len(loads) == 1
+    finally:
+        store.close()
+
+
+def test_a_reopened_gen2_gift_the_pc_still_holds_settles_before_any_write(tmp_path, monkeypatch):
+    from pokesim.gen2 import rewards as gen2_rewards
+    store = Store(tmp_path)
+    try:
+        rewards.earn(store, 1)
+        seed = rewards.next_claim(store.db, 2)[2]
+        trainer, first, second = rewards._draw(seed, 2)
+        kept = SimpleNamespace(box=0, position=0, species=152, shiny=False, trainer_id=trainer,
+                               dvs=(first >> 4, first & 15, second >> 4, second & 15))
+        emu, loads = gen2_gift_run(tmp_path, monkeypatch, store, 'league_reward', stored=(kept,))
+        monkeypatch.setattr(gen2_rewards, 'clone_emulator', lambda _: pytest.fail('A held gift was written again'))
+        assert gen2_rewards.deliver(emu) is None
+        found = rewards.status(store)
+        assert (found['delivered'], found['pending']) == (1, 0)
+        assert store.get(PENDING) is None and loads == [] and store.events() == []
+    finally:
+        store.close()
