@@ -18,6 +18,10 @@
   let asked = 0
   // The goals from the last read, by key, so a choice can show its own species and stop fields.
   let goals = new Map()
+  // The goal whose species and stop fields are drawn, so a state refresh leaves a half-typed name alone.
+  let drawnFor
+  // A state refresh runs every 2 seconds and writes only what changed.
+  const put = (element, property, value) => { if (element && element[property] !== value) element[property] = value }
 
   const status = pin => pin ? `Next: ${spell(pin.label)}` : ''
   // The game's own spelling, whatever the label source wrote.
@@ -42,6 +46,7 @@
 
   // The species and stop fields follow the chosen goal. Only the species its target kind can reach are listed.
   function fields(goal) {
+    drawnFor = goal?.key ?? null
     const species = Array.isArray(goal?.species) ? goal.species : []
     const stops = Array.isArray(goal?.stops) ? goal.stops : []
     const list = $('#next-activity-species-list')
@@ -63,16 +68,19 @@
   function render(pin) {
     const section = $('#next-activity')
     if (!section) return
-    section.hidden = !owner
+    put(section, 'hidden', !owner)
     const active = Boolean(pin)
     const line = $('#next-activity-status')
-    line.textContent = status(pin)
-    line.hidden = !active
-    $('#next-activity-cancel').hidden = !active
-    $('#next-activity-goal-field').hidden = active || empty
-    $('#next-activity-search-field').hidden = active
-    $('#next-activity-set').hidden = active || empty
-    fields(active || empty ? null : chosen())
+    put(line, 'textContent', status(pin))
+    put(line, 'hidden', !active)
+    put($('#next-activity-cancel'), 'hidden', !active)
+    put($('#next-activity-goal-field'), 'hidden', active || empty)
+    put($('#next-activity-search-field'), 'hidden', active)
+    put($('#next-activity-set'), 'hidden', active || empty)
+    // The fields are drawn again only for another goal. Redrawing them each refresh cleared a name
+    // still being typed and closed an open list.
+    const goal = active || empty ? null : chosen()
+    if ((goal?.key ?? null) !== drawnFor) fields(goal)
     const key = pin ? pin.key : null
     if (owner && key !== shown) {
       shown = key
