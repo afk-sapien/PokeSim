@@ -16,10 +16,10 @@ def memory_mib(value):
                           'GB': 1000000000 / 1048576, 'GiB': 1024}[unit]
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(argv=None, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__)
     parser.add_argument('directory', type=Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     status = json.loads((args.directory / 'status.json').read_text(encoding='utf-8'))
     sample_path = args.directory / 'samples.jsonl'
     samples = [json.loads(line) for line in sample_path.read_text(encoding='utf-8').splitlines()] if sample_path.exists() else []

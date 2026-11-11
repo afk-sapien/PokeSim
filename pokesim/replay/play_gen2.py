@@ -15,8 +15,8 @@ from pokesim.runtime.game_loop import GameLoop, Gen2
 from pokecore.gen2.ram import Memory, read_snapshot
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(argv=None, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__)
     parser.add_argument('rom', type=Path)
     parser.add_argument('--game', required=True, choices=('gold', 'silver', 'crystal'))
     parser.add_argument('--data', type=Path, default=Path('.release-local/gen2-data'))
@@ -36,7 +36,7 @@ def main():
     parser.add_argument('--extra-store-items', action='store_true', help='Sell evolution stones and trade items at the Goldenrod Dept. Store')
     parser.add_argument('--runtime-store', type=Path, help='Keep optional reward claims across scenario continuations')
     parser.add_argument('--stall-frames', type=int, default=12000)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.real_clock and args.game_clock:
         parser.error('--real-clock and --game-clock are mutually exclusive')
     if args.restore_team_from and args.focus != 'restore':

@@ -217,7 +217,7 @@ GEN2_CARTRIDGE_DIR=.release-local/gen2 \
 Run a complete isolated campaign:
 
 ```sh
-.venv/bin/python tools/play_gen2.py .release-local/gen2/crystal.gbc \
+.venv/bin/python -m pokesim.replay play-gen2 .release-local/gen2/crystal.gbc \
   --game crystal --starter cyndaquil --frames 10000000 --until red \
   --data .release-local/gen2-data --output .release-local/crystal-campaign
 ```
@@ -229,7 +229,7 @@ APIs, capture accounting, portable saves, trade preparation, durable exchange,
 custom reward delivery and worker restart during trade preparation.
 `tools/verify_cartridge.py gen2-trading --time-capsule` prepares a compatible boxed offer.
 
-`tools/play_gen2.py --until all251` stops only after the observed owned count is 251.
+`python -m pokesim.replay play-gen2 --until all251` stops only after the observed owned count is 251.
 Optional Mew, GS Ball and earned League starter gifts use the existing runtime
 settings, a persistent `--runtime-store` and a separate event ledger.
 

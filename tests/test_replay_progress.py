@@ -4,8 +4,8 @@ import sqlite3
 
 import pytest
 
-from tools.replay_progress import (Axis, Episode, Flag, connect, ground_truth, load, main, rebuild, replay, score,
-                                   segments)
+from pokesim.replay.progress import (Axis, Episode, Flag, connect, ground_truth, load, main, rebuild, replay, score,
+                                     segments)
 from pokesim.progress_events import HOUR
 
 T0 = 1_700_000_000

@@ -202,8 +202,8 @@ def run(args):
         print(json.dumps({key: value for key, value in result.items() if key not in {'functions', 'timings'}}, indent=2))
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(argv=None, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     cap = commands.add_parser('capture')
     cap.add_argument('--source', type=Path, required=True)
@@ -217,8 +217,8 @@ def main():
     replay.add_argument('--mode', choices=['headless', 'viewer', 'audio'], default='headless')
     replay.add_argument('--profiler', choices=['none', 'timers', 'detailed', 'cprofile'], default='none')
     replay.add_argument('--cpu', type=int)
-    args = parser.parse_args()
-    checkout = Path(__file__).resolve().parents[1]
+    args = parser.parse_args(argv)
+    checkout = Path(__file__).resolve().parents[2]
     if args.output.resolve().is_relative_to(checkout):
         parser.error('Keep private profiling outputs outside the source checkout')
     if args.command == 'capture':

@@ -9,12 +9,17 @@
     python -m pokesim.replay audit run ROM STATE FRAMES OUT_JSON | report BEFORE_DIR AFTER_DIR
     python -m pokesim.replay check-endurance --rom ROM --checkpoint STATE --output OUT [--baseline CHECKOUT]
     python -m pokesim.replay validate-progress --rom ROM --checkpoint STATE --output OUT_JSON
+    python -m pokesim.replay progress run STORES_DIR --days 14 --out REPORT_JSON | report REPORT_JSON
+    python -m pokesim.replay play-gen2 ROM --game crystal --output OUT [--load STATE]
+    python -m pokesim.replay profile-simulation capture --source DIR ... | run --fixture DIR --output OUT
+    python -m pokesim.replay soak-release --image ID --rom ROM --source DIR --output OUT [--hours H]
+    python -m pokesim.replay summarize-soak OUT
 
 Each run plays the rung as the ladder gate does, with the commit's own code and lock, and keeps
 its trace. pyboy-rs is held at the running checkout's version unless ``--pyboy own`` asks for
 each commit's own. Reports go beside the runs as JSON and Markdown. ``capture`` keeps a stall
-bundle as a stuck scenario with its row in scenarios/index.toml. The last five commands keep
-their own options, which ``--help`` after the command lists.
+bundle as a stuck scenario with its row in scenarios/index.toml. The commands from
+``find-stalls`` on keep their own options, which ``--help`` after the command lists.
 """
 from __future__ import annotations
 
@@ -37,6 +42,11 @@ TOOLS = {
     'audit': ('audit', 'replay copied checkpoints forward and audit where the frames go'),
     'check-endurance': ('check_endurance', 'compare bounded checkpoint replays of two checkouts'),
     'validate-progress': ('validate_progress', 'replay a copied checkpoint without rewinds and report progress'),
+    'progress': ('progress', 'replay journal history through the stall checks and the progress model'),
+    'play-gen2': ('play_gen2', 'run an isolated Gen II policy scenario and keep failure evidence'),
+    'profile-simulation': ('profile_simulation', 'profile the whole simulation loop on a private copy of an adventure'),
+    'soak-release': ('soak_release', 'run bounded, isolated release endurance and fresh-campaign checks'),
+    'summarize-soak': ('summarize_soak', 'summarize recorded endurance samples'),
 }
 
 

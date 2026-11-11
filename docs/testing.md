@@ -134,7 +134,7 @@ otherwise identical refactor comparison. An event gap can contain productive XP 
 so inspect training samples before classifying it as a stall.
 
 Game-time replays are regression checks. They do not prove 24-hour or week-long process
-reliability. Use the existing isolated container checks in `tools/soak_release.py` and
+reliability. Use the existing isolated container checks in `python -m pokesim.replay soak-release` and
 [monitoring runbook](operations-monitor.md) for wall-clock endurance, resource growth,
 viewer load, and process continuity.
 

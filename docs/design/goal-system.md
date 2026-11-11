@@ -577,11 +577,11 @@ This checks the progress model on real history before the stall tiers switch to 
 
 ### Tool
 
-`tools/replay_progress.py`:
+`python -m pokesim.replay progress`, in `pokesim/replay/progress.py`:
 
 ```
-replay_progress.py run STORES_DIR --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10]
-replay_progress.py report REPORT_JSON
+python -m pokesim.replay progress run STORES_DIR --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10]
+python -m pokesim.replay progress report REPORT_JSON
 ```
 
 1. Input is two read-only copies on the desktop. The main one is the hosted app's newest cold backup, extracted outside the repo, for two weeks of real play. The second is a copy of the local dev instance's data folder, for the stall hunt games and their fresh stall events. The tool never opens a live data folder. It reads `events`, `capture_receipts`, `progress`, `kv` and the stall bundle reports. It never reads save state.
@@ -620,7 +620,7 @@ Each PR is proved by the live soak gate and by behavioral parity tests. The soak
 |---|---|---|---|
 | 1 | Behavioral parity tests | 3 hours | the new tests pass on main, with known gaps marked xfail and named |
 | 2 | `progress_events` and `encounter_counts` tables and kinds, in shadow mode. Catches, receives, releases, marathon checkpoints and goal ends write rows. Nothing reads them for decisions yet | 4 hours | parity tests, soak, a test that a marathon checkpoint and a duplicate catch each write a row and that a catch and a receive are net 0 |
-| 3 | `tools/replay_progress.py` and the two-week replay. The first run missed its bar, so the switch of the five definitions, LoopGuard and the watchdog to `net` moves to after PR 7 (section 12) | 4 hours plus 1 hour run | the tool's tests, the report in section 12 |
+| 3 | The progress replay tool, now `pokesim/replay/progress.py`, and the two-week replay. The first run missed its bar, so the switch of the five definitions, LoopGuard and the watchdog to `net` moves to after PR 7 (section 12) | 4 hours plus 1 hour run | the tool's tests, the report in section 12 |
 | 4 | Worth oracle with locks, family demand and the `full_locked` state. Every call site in section 5 moves to it | 6 hours | parity tests, soak, the bred Squirtle case as a test, a full box of locked mons parks producers and fires one alert |
 | 5 | Claims ledger and shared gift pipeline, with idempotent delivery | 6 hours | parity tests, soak, staged and delivered claims reopen after a rewind, a second delivery of a held mon writes nothing |
 | 6 | `runtime/supervision.py`, one ladder, the rewind event, frame clocks, the liveness check in the supervisor and the watchdog, Gen II stall bundles | 6 hours | parity tests, soak, both generations give the same ladder for the same scripted stall, a frozen PlayClock raises one liveness alert after 15 real minutes |

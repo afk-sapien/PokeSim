@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from tools import soak_release
+from pokesim.replay import soak_release
 
 
 @pytest.mark.parametrize('failed_label', ['soak', 'campaign'])
@@ -60,7 +60,7 @@ def test_failed_health_keeps_evidence_and_marks_stopped_runs(tmp_path, monkeypat
         assert ('stop', '--time', '20', f'{prefix}-{label}') in commands
 
     summary = json.loads(subprocess.check_output([
-        sys.executable, 'tools/summarize_soak.py', str(output),
+        sys.executable, '-m', 'pokesim.replay', 'summarize-soak', str(output),
     ], text=True))
     assert summary['sample_count'] == 0
     assert summary['runs'][failed_label]['status'] == 'failed'
