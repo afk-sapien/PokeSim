@@ -94,7 +94,7 @@ def test_finish_report_and_personal_best_are_saved_and_journaled(tmp_path):
     restored = Collection()
     restored.load(json.loads(json.dumps(c.state_dict())))
     assert restored.marathon_records == c.marathon_records
-    assert restored.next_marathon == c.elapsed + marathon.INTERVAL
+    assert restored.next_marathon == c.clock + marathon.INTERVAL
     assert restored.take_activity_events() == []
 
 
@@ -165,7 +165,7 @@ def test_absolute_budget_stops_a_moving_race():
     c.observe(replace(checkpoint(0, 60), x=10))
     assert c.project is None
     assert not c.marathon_records['last']['finished']
-    assert c.next_marathon > c.elapsed
+    assert c.next_marathon > c.clock
 
 
 def test_marathon_never_displaces_missing_entries_or_urgent_supplies():

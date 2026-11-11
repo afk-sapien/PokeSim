@@ -455,7 +455,7 @@ class StrategicPolicy(Policy):
         self.escape_attempted = bool(data.get('escape_attempted', False))
         if self.fossil not in ('HELIX_FOSSIL', 'DOME_FOSSIL'):
             self.fossil = 'HELIX_FOSSIL'
-        self.pickups.load(data.get('pickups', {}))
+        self.pickups.load(data.get('pickups', {}), self.collection.clock_shift(data.get('collection', {})))
         self.nav.load_state_dict(data.get("navigation", {}))
         self.naming.load_state_dict(data.get("naming", {}))
         self.interactions = {key: True for key in data.get("interactions", [])}
@@ -511,7 +511,7 @@ class StrategicPolicy(Policy):
                                 training_active=(self.goal.key == 'collect_train' and not self.heal_latch
                                                  and not needs_healing(s.party)
                                                  and (bool(s.in_battle) or kind == 'overworld' and pos in self.goal.targets)))
-        self.pickups.observe(s, self.collection.elapsed)
+        self.pickups.observe(s, self.clock)
         if s.in_battle and s.party and not any(p.hp for p in s.party):
             self.note_boss_loss(s)
         if self.collection.completed_champion and s.map == MAPS['HALL_OF_FAME']:
@@ -1070,7 +1070,7 @@ class StrategicPolicy(Policy):
         committed = legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon'
         pickup_errand = choice.errand_candidate('collect_pickup', 'pickup')
         if not self.heal_latch and not in_league and not committed and choice.wins(pickup_errand):
-            pickup = self.pickups.choose(s, self.nav, goal, self.collection.elapsed)
+            pickup = self.pickups.choose(s, self.nav, goal, self.clock)
             if pickup:
                 self.next_goal = goal.to_dict()
                 goal = choice.offer(pickup, pickup_errand)
@@ -1826,7 +1826,7 @@ class StrategicPolicy(Policy):
 
     def _recover(self, snapshot):
         if self.goal.key == 'collect_pickup':
-            self.pickups.defer(self.collection.elapsed, 'Pickup approach failed')
+            self.pickups.defer(self.clock, 'Pickup approach failed')
         self.recoveries += 1
         self.intent = None
         if (self.heal_latch and snapshot.map in VICTORY_MAPS and snapshot.valid
@@ -1869,7 +1869,7 @@ class StrategicPolicy(Policy):
         """
         self.unreachable().record(goal.key, self._place(goal), goal.targets, self.clock, snapshot.map)
         if goal.key == 'collect_pickup':
-            self.pickups.defer(self.collection.elapsed, 'No route to the pickup')
+            self.pickups.defer(self.clock, 'No route to the pickup')
         elif goal.key.startswith('collect_') and self.collection.project:
             self.collection.abandon(f'No route to {goal.title}')
         self.nav.path.clear()
@@ -1880,7 +1880,7 @@ class StrategicPolicy(Policy):
     def recover_stall(self, snapshot):
         """Change the plan in the current world before considering a save rewind."""
         if self.pickups.active:
-            self.pickups.defer(self.collection.elapsed, 'Pickup approach was stationary too long')
+            self.pickups.defer(self.clock, 'Pickup approach was stationary too long')
         else:
             self.collection.abandon('The run was stationary too long')
         self.collection.idle_token = None

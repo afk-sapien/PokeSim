@@ -111,7 +111,6 @@ def test_pickup_time_does_not_consume_the_main_project_budget():
     c.observe(cave())
     c.observe(replace(cave(), frame=120), suspended=True)
     assert c.remaining == 1000
-    assert c.elapsed == 120
     c.observe(replace(cave(), frame=240))
     assert c.remaining == 880
 
@@ -161,3 +160,22 @@ def test_ground_item_journal_requires_a_new_pickup_flag_and_does_not_repeat():
     assert not [event for event in diff(after, after, memory) if event.type == 'item']
     bought = replace(before, items=after.items)
     assert not [event for event in diff(before, bought, memory) if event.type == 'item']
+
+
+def test_an_older_save_keeps_the_marathon_and_pickup_waits_it_had_left():
+    """A save from before these waits moved to the PlayClock timed them on the collection's own frames."""
+    from copy import deepcopy
+    from pokesim.runtime.supervision import Tables
+    policy = StrategicPolicy(7)
+    policy.monitor_tables = Tables(clock=lambda: 90_000)
+    assert 'elapsed' not in policy.state_dict()['collection']
+    older = deepcopy(policy.state_dict())
+    older['collection'].update(elapsed=1000, next_marathon=1500)
+    older['pickups'].update(retry={'1:2': 1200}, next_scan=1300, active={'key': '1:3', 'expires': 1800})
+    policy.load_state_dict(older)
+    assert policy.collection.next_marathon == 90_500
+    assert policy.pickups.retry == {'1:2': 90_200}
+    assert policy.pickups.next_scan == 90_300 and policy.pickups.active['expires'] == 90_800
+    # A newer save's times already count on the PlayClock, so loading it moves nothing.
+    policy.load_state_dict(deepcopy(policy.state_dict()))
+    assert policy.collection.next_marathon == 90_500 and policy.pickups.retry == {'1:2': 90_200}

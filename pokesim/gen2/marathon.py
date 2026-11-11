@@ -54,8 +54,21 @@ def _course(data):
              'Wild Pokémon have not agreed to stay off the course.')
 
 
+# The cooldown counts on the policy's PlayClock frame, which a reload never moves back. A record without
+# this mark is from an older save, which timed its cooldown on the emulator's frame.
+CLOCK = 'play'
+
+
 def records(policy):
-    return policy.collection.setdefault('marathon', {'records': {}, 'next': 0})
+    return policy.collection.setdefault('marathon', {'records': {}, 'next': 0, 'clock': CLOCK})
+
+
+def cooled_down(policy, snapshot):
+    data = records(policy)
+    if data.get('clock') == CLOCK:
+        return policy.clock >= data['next']
+    # An older save's cooldown runs out on the frame it was set on. The next race's moves to the PlayClock.
+    return snapshot.frame >= data.get('next', 0)
 
 
 def can_cut(snapshot):
@@ -71,7 +84,7 @@ def sudowoodo_cleared(snapshot):
 def eligible(policy, snapshot, finished):
     """Whether a race may start now: Champion, four postgame projects done, Cut, a clear Route 36 and no cooldown."""
     return ('champion' in policy.completed and finished >= PROJECTS and can_cut(snapshot)
-            and sudowoodo_cleared(snapshot) and snapshot.frame >= records(policy).get('next', 0))
+            and sudowoodo_cleared(snapshot) and cooled_down(policy, snapshot))
 
 
 def candidate(snapshot):
@@ -119,8 +132,7 @@ def finish(policy, activity):
     data = records(policy)
     finished = activity['checkpoint'] == len(course(policy.data).points)
     events(policy).append(engine.finish(data['records'], activity, finished, course(policy.data)))
-    previous = getattr(policy, 'marathon_previous', None)
-    data['next'] = (previous.frame if previous is not None else activity['started_frame']) + engine.INTERVAL
+    data['next'], data['clock'] = policy.clock + engine.INTERVAL, CLOCK
     policy.marathon_previous = None
 
 

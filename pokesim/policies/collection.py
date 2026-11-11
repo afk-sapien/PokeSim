@@ -524,7 +524,6 @@ class Collection:
         self.version = 'red'
         self.project = None
         self.remaining = 0
-        self.elapsed = 0
         self.last_frame = None
         # The cartridge's encounter odds, which the host attaches once per adventure. None prices
         # every catch with the unpriced estimate.
@@ -554,7 +553,8 @@ class Collection:
         self.peer_demand = {}
         self.demand_until = 0
         # The policy context clock at the last step, in game frames that never rewind. Never saved.
-        # The director's stand-downs count on it, so a reload neither restarts nor stretches them.
+        # The director's stand-downs, the marathon's turn and the pickups' waits count on it, so a
+        # reload neither restarts nor stretches them.
         self.clock = 0
         self.next_marathon = 0
         self.marathon_records = {}
@@ -599,7 +599,7 @@ class Collection:
         return target
 
     def state_dict(self):
-        return {**{k:getattr(self,k) for k in ('project','remaining','elapsed','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','deferred_catches','next_marathon','marathon_records','activity_events')},
+        return {**{k:getattr(self,k) for k in ('project','remaining','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','deferred_catches','next_marathon','marathon_records','activity_events')},
                 'director': self.director.state_dict()}
 
     def defer(self, s, species):
@@ -666,6 +666,16 @@ class Collection:
         else:
             spent.pop(key, None)
 
+    def clock_shift(self, data):
+        """How far a save's marathon and pickup times move to count on the PlayClock.
+
+        A save from before they moved timed them on the collection's own frames, which it kept as
+        ``elapsed`` and a reload rewound. Each wait keeps what it had left. A newer save needs no move.
+        """
+        if 'elapsed' not in data:
+            return 0
+        return self.director.progress.now(data['elapsed']) - data['elapsed']
+
     def load(self, data):
         self.pin = None
         self.next_marathon = data.get('next_marathon', 0)
@@ -675,9 +685,10 @@ class Collection:
         for key in self.state_dict():
             if key in data and key not in ('director', 'remaining'):
                 setattr(self,key,data[key])
+        self.next_marathon += self.clock_shift(data)
         # A reload keeps the frames each project spent, so the save's budget and idle count are taken
         # only when the director had no tables yet. Older saves kept the retry times beside it.
-        fresh = self.director.load(data.get('director', {}), self.elapsed, data.get('attempts'))
+        fresh = self.director.load(data.get('director', {}), data.get('elapsed', 0), data.get('attempts'))
         if fresh and 'idle_frames' in data and 'progress' not in data.get('director', {}):
             self.idle_frames = data['idle_frames']
         if 'remaining' in data and (fresh or not (self.project and budgeted(self.project))):
@@ -728,7 +739,7 @@ class Collection:
         if not project or project['method'] != 'marathon':
             return
         self.activity_events.append(marathon.finish(self.marathon_records, project, finished))
-        self.next_marathon = self.elapsed + marathon.INTERVAL
+        self.next_marathon = self.clock + marathon.INTERVAL
         self.marathon_previous = None
 
     def take_activity_events(self):
@@ -791,7 +802,6 @@ class Collection:
     def observe(self,s, suspended=False, training_ready=True, training_active=None, overworld=True, support=False):
         delta = max(0,min(120,s.frame - self.last_frame)) if self.last_frame is not None else 0
         self.last_frame = s.frame
-        self.elapsed += delta
         self.completed_champion |= champion(s)
         for chosen, flag in ((106, 'EVENT_GOT_HITMONLEE'), (107, 'EVENT_GOT_HITMONCHAN')):
             if event_set(s.event_flags, flag):
@@ -941,7 +951,7 @@ class Collection:
                 self.record_quality_search()
                 self.finish_marathon(bool(finished))
                 if finished and project.get('repeat'):
-                    self.last_repeat[str(target)] = self.elapsed
+                    self.last_repeat[str(target)] = self.clock
                 label = name(target) if target else item.replace('_',' ').title() if item else self.project['method'].title()
                 if project['method'] == 'train':
                     label = f'{name(project["parent"])} toward level {project["target_level"]}'
@@ -1075,7 +1085,7 @@ class Collection:
                 'reason':'Collect, evolve, train, and explore in bounded projects. Repeated failures wait longer before retrying.'}
 
     def marathon_due(self, s, nav):
-        return (self.elapsed >= self.next_marathon and s.saffron_open and nav.can_cut
+        return (self.clock >= self.next_marathon and s.saffron_open and nav.can_cut
                 and sum(self.director.completed.values()) >= 4)
 
     def plan_token(self, s):
@@ -1086,7 +1096,7 @@ class Collection:
         stood = self.director.monitor._table(STOOD_DOWN)
         return (s.owned, s.items, s.stored_pokemon, tuple((p.species, p.level) for p in s.party), s.event_flags,
                 s.map, frozenset(key for key in stood if self.director.waiting(key, self.clock)),
-                self.elapsed >= self.next_marathon, funds_short(s), tuple(sorted(self.demand().items())))
+                self.clock >= self.next_marathon, funds_short(s), tuple(sorted(self.demand().items())))
 
     def choose(self,s,nav,rng,main):
         if s.map in LEAGUE or not s.party or not s.owned or not event_set(s.event_flags,'EVENT_GOT_POKEDEX') or main.key.startswith(('heal','party_','teach_','restock')):
@@ -1135,10 +1145,10 @@ class Collection:
         if self.project['method'] == 'rematch':
             self.prepare_league_rotation(s)
         if self.project['method'] == 'marathon':
-            self.next_marathon = self.elapsed + marathon.INTERVAL
+            self.next_marathon = self.clock + marathon.INTERVAL
             self.marathon_previous = None
         if self.project.get('dv_hunt'):
-            self.last_hunt[str(self.project['species'])] = self.elapsed
+            self.last_hunt[str(self.project['species'])] = self.clock
         self.project['initial_owned'] = list(s.owned)
         self.idle_frames = 0
         self.project_maps = [s.map]

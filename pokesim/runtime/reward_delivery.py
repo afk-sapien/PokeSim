@@ -37,14 +37,14 @@ def gift_title(nick, species, ordinal):
 
 
 def reward_due(emu):
-    """A reload can move the frame counter back, which makes the next check due at once."""
+    """The spacing counts on the PlayClock, so a reload neither restarts it nor makes a gift due at once."""
     last = getattr(emu, '_reward_frame', None)
-    return last is None or emu.frame < last or emu.frame - last >= getattr(emu, '_reward_wait', 0)
+    return last is None or emu.play_clock.frames - last >= getattr(emu, '_reward_wait', 0)
 
 
 def schedule(emu, delivered):
     """A battle or menu should not postpone a pending gift for a whole spacing interval."""
-    emu._reward_frame = emu.frame
+    emu._reward_frame = emu.play_clock.frames
     emu._reward_wait = SPACING_FRAMES if delivered else RETRY_FRAMES
 
 

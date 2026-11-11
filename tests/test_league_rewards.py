@@ -316,7 +316,7 @@ def test_later_eevees_can_fill_remaining_evolutions_and_rematches_stay_available
     from test_strategy import mon
     collection = Collection()
     collection.completed_champion = True
-    collection.elapsed = 2000
+    collection.clock = 2000
     collection.eevee_choice = 134
     monkeypatch.setattr(collection, 'sources', lambda: {})
     candidates = []

@@ -63,6 +63,7 @@ def start(policy, snapshot, monkeypatch):
 def run_course(policy, points, frame, gap=600):
     for point in points:
         frame += gap
+        policy.clock += gap
         postgame.observe(policy, at(point, frame))
     return frame
 
@@ -105,6 +106,26 @@ def test_entry_needs_champion_four_activities_cut_sudowoodo_and_the_cooldown(dat
     assert not marathon.eligible(champion, at(point, 1000), 4)
     marathon.records(policy)['next'] = 2000
     assert not marathon.eligible(policy, at(point, 1000), 4)
+
+
+def test_a_reload_neither_restarts_nor_ends_the_cooldown(data, monkeypatch):
+    """The cooldown counts on the PlayClock. An older save's runs out on the emulator frame it was set on."""
+    points = marathon.course(data).points
+    policy = runner_policy(data)
+    start(policy, at(points[0], 1000), monkeypatch)
+    policy.clock = 50_000
+    run_course(policy, points, 1000)
+    due = marathon.records(policy)['next']
+    assert due == policy.clock + engine.INTERVAL
+    # A reload moves the emulator's frame back and leaves the PlayClock where it was.
+    assert not marathon.eligible(policy, at(points[0], 10 * engine.INTERVAL), 4)
+    policy.clock = due
+    assert marathon.eligible(policy, at(points[0], 0), 4)
+    older = runner_policy(data)
+    older.clock = 10 ** 7
+    older.collection['marathon'] = {'records': {}, 'next': 5000}
+    assert not marathon.eligible(older, at(points[0], 4999), 4)
+    assert marathon.eligible(older, at(points[0], 5000), 4)
 
 
 def test_older_saves_count_their_recent_activities_as_finished(data):
@@ -151,8 +172,10 @@ def test_a_full_race_is_timed_journaled_and_recorded(data, monkeypatch):
     assert records['records']['completed'] == 1 and records['records']['best_frames'] == 10 * 600
     assert records['next'] == frame + engine.INTERVAL
     assert marathon.details(policy)['current'] is None
-    # The six hour cooldown holds the next race back, then a faster one sets a new best.
-    assert not marathon.eligible(policy, at(points[0], frame + engine.INTERVAL - 1), 4)
+    # The six hour cooldown holds the next race back on the PlayClock, then a faster one sets a new best.
+    policy.clock = frame + engine.INTERVAL - 1
+    assert not marathon.eligible(policy, at(points[0], frame + engine.INTERVAL), 4)
+    policy.clock += 1
     policy.marathon_previous = None
     activity = start(policy, at(points[0], frame + engine.INTERVAL), monkeypatch)
     run_course(policy, points, frame + engine.INTERVAL, gap=300)
