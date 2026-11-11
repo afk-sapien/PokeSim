@@ -128,9 +128,10 @@ def test_gen1_options_follow_the_text_and_animation_settings(monkeypatch):
 def test_gen2_asks_with_the_stack_pointer_and_never_writes_options():
     pb = Pad()
     before = bytes(pb.memory)
-    Gen2().options(pb)
+    Gen2(lambda: 0).options(pb)
     assert bytes(pb.memory) == before
     calls = []
-    policy = SimpleNamespace(step=lambda snapshot, memory, sp: calls.append((snapshot, sp)) or act('a', 6, 24))
-    assert [a.button for a in Gen2().ask(policy, 'snapshot', pb)] == ['a']
-    assert calls == [('snapshot', 0xDFF0)]
+    policy = SimpleNamespace(step=lambda snapshot, memory, sp, clock: calls.append((snapshot, sp, clock)) or act('a', 6, 24))
+    # The policy's waits count the clock the decider was given, the PlayClock in a managed run.
+    assert [a.button for a in Gen2(lambda: 7200).ask(policy, 'snapshot', pb)] == ['a']
+    assert calls == [('snapshot', 0xDFF0, 7200)]

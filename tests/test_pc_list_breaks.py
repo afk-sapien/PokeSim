@@ -189,7 +189,7 @@ def test_gen2_without_sp_guards_every_pick_in_a_box_with_a_text_command_name(cod
     mon = lambda box, position, name: SimpleNamespace(box=box, position=position, nick_bytes=name)  # noqa: E731
     plain = bytes(boxes.encode_text('CORNFAX'))
     snap = SimpleNamespace(frame=0, active_box=2, stored=(mon(2, 0, plain), mon(2, 3, named(code)), mon(4, 0, plain)))
-    policy = SimpleNamespace(sp=None, blocked={}, task_key=Gen2Policy.task_key, unlisted_box=Gen2Policy.unlisted_box)
+    policy = SimpleNamespace(sp=None, blocked={}, clock=0, task_key=Gen2Policy.task_key, unlisted_box=Gen2Policy.unlisted_box)
     allowed = lambda task: Gen2Policy.allowed(policy, task, snap)  # noqa: E731
     withdraw = menus.Storage('WITHDRAW', 0, 1)
     assert not allowed(menus.Release(2, 0)) and not allowed(withdraw)

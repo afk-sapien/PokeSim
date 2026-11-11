@@ -171,7 +171,7 @@ def main():
             pb.tick(count, True)
             frame += count
 
-    loop = GameLoop(SimpleNamespace(pb=pb, policy=policy, frame=frame), Gen2(), tick)
+    loop = GameLoop(SimpleNamespace(pb=pb, policy=policy, frame=frame), Gen2(lambda: frame), tick)
     try:
         if args.load:
             with args.load.open('rb') as source:

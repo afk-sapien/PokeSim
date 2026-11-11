@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from pokesim.runtime.supervision import REFUSED_SHORTCUT
 from pokesim.stalls import StallWatch
 from pokesim.store import Store
 
@@ -274,7 +275,7 @@ def test_a_refused_hm_lesson_is_not_asked_for_again_at_once(teaching_policy, rea
     policy.step(snapshot, ZEROS)
     assert policy.menu == Teach(15, 0)
     policy.menu = None
-    policy.blocked[policy.task_key(Teach(15, 0))] = snapshot.frame + policy.RETRY_FRAMES
+    policy.blocked[policy.task_key(Teach(15, 0))] = REFUSED_SHORTCUT.until(policy.clock)
     with pytest.raises(Onward):
         policy.step(snapshot, ZEROS)
     assert policy.menu is None
@@ -288,7 +289,7 @@ def test_a_refused_iron_tail_lesson_is_not_asked_for_again_at_once(teaching_poli
     policy.step(snapshot, ZEROS)
     assert policy.menu == Teach(231, 0)
     policy.menu = None
-    policy.blocked[policy.task_key(Teach(231, 0))] = snapshot.frame + policy.RETRY_FRAMES
+    policy.blocked[policy.task_key(Teach(231, 0))] = REFUSED_SHORTCUT.until(policy.clock)
     with pytest.raises(Onward):
         policy.step(snapshot, ZEROS)
     assert policy.menu is None
