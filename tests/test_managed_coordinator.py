@@ -653,6 +653,29 @@ def test_automatic_scheduler_skips_ineligible_adventures(setup, change):
     assert setup.cable_calls == []
 
 
+def test_scheduler_skips_a_last_copy_that_lost_its_point_before_the_exchange(setup, caplog):
+    # Scored, the left game's last copy is a new entry for the right game. By the time the exchange
+    # reads both again, the right game has caught one, so the exchange refuses the pick. Live, this
+    # failed the whole pass with an error alert on the main page.
+    left, right = (setup.peers[setup.data[side]] for side in ('left_id', 'right_id'))
+    left.offer = {'last_copy': True}
+    reads = right.request
+
+    def request(method, path, data=None, timeout=None):
+        result = reads(method, path, data, timeout)
+        if path.endswith('/inventory'):
+            right.owned = [1, 2]
+        return result
+
+    right.request = request
+    with caplog.at_level(logging.INFO, logger='pokesim.app.coordinator'):
+        assert setup.coordinator.schedule_once() is None
+        assert setup.coordinator.schedule_once() is None
+    assert setup.cable_calls == []
+    assert 'Automatic trade skipped: A last copy needs a new Pokédex entry' in caplog.text
+    assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
+
+
 def test_scheduler_does_not_abort_an_exchange_waiting_for_execution(setup):
     row = setup.coordinator.propose(setup.data)
     assert setup.coordinator.schedule_once() is None

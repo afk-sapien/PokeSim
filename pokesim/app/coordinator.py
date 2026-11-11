@@ -93,6 +93,10 @@ class Ineligible(Conflict):
         self.aid, self.key = aid, key
 
 
+class Unhelpful(Conflict):
+    """An automatic pick fails the cable or last copy rules when its inventories are read again for the exchange."""
+
+
 def _display_number(value, maximum):
     return value if type(value) is int and 1 <= value <= maximum else None
 
@@ -650,9 +654,9 @@ class Coordinator:
         if not self._compatible_pair(left, right, give, take):
             if manual:
                 raise Conflict(self._capsule_reason(left, right, give, take))
-            raise Conflict('The Time Capsule needs an unlocked Gen II adventure and compatible Kanto Pokémon')
+            raise Unhelpful('The Time Capsule needs an unlocked Gen II adventure and compatible Kanto Pokémon')
         if not manual and not self._last_copies_useful(give, take, gain(left, take).points, gain(right, give).points):
-            raise Conflict('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
+            raise Unhelpful('A last copy needs a new Pokédex entry for its recipient or its evolution for its owner')
         # A transfer ends queued trades under `offers.guard`, so the owner is checked again under it.
         with self.manager.maintenance, self._offers_guard(), owned_by(self.manager, actor, participants), self.guard:
             existing = self._admit(tid, selection)
@@ -1244,6 +1248,11 @@ class Coordinator:
                 self.ineligible[(error.aid, error.key)] = time.monotonic() + INELIGIBLE_SECONDS
                 log.info('Automatic trade skipped: Pokémon %s of adventure %s left its offers before the exchange',
                          error.key, error.aid)
+                return None
+            except Unhelpful as error:
+                # The same rules passed on the inventories scored above. A catch or a trade since then
+                # can change a Pokédex or a last copy, and the next pass scores the fresh ones.
+                log.info('Automatic trade skipped: %s', error)
                 return None
             self.last_message = 'A useful exchange is preparing at the Cable Club.'
             return self.execute(row['id'])
