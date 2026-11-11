@@ -681,9 +681,12 @@ def test_closing_never_starts_another_participant_request(setup):
 
 
 def test_scheduler_preserves_quality_benefits_without_new_dex_entries():
-    inventory = {'owned': [25], 'party': [{'dex': 25, 'level': 10}], 'storage': {'pokemon': []}}
-    assert Coordinator._benefit(inventory, {'dex': 25, 'level': 20}) == 10
-    assert Coordinator._benefit(inventory, {'dex': 25, 'level': 10}) == 0
+    from pokesim.trade.worth import gain
+    inventory = {'owned': [25, 26], 'version': 'red', 'storage': {'pokemon': []},
+                 'party': [{'dex': 25, 'level': 10, 'dvs': [0, 6, 6, 6, 6]}]}
+    assert gain(inventory, {'dex': 25, 'level': 10, 'dvs': [0, 12, 12, 12, 12]}).points == 5
+    # Any copy can be trained, so a stronger one alone is no gain.
+    assert gain(inventory, {'dex': 25, 'level': 20}).points == 0
 
 
 def trade_display_fixture(setup, nickname='HAUNTER'):

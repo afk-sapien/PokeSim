@@ -5,10 +5,10 @@ Core holds the breeding rules (``pokecore.gen2.breeding``). This module plans th
 from copy import deepcopy
 from itertools import combinations
 
-from pokecore.gen2.breeding import (branch_parents, descendants_wanted, egg_lines, families,
-                                        free_slots, offspring)
+from pokecore.gen2.breeding import branch_parents, descendants_wanted, egg_lines, free_slots, offspring
 
 from .menus import ChangeBox, DayCare, Storage
+from .release import keeps_hatch
 from ..planning.ledger import FIELD_MOVES
 from .training import identity
 
@@ -112,15 +112,19 @@ def pairings(policy, snapshot):
     mons = [mon for mon in snapshot.party[1:] + snapshot.stored + tuple(mon for mon in parents if mon)
             if not mon.egg and (mon.box is not None or not FIELD_MOVES.intersection(mon.moves))]
     choices = []
+    wanted = {}
     for first, second in combinations(mons, 2):
         babies = offspring(data, first, second)
         missing = babies - snapshot.owned
         for baby in babies:
             if descendants_wanted(data, snapshot, policy.demand, baby):
                 missing.add(baby)
-            if (policy.demand.get(baby, 0) and sum(mon.species == baby for mon in snapshot.party + snapshot.stored)
-                    <= policy.demand[baby]):
-                missing.add(baby)
+            if policy.demand.get(baby, 0):
+                # Cable demand breeds a child the PC would keep for it (release.keeps_hatch).
+                if baby not in wanted:
+                    wanted[baby] = keeps_hatch(policy, snapshot, baby)
+                if wanted[baby]:
+                    missing.add(baby)
             level_evolution = any(evo['method'] in {'level', 'happiness', 'stat'}
                                   and evo['species'] not in snapshot.owned
                                   for evo in data.species[baby]['evolutions'])
@@ -235,21 +239,8 @@ def brought_eggs(state, snapshot):
     return brought
 
 
-def worth_hatching(policy, snapshot, mon):
-    """Whether an egg would add something once hatched.
-
-    An egg whose whole family is already registered gives only another copy, so it is worth a trip
-    only while cable demand or a later stage of a single source family still asks for that copy. Gold
-    once boxed dozens of Sneasel eggs, and fetching them one by one held a trainee in the PC for days.
-    """
-    data, demand = policy.data, getattr(policy, 'demand', None) or {}
-    owned = getattr(snapshot, 'owned', None)
-    species = mon.species
-    if owned is None or not families(data).get(species, {species}) <= owned:
-        return True
-    held = sum(not other.egg and other.species == species for other in snapshot.party + snapshot.stored)
-    # Like the breeding search, demand keeps one copy beyond what the cable asks for as a parent.
-    return bool(demand.get(species)) and held <= demand[species] or descendants_wanted(data, snapshot, demand, species)
+def _hatches(policy, snapshot, mon):
+    return keeps_hatch(policy, snapshot, mon.species, mon.dvs)
 
 
 def carried(policy, snapshot, mon):
@@ -259,7 +250,7 @@ def carried(policy, snapshot, mon):
     egg that adds nothing may go back to make room for a trainee.
     """
     return (bool(getattr(mon, 'egg', False)) and egg_key(mon) in brought_eggs(getattr(policy, 'collection', {}), snapshot)
-            and worth_hatching(policy, snapshot, mon))
+            and _hatches(policy, snapshot, mon))
 
 
 def hatch_spares(policy, snapshot):
@@ -294,7 +285,7 @@ def hatching(policy, snapshot, Goal):
     state = policy.collection
     carried = sum(getattr(mon, 'egg', False) for mon in snapshot.party)
     # Only eggs that add something get a trip. The rest stay boxed rather than hold up training.
-    boxed = any(getattr(mon, 'egg', False) and worth_hatching(policy, snapshot, mon)
+    boxed = any(getattr(mon, 'egg', False) and _hatches(policy, snapshot, mon)
                 for mon in getattr(snapshot, 'stored', ()))
     # A Battle Tower run or a Time Capsule restore needs an exact party, so the eggs wait for it.
     if (not boxed or carried >= HATCH_BATCH or state.get('breeding') or state.get('tower')
@@ -331,7 +322,7 @@ def hatch_arrive(policy, snapshot):
     from .standdown import stand_down
     state = policy.collection
     state['hatch_ops'] = state.get('hatch_ops', 0) + 1
-    eggs = sorted((mon for mon in snapshot.stored if mon.egg and worth_hatching(policy, snapshot, mon)), key=lambda mon: (mon.box != snapshot.active_box, mon.box))
+    eggs = sorted((mon for mon in snapshot.stored if mon.egg and _hatches(policy, snapshot, mon)), key=lambda mon: (mon.box != snapshot.active_box, mon.box))
     if not eggs or state['hatch_ops'] > HATCH_OPS:
         # Nothing left to bring, or the trip keeps failing. Leave the PC and let other work go on.
         stand_down(policy, HATCH_KEY)

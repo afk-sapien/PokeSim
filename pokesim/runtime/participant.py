@@ -337,7 +337,16 @@ class Participant:
                         self.store.trade_preferences())
         from ..league_partners import apply as league_partners
         payload = league_partners(payload, self.store)
-        inv = normalise(self.bootstrap.adventure_id, '', payload)
+        # A trade gives what the PC's own rows let go (trade/worth.py), so the plan, the hunt and the
+        # copies kept for the other adventures count. A test double without a PC rates the payload.
+        policy, snapshot = getattr(self.emu, 'policy', None), getattr(self.emu, 'snapshot', None)
+        collection = getattr(policy, 'collection', None)
+        demanded = collection.demand() if hasattr(collection, 'demand') else {}
+        demanded = demanded if isinstance(demanded, dict) else {}
+        from ..trade.worth import given
+        rated = policy.pc_rated(snapshot) if snapshot is not None and hasattr(policy, 'pc_rated') else None
+        gives = given(rated) if isinstance(rated, (list, tuple)) else None
+        inv = normalise(self.bootstrap.adventure_id, '', payload, demand=demanded, gives=gives)
         # Only the owning runtime imports game-specific data to derive offers.
         from .preparation import SEALED, sealed
         from ..pc_list import guarded
@@ -350,9 +359,6 @@ class Participant:
         # The offer is built from the same PC rows, located by box and position.
         records = {(row.get('box'), row.get('position'), row.get('species')): row
                    for row in (payload.get('storage') or {}).get('pokemon') or ()}
-        collection = getattr(getattr(self.emu, 'policy', None), 'collection', None)
-        demanded = collection.demand() if hasattr(collection, 'demand') else {}
-        demanded = demanded if isinstance(demanded, dict) else {}
         # Without the stack pointer a Gen I PC list can stop at a nickname holding a text command, so
         # the slots pc_list guards cannot be withdrawn. Offering one fails every trade that picks it.
         unlisted = guarded(getattr(self.emu, 'snapshot', None), sp)
@@ -360,7 +366,7 @@ class Participant:
         # the Pokémon gone, so it fails as one that cannot be identified.
         releasing = getattr(getattr(self.emu, 'policy', None), 'release_spare', None)
         releasing = releasing if isinstance(releasing, tuple) else None
-        for mon in offers(inv, True, demanded) if available else ():
+        for mon in offers(inv, True) if available else ():
             from ..broker.routine import EVOLVES
             from ..strategy_data import SPECIES
             side = mon.as_side()

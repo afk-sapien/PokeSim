@@ -6,7 +6,7 @@ import pytest
 
 from pokesim.shiny import KEY, fresh, is_shiny, shiny_bytes, ShinyTracker, record, status
 from pokesim.store import Store
-from pokesim.broker.inventory import spare_entries
+from pokesim.trade.worth import spares
 
 
 def test_every_dv_combination_matches_gen2_rule():
@@ -26,7 +26,7 @@ def test_a_shiny_spare_goes_only_after_every_plain_spare():
     plain = {**shiny, 'level': 30, 'dvs': (9,)*5, 'position': 3}
     twin = {**shiny, 'position': 4}
     # One shiny is the best copy and the perfect one the rarest, so the second shiny is the spare.
-    line = spare_entries([], [shiny, better, plain, twin])
+    line = spares([], [shiny, better, plain, twin], {'version': 'gold'})
     assert len(line) == 2 and line[0] == plain and line[1] in (shiny, twin)
 
 

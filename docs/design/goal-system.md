@@ -15,11 +15,11 @@ Each row is a rule that one place decides on its own. The goal system replaces e
 | `rewards.py:114-140` `wasted()` | A League gift is skipped when it would rate as a spare. #334 passes `marks=` to `pc_rated` and `release_rated` instead of the old monkeypatch | One worth call before any acquire |
 | `runtime/reward_delivery.py:117`, `gen2/rewards.py:68` | The two callers of `wasted()`, one per generation | The same |
 | `gen2/collection.py:840`, `:845`, `:853`, `:859` | `offer('returned')`, `offer('gifts')`, `offer('breed')` and `offer('hatching')` each decide if the result is worth a slot | The same |
-| `gen2/breeding.py:97` `pairings` | Breeding chooses pairs by its own rule | The same |
-| `app/coordinator.py:975` `_benefit`, used at `:620` and `:1121-1122` | Trade benefit, rule one | The same |
+| `gen2/breeding.py:97` `pairings` | Breeding chooses pairs by its own rule | PR 4a-2 asks `release.keeps_hatch` for a demanded baby |
+| `app/coordinator.py:975` `_benefit`, used at `:620` and `:1121-1122` | Trade benefit, rule one | PR 4a-2 moves it to `trade/worth.py` `gain` |
 | `app/coordinator.py:1186` `_would_keep` | Trade keep check | The same |
-| `broker/routine.py:12` `benefit` | Trade benefit, rule three | The same |
-| `broker/inventory.py:130` `spare_entries`, return at `:141`, used at `:178` | Offers spares rated without demand or focus | The same |
+| `broker/routine.py:12` `benefit` | Trade benefit, rule three | PR 4a-2 moves it to `trade/worth.py` `gain` |
+| `broker/inventory.py:130` `spare_entries`, return at `:141`, used at `:178` | Offers spares rated without demand or focus | PR 4a-2 moves it to `trade/worth.py` `spares` and `given`, with demand |
 | `gen2/release.py:53` `plan_partners` | Protects only breeding, training and tower identities, never a family | Demand by evolution family |
 | `gen2/release.py:88` `release_rated` | Release order for Gen II | One worth call |
 | `gen2/release.py:107-122` `keeps_another`, used at `gen2/emulator.py:685-687` | A phantom Entry decides if a return or repeat gift would be the next spare (#336) | The same |
@@ -324,6 +324,8 @@ Parked producers write no rows and spend no budget, so the state can never loop.
 | `runtime/participant.py:415-433` `would_keep` | `worth` |
 
 The readers in `policies/team.py:64`, `policies/storage.py:65`, `strategic.py:1359`, `gen2/policy.py:738` and `gen2/ledger.py:190` read the same oracle and do not change behavior.
+
+PR 4a-2 moves trades and hatching onto the PC value rows. In `trade/worth.py`, `gain` scores an incoming Pokémon by the reason the recipient's PC would keep it: a new entry, the only copy, a copy its family needs, or a rarer, shiny or trained copy. Level alone is no gain. `spares` and `given` list what a trade may give. A copy kept only for a linked adventure that lacks the species is marked For trade (`pcvalue.gives`), so a trade may still give it. `release.keeps_hatch` decides if an egg is worth hatching, and `pairings` asks it before it breeds for a demanded baby.
 
 ## 6. Shared supervision
 

@@ -10,6 +10,7 @@ from pokesim.app import trade_settings
 from pokesim.app.trade_builder import TradeBuilder, ViewOnlyError
 from pokesim.app.registry import identifier
 from pokesim.gen2 import trading as gen2_trading
+from pokesim.trade.worth import Gain
 
 from test_managed_coordinator import Peer, setup  # noqa: F401  (fixture)
 from test_view_links import managed  # noqa: F401  (fixture)
@@ -86,7 +87,7 @@ def test_an_old_stored_wish_list_is_ignored_and_kept(setup, monkeypatch):  # noq
     c, left = setup.coordinator, setup.data['left_id']
     setup.registry.set_setting(trade_settings.KEY, {left: {'enabled': True, 'wishlist': [2, 'bad', 999]}, 'junk': 5})
     assert trade_settings.get(setup.registry, left)['enabled'] is True
-    monkeypatch.setattr(c, '_benefit', lambda inventory, mon: 0)
+    monkeypatch.setattr('pokesim.app.coordinator.gain', lambda inventory, mon: Gain(0))
     # Both peers offer an Ivysaur (No. 2). An old wish for it no longer makes a useless trade worth it.
     assert c.schedule_once() is None
     trade_settings.update(setup.registry, left, enabled=False)

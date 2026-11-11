@@ -117,9 +117,16 @@ def offers(emu, payload):
     stored = (payload.get('storage') or {}).get('pokemon') or []
     held = Counter(mon['species'] for mon in party + stored)
     stock = _stock(emu, party + stored)
+    # A trade gives what the PC's own rows let go (trade/worth.py), the last copy of a species, which
+    # the coordinator sends only for a new Pokédex entry, or a Pokémon set to Prefer to trade.
+    from ..trade.worth import given
+    gives = given(emu.policy.pc_rated(snapshot)) if hasattr(emu.policy, 'pc_rated') else None
     result = []
     for mon in stored:
         if _kept(mon, stock):
+            continue
+        if (gives is not None and (mon['box'], mon['position']) not in gives and held[mon['species']] > 1
+                and mon.get('trade_preference') != 'offered'):
             continue
         equip = available_trade_item(emu.data, mon['species'], mon.get('held_item', 0), dict(snapshot.items),
                                      held_species={row['species'] for row in party + stored if not row.get('egg')})

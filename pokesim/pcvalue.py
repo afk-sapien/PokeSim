@@ -11,7 +11,8 @@ rarest copy of each species (each Unown letter), so the Pokédex never loses an 
 a running plan relies on. Each species keeps those, or the copies a plan or its evolution family
 needs. An open DV hunt keeps only its best candidate. The rest are spares, released lowest score first, and only when room is needed. Copies
 the demand needs come after every spare. So the PC can only fill with nothing to release when every
-slot is locked.
+slot is locked. A copy kept for a linked adventure that lacks the species is marked For trade, and a
+trade may give it or a spare (``gives``).
 
 ``worth`` is the one worth call (docs/design/goal-system.md, section 5). Every producer asks it before
 it takes a Pokémon: a catch, a gift, a return, a trade, a hatch and a hunt. It reads the same rows as a
@@ -61,6 +62,8 @@ DEADLOCK = 'PC full: every stored Pokémon is Keep-locked, trained, a plan\'s or
 FULL_LOCKED = 'PC full'
 # The reasons for the best candidate of an open hunt and for a copy its evolution family needs.
 HUNT_BEST, FAMILY = 'Hunt best', 'Family'
+# The reason for a copy kept for a linked adventure that lacks the species. It is the copy a trade gives.
+SUPPLY = 'For trade'
 # The reason worth gives a catch before the Champion that only its family would keep (worth's story).
 STORY_FIRST = 'Story first'
 # A trainee whose next level takes more than this many wild battles at a map's top encounter level is
@@ -238,7 +241,10 @@ def _rate(entries, inputs):
         rarest = min(known, key=lambda row: row.rarity) if known else None
         planned = inputs.demand.get(group[0], 0)
         kin = 0 if group[1] else family[group[0]]
-        need = max(1, planned + kin)
+        # The adventure's own copy, or the copies its family needs, plus one for each linked adventure
+        # that lacks the species, so a copy is left to give.
+        own = max(1, kin)
+        need = own + planned
         if group[0] in inputs.focus:
             # Only the hunt's best candidate. A plainer copy stays a spare, so a hunt for a better
             # one can make room by releasing it.
@@ -260,9 +266,9 @@ def _rate(entries, inputs):
                 row.status, row.reason = 'floor', 'Trained'
             elif index < need or row.entry in roles:
                 row.status = 'kept'
-                if max(1, planned) <= index < need and kin and row.entry not in roles:
-                    # A copy a later stage of its family still needs, after the plan's own copies.
-                    row.reason = FAMILY
+                if row.entry not in roles:
+                    # A copy a later stage of its family still needs, then the copies for trade.
+                    row.reason = FAMILY if index < own else SUPPLY
             if row.entry.locked:
                 row.status, row.reason = 'floor', 'Keep'
             elif row.entry.slot is None:
@@ -307,6 +313,13 @@ def locked(row):
     return bool(entry.locked or entry.role or sum(entry.stat_exp) >= TRAINED_STAT_EXP or row.reason == HUNT_BEST)
 
 
+def gives(row):
+    """Whether a trade may give a held Pokémon away: a spare, or a copy kept for a linked adventure that
+    lacks the species, and never a locked one. The only copy of a species is the owner's choice
+    (the last copy settings) and is not counted here."""
+    return (row.status == 'spare' or row.reason == SUPPLY) and not row.entry.egg and not locked(row)
+
+
 def worth(rows, *, missing=False, headroom=None, active_box=None, room=None, story=False):
     """The one worth call for a new copy, the last of ``rows``: the PC rated as the next release rates
     it. The copy may be a phantom whose DVs are not rolled yet, as a return or a gift is before it
@@ -332,7 +345,7 @@ def worth(rows, *, missing=False, headroom=None, active_box=None, room=None, sto
         return Worth(False, FULL_LOCKED, row.rarity, **extra)
     needed = 0 if headroom is None else catch_visit(headroom, len(requested(rows)))
     found = verdict(rows, missing=missing, needed=needed, active_box=active_box)
-    if story and found.keep and found.reason == FAMILY:
+    if story and found.keep and found.reason in (FAMILY, SUPPLY):
         found = Worth(False, STORY_FIRST, found.rarity, found.best)
     if found.keep and not reserve_allows(rows, room, missing=missing):
         found = Worth(False, 'Upgrade slot only', found.rarity, found.best)

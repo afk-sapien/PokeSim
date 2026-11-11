@@ -1431,7 +1431,7 @@ def test_breeding_pair_search_is_reused_until_the_collection_changes(real_data, 
     from pokesim.gen2 import breeding
     def mon(species, gender, dvs, box=None):
         return SimpleNamespace(species=species, moves=(33,), egg=False, box=box, gender=gender,
-            trainer_id=1, dvs=dvs, level=20)
+            trainer_id=1, dvs=dvs, level=20, experience=8000, stat_exp=(0,) * 5, position=0)
     lead = mon(155, 'Male', (0, 2, 4, 6, 8))
     ditto, pikachu = mon(132, 'Genderless', (0, 1, 3, 5, 7)), mon(25, 'Male', (0, 2, 4, 6, 8), box=0)
     snapshot = SimpleNamespace(party=(lead, ditto), stored=(pikachu,), daycare=(None, None), owned={25, 132, 155})
