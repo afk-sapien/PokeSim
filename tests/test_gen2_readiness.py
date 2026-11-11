@@ -6,7 +6,7 @@ import pytest
 
 from pokecore.gen2.ram import calculated_stats
 from pokesim.planning.losses import ace_slot
-from pokesim.planning.readiness import league_unready, score, unready
+from pokesim.planning.readiness import MATCHUP, Boss, Team, Train, judge, score
 
 TACKLE, EMBER, LEER, HARDEN, CUT, STRENGTH, FLAMETHROWER = 33, 52, 43, 106, 15, 70, 53
 
@@ -57,10 +57,13 @@ def test_the_shared_score_and_gates():
     assert score(40, 0, 10, 40, False) == 0
     assert score(20, 10, 10, 40, True) == 40
     # A gym trains while the best score is under 75 and the best fighter is under the ace + 10.
-    assert unready(74, 25, 16) and not unready(75, 13, 16) and not unready(10, 26, 16)
+    gym = lambda best: Boss('hive', 16, scores=(best,))
+    assert judge(gym(74), Team(25)) == Train(MATCHUP, 26)
+    assert judge(gym(75), Team(13)) is None and judge(gym(10), Team(26)) is None
     # The League trains while a room scores under 60 and the best fighter is under the top ace.
-    assert league_unready([100, 59], 49, 50) and not league_unready([60, 60], 10, 50)
-    assert not league_unready([0], 50, 50)
+    league = lambda *scores: Boss('league', 50, scores=scores, league=True)
+    assert judge(league(100, 59), Team(49)) == Train(MATCHUP, 50) and judge(league(60, 60), Team(10)) is None
+    assert judge(league(0), Team(50)) is None
 
 
 def test_one_fighter_and_a_bench_of_non_attackers_trains_before_bugsy(real_data, walks):

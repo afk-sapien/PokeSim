@@ -6,7 +6,8 @@ from pokesim.policies.base import PolicyContext
 from pokesim.policies.battle import (Decision, choose_battle, damage, effectiveness, healing_item,
                                     needs_healing, ranked_moves, replacement_slot, shopping_item)
 from pokesim.policies.navigation import Navigator
-from pokesim.policies.progression import milestones, story_goal
+from pokesim.planning.losses import Losses
+from pokesim.policies.progression import boss_training, milestones, story_goal
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.ram import PartyMon, read_snapshot, W_PARTY_MONS, W_PARTY_COUNT, W_EVENT_FLAGS
 from pokesim.screen import Screen, W_CURRENT_MENU_ITEM, W_TOP_MENU_X, W_TOP_MENU_Y, W_TILEMAP
@@ -114,11 +115,17 @@ def test_progression_uses_flags_and_training_prerequisite():
     assert story_goal(snap()).key == 'parcel'
     assert story_goal(snap(items=((ITEMS['OAKS_PARCEL'], 1),))).key == 'pokedex'
     ready = snap(party=(mon(),), event_flags=flags('EVENT_GOT_POKEDEX'))
-    assert story_goal(ready).key == 'boulder'
-    assert story_goal(replace(ready, party=(mon(level=5, hp=20, max_hp=20, attack=10, defense=10, special=10, moves=(33, 45), pp=(35, 40)),))).key == 'train_brock'
-    assert story_goal(replace(ready, badges=1)).key == 'moon_trainer'        # Misty's training route lies beyond Mt. Moon
-    assert story_goal(replace(ready, badges=1, map=MAPS['CERULEAN_CITY'])).key == 'train_cascade'
-    assert story_goal(replace(ready, badges=1, map=MAPS['CERULEAN_CITY'], party=(mon(level=20, hp=60, max_hp=60, attack=40, defense=40, special=55),))).key == 'cascade'
+
+    def journey(s):
+        # The goal the policy takes: the story's, or the training the readiness oracle asks for first.
+        goal = story_goal(s)
+        return (boss_training(s, goal, Losses()) or goal).key
+
+    assert journey(ready) == 'boulder'
+    assert journey(replace(ready, party=(mon(level=5, hp=20, max_hp=20, attack=10, defense=10, special=10, moves=(33, 45), pp=(35, 40)),))) == 'train_boulder'
+    assert journey(replace(ready, badges=1)) == 'moon_trainer'        # Misty's training route lies beyond Mt. Moon
+    assert journey(replace(ready, badges=1, map=MAPS['CERULEAN_CITY'])) == 'train_cascade'
+    assert journey(replace(ready, badges=1, map=MAPS['CERULEAN_CITY'], party=(mon(level=20, hp=60, max_hp=60, attack=40, defense=40, special=55),))) == 'cascade'
 
 
 def test_directed_edges_observation_and_restore():

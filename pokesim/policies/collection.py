@@ -1096,7 +1096,7 @@ class Collection:
             # The story comes first until the Champion is beaten. Seed 37 after Brock spent 244 of 300
             # game minutes training partners toward evolutions and 16 more hunting grass beside Mt. Moon,
             # and never reached Misty. Catches and training the story needs come from story_goal: an HM
-            # partner through teaching_goal and gym or League preparation through gym_goal. Wild
+            # partner through teaching_goal and gym or League preparation through boss_training. Wild
             # battles on the way still catch missing species.
             self.abandon('The story comes before side projects until the Champion is beaten')
             return None

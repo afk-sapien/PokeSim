@@ -1,8 +1,7 @@
-"""What a lost boss battle asks of the next try, one rule for both generations.
+"""The levels that lost to each boss, kept for both generations.
 
 A loss to a gym leader, an Elite Four member, the Champion or another boss goal raises the level the
-team's best fighter trains to before that boss: REGROWTH over the best fighter level that lost, up
-to CEILING over the boss's ace, the margin Red, Blue and Yellow train to before a gym. A loss is a
+team's best fighter trains to before that boss (the loss bar, planning/readiness.py). A loss is a
 black out in the boss's room, a battle there that cannot end, or a stall reload during a battle
 there. A boss is named by its trainer class too (BOSS_CLASSES), since the rival, Giovanni and the
 Rocket executives fight on ordinary maps: a loss to one counts against the goal under way, capped
@@ -18,8 +17,9 @@ from __future__ import annotations
 
 KEY = 'boss_losses'
 ACES = 'boss_aces'
-REGROWTH = 2
-CEILING = 10
+# Goal keys an older version kept losses under, by the key that names the same boss now. Red, Blue
+# and Yellow trained for Brock under 'train_brock' before every gym trained under 'train_' and its key.
+RENAMED = {'train_brock': 'train_boulder'}
 
 # The trainer classes that block the story until beaten, by generation: every rival battle, the gym
 # leaders, the Elite Four, the Champion, Red, and the story's villains.
@@ -70,9 +70,12 @@ class Losses:
         self.memory = {}
 
     def _read(self, name):
-        if self.store is None:
-            return dict(self.memory.get(name) or {})
-        return dict(self.store.get(name) or {})
+        saved = (self.memory.get(name) if self.store is None else self.store.get(name)) or {}
+        values = {}
+        for key, value in saved.items():
+            key = RENAMED.get(key, key)
+            values[key] = max(value, values.get(key, value))
+        return values
 
     def _write(self, name, values):
         if self.store is None:
@@ -97,13 +100,3 @@ class Losses:
             return
         levels[key] = level
         self._write(KEY, levels)
-
-    def bar(self, key, floor, ace=None):
-        """The level the best fighter trains to before ``key``: ``floor`` until a loss there.
-
-        ``ace`` defaults to the best foe level a loss there noted."""
-        lost = self.levels().get(key)
-        if lost is None:
-            return floor
-        ace = self.aces().get(key, lost) if ace is None else ace
-        return min(ace + CEILING, max(floor, lost + REGROWTH))
