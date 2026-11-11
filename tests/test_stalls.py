@@ -31,18 +31,19 @@ def test_status_questions_change_nothing_and_count_only_game_time():
     # Hours of real time on a paused game are not a stall. Only game frames count.
     assert not watch.stalled(1000 * MINUTE + 10) and watch.game_minutes(1000 * MINUTE + 10) == 0
     assert watch.stalled(1125 * MINUTE) and watch.game_minutes(1125 * MINUTE) == 125
-    # A frame from before the last progress is a reloaded save, and asking about it moves no clock.
+    # The play clock never goes back, so an earlier frame is only no quiet time, and asking moves no clock.
     assert not watch.stalled(500 * MINUTE) and watch.game_minutes(500 * MINUTE) == 0
     assert not watch.stalled(None) and watch.game_minutes(None) == 0
     assert (watch.frame, watch.since, watch.alerted) == before
 
 
-def test_zero_game_minutes_disables_and_a_restore_restarts_the_clock():
+def test_zero_game_minutes_disables_and_a_reload_does_not_restart_the_clock():
     assert StallWatch(game_minutes=0).check(10 ** 9, 10 ** 9) is None
     watch = StallWatch(game_minutes=120, real_minutes=0)
     watch.progress(500 * MINUTE, 0)
-    assert watch.check(100 * MINUTE, 50000) is None             # frame went backwards: a save was reloaded
-    assert watch.quiet(101 * MINUTE, 50060) == (1, 1)
+    assert watch.check(600 * MINUTE, 50000) is None
+    # A reload rewinds the game but not the play clock, so the quiet stretch goes on through it.
+    assert watch.check(621 * MINUTE, 50060) == (121, 834)
 
 
 def test_managed_trades_do_not_count_as_progress():
@@ -52,7 +53,7 @@ def test_managed_trades_do_not_count_as_progress():
 def test_emulator_reports_a_stall_as_a_notable_event_with_the_objective():
     seen = []
     game = SimpleNamespace(
-        stall=StallWatch(game_minutes=120, real_minutes=0), frame=130 * MINUTE,
+        stall=StallWatch(game_minutes=120, real_minutes=0), play_clock=SimpleNamespace(frames=130 * MINUTE),
         snapshot=SimpleNamespace(valid=True, started=True, map_name='Safari Zone Gate'),
         policy=SimpleNamespace(details=lambda: {'objective': {'title': 'Find the secret house'}, 'recoveries': 9}),
         _handle_events=lambda events, snap: seen.extend(events))
@@ -82,8 +83,8 @@ def test_earned_experience_is_progress_but_a_party_swap_is_not():
 
 
 def test_a_stalled_red_blue_or_yellow_run_asks_for_help():
-    game = SimpleNamespace(stall=StallWatch(game_minutes=120, real_minutes=0), frame=130 * MINUTE,
-                           paused=False, manual_mode=False)
+    game = SimpleNamespace(stall=StallWatch(game_minutes=120, real_minutes=0),
+                           play_clock=SimpleNamespace(frames=130 * MINUTE), paused=False, manual_mode=False)
     game.stall.progress(0, 0)
     request = Emulator.help_request(game, {'action': 'exploring'})
     assert request == {'reason': 'The policy has stopped making game progress', 'action': 'exploring'}
@@ -91,5 +92,6 @@ def test_a_stalled_red_blue_or_yellow_run_asks_for_help():
     assert Emulator.help_request(game, {}) is None
     game.paused, game.manual_mode = False, True
     assert Emulator.help_request(game, {}) is None
-    game.manual_mode, game.frame = False, 10 * MINUTE
+    game.manual_mode = False
+    game.stall.progress(125 * MINUTE, 0)
     assert Emulator.help_request(game, {}) is None

@@ -7,13 +7,15 @@ from unittest.mock import Mock
 from pokesim.emulator import Emulator
 from pokesim.events import RunMemory
 from pokesim.ram import PartyMon
+from pokesim.runtime.supervision import Supervisor
 from test_events import snap
 
 
 def observer(monkeypatch):
     emu = Emulator.__new__(Emulator)
     emu.pb = Mock()
-    emu.play_clock = Mock()
+    emu.play_clock = Mock(frames=0)
+    emu.supervisor = Supervisor()
     emu._enforce_options = Mock()
     emu._handle_events = Mock()
     emu.store = Mock()
