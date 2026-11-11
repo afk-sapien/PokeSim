@@ -119,10 +119,15 @@ class ShinyTracker:
             from .fair_dvs import reroll
             reroll(mem, self.fair_key)
         # Trainer battles and Transform do not create wild encounters.
-        if mem[0xd057] != 1 or mem[0xd069] & 8 or not shiny_bytes(bytes(mem[0xcff1:0xcff3])):
+        if mem[0xd057] != 1 or mem[0xd069] & 8:
             return
         species = mem[0xcfe5]
         if species not in SPECIES:
+            return
+        dvs = bytes(mem[0xcff1:0xcff3])
+        from . import progress_events
+        progress_events.encounter(self.store, SPECIES[species]['dex'], dvs)
+        if not shiny_bytes(dvs):
             return
         fingerprint = hashlib.sha256(bytes(mem[0xc000:0xe000])).hexdigest()
         with self.store.transaction() as db:

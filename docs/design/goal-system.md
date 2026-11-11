@@ -218,7 +218,7 @@ Every tier writes typed progress events to one store table, `progress_events`. T
 |---|---|---|
 | `dex` | yes | any tier, on a new owned entry |
 | `improve` | yes | the goal whose score got better, or the oracle when a kept Pokémon fills family demand or a plan need |
-| `item` | yes for a needed item, no for a sale | UPKEEP and STORY |
+| `item` | yes for a key item or HM, no for a pickup or a purchase | UPKEEP and STORY |
 | `badge`, `league`, `event`, `area` | yes | STORY |
 | `checkpoint` | yes | RACE, one per marathon checkpoint |
 | `catch` | no | every catch, from the same hook that writes `capture_receipts` |
@@ -227,9 +227,11 @@ Every tier writes typed progress events to one store table, `progress_events`. T
 | `room` | no | S1 make_room |
 | `level` | no | any battle. A training goal whose score rises writes its own `improve` |
 | `goal` | no | every goal start, done, stop, expire and stand-down |
-| `plan` | no | diagnostics, such as boss ready's "Went in unready" |
+| `plan` | no | diagnostics, such as boss ready's "Went in unready", and every reload or power cycle, with `identity` naming the reason, such as `reload:battle cannot end` |
 
 Net comes only from `dex`, `improve`, a needed `item`, and the STORY and RACE kinds. A catch or a receive is never net by itself. A duplicate catch raises the held count, so counting held rises as progress would count churn as progress. When a caught or received Pokémon is kept because it fills family demand or a plan need, the oracle writes a separate `improve` row for it. LoopGuard still counts receive and release cycles by species from the `receive` and `release` rows.
+
+In shadow mode the journal entry that reports a new owned entry, a badge, a League win, a new area or an item also writes its row, under the goal running at the time. An `event` row is a story flag this run has not seen set before, and its score is the count of flags seen. These rows follow the journal, so a reload can write one again. The rewind event (section 6) marks the ones a reload undoes.
 
 ### Encounter counters
 
@@ -243,7 +245,7 @@ Encounters are not rows. A shiny hunt would write about 20000 of them. S4 keeps 
 | `target` | encounters with the target species |
 | `met_rule` | target encounters whose DVs met the hunt's rule, for the observed DV rate |
 
-The rates in the absolute checks and the observed DV rate read these counters. They never count as net.
+The rates in the absolute checks and the observed DV rate read these counters. They never count as net. The cartridge's wild battle hook counts each encounter in memory, and the next decision adds them to the counters with the running goal's target and rule.
 
 ### Which definitions it replaces
 

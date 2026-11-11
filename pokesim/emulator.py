@@ -122,7 +122,7 @@ class Emulator:
         self.play_clock = PlayClock(store.get("play_clock", {}))
         # A reset replaces the clock, so the store asks for the current one each time.
         store.clock = lambda: self.play_clock.frames
-        self.goal_watch = progress_events.GoalWatch()
+        self.goal_watch = store.goal_watch = progress_events.GoalWatch()
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
         # The newest autosave's manifest replaces this, and the policy's state, when start() loads it.
@@ -674,6 +674,8 @@ class Emulator:
             # between level milestones. Neither is a stall.
             self.stall.progress(self.frame, time.time())
         new = diff(self.prev_snapshot, snap, self.mem)
+        if snap.valid and snap.started and (watch := getattr(self, 'goal_watch', None)):
+            watch.story(self.store, snap.event_flags)
         if (snap.valid and snap.map == LEAGUE_ENTRY and came_from is not None and came_from not in LEAGUE
                 and not snap.in_battle):
             # Nobody can leave the League, and no trade happens inside it, so this is the one save that
@@ -936,6 +938,7 @@ class Emulator:
         if self.unstick_streak >= 2 and entry and self.snapshot is not None and self.snapshot.map in LEAGUE:
             log.warning("%s again with no progress, restarting the League attempt", why)
             target, saves = entry, [entry] + saves
+        progress_events.reload(self.store, why)
         if target:
             log.warning("%s for %.1f game minutes, reloading %s", why,
                         max(0, self.frame - since_frame) / FRAMES_PER_SECOND / 60, target.name)
@@ -1252,6 +1255,8 @@ class Emulator:
         from .goal_time import GoalTime
         self.pb.stop(save=False)
         self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
+        if watch := getattr(self, 'goal_watch', None):
+            watch.restart()
         self.goal_time = GoalTime(self.store)
         if hasattr(self, 'milestones'):
             from .milestones import MilestoneTracker
@@ -1331,7 +1336,7 @@ class Emulator:
                         if watch := getattr(self, 'goal_watch', None):
                             collection = self.policy.collection
                             tier = 'RACE' if (collection.project or {}).get('method') == 'marathon' else ''
-                            watch.observe(self.store, collection.project_key, tier)
+                            watch.observe(self.store, collection.project_key, tier, hunt=collection.hunt(snap))
                         if activity_events:
                             self._handle_events(activity_events, snap)
                     if self.paused:
