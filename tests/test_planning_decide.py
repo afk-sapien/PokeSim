@@ -95,8 +95,8 @@ def test_a_difference_names_the_rule_that_split_the_two():
 
 
 def test_the_needs_table_reads_the_chain_order():
-    assert pipeline.NEEDS['base'] == ('lock', 'supplies', 'healthy', 'room', 'reserve', 'trained')
-    assert pipeline.NEEDS['heal'] == ('lock', 'supplies')
+    assert pipeline.NEEDS['base'] == ('lock', 'supplies', 'team', 'healthy', 'room', 'reserve', 'trained')
+    assert pipeline.NEEDS['heal'] == ('lock', 'supplies', 'team')
     assert pipeline.NEEDS['collection'] == pipeline.NEEDS['elevator'] == ()
     assert pipeline.offer('passage', None, Candidate('p', Tier.UPKEEP, 1, 1)).forced
     assert pipeline.offer('tm_trip', None, Candidate('t', Tier.UPKEEP, 1, 1)).hold
@@ -112,7 +112,7 @@ def test_every_chain_site_is_in_the_table():
 def test_a_choice_records_each_offer_with_its_site():
     story = Goal('misty', 'Beat Misty', 'Badge')
     choice = Choice(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
-    choice.replace(Goal('heal', 'Heal', 'Heal'), choice.errand_candidate('heal', 'heal'), site='heal')
+    choice.enable(Goal('heal', 'Heal', 'Heal'), choice.errand_candidate('heal', 'heal'), site='heal')
     # An errand under way refuses another kind of offer, and the refused offer is not recorded.
     choice.offer(Goal('collect_pickup', 'Pick up', 'Pick up'), choice.errand_candidate('collect_pickup', 'pickup'),
                  site='pickup_new')
@@ -120,6 +120,34 @@ def test_a_choice_records_each_offer_with_its_site():
         ('story', 'misty', ''), ('heal', 'heal', 'healthy')]
     decision = decide.decide(choice.offers)
     assert (decision.key, decision.rule) == ('heal', decide.NEED) and decide.difference(decision, 'heal') is None
+
+
+def test_a_choice_runs_the_latest_enabler_its_goal_needs_and_only_that_one_writes():
+    wrote = []
+    story = Goal('misty', 'Beat Misty', 'Badge')
+    choice = Choice(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
+    choice.enable(Goal('party_box', 'Box', 'Box'), choice.errand_candidate('party_box', 'party'), site='box',
+                  commit=lambda: wrote.append('box'))
+    assert choice.goal.key == 'party_box' and choice.errand
+    choice.enable(Goal('heal', 'Heal', 'Heal'), choice.errand_candidate('heal', 'heal'), site='heal',
+                  commit=lambda: wrote.append('heal'))
+    assert choice.goal.key == 'heal' and choice.candidates == [choice.pick]
+    choice.commit()
+    assert wrote == ['heal']
+    # A later replace puts its goal over every enabler before it, and none of them writes.
+    choice.replace(Goal('collect_passage', 'Leave', 'Leave'), choice.errand_candidate('collect_passage', 'passage'),
+                   site='passage')
+    assert choice.goal.key == 'collect_passage'
+    choice.commit()
+    assert wrote == ['heal']
+    # An enabler after a replace still runs for the goal it put first.
+    hunt = Choice(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
+    hunt.replace(Goal('collect_catch', 'Catch', 'Catch'), Candidate('grass:1', Tier.PROGRESS, 1.0, 10, goal='collection'),
+                 site='project')
+    hunt.enable(Goal('party_release', 'Release', 'Release'), hunt.errand_candidate('party_release', 'party'),
+                site='release')
+    assert hunt.goal.key == 'party_release' and hunt.chosen.key == 'collect_catch'
+    assert decide.decide(hunt.offers).key == 'party_release'
 
 
 def test_the_shadow_counts_pipeline_decisions_by_source_and_frames():

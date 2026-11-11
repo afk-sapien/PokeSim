@@ -324,6 +324,43 @@ def test_a_release_visit_frees_slots_to_the_refill_mark_in_one_go():
     assert p.goal.key == 'party_release'
 
 
+def test_a_release_the_heal_overrides_leaves_no_spare_and_keeps_the_swap():
+    # A source writes only when its goal is picked (decide pipeline rule A), so the release that loses
+    # to the heal neither marks its spare nor ends the swap.
+    p = StrategicPolicy(7)
+    p.pc.species = 17
+    p.pc.destination = MAPS['LAVENDER_POKECENTER']
+    p.heal_latch = True
+    s = stuffed(textbox=True)
+    p.observed_map = s.map
+    memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
+    p.step(PolicyContext(s, 0, memory))
+    assert p.goal.key == 'heal'
+    assert p.release_spare is None and p.pc.species == 17
+    p.heal_latch = False
+    p.step(PolicyContext(s, 0, memory))
+    assert p.goal.key == 'party_release'
+    assert p.release_spare == release_target(s) is not None and p.pc.species is None
+
+
+def test_an_upgrade_the_restock_overrides_starts_no_swap(monkeypatch):
+    from pokesim.policies import strategic
+    from pokesim.policies.shopping import SupplyPlan
+    monkeypatch.setattr(strategic, 'reserve_to_deposit', lambda s: 0)
+    monkeypatch.setattr(strategic, 'potential', lambda species, party: 500 if species == 17 else 0)
+    s = snap(party=(mon(level=20),) * 6, boxed_pokemon=((17, 20),), box_counts=(1,) + (0,) * 11,
+             map=MAPS['LAVENDER_POKECENTER'], x=13, y=4, frame=100, event_flags=flags('EVENT_GOT_POKEDEX'))
+    p = StrategicPolicy(7)
+    p._overworld(s, fake_mem({}))
+    assert p.goal.key == 'party_upgrade' and p.pc.species == 17
+    # The swap is written only when the step ends with the upgrade running.
+    restock = Goal('restock', 'Restock', 'Buy what the goal needs')
+    q = StrategicPolicy(7)
+    q.shop.plan = lambda *args, **kwargs: SupplyPlan(restock)
+    q._overworld(s, fake_mem({}))
+    assert q.goal.key == 'restock' and q.pc.species is None
+
+
 def test_release_menu_is_only_opened_for_the_release_goal():
     p = StrategicPolicy(7)
     memory = menu({1: '  WITHDRAW', 3: '  DEPOSIT', 5: '  RELEASE', 7: '  CHANGE BOX'}, (1, 1), top=(1, 1))
