@@ -106,3 +106,26 @@ def test_a_journal_entry_costs_its_screenshot_and_nothing_else(store):
     assert row['state'] is None
     assert list(store.states.iterdir()) == []
     assert (store.shots / row['shot']).read_bytes() == b'png-bytes'
+
+
+def test_a_write_inside_a_transaction_joins_it(store, tmp_path):
+    import sqlite3
+    with pytest.raises(RuntimeError, match='stop'):
+        with store.transaction() as db:
+            db.execute("INSERT INTO kv(k,v) VALUES ('outer', '1')")
+            store.set('inner', 2)
+            raise RuntimeError('stop')
+    # The inner write neither committed the outer one early nor stayed when the outer rolled back.
+    assert store.get('outer') is None and store.get('inner') is None
+    with store.transaction():
+        store.set('inner', 2)
+        with store.transaction():
+            store.set('deeper', 3)
+        other = sqlite3.connect(tmp_path / 'pokesim.sqlite')
+        assert other.execute("SELECT count(*) FROM kv WHERE k IN ('inner', 'deeper')").fetchone()[0] == 0
+    assert other.execute("SELECT count(*) FROM kv WHERE k IN ('inner', 'deeper')").fetchone()[0] == 2
+    other.close()
+    with store.transaction(), pytest.raises(RuntimeError, match='durable'):
+        with store.durable():
+            pass
+    assert not store.db.in_transaction
