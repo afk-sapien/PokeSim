@@ -3,12 +3,14 @@
 Gen II hides an overworld object while its event flag is set and reloads that state when a map
 loads, so clearing a flag away from the map brings the encounter back on the next visit. A gift
 giver checks its GOT flag and a trader its wTradeFlags bit the same way.
+The legendaries' returns are ``legendary`` rows in the claims ledger (return_claims), and the kv
+value under KEY keeps only the walking clock.
 """
 import json
 
-from .. import config
+from .. import config, return_claims
 from ..events import Event
-from ..state import kv
+from ..state import claims as ledger, kv
 from pokecore.gen2.ram import Memory
 from pokecore.gen2.resets import write_byte, write_flag
 
@@ -127,7 +129,7 @@ def observe(store, snapshot, memory, walking=None):
         return [], False
     total = steps.get('total', 0)
     saved = store.get(KEY)
-    value = json.loads(json.dumps(saved)) if saved else {'cycle': 0, 'tickets': {}, 'interval': every, 'next_at': every}
+    value = dict(saved) if saved else {'cycle': 0, 'interval': every, 'next_at': every}
     if not every:
         value.update(interval=0, next_at=0)
         if value != saved:
@@ -135,68 +137,54 @@ def observe(store, snapshot, memory, walking=None):
         return [], False
     if value['interval'] != every:
         value.update(interval=every, next_at=total + every)
-    tickets = value['tickets']
-    if total >= value['next_at']:
-        passed = 1 + (total - value['next_at']) // every
-        value['cycle'] += passed
-        value['next_at'] += passed * every
-        for dex in legends(data):
-            if dex in snapshot.owned or str(dex) in tickets:
-                state = tickets.get(str(dex), {}).get('state')
-                tickets[str(dex)] = {'cycle': value['cycle'],
-                                     'state': state if state in ('pending', 'available') else 'pending'}
-    events, changed = [], False
-    if safe(snapshot, memory):
-        for dex in legends(data):
-            ticket = tickets.get(str(dex))
-            if not ticket or snapshot.map in rooms(data, dex):
-                continue
-            if dex == 251 and Memory(memory, data).byte('sGSBallFlag') != 0x0b:
-                continue
-            if ticket['state'] == 'pending':
-                changed |= encounter(memory, data, dex, present=True)
-                ticket['state'] = 'available'
-                events.append(Event('legendary_return', f'{data.species[dex]["name"]} has returned!',
-                                    'Another encounter waits where it first appeared.', priority=4))
-            elif ticket['state'] == 'available' and dex == 251 and celebi_spent(snapshot, data):
-                # Static and roaming misses go through Recovery. Celebi's quest needs the GS Ball again.
-                changed |= encounter(memory, data, dex, present=True)
-            elif ticket['state'] in ('caught', 'declined'):
-                # An older checkpoint cannot reopen a claim that was already caught or declined.
-                changed |= encounter(memory, data, dex, present=False)
-    if value != saved:
-        store.set(KEY, value)
+    from ..progress_events import frame
+    events, changed, now = [], False, frame(store)
+    with store.transaction() as db:
+        found = return_claims.rows(db)
+        if total >= value['next_at']:
+            passed = 1 + (total - value['next_at']) // every
+            value['cycle'] += passed
+            value['next_at'] += passed * every
+            return_claims.earn(db, [dex for dex in legends(data) if dex in snapshot.owned or dex in found], now)
+            found = return_claims.rows(db)
+        if safe(snapshot, memory):
+            for dex in legends(data):
+                row = found.get(dex)
+                if not row or snapshot.map in rooms(data, dex):
+                    continue
+                if dex == 251 and Memory(memory, data).byte('sGSBallFlag') != 0x0b:
+                    continue
+                if row['state'] == ledger.OPEN:
+                    changed |= encounter(memory, data, dex, present=True)
+                    return_claims.deliver(db, dex, now)
+                    if row['reasons'] != ledger.RELOADED:
+                        events.append(Event('legendary_return', f'{data.species[dex]["name"]} has returned!',
+                                            'Another encounter waits where it first appeared.', priority=4))
+                elif row['state'] == ledger.DELIVERED and dex == 251 and celebi_spent(snapshot, data):
+                    # Static and roaming misses go through Recovery. Celebi's quest needs the GS Ball again.
+                    changed |= encounter(memory, data, dex, present=True)
+                elif row['state'] in (ledger.CONSUMED, ledger.DECLINED):
+                    # An older checkpoint cannot reopen a claim that was already caught or declined.
+                    changed |= encounter(memory, data, dex, present=False)
+        if value != saved:
+            kv.put(db, KEY, value)
     return events, changed
 
 
 def consume(db, dex):
     """Close a return in the same transaction as its verified capture receipt."""
-    for key in (KEY, EVENTS):
-        value = kv.get(db, key)
-        if value is None:
-            continue
-        tickets = value.get('tickets', {})
-        ticket = tickets.get(str(dex)) if key == KEY else next(
-            (tickets.get(name) for name, _, number, _, _ in ACTIVITIES if number == dex), None)
-        if ticket and ticket['state'] == 'available':
-            ticket['state'] = 'caught'
-            kv.update(db, key, value)
-
-
-def decline(store, dex):
-    """Close an open return the PC would not keep, until the next walking milestone."""
-    value = store.get(KEY) or {}
-    ticket = value.get('tickets', {}).get(str(dex))
+    return_claims.consume(db, dex)
+    value = kv.get(db, EVENTS)
+    if value is None:
+        return
+    tickets = value.get('tickets', {})
+    ticket = next((tickets.get(name) for name, _, number, _, _ in ACTIVITIES if number == dex), None)
     if ticket and ticket['state'] == 'available':
-        ticket['state'] = 'declined'
-        store.set(KEY, value)
+        ticket['state'] = 'caught'
+        kv.update(db, EVENTS, value)
 
 
-def claims(store):
-    tickets = (store.get(KEY) or {}).get('tickets', {})
-    ready = {int(dex) for dex, ticket in tickets.items() if ticket['state'] == 'available'}
-    closed = {int(dex) for dex, ticket in tickets.items() if ticket['state'] in ('caught', 'declined')}
-    return (ready if interval() else set()), closed
+decline, claims = return_claims.decline, return_claims.claims
 
 
 def observe_events(store, snapshot, memory, walking=None, keeps=None):
@@ -403,11 +391,11 @@ def status(store, data=None):
     every = interval()
     total = walking.get('total', 0)
     remaining = max(0, value.get('next_at', every) - total) if every else None
-    tickets = value.get('tickets', {})
+    ready, _ = claims(store)
     return {'enabled': bool(every), 'available': bool(walking), 'steps': total, 'interval': every,
             'progress': max(0, every - remaining) if every else 0, 'remaining': remaining,
             'cycles': value.get('cycle', 0), 'started_at': walking.get('started_at'),
-            'ready': sorted(int(dex) for dex, ticket in tickets.items() if ticket['state'] == 'available')}
+            'ready': sorted(ready)}
 
 
 def event_status(store):

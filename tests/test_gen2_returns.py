@@ -71,7 +71,9 @@ def capture(store, dex):
 
 
 def test_lugia_returns_only_away_from_its_chamber_and_stays_closed_after_capture(world):
+    from pokesim import return_claims
     from pokesim.gen2.returns import KEY, claims, observe
+    from pokesim.state import claims as ledger
     data, snap = world.data, world.snapshot
     for flag in ('EVENT_FOUGHT_LUGIA', 'EVENT_WHIRL_ISLAND_LUGIA_CHAMBER_LUGIA'):
         world.flag(flag)
@@ -82,7 +84,7 @@ def test_lugia_returns_only_away_from_its_chamber_and_stays_closed_after_capture
     snap.map = data.map_ids['WHIRL_ISLAND_LUGIA_CHAMBER']
     events, changed = observe(world.store, snap, world.memory)
     assert (events, changed) == ([], False) and world.event('EVENT_FOUGHT_LUGIA')
-    assert world.store.get(KEY)['tickets']['249']['state'] == 'pending'
+    assert return_claims.rows(world.store.db)[249]['state'] == ledger.OPEN
     snap.map = data.map_ids['OLIVINE_CITY']
     events, changed = observe(world.store, snap, world.memory)
     assert changed and [event.title for event in events] == ['Lugia has returned!']

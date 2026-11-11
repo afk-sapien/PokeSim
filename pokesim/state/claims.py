@@ -1,8 +1,9 @@
 """The claims ledger: one row per gift a source earned (docs/design/goal-system.md section 7).
 
-A row is ``open`` until its gift is delivered or declined. ``frame`` is the PlayClock frame when it
-was earned, delivered or declined, whichever came last, so a reload to an earlier save sends a gift
-delivered after that save back to open.
+A row is ``open`` until its gift is delivered or declined. A legendary return's encounter is
+delivered into the cartridge, and its row is ``consumed`` once the Pokémon is caught.
+``frame`` is the PlayClock frame when it was earned, delivered or declined, whichever came last,
+so a reload to an earlier save sends a gift delivered after that save back to open.
 A row with no frame, such as one moved from the League ledger before rows, never reopens.
 ``seed`` is the seed of the gift a delivery wrote, so a reopened claim writes the same Pokémon and
 a delivery can find it already held.
@@ -12,8 +13,10 @@ yields.
 """
 import time
 
-OPEN, DELIVERED, DECLINED = 'open', 'delivered', 'declined'
-STATES = (OPEN, DELIVERED, DECLINED)
+OPEN, DELIVERED, DECLINED, CONSUMED = 'open', 'delivered', 'declined', 'consumed'
+STATES = (OPEN, DELIVERED, DECLINED, CONSUMED)
+# The reasons of a claim a reload sent back to open.
+RELOADED = 'Reloaded an earlier save'
 
 TABLE = """CREATE TABLE IF NOT EXISTS claims (
   source TEXT NOT NULL,
@@ -72,6 +75,6 @@ def reopen_after(db, frame, *, keep=None):
         'AND (reward_id IS NULL OR reward_id IS NOT ?)', (DELIVERED, frame, keep)).fetchall()
     reopened = [(source, key) for source, key in reopened]
     for source, key in reopened:
-        db.execute("UPDATE claims SET state=?, ts=?, reasons='Reloaded an earlier save', reward_id=NULL "
-                   'WHERE source=? AND key=?', (OPEN, time.time(), source, key))
+        db.execute('UPDATE claims SET state=?, ts=?, reasons=?, reward_id=NULL WHERE source=? AND key=?',
+                   (OPEN, time.time(), RELOADED, source, key))
     return reopened

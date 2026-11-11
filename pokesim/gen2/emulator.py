@@ -574,7 +574,7 @@ class Emulator:
         self.policy.load_state_dict(metadata.get('policy_state', {}))
         self.policy.on_restore()
         self.play_clock.restore(metadata.get('play_clock'))
-        # A League gift delivered after this save is not in it, so its claim opens again.
+        # A League gift or a legendary return delivered after this save is not in it, so its claim opens again.
         from .. import rewards
         rewards.rewound(self.store, metadata)
         if 'gen2_history' in metadata:

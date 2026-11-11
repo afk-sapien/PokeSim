@@ -1,13 +1,17 @@
-"""Durable walking milestones and repeat legendary encounter claims."""
+"""Durable walking milestones and repeat legendary encounter claims.
+
+The kv value keeps the walking clock: the milestones passed and the step count of the next one.
+Each return is a ``legendary`` row in the claims ledger (return_claims).
+"""
 import time
 from pokecore.resets import Flag, update_flags
 
-from . import config
+from . import config, return_claims
 from .catches import TRACKED, YELLOW, site
 from .events import Event
 from .legendary import ENCOUNTERS
 from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
-from .state import kv
+from .state import claims as ledger, kv
 from .strategy_data import DATA, EVENTS, SPECIES
 
 KEY = 'legendary-returns-v1'
@@ -26,14 +30,13 @@ def status(store):
     value = store.get(KEY) or {}
     every = interval()
     total = walking.get('total', 0)
-    tickets = value.get('tickets', {})
+    ready, _ = claims(store)
     remaining = max(0, value.get('next_at', every) - total) if every else None
     return {'enabled': bool(every), 'available': walking.get('available', False),
             'steps': total, 'interval': every, 'progress': max(0, every - remaining) if every else 0,
             'remaining': remaining,
             'cycles': value.get('cycle', 0), 'started_at': walking.get('started_at'),
-            'ready': [dex for dex, _, _, _ in ENCOUNTERS
-                      if tickets.get(str(dex), {}).get('state') == 'available']}
+            'ready': [dex for dex, _, _, _ in ENCOUNTERS if dex in ready]}
 
 
 class StepTracker:
@@ -69,31 +72,7 @@ class StepTracker:
             self.last_flush = now
 
 
-def consume(db, dex):
-    """Consume a return in the same transaction as its verified capture receipt."""
-    value = kv.get(db, KEY)
-    if value is None:
-        return
-    ticket = value.get('tickets', {}).get(str(dex))
-    if ticket and ticket['state'] == 'available':
-        ticket['state'] = 'caught'
-        kv.update(db, KEY, value)
-
-
-def decline(store, dex):
-    """Close an open return the PC would not keep, until the next walking milestone."""
-    value = store.get(KEY) or {}
-    ticket = value.get('tickets', {}).get(str(dex))
-    if ticket and ticket['state'] == 'available':
-        ticket['state'] = 'declined'
-        store.set(KEY, value)
-
-
-def claims(store):
-    tickets = (store.get(KEY) or {}).get('tickets', {})
-    ready = {int(dex) for dex, ticket in tickets.items() if ticket['state'] == 'available'}
-    closed = {int(dex) for dex, ticket in tickets.items() if ticket['state'] in ('caught', 'declined')}
-    return (ready if interval() else set()), closed
+consume, decline, claims = return_claims.consume, return_claims.decline, return_claims.claims
 
 
 def encounter_flags(memory, room, obj, flag, *, hidden):
@@ -105,6 +84,7 @@ def encounter_flags(memory, room, obj, flag, *, hidden):
 
 def observe(store, snapshot, memory):
     """Open one claim per milestone and reconcile spent claims after restores."""
+    from .progress_events import frame
     every = interval()
     if not snapshot.valid or not snapshot.started:
         return [], False
@@ -113,7 +93,7 @@ def observe(store, snapshot, memory):
         return [], False
     total = steps.get('total', 0)
     saved = store.get(KEY)
-    value = saved or {'cycle': 0, 'tickets': {}, 'interval': every, 'next_at': every}
+    value = saved or {'cycle': 0, 'interval': every, 'next_at': every}
     updated = saved is None
     if not every:
         if value['interval'] != 0 or store.get(KEY) is None:
@@ -123,33 +103,31 @@ def observe(store, snapshot, memory):
     if value['interval'] != every:
         value.update(interval=every, next_at=total + every)
         updated = True
-    if total >= value['next_at']:
-        passed = 1 + (total - value['next_at']) // every
-        cycle = value['cycle'] + passed
-        value['next_at'] += passed * every
-        for dex, _, _, _ in ENCOUNTERS:
-            if dex in snapshot.owned or str(dex) in value['tickets']:
-                ticket = value['tickets'].get(str(dex), {})
-                value['tickets'][str(dex)] = {'cycle': cycle, 'state':
-                    ticket['state'] if ticket.get('state') in ('pending', 'available') else 'pending'}
-        value['cycle'] = cycle
-        updated = True
-    events, changed = [], False
-    if not snapshot.in_battle and not snapshot.textbox and not snapshot.start_menu:
-        for dex, room, obj, flag in ENCOUNTERS:
-            ticket = value['tickets'].get(str(dex), {})
-            if snapshot.map == room:
-                continue
-            if ticket.get('state') == 'pending':
-                changed |= encounter_flags(memory, room, obj, flag, hidden=False)
-                ticket['state'] = 'available'
-                updated = True
-                name = next(row['name'].title() for row in SPECIES.values() if row['dex'] == dex)
-                events.append(Event('legendary_return', f'{name} has returned!',
-                                    'A new expedition is available at its original home.', priority=4))
-            elif ticket.get('state') in ('caught', 'declined'):
-                # An older checkpoint cannot reopen a claim that was already caught or declined.
-                changed |= encounter_flags(memory, room, obj, flag, hidden=True)
-    if updated:
-        store.set(KEY, value)
+    events, changed, now = [], False, frame(store)
+    with store.transaction() as db:
+        found = return_claims.rows(db)
+        if total >= value['next_at']:
+            passed = 1 + (total - value['next_at']) // every
+            value['cycle'] += passed
+            value['next_at'] += passed * every
+            return_claims.earn(db, [dex for dex, _, _, _ in ENCOUNTERS if dex in snapshot.owned or dex in found], now)
+            found = return_claims.rows(db)
+            updated = True
+        if not snapshot.in_battle and not snapshot.textbox and not snapshot.start_menu:
+            for dex, room, obj, flag in ENCOUNTERS:
+                row = found.get(dex)
+                if row is None or snapshot.map == room:
+                    continue
+                if row['state'] == ledger.OPEN:
+                    changed |= encounter_flags(memory, room, obj, flag, hidden=False)
+                    return_claims.deliver(db, dex, now)
+                    if row['reasons'] != ledger.RELOADED:
+                        name = next(entry['name'].title() for entry in SPECIES.values() if entry['dex'] == dex)
+                        events.append(Event('legendary_return', f'{name} has returned!',
+                                            'A new expedition is available at its original home.', priority=4))
+                elif row['state'] in (ledger.CONSUMED, ledger.DECLINED):
+                    # An older checkpoint cannot reopen a claim that was already caught or declined.
+                    changed |= encounter_flags(memory, room, obj, flag, hidden=True)
+        if updated:
+            kv.put(db, KEY, value)
     return events, changed

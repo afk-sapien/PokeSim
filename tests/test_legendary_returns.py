@@ -284,3 +284,64 @@ def test_disabled_walking_does_not_create_a_backlog_when_reenabled(tracking, mon
     assert status(store)['remaining'] == 100
     walk(steps, 100)
     assert len(observe(store, s, memory)[0]) == 1
+
+
+def test_a_reload_from_before_a_return_writes_it_again_without_a_second_notice(tracking):
+    from pokesim import rewards
+    store, steps = tracking
+    play = [500]
+    store.clock = lambda: play[0]
+    s, memory = failed(owned=frozenset({150}), map=MAPS['PALLET_TOWN'])
+    original = bytes(memory)
+    walk(steps, 100)
+    assert len(observe(store, s, memory)[0]) == 1
+    returned = bytes(memory)
+    # A save from after the return already holds its encounter.
+    assert rewards.rewound(store, {'play_clock': {'frames': 600}}) == []
+    # A save from before it does not, so the claim opens and the encounter is written again.
+    memory[:] = original
+    assert rewards.rewound(store, {'play_clock': {'frames': 400}}) == [('legendary', '150')]
+    assert claims(store) == (set(), set())
+    play[0] = 450
+    assert observe(store, s, memory) == ([], True)
+    assert bytes(memory) == returned and claims(store) == ({150}, set())
+
+
+def test_a_restart_lets_the_new_games_legendaries_wait_at_home(tracking):
+    store, steps = tracking
+    s, memory = failed(owned=frozenset({150}), map=MAPS['PALLET_TOWN'])
+    walk(steps, 100)
+    observe(store, s, memory)
+    CatchTracker(store, sorted(SUPPORTED)[0]).record('capture', 150)
+    assert claims(store) == (set(), {150})
+    store.restart(1, {})
+    assert claims(store) == (set(), set())
+    # The last game's caught Mewtwo no longer hides the new game's from Cerulean Cave.
+    fresh = bytearray(len(memory))
+    assert observe(store, replace(s, owned=frozenset()), fresh) == ([], False)
+    assert fresh == bytes(len(memory))
+
+
+def test_the_schema_moves_return_tickets_into_claims_rows_once(tmp_path):
+    import json
+    import sqlite3
+    from pokesim import return_claims, rewards
+    from pokesim.state import claims as ledger
+    Store(tmp_path).close()
+    gen1, gen2 = return_claims.KEYS
+    with sqlite3.connect(tmp_path / 'pokesim.sqlite') as db:
+        db.execute('PRAGMA user_version = 2')
+        for key, tickets in ((gen1, {'150': {'cycle': 2, 'state': 'caught'}, '144': {'cycle': 2, 'state': 'available'}}),
+                             (gen2, {'249': {'cycle': 1, 'state': 'pending'}})):
+            db.execute('INSERT OR REPLACE INTO kv(k, v) VALUES (?, ?)',
+                       (key, json.dumps({'cycle': 2, 'interval': 100, 'next_at': 300, 'tickets': tickets})))
+    store = Store(tmp_path)
+    try:
+        assert {dex: row['state'] for dex, row in return_claims.rows(store.db).items()} == {
+            150: ledger.CONSUMED, 144: ledger.DELIVERED, 249: ledger.OPEN}
+        assert store.get(KEY) == store.get(gen2) == {'cycle': 2, 'interval': 100, 'next_at': 300}
+        assert claims(store) == ({144}, {150})
+        # A moved row has no frame, so no reload reopens it.
+        assert rewards.rewound(store, {'play_clock': {'frames': 0}}) == []
+    finally:
+        store.close()
