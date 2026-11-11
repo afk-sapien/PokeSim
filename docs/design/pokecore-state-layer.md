@@ -26,7 +26,7 @@ Status: proposed on 2026-11-10. It was read from main at `63cb1717`. It is phase
 3. Before each merge, compare the slice's files with every open pull request. A slice that shares a file with an open goal system v2 pull request waits for it, then rebases.
 4. Each slice needs green CI and a passed `tools/preflight.py`, then merges with auto-merge.
 5. pokecore stays free of text, sprites, music and ROM bytes. Addresses, IDs and bit names may ship. Tables stay with the consumer, as today.
-6. Gen I surfaces PokeBench uses (`gen1` constants, `read_party`, `read_bag`, `read_progress`, `storage.decode_box`, `memory_bytes`) only gain names. Nothing is renamed or removed there.
+6. Gen I surfaces the benchmark package uses (`gen1` constants, `read_party`, `read_bag`, `read_progress`, `storage.decode_box`, `memory_bytes`) only gain names. Nothing is renamed or removed there.
 7. No pokecore release is cut for this work. PokeSim uses the workspace copy, as `pokesim/gen2/routes.py` already does for `pokecore.gen2.mapfacts`. The next pokecore release notes the changes.
 
 ## 4. Slices, in order
@@ -39,7 +39,7 @@ Agent time per slice is 1 to 4 hours plus CI and a 10 minute preflight.
 4. **Gen I names, in the policies.** The same in `policies/strategic.py`, `policies/battle.py`, `policies/navigation.py`, `policies/travel.py`, `runtime/preparation.py`, `catches.py` and `emulator.py`. These files are in the v2 pull requests, so this slice waits for them.
 5. **Gen I boxes in pokecore.** `pokecore.storage` gains `box_location(box, active)`, `read_box_counts` and `read_box_records`, built on `decode_box`. `pokesim/ram.py` keeps `StoredMon`, its species and level filter, maximum PP and the PC list check, and calls pokecore for the bytes.
 6. **Nickname repair in pokecore.** `pokecore.repairs.repair_party_nicknames(memory, *, version=None)` holds the write, in a module named for writes so the decoders stay read only. It is tested on Red and Yellow layouts. `pokesim/ram.py` calls it.
-7. **View fields out of Mon.to_dict.** PokeSim gets `pokesim/gen2/views.py` with `mon_view(mon, egg_view=False)`, which adds `perfect_dvs`, `dv_total`, `dv_percent`, `dv_stars` and `potential_power` to pokecore's dict. Every PokeSim caller moves to it first, then pokecore drops the fields. The payload is unchanged. PokeBench reads only Gen I, so it is not affected.
+7. **View fields out of Mon.to_dict.** PokeSim gets `pokesim/gen2/views.py` with `mon_view(mon, egg_view=False)`, which adds `perfect_dvs`, `dv_total`, `dv_percent`, `dv_stars` and `potential_power` to pokecore's dict. Every PokeSim caller moves to it first, then pokecore drops the fields. The payload is unchanged. The benchmark package reads only Gen I, so it is not affected.
 8. **State types.** `pokecore.state` with frozen `GameState`, `Player`, `Mon`, `Party`, `Bag` and `MapState`, a `generation` field, and `None` for what a generation lacks. `read_state(memory, game)` is a thin layer over the existing decoders. pokecore only, with tests on synthetic memory for all six games.
 9. **BattleState.** Kind (none, wild, trainer, tutorial, scripted), both active mons, enemy HP, and named flags: transformed, trapped, can run, link battle. pokecore only.
 10. **UiState.** Text box, start menu, menu cursor and scroll, facing, walking, biking or surfing. pokecore only. The shortcut machine already detects most of this internally, so it is exposed, not rebuilt.
