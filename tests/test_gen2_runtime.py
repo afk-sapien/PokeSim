@@ -1620,7 +1620,7 @@ def test_checkpoint_clock_export_preserves_elapsed_days(real_data):
     import struct
     from pokecore.gen2.clock import boot
     from pokesim.gen2.cable_verification import checkpoint_clock
-    from tools.advance_gen2_clock import advance
+    from tools.verify_cartridge import advance
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
     if not directory:
         pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')

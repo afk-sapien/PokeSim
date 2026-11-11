@@ -5,7 +5,7 @@ import pytest
 from pokesim.ram import BOX_DATA_SIZE, PartyMon, W_BOX_COUNT
 from pokesim.trade import boxes
 from pokesim.trade.preferences import identity
-from tools.trim_duplicate_checkpoint import compact_boxes, plan_removals
+from tools.maintain import compact_boxes, plan_removals
 from test_trade_save import MACHOKE, Memory, entry, populate
 
 
