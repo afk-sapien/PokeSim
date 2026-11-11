@@ -251,6 +251,6 @@ def test_the_runner_never_flies_or_surfs_past_the_starting_line(data, monkeypatc
     assert not marathon.racing(policy)
     postgame.observe(policy, at(points[0], 60))
     assert marathon.racing(policy)
-    source = open(flight.__file__.replace('flight.py', 'policy.py')).read()
+    source = open(flight.__file__.replace('flight.py', 'policy/__init__.py')).read()
     assert "running = self.goal.key == 'collection_marathon' and racing(self)" in source
     assert 'flight = None if running else shortcut(' in source and 'surf = not running and' in source

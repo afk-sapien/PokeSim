@@ -5,7 +5,9 @@ Vaporeon spent its last Hydro Pump and Waterfall before Lance, then kept Growlin
 with Rest and Growl PP left, so not even Struggle could end the battle. The battle timeout
 reloaded the same save from Karen's room three times and gave up.
 """
+import importlib
 import os
+import pkgutil
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -72,6 +74,15 @@ def lance(party, items=(), in_battle=2):
                            enemy_hp=150, hall_of_fame_count=215)
 
 
+def patch_memory(monkeypatch, memory):
+    """Patch Memory in the policy package and in each of its modules that imports it."""
+    monkeypatch.setattr(policy_module, 'Memory', memory)
+    for info in pkgutil.iter_modules(policy_module.__path__):
+        module = importlib.import_module(f'{policy_module.__name__}.{info.name}')
+        if hasattr(module, 'Memory'):
+            monkeypatch.setattr(module, 'Memory', memory)
+
+
 def policy(data):
     fake = SimpleNamespace(data=data)
     fake.move_score = lambda mid, mon, snapshot: Policy.move_score(fake, mid, mon, snapshot)
@@ -82,7 +93,7 @@ def policy(data):
 def test_a_party_with_nothing_but_rest_and_growl_cannot_end_the_battle(data, monkeypatch):
     fake = policy(data)
     fake.memory = object()
-    monkeypatch.setattr(policy_module, 'Memory', lambda memory, data: BattleMemory())
+    patch_memory(monkeypatch, lambda memory, data: BattleMemory())
 
     def hopeless(snapshot):
         return Policy.hopeless_battle(fake, snapshot)
@@ -137,9 +148,9 @@ def test_a_ditto_left_standing_can_still_transform_and_end_the_battle(data, monk
     # Once Transformed it has five PP for each copied move, so Struggle is a few turns away even
     # after its copied attack runs out. Played on, it beat Koga's Crobat this way.
     fake.memory = object()
-    monkeypatch.setattr(policy_module, 'Memory', lambda memory, data: BattleMemory(transformed=True, moves=(REST, 0, 0, 0)))
+    patch_memory(monkeypatch, lambda memory, data: BattleMemory(transformed=True, moves=(REST, 0, 0, 0)))
     assert not Policy.hopeless_battle(fake, lance((fainted, vaporeon())))
-    monkeypatch.setattr(policy_module, 'Memory', lambda memory, data: BattleMemory())
+    patch_memory(monkeypatch, lambda memory, data: BattleMemory())
     assert Policy.hopeless_battle(fake, lance((fainted, vaporeon())))
 
 
@@ -159,7 +170,7 @@ def test_a_healer_the_foe_outhits_blacks_out_instead_of_reloading(data, monkeypa
     fake = policy(data)
     fake.memory = object()
     fainted = mon(84, 20, 0, (PECK, GROWL, 0, 0), (35, 40, 0, 0))
-    monkeypatch.setattr(policy_module, 'Memory', lambda memory, data: BattleMemory(enemy=(SURF, 0, 0, 0)))
+    patch_memory(monkeypatch, lambda memory, data: BattleMemory(enemy=(SURF, 0, 0, 0)))
     assert not Policy.hopeless_battle(fake, chuck((fainted, hoppip())))
     # Vaporeon's Rest wins back a third of 359 HP a turn, more than Surf takes, so it outlasts him.
     assert Policy.hopeless_battle(fake, chuck((fainted, vaporeon())))

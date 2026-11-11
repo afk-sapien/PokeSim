@@ -135,7 +135,7 @@ def test_only_spares_the_pc_allows_are_offered():
 # 'checked': its function asks may_release itself, for a runner that presses outside menu_step.
 # 'probe': a key for policy.allowed that never runs.
 RELEASE_SITES = {('ledger.py', 'unequip_step'): 'menu', ('ledger.py', 'release_step'): 'menu',
-                 ('ledger.py', 'storage_unit'): 'probe', ('policy.py', 'trade_spare'): 'probe',
+                 ('ledger.py', 'storage_unit'): 'probe', ('policy/storage.py', 'trade_spare'): 'probe',
                  ('preparation.py', 'make_room'): 'checked', ('teams.py', 'arrive'): 'menu',
                  ('training.py', 'arrive'): 'menu'}
 
@@ -145,12 +145,13 @@ def release_sites():
     from pathlib import Path
     import pokesim.gen2
     sites = {}
-    for path in sorted(Path(pokesim.gen2.__file__).parent.glob('*.py')):
+    root = Path(pokesim.gen2.__file__).parent
+    for path in sorted(root.rglob('*.py')):
         for function in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
             if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 calls = [node for node in ast.walk(function) if isinstance(node, ast.Call)]
                 if any(getattr(call.func, 'id', None) == 'Release' for call in calls):
-                    sites[path.name, function.name] = function
+                    sites[path.relative_to(root).as_posix(), function.name] = function
     return sites
 
 
