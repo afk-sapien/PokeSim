@@ -24,6 +24,7 @@ EXP_SHARE = 0x39
 from .web import live_status
 from .timecapsule import compatible, unlocked
 from .timecapsule_conversion import convert
+from .views import mon_view
 
 
 def status(emu, payload, adventure_id):
@@ -298,7 +299,7 @@ class Participant(BaseParticipant):
                               'party_slot': prepared['party_slot'], 'selected_key': selected},
                       outgoing={key: value.hex() for key, value in row.items()})
         from .league import export
-        record['outgoing_league_record'] = export(self.store, self.emu.data, snapshot.party[prepared['party_slot']].to_dict(egg_view=True))
+        record['outgoing_league_record'] = export(self.store, self.emu.data, mon_view(snapshot.party[prepared['party_slot']], egg_view=True))
         return _save(self.store, record)
 
     def prepare_session(self, data):
@@ -379,7 +380,7 @@ class Participant(BaseParticipant):
         if record.get('time_capsule'):
             from .timecapsule_records import to_gen2
             league = to_gen2(league, data['incoming'], self.emu.data)
-        record['incoming_league_record'] = validate(league, self.emu.data, mon.to_dict(egg_view=True))
+        record['incoming_league_record'] = validate(league, self.emu.data, mon_view(mon, egg_view=True))
 
     def verify_session(self, record, result, state, save):
         """Check this side of an owner-driven session against its own prepared source."""

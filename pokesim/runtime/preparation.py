@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict
 import time
 
+from pokecore.gen1 import W_FACING, W_LINK_STATE, W_WALK_COUNTER
 from pokecore.shortcuts import ChangeBox, DepositPokemon, WithdrawPokemon
 
 from ..policies.base import Action, stack_pointer
@@ -243,7 +244,7 @@ class Preparation:
     def _walk(self, ctx, targets):
         snap = ctx.snapshot
         pos = (snap.map, snap.x, snap.y)
-        moving = bool(ctx.mem[0xCFC5])
+        moving = bool(ctx.mem[W_WALK_COUNTER])
         self.nav.observe(pos, snap.frame, moving, interrupted=bool(snap.in_battle or snap.textbox or snap.start_menu))
         if moving:
             return [Action(None, 0, 4)]
@@ -300,7 +301,7 @@ class Preparation:
                         return self._select(screen, 0)
                     if kind != 'overworld':
                         return [Action('a', 6, 24)]
-                    return [Action('a' if ctx.mem[0xC109] == 4 else 'up', 6, 18)]
+                    return [Action('a' if ctx.mem[W_FACING] == 4 else 'up', 6, 18)]
                 if kind != 'overworld' or snap.textbox or snap.start_menu:
                     return [Action('b', 6, 18)]
                 return self._walk(ctx, (target,))
@@ -367,7 +368,7 @@ class Preparation:
             rendezvous = CENTERS[snap.map]['rendezvous']
             if pos != rendezvous:
                 return self._walk(ctx, (rendezvous,))
-            if ctx.mem[0xD12B] != 0:
+            if ctx.mem[W_LINK_STATE] != 0:
                 raise ValueError('The game is already in an incompatible link state')
             self.state['party_slot'] = index
             self.state['party_keys'] = [identity(member) for member in live_status(snap.to_dict())['party']]
@@ -397,7 +398,7 @@ class Preparation:
             pc = CENTERS[snap.map]['pc']
             if pos != pc:
                 return self._walk(ctx, (pc,))
-            if ctx.mem[0xC109] != 4:
+            if ctx.mem[W_FACING] != 4:
                 return [Action('up', 4, 8)]
             return [Action('a', 6, 18)]
         if kind == 'pc_root':
@@ -467,7 +468,7 @@ class Preparation:
         if kind == 'overworld':
             if (snap.map, snap.x, snap.y) != pc:
                 return self._walk(ctx, (pc,))
-            if ctx.mem[0xC109] != 4:
+            if ctx.mem[W_FACING] != 4:
                 return [Action('up', 4, 8)]
             return [Action('a', 6, 18)]
         from ..policies.progression import Goal

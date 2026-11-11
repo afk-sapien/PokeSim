@@ -217,15 +217,17 @@ Box data uses `individual_data` but box enumeration remains application-owned.
 addresses from pret/pokered: `W_FACING` (a key of `FACINGS`), `W_WALK_COUNTER`,
 `W_WHICH_POKEMON`, `W_MOVE_NUM`, `W_PLAYER_DISABLED_MOVE`, `W_WALK_BIKE_SURF_STATE`
 (0 walking, 1 biking, 2 surfing), `W_STATUS_FLAGS1` with `BIT_STRENGTH_ACTIVE` and
-`BIT_GAVE_SAFFRON_GUARDS_DRINK`, and `W_MOVEMENT_FLAGS` with `BIT_SPINNING` (arrow
-tiles). `W_SPRITE_STATE_DATA2`, `SPRITE_STRUCT`, `SPRITE_MAP_Y` and `SPRITE_MAP_X`
+`BIT_GAVE_SAFFRON_GUARDS_DRINK`, `W_STATUS_FLAGS7` with `BIT_TRAINER_BATTLE` (a
+trainer who spotted the player is walking up), and `W_MOVEMENT_FLAGS` with
+`BIT_SPINNING` (arrow tiles). `W_SPRITE_STATE_DATA2`, `SPRITE_STRUCT`, `SPRITE_MAP_Y` and `SPRITE_MAP_X`
 locate sprite positions, and `sprite_tile(memory, sprite, *, version=None)` returns
 the (x, y) tile of sprite slot `sprite`: 0 is the player and 1 to 15 the map's objects.
 For battles it names `W_BATTLE_MON` and `W_ENEMY_MON` (each `BATTLE_STRUCT` bytes),
 their nicknames, `W_BATTLE_MON_HP`, `W_BATTLE_MON_STATUS`, `W_BATTLE_MON_PP`,
 `W_ENEMY_HP`, `W_ENEMY_MAX_HP`, `W_ENEMY_DVS`, `W_TRANSFORMED_ENEMY_DVS`,
 `W_PLAYER_MON_NUMBER`, both sides' battle status 1 and 3 bytes with
-`BIT_USING_TRAPPING_MOVE` and `BIT_TRANSFORMED`, `W_LINK_STATE`, and the
+`BIT_USING_TRAPPING_MOVE` and `BIT_TRANSFORMED`, `W_LINK_STATE`,
+`W_CAPTURED_MON_SPECIES` (set once a ball catches), and the
 `BATTLE_TYPE_OLD_MAN`, `BATTLE_TYPE_SAFARI` and `BATTLE_TYPE_PIKACHU` values.
 Menus and items use `W_CUR_ITEM`, `W_ITEM_QUANTITY`, `W_OPTIONS` and
 `H_VENDING_MACHINE_ITEM`. In-game trades use `W_IN_GAME_TRADE_GIVE_MON_SPECIES`,
@@ -523,6 +525,18 @@ count 0 until the game initializes the boxes, and memory without banks reports
 returns a frozen `BoxRecords(box, structs, names)` for each box that holds
 Pokémon. Its `mons` property is `decode_box` of those bytes. A box whose bank the
 memory cannot serve is left out. Neither reader switches banks or writes memory.
+
+## Repairs
+
+`repairs` holds named writes that fix damaged Gen I memory, apart from the
+read-only decoders. Call it only while the emulator is paused or under its
+exclusive lock.
+
+- `repair_party_nicknames(memory, *, version=None)` ends each party nickname at
+  its first text command byte (below 0x60 and not the 0x50 terminator), which the
+  naming screen can never type but a trade can copy in. It returns the party slots
+  it changed, and an empty list when nothing needed it. `version='yellow'` repairs
+  raw Yellow memory.
 
 ## Trusted resets
 

@@ -32,6 +32,7 @@ from . import journal
 from .policy import Action, Policy
 from pokecore.gen2.ram import BADGES, read_snapshot
 from .store_stock import StoreStock
+from .views import mon_view, state_view
 
 log = logging.getLogger('pokesim.gen2')
 
@@ -672,7 +673,7 @@ class Emulator:
             self.pb.memory[bank, address] = value
             self.options_applied = True
         self.play_clock.seed(snapshot.playtime_seconds)
-        self.store.upgrade_trade_preferences(lambda: [mon.to_dict(egg_view=True) for mon in (*snapshot.party, *snapshot.stored)])
+        self.store.upgrade_trade_preferences(lambda: [mon_view(mon, egg_view=True) for mon in (*snapshot.party, *snapshot.stored)])
         self.game_clock = game_clock(self.pb.memory, self.data)
         self.tracker.observe(snapshot)
         from .steps import observe_mew
@@ -1271,7 +1272,7 @@ class Emulator:
                 'stopped': self.frozen,
                 'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,
                 'policy': self.policy.describe(), 'strategy': self.policy.details(), 'frame': self.frame,
-                'game': self.snapshot.to_dict(egg_view=True) if self.snapshot else None, 'rom': self.rom_note,
+                'game': state_view(self.snapshot, egg_view=True) if self.snapshot else None, 'rom': self.rom_note,
                 'play_clock': self.play_clock.status(), 'clock': getattr(self, 'game_clock', None), 'performance': {'frames': self.executed_frames, 'sampled_at': time.monotonic()},
                 'uptime': int(time.time() - self.started_at), 'stuck_seconds': max(0, self.frame - self.stuck_frame) // FRAMES_PER_SECOND,
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,

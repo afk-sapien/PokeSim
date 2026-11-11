@@ -22,6 +22,7 @@ from .policies.strategic import StrategicPolicy
 from .runtime import trace as runtime_trace
 from .runtime.game_loop import GameLoop, Gen1
 from .runtime.manifest import checkpoint_manifest
+from .runtime.supervision import Tables
 from .seeds import RELOAD_IDLE, reload_idle
 
 BLUE_SHA1 = 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2'
@@ -61,7 +62,9 @@ class HeadlessRun:
             key = fair_wild_dvs if isinstance(fair_wild_dvs, bytes) else fair_key(seed)
             fair_dvs.attach(self.pb, self.rom_sha1, key)
         self.policy = StrategicPolicy(seed)
-        self.policy.collection.version = ('yellow' if self.rom_sha1 == YELLOW_SHA1
+        # The goals' stand-downs count on the run's frames, which a reload keeps, as the PlayClock does live.
+        self.policy.monitor_tables = Tables(clock=lambda: self.frame)
+        self.policy.collection.version =('yellow' if self.rom_sha1 == YELLOW_SHA1
                                           else 'blue' if self.rom_sha1 == BLUE_SHA1 else 'red')
         from .planning.cost import wild_odds
         self.policy.collection.wild = wild_odds(rom, self.policy.collection.version)
@@ -75,17 +78,21 @@ class HeadlessRun:
             # A checkpoint carries the policy's own random state, so every run of one checkpoint
             # makes the same choices whatever seed is asked for. Exploring needs the seed to matter;
             # replaying a saved stall needs the original choices, so this is the caller's decision.
-            self.frame = self._load(checkpoint, reseed=reseed).get('frame', 0)
+            self._load(checkpoint, reseed=reseed, first=True)
         if self.tracer is not None:
             self.tracer.ensure(self.manifest)
 
-    def _load(self, path, reseed=False):
+    def _load(self, path, reseed=False, first=False):
         metadata = CheckpointStore(path.parent).checkpoint_metadata(path)
         if not metadata:
             raise ValueError('A checkpoint manifest is required for a faithful replay')
         validate_runtime(metadata)
         if metadata['rom_sha1'] != self.rom_sha1:
             raise ValueError('ROM or emulator version does not match the checkpoint')
+        if first:
+            # The run counts its frames on from the save's, before the policy reads a wait timed on them.
+            # A reload keeps counting, so the frames never go back.
+            self.frame = metadata.get('frame', 0)
         self.policy.load_state_dict(metadata['policy_state'])
         self.memory = RunMemory.from_dict(metadata['run_memory'])
         if reseed:

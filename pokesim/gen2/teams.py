@@ -10,13 +10,14 @@ from collections import Counter
 from ..trade.preferences import signature as identity
 from .menus import ChangeBox, Release, Storage
 from .standdown import exhausted, forget, pc_key, stand_down, standing_down, team_key
+from .views import mon_view
 
 # Consecutive PC visits with nothing left to do before an assembly stands down. The monitor keeps the count.
 BLOCKED_LIMIT = 8
 
 
 def key(mon):
-    return identity(mon.to_dict(egg_view=True))
+    return identity(mon_view(mon, egg_view=True))
 
 
 def assembled(snapshot, wanted):

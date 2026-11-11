@@ -1,7 +1,7 @@
 """What the bot is working on: its current goal, its share of play per goal and its recent stand-downs.
 
-Both generations keep the stand-downs in one table of the progress monitor (planning/monitor.py),
-saved with the policy. This only reads that table and the current goal, so it never changes a decision.
+Both generations keep the stand-downs in one table of the progress monitor (planning/monitor.py).
+This only reads that table and the current goal, so it never changes a decision.
 Frames are counted between observations and written at most once a minute, so a restart loses less than
 a minute of counting.
 """

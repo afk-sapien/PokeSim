@@ -7,6 +7,7 @@ import time
 
 from fastapi.testclient import TestClient
 
+from pokesim.gen2.views import state_view
 from pokesim.runtime.settings import SimulationSettings
 from pokesim.runtime.simulation import SimulationRuntime
 from pokecore.gen2.ram import Memory, read_snapshot
@@ -75,7 +76,7 @@ def main():
                 assert emu.paused and not emu.manual_mode
                 assert client.post('/api/control', json={'action': 'save'}).status_code == 200
             saved = emu.call(emu._autosave)
-            previous = emu.snapshot.to_dict(egg_view=True)
+            previous = state_view(emu.snapshot, egg_view=True)
             steps = runtime.store.get('cartridge-steps-v1')['total']
             assert steps > 0, 'No completed cartridge walking steps were recorded'
             assert saved.exists()

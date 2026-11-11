@@ -5,9 +5,10 @@ goal makes progress, and says when a goal has spent its budget without any. A go
 waits before it is tried again, and the wait doubles with each stand-down in a row.
 
 The monitor keeps no clock of its own. Each caller passes ``now`` in its own unit, which is decisions
-for Gold, Silver and Crystal and elapsed frames for Red, Blue and Yellow, and the waits are in the same
-unit. The state that has to survive a restart lives in a plain dictionary the caller saves with its
-policy. The frame counts behind ``shares`` are kept for the session only.
+for Gold, Silver and Crystal and PlayClock frames for Red, Blue and Yellow, and the waits are in the same
+unit. The state lives in a dictionary the caller hands it. Red, Blue and Yellow keep theirs in the
+supervisor's tables (runtime/supervision.py), which a reload keeps, and Gold, Silver and Crystal save
+theirs with the policy. The frame counts behind ``shares`` are kept for the session only.
 """
 from __future__ import annotations
 

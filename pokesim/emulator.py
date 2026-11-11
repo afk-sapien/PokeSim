@@ -13,6 +13,7 @@ from pathlib import Path
 
 from PIL import Image
 from pokecore.emulator import Emulator as CoreEmulator
+from pokecore.gen1 import W_WALK_COUNTER
 
 from .yellow import YELLOW_SHA1, open_emulator
 
@@ -825,6 +826,9 @@ class Emulator:
         if self.store.get("trade_hold") and not trade_prepare:
             return
         self.store.set("play_clock", self.play_clock.state_dict())
+        # The goals' stand-downs and spent frames sit beside the clock they count on, not in the save.
+        if (tables := getattr(self.policy, 'monitor_tables', None)) is not None:
+            tables.flush()
         if hasattr(self, 'step_tracker'):
             self.step_tracker.flush(force=True)
         if hasattr(self, 'statistics'):
@@ -1342,14 +1346,14 @@ class Emulator:
                         continue
                 act = loop.pending[0]
                 nav = getattr(self.policy, "nav", None) if self.manual_mode else None
-                if nav and act.button in ("up", "down", "left", "right") and not self.pb.memory[0xCFC5]:
+                if nav and act.button in ("up", "down", "left", "right") and not self.pb.memory[W_WALK_COUNTER]:
                     before = read_snapshot(self.pb.memory, self.frame)
                     if not before.in_battle and not before.textbox and not before.start_menu:
                         nav.issued((before.map, before.x, before.y), act.button, self.frame)
                 loop.act()
                 if nav:
                     after = read_snapshot(self.pb.memory, self.frame)
-                    nav.observe((after.map, after.x, after.y), self.frame, bool(self.pb.memory[0xCFC5]),
+                    nav.observe((after.map, after.x, after.y), self.frame, bool(self.pb.memory[W_WALK_COUNTER]),
                                 interrupted=bool(after.in_battle or after.textbox or after.start_menu))
                 if getattr(self, 'isolated_ram', False) and getattr(self.policy, 'tm_plan', None):
                     from .runtime.tm_purchase import purchase

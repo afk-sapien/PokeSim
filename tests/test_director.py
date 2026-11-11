@@ -7,9 +7,17 @@ from pokesim.policies.collection import Collection, candidate, training_targets
 from pokesim.policies.director import AdventureDirector
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
+from pokesim.runtime.supervision import MONITOR_KEY, Tables
 from pokesim.strategy_data import ITEMS, MAPS, WORLD
-from test_collection import sid, state
+from test_collection import reloaded, sid, state
 from test_strategy import flags, mon
+
+
+class Kv(dict):
+    """An adventure store with only the get and set the supervisor's tables use."""
+
+    def set(self, key, value):
+        self[key] = json.loads(json.dumps(value))
 
 
 def pick(director, *projects):
@@ -18,10 +26,15 @@ def pick(director, *projects):
 
 
 def test_restarts_preserve_repeated_failure_backoff_and_ignore_the_old_recent_picks():
+    store = Kv()
     director = AdventureDirector()
+    director.attach(Tables(store))
     catch = {'method': 'grass', 'species': sid(16), 'key': 'pidgey', 'repeat': True}
     first_retry = director.finish(catch, 0, False, 'No encounter')
+    # The autosave writes the tables to the store, and the restarted worker reads them back.
+    director.progress.flush()
     restored = AdventureDirector()
+    restored.attach(Tables(store))
     restored.load({**json.loads(json.dumps(director.state_dict())), 'recent': [{'category': 'collection', 'key': 'pidgey'}]})
     assert 'recent' not in restored.state_dict()
     second_retry = restored.finish(catch, first_retry, False, 'No encounter')
@@ -92,8 +105,7 @@ def test_productive_training_still_stops_when_idle_and_preserves_partial_progres
     c.observe(start)
     gained = replace(start, frame=120, party=(replace(start.party[0], experience=10524),))
     c.observe(gained)
-    restored = Collection()
-    restored.load(json.loads(json.dumps(c.state_dict())))
+    restored = reloaded(c)
     restored.observe(gained)
     for frame in range(240, 7441, 120):
         restored.observe(replace(gained, frame=frame))
@@ -102,7 +114,7 @@ def test_productive_training_still_stops_when_idle_and_preserves_partial_progres
     assert outcome['status'] == 'advanced'
     assert outcome['gains'] == {'experience': 524, 'levels': 0}
     assert 'No trainee experience gain' in outcome['reason']
-    assert outcome['retry_at'] - outcome['elapsed'] == 60000
+    assert outcome['retry_at'] - outcome['clock'] == 60000
     assert not restored.director.failures
     assert not restored.director.completed
 
@@ -217,4 +229,68 @@ def test_new_maps_reset_the_idle_count_but_not_the_failures_in_a_row():
     assert c.director.failures['ditto'] == 2
     c.abandon('No encounter')
     assert c.director.failures['ditto'] == 3
-    assert c.director.outcomes[-1]['retry_at'] - c.elapsed == 240000
+    assert c.director.outcomes[-1]['retry_at'] - c.clock == 240000
+
+
+def test_a_reload_keeps_a_stand_down_and_the_frames_a_project_spent():
+    project = {'method': 'grass', 'species': sid(16), 'key': 'pidgey', 'repeat': True, 'initial_count': 0,
+               'catch_goal': 3}
+    c = Collection()
+    c.project, c.remaining = project, 600
+    start = state(map=MAPS['ROUTE_1'])
+    for frame in range(0, 360, 120):
+        c.observe(replace(start, frame=frame, in_battle=1))
+    saved = json.loads(json.dumps(c.state_dict()))
+    assert 'progress' not in saved['director']
+    c.director.finish({'method': 'grass', 'key': 'ditto'}, 5000, False, 'No encounter')
+    c.observe(replace(start, frame=360, in_battle=1))
+    assert c.remaining == 240
+    # The reload goes back to a save from before the stand-down and the last 120 frames.
+    c.load(saved)
+    assert c.project['key'] == 'pidgey'
+    assert c.remaining == 240
+    assert c.director.waiting('ditto', 5001)
+
+
+def test_an_older_save_waits_out_what_was_left_of_its_stand_downs_on_the_play_clock():
+    store = Kv()
+    store.clock = lambda: 90000
+    c = Collection()
+    c.director.attach(Tables(store))
+    older = {**Collection().state_dict(), 'elapsed': 1000,
+             'director': {'outcomes': [], 'progress': {'stood_down': {'ditto': 400}, 'stand_downs': {'ditto': 1}}}}
+    c.load(json.loads(json.dumps(older)))
+    # It stood down 600 frames before the save, so 59400 of its 60000 are left from the PlayClock's 90000.
+    assert c.director.waiting('ditto', 90000 + 59399)
+    assert not c.director.waiting('ditto', 90000 + 59400)
+    assert c.director.failures == {'ditto': 1}
+    # A second load of the same save keeps the tables the first one took.
+    c.load(json.loads(json.dumps(older)))
+    assert c.director.monitor.until('ditto') == 90000 + 59400
+    c.director.progress.flush()
+    assert store[MONITOR_KEY]['stood_down'] == {'ditto': 89400}
+    assert Tables(store) == {name: table for name, table in c.director.progress.items() if table}
+
+
+def test_a_headless_run_counts_an_older_save_on_from_its_own_frames():
+    c = Collection()
+    c.director.attach(Tables(clock=lambda: 5000))
+    older = {**Collection().state_dict(), 'elapsed': 1000,
+             'director': {'outcomes': [], 'progress': {'stood_down': {'ditto': 400}}}}
+    c.load(json.loads(json.dumps(older)))
+    assert c.director.monitor.until('ditto') == 5000 - 600 + 60000
+
+
+def test_a_new_game_starts_with_empty_tables_in_the_same_store():
+    from pokesim.policies.strategic import StrategicPolicy
+    store = Kv()
+    policy = StrategicPolicy(42)
+    policy.monitor_tables = Tables(store)
+    tables = policy.monitor_tables
+    assert policy.collection.director.progress is tables
+    policy.collection.director.finish({'method': 'grass', 'key': 'ditto'}, 0, False, 'No encounter')
+    assert tables
+    policy.reset()
+    assert policy.monitor_tables is tables and not any(tables.values())
+    tables.flush()
+    assert store[MONITOR_KEY] == {}

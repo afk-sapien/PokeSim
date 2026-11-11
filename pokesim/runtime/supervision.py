@@ -22,16 +22,20 @@ attempt holds the ladder until it ends, and a blackout or a reload out of it is 
 does not count.
 
 The status page's help request and progress line are written here too, once for both generations.
-So are the policy's own waits, each a named ``Budget`` on the PlayClock.
+So are the policy's own waits, each a named ``Budget`` on the PlayClock, and the progress monitor's
+stand-downs and spent frames, kept in ``Tables`` under ``MONITOR_KEY`` so that a reload keeps them.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 
 from ..pcvalue import BOXES_FULL
+from ..planning.monitor import STOOD_DOWN
 
 KEY = 'supervisor-ladder-v1'
 BEST_KEY = 'supervisor-best-v1'
+MONITOR_KEY = 'supervisor-monitor-v1'
 # Pokémon whose own bests are kept. A gift and release loop brings a new one each time.
 KEEP_MONS = 64
 # Reloads in a row without new progress before the run is reported as stalled.
@@ -81,6 +85,51 @@ PARTNER_TRAINING = Budget('partner training', 18000)
 DETOUR_REST = Budget('detour rest', 3600)
 LOOK_AROUND = Budget('look around', 1800)
 CHAT_REST = Budget('chat rest', 900)
+
+
+class Tables(dict):
+    """The progress monitor's tables (planning/monitor.py), kept in the adventure store rather than a save.
+
+    A reload rewinds the game but not the frames a goal really spent, so a goal that stood down keeps
+    waiting and a spent budget stays spent. The stand-down times are PlayClock frames, which never go
+    back. ``flush`` writes the tables to the store at each autosave, so a worker restart keeps them too,
+    and an owner restart empties them with the old game. Without a store, as in a headless run, nothing is kept.
+
+    ``clock`` gives the frames the policy counts on, and defaults to the store's PlayClock. A headless
+    run has no store and counts its own frames.
+    """
+
+    def __init__(self, store=None, clock=None):
+        saved = store.get(MONITOR_KEY) if store is not None else None
+        super().__init__(deepcopy(saved) if isinstance(saved, dict) else {})
+        self.store = store
+        self.clock = clock
+
+    def adopt(self, saved, then, factor=1, now=None):
+        """Take the tables a save carried from before they moved here, when there are none yet.
+
+        The save timed its stand-downs on its own clock, which stood at ``then`` and counts ``factor``
+        frames per unit. Each keeps the wait it had left, counted from ``now``, which defaults to the
+        clock's frame, or ``then`` without a clock. True when there were no tables, whether or not the
+        save had any.
+        """
+        if any(self.values()):
+            return False
+        if now is None:
+            # The emulator sets the store's clock after it attaches the tables, so it is read here.
+            clock = self.clock if self.clock is not None else getattr(self.store, 'clock', None)
+            now = clock() if callable(clock) else then
+        self.clear()
+        self.update({name: deepcopy(table) for name, table in (saved or {}).items()
+                     if isinstance(table, dict) and table})
+        stood = self.get(STOOD_DOWN)
+        for key, when in (stood or {}).items():
+            stood[key] = now - (then - when) * factor
+        return True
+
+    def flush(self):
+        if self.store is not None:
+            self.store.set(MONITOR_KEY, {name: dict(table) for name, table in self.items() if table})
 
 
 @dataclass(frozen=True)

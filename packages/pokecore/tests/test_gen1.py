@@ -135,6 +135,8 @@ def test_named_addresses_match_pret_pokered():
     assert (gen1.W_FACING, gen1.W_WALK_COUNTER, gen1.W_WHICH_POKEMON, gen1.W_MOVE_NUM) == (0xC109, 0xCFC5, 0xCF92, 0xD0E0)
     assert (gen1.W_PLAYER_DISABLED_MOVE, gen1.W_WALK_BIKE_SURF_STATE) == (0xD06D, 0xD700)
     assert (gen1.W_STATUS_FLAGS1, gen1.W_MOVEMENT_FLAGS) == (0xD728, 0xD736)
+    assert (gen1.W_STATUS_FLAGS7, 1 << gen1.BIT_TRAINER_BATTLE) == (0xD733, 0x08)
+    assert gen1.W_CAPTURED_MON_SPECIES == 0xD11C
     assert gen1.W_SPRITE_STATE_DATA2 + gen1.SPRITE_STRUCT + gen1.SPRITE_MAP_Y == 0xC214
     assert gen1.FACINGS[4] == 'up'
     assert (gen1.W_CUR_ITEM, gen1.W_ITEM_QUANTITY, gen1.W_OPTIONS) == (0xCF91, 0xCF96, 0xD355)

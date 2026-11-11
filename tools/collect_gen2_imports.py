@@ -35,6 +35,7 @@ def inspect_modern(rom, state, data, *, offer_trained=False):
     from pokesim.gen2.policy import Policy
     from pokecore.gen2.ram import read_snapshot
     from pokesim.gen2.trading import offers
+    from pokesim.gen2.views import state_view
     from pokesim.gen2.web import live_status
     pb = boot(str(rom), sound=True)
     try:
@@ -44,7 +45,7 @@ def inspect_modern(rom, state, data, *, offer_trained=False):
         policy = Policy(data)
         policy.load_state_dict(json.loads(state.with_suffix('.policy.json').read_text(encoding='utf-8')))
         emu = SimpleNamespace(snapshot=snapshot, data=data, policy=policy)
-        payload = live_status(snapshot.to_dict(egg_view=True))
+        payload = live_status(state_view(snapshot, egg_view=True))
         preferences = {identity(mon): {'state': 'offered'} for mon in payload['storage']['pokemon']
                        if offer_trained and tuple(mon['dvs']) != (15,) * 5}
         return snapshot.owned, offers(emu, apply(payload, preferences))

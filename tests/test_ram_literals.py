@@ -24,8 +24,6 @@ SYMBOL = re.compile(r'^[wsh][A-Z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)?$')
 
 # Module: (raw RAM literals, direct symbol reads).
 ALLOWED = {
-    'pokesim/catches.py': (8, 0),
-    'pokesim/emulator.py': (2, 0),
     'pokesim/experimental/gen2.py': (18, 0),
     'pokesim/gen2/activity.py': (1, 21),
     'pokesim/gen2/cable_verification.py': (0, 5),
@@ -56,13 +54,6 @@ ALLOWED = {
     'pokesim/gen2/trading.py': (0, 3),
     'pokesim/gen2/training.py': (0, 2),
     'pokesim/interactions/verification.py': (0, 6),
-    'pokesim/policies/battle.py': (5, 0),
-    'pokesim/policies/navigation.py': (2, 0),
-    'pokesim/policies/strategic.py': (11, 0),
-    'pokesim/policies/travel.py': (1, 0),
-    'pokesim/ram.py': (1, 0),
-    'pokesim/runtime/preparation.py': (5, 0),
-    'pokesim/runtime/tm_purchase.py': (1, 0),
     'pokesim/scenarios.py': (0, 5),
 }
 

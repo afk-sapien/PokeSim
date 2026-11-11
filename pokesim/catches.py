@@ -5,6 +5,9 @@ import hashlib
 import re
 import time
 
+from pokecore.gen1 import (W_BATTLE_TYPE, W_CAPTURED_MON_SPECIES, W_ENEMY_DVS, W_IS_IN_BATTLE, W_PLAYER_ID,
+                           WRAM_END, WRAM_START)
+
 from . import progress_events
 from .state import kv, tracking
 
@@ -59,16 +62,16 @@ class CatchTracker:
     def completed(self, pb):
         from .strategy_data import SPECIES
         memory = pb.memory
-        species = memory[0xd11c]
-        if memory[0xd057] != 1 or memory[0xd05a] == 1 or species not in SPECIES:
+        species = memory[W_CAPTURED_MON_SPECIES]
+        if memory[W_IS_IN_BATTLE] != 1 or memory[W_BATTLE_TYPE] == 1 or species not in SPECIES:
             return
         dex = SPECIES[species]['dex']
         # Re-entering the exact saved capture completion must not count twice.
         # WRAM includes the individual, destination, game clock and random state.
-        fingerprint = hashlib.sha256(bytes(memory[0xc000:0xe000])).hexdigest()
+        fingerprint = hashlib.sha256(bytes(memory[WRAM_START:WRAM_END])).hexdigest()
         from .shiny import shiny_bytes
-        dvs = bytes(memory[0xcff1:0xcff3])
-        trainer_id = int.from_bytes(bytes(memory[0xd359:0xd35b]), 'big')
+        dvs = bytes(memory[W_ENEMY_DVS:W_ENEMY_DVS + 2])
+        trainer_id = int.from_bytes(bytes(memory[W_PLAYER_ID:W_PLAYER_ID + 2]), 'big')
         self.record(fingerprint, dex, shiny=shiny_bytes(dvs), perfect=dvs == b'\xff\xff',
                     species=species, trainer_id=trainer_id, identity=progress_events.identity(trainer_id, dvs, dex),
                     dvs=dvs)

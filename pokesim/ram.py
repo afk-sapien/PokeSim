@@ -52,10 +52,12 @@ from .game_data import load
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
 from pokecore.storage import decode_box, read_box_counts as read_box_counts, read_box_records
+from pokecore.gen1 import BIT_TRANSFORMED, W_ENEMY_BATTLE_STATUS3
+from pokecore import repairs
 
 # Yellow's opening scene, where Oak catches Pikachu before the player has a party.
 BATTLE_TYPE_PIKACHU = 4
-W_ENEMY_STATUS3, TRANSFORMED = 0xD069, 8
+W_ENEMY_STATUS3, TRANSFORMED = W_ENEMY_BATTLE_STATUS3, 1 << BIT_TRANSFORMED
 
 TABLES = load("tables.json")
 MAP_NAMES = {int(k): place_name(v) for k, v in TABLES["maps"].items()}   # display spelling
@@ -282,34 +284,19 @@ class Snapshot:
         }
 
 
-NAME_END = 0x50
-
-
 def repair_party_nicknames(mem):
-    """End each party nickname at its first text command byte, and return the party slots changed.
+    """Run pokecore's party nickname repair, and return the party slots changed.
 
-    Bytes below 0x60 other than the 0x50 terminator are text commands, which the naming screen can
-    never type. A nickname that holds one draws differently from how its bytes decode, so the party
-    menu never matches the party and every action through it fails. Live, a traded Butterfree's
-    name lost its terminator to 0x55 and kept a Yellow run from healing or using Surf for hours.
+    A damaged nickname makes every action through the party menu fail. Live, a traded
+    Butterfree's name lost its terminator to 0x55 and kept a Yellow run from healing or
+    using Surf for hours.
     """
-    repaired = []
     try:
-        count = mem[W_PARTY_COUNT]
+        mem[W_PARTY_COUNT]
     except TypeError:
         # Only a stand-in without real memory, as in unit tests, cannot be read by address.
-        return repaired
-    for index in range(min(count, 6)):
-        start = W_PARTY_NICKS + index * 11
-        for offset in range(11):
-            value = mem[start + offset]
-            if value == NAME_END:
-                break
-            if value < 0x60:
-                mem[start + offset] = NAME_END
-                repaired.append(index)
-                break
-    return repaired
+        return []
+    return repairs.repair_party_nicknames(mem)
 
 
 def read_stored_pokemon(mem):
