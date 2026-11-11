@@ -224,23 +224,12 @@ Run a complete isolated campaign:
 
 `--load PATH` resumes a cartridge checkpoint and its sibling `.policy.json`.
 Focused scenarios include ruins, tower, celebi, contest, gifts, legends, breeding, stones, trade_items, gamecorner, restore,
-Headbutt, Rock Smash and a specified encounter. Separate verification tools exercise runtime
-APIs, capture accounting, portable saves, trade preparation, durable exchange
-and custom reward delivery. `tools/verify_gen2_library.py` also exercises worker
-restart during trade preparation and reservation release before an automatic
-exchange. `tools/verify_gen2_trading.py --time-capsule` prepares a compatible
-boxed offer. `tools/verify_timecapsule.py` exchanges that receipt with a prepared
-Red or Blue checkpoint and runs both participant verifiers. Its `--data`
-directory must contain both the Generation I tables and generated `gen2` data.
+Headbutt, Rock Smash and a specified encounter. The test suite covers runtime
+APIs, capture accounting, portable saves, trade preparation, durable exchange,
+custom reward delivery and worker restart during trade preparation.
+`tools/verify_gen2_trading.py --time-capsule` prepares a compatible boxed offer.
 
-`tools/collect_gen2_imports.py` resumes verified Time Capsule imports from disposable
-Red or Blue donor copies. `tools/collect_gen2_donors.py` does the same for Gen II
-donors, including held-item evolutions. Their progress manifests record each
-adopted checkpoint and the continuous recipient lineage. `--offer-trained`
-explicitly offers trained boxed partners in those disposable copies.
 `tools/play_gen2.py --until all251` stops only after the observed owned count is 251.
-`tools/verify_gen2_collection.py` requires every owned entry, exports a portable
-cartridge save, verifies fresh Continue and records checkpoint and save hashes.
 Optional Mew, GS Ball and earned League starter gifts use the existing runtime
 settings, a persistent `--runtime-store` and a separate event ledger.
 

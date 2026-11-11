@@ -7,11 +7,14 @@ Milestone 4 of `docs/multi-game.md`. One question:
 
 **Yes. GO for execution backend B.**
 
-Everything below was measured, not reasoned about. `tools/link_spike.py` reproduces all of it:
+Everything below was measured, not reasoned about. `tools/link_spike.py` reproduced all of it:
 
 ```
 python tools/link_spike.py all --rom roms/pokered.gb
 ```
+
+The cable runtime replaced the spike, and the script is gone from `tools/`. Commit `7053c654` is
+the last one that has it.
 
 Four stages, all PASS. No PyBoy modification, no fork, no thread, no serial emulation.
 
@@ -168,7 +171,7 @@ Then `PyBoy(rom, symbols="pokered.gb.sym")` resolves names in `hook_register(Non
 and `symbol_lookup`. Verified working for bank 0 (`Serial_ExchangeByte` → `00:219a`) and for
 banked symbols (`MainMenu` → `01:5af2`).
 
-**Symbols are a convenience, not a dependency.** `tools/link_spike.py` runs without a `.sym` file
+**Symbols are a convenience, not a dependency.** `tools/link_spike.py` ran without a `.sym` file
 at all, using hard-coded addresses validated directly against the ROM image:
 
 ```
