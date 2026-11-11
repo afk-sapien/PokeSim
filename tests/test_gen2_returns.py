@@ -620,6 +620,33 @@ def test_a_return_or_gift_the_pc_would_release_is_skipped_and_journaled_once(wor
     assert rows and all(row['state'] == ledger.DELIVERED for row in rows)
 
 
+def test_a_pc_rating_that_reads_the_store_does_not_freeze_the_return_check(world):
+    # A Gold adventure froze and stopped answering once a due return came up that the PC would
+    # release: the PC rating reads the store, and it ran inside the return check's own transaction.
+    import threading
+    from pokesim.gen2.returns import observe_events
+    snap = world.snapshot
+    snap.party, snap.stored = [SimpleNamespace(species=185)], []
+    world.flag('EVENT_FOUGHT_SUDOWOODO')
+    world.walk(10)
+    observe_events(world.store, snap, world.memory, keeps=lambda species: False)
+    world.walk(60)
+
+    def keeps(species):
+        world.store.league_marks(2)  # as release_rated reads the League reward marks
+        return False
+    done = []
+    check = threading.Thread(target=lambda: done.append(observe_events(world.store, snap, world.memory, keeps=keeps)),
+                             daemon=True)
+    check.start()
+    check.join(10)
+    if not done and type(world.store.lock) is type(threading.Lock()):
+        # A plain Lock can be released from any thread, so the stuck check ends and teardown can close.
+        world.store.lock.release()
+    assert done, 'the return check waited on its own store lock'
+    assert [event.title for event in done[0][0]] == ['Skipped the returning Sudowoodo']
+
+
 def test_kims_aerodactyl_trade_reopens_and_makes_aerodactyl_worth_trading_for(world):
     from pokesim.gen2.npc_trades import trades, worth_trading
     from pokesim.gen2.returns import observe_events, returned_events

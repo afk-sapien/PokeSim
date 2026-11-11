@@ -39,7 +39,9 @@ class Store:
         self.clock = None
         # The running emulator's goal for progress rows and encounter counters. None where none runs.
         self.goal_watch = None
-        self.lock = threading.Lock()
+        # Re-entrant, so a read from inside the same thread's transaction (a PC rating asked during
+        # the walking return check) does not wait on itself.
+        self.lock = threading.RLock()
         self._read_local = threading.local()
         self._read_cache = {}
         self._read_epoch = None
