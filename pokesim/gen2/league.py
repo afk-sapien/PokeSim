@@ -8,6 +8,7 @@ import uuid
 from ..state import kv
 from ..trade.preferences import signature as identity
 from .tracking import ancestors, data_cache
+from .views import mon_view
 
 KEY = 'gen2-league-partners-v1'
 
@@ -64,7 +65,7 @@ def record(store, data, snapshot):
             return
         if not value['victories'] and snapshot.hall_of_fame_count > 1:
             value['incomplete'] = True
-        mons = [mon.to_dict(egg_view=True) for mon in snapshot.party + snapshot.stored if not mon.egg]
+        mons = [mon_view(mon, egg_view=True) for mon in snapshot.party + snapshot.stored if not mon.egg]
         keys = resolve(data, value, mons)
         for key in set(keys[:sum(not mon.egg for mon in snapshot.party)]):
             row = value['partners'][key]

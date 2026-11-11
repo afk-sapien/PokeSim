@@ -71,6 +71,7 @@ def saved_game(root, meta):
     if reference.is_dir():
         os.environ['GAME_DATA_DIR'] = str(reference)
     from pokesim.gen2.headless import HeadlessRun
+    from pokesim.gen2.views import state_view
 
     folder = root / 'adventures' / meta['id'] / 'states'
     rom = root / 'assets' / 'roms' / meta['rom_id'] / 'rom.gb'
@@ -86,7 +87,7 @@ def saved_game(root, meta):
                 continue
             run = HeadlessRun(rom, copy, data_root=directory())
             try:
-                return run.read().to_dict(egg_view=True)
+                return state_view(run.read(), egg_view=True)
             finally:
                 run.stop()
     raise FileNotFoundError(f'no autosave in {folder}')

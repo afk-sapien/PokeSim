@@ -10,6 +10,7 @@ from pokecore.gen2.clock import boot, follow_game_time, lock_clock
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.policy import Goal, Policy
+from pokesim.gen2.views import state_view
 from pokesim.runtime.game_loop import GameLoop, Gen2
 from pokecore.gen2.ram import Memory, read_snapshot
 
@@ -255,14 +256,14 @@ def main():
                         pb.save_state(output)
                     (args.output / 'latest.policy.json').write_text(json.dumps(policy.state_dict()), encoding='utf-8')
                     (args.output / 'progress.json').write_text(json.dumps({
-                        'game': snapshot.to_dict(egg_view=True), 'mode': policy.mode,
+                        'game': state_view(snapshot, egg_view=True), 'mode': policy.mode,
                         'seconds': time.monotonic() - start}, indent=2), encoding='utf-8')
         snapshot = read_snapshot(pb.memory, data, frame)
         pb.screen.image.save(args.output / 'final.png')
         with (args.output / 'final.state').open('wb') as output:
             pb.save_state(output)
         (args.output / 'final.policy.json').write_text(json.dumps(policy.state_dict()), encoding='utf-8')
-        (args.output / 'final.json').write_text(json.dumps({'game': snapshot.to_dict(egg_view=True), 'policy': policy.state_dict(),
+        (args.output / 'final.json').write_text(json.dumps({'game': state_view(snapshot, egg_view=True), 'policy': policy.state_dict(),
                                                          'seconds': time.monotonic() - start, 'stopped': stopped}, indent=2), encoding='utf-8')
     finally:
         pb.stop(save=False)
