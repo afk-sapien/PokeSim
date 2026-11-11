@@ -171,7 +171,7 @@ def test_the_old_timers_are_gone():
     for module in (collection, tower):
         source = inspect.getsource(module)
         assert "'attempts'" not in source and 'tower_after\'] =' not in source
-    shop = inspect.getsource(__import__('pokesim.gen2.policy', fromlist=['Policy']).Policy.shop)
+    shop = inspect.getsource(__import__('pokesim.gen2.errands', fromlist=['Shop']).Shop.offer)
     for name in ('MAHOGANY_MART_1F', 'BLACKTHORN_MART', 'ICE_PATH_', 'len(route) > 5', 'BLACKTHORN_GYM_1F'):
         assert name not in shop
     assert 'clock_wait(policy' not in inspect.getsource(collection.postgame_league)

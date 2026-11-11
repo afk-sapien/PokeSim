@@ -1,6 +1,7 @@
 """A clerk that keeps offering a purchase the wallet cannot cover must not trap the player."""
 from types import SimpleNamespace
 
+from pokesim.gen2.errands import Shop
 from pokesim.gen2.menus import Buy
 from pokesim.gen2.policy import Policy
 
@@ -28,7 +29,7 @@ def test_buy_is_finished_once_the_pack_count_rises():
 
 
 def conversation_stub():
-    return SimpleNamespace(talk_key=None, talk_frames=0, shopping=(GREAT_BALL, 20), shop_location=(1030, 'Clerk', GREAT_BALL),
+    return SimpleNamespace(talk_key=None, talk_frames=0, shop=Shop(purchase=(GREAT_BALL, 20), location=(1030, 'Clerk', GREAT_BALL)),
                            interaction='buy_balls', TALK_STALL_FRAMES=Policy.TALK_STALL_FRAMES,
                            TALK_FAIL_FRAMES=Policy.TALK_FAIL_FRAMES, fail=lambda reason: setattr(stub_failures, 'last', reason))
 
@@ -46,7 +47,7 @@ def test_a_conversation_that_changes_nothing_drops_the_errand_backs_out_and_then
     results = [Policy.talk_progress(policy, snapshot) for _ in range(Policy.TALK_FAIL_FRAMES + 1)]
     assert not any(results[:Policy.TALK_STALL_FRAMES])
     assert all(results[Policy.TALK_STALL_FRAMES:Policy.TALK_FAIL_FRAMES - 1])
-    assert policy.shopping is None and policy.shop_location is None and policy.interaction is None
+    assert policy.shop.purchase is None and policy.shop.location is None and policy.interaction is None
     assert 'Ecruteak Mart' in stub_failures.last
 
 
@@ -54,4 +55,4 @@ def test_a_conversation_that_keeps_changing_things_is_never_a_stall():
     policy = conversation_stub()
     for step in range(300):
         assert not Policy.talk_progress(policy, talking(money=50 + step))
-    assert policy.shopping is not None
+    assert policy.shop.purchase is not None

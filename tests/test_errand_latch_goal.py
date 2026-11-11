@@ -22,9 +22,8 @@ RESTOCK = Goal('restock', 'Restock supplies', 'Buy useful balls and medicine wit
 def restocking():
     """A policy whose last decision picked the restock, with the offer it picked, as the step leaves them."""
     policy = StrategicPolicy(7)
-    policy.errand = RESTOCK
-    policy.errand_offer = offer('supplies', RESTOCK, Candidate('restock', Tier.PROGRESS, values.SMALL,
-                                                               ERRAND_FRAMES, goal='supplies'))
+    policy.trip.start(RESTOCK, offer('supplies', RESTOCK, Candidate('restock', Tier.PROGRESS, values.SMALL,
+                                                                    ERRAND_FRAMES, goal='supplies')))
     return policy
 
 

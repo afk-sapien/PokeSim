@@ -13,6 +13,8 @@ from ..strategy_data import DATA, ITEMS, MAPS, WORLD, event_set
 from . import gates
 
 DIRS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
+# The facing byte (W_FACING) the player has after a step in each direction.
+FACING = {"down": 0, "up": 4, "left": 8, "right": 12}
 PAIR_COLLISIONS = {(ts, a, b) for ts, a, b in DATA["collision_pairs"]}
 WATER_TILESETS = {"OVERWORLD", "PLATEAU", "FOREST", "CAVERN", "SHIP_PORT"}
 OPTIONAL_LIFTS = {MAPS[row.map] for row in HAND if row.kind == 'lift'}

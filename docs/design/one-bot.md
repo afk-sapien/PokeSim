@@ -115,6 +115,14 @@ Deletes: the errand latches and fields in both policies (`errand`, `errand_offer
 `healing_map`, `shopping`, `shop_location`), the detour's goal write inside the walk and the inline arrival
 code in Gen II's step.
 
+As built, the parts of `gen2/policy/` share the policy's state, one module each, and `Policy` in its
+`__init__.py` keeps the step, the save and the restore. The errands are `Heal` and `Shop` in
+`gen2/errands.py`, and `Heal`, `ShoppingController` and `Detour` in `policies/errands.py`. In both
+generations a `Trip` holds the errand under way and the offer it was picked under. Gen II saves each
+errand's state in a typed record under version 2. Gen I saves no errand state, as before, so a reload starts
+its errands afresh, and the detour keeps its waits before the next chat and the next partner training. The
+detour records the goal it picks, and the step applies it after the walk, at the same point as before.
+
 ## Differences that stay, as adapter settings
 
 These have a reason in the code or in the PR that made them, and they stay.

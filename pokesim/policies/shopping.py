@@ -1,6 +1,8 @@
 """Shop interaction state, independent of the strategic policy's PC and battle state."""
 from dataclasses import dataclass, replace
+from typing import ClassVar
 
+from ..planning.errand import Errand
 from .battle import BALLS, CURES, HEALING, shopping_item
 from .progression import Goal
 from .collection import legendary_project
@@ -67,7 +69,10 @@ class SupplyPlan:
 
 
 @dataclass
-class ShoppingController:
+class ShoppingController(Errand):
+    """The shop errand of Red, Blue and Yellow (planning/errand.py). ``plan`` is its offer, which weighs the
+    goal it would cut into, and ``step`` its act at the counter. A reload starts with no visit under way."""
+    key: ClassVar[str] = 'shop'
     selling: bool = False
     restocking: bool = False
     fund_target: int = 0

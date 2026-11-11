@@ -7,7 +7,8 @@ import pytest
 
 from pokesim.planning.cost import WildOdds
 from pokesim.policies.progression import Goal
-from pokesim.policies.strategic import DEVELOPMENT_STALL, StrategicPolicy
+from pokesim.policies.errands import DEVELOPMENT_STALL
+from pokesim.policies.strategic import StrategicPolicy
 from pokesim.pcvalue import TRAINING_BATTLES
 from pokesim.policies.team import battles_to_level, development_candidate
 from pokesim.runtime.supervision import CHAT_REST, LOOK_AROUND, PARTNER_TRAINING
@@ -24,9 +25,9 @@ def developing(frame=10000):
     policy = StrategicPolicy(3)
     route = MAPS['ROUTE_1']
     goal = Goal('train_partner', 'Train', 'Train', ((route, 10, 10),))
-    policy.excursion = (goal, None, 'development')
-    policy.development_index = 0
-    policy.development = {'partner': (PARTNER.species, PARTNER.nick, PARTNER.dvs), 'level': PARTNER.level,
+    policy.detour.excursion = (goal, None, 'development')
+    policy.detour.development_index = 0
+    policy.detour.development = {'partner': (PARTNER.species, PARTNER.nick, PARTNER.dvs), 'level': PARTNER.level,
                           'experience': PARTNER.experience, 'since': frame}
     return policy, state(map=route, x=10, y=12, party=(PARTNER, LEAD), frame=frame)
 
@@ -35,28 +36,28 @@ def test_an_excursion_that_gains_experience_goes_on_past_the_stall_window():
     policy, s = developing()
     for step in range(1, 5):
         gained = replace(PARTNER, experience=PARTNER.experience + 50 * step)
-        assert not policy._development_done(replace(s, party=(gained, LEAD), frame=s.frame + step * 2000))
-    assert policy.developing
+        assert not policy.detour.development_done(replace(s, party=(gained, LEAD), frame=s.frame + step * 2000))
+    assert policy.detour.developing
 
 
 def test_an_excursion_ends_when_its_partner_gains_a_level():
     policy, s = developing()
     grown = replace(PARTNER, level=PARTNER.level + 1, experience=PARTNER.experience + 400)
-    assert policy._development_done(replace(s, party=(grown, LEAD), frame=s.frame + 600))
+    assert policy.detour.development_done(replace(s, party=(grown, LEAD), frame=s.frame + 600))
 
 
 def test_an_excursion_without_experience_still_ends():
     policy, s = developing()
-    assert not policy._development_done(replace(s, frame=s.frame + DEVELOPMENT_STALL - 1))
+    assert not policy.detour.development_done(replace(s, frame=s.frame + DEVELOPMENT_STALL - 1))
     later = replace(s, frame=s.frame + DEVELOPMENT_STALL)
-    assert policy._development_done(later)
-    assert policy._purposeful_detour(later, bytearray(65536), Goal('story', 'Story', 'Story')) is None
-    assert policy.excursion is None and not policy.developing
+    assert policy.detour.development_done(later)
+    assert policy.detour.act(policy, later, bytearray(65536), Goal('story', 'Story', 'Story')) is None
+    assert policy.detour.excursion is None and not policy.detour.developing
 
 
 def test_an_excursion_ends_when_its_partner_leaves_the_party():
     policy, s = developing()
-    assert policy._development_done(replace(s, party=(LEAD,), frame=s.frame + 10))
+    assert policy.detour.development_done(replace(s, party=(LEAD,), frame=s.frame + 10))
 
 
 def grass(level, base_exp=70, map_id=MAPS['ROUTE_1']):
@@ -94,8 +95,8 @@ def starts_an_excursion(party, odds):
     policy.collection.wild = odds
     policy.rng.random = lambda: 0.0
     s = state(map=MAPS['ROUTE_1'], x=12, y=8, party=party, frame=10000)
-    policy._purposeful_detour(s, bytearray(65536), Goal('story', 'Story', 'Story'))
-    return policy.development and policy.development['partner'][1]
+    policy.detour.act(policy, s, bytearray(65536), Goal('story', 'Story', 'Story'))
+    return policy.detour.development and policy.detour.development['partner'][1]
 
 
 def test_a_route_whose_battles_cannot_raise_the_partner_starts_no_excursion():
@@ -113,19 +114,19 @@ def test_a_reload_keeps_the_wait_before_the_next_partner_training():
     policy.clock = 10000
     s = state(map=MAPS['ROUTE_1'], x=12, y=8, party=(STRONG, HIGH), frame=10000)
     story = Goal('story', 'Story', 'Story')
-    policy._purposeful_detour(s, bytearray(65536), story)
-    assert policy.development_cooldown == PARTNER_TRAINING.until(10000)
-    policy.next_conversation = CHAT_REST.until(10000)
+    policy.detour.act(policy, s, bytearray(65536), story)
+    assert policy.detour.development_cooldown == PARTNER_TRAINING.until(10000)
+    policy.detour.next_conversation = CHAT_REST.until(10000)
     policy.on_restore()
-    assert policy.development is None
-    assert policy.next_conversation == CHAT_REST.until(10000)
-    assert policy.development_cooldown == PARTNER_TRAINING.until(10000)
+    assert policy.detour.development is None
+    assert policy.detour.next_conversation == CHAT_REST.until(10000)
+    assert policy.detour.development_cooldown == PARTNER_TRAINING.until(10000)
     reloaded = replace(s, frame=2000)
     policy.clock = PARTNER_TRAINING.until(10000) - 1
-    policy._purposeful_detour(reloaded, bytearray(65536), story)
-    assert policy.development is None
+    policy.detour.act(policy, reloaded, bytearray(65536), story)
+    assert policy.detour.development is None
     # That look around set its own half minute wait, which ends after the training wait.
-    assert policy.next_conversation == LOOK_AROUND.until(policy.clock)
-    policy.clock, policy.excursion = policy.next_conversation, None
-    policy._purposeful_detour(reloaded, bytearray(65536), story)
-    assert policy.development['partner'][1] == 'HIGH'
+    assert policy.detour.next_conversation == LOOK_AROUND.until(policy.clock)
+    policy.clock, policy.detour.excursion = policy.detour.next_conversation, None
+    policy.detour.act(policy, reloaded, bytearray(65536), story)
+    assert policy.detour.development['partner'][1] == 'HIGH'

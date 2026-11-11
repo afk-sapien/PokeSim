@@ -246,7 +246,8 @@ def test_the_gen2_needs_table_reads_the_chain_order():
 
 
 def test_every_gen2_site_is_in_the_table():
-    source = (ROOT / 'pokesim' / 'gen2' / 'policy.py').read_text(encoding='utf-8')
+    package = ROOT / 'pokesim' / 'gen2' / 'policy'
+    source = '\n'.join(path.read_text(encoding='utf-8') for path in sorted(package.glob('*.py')))
     named = {site for line in source.splitlines() if 'ballot.offer(' in line or 'ballot.errand(' in line
              for site in re.findall(r"'(\w+)'", line)}
     # The story site is named by story_site, which returns the story, an activity that holds or a rung.

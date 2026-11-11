@@ -815,7 +815,7 @@ class Emulator(EmulatorBase):
             from pokecore.centers import CENTERS
             snapshot = self.snapshot
             if (snapshot is not None and snapshot.map in CENTERS and not snapshot.in_battle
-                    and snapshot.hp_overflow_only and hasattr(self.policy, 'heal_latch')):
+                    and snapshot.hp_overflow_only and hasattr(getattr(self.policy, 'heal', None), 'latched')):
                 # Give the normal healing trip time to finish. The state remains invalid for saving
                 # and the grace is still bounded.
                 invalid_grace = CENTER_GRACE_FRAMES

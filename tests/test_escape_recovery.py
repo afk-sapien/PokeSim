@@ -18,7 +18,7 @@ def depleted(**changes):
 
 def policy():
     p = StrategicPolicy(42)
-    p.heal_latch = True
+    p.heal.latched = True
     p.goal = Goal('heal', 'Heal the party', 'Restore supplies')
     return p
 
@@ -42,7 +42,7 @@ def test_failed_attempt_does_not_repeat_after_checkpoint_or_trade_restore():
     recorder = Recorder.on(restored)
     restored.load_state_dict(saved)
     restored.on_restore()
-    restored.heal_latch = True
+    restored.heal.latched = True
     for frame in (2000, 20000, 200000):
         restored._recover(replace(s, frame=frame))
     assert not recorder.started
@@ -61,7 +61,7 @@ def test_unavailable_rope_or_unsafe_context_does_not_use_an_item(change):
 def test_normal_healthy_exploration_does_not_spend_rope():
     p = policy()
     recorder = Recorder.on(p)
-    p.heal_latch = False
+    p.heal.latched = False
     p._recover(depleted())
     assert not recorder.started and not p.escape_attempted
 
@@ -72,7 +72,7 @@ def test_successful_healing_allows_a_future_emergency_attempt():
     healed = replace(depleted(), map=MAPS['PALLET_TOWN'], party=(mon(hp=100, max_hp=100),))
     p._overworld(healed, bytearray(65536))
     assert not p.escape_attempted
-    p.heal_latch = True
+    p.heal.latched = True
     recorder = Recorder.on(p)
     assert p._recover(depleted())[0] == PRESS
     assert recorder.last.item == ITEMS['ESCAPE_ROPE']

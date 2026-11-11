@@ -16,7 +16,7 @@ def step(policy, s):
 
 def test_a_battle_on_the_way_to_the_nurse_keeps_the_heal_goal():
     policy = StrategicPolicy(7)
-    policy.heal_latch = True
+    policy.heal.latched = True
     s = snap(map=MAPS['ROUTE_15'], x=30, y=8, frame=1000, in_battle=1, party=(mon(hp=10, status=8),))
     assert step(policy, s) == 'heal'
 
@@ -25,12 +25,12 @@ def test_a_hurt_party_in_battle_does_not_latch_the_heal_before_the_overworld():
     policy = StrategicPolicy(7)
     s = snap(map=MAPS['ROUTE_15'], x=30, y=8, frame=1000, in_battle=1, party=(mon(hp=1),))
     assert step(policy, s) != 'heal'
-    assert not policy.heal_latch
+    assert not policy.heal.latched
 
 
 def test_the_league_keeps_its_own_goal_while_the_heal_is_latched():
     policy = StrategicPolicy(7)
-    policy.heal_latch = True
+    policy.heal.latched = True
     s = snap(map=MAPS['LORELEIS_ROOM'], x=5, y=5, frame=1000, in_battle=1, party=(mon(hp=10),))
     assert step(policy, s) != 'heal'
 
@@ -43,7 +43,7 @@ def test_an_item_ball_a_step_away_comes_before_the_heal(monkeypatch):
     hurt = (mon(hp=1),)
     policy = StrategicPolicy(7)
     assert step(policy, snap(map=MAPS['ROCKET_HIDEOUT_B4F'], x=24, y=3, frame=1000, party=hurt)) == 'scope'
-    assert policy.heal_latch
+    assert policy.heal.latched
     # Nine steps away the heal still goes first.
     far = snap(map=MAPS['ROCKET_HIDEOUT_B4F'], x=24, y=10, frame=1000, party=hurt)
     assert step(StrategicPolicy(7), far) == 'heal'

@@ -159,7 +159,7 @@ class Preparation:
     def heal(self, snapshot, mem):
         """Walk to the nurse and talk to her until the party is healed."""
         policy, data = self.emu.policy, self.emu.data
-        goal = policy.healing(snapshot)
+        goal, _ = policy.heal.offer(policy, snapshot)
         if goal is None:
             raise ValueError('The party needs a Pokémon Center before link preparation')
         surf = any(57 in member.moves for member in snapshot.party) and bool(snapshot.badges & 8)

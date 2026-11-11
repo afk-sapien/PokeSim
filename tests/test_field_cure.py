@@ -32,8 +32,8 @@ def test_a_poison_the_bag_cures_latches_no_heal_and_is_cured_where_the_party_sta
     policy = StrategicPolicy(7)
     recorder = Recorder.on(policy)
     policy.goal = story_goal(s)
-    policy._update_heal_latch(s)
-    assert not policy.heal_latch
+    policy.heal.update(policy, s)
+    assert not policy.heal.latched
     assert policy._overworld(s, bytearray(65536))[0] == PRESS
     assert (recorder.last.kind, recorder.last.item, recorder.last.target) == ('use_item', ITEMS['ANTIDOTE'], 0)
 
@@ -41,8 +41,8 @@ def test_a_poison_the_bag_cures_latches_no_heal_and_is_cured_where_the_party_sta
 def test_a_poison_with_no_field_cure_still_latches_the_heal():
     for s in (poisoned(), poisoned((ITEMS['FULL_RESTORE'], 1)), poisoned((ITEMS['PARLYZ_HEAL'], 1))):
         policy = StrategicPolicy(7)
-        policy._update_heal_latch(s)
-        assert policy.heal_latch
+        policy.heal.update(policy, s)
+        assert policy.heal.latched
 
 
 def test_the_field_cure_is_the_cheapest_and_keeps_a_full_restore_for_the_league():

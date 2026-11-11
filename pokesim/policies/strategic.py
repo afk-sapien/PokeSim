@@ -12,9 +12,9 @@ from ..planning.ledger import box_wanted
 from pokecore.textmatch import ScreenText
 from .battle import (BALLS, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
                      enemy_dvs, field_cure, healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
-from .navigation import DIRS, PAIR_COLLISIONS, WATER_TILESETS, Navigator
+from .navigation import DIRS, FACING, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
-from .pickups import Pickups, ground_item
+from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
 from .move_development import hm_upgrade, move_name
 from .progression import (BOSS_TABLE, GAME_STARTERS, STARTERS, YELLOW, Goal, boss_training, healing_goal, journey,
@@ -22,6 +22,8 @@ from .progression import (BOSS_TABLE, GAME_STARTERS, STARTERS, YELLOW, Goal, bos
 from ..planning.losses import Losses, ace_slot
 from . import training
 from .menus import select, tap
+from .errands import EXPLORATION_CHANCE, Detour, Heal
+from ..planning.errand import Trip
 from .shopping import ShoppingController
 from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
@@ -34,12 +36,11 @@ from ..planning import league
 from ..planning import catalogue
 from ..planning.monitor import hold_key
 from .pipeline import ERRAND_FRAMES, ERRANDS, Ballot
-from .ledger import battle_room, fighters, league_treatment
-from ..planning.ledger import PP
+from .ledger import fighters, league_treatment
 from ..planning.arbiter import Candidate, Tier
-from ..planning.stance import FLEE_TRIES, STORY, TRAIN
+from ..planning.stance import FLEE_TRIES, STORY
 from .awareness import ActionWatch
-from .team import (development_candidate, held_identities, potential, readiness, release_note, requested_slots,
+from .team import (held_identities, potential, readiness, release_note, requested_slots,
                    reserve_to_deposit, storage_headroom, team_keys)
 from ..pcvalue import VisitTeam
 from ..screen import Screen, W_PLAYER_MON_NUMBER
@@ -50,10 +51,8 @@ from pokecore.gen1 import (BIT_SPINNING, BIT_STRENGTH_ACTIVE, BIT_TRAINER_BATTLE
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
 from ..pc_list import guarded
 from ..shortcuts import ShortcutRunner, gen1_ui
-from ..runtime.supervision import CHAT_REST, DETOUR_REST, LOOK_AROUND, PARTNER_TRAINING
 from .. import config
 
-EXPLORATION_CHANCE = 0.12
 # A trip to buy a TM or Champion shop supplies is expected to take 20000 frames. It is dropped once it
 # spent three times that, counted only while the trip is under way, without the item.
 TM_TRIP_FRAMES = 20000
@@ -61,13 +60,9 @@ TM_TRIP_FRAMES = 20000
 TEACH_FRAMES = 1250
 # The HMs whose battle moves ``hm_upgrade`` weighs, Surf and Strength.
 HM_TEACH_ITEMS = frozenset((ITEMS['HM03'], ITEMS['HM04']))
-# A development excursion lasts until its partner gains a level. It ends sooner once this many frames
-# pass without the partner gaining any experience, so grass without encounters cannot hold it.
-DEVELOPMENT_STALL = 2400
 
 TRAINER_ENGAGING = 1 << BIT_TRAINER_BATTLE
 W_REPEL_STEPS = W_MOVE_NUM - 5  # wRepelRemainingSteps precedes the four-byte wMoves array
-FACING = {"down": 0, "up": 4, "left": 8, "right": 12}
 HM_ITEM_MOVES = {ITEMS[f'HM0{number}']: move for number, move in zip(range(1, 6), (15, 19, 57, 70, 148))}
 
 
@@ -215,11 +210,10 @@ class StrategicPolicy(Policy):
         self.shortcut = ShortcutRunner()
         # Run attempts the battle stance made over the whole run, which the replay audit reads.
         self.flees = Counter()
-        # The PlayClock frame of the latest decision, never saved. The waits below count on it, so a
+        # The PlayClock frame of the latest decision, never saved. The detour's waits count on it, so a
         # reload neither restarts nor stretches them.
         self.clock = 0
-        self.next_conversation = 0
-        self.development_cooldown = 0
+        self.detour = Detour()
         self.on_restore()
 
     def reset(self):
@@ -269,14 +263,14 @@ class StrategicPolicy(Policy):
         self.catch_attempts = 0
         # Failed stance runs in this battle, and whether one is under way.
         self.flee_tries, self.fleeing = 0, False
-        self.heal_latch = False
-        # Whether the heal under way is one the party's spent PP called for.
-        self.pp_heal = False
-        # The boss check before a leader, the Elite Four or the Champion (planning/boss.py), and whether
-        # it sends the party to heal first.
-        self.boss_gate = boss.Gate()
-        self.boss_heal = False
+        # The errands (policies/errands.py): the heal, the shop visit and the detour, none of them under
+        # way after a reload, and the one an overworld decision picked with its offer as it was picked.
+        self.heal = Heal()
         self.shop = ShoppingController()
+        self.detour.reset()
+        self.trip = Trip()
+        # The boss check before a leader, the Elite Four or the Champion (planning/boss.py).
+        self.boss_gate = boss.Gate()
         # The PC menu ranks releases with the same call as the planner, so the two never disagree.
         self.pc = StorageController(ranker=self._release_target)
         self.visit_team = VisitTeam()
@@ -302,17 +296,10 @@ class StrategicPolicy(Policy):
         self.trash_checked = set()
         self.trash_pending = None
         self.trash_first = None
-        self.social_target = None
         self.watch = ActionWatch()
         self.last_action = None
-        self.excursion = None
-        # The partner a development excursion trains, with its level and experience at the start and the
-        # frame it last gained experience.
-        self.development = None
-        self.development_index = None
         self.assessment_token = None
         self.menu_context = None
-        self.pending_social = None
         self.supply_attempts = set()
         # The HM teach last scored, and the party and HMs it was scored for.
         self.hm_token = None
@@ -326,10 +313,7 @@ class StrategicPolicy(Policy):
         # writes when the step ends.
         self.choice = None
         self.committing = None
-        # The errand the last overworld decision picked and its offer as it was picked, the step's pick
-        # before any errand, and whether this step reached the overworld decision.
-        self.errand = None
-        self.errand_offer = None
+        # The step's pick before any errand, and whether this step reached the overworld decision.
         self.pick = None
         self.decided = False
         # The decide pipeline's pick at this step's overworld decision, for the trace, or None.
@@ -455,16 +439,21 @@ class StrategicPolicy(Policy):
 
     def step(self, ctx):
         self.pick, self.decided, self.pipeline_pick, self.committing = None, False, None, None
+        self.detour.ran = None
         actions = self._step(ctx)
         ballot, self.committing = self.committing, None
-        if (ballot is not None and self.errand is not None and not self.decided and self.goal is self.pick
+        if self.detour.ran is not None:
+            # A detour the walk ran is the goal, with the goal behind it next. The step's commit can still
+            # name another goal behind its pick.
+            self.goal, self.next_goal = self.detour.ran
+        if (ballot is not None and self.trip.goal is not None and not self.decided and self.goal is self.pick
                 and not ctx.snapshot.in_battle):
             # An errand under way is the goal until the next overworld decision ends it. Otherwise each
             # walking, warp, dialogue and menu step on the way ran under the pick behind it. The step has
             # already decided under that pick, so menus read the same goal as before. It is offered again
             # as it was picked, so a reserve swap is still the enabler of the goal it serves and a lift
             # exit is still forced.
-            self.goal = ballot.resume(self.errand_offer)
+            self.goal = self.trip.resume(ballot)
         if ballot is not None:
             # Only the offer the step ends with writes, so an offer a later site overrides leaves nothing.
             self.goal_offer = ballot.running
@@ -490,7 +479,7 @@ class StrategicPolicy(Policy):
                                 or self.goal.key == 'party_release',
                                 support=self.goal.key in SUPPORT_TRIPS,
                                 training_ready=bool(s.in_battle) or kind == 'overworld',
-                                training_active=(self.goal.key == 'collect_train' and not self.heal_latch
+                                training_active=(self.goal.key == 'collect_train' and not self.heal.latched
                                                  and not needs_healing(s.party)
                                                  and (bool(s.in_battle) or kind == 'overworld' and pos in self.goal.targets)))
         self.pickups.observe(s, self.clock)
@@ -503,15 +492,7 @@ class StrategicPolicy(Policy):
             self.mode = 'Hall of Fame ceremony'
             self.reason = self.goal.reason
             return tap('a',6,24)
-        if self.pending_social:
-            key, started = self.pending_social
-            if kind == 'dialogue' or s.in_battle:
-                if key not in self.interactions:
-                    self.interactions[key] = True
-                    self.interaction_count += 1
-                self.pending_social = None
-            elif frame - started > 240:
-                self.pending_social = None
+        self.detour.observe(self, s, kind)
         naming_action = self.naming.step(scr, s)
         if naming_action is not None:
             self.mode = "naming"
@@ -635,11 +616,12 @@ class StrategicPolicy(Policy):
                                      commit=self._end_swap)
         if kind == 'overworld' and not s.in_battle:
             self._boss_check(s, self.pick, s.map in league_rooms)
-            self._update_heal_latch(s)
-        if self.heal_latch and s.map not in league_rooms and not ball_at_hand(s, choice.goal, self.nav):
+            self.heal.update(self, s)
+        heal, _ = self.heal.offer(self, s)
+        if heal is not None and s.map not in league_rooms and not ball_at_hand(s, choice.goal, self.nav):
             # The heal under way is the goal of every step, not only the overworld ones. Otherwise each
             # dialogue box, battle and poison tick on the way to the nurse ran under the story goal.
-            self.goal = choice.offer(healing_goal(s), choice.errand_candidate('heal', 'heal'), site='heal_latch')
+            self.goal = choice.offer(heal, choice.errand_candidate('heal', 'heal'), site='heal_latch')
         # The step ends with this choice's writes unless the overworld decision goes on weighing it.
         self.choice = self.committing = choice
         token =(s.badges, tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
@@ -679,11 +661,11 @@ class StrategicPolicy(Policy):
             return wait()
         walking_state = mem[W_WALK_BIKE_SURF_STATE] | ((mem[W_STATUS_FLAGS1] >> BIT_STRENGTH_ACTIVE & 1) << 2)
         failure = self.watch.observe(s, kind, scr.cursor, walking_state,
-                                     self.goal.key.startswith(('train_', 'catch_', 'collect_hunt', 'collect_train')) or self.developing)
+                                     self.goal.key.startswith(('train_', 'catch_', 'collect_hunt', 'collect_train')) or self.detour.developing)
         if failure:
             self._remember_failure(s, failure)
             self.intent = None
-            self.excursion = None
+            self.detour.excursion = None
             self.watch = ActionWatch()
             self.watch.last_failure = s.frame
             if kind != 'overworld':
@@ -886,22 +868,6 @@ class StrategicPolicy(Policy):
             return tap("a", 6, 24)
         return self._overworld(s, mem)
 
-    def _update_heal_latch(self, s):
-        # A status the bag cures is cured in the field (_overworld), so it latches no heal.
-        if needs_healing(s.party, s.items):
-            if not self.heal_latch:
-                # A heal its spent PP called for says so in the journal once the nurse is done.
-                self.pp_heal = battle_room(s.party)[PP] == 0
-            self.heal_latch = True
-        if all(p.hp == p.max_hp and not p.status for p in s.party) and not needs_healing(s.party):
-            if self.heal_latch and getattr(self, 'pp_heal', False):
-                self.collection.activity_events.append(boss.pp_heal_event(s.map_name))
-            self.pp_heal = False
-            self.heal_latch = False
-            self.escape_attempted = False
-        if getattr(self, 'boss_heal', False):
-            self.heal_latch = True
-
     def note_boss_loss(self, s):
         """Remember the best fighter level that lost to the boss the goal names, which raises its bar.
 
@@ -921,7 +887,7 @@ class StrategicPolicy(Policy):
             BOSS_TABLE, self, goal, fighters(s.party), reachable, where=s.map, inside=in_league,
             center=s.map in CENTER_MAPS, treatment=lambda: league_treatment(s.party, s.items) is not None,
             title=lambda: goal.title, names=lambda: [mon.nick or f'#{mon.species}' for mon in s.party])
-        self.boss_heal = verdict == boss.HEAL
+        self.heal.before_boss = verdict == boss.HEAL
         self.collection.activity_events.extend(rows)
         return verdict
 
@@ -930,7 +896,7 @@ class StrategicPolicy(Policy):
         self.intent = None
         self.shop.leave_menu()
         pos = (s.map, s.x, s.y)
-        self._update_heal_latch(s)
+        self.heal.update(self, s)
         league_rooms = {MAPS[n] for n in ("LORELEIS_ROOM", "BRUNOS_ROOM", "AGATHAS_ROOM", "LANCES_ROOM", "CHAMPIONS_ROOM")}
         in_league = s.map in league_rooms
         choice = self.choice
@@ -938,10 +904,11 @@ class StrategicPolicy(Policy):
             choice = Ballot(self.goal, goal_candidate(self.goal, self.collection),
                             pinned=self.collection.pinned() and goal_kind(self.goal.key) == 'collection')
         self.choice, self.committing = None, choice
-        if self.heal_latch and not in_league and not ball_at_hand(s, choice.goal, self.nav):
-            choice.offer(healing_goal(s), choice.errand_candidate('heal', 'heal'), site='heal')
+        heal, _ = self.heal.offer(self, s)
+        if heal is not None and not in_league and not ball_at_hand(s, choice.goal, self.nav):
+            choice.offer(heal, choice.errand_candidate('heal', 'heal'), site='heal')
         swap = choice.errand_candidate('party_upgrade', 'party')
-        if (not s.box_full and not self.heal_latch and not choice.owns_party and choice.wins(swap)
+        if (not s.box_full and not self.heal.latched and not choice.owns_party and choice.wins(swap)
                 and 'Pokecenter' in WORLD.get(s.map, {}).get('name', '') and WORLD[s.map]['width'] == 14):
             weakest = reserve_to_deposit(s)
             if weakest is not None:
@@ -989,7 +956,7 @@ class StrategicPolicy(Policy):
                     if actions:
                         return actions
         supplies = self.shop.plan(s, goal, self.collection.project, requested_goal=self.goal.key,
-                                  healing=self.heal_latch, in_league=in_league,
+                                  healing=self.heal.latched, in_league=in_league,
                                   has_pokedex=self.completed.get('pokedex', False),
                                   completed_champion=self.collection.completed_champion)
         if supplies.goal is not goal:
@@ -1003,7 +970,7 @@ class StrategicPolicy(Policy):
             # A plan that keeps the goal reads the bag and the purse as they are: the supplies are ready,
             # or a hunt cannot pay for its balls.
             self._commit_supplies(supplies)
-        if self.heal_latch:
+        if self.heal.latched:
             # Medicine is useful when no known route to a center can be followed.
             for target, mon in enumerate(s.party):
                 index = healing_item(s.items, mon)
@@ -1011,7 +978,7 @@ class StrategicPolicy(Policy):
                     actions = self._use_item(s, s.items[index][0], target, "Treat the party before walking farther")
                     if actions:
                         return actions
-        if not self.heal_latch and not in_league:
+        if not self.heal.latched and not in_league:
             upgrade = self._hm_option(s)
             if upgrade:
                 _, target, item, move, _ = upgrade
@@ -1034,7 +1001,7 @@ class StrategicPolicy(Policy):
             return tm_action
         if goal.key == "thunder" and not event_set(s.event_flags, "EVENT_2ND_LOCK_OPENED"):
             goal = choice.offer(self._trash_goal(s), choice.errand_candidate('trash', 'trash'), site='trash')
-        if not self.heal_latch and not in_league and not choice.errand:
+        if not self.heal.latched and not in_league and not choice.errand:
             # The collection pick weighs its own projects on the arbiter against the goal it is handed, so
             # its pick is taken as it is. A new project starts only when the step ends with it running
             # (decide pipeline rule A). An errand under way is never handed to it.
@@ -1051,7 +1018,7 @@ class StrategicPolicy(Policy):
         # A legendary or a marathon under way loses its run when it leaves, so no pickup cuts into one.
         committed = legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon'
         pickup_errand = choice.errand_candidate('collect_pickup', 'pickup')
-        if not self.heal_latch and not in_league and not committed and choice.wins(pickup_errand):
+        if not self.heal.latched and not in_league and not committed and choice.wins(pickup_errand):
             picked = self.pickups.pick(s, self.nav, goal, self.clock)
             if picked:
                 pickup, start = picked
@@ -1090,8 +1057,10 @@ class StrategicPolicy(Policy):
             ceremony = at('collect_ceremony', 'Enter the Hall of Fame', 'Finish the Champion ceremony', 'HALL_OF_FAME', 4, 6)
             goal = choice.offer(ceremony, goal_candidate(ceremony, self.collection, 'ceremony'), site='ceremony')
         self.goal = goal
-        self.errand = goal if choice.errand else None
-        self.errand_offer = choice.running if choice.errand else None
+        if choice.errand:
+            self.trip.start(goal, choice.running)
+        else:
+            self.trip.end()
         self.goal_offer = choice.running
         self.decided = True
         choice.commit()
@@ -1197,8 +1166,8 @@ class StrategicPolicy(Policy):
                 action = self._use_item(s, repel)
                 if action:
                     return action
-        if not goal.key.startswith(("collect_", "party_collection", "party_league")) and (goal.key == "train_league_partner" or self.development_index is not None and self.developing):
-            target = league.partner(s.party, BOSS_TABLE.partner) if goal.key == 'train_league_partner' else self.development_index
+        if not goal.key.startswith(("collect_", "party_collection", "party_league")) and (goal.key == "train_league_partner" or self.detour.development_index is not None and self.detour.developing):
+            target = league.partner(s.party, BOSS_TABLE.partner) if goal.key == 'train_league_partner' else self.detour.development_index
             if target is not None and target != 0:
                 actions = self._reorder(s, target, "Give the partner the lead position while training")
                 if actions:
@@ -1314,10 +1283,10 @@ class StrategicPolicy(Policy):
                 return wait()
         else:
             if goal.key not in ("heal", "restock", "buy_tm"):
-                social = None if goal.key.startswith(("collect_", "party_collection", "party_league")) else self._purposeful_detour(s, mem, goal)
+                social = None if goal.key.startswith(("collect_", "party_collection", "party_league")) else self.detour.act(self, s, mem, goal)
                 if social:
                     return social
-                social = None if goal.key == 'collect_pickup' or kinds.rules((self.collection.project or {}).get('method')).own_clock or legendary_project(self.collection.project) else self._social_interaction(s, mem)
+                social = None if goal.key == 'collect_pickup' or kinds.rules((self.collection.project or {}).get('method')).own_clock or legendary_project(self.collection.project) else self.detour.chat(self, s, mem)
                 if social:
                     return social
             curiosity = 0 if goal.key in ("heal", "restock", "buy_tm", "collect_pickup", "collect_hunt") or kinds.rules((self.collection.project or {}).get('method')).own_clock or legendary_project(self.collection.project) else EXPLORATION_CHANCE
@@ -1646,7 +1615,7 @@ class StrategicPolicy(Policy):
         from .. import tm_shop, champion_shop
         teach = choice.errand_candidate('teach_tm', 'moves')
         # Every option here is an errand or an upgrade, and neither cuts into an errand under way.
-        if not self.tm_moves or self.heal_latch or in_league or not choice.wins(teach):
+        if not self.tm_moves or self.heal.latched or in_league or not choice.wins(teach):
             return goal, None
         monitor = self.collection.director.monitor
         now = self.clock
@@ -1789,8 +1758,8 @@ class StrategicPolicy(Policy):
     def _reorder(self, s, target, purpose):
         """Move party slot ``target`` to the lead outside battle."""
         def done(result, machine):
-            if result.completed and self.development_index is not None:
-                self.development_index = 0
+            if result.completed and self.detour.development_index is not None:
+                self.detour.development_index = 0
         return self._start_shortcut(s, ReorderParty(target, 0), ('reorder', individual(s.party[target])),
                                     purpose, done)
 
@@ -1874,7 +1843,7 @@ class StrategicPolicy(Policy):
             self.pickups.defer(self.clock, 'Pickup approach failed')
         self.recoveries += 1
         self.intent = None
-        if (self.heal_latch and snapshot.map in VICTORY_MAPS and snapshot.valid
+        if (self.heal.latched and snapshot.map in VICTORY_MAPS and snapshot.valid
                 and not snapshot.in_battle and not snapshot.textbox and not snapshot.start_menu
                 and not self.escape_attempted):
             action = self._use_item(snapshot, ITEMS['ESCAPE_ROPE'])
@@ -1936,7 +1905,7 @@ class StrategicPolicy(Policy):
             self.collection.director.monitor.stand_down(hold_key(offer.goal.key), self.collection.clock,
                                                         failure=decide.STUCK.kind)
             # The visit is no longer the errand under way, so no step resumes it.
-            self.errand = self.errand_offer = None
+            self.trip.end()
         elif self.pickups.active and kind in (None, 'pickup'):
             self.pickups.defer(self.clock, 'Pickup approach was stationary too long')
         elif kind in (None, 'collection'):
@@ -1975,156 +1944,3 @@ class StrategicPolicy(Policy):
                 self.nav.blocked[(pos, button)] = s.frame + 600 * self.failures[key]
                 self.nav.path.clear()
         self.reason = message
-
-    @property
-    def developing(self):
-        """Whether a development excursion is under way."""
-        return self.excursion is not None and self.excursion[2] == 'development'
-
-    def _development_done(self, s):
-        """Whether the development excursion has ended: its partner gained a level, left the party, or went
-        ``DEVELOPMENT_STALL`` frames without gaining experience. The partner is found by who it is, since
-        the excursion moves it to the lead."""
-        progress = self.development
-        mon = next((p for p in s.party if progress and (p.species, p.nick, p.dvs) == progress['partner']), None)
-        if mon is None:
-            return True
-        if mon.experience > progress['experience']:
-            progress['experience'], progress['since'] = mon.experience, s.frame
-        return mon.level > progress['level'] or s.frame - progress['since'] >= DEVELOPMENT_STALL
-
-    def _purposeful_detour(self, s, mem, main_goal):
-        pos = (s.map, s.x, s.y)
-        if self.heal_latch or main_goal.key.startswith(('heal', 'restock', 'train_', 'catch_', 'party_', 'teach_', 'league', 'collect_')) or s.map in MANSION_MAPS | VICTORY_MAPS:
-            self.excursion = None
-            return None
-        if self.excursion:
-            goal, expires, key = self.excursion
-            ended = self._development_done(s) if key == 'development' else s.frame >= expires
-            if ended or s.map != goal.targets[0][0]:
-                self.excursion = None
-                self.next_conversation = DETOUR_REST.until(self.clock)
-                return None
-            self.goal = goal
-            self.next_goal = main_goal.to_dict()
-            self.reason = goal.reason
-            if pos in goal.targets:
-                if key == 'development':
-                    choices = [(dr, q) for dr, q in self.nav.neighbors(pos, s.frame) if q in goal.targets]
-                    if not choices:
-                        self.excursion = None
-                        return None
-                    direction = self.rng.choice(choices)[0]
-                else:
-                    self.excursion = None
-                    self.next_conversation = DETOUR_REST.until(self.clock)
-                    self.mode = 'following a curiosity'
-                    facing = goal.facing_at(pos)
-                    if mem[W_FACING] != FACING[facing]:
-                        self.excursion = (goal, expires, key)
-                        return tap(facing, 4, 12)
-                    self.pending_social = (key, s.frame)
-                    return tap('a')
-            else:
-                direction = self.nav.route(pos, goal.targets, s.frame)
-                if not direction or len(self.nav.path) > 20:
-                    self.excursion = None
-                    self.next_conversation = LOOK_AROUND.until(self.clock)
-                    return None
-            self.mode = 'training a partner' if key == 'development' else 'following a curiosity'
-            self.nav.issued(pos, direction, s.frame)
-            return tap(direction, 8, 12)
-        if self.clock < self.next_conversation or self.rng.random() > EXPLORATION_CHANCE * 0.15:
-            return None
-        w = WORLD.get(s.map, {})
-        if any(p.status for p in s.party) or max((p.hp / max(1, p.max_hp) for p in s.party), default=0) < 0.8:
-            return None
-        encounters = w.get('encounters', [])
-        # The cartridge's grass table prices a battle here. Gen I has no training site picker, so a trainee
-        # this map cannot raise waits for a map on the way that can.
-        wild = self.collection.wild
-        trainee = development_candidate(s, max((level for _, level in encounters), default=100),
-                                        wild.battle_experience(s.map) if wild is not None else None)
-        grass = tuple((s.map, x, y) for y, row in enumerate(w.get('tiles', [])) for x, tile in enumerate(row)
-                      if tile == 0x52 and abs(x - s.x) + abs(y - s.y) <= 8)
-        if trainee is not None and grass and self.clock >= self.development_cooldown:
-            goal = Goal('train_partner', 'Give a promising partner some experience',
-                        f'Train {s.party[trainee].nick or s.party[trainee].name} in nearby manageable encounters', grass,
-                        kind=TRAIN)
-            mon = s.party[trainee]
-            self.development = {'partner': (mon.species, mon.nick, mon.dvs), 'level': mon.level,
-                                'experience': mon.experience, 'since': s.frame}
-            self.development_cooldown = PARTNER_TRAINING.until(self.clock)
-            self.development_index = trainee
-            self.excursion = (goal, None, 'development')
-            if trainee != 0:
-                actions = self._reorder(s, trainee, goal.reason)
-                if actions:
-                    return actions
-            return self._purposeful_detour(s, mem, main_goal)
-        positions = self.nav.live_positions if self.nav.live_map == s.map else []
-        candidates = []
-        for i, o in enumerate(w.get('objects', [])):
-            if o[2] in ('SPRITE_NURSE', 'SPRITE_CLERK', 'SPRITE_BOULDER', 'SPRITE_SNORLAX', 'SPRITE_BLUE', 'SPRITE_OAK') or (s.map, o[0], o[1]) in self.nav.cleared_objects:
-                continue
-            # An item the bag has no room for, including the Safari Zone's kept prize room, is left alone.
-            item = ground_item(o)
-            if item and not Pickups.has_space(s, item['item']):
-                continue
-            x, y = positions[i] if i < len(positions) else o[:2]
-            key = f'{s.map}:{o[4]}'
-            weight = 3 if (self.personality == 'Collector') == (o[2] == 'SPRITE_POKE_BALL') else 1
-            candidates.append((x, y, key, 'Investigate a nearby item' if o[2] == 'SPRITE_POKE_BALL' else 'Meet someone nearby', weight))
-        candidates += [(x, y, f'{s.map}:{name}', 'Read a local sign', 3 if self.personality == 'Explorer' else 1)
-                       for x, y, name in w.get('backgrounds', []) if 'SIGN' in name or 'TRAINER_TIPS' in name]
-        candidates = [c for c in candidates if c[2] not in self.interactions and 1 < abs(c[0] - s.x) + abs(c[1] - s.y) <= 8]
-        self.next_conversation = LOOK_AROUND.until(self.clock)
-        if candidates:
-            x, y, key, title, _ = self.rng.choices(candidates, weights=[c[4] for c in candidates])[0]
-            approaches = tuple((s.map, x - dx, y - dy, dr) for dr, (dx, dy) in DIRS.items()
-                               if self.nav._tile(w, x - dx, y - dy) in w['passable'])
-            if approaches:
-                goal = Goal('curiosity', title, f'{self.personality} detour, then return to {main_goal.title.lower()}',
-                            tuple(p[:3] for p in approaches), approaches[0][3], True, approaches=approaches)
-                direction = self.nav.route(pos, goal.targets, s.frame)
-                if direction and len(self.nav.path) <= 16 and all(p[0][0] == s.map for p in self.nav.path):
-                    self.excursion = (goal, s.frame + 900, key)
-                    return self._purposeful_detour(s, mem, main_goal)
-        return None
-
-    def _social_interaction(self, snapshot, mem):
-        pos = (snapshot.map, snapshot.x, snapshot.y)
-        if self.social_target:
-            origin, facing, key, label = self.social_target
-            self.social_target = None
-            if origin == pos and mem[W_FACING] == FACING[facing]:
-                self.pending_social = (key, snapshot.frame)
-                self.next_conversation = CHAT_REST.until(self.clock)
-                self.mode = label
-                self.reason = "Take a moment to learn about the area before continuing"
-                return tap("a")
-        if self.clock < self.next_conversation or self.rng.random() > 0.15:
-            return None
-        world = WORLD.get(snapshot.map, {})
-        positions = self.nav.live_positions if self.nav.live_map == snapshot.map else []
-        candidates = [(*(positions[i] if i < len(positions) else o[:2]), o[4], "talking to locals")
-                      for i, o in enumerate(world.get("objects", []))
-                      if o[2] not in ("SPRITE_NURSE", "SPRITE_CLERK", "SPRITE_BOULDER", "SPRITE_SNORLAX")
-                      and (snapshot.map, o[0], o[1]) not in self.nav.cleared_objects]
-        candidates += [(x, y, name, "reading a sign") for x, y, name in world.get("backgrounds", [])
-                       if "SIGN" in name or "TRAINER_TIPS" in name]
-        self.rng.shuffle(candidates)
-        for x, y, name, label in candidates:
-            key = f"{snapshot.map}:{name}"
-            if key in self.interactions:
-                continue
-            direction = next((d for d, (dx, dy) in DIRS.items()
-                              if (snapshot.x + dx, snapshot.y + dy) == (x, y)), None)
-            if direction:
-                self.social_target = (pos, direction, key, label)
-                self.mode = label
-                self.reason = "Notice someone or something along the way"
-                if mem[W_FACING] == FACING[direction]:
-                    return self._social_interaction(snapshot, mem)
-                return tap(direction, 4, 12)
-        return None

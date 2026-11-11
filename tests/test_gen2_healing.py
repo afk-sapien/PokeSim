@@ -21,7 +21,7 @@ def policy_at(data, monkeypatch, walks):
     monkeypatch.setattr(ledger, 'walk_spent', lambda data, snapshot, goal='walk': True)
     policy = Policy(data, seed=1, starter='cyndaquil')
     policy.completed['ice_path'] = 0
-    policy.healing_map = data.map_ids['BLACKTHORN_POKECENTER_1F']
+    policy.heal.map = data.map_ids['BLACKTHORN_POKECENTER_1F']
     # Each center's walk, as the maps it passes. A center left out has no known walk.
     steps = {data.map_ids[center]: [(None, (data.map_ids[name], 0, 0)) for name in names]
              for center, names in walks.items()}
@@ -42,14 +42,15 @@ def test_a_center_past_ice_path_is_never_the_healing_trip(data, monkeypatch):
         'BLACKTHORN_POKECENTER_1F': ['ROUTE_42', 'MAHOGANY_TOWN', 'ROUTE_44', 'ICE_PATH_1F', 'ICE_PATH_B1F',
                                      'BLACKTHORN_CITY', 'BLACKTHORN_POKECENTER_1F'],
         'VIOLET_POKECENTER_1F': ['VIOLET_POKECENTER_1F']})
-    goal = policy.healing(snapshot(data, 'VIOLET_CITY', 31, 25))
+    goal, _ = policy.heal.offer(policy, snapshot(data, 'VIOLET_CITY', 31, 25))
     assert goal is not None and goal.map_name == 'VIOLET_POKECENTER_1F'
-    assert policy.healing_map == data.map_ids['VIOLET_POKECENTER_1F']
+    assert policy.heal.map == data.map_ids['VIOLET_POKECENTER_1F']
 
 
 def test_a_center_with_no_known_walk_is_chosen_by_the_map_links(data, monkeypatch):
     policy = policy_at(data, monkeypatch, {})
-    assert policy.healing(snapshot(data, 'BLACKTHORN_CITY', 21, 30)).map_name == 'BLACKTHORN_POKECENTER_1F'
+    goal, _ = policy.heal.offer(policy, snapshot(data, 'BLACKTHORN_CITY', 21, 30))
+    assert goal.map_name == 'BLACKTHORN_POKECENTER_1F'
 
 
 def mon(data, species, level, moves, pp):

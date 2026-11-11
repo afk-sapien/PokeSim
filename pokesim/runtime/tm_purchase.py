@@ -33,7 +33,7 @@ def purchase(emu):
     before = read_snapshot(emu.pb.memory, emu.frame)
     if (not before.valid or not before.started or before.in_battle or before.textbox or before.start_menu
             or emu.pb.memory[W_WALK_COUNTER] or (before.map, before.x, before.y) != tm_shop.COUNTER
-            or policy.goal.key != 'buy_tm' or getattr(policy, 'heal_latch', False)
+            or policy.goal.key != 'buy_tm' or getattr(getattr(policy, 'heal', None), 'latched', False)
             or not tm_shop.valid_plan(before, plan, policy.tm_moves, policy.tm_compatible, champion_shop.ready(emu.store))):
         return None
     item, target = plan['item'], plan['target']
