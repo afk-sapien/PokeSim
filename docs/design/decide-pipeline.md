@@ -1,6 +1,6 @@
 # Decide pipeline
 
-Status: accepted on 2026-11-11. Slices 1, 2, 3 and 4a are built. Every line number was read from main at `2d02e6c2`. This is phase 2 item 4 of the architecture plan of 2026-11-09, the new PR before [Goal system v2](goal-system.md) PR 7. Shadow mode reuses `planning/shadow.py`, and the trace is the one in [Replayable bugs](replayable-bugs.md).
+Status: accepted on 2026-11-11. Slices 1, 2, 3, 4a and 5 are built. Every line number was read from main at `2d02e6c2`. This is phase 2 item 4 of the architecture plan of 2026-11-09, the new PR before [Goal system v2](goal-system.md) PR 7. Shadow mode reuses `planning/shadow.py`, and the trace is the one in [Replayable bugs](replayable-bugs.md).
 
 Today each generation rebuilds its goal on every decision through an ordered chain. A source low in the chain wins because it comes later in the file, not because it is worth more, and nothing records that two sources fought. This note replaces both chains with one pipeline. Every source offers, one filter decides what can run, and the arbiter ranks everything that is left in one call.
 
@@ -122,8 +122,10 @@ A director is one more source. It holds at most one standing choice, a goal key 
 
 - Its offer passes the same filter. An offer that cannot run is parked, and the reason goes back to the director: a `pin.gave_up` row now, a typed failure after PR 7.
 - It never overrides. Forced moves, holds, UPKEEP and needs still go first, the same as for any source.
-- Its choice enters through the trace as an `input` record with source `director`, so a replay makes the same choice at the same record.
-- Today's manager pin becomes the first director in both generations. In Gen II it asks the rung it names through the ladder, with no exemption.
+- Its choice enters the trace as an `input` record with source `pin` and the goal key, or none for a cancel (`emulator.py:279`, L283). So a `redecide` play hands the policy the same choice at the same record. No PokeSim play runs `redecide` yet, and the one that does feeds these records.
+- Today's manager pin becomes the first director in both generations. In Gen II it asks the rung it names through the ladder, with no exemption from a check. Its rung is still asked when the pick ranks in a higher tier (`gen2/collection.py:695`), since that is the pinned lane, not a check.
+
+Slice 5 builds it. The director's offer stays inside its source: in Gen I the collection's pick with `director.select(pinned=)`, in Gen II the ladder's pin rung. Neither pipeline passes `pinned` to `decide.decide`, so the pin outranks the other goals of its source and never the other sources, as before. Ranking it across sources changes what a pin beats, so it waits for PR 7.
 
 ## 4. Shadow mode
 
@@ -210,7 +212,11 @@ Do not offer the errand under way as a fresh goal. The gate caught two goals tha
 
 **B. A pin passes the checks** (slice 5). A pinned Gen II rung no longer skips the stand-down check (`gen2/collection.py:704`) or the no-route check (L712). A rung the watchdog gave up on is parked, where today the pin asks it again. A pin comes from the owner in the UI, and a pin that silently does nothing is a bug. So the same PR puts the parked reason into the adventure's API state and shows it in the UI where the pin is set. The UI part is agreed with pokesim-ui through the lead.
 
+Built in slice 5. `Pin.parked` holds the reason, `decide.STOOD_DOWN` or `decide.NO_ROUTE`, and is empty while the pin can run. `/api/state` carries it in `strategy.pin`, and `/api/goals` in `pin`. The Next activity line reads "Next: Find Clefairy, waiting (no route)". A parked pin that has not started waits for the reason to clear. A started pin whose goal is parked ends with a `pin.gave_up` row that names the reason. Gen I has no parked pin: `set_pin` refuses a goal that stood down, and the Gen I pipeline has no no-route park.
+
 **C. A pin keeps the project** (slice 5). Setting a pin in Gen I no longer abandons the running project (`policies/collection.py:1446`). The pin wins by its lane, and the project resumes after it. The project's budget counts only the frames it runs. A test checks that the project resumes with its progress intact after the pin ends.
+
+Built in slice 5. `Collection.pause` sets the project aside with its remaining frames, maps and flags, and its idle count and budget stay on the monitor under the project's own keys. The history reads "Set aside: X. A manager set the next activity". The pick resumes it once no pin is set, whether the pin's run ended, it was cancelled or it dropped out of the list, and the history reads "Resumed: X". A pin on the project set aside resumes it at once. One project waits at a time, so a second pin set while a project runs and another waits abandons the running one, as before. The project set aside is saved with the collection.
 
 ## 6. Slices
 
@@ -222,7 +228,7 @@ Each switch slice deletes the old call sites it replaces in the same PR. Estimat
 | 2 | Gen I upkeep and party switch: heal, upgrade, release, box, supplies and trash become enablers that the need walk (`decide.serve`) runs, and their writes move to commits (rule A). The heal latch stays the party's observation, and its site offers the heal as an enabler. The errand restore stays, since it sets the goal on battle, menu and dialogue steps that make no overworld decision, so no hold can replace it before the errand is a goal under way in slice 3 | replaces at L603, L634, L640, L650, L967, L1022, L1056, the offer at L980 | 3 hours |
 | 3 | Gen I story and collection switch: base goal and boss training, the project, `collection.choose`, pickups, teaching, TM development and the forced moves. Every Gen I overworld goal is picked by `decide.decide` over the step's `Ballot` (`policies/pipeline.py`). The errand restore becomes `Ballot.resume`: the errand the last decision picked is offered again, as it was picked, at the end of each step that makes no overworld decision. An enabler meets the same need, a forced move is forced again, and a goal is under way. It carries no writes, since they ran when it was picked | `Choice` (L168-230) with `offer` and `replace`, replaces at L594, L1068, L1083, L1098, offers at L596, L1045, L1076, L1640-1666, direct assignments at L518, L582-587, L1047, L1138-1139, L1286, L1288, L1294, the restore at L489, the `legacy` source, the `collection` shadow point (`collection.py:1144`) | 4 hours |
 | 4 | Gen II, in two PRs. 4a is shadow: story, holds, ladder and the `_step` sites as sources, with the Gen II needs table. 4b switches them | 4a: the `ladder` shadow point (policy.py:1489-1496) and `ladder_candidates` (`collection.py:570`). 4b: boss training (L368-369), release (L1486), heal (L1532, L1593-1594), partner and HM (L1564, L1570), the no-route fallback (L1601), the unreachable errand fallback (L1624-1627), Sudowoodo (L1720), the errand restore (L1399), the `holds` return (`collection.py:811`) | 4 hours |
-| 5 | Director source: the manager pin becomes the director in both generations, and its choices go into the trace. A parked pin's reason reaches the API state and the UI, and a test checks that a Gen I project resumes intact after a pin | the pin exemptions (`gen2/collection.py:627-629`, L702, L704, L712), the Gen I pin abandon (`policies/collection.py:1446`) | 2 hours |
+| 5 | Director source: the manager pin becomes the director in both generations, and its choices go into the trace. A parked pin's reason reaches the API state and the UI, and a test checks that a Gen I project resumes intact after a pin | the pin exemptions from the stand-down and no-route checks (`gen2/collection.py:704`, L712), the Gen I pin abandon (`policies/collection.py:1446`). The pin rung's ask below the pick's tier (L702) stays, since that is the pinned lane | 2 hours |
 
 The total is 18 agent hours, plus the shadow runs before each switch. Slices 2 and 3 wait for slice 1's shadow data, and 4b waits for 4a's.
 
