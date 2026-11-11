@@ -233,10 +233,11 @@ def test_the_gen2_needs_table_reads_the_chain_order():
         assert gen2_pipeline.NEEDS[site] == ('healthy', 'supplies', 'field_move', 'room', 'trained')
     assert gen2_pipeline.NEEDS['boss'] == ('healthy', 'supplies', 'field_move', 'room')
     assert gen2_pipeline.NEEDS['shop'] == ('healthy',)
-    assert gen2_pipeline.NEEDS['heal'] == gen2_pipeline.NEEDS['sudowoodo'] == ()
+    assert gen2_pipeline.NEEDS['heal'] == gen2_pipeline.NEEDS['sudowoodo'] == gen2_pipeline.NEEDS['well_boulder'] == ()
     tree = Goal('sudowoodo', 'Tree', 'Tree')
     candidate = Candidate('sudowoodo', Tier.UPKEEP, 0.05, 3000, goal='sudowoodo')
     assert gen2_pipeline.offer('sudowoodo', tree, candidate).forced and gen2_pipeline.offer('holds', tree, candidate).hold
+    assert gen2_pipeline.offer('well_boulder', tree, candidate).forced
     assert gen2_pipeline.offer('nowhere', tree, candidate).source == 'legacy'
     # A rung offers under its own name, with its own tier.
     hunt = Candidate('hunt:tree', Tier.PROGRESS, 1.0, 3000, goal='hunt')

@@ -497,19 +497,31 @@ def stones(policy, snapshot, Goal):
     return None
 
 
-def trade_items(policy, snapshot, Goal):
+def well_boulder(policy, snapshot, Goal, leaving):
+    """The push that opens the way on Slowpoke Well B1F to ``leaving``, the ladder down at (7, 11) or the
+    exit at (17, 15), or None when that way is open or the player is not on B1F.
+
+    The boulder goes back to its place on every visit, and the map regions do not know it is there."""
     well = policy.data.map_ids['SLOWPOKE_WELL_B1F']
-    if snapshot.map == well:
-        stones = policy.nav.objects.setdefault(well, {})
-        stones.update({index: (x, y) for index, x, y in snapshot.objects})
-        index = next(i for i, obj in enumerate(policy.data.maps[well]['objects'], 1) if obj['sprite'] == 'SPRITE_BOULDER')
-        x, y = stones.get(index, (3, 2))
-        if (not snapshot.event('EVENT_GOT_KINGS_ROCK_IN_SLOWPOKE_WELL') and x > 2
-                and policy.nav.local(snapshot, [(7, 11)], policy.memory, surf=True) is None):
-            return Goal('push_well_passage', 'Open the lower passage in Slowpoke Well', 'SLOWPOKE_WELL_B1F', x + 1, y, 'left')
-        if (snapshot.event('EVENT_GOT_KINGS_ROCK_IN_SLOWPOKE_WELL') and x < 6
-                and policy.nav.local(snapshot, [(17, 15)], policy.memory, surf=True) is None):
+    if snapshot.map != well:
+        return None
+    stones = policy.nav.objects.setdefault(well, {})
+    stones.update({index: (x, y) for index, x, y in snapshot.objects})
+    index = next(i for i, obj in enumerate(policy.data.maps[well]['objects'], 1) if obj['sprite'] == 'SPRITE_BOULDER')
+    x, y = stones.get(index, (3, 2))
+    out = tuple(leaving) == (17, 15)
+    if (x < 6 if out else x > 2) and policy.nav.local(snapshot, [tuple(leaving)], policy.memory, surf=True) is None:
+        if out:
             return Goal('push_well_exit', 'Reopen the exit from Slowpoke Well', 'SLOWPOKE_WELL_B1F', x - 1, y, 'right')
+        return Goal('push_well_passage', 'Open the lower passage in Slowpoke Well', 'SLOWPOKE_WELL_B1F', x + 1, y, 'left')
+    return None
+
+
+def trade_items(policy, snapshot, Goal):
+    leaving = (17, 15) if snapshot.event('EVENT_GOT_KINGS_ROCK_IN_SLOWPOKE_WELL') else (7, 11)
+    push = well_boulder(policy, snapshot, Goal, leaving)
+    if push is not None:
+        return push
     for event, area, script, label in [
         ('EVENT_GOT_UP_GRADE', 'SILPH_CO_1F', 'SilphCoOfficerScript', 'Receive the Up-Grade at Silph Co.'),
         ('EVENT_GOT_KINGS_ROCK_IN_SLOWPOKE_WELL', 'SLOWPOKE_WELL_B2F', 'SlowpokeWellB2FGymGuideScript',

@@ -35,11 +35,12 @@ SITES = (
     ('shop', 'supplies', 'supplies'),    # A restock errand.
     ('heal', 'heal', 'healthy'),         # A heal errand.
     ('sudowoodo', 'sudowoodo', ''),      # The returned tree that walls off Route 36.
+    ('well_boulder', 'well_boulder', ''),  # The Slowpoke Well boulder that shuts the player in.
 )
 
 # Sites whose goal is under way, and sites the game forces by map.
 HOLDS = frozenset({'holds'})
-FORCED = frozenset({'sudowoodo'})
+FORCED = frozenset({'sudowoodo', 'well_boulder'})
 
 NEEDS = decide.needs(SITES)
 SOURCES = {site: source for site, source, _ in SITES}
