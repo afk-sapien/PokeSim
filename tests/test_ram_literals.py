@@ -62,7 +62,7 @@ ALLOWED = {
     'pokesim/policies/navigation.py': (2, 0),
     'pokesim/policies/strategic.py': (11, 0),
     'pokesim/policies/travel.py': (1, 0),
-    'pokesim/ram.py': (3, 0),
+    'pokesim/ram.py': (1, 0),
     'pokesim/replay/rung.py': (2, 0),
     'pokesim/runtime/preparation.py': (5, 0),
     'pokesim/runtime/tm_purchase.py': (1, 0),

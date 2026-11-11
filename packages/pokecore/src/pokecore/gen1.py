@@ -78,6 +78,12 @@ BOX_CAPACITY = 20
 BOX_COUNT = 12
 
 BOX_DATA_SIZE = 1122
+# sBox1 and sBox7, where boxes 1 to 6 and 7 to 12 start in cartridge RAM banks 2 and 3.
+S_BOXES = 0xA000
+# Offsets in a box of its 33-byte records and its 11-byte nicknames. The count byte and 21
+# species bytes come first, then 20 records and 20 original trainer names.
+BOX_MONS_OFFSET = 22
+BOX_NICKS_OFFSET = 902
 
 W_TOGGLE_OBJECT_FLAGS = 0xD5A6
 

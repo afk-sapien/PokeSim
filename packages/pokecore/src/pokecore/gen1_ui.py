@@ -7,8 +7,8 @@ Yellow, where sprite slot 15 is the following Pikachu. Readers of shifted
 fields take ``version`` like the ``gen1`` readers.
 """
 from .yellow import red_layout
-from .storage import decode_box, memory_bytes
-from .gen1 import (W_TILEMAP, decode_text, W_CURRENT_BOX, W_BOX_COUNT, BOX_DATA_SIZE, W_CURRENT_MENU_ITEM,
+from .storage import box_location, decode_box, memory_bytes
+from .gen1 import (W_TILEMAP, decode_text, W_CURRENT_BOX, BOX_MONS_OFFSET, BOX_NICKS_OFFSET, W_CURRENT_MENU_ITEM,
                    W_LIST_SCROLL_OFFSET, W_TOP_MENU_ITEM_X, W_TOP_MENU_ITEM_Y)
 
 
@@ -71,13 +71,14 @@ def read_storage(memory, *, version=None):
         return {"active_box": None, "boxes": [], "available": False}
     boxes = []
     for box in range(12):
-        base = W_BOX_COUNT if box == active else 0xA000 + (box % 6) * BOX_DATA_SIZE
-        get = (lambda address: memory[address]) if box == active else (lambda address: memory[2 + box // 6, address])
+        bank, base = box_location(box, active)
         try:
-            count = min(get(base), 20) if box == active or current & 0x80 else 0
-            bank = None if box == active else 2 + box // 6
-            structs = memory_bytes(memory, bank, base + 22, count * 33)
-            names = memory_bytes(memory, bank, base + 902, count * 11)
+            if box == active or current & 0x80:
+                count = min(memory[base] if bank is None else memory[bank, base], 20)
+            else:
+                count = 0
+            structs = memory_bytes(memory, bank, base + BOX_MONS_OFFSET, count * 33)
+            names = memory_bytes(memory, bank, base + BOX_NICKS_OFFSET, count * 11)
             mons = [{"slot": mon.position + 1, "species": mon.species, "level": mon.level,
                      "hp": mon.hp, "status": mon.status, "types": list(mon.types),
                      "moves": list(mon.moves), "pp": list(mon.pp), "nick": mon.nick}
