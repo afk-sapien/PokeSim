@@ -63,6 +63,14 @@ def add_progress(db, frame, ts, kind, goal, tier, species, identity, score, net)
                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', (frame, ts, kind, goal, tier, species, identity, score, net))
 
 
+def add_encounters(db, goal, hour, encounters, target, met_rule):
+    """Add to the encounter counters of one goal in one game hour."""
+    db.execute('INSERT INTO encounter_counts(goal, hour, encounters, target, met_rule) VALUES (?, ?, ?, ?, ?) '
+               'ON CONFLICT(goal, hour) DO UPDATE SET encounters = encounters + excluded.encounters, '
+               'target = target + excluded.target, met_rule = met_rule + excluded.met_rule',
+               (goal, hour, encounters, target, met_rule))
+
+
 # --- stall truth ---
 def add_stall_truth(db, frame, ts, kind, source, detail_json):
     db.execute('INSERT INTO stall_truth(frame, ts, kind, source, detail_json) VALUES (?, ?, ?, ?, ?)',

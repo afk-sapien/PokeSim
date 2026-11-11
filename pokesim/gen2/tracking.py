@@ -98,12 +98,15 @@ class Tracker:
                 shiny.record(db, 'acquired', f'hatch:{slot}:{ram}', dex, generation=2)
 
     def encountered(self, pb):
-        """A wild battle opens. Count it once when the opponent is shiny."""
+        """A wild battle opens. Count it for the running goal, and once more when the opponent is shiny."""
         mem = Memory(pb.memory, self.data)
         species = mem.byte('wEnemyMonSpecies')
         # The catching tutorial is the guide's battle and the debug battle is not an encounter.
-        if (not 1 <= species <= 251 or mem.byte('wBattleMode') != 1 or mem.byte('wBattleType') in (2, 3)
-                or not shiny.shiny_bytes(mem.read('wEnemyMonDVs', 2))):
+        if not 1 <= species <= 251 or mem.byte('wBattleMode') != 1 or mem.byte('wBattleType') in (2, 3):
+            return
+        dvs = mem.read('wEnemyMonDVs', 2)
+        progress_events.encounter(self.store, species, dvs)
+        if not shiny.shiny_bytes(dvs):
             return
         fingerprint = hashlib.sha256(bytes(pb.memory[0xC000:0xE000])).hexdigest()
         with self.store.transaction() as db:

@@ -136,6 +136,10 @@ class Event:
     notable: bool = True
     # The Pokédex number of the Pokémon a receive or release is about, for its progress row.
     species: int | None = None
+    # The progress_events kind this entry also writes, such as ``dex`` or ``badge``, or empty.
+    progress: str = ''
+    # For an ``item`` row, whether the item was needed: True for a key item or HM, False for a purchase.
+    needed: bool | None = None
 
 
 
@@ -217,7 +221,7 @@ class Emulator:
         # A reset replaces the clock, so the store asks for the current one each time.
         store.clock = lambda: self.play_clock.frames
         from ..progress_events import GoalWatch
-        self.goal_watch = GoalWatch()
+        self.goal_watch = store.goal_watch = GoalWatch()
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.commands = queue.Queue()
@@ -306,7 +310,8 @@ class Emulator:
             name = champion_shop.label(self.data, item)
             self._event(Event('item', f'Bought {f"{count} × " if count > 1 else ""}{name}',
                               f'Spent ₽{price * count:,} at the Goldenrod Dept. Store Champion counter. '
-                              'The purchase went through the cartridge BUY menu into the bag.', priority=3), snapshot)
+                              'The purchase went through the cartridge BUY menu into the bag.', priority=3,
+                              progress='item', needed=False), snapshot)
         self.policy.shop_offers = champion_shop.ready(self.store, self.data, self.steps.value)
 
     def _remember_clock(self, elapsed):
@@ -650,8 +655,8 @@ class Emulator:
         for row in drain(self.store, take_events(self.policy)):
             self._event(Event(**row), snapshot)
         if watch := getattr(self, 'goal_watch', None):
-            from .standdown import goal_key
-            watch.observe(self.store, *goal_key(self.policy))
+            from .standdown import goal_key, hunt
+            watch.observe(self.store, *goal_key(self.policy), hunt=hunt(self.policy, snapshot))
 
     def _event(self, event, snapshot):
         shot = self._shot_png()
@@ -745,7 +750,7 @@ class Emulator:
                 snapshot = self.snapshot = self._read()
         if snapshot.map not in self.history['maps']:
             self.history['maps'].append(snapshot.map)
-            self._event(Event('map', f'Arrived at {snapshot.map_name}', priority=2), snapshot)
+            self._event(Event('map', f'Arrived at {snapshot.map_name}', priority=2, progress='area'), snapshot)
         for dex in sorted(snapshot.owned - set(self.history['owned'])):
             self.history['owned'].append(dex)
             self._event(journal.catch(self.data, dex, self.previous, snapshot, Event), snapshot)
@@ -762,14 +767,17 @@ class Emulator:
         for i, badge in enumerate(BADGES):
             if snapshot.badges & (1 << i) and not self.history['badges'] & (1 << i):
                 self.history['badges'] |= 1 << i
-                self._event(Event('badge', f'Earned the {badge} Badge', priority=5), snapshot)
+                self._event(Event('badge', f'Earned the {badge} Badge', priority=5, progress='badge'), snapshot)
+        if watch := getattr(self, 'goal_watch', None):
+            watch.story(self.store, snapshot.event_flags)
         if snapshot.hall_of_fame_count > self.history['league']:
             from .. import rewards
             rewards.earn(self.store, snapshot.hall_of_fame_count, enabled=getattr(config, 'LEAGUE_REWARDS', False))
             from .league import record
             record(self.store, self.data, snapshot)
             self.history['league'] = snapshot.hall_of_fame_count
-            self._event(Event('champion', f'Champion! League victory #{snapshot.hall_of_fame_count}', priority=5), snapshot)
+            self._event(Event('champion', f'Champion! League victory #{snapshot.hall_of_fame_count}', priority=5,
+                              progress='league'), snapshot)
         observe_mew(self.store, snapshot, self.steps.value['total'])
         before = self.previous
         self._note_league_entry(before, snapshot)
@@ -993,6 +1001,8 @@ class Emulator:
                 note(self.snapshot)
         stalled = stalled_objectives(self.policy)
         wins = getattr(self.snapshot, 'hall_of_fame_count', 0)
+        from .. import progress_events
+        progress_events.reload(self.store, why)
         if target:
             log.warning('%s for %.1f game minutes, reloading %s', why, max(0, self.frame - since_frame) / 3600, target.name)
             if guard := getattr(self, 'loop_guard', None):
@@ -1211,6 +1221,8 @@ class Emulator:
         self.statistics = Statistics(self.store, clock=lambda: self.play_clock.status())
         self.goal_time = GoalTime(self.store)
         self.legendary_recovery = Recovery()
+        if watch := getattr(self, 'goal_watch', None):
+            watch.restart()
         self.pb = self._boot(tracer=getattr(self, 'tracer', None))
         self._sync_clock()
         self.options_applied = False

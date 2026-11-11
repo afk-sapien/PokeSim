@@ -42,6 +42,10 @@ class Event:
     still: Callable[[Snapshot], bool] | None = None
     # The Pokédex number of the Pokémon a receive or release is about, for its progress row.
     species: int | None = None
+    # The progress_events kind this entry also writes, such as ``dex`` or ``badge``, or empty.
+    progress: str = ''
+    # For an ``item`` row, whether the item was needed: True for a key item, False for a pickup.
+    needed: bool | None = None
 
     def __post_init__(self):
         if self.notable is None:
@@ -88,6 +92,7 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
         mem.seen_maps.add(cur.map)
         return events
 
+    new_owned = cur.owned - prev.owned
     # Recognize actual evolution pairs and exclude party swaps.
     evolved_species: set[int] = set()
     removed = Counter(p.species for p in prev.party) - Counter(p.species for p in cur.party)
@@ -99,12 +104,13 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
                 removed[a.species] -= 1
                 added[b.species] -= 1
                 evolved_species.add(b.species)
+                dex = SPECIES_DEX.get(b.species)
                 events.append(Event("evolve", f"{_mon_label(a)} evolved into {b.name}!",
                                     f"Level {b.level}, on {cur.map_name}.", priority=HIGH, tags="sparkles",
-                                    still=lambda s, sp=b.species: any(p.species == sp for p in s.party)))
+                                    still=lambda s, sp=b.species: any(p.species == sp for p in s.party),
+                                    progress='dex' if dex in new_owned else '', species=dex))
 
     # --- pokedex owned / catches ---
-    new_owned = cur.owned - prev.owned
     for dex in sorted(new_owned):
         name = DEX_NAMES.get(dex, f"#{dex}")
         if any(SPECIES_NAMES.get(s) == name for s in evolved_species):
@@ -115,11 +121,11 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
             events.append(Event("catch", f"Caught {name}!" if not legendary else f"Caught the legendary {name}!",
                                 f"A level {lvl} {name} on {cur.map_name}. Pokédex: {len(cur.owned)} owned.",
                                 priority=URGENT if legendary else HIGH, tags="tada",
-                                still=lambda s, d=dex: d in s.owned))
+                                still=lambda s, d=dex: d in s.owned, progress='dex', species=dex))
         else:
             events.append(Event("obtain", f"Got {name}!",
                                 f"New Pokédex entry on {cur.map_name}. {len(cur.owned)} owned.", priority=HIGH,
-                                tags="gift", still=lambda s, d=dex: d in s.owned, species=dex))
+                                tags="gift", still=lambda s, d=dex: d in s.owned, progress='dex', species=dex))
     for dex in sorted(cur.seen - prev.seen - new_owned):
         events.append(Event("seen", f"Saw {DEX_NAMES.get(dex, f'#{dex}')} for the first time", priority=MINIMAL,
                             still=lambda s, d=dex: d in s.seen))
@@ -130,7 +136,7 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
         if gained & (1 << i):
             events.append(Event("badge", f"Beat {LEADERS[i]}! Got the {BADGES[i]} Badge",
                                 f"{bin(cur.badges).count('1')}/8 badges after {cur.playtime[0]}h of play.",
-                                priority=URGENT, tags="trophy"))
+                                priority=URGENT, tags="trophy", progress='badge'))
 
     # --- levels / faints ---
     if len(prev.party) == len(cur.party):
@@ -202,21 +208,21 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
         mem.championships += 1
         events.append(Event("champion", f"Champion! League victory #{mem.championships}",
                             f"Party: {', '.join(f'{_mon_label(p)} L{p.level}' for p in cur.party)}.",
-                            priority=URGENT, tags="crown"))
+                            priority=URGENT, tags="crown", progress='league'))
 
     # --- new areas ---
     if cur.map not in mem.seen_maps:
         mem.seen_maps.add(cur.map)
         if cur.map != HALL_OF_FAME_MAP:
             events.append(Event("map", f"Entered {cur.map_name}", f"Area #{len(mem.seen_maps)} discovered.",
-                                priority=LOW, tags="world_map"))
+                                priority=LOW, tags="world_map", progress='area'))
 
     # --- key items ---
     prev_items = {i for i, _ in prev.items}
     for i, _ in cur.items:
         if i in KEY_ITEM_IDS and i not in prev_items:
             events.append(Event("item", f"Got the {ITEM_NAMES.get(i, f'item #{i}')}", f"On {cur.map_name}.",
-                                priority=HIGH, tags="key"))
+                                priority=HIGH, tags="key", progress='item', needed=True))
 
     # Ordinary ground pickups are useful journal milestones too. Object flags
     # distinguish them from shopping, PC withdrawals, and failed bag-full prompts.
@@ -230,7 +236,7 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
             item = ground_item(WORLD[map_id]['objects'][index])
             if item and item['item'] not in KEY_ITEM_IDS:
                 events.append(Event('item', 'Picked up ' + item['name'], f'On {cur.map_name}.',
-                                    priority=MINIMAL,
+                                    priority=MINIMAL, progress='item', needed=False,
                                     still=lambda s, byte=byte, bit=bit: byte < len(s.hidden_objects) and bool(s.hidden_objects[byte] & bit)))
 
     # --- money ---
