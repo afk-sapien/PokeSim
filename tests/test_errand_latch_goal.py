@@ -3,8 +3,11 @@
 In red-randomized the steps between decisions ran under the story pick, so the goal flipped between
 restock and the story goal at every warp, and the mart purchases were credited to the story goal.
 """
+from pokesim.planning import values
+from pokesim.planning.arbiter import Candidate, Tier
 from pokesim.policies.base import PolicyContext
 from pokesim.policies.pickups import Pickups
+from pokesim.policies.pipeline import ERRAND_FRAMES, offer
 from pokesim.policies.progression import Goal
 from pokesim.policies.shopping import ShoppingController
 from pokesim.policies.strategic import W_WALK_COUNTER, StrategicPolicy
@@ -14,6 +17,15 @@ from test_strategy import mon
 
 RESTOCK = Goal('restock', 'Restock supplies', 'Buy useful balls and medicine with a cash reserve',
                ((MAPS['LAVENDER_MART'], 2, 5),), 'left', True)
+
+
+def restocking():
+    """A policy whose last decision picked the restock, with the offer it picked, as the step leaves them."""
+    policy = StrategicPolicy(7)
+    policy.errand = RESTOCK
+    policy.errand_offer = offer('supplies', RESTOCK, Candidate('restock', Tier.PROGRESS, values.SMALL,
+                                                               ERRAND_FRAMES, goal='supplies'))
+    return policy
 
 
 def walk(policy, **changes):
@@ -26,15 +38,11 @@ def walk(policy, **changes):
 
 
 def test_a_walking_step_keeps_the_errand_under_way():
-    policy = StrategicPolicy(7)
-    policy.errand = RESTOCK
-    assert walk(policy) is RESTOCK
+    assert walk(restocking()) is RESTOCK
 
 
 def test_a_battle_runs_under_the_pick_not_the_errand():
-    policy = StrategicPolicy(7)
-    policy.errand = RESTOCK
-    assert walk(policy, in_battle=1).key != 'restock'
+    assert walk(restocking(), in_battle=1).key != 'restock'
 
 
 def test_without_an_errand_the_walking_step_keeps_the_pick():
