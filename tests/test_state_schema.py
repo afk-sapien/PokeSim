@@ -52,7 +52,7 @@ def read_version(path):
 def test_a_database_from_before_versions_gains_every_table_once(tmp_path):
     path = legacy(tmp_path / 'pokesim.sqlite')
     with closing(schema.connect(path)) as db:
-        assert schema.version(db) == schema.VERSION == 3
+        assert schema.version(db) == schema.VERSION == 4
         assert NAMES | {'claims'} <= tables(db)
         assert db.execute('SELECT title, priority FROM events ORDER BY id').fetchall() == [
             ('Boulder Badge', 5), ('Route 1', 1)]

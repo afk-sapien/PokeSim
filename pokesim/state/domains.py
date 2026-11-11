@@ -142,7 +142,7 @@ DOMAINS = (
     Domain('capture-gift-backfill-v1', 'pokesim.catches', SURVIVES, GEN1),
 
     # Tables. The restart empties the capture and shiny receipts, the encounter rows and the claims,
-    # so a new game's legendaries wait in their first homes whatever the last game returned.
+    # so a new game's legendaries and event returns wait for its own story whatever the last game returned.
     # A reload keeps the claims but sends one delivered after the save back to open (rewards.rewound).
     _table('claims', 'pokesim.state.claims', RESETS_ON_RESTART, policy_reads=True),
     _table('capture_receipts', 'pokesim.catches', RESETS_ON_RESTART),

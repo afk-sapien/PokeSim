@@ -1,11 +1,17 @@
-"""Repeat native gifts and exchanges through durable walking opportunities."""
+"""Repeat native gifts and exchanges through durable walking opportunities.
+
+Each activity's return is an ``event`` row in the claims ledger (return_claims). The kv value
+keeps each activity's walking clock, its fossil and dojo choice, the count at the venue, and the
+guards that keep a spent room closed.
+"""
 from dataclasses import dataclass
 import json
 from functools import lru_cache
 from pokecore.resets import Flag, update_flags
 
-from . import config
+from . import config, return_claims
 from .events import Event
+from .state import claims as ledger, kv
 from .game_data import current_variant
 from .legendary_returns import STEPS
 from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
@@ -117,75 +123,91 @@ def observe(store, snapshot, memory):
     from .policies.collection import champion
     if not champion(snapshot):
         return [], False
+    from .progress_events import frame
     every = getattr(config, 'EVENT_RETURN_STEPS', 100000)
     total = walking.get('total', 0)
-    saved = store.get(KEY) or {'tickets': {}}
+    saved = store.get(KEY) or {'clocks': {}}
     value = json.loads(json.dumps(saved))
     fossil, dojo = 'helix', 106
-    tickets = value['tickets']
-    events, changed = [], False
+    clocks = value['clocks']
+    events, changed, now = [], False, frame(store)
     safe = not snapshot.in_battle and not snapshot.textbox and not snapshot.start_menu
-    for default in activities(fossil, dojo):
-        ticket = tickets.get(default.key)
-        if ticket is None:
-            eligible = any(read(memory, bit) for bit in default.done)
-            if default.key == 'fossil':
-                eligible = bool(snapshot.owned & {138, 139, 140, 141, 142})
-            if not eligible:
-                continue
-            ticket = tickets[default.key] = {'state': 'walking', 'next_at': total + every,
-                'interval': every, 'cycle': 0, 'choice': fossil, 'dojo': dojo}
-        spec = next(a for a in activities(ticket['choice'], ticket['dojo']) if a.key == default.key)
-        if ticket['interval'] != every:
-            ticket.update(interval=every, next_at=total + every)
-        if (ticket['state'] == 'available' and safe and snapshot.map == spec.room
-                and not any(read(memory, bit) for bit in spec.done)):
-            # PC preparation may release a spare before the visit. Compare the
-            # acquisition with inventory at the venue, not at the walking milestone.
-            ticket['baseline'] = population(snapshot, spec)
-        if (ticket['state'] == 'available' and safe and any(read(memory, bit) for bit in spec.done)
-                and not (spec.encounter and snapshot.map == spec.room)):
-            acquired = population(snapshot, spec) > ticket.get('baseline', 0)
-            if not acquired:
-                if snapshot.map != spec.room:
-                    for bit in spec.bits:
-                        changed |= write(memory, bit, False)
-                continue
-            ticket.update(state='walking', next_at=total + every)
-            value.setdefault('guards', {})[f'{spec.key}:{spec.room}'] = {
-                'room': spec.room, 'bits': spec.bits,
-                'closed': [int(read(memory, bit)) for bit in spec.bits]}
-            events.append(Event('event_return', f'Caught the returning {spec.name}' if spec.encounter
-                                else f'Completed {spec.name.lower()}',
-                                'The next opportunity starts after more walking.', priority=3))
-        if (every and ticket['state'] == 'walking' and total >= ticket['next_at']
-                and safe and snapshot.map not in (default.room, spec.room)):
-            # Finish any fossil already in the bag or lab before offering another.
-            if default.key == 'fossil' and (any(dict(snapshot.items).get(ITEMS[item]) for _, item in FOSSILS.values())
-                    or event_set(snapshot.event_flags, 'EVENT_GAVE_FOSSIL_TO_LAB')):
-                continue
-            fossil, dojo = choices(snapshot)
-            spec = next(a for a in activities(fossil, dojo) if a.key == default.key)
-            if snapshot.map == spec.room:
-                continue
-            ticket.update(state='available', choice=fossil, dojo=dojo, cycle=ticket['cycle'] + 1,
-                          baseline=population(snapshot, spec))
-            for bit in spec.bits:
-                changed |= write(memory, bit, False)
-            events.append(Event('event_return', f'{spec.name} has returned!' if spec.encounter
-                                else f'{spec.name} available',
-                                'A walking milestone unlocked another visit.', priority=3))
-    if safe:
-        opened_bits = {bit for key, ticket in tickets.items() if ticket['state'] == 'available'
-                       for activity in activities(ticket['choice'], ticket['dojo']) if activity.key == key
-                       for bit in activity.bits}
-        for guard in value.get('guards', {}).values():
-            if snapshot.map != guard['room']:
-                for bit, closed in zip(guard['bits'], guard['closed']):
-                    if tuple(bit) not in opened_bits:
-                        changed |= write(memory, bit, closed)
-    if value != saved:
-        store.set(KEY, value)
+    with store.transaction() as db:
+        found = return_claims.events(db)
+        for default in activities(fossil, dojo):
+            clock, row = clocks.get(default.key), found.get(default.key)
+            state = row['state'] if row else None
+            if row is None:
+                # The claims reset on restart, so a new game's activity waits for its story.
+                eligible = any(read(memory, bit) for bit in default.done)
+                if default.key == 'fossil':
+                    eligible = bool(snapshot.owned & {138, 139, 140, 141, 142})
+                if not eligible:
+                    continue
+            if clock is None:
+                clock = clocks[default.key] = {'next_at': total + every, 'interval': every, 'cycle': 0,
+                                               'choice': fossil, 'dojo': dojo}
+            spec = next(a for a in activities(clock['choice'], clock['dojo']) if a.key == default.key)
+            if clock['interval'] != every:
+                clock.update(interval=every, next_at=total + every)
+            if state == ledger.OPEN and safe and snapshot.map not in (default.room, spec.room):
+                # A reload went back to before the visit opened, so it opens again with no second notice.
+                for bit in spec.bits:
+                    changed |= write(memory, bit, False)
+                return_claims.mark(db, spec.key, ledger.DELIVERED, now, spec.dex)
+                state = ledger.DELIVERED
+            if (state == ledger.DELIVERED and safe and snapshot.map == spec.room
+                    and not any(read(memory, bit) for bit in spec.done)):
+                # PC preparation may release a spare before the visit. Compare the
+                # acquisition with inventory at the venue, not at the walking milestone.
+                clock['baseline'] = population(snapshot, spec)
+            if (state == ledger.DELIVERED and safe and any(read(memory, bit) for bit in spec.done)
+                    and not (spec.encounter and snapshot.map == spec.room)):
+                acquired = population(snapshot, spec) > clock.get('baseline', 0)
+                if not acquired:
+                    if snapshot.map != spec.room:
+                        for bit in spec.bits:
+                            changed |= write(memory, bit, False)
+                    continue
+                clock['next_at'] = total + every
+                return_claims.mark(db, spec.key, ledger.CONSUMED, now, spec.dex)
+                state = ledger.CONSUMED
+                value.setdefault('guards', {})[f'{spec.key}:{spec.room}'] = {
+                    'room': spec.room, 'bits': spec.bits,
+                    'closed': [int(read(memory, bit)) for bit in spec.bits]}
+                events.append(Event('event_return', f'Caught the returning {spec.name}' if spec.encounter
+                                    else f'Completed {spec.name.lower()}',
+                                    'The next opportunity starts after more walking.', priority=3))
+            if (every and state not in (ledger.OPEN, ledger.DELIVERED) and total >= clock['next_at']
+                    and safe and snapshot.map not in (default.room, spec.room)):
+                # Finish any fossil already in the bag or lab before offering another.
+                if default.key == 'fossil' and (any(dict(snapshot.items).get(ITEMS[item]) for _, item in FOSSILS.values())
+                        or event_set(snapshot.event_flags, 'EVENT_GAVE_FOSSIL_TO_LAB')):
+                    continue
+                fossil, dojo = choices(snapshot)
+                spec = next(a for a in activities(fossil, dojo) if a.key == default.key)
+                if snapshot.map == spec.room:
+                    continue
+                clock.update(choice=fossil, dojo=dojo, cycle=clock['cycle'] + 1, baseline=population(snapshot, spec))
+                return_claims.mark(db, spec.key, ledger.DELIVERED, now, spec.dex)
+                for bit in spec.bits:
+                    changed |= write(memory, bit, False)
+                events.append(Event('event_return', f'{spec.name} has returned!' if spec.encounter
+                                    else f'{spec.name} available',
+                                    'A walking milestone unlocked another visit.', priority=3))
+        if safe:
+            opened = {key for key, row in return_claims.events(db).items()
+                      if row['state'] in (ledger.OPEN, ledger.DELIVERED)}
+            opened_bits = {bit for key, clock in clocks.items() if key in opened
+                           for activity in activities(clock['choice'], clock['dojo']) if activity.key == key
+                           for bit in activity.bits}
+            for guard in value.get('guards', {}).values():
+                if snapshot.map != guard['room']:
+                    for bit, closed in zip(guard['bits'], guard['closed']):
+                        if tuple(bit) not in opened_bits:
+                            changed |= write(memory, bit, closed)
+        if value != saved:
+            kv.put(db, KEY, value)
     return events, changed
 
 
@@ -200,12 +222,14 @@ def population(snapshot, spec):
 
 
 def available(store):
+    """The activities whose flags wait cleared in the cartridge, with the Pokémon, room and item each gives."""
     if not getattr(config, 'EVENT_RETURN_STEPS', 100000):
         return {}
+    clocks = (store.get(KEY) or {}).get('clocks', {})
     rows = {}
-    for key, ticket in (store.get(KEY) or {}).get('tickets', {}).items():
-        if ticket['state'] == 'available':
-            spec = next(a for a in activities(ticket['choice'], ticket['dojo']) if a.key == key)
+    for key in return_claims.delivered(store):
+        if (clock := clocks.get(key)) is not None:
+            spec = next(a for a in activities(clock['choice'], clock['dojo']) if a.key == key)
             rows[key] = {'dex': spec.dex, 'room': spec.room, 'item': spec.item}
     return rows
 
@@ -213,7 +237,7 @@ def available(store):
 def status(store):
     total = (store.get(STEPS) or {}).get('total', 0)
     enabled = bool(getattr(config, 'EVENT_RETURN_STEPS', 100000))
+    ready = return_claims.delivered(store)
     return {'enabled': enabled, 'interval': getattr(config, 'EVENT_RETURN_STEPS', 100000), 'activities': [
-        {'key': key, 'ready': enabled and ticket['state'] == 'available',
-         'remaining': max(0, ticket['next_at'] - total)}
-        for key, ticket in (store.get(KEY) or {}).get('tickets', {}).items()]}
+        {'key': key, 'ready': enabled and key in ready, 'remaining': max(0, clock['next_at'] - total)}
+        for key, clock in (store.get(KEY) or {}).get('clocks', {}).items()]}
