@@ -61,18 +61,20 @@ def test_the_ladder_skips_a_rung_the_watchdog_blocked():
 
 
 def test_exhausted_reloads_block_the_stuck_rung_and_start_over():
-    from pokesim.gen2.emulator import MAX_RELOADS, Emulator
+    from pokesim.gen2.emulator import Emulator
     from pokesim.gen2.standdown import rung_key, standing_down
+    from pokesim.runtime.supervision import MAX_RELOADS
+    from test_supervision import ladder
     run = ladder_policy()
     run.ladder_rung = 'gifts'
     run.goal = Goal('collection_gift_room', 'Make room for a new partner', 'CHERRYGROVE_POKECENTER_1F', 9, 2)
     journal, resets = [], []
     emu = SimpleNamespace(policy=run, snapshot=SimpleNamespace(started=True, map_name='Cherrygrove Pokémon Center 1F'),
-                          unstick_streak=MAX_RELOADS, reloads_exhausted=True, _reset_watch=lambda: resets.append(1),
+                          supervisor=ladder(MAX_RELOADS, exhausted=True), _reset_watch=lambda: resets.append(1),
                           _event=lambda event, snap: journal.append(event.title),
                           store=SimpleNamespace(autosaves=lambda: journal.append('reloaded') or []))
     Emulator._unstick(emu, 0, 'stuck')
     assert standing_down(run, rung_key('gifts'))
     assert journal == ['Gave up on “Make room for a new partner” for now']
-    assert emu.unstick_streak == 0 and not emu.reloads_exhausted and resets == [1]
+    assert not emu.supervisor.stalled and emu.supervisor.reloads == 0 and resets == [1]
     assert run.goal is None and run.ladder_rung is None

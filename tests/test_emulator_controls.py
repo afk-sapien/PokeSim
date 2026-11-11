@@ -6,6 +6,7 @@ from pokesim.emulator import Emulator
 from pokesim.play_clock import PlayClock
 from pokesim.policies.base import Action
 from pokesim.runtime.reward_delivery import RETRY_FRAMES, SPACING_FRAMES, reward_due, schedule
+from pokesim.runtime.supervision import Supervisor
 from test_events import snap
 
 
@@ -230,6 +231,7 @@ def test_live_progress_uses_achievement_age_and_recovery_state(monkeypatch):
     emu.last_achievement = {'id': 1, 'title': 'Caught Ditto', 'ts': 1000}
     emu.invalid_frame = None
     emu.last_reload = 0
+    emu.supervisor = Supervisor()
     monkeypatch.setattr('pokesim.emulator.time.time', lambda: 1050)
     assert emu.progress_status()['state'] == 'making_progress'
     monkeypatch.setattr('pokesim.emulator.time.time', lambda: 1500)
@@ -240,12 +242,13 @@ def test_live_progress_uses_achievement_age_and_recovery_state(monkeypatch):
 
 
 def _stuck_emulator():
-    from pokesim.emulator import MAX_RELOADS
     from pokesim.policies.strategic import StrategicPolicy
+    from pokesim.runtime.supervision import MAX_RELOADS
+    from test_supervision import ladder
     emu = Emulator.__new__(Emulator)
     emu.policy = StrategicPolicy(7)
     emu.snapshot = snap(frame=1000)
-    emu.unstick_streak = MAX_RELOADS
+    emu.supervisor = ladder(MAX_RELOADS)
     emu.input_epoch = 0
     emu.events = []
     emu._handle_events = lambda events, snapshot: emu.events.extend(events)
@@ -260,7 +263,7 @@ def test_exhausted_reloads_give_up_the_collection_project():
     Emulator._unstick(emu, 0, 'stuck')
     emu.store.autosaves.assert_not_called()
     assert emu.policy.collection.project is None
-    assert emu.unstick_streak == 0 and not emu.reloads_exhausted
+    assert emu.supervisor.reloads == 0 and not emu.supervisor.stalled
     assert [event.title for event in emu.events][-1].startswith('Gave up on')
 
 

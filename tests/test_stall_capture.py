@@ -19,6 +19,7 @@ from pokesim.stalls import BEFORE_STALL_CHECKPOINT, FRAMES_PER_GAME_MINUTE as MI
 from pokesim.store import Store
 
 from test_stall_bundles import MANIFEST, game
+from test_supervision import ladder
 
 LOOP = 'It reloaded auto-v1-1.state 6 times without progress'
 
@@ -138,7 +139,7 @@ def test_a_gzipped_save_finds_the_segment_that_starts_at_its_unpacked_bytes(segm
 
 def test_a_gen1_give_up_keeps_a_bundle_before_it_abandons_the_project(tmp_path):
     abandoned = []
-    playing = game(tmp_path, unstick_streak=5, input_epoch=0, _handle_events=lambda events, snap: None)
+    playing = game(tmp_path, supervisor=ladder(5), input_epoch=0, _handle_events=lambda events, snap: None)
     Emulator._autosave(playing)
     playing.policy = SimpleNamespace(collection=SimpleNamespace(project='dex', abandon=abandoned.append),
                                      goal=SimpleNamespace(title='Catch Lapras'), on_restore=lambda: None, details=dict)
@@ -190,7 +191,7 @@ def test_a_gen2_give_up_keeps_a_bundle_before_the_rung_stands_down(tmp_path, mon
     monkeypatch.setattr(standdown, 'rung_key', lambda rung: rung)
     monkeypatch.setattr(standdown, 'stalled_objectives', lambda policy: {'keys': []})
     monkeypatch.setattr(standdown, 'stand_down', lambda policy, key: stood.append(key))
-    playing = gen2(tmp_path, [], unstick_streak=5, _reset_watch=lambda: None)
+    playing = gen2(tmp_path, [], supervisor=ladder(5), _reset_watch=lambda: None)
     playing.policy.ladder_rung, playing.policy.goal, playing.policy.menu = 'dex_10', None, None
     assert Gen2Emulator._give_up(playing, 'stuck')
     _, report = kept(playing.store)

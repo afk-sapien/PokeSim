@@ -222,8 +222,10 @@ def test_reload_target_uses_the_saved_game_frame_not_file_times(tmp_path):
 
 
 def test_exhausted_reloads_are_reported_once(caplog):
-    from pokesim.gen2.emulator import MAX_RELOADS, Emulator
-    emu = SimpleNamespace(unstick_streak=MAX_RELOADS, reloads_exhausted=False, _reset_watch=lambda: None)
+    from pokesim.gen2.emulator import Emulator
+    from pokesim.runtime.supervision import MAX_RELOADS
+    from test_supervision import ladder
+    emu = SimpleNamespace(supervisor=ladder(MAX_RELOADS), snapshot=None, _reset_watch=lambda: None)
     with caplog.at_level('ERROR', logger='pokesim.gen2'):
         for _ in range(3):
             Emulator._unstick(emu, 0, 'stuck')

@@ -56,11 +56,13 @@ def test_invalid_snapshots_change_nothing():
 
 def test_a_league_win_is_progress_for_a_finished_run():
     from pokesim.gen2.emulator import Emulator
+    from pokesim.runtime.supervision import Supervisor
     from pokesim.stalls import StallWatch
     emu = Emulator.__new__(Emulator)
     emu.frame, emu.history = 1000, {'maps': [1, 2, 3], 'league': 200}
     snapshot = SimpleNamespace(badges=0xFFFF, event_flags=b'\xff', owned=set(range(1, 252)), party=())
     emu.best_progress = (16, 8, 251, 3, 0, 200)
+    emu.supervisor = Supervisor()
     emu.stall = StallWatch()
     emu.stall.progress(0, 0.0)
     emu._note_progress(snapshot, 10.0)
