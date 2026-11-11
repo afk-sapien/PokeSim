@@ -254,7 +254,7 @@ To PR 7, which [Typed goals](typed-goals.md) plans. Frame budgets per tier and t
 - Commitment by `interrupt_frames` in place of the absolute hold, which would let a much better offer cut into an errand. That is a behaviour change, so it waits for typed goals and their budgets.
 - The 47-key collection project dict.
 
-To phase 3:
+To phase 3, planned in [one-bot.md](one-bot.md):
 
 - One Policy protocol and a shared loop with a game adapter per generation.
 - The 27 Gen II rungs as separate offers in the shared arbiter, which removes the `Ladder` and its undo copies.
