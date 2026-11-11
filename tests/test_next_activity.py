@@ -18,6 +18,7 @@ from pokesim.policies.collection import Collection
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
 from pokesim.policies.strategic import StrategicPolicy
+from pokesim.runtime.supervision import Supervisor
 from pokesim.strategy_data import EVENTS, ITEMS, MAPS, SPECIES
 from pokesim.web.app import create_app
 from test_collection import state
@@ -155,6 +156,7 @@ def pinned_emulator():
     emu.policy = StrategicPolicy(7)
     emu.policy.collection.pin = Pin('hunt', 'Find Clefairy')
     emu.snapshot = snap(frame=1000)
+    emu.supervisor = Supervisor()
     emu.journal = []
     emu._handle_events = lambda events, snapshot: emu.journal.extend(event.title for event in events)
     return emu
@@ -298,12 +300,14 @@ def test_gen2_refuses_before_red_and_an_unknown_key_with_a_reason():
 
 
 def test_gen2_an_unstick_drops_the_pin_and_journals_it():
-    from pokesim.gen2.emulator import MAX_RELOADS, Emulator as Gen2
+    from pokesim.gen2.emulator import Emulator as Gen2
     from pokesim.gen2.policy import Policy
+    from pokesim.runtime.supervision import MAX_RELOADS
+    from test_supervision import ladder
     journal = []
     run = SimpleNamespace(pin=Pin('hunt:hunt', 'Label hunt'))
     run.drop_pin = lambda: Policy.drop_pin(run)
-    emu = SimpleNamespace(policy=run, snapshot=SimpleNamespace(), unstick_streak=MAX_RELOADS, reloads_exhausted=True,
+    emu = SimpleNamespace(policy=run, snapshot=SimpleNamespace(), supervisor=ladder(MAX_RELOADS, exhausted=True),
                           _reset_watch=lambda: None, _event=lambda event, snapshot: journal.append(event.title))
     Gen2._unstick(emu, 0, 'stuck')
     assert run.pin is None and journal == ['Gave up on Label hunt: stuck']

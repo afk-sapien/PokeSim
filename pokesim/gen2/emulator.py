@@ -22,6 +22,8 @@ from ..runtime.game_loop import GameLoop, Gen2
 from ..runtime.manifest import checkpoint_manifest
 from ..runtime.reload import FRAMES_PER_SECOND, reload_target
 from ..runtime.restart import restart
+from ..runtime.supervision import CANNOT_END, GIVE_UP, HOLD, LEAGUE_RESTARTS, Supervisor
+from ..runtime.supervision import report as stuck_report
 from ..stalls import LoopGuard, StallWatch, boss_attempt, stalled_state
 from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import validate_runtime
@@ -100,31 +102,11 @@ def solid(image):
     return all(low == high for low, high in bands)
 # A screen that has not changed for half a game minute is a loop, not a pause.
 SCREEN_FRAMES = 1800
-STALL_RELOADS = 3  # reloads in a row without new progress before the run is reported as stalled
-MAX_RELOADS = 12  # and the number after which reloading stops, since it only replays the same trouble
 # Written on arriving at the Indigo Plateau Pokémon Center, the last place before an Elite Four attempt.
 LEAGUE_CHECKPOINT = 'league-entry.state'
 BEFORE_LOAD_CHECKPOINT = 'before-load.state'
 BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
-CANNOT_END = 'battle cannot end'
-# League attempts restarted from the entry save without a new Hall of Fame entry before the run is
-# called off. Experience gained before each loss counts as progress, so the reload streak never caps it.
-LEAGUE_RESTARTS = 3
 BUTTONS = ('up', 'down', 'left', 'right', 'a', 'b', 'start', 'select')
-
-
-def league_restart(restarts, wins):
-    """Count a League attempt restarted from its entry save: the new count, and whether to call the run off.
-
-    A live Crystal run reloaded its League entry fourteen times in half an hour, as the same team
-    met the same trouble at Koga each time. The entry save forgets every attempt, so the count lives
-    in the emulator and starts again only with a new Hall of Fame entry.
-    """
-    seen, count = restarts
-    count = count + 1 if wins <= seen else 1
-    if count >= LEAGUE_RESTARTS:
-        return (max(wins, seen), 0), True
-    return (max(wins, seen), count), False
 
 
 @dataclass(frozen=True)
@@ -236,9 +218,7 @@ class Emulator:
         self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
         self.reloads = 0
         self.last_reload = 0.0
-        self.unstick_streak = 0
-        self.reloads_exhausted = False
-        self.league_restarts = (0, 0)
+        self.supervisor = Supervisor(store)
         self.waiting = False
         self.best_progress = (0,) * 6
         self.failure_streak = 0
@@ -892,8 +872,7 @@ class Emulator:
         if trained or any(new > old for new, old in zip(score, self.best_progress)):
             self.best_progress = tuple(max(new, old) for new, old in zip(score, self.best_progress))
             self.stall.progress(self.frame, now)
-            self.unstick_streak = 0
-            self.reloads_exhausted = False
+            self.supervisor.reset()
 
     def _watch_progress(self, snapshot):
         """Restart the progress clocks and the failure streak when the run achieves something new.
@@ -940,12 +919,12 @@ class Emulator:
         for key in [rung_key(rung), *stalled_objectives(policy)['keys']]:
             stand_down(policy, key)
         label = goal.label if goal is not None else rung
-        log.error('%s and %d reloads did not help, blocking %s for now', why, self.unstick_streak, rung)
+        reloads = self.supervisor.reloads
+        log.error('%s and %d reloads did not help, blocking %s for now', why, reloads, rung)
         self._event(Event('stall', f'Gave up on “{label}” for now',
-                          f'{why.capitalize()} at {snapshot.map_name} and {self.unstick_streak} reloads did not '
+                          f'{why.capitalize()} at {snapshot.map_name} and {reloads} reloads did not '
                           'help, so it waits while other goals run.', priority=HIGH), snapshot)
         policy.goal, policy.menu, policy.ladder_rung = None, None, None
-        self.unstick_streak, self.reloads_exhausted = 0, False
         self._reset_watch()
         return True
 
@@ -962,14 +941,15 @@ class Emulator:
         """Go back to an autosave from before the trouble started, or power-cycle when there is none."""
         from ..planning.pin import STUCK
         Emulator._drop_pin(self, STUCK)
-        if self.unstick_streak >= MAX_RELOADS and Emulator._give_up(self, why):
+        rung = self.supervisor.climb(why, lambda: Emulator._give_up(self, why), looping=lambda: Emulator._looping(self),
+                                     in_league=lambda: self.snapshot is not None and self.policy.in_league(self.snapshot))
+        if rung.kind == GIVE_UP:
             return
-        if self.unstick_streak >= MAX_RELOADS or Emulator._looping(self):
+        if rung.kind == HOLD:
             # Reloading again would only replay the same trouble. Leave the run as it is, flagged as
             # stalled, and say so once rather than at every guard check.
-            if not getattr(self, 'reloads_exhausted', False):
-                log.error('%s and %d reloads did not help, not reloading again', why, self.unstick_streak)
-                self.reloads_exhausted = True
+            if rung.first:
+                log.error('%s and %d reloads did not help, not reloading again', why, rung.reloads)
             self._reset_watch()
             return
         all_saves = self.store.autosaves()
@@ -978,10 +958,8 @@ class Emulator:
         # between the refused save and the newest one until it ran out of reloads.
         saves = [path for path in all_saves if not self._behind_barrier(self.store.checkpoint_metadata(path))]
         target = reload_target(self.store, saves, since_frame)
-        self.unstick_streak += 1
         entry = None
-        if ((self.unstick_streak >= 2 or why == CANNOT_END) and self.snapshot is not None
-                and self.policy.in_league(self.snapshot)):
+        if rung.league:
             # A save part way through the League keeps the PP already spent, so going back a little
             # replays the same lost battle. Restart the attempt from before it began instead.
             entry = self.store.state_path(LEAGUE_CHECKPOINT)
@@ -990,10 +968,9 @@ class Emulator:
                 target, saves = entry, [entry] + saves
             else:
                 entry = None
-        if self.unstick_streak == 2 and self.snapshot is not None and self.snapshot.valid and self.snapshot.started:
-            self._event(Event('stall', 'Stuck? The adventure had to reload twice',
-                              f'{why.capitalize()} at {self.snapshot.map_name} and a reload did not help. '
-                              f'{self.policy.recoveries} recoveries so far.', priority=HIGH), self.snapshot)
+        if rung.report and self.snapshot is not None and self.snapshot.valid and self.snapshot.started:
+            title, body = stuck_report(why, self.snapshot.map_name)
+            self._event(Event('stall', title, body, priority=HIGH), self.snapshot)
         restored = None
         clock = self.play_clock.frames
         from .standdown import carry_over, stalled_objectives
@@ -1021,10 +998,9 @@ class Emulator:
                     log.exception('Cannot reload Gen II checkpoint %s', path.name)
         if restored:
             carry_over(self.policy, stalled)
-            if entry is not None and restored == entry:
-                self.league_restarts, call_off = league_restart(getattr(self, 'league_restarts', (0, 0)), wins)
+            if entry is not None and restored == entry and self.supervisor.restarted_league(wins):
                 from .collection import call_off_league
-                if call_off and call_off_league(self.policy):
+                if call_off_league(self.policy):
                     log.warning('the League attempt restarted %d times, leaving to prepare the team', LEAGUE_RESTARTS)
             # The emulator is deterministic, so the same save and choices would replay the same
             # trouble. Idling a moment drawn from the reload stream moves the game's random numbers
@@ -1244,9 +1220,7 @@ class Emulator:
         # watch clocks still pointed at its frames, which kept the guards and reward checks off.
         self.best_progress = (0,) * 6
         self.best_experience, self.best_egg_cycles = {}, {}
-        self.unstick_streak = 0
-        self.reloads_exhausted = False
-        self.league_restarts = (0, 0)
+        self.supervisor = Supervisor(self.store)
         self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
@@ -1340,8 +1314,7 @@ class Emulator:
         live = not self.paused and not self.manual_mode
         waiting = live and self.waiting
         loop = live and Emulator._looping(self)
-        stalled = stalled_state(live, waiting, self.stall.stalled(self.frame)
-                                or self.unstick_streak >= STALL_RELOADS, loop)
+        stalled = stalled_state(live, waiting, self.stall.stalled(self.frame) or self.supervisor.stalled, loop)
         recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
                 'stopped': self.frozen,

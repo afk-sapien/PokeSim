@@ -407,11 +407,12 @@ def test_guards_stand_down_while_paused_or_in_manual_control():
         assert emu.stuck_frame == emu.frame
 
 
-def test_second_consecutive_unstick_raises_a_stuck_event():
+def test_third_consecutive_unstick_raises_a_stuck_event():
     from pokesim.gen2.emulator import Emulator
+    from test_supervision import ladder
     events = []
     saves = []
-    emu = SimpleNamespace(unstick_streak=1, snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'),
+    emu = SimpleNamespace(supervisor=ladder(2), snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'),
                           store=SimpleNamespace(autosaves=lambda: saves), play_clock=PlayClock(), adventure_seed=7,
                           policy=SimpleNamespace(recoveries=4, menu=None, on_restore=lambda: None,
                                                  collection={}, goal=None, decisions=0, in_league=lambda snapshot: False),
@@ -421,7 +422,7 @@ def test_second_consecutive_unstick_raises_a_stuck_event():
                           pb=SimpleNamespace(stop=lambda save: None),
                           _event=lambda event, snapshot: events.append(event))
     Emulator._unstick(emu, 0.0, 'stuck')
-    assert emu.reloads == 1 and emu.unstick_streak == 2
+    assert emu.reloads == 1 and emu.supervisor.reloads == 3
     assert [event.type for event in events] == ['stall']
     assert events[0].title.startswith('Stuck?')
 

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from pokesim.emulator import Emulator
 from pokesim.gen2.emulator import Emulator as Gen2Emulator
+from pokesim.runtime.supervision import Supervisor
 from pokesim.stalls import LOOP_LIMIT, SCAN_FRAMES, LoopGuard, StallWatch, advanced, boss_attempt
 from pokesim.store import Store
 from pokesim.strategy_data import MAPS
@@ -23,7 +24,7 @@ def blackout_emu(stall):
                              goal=None, BOSSES=frozenset())
     return SimpleNamespace(stall=stall, loop_guard=None, store=None, policy=policy, data=SimpleNamespace(map_ids={}),
                            history={'maps': set(), 'league': 0}, best_progress=(0,) * 6, frame=0,
-                           unstick_streak=0, reloads_exhausted=False)
+                           supervisor=Supervisor())
 
 
 def test_repeated_gen2_league_blackouts_trip_the_stall_while_experience_keeps_rising():

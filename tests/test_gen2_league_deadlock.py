@@ -13,7 +13,9 @@ import pytest
 
 from pokesim.gen2 import collection
 from pokesim.gen2 import policy as policy_module
-from pokesim.gen2.emulator import CANNOT_END, LEAGUE_CHECKPOINT, LEAGUE_RESTARTS, Emulator
+from pokesim.gen2.emulator import CANNOT_END, LEAGUE_CHECKPOINT, Emulator
+from pokesim.runtime.supervision import LEAGUE_RESTARTS, Supervisor
+from test_supervision import ladder
 from pokesim.gen2.policy import SUBSTATUS_TRANSFORMED, Policy, transformed
 from pokesim.planning.readiness import DEPTH, STAMINA, Train
 from pokesim.play_clock import PlayClock
@@ -201,7 +203,7 @@ def unstick(why, *, streak=0, in_league=True, entry=True):
     loaded = []
     store = SimpleNamespace(autosaves=lambda: [autosave], checkpoint_metadata=lambda path: {'frame': 1, 'settled': True},
                             state_path=lambda name: league if entry and name == LEAGUE_CHECKPOINT else None)
-    emu = SimpleNamespace(unstick_streak=streak, snapshot=SimpleNamespace(valid=True, started=True, map_name="Lance's Room"),
+    emu = SimpleNamespace(supervisor=ladder(streak), snapshot=SimpleNamespace(valid=True, started=True, map_name="Lance's Room"),
                           store=store, frame=100000, reloads=0, last_reload=0, _behind_barrier=lambda metadata: False,
                           play_clock=PlayClock(), adventure_seed=7,
                           policy=SimpleNamespace(recoveries=0, menu=None, collection={}, goal=None, decisions=0,
@@ -221,7 +223,7 @@ def test_a_league_attempt_restarted_again_and_again_is_called_off(monkeypatch):
                             state_path=lambda name: league if name == LEAGUE_CHECKPOINT else None)
     run = SimpleNamespace(data=DATA, recoveries=0, menu=None, collection={}, goal=None, decisions=0,
                           in_league=lambda snapshot: True)
-    emu = SimpleNamespace(unstick_streak=0, store=store, frame=100000, reloads=0, last_reload=0,
+    emu = SimpleNamespace(supervisor=Supervisor(), store=store, frame=100000, reloads=0, last_reload=0,
                           play_clock=PlayClock(), adventure_seed=7,
                           _behind_barrier=lambda metadata: False, policy=run,
                           _tick=lambda frames: None, _reset_watch=lambda: None, _event=lambda event, snapshot: None)
@@ -229,7 +231,7 @@ def test_a_league_attempt_restarted_again_and_again_is_called_off(monkeypatch):
     def restart(wins=231):
         # Each reload restores the entry save's policy, which forgets the attempt.
         emu.snapshot = SimpleNamespace(valid=True, started=True, map_name="Koga's Room", hall_of_fame_count=wins)
-        emu.unstick_streak = 0
+        emu.supervisor.reset()
         emu._load_state_file = lambda path: (calls.append(path.name), run.collection.clear(), run.collection.update(league_loop=wins + 1))
         Emulator._unstick(emu, 100000, CANNOT_END)
         return 'league_entered' in run.collection

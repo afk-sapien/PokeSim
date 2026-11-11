@@ -16,6 +16,7 @@ from pokecore.gen2.ram import calculated_stats, experience_at, experience_progre
 from pokesim.gen2.sprites import portrait
 from pokesim.gen2.web import Reference
 from pokesim.play_clock import PlayClock
+from pokesim.runtime.supervision import Supervisor
 
 
 @pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
@@ -2734,7 +2735,7 @@ def test_a_stall_reload_inside_a_boss_battle_counts_as_a_loss_and_the_team_train
     loaded = []
     saves = SimpleNamespace(autosaves=lambda: [Path('auto-v1-1.state')], state_path=lambda name: None,
                             checkpoint_metadata=lambda path: {'frame': 1, 'settled': True})
-    emu = SimpleNamespace(unstick_streak=0, snapshot=battle, store=saves, frame=100000, reloads=0, last_reload=0,
+    emu = SimpleNamespace(supervisor=Supervisor(), snapshot=battle, store=saves, frame=100000, reloads=0, last_reload=0,
                           play_clock=PlayClock(), adventure_seed=7, policy=policy, _behind_barrier=lambda metadata: False, _load_state_file=loaded.append,
                           _tick=lambda frames: None, _reset_watch=lambda: None, _event=lambda event, snapshot: None)
     Emulator._unstick(emu, 100000, 'battle never ended')
@@ -2770,7 +2771,7 @@ def test_a_stall_reload_in_the_burned_tower_rival_battle_counts_against_the_goal
                             badges=7, event=lambda name: True)
     saves = SimpleNamespace(autosaves=lambda: [Path('auto-v1-1.state')], state_path=lambda name: None,
                             checkpoint_metadata=lambda path: {'frame': 1, 'settled': True})
-    emu = SimpleNamespace(unstick_streak=0, snapshot=rival, store=saves, frame=100000, reloads=0, last_reload=0,
+    emu = SimpleNamespace(supervisor=Supervisor(), snapshot=rival, store=saves, frame=100000, reloads=0, last_reload=0,
                           play_clock=PlayClock(), adventure_seed=7, policy=policy, _behind_barrier=lambda metadata: False, _load_state_file=lambda path: None,
                           _tick=lambda frames: None, _reset_watch=lambda: None, _event=lambda event, snapshot: None)
     Emulator._unstick(emu, 100000, 'battle never ended')

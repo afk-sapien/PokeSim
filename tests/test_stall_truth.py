@@ -11,6 +11,7 @@ from pokesim import config, progress_events, stall_truth
 from pokesim.app.manager import Manager
 from pokesim.app.registry import identifier
 from pokesim.play_clock import PlayClock
+from pokesim.runtime.supervision import Supervisor
 from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, StallWatch
 from pokesim.store import Store
 from pokesim.web.app import create_app
@@ -63,7 +64,7 @@ def gen2_game(store, loop):
     now = time.time()
     policy = SimpleNamespace(mode='exploring', describe=lambda: '', details=dict, boxes_full=False)
     return SimpleNamespace(**stalled_game(store, loop), last_achievement=None, progress_frame=0, waiting=False,
-                           unstick_streak=0, last_reload=0, policy=policy, frozen=False, health=dict, speed=1,
+                           supervisor=Supervisor(), last_reload=0, policy=policy, frozen=False, health=dict, speed=1,
                            snapshot=None, rom_note='', play_clock=PlayClock(), executed_frames=0, started_at=now,
                            stuck_frame=130 * MINUTE, history={'maps': set()}, reloads=0, invalid_frame=None,
                            legendary_recovery=SimpleNamespace(state_dict=dict))

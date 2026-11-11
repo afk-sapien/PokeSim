@@ -61,6 +61,7 @@ def test_a_league_attempt_is_checkpointed_on_entry_and_restarted_when_a_battle_r
     from pokesim import emulator
     from pokesim.checkpoints import CheckpointStore
     from pokesim.play_clock import PlayClock
+    from pokesim.runtime.supervision import Supervisor
     store = CheckpointStore(tmp_path)
     store.write_checkpoint(b'entry', {'policy_state': {}, 'run_memory': {}}, name=emulator.LEAGUE_CHECKPOINT)
     assert store.autosaves() == [], 'the entry checkpoint is not a rotating autosave'
@@ -70,12 +71,12 @@ def test_a_league_attempt_is_checkpointed_on_entry_and_restarted_when_a_battle_r
     game = SimpleNamespace(store=SimpleNamespace(autosaves=store.autosaves, state_path=store.state_path,
                                                  checkpoint_metadata=store.checkpoint_metadata),
                            snapshot=SimpleNamespace(map=emulator.MAPS['LANCES_ROOM']), reloads=0, frame=10 ** 6,
-                           play_clock=PlayClock(), adventure_seed=7,
+                           play_clock=PlayClock(), adventure_seed=7, supervisor=Supervisor(),
                            _restore_first_valid=lambda paths: restored.append(paths[0].name), _tick=lambda n: None)
     emulator.Emulator._unstick(game, game.frame, 'battle never ended')
     emulator.Emulator._unstick(game, game.frame, 'battle never ended')
     assert restored == [recent.name, emulator.LEAGUE_CHECKPOINT]
-    game.snapshot.map, game.unstick_streak = emulator.MAPS['ROUTE_1'], 5
+    game.snapshot.map, game.supervisor.reloads = emulator.MAPS['ROUTE_1'], 5
     emulator.Emulator._unstick(game, game.frame, 'battle never ended')
     assert restored[-1] == recent.name, 'outside the League the entry checkpoint is never used'
 

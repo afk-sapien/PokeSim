@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw
 
 from pokesim.emulator import RETAKE_FRAMES, Emulator, blank_frame
 from pokesim.events import Event
+from pokesim.runtime.supervision import Supervisor
 from pokesim.store import Store
 from test_events import snap
 
@@ -48,6 +49,7 @@ def game(tmp_path, screen):
     emu.ntfy = Ntfy()
     emu.frame = 1000
     emu.mem = SimpleNamespace(championships=0)
+    emu.supervisor = Supervisor()
     emu._image = lambda: screen[0]
     return emu
 

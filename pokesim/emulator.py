@@ -35,6 +35,8 @@ from .runtime import capture, trace
 from .runtime.manifest import checkpoint_manifest
 from .runtime.reload import FRAMES_PER_SECOND, reload_target
 from .runtime.restart import restart
+from .runtime.supervision import CANNOT_END, GIVE_UP, HOLD, Supervisor
+from .runtime.supervision import report as stuck_report
 from .screen import W_OPTIONS
 from .stalls import BEFORE_STALL_CHECKPOINT, PROGRESS_EVENTS, LoopGuard, StallWatch, advanced, boss_attempt  # noqa: F401
 from .strategy_data import MAPS
@@ -49,7 +51,6 @@ BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
 PLAYTIME_MILESTONES = 'playtime-milestones-v1'
 # The phases of an exchange's preparation that hold back every command but stop, speed and pause.
 PREPARING = {'travelling', 'storage', 'rendezvous'}
-MAX_RELOADS = 12  # reloads in a row without progress after which reloading stops, as in Generation II
 # Game frames, as in Generation II: no guard runs for a minute after a reload, and a glitched state
 # gets 5 seconds, or a minute in a Pokémon Center while the healing trip finishes.
 RELOAD_QUIET_FRAMES = 60 * FRAMES_PER_SECOND
@@ -133,6 +134,7 @@ class Emulator:
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
         self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
+        self.supervisor = Supervisor(store)
         self.commands: queue.Queue = queue.Queue()
         self.manual: queue.Queue = queue.Queue(maxsize=2)
         self.started_at = time.time()
@@ -374,7 +376,7 @@ class Emulator:
         state = 'recovering' if (self.invalid_frame is not None or time.time() - self.last_reload < 30
                                  or mode == 'finding another approach') else 'making_progress' if age is not None and age < 120 else 'exploring'
         stall = getattr(self, 'stall', None)
-        if stall and stall.stalled(self.frame) or getattr(self, 'reloads_exhausted', False):
+        if stall and stall.stalled(self.frame) or self.supervisor.stalled:
             state = 'stalled'
         return {'state': state, 'quiet_game_minutes': stall.game_minutes(self.frame) if stall else 0,
                 'last_achievement': {
@@ -788,7 +790,7 @@ class Emulator:
             if ev.type == 'obtain' and guard and guard.looping(self.store):
                 pass   # a gift in a gift and release loop is not progress
             elif ev.type in PROGRESS_EVENTS:
-                self.unstick_streak, self.reloads_exhausted = 0, False
+                self.supervisor.reset()
             if ev.type in PROGRESS_EVENTS and getattr(self, 'stall', None) and not (ev.type == 'obtain' and guard and guard.reason):
                 self.stall.progress(self.frame, time.time())
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
@@ -895,13 +897,13 @@ class Emulator:
         goal = getattr(policy, 'goal', None)
         label = goal.title if goal is not None else 'the current project'
         capture.keep(self, 'give_up', why)
-        collection.abandon(f'{why.capitalize()} and {self.unstick_streak} reloads did not help')
-        log.error('%s and %d reloads did not help, giving up on %s for now', why, self.unstick_streak, label)
+        reloads = self.supervisor.reloads
+        collection.abandon(f'{why.capitalize()} and {reloads} reloads did not help')
+        log.error('%s and %d reloads did not help, giving up on %s for now', why, reloads, label)
         self._handle_events([Event('stall', f'Gave up on “{label}” for now',
-                                   f'{why.capitalize()} at {snapshot.map_name} and {self.unstick_streak} reloads '
+                                   f'{why.capitalize()} at {snapshot.map_name} and {reloads} reloads '
                                    'did not help, so it waits while other goals run.', priority=HIGH)], snapshot)
         policy.on_restore()
-        self.unstick_streak, self.reloads_exhausted = 0, False
         Emulator._reset_watch(self)
         self.input_epoch += 1
         return True
@@ -915,31 +917,34 @@ class Emulator:
         Emulator._drop_pin(self, pin.STUCK)
         note = getattr(getattr(self, 'policy', None), 'note_boss_loss', None)
         snapshot = getattr(self, 'snapshot', None)
-        if note is not None and snapshot is not None and (why == "battle cannot end" or getattr(snapshot, 'in_battle', 0) == 2):
+        if note is not None and snapshot is not None and (why == CANNOT_END or getattr(snapshot, 'in_battle', 0) == 2):
             # A boss battle the reload leaves is lost, though not everyone fainted, so the team trains
             # before it goes back in. note_boss_loss ignores trainers outside a boss gym.
             note(snapshot)
-        self.unstick_streak = getattr(self, 'unstick_streak', 0)
-        if self.unstick_streak >= MAX_RELOADS and Emulator._give_up(self, why):
-            return
         guard = getattr(self, 'loop_guard', None)
-        if self.unstick_streak >= MAX_RELOADS or guard and guard.looping(self.store):
+        rung = self.supervisor.climb(why, lambda: Emulator._give_up(self, why),
+                                     looping=lambda: guard and guard.looping(self.store),
+                                     in_league=lambda: snapshot is not None and snapshot.map in LEAGUE)
+        if rung.kind == GIVE_UP:
+            return
+        if rung.kind == HOLD:
             # Reloading again would only replay the same trouble. Leave the run as it is, flagged as
             # stalled, and say so once rather than at every guard check.
-            if not getattr(self, 'reloads_exhausted', False):
-                log.error('%s and %d reloads did not help, not reloading again', why, self.unstick_streak)
-                self.reloads_exhausted = True
+            if rung.first:
+                log.error('%s and %d reloads did not help, not reloading again', why, rung.reloads)
             Emulator._reset_watch(self)
             return
         saves = self.store.autosaves()
         target = reload_target(self.store, saves, since_frame)
         # A recent save inside the League can already be lost: one frozen partner left and an
         # opponent that never attacks. If going back a little did not help, restart the attempt.
-        self.unstick_streak += 1
         entry = self.store.state_path(LEAGUE_CHECKPOINT)
-        if self.unstick_streak >= 2 and entry and self.snapshot is not None and self.snapshot.map in LEAGUE:
-            log.warning("%s again with no progress, restarting the League attempt", why)
+        if rung.league and entry:
+            log.warning("%s inside the League, restarting the attempt", why)
             target, saves = entry, [entry] + saves
+        if rung.report and snapshot is not None and snapshot.valid and snapshot.started:
+            title, body = stuck_report(why, snapshot.map_name)
+            self._handle_events([Event('stall', title, body, priority=HIGH)], snapshot)
         progress_events.reload(self.store, why)
         if target:
             log.warning("%s for %.1f game minutes, reloading %s", why,
@@ -1261,6 +1266,8 @@ class Emulator:
         from .goal_time import GoalTime
         self.pb.stop(save=False)
         self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
+        # The restart emptied the old run's reload streak from the store, so it cannot hold the new one stalled.
+        self.supervisor = Supervisor(self.store)
         if watch := getattr(self, 'goal_watch', None):
             watch.restart()
         self.goal_time = GoalTime(self.store)

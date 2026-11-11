@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
+from pokesim.runtime.supervision import Supervisor
 from pokesim.store import Store
 from pokesim.web.app import create_app
 
@@ -162,6 +163,7 @@ def gen1_adventure(tmp_path):
     store = Store(tmp_path / 'red')
     emu = Emulator.__new__(Emulator)
     common(emu, store)
+    emu.supervisor = Supervisor()
     rom = sorted(SUPPORTED)[0]
     CatchTracker(store, rom, fresh=True)
     ShinyTracker(store, rom)
@@ -214,7 +216,7 @@ def gen2_adventure(tmp_path, data):
     statistics.flush(emu.snapshot)
     emu.data, emu.policy = data, Policy(data, seed=1, starter=config.STARTER)
     emu.rom_note = f'Pokémon {data.game.title()} (revision 0)'
-    emu.progress_frame, emu.waiting, emu.unstick_streak, emu.invalid_frame = 3500, False, 0, None
+    emu.progress_frame, emu.waiting, emu.supervisor, emu.invalid_frame = 3500, False, Supervisor(), None
     emu.game_clock = {'weekday': 'Monday', 'hour': 10, 'minute': 0, 'period': 'Day'}
     emu.history = {'maps': [start], 'owned': [1], 'badges': 1, 'league': 0}
     emu.legendary_recovery = Recovery()

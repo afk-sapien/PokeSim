@@ -68,8 +68,9 @@ def test_blocked_tile_is_cleared_when_its_boulder_moves():
 
 def emulator(streak, frame=1000):
     from pokesim.gen2.emulator import Emulator
+    from test_supervision import ladder
     events = []
-    emu = SimpleNamespace(unstick_streak=streak, best_progress=(0,) * 5, frame=frame, history={'maps': []},
+    emu = SimpleNamespace(supervisor=ladder(streak), best_progress=(0,) * 5, frame=frame, history={'maps': []},
                           stall=SimpleNamespace(progress=lambda frame, now: None))
     emu._note_progress = lambda snapshot, now: Emulator._note_progress(emu, snapshot, now)
     return emu, events
@@ -82,22 +83,25 @@ def seen(badges=0, flags=b'\x00', owned=(), exp=0):
 def test_progress_must_beat_the_best_seen_to_end_a_run_of_reloads():
     emu, _ = emulator(3)
     emu._note_progress(seen(flags=b'\x07', exp=50), 0.0)
-    assert emu.unstick_streak == 0
-    emu.unstick_streak = 3
+    assert emu.supervisor.reloads == 0
+    emu.supervisor.reloads = 3
     emu._note_progress(seen(flags=b'\x03', exp=50), 1.0)  # an older save has less than the best
-    assert emu.unstick_streak == 3
+    assert emu.supervisor.reloads == 3
     emu._note_progress(seen(flags=b'\x0f', exp=50), 2.0)
-    assert emu.unstick_streak == 0
+    assert emu.supervisor.reloads == 0
 
 
 def test_reloading_stops_after_the_cap():
     from pokesim.gen2 import emulator as module
+    from pokesim.runtime.supervision import MAX_RELOADS, STALL_RELOADS
+    from test_supervision import ladder
     reloaded = []
-    emu = SimpleNamespace(unstick_streak=module.MAX_RELOADS, store=SimpleNamespace(autosaves=lambda: reloaded.append(1) or []),
+    emu = SimpleNamespace(supervisor=ladder(MAX_RELOADS), snapshot=None,
+                          store=SimpleNamespace(autosaves=lambda: reloaded.append(1) or []),
                           _reset_watch=lambda: reloaded.append('reset'))
     module.Emulator._unstick(emu, 0.0, 'stuck')
     assert reloaded == ['reset']
-    assert module.STALL_RELOADS <= module.MAX_RELOADS
+    assert STALL_RELOADS <= MAX_RELOADS
 
 
 def test_training_a_new_trainee_counts_as_progress_after_a_swap():
@@ -106,16 +110,16 @@ def test_training_a_new_trainee_counts_as_progress_after_a_swap():
     trainee = SimpleNamespace(trainer_id=1, dvs=(9, 9), species=168, experience=100_000)
     party = lambda *mons: SimpleNamespace(badges=0, event_flags=b'\x00', owned=(), party=list(mons))
     emu._note_progress(party(veteran), 0.0)
-    emu.unstick_streak = 3
+    emu.supervisor.reloads = 3
     emu._note_progress(party(trainee), 1.0)  # the veteran went to the PC, the party total fell
-    assert emu.unstick_streak == 3
+    assert emu.supervisor.reloads == 3
     trainee.experience = 120_000
     emu._note_progress(party(trainee), 2.0)
-    assert emu.unstick_streak == 0
-    emu.unstick_streak = 3
+    assert emu.supervisor.reloads == 0
+    emu.supervisor.reloads = 3
     trainee.experience = 110_000  # a reload back to an older save is not progress
     emu._note_progress(party(trainee), 3.0)
-    assert emu.unstick_streak == 3
+    assert emu.supervisor.reloads == 3
 
 
 def test_walking_an_egg_to_hatching_counts_as_progress():
@@ -126,22 +130,22 @@ def test_walking_an_egg_to_hatching_counts_as_progress():
     egg = SimpleNamespace(trainer_id=1, dvs=(6, 14), species=215, experience=135, egg=True, friendship=12)
     party = lambda *mons: SimpleNamespace(badges=0, event_flags=b'\x00', owned=(), party=list(mons))
     emu._note_progress(party(veteran, egg), 0.0)
-    emu.unstick_streak = 3
+    emu.supervisor.reloads = 3
     egg.friendship = 12
     emu._note_progress(party(veteran, egg), 1.0)  # still on the same cycle
-    assert emu.unstick_streak == 3
+    assert emu.supervisor.reloads == 3
     egg.friendship = 11
     emu._note_progress(party(veteran, egg), 2.0)
-    assert emu.unstick_streak == 0
-    emu.unstick_streak = 3
+    assert emu.supervisor.reloads == 0
+    emu.supervisor.reloads = 3
     egg.friendship = 12  # a reload back to a fuller egg replays steps that already counted
     emu._note_progress(party(veteran, egg), 3.0)
     egg.friendship = 11
     emu._note_progress(party(veteran, egg), 4.0)
-    assert emu.unstick_streak == 3
+    assert emu.supervisor.reloads == 3
     egg.friendship, egg.egg = 70, False  # hatched: the friendship byte is a hatchling's again
     emu._note_progress(party(veteran, egg), 5.0)
-    assert emu.unstick_streak == 0
-    emu.unstick_streak = 3
+    assert emu.supervisor.reloads == 0
+    emu.supervisor.reloads = 3
     emu._note_progress(party(veteran, egg), 6.0)
-    assert emu.unstick_streak == 3
+    assert emu.supervisor.reloads == 3
