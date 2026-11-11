@@ -109,21 +109,55 @@ class Monitor:
         """Frames ``key`` has spent since its last progress."""
         return self._table(SPENT).get(key, 0)
 
-    def stand_down(self, key, now, progressed=False):
+    def set_spent(self, key, frames):
+        """Set the frames ``key`` has spent since its last progress. None or no frames forgets them."""
+        spent = self._table(SPENT)
+        if frames and frames > 0:
+            spent[key] = frames
+        else:
+            spent.pop(key, None)
+
+    def since(self, key):
+        """When ``key`` last stood down, or None when it has not."""
+        return self._table(STOOD_DOWN).get(key)
+
+    def stood_down(self):
+        """A copy of when each key last stood down, oldest first."""
+        return dict(self._table(STOOD_DOWN))
+
+    def stand_down(self, key, now, progressed=False, most=None):
         """Set ``key`` aside from ``now`` and return when it may be tried again.
 
         A goal that made some progress before it stopped waits the base time and starts its count of
-        stand-downs again. Otherwise each stand-down in a row doubles the wait.
+        stand-downs again. Otherwise each stand-down in a row doubles the wait. With ``most``, the count
+        kept is capped there and the key moves to the newest end, so ``trim`` drops the keys left alone
+        longest. The wait returned still counts this stand-down in full.
         """
         counts = self._table(STAND_DOWNS)
+        if most is not None and key in counts:
+            counts[key] = counts.pop(key)
         count = 0 if progressed else counts.get(key, 0) + 1
         if count:
-            counts[key] = count
+            counts[key] = count if most is None else min(count, most)
         else:
             counts.pop(key, None)
         self._table(STOOD_DOWN)[key] = now
         self._table(SPENT).pop(key, None)
         return now + self.backoff.wait(count)
+
+    def expire(self, now):
+        """Forget the stand-down times that ran out by ``now``. The counts stay, so the next stand-down
+        in a row still waits longer."""
+        stood = self._table(STOOD_DOWN)
+        for key in [key for key in stood if not self.standing_down(key, now)]:
+            del stood[key]
+
+    def trim(self, limit):
+        """Keep the newest ``limit`` keys in each table."""
+        for name in (STOOD_DOWN, STAND_DOWNS, SPENT):
+            table = self._table(name)
+            for key in list(table)[:-limit]:
+                del table[key]
 
     def until(self, key):
         """When ``key`` may be tried again, or None when it has not stood down."""
@@ -140,6 +174,10 @@ class Monitor:
         """Forget ``key``'s stand-downs and spent frames, as when its goal is done."""
         for name in (STOOD_DOWN, STAND_DOWNS, SPENT):
             self._table(name).pop(key, None)
+
+    def rows(self, name):
+        """The caller's own table ``name`` inside the same state, such as the no-route attempts."""
+        return self._table(name)
 
     def shares(self):
         """Share of the frames counted this session, per goal key."""

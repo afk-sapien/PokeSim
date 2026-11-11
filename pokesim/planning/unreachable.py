@@ -8,7 +8,7 @@ target keeps failing and the picker passes it over until the wait runs out.
 
 Each caller passes ``now`` in PlayClock frames, as the monitor does.
 """
-from .monitor import SPENT, STAND_DOWNS, STOOD_DOWN, Backoff, Monitor
+from .monitor import Backoff, Monitor
 
 # Name of the table of failed attempts inside the monitor's state.
 ATTEMPTS = 'no_route'
@@ -37,14 +37,13 @@ class NoRoute:
         """
         name = key(goal, place, targets)
         until = self.monitor.stand_down(name, now)
-        rows = self.monitor._table(ATTEMPTS)
+        rows = self.monitor.rows(ATTEMPTS)
         rows.pop(name, None)
         rows[name] = {'goal': goal, 'map': place, 'targets': [list(target) for target in targets[:8]],
                       'origin': origin, 'at': now, 'until': until}
         for old in list(rows)[:-REMEMBERED]:
             del rows[old]
-            for table in (STOOD_DOWN, STAND_DOWNS, SPENT):
-                self.monitor._table(table).pop(old, None)
+            self.monitor.clear(old)
         return until
 
     def waiting(self, goal, place, targets, now):
@@ -53,4 +52,4 @@ class NoRoute:
 
     def attempts(self):
         """The failed attempts remembered, oldest first."""
-        return list(self.monitor._table(ATTEMPTS).values())
+        return list(self.monitor.rows(ATTEMPTS).values())

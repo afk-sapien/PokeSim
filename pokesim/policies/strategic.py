@@ -26,13 +26,13 @@ from .shopping import ShoppingController
 from .storage import FIELD_MOVE_GOALS
 from .storage import StorageController
 from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TRIPS, improves, legendary_project, reserve_allows, snorlax_project
+from . import kinds
 from ..planning import values
 from ..planning import boss
 from .pipeline import ERRAND_FRAMES, ERRANDS, Ballot
 from .ledger import battle_room, fighters, league_treatment
 from ..planning.ledger import PP
 from ..planning.arbiter import Candidate, Tier
-from ..planning.monitor import STOOD_DOWN
 from ..planning.stance import FLEE_TRIES, STORY, TRAIN
 from .awareness import ActionWatch
 from .team import (development_candidate, held_identities, potential, readiness, release_note, requested_slots,
@@ -763,7 +763,7 @@ class StrategicPolicy(Policy):
                     # new move, member or ball, and a hunt that came for it ends (planning.throws).
                     self.collection.defer(s, enemy.species)
                     project = self.collection.project
-                    if project and project.get('species') == enemy.species and project['method'] in ('grass', 'surf', 'fish'):
+                    if project and project.get('species') == enemy.species and kinds.rules(project['method']).own_balls:
                         self.collection.abandon('Leave a catch nobody here can weaken for a new move, member or ball',
                                                 stand_down=False)
             self.mode = f"battle: {self.intent.kind}"
@@ -1284,10 +1284,10 @@ class StrategicPolicy(Policy):
                 social = None if goal.key.startswith(("collect_", "party_collection", "party_league")) else self._purposeful_detour(s, mem, goal)
                 if social:
                     return social
-                social = None if goal.key == 'collect_pickup' or (self.collection.project or {}).get('method') in ('train', 'marathon') or legendary_project(self.collection.project) else self._social_interaction(s, mem)
+                social = None if goal.key == 'collect_pickup' or kinds.rules((self.collection.project or {}).get('method')).own_clock or legendary_project(self.collection.project) else self._social_interaction(s, mem)
                 if social:
                     return social
-            curiosity = 0 if goal.key in ("heal", "restock", "buy_tm", "collect_pickup", "collect_hunt") or (self.collection.project or {}).get('method') in ('train', 'marathon') or legendary_project(self.collection.project) else EXPLORATION_CHANCE
+            curiosity = 0 if goal.key in ("heal", "restock", "buy_tm", "collect_pickup", "collect_hunt") or kinds.rules((self.collection.project or {}).get('method')).own_clock or legendary_project(self.collection.project) else EXPLORATION_CHANCE
             # A goal whose walk found no route lately (_no_route) looks around instead of walking it again.
             waiting = self.no_route_waiting(goal)
             if waiting:
@@ -1628,7 +1628,7 @@ class StrategicPolicy(Policy):
             elif monitor.observe(key, delta, now=now).stand_down:
                 # The monitor's backoff keeps this item aside, and the next best purchase may go instead.
                 self.tm_plan = None
-        stood = monitor._table(STOOD_DOWN)
+        stood = monitor.stood_down()
         standing = frozenset(int(key[3:]) for key in stood if key.startswith('tm:') and monitor.standing_down(key, now))
         supplies, owned, purchase = self._tm_options(s, standing)
         bag = dict(s.items)

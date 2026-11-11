@@ -234,5 +234,6 @@ def test_a_level_evolution_turn_that_gains_experience_is_progress_not_a_failure(
     c.observe(replace(snapshot, frame=240, party=(stronger,)))
     assert c.project is None
     assert c.director.outcomes[-1]['status'] == 'advanced'
-    assert 'dragonite' not in c.director.failures
+    from pokesim.planning.monitor import STAND_DOWNS
+    assert 'dragonite' not in c.director.monitor.rows(STAND_DOWNS)
     assert not c.director.waiting('dragonite', c.clock)   # free to take the next turn straight away

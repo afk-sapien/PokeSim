@@ -1,16 +1,15 @@
 """Bounded collecting expeditions and evolution projects for a continuing adventure."""
 import random
 from collections import Counter
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from ..duplicates import quality
 from pokecore.identity import same
-from .move_development import evolution_wait, move_name
 from ..pokemon import experience_at_level
 from ..investment import automatic_trade_protected, training_investment, potential_power, rarity, SEARCH_BUDGET
 from functools import lru_cache, partial
 from ..game_data import current_variant, load
 
-from .progression import GRASS_TILES, Goal, object_goal, at
+from .progression import GRASS_TILES, Goal
 
 YELLOW = current_variant() == 'yellow'
 # Yellow's Pikachu refuses the Thunder Stone, and the game treats every Pikachu
@@ -26,9 +25,9 @@ from ..planning.cost import FRAMES_PER_TILE
 from ..planning.shadow import Shadow
 from ..planning.conditions import Can, Count, Item, Requirements, feasible
 from ..planning.ledger import MONEY, Need
-from ..planning.stance import HUNT, TRAIN
-from ..planning.monitor import CONTINUE, SPENT, STOOD_DOWN, ProgressEvent
-from . import training, marathon, league_rotation
+from ..planning.monitor import CONTINUE, ProgressEvent
+from ..planning.goals import Abandon, GoalRun
+from . import kinds, training, marathon, league_rotation
 from .. import progress_events
 from ..shiny import is_shiny
 from ..milestones import is_perfect, level_credit
@@ -61,7 +60,8 @@ TRAINING_PP = 20
 
 
 def budgeted(project):
-    return project['method'] not in ('train', 'marathon')
+    """Whether the monitor keeps ``project``'s budget, as for every kind without its own clock."""
+    return not kinds.rules(project['method']).own_clock
 
 
 def kind_frames(project, wild=None):
@@ -240,7 +240,7 @@ def party_first(options, projects):
 
 
 def project_budget(project):
-    return 3 * expected_frames(project)
+    return kinds.rules(project['method']).budget(project)
 
 
 def budget_key(project):
@@ -527,6 +527,7 @@ DEMAND_FRAMES = 10_800
 class Collection:
     def __init__(self):
         self.version = 'red'
+        # The project under way, a GoalRun (planning/goals.py), or None.
         self.project = None
         self.remaining = 0
         self.last_frame = None
@@ -623,6 +624,17 @@ class Collection:
         return self.deferred_catches.get(str(species)) == throw_signature(s)
 
     @property
+    def project(self):
+        return self._project
+
+    @project.setter
+    def project(self, record):
+        """Run ``record``, a GoalRun, or a project dict from a save or a test, which becomes one."""
+        if record and not isinstance(record, GoalRun):
+            record = GoalRun.from_dict(record, kinds.rules(record['method']))
+        self._project = record
+
+    @property
     def project_key(self):
         return self.project.get('key', self.project['method']) if self.project else None
 
@@ -634,7 +646,7 @@ class Collection:
         """
         project = self.project or {}
         species = project.get('species')
-        if project.get('method') not in REPEATABLE or not species:
+        if not kinds.rules(project.get('method')).wild or not species:
             return None
         if project.get('dv_hunt'):
             return dex(species), lambda raw: improves(snapshot, species, wild_dvs(raw))
@@ -654,12 +666,7 @@ class Collection:
         if not (project and budgeted(project)):
             self._remaining = frames
             return
-        spent = self.director.monitor._table(SPENT)
-        used = project_budget(project) - frames
-        if used > 0:
-            spent[budget_key(project)] = used
-        else:
-            spent.pop(budget_key(project), None)
+        self.director.monitor.set_spent(budget_key(project), project_budget(project) - frames)
 
     @property
     def idle_frames(self):
@@ -670,13 +677,8 @@ class Collection:
     @idle_frames.setter
     def idle_frames(self, frames):
         key = self.project_key
-        if key is None:
-            return
-        spent = self.director.monitor._table(SPENT)
-        if frames:
-            spent[key] = frames
-        else:
-            spent.pop(key, None)
+        if key is not None:
+            self.director.monitor.set_spent(key, frames)
 
     def clock_shift(self, data):
         """How far a save's marathon and pickup times move to count on the PlayClock.
@@ -851,8 +853,10 @@ class Collection:
                 self.dojo_choice = chosen
         self.director.forget_expired(self.clock)
         idle = CONTINUE
-        if self.project and (not suspended or self.project['method'] in ('train', 'marathon')):
+        if self.project and (not suspended or self.project.rules.own_clock):
             project = self.project
+            rules = project.rules
+            trainee = None
             training_reason = None
             marathon_finished = False
             # Frames that count against the project's idle time and budget. A support trip's frames do
@@ -923,8 +927,7 @@ class Collection:
                 # A map first reached on a support trip is not a new route for the project either.
                 moved = ((token is not None and self.progress_token is not None and token != self.progress_token)
                          or new_flags or s.map not in self.project_maps and not away
-                         or (self.project['method'] in ('grass', 'surf', 'fish', 'safari', 'trade') or legendary_project(self.project))
-                         and self.was_in_battle and not s.in_battle)
+                         or rules.battle_progress(project) and self.was_in_battle and not s.in_battle)
                 self.director.monitor.start(self.project_key, budget=IDLE_BUDGET)
                 idle = self.director.monitor.observe(self.project_key, 0 if s.in_battle or suspended else spent,
                                                      (ProgressEvent('project'),) if moved else ())
@@ -932,57 +935,10 @@ class Collection:
                     self.project_maps.append(s.map)
                 self.progress_token = token
                 self.was_in_battle = bool(s.in_battle)
-            target = self.project.get('species')
-            if (legendary_project(project) and not s.in_battle
-                    and (dex(target) not in s.owned or project.get('legendary_return')
-                         and dex(target) in getattr(self, 'returned_legendaries', ()))
-                    and project.get('flag') and event_set(s.event_flags, project['flag'])):
-                self.abandon('Legendary encounter ended without a catch')
+            finished = rules.finished(kinds.View(self, s, trainee, marathon_finished), project)
+            if isinstance(finished, Abandon):
+                self.abandon(finished.reason)
                 return
-            item = self.project.get('item')
-            finished = (target and dex(target) in s.owned) or (not target and item and any(i==ITEMS[item] for i,q in s.items if q))
-            if project.get('repeat'):
-                caught = max(0, held_count(s, target) - project['initial_count'])
-                project.setdefault('gains', {})['catches'] = max(project.get('gains', {}).get('catches', 0), caught)
-                finished = caught >= project.get('catch_goal', 1)
-            if project.get('event_return'):
-                finished = project['event_return'] not in getattr(self, 'returned_events', {})
-            if (snorlax_project(project) and not s.in_battle and project.get('flag')
-                    and event_set(s.event_flags, project['flag'])):
-                # The walking return closes once Route 12 is behind, so judge the battle here.
-                finished = (max(0, held_count(s, target) - project['initial_count']) >= 1 if project.get('repeat')
-                            else dex(target) in s.owned)
-                if not finished:
-                    self.abandon('Snorlax battle ended without a catch')
-                    return
-            if project.get('legendary_return'):
-                finished = dex(target) not in getattr(self, 'returned_legendaries', ())
-            if project.get('upgrade_evolution'):
-                index = self.trainee(s, project)
-                finished = index is not None and s.party[index].species == target
-            if project['method'] == 'gift' and dex(target) in (106, 107):
-                finished = event_set(s.event_flags, project['flag'])
-            if project['method'] in ('gift', 'static') and not legendary_project(project) and target:
-                held = project.setdefault('initial_held', project.get('initial_count', held_count(s, target)))
-                if not finished and not s.in_battle and not self.available(s, project):
-                    if held_count(s, target) <= held:
-                        # The source left the room or the game closed it, for example the other Fighting
-                        # Dojo ball was taken. Waiting on it could only end in a stand-down two minutes later.
-                        self.abandon(f'{name(target)} is no longer offered here')
-                        return
-                    finished = True
-            if self.project['method']=='fossil' and self.project.get('initial_owned'):
-                finished = finished or bool(s.owned - set(self.project['initial_owned']))
-            if self.project['method']=='trainer':
-                finished = event_set(s.event_flags,self.project['flag'])
-            if self.project['method']=='explore':
-                finished = (s.map,s.x,s.y) == tuple(self.project['target'])
-            if self.project['method']=='rematch':
-                finished = s.hall_of_fame_count > self.project['hof_count'] or s.map == MAPS['HALL_OF_FAME']
-            if project['method'] == 'marathon':
-                finished = marathon_finished
-            if project['method'] == 'train':
-                finished = trainee is not None and s.party[trainee].level >= project['target_level']
             if training_reason and not s.in_battle and not finished:
                 self.abandon(training_reason)
                 return
@@ -990,15 +946,12 @@ class Collection:
                 self.spend_budget(project, s, spent, new_flags)
             if finished or (self.remaining <= 0 and (project['method'] != 'train' or not s.in_battle)):
                 # A project done or out of budget starts its next turn with the whole budget.
-                self.director.monitor._table(SPENT).pop(budget_key(project), None)
+                self.director.monitor.set_spent(budget_key(project), 0)
                 self.record_quality_search()
                 self.finish_marathon(bool(finished))
                 if finished and project.get('repeat'):
-                    self.last_repeat[str(target)] = self.clock
-                label = name(target) if target else item.replace('_',' ').title() if item else self.project['method'].title()
-                if project['method'] == 'train':
-                    label = f'{name(project["parent"])} toward level {project["target_level"]}'
-                self.history = (self.history + [f'{"Completed" if finished else "Will revisit"}: {label}'])[-6:]
+                    self.last_repeat[str(project.get('species'))] = self.clock
+                self.history = (self.history + [f'{"Completed" if finished else "Will revisit"}: {rules.label(project)}'])[-6:]
                 progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
                 self.director.finish(project, self.clock, bool(finished),
                                      'Target reached' if finished else 'Expedition time budget reached', progressed)
@@ -1136,7 +1089,7 @@ class Collection:
         party, the event flags, the map, the projects still standing down, the marathon's turn, the
         purse and the other adventures' requests."""
         from .ledger import funds_short
-        stood = self.director.monitor._table(STOOD_DOWN)
+        stood = self.director.monitor.stood_down()
         return (s.owned, s.items, s.stored_pokemon, tuple((p.species, p.level) for p in s.party), s.event_flags,
                 s.map, frozenset(key for key in stood if self.director.waiting(key, self.clock)),
                 self.clock >= self.next_marathon, funds_short(s), tuple(sorted(self.demand().items())))
@@ -1231,7 +1184,7 @@ class Collection:
 
     def _start(self, s, nav, project, appearances, weighed):
         """Start ``project``, the pick's new project, with the League ``appearances`` it counted."""
-        self.project = project
+        self.project = GoalRun.start(project, kinds.rules(project['method']))
         if appearances is not None:
             self.league_appearances = appearances
         if self.pin and project['key'] == self.pin.key:
@@ -1246,8 +1199,8 @@ class Collection:
         self.project_flags = list(s.event_flags)
         self.progress_token = None
         # Any other project's budget lives on the monitor and keeps what it spent before.
-        if not budgeted(project):
-            self.remaining = training.TRAINING_BUDGET if project['method'] == 'train' else marathon.BUDGET
+        if self.project.rules.own_clock:
+            self.remaining = self.project.rules.clock
         nav.path.clear()
         self.weighed = weighed
 
@@ -1261,15 +1214,7 @@ class Collection:
         travel = {}
         labels = {}
         def add(project):
-            key = str(project.get('species',0)) + ':' + project['method'] + ':' + str(project.get('map',0)) + ':' + str(project.get('fragment',''))
-            if legendary_project(project):
-                key = f'legendary:{project["species"]}:{project["map"]}'
-            if project['method'] == 'evolve' and project.get('trainee_key'):
-                key += ':' + project['trainee_key']
-            if project['method'] == 'train':
-                key = f'train:{project.get("trainee_key") or project["parent"]}:{project["target_level"]}'
-                if project.get('scoped_partner'):
-                    key += ':' + str(project['parent']) + ':' + project.get('trainee_nick', '')
+            key = kinds.rules(project['method']).key(project)
             if not self.director.waiting(key, self.clock):
                 goal = self.goal(s, project)
                 distance = distance_to(goal.targets) if goal and goal.targets else None
@@ -1359,7 +1304,7 @@ class Collection:
                     if dex(sid) in getattr(self, 'returned_legendaries', ()):
                         project.update(legendary_return=True, repeat=True, initial_count=held_count(s, sid), catch_goal=1,
                                        needed_capture=dex(sid) not in s.owned)
-                goal = self.project_goal(s,project)
+                goal = kinds.rules(project['method']).target(kinds.View(self, s), project)
                 if not goal or not goal.targets:
                     continue
                 distance = distance_to(goal.targets)
@@ -1530,7 +1475,7 @@ class Collection:
         goals, reason = self.goal_list(s, nav, rng, limit=None)
         match = next((goal for goal in goals if goal['key'] == key), None)
         if match is None:
-            if key in self.director.monitor._table(STOOD_DOWN) and self.director.waiting(key, self.clock):
+            if self.director.monitor.since(key) is not None and self.director.waiting(key, self.clock):
                 raise ValueError('It stood down after a failed try. Try again later')
             raise ValueError(reason or pin.UNAVAILABLE.capitalize())
         if self.project and self.project_key != key:
@@ -1561,68 +1506,6 @@ class Collection:
         """The pinned project ended, done or not, so the pin has had its one run."""
         if self.pin is not None and self.pin.started and self.pin.key == key:
             self.pin = None
-
-    def project_goal(self,s,p):
-        mode=p['method']
-        if mode == 'return_fossil':
-            room = WORLD[p['map']]['symbol']
-            fragment = 'SCIENTIST2' if p['item'] == 'OLD_AMBER' else p['item']
-            return object_goal('collect_pickup', 'Collect another fossil', 'Bring it to the Cinnabar lab', room, fragment)
-        if mode == 'marathon':
-            return marathon.goal(p)
-        sid=p.get('species')
-        if mode in ('grass','surf','fish','safari'):
-            points=tiles(p)
-            purpose = ('a partner another adventure needs' if self.demand().get(dex(sid), 0)
-                       else 'more chances to find high DV partners' if p.get('dv_hunt') else 'another partner for the collection' if p.get('repeat') else 'a missing Pokédex entry')
-            # Every hunt runs from the battles it cannot catch from (planner design S5): Pokédex, partner,
-            # repeat and high DV searches alike.
-            return Goal('collect_hunt','Find '+name(sid),f'Search {place(p["map"])} for {purpose}',
-                        tuple(t[:3] for t in points), approaches=tuple(t for t in points if t[3]), kind=HUNT)
-        if mode in ('gift','static','trade','fossil'):
-            if mode == 'static' and dex(sid) == 144 and not all(event_set(s.event_flags, flag) for flag in
-                    ('EVENT_SEAFOAM4_BOULDER1_DOWN_HOLE', 'EVENT_SEAFOAM4_BOULDER2_DOWN_HOLE')):
-                return replace(at('collect_seafoam_current', 'Slow the current for Articuno',
-                                  'Push the Seafoam boulders into the holes before using Surf',
-                                  'SEAFOAM_ISLANDS_B3F', 6, 15), kind=HUNT)
-            room=WORLD[p['map']]['symbol']
-            fragment = p['fragment']
-            if mode=='trade':
-                fragment=fragment or TRADE_NPCS[room]
-            if mode=='gift' and dex(sid) in (106,107) and not event_set(s.event_flags,'EVENT_BEAT_KARATE_MASTER'):
-                fragment='KARATE_MASTER'
-            if mode=='gift' and dex(sid)==133:
-                fragment='EEVEE_POKEBALL'
-            if mode=='fossil' and event_set(s.event_flags,'EVENT_LAB_STILL_REVIVING_FOSSIL'):
-                return at('collect_fossil_walk','Give the fossil lab time','Step outside while the fossil is revived','CINNABAR_ISLAND',6,10)
-            goal = object_goal('collect_'+mode,'Collect '+name(sid),'Visit a remaining source for the Pokédex',room,fragment)
-            # A legendary expedition is a hunt for its legendary, so it runs from every other battle.
-            return replace(goal, kind=HUNT) if legendary_project(p) else goal
-        if mode=='rematch':
-            if s.map != MAPS['INDIGO_PLATEAU_LOBBY']:
-                # Money stops at 999,999, so at the cap a rematch earns experience only.
-                purpose = 'Earn prize money and experience for collecting' if s.money < 999999 else 'Earn experience while nothing else is left'
-                return at('collect_rematch','Return for a League rematch',purpose,'INDIGO_PLATEAU_LOBBY',8,10)
-            return object_goal('league_lorelei','Begin a League rematch','Fund the next expeditions' if s.money < 999999 else 'Run the League again','LORELEIS_ROOM','LORELEI')
-        if mode=='trainer':
-            return object_goal('collect_trainer','Meet an unbeaten trainer','Explore and earn experience and supplies',WORLD[p['map']]['symbol'],p['fragment'])
-        if mode=='explore':
-            return Goal('collect_explore','Explore '+place(p['map']),'Visit an area that has not been explored',(tuple(p['target']),))
-        if mode=='prize':
-            if not dict(s.items).get(ITEMS['COIN_CASE']):
-                return object_goal('collect_coins','Get the Coin Case','Prepare to exchange coins for Porygon','CELADON_DINER','FISHER')
-            cost = PORYGON_COINS.get(self.version, 9999)
-            if s.coins < cost:
-                if s.money < 10000:
-                    self.remaining=0
-                    return None
-                return at('collect_coins','Save coins for Porygon',f'{s.coins} of {cost} coins saved','GAME_CORNER',5,8,'up')
-            return at('collect_prize','Collect Porygon','Exchange saved coins for a new Pokédex entry','GAME_CORNER_PRIZE_ROOM',4,3,'up')
-        if mode=='rod':
-            return object_goal('collect_rod','Obtain '+p['item'].replace('_',' ').title(),'Unlock more fishing encounters',p['room'],'FISHING_GURU')
-        if mode=='amber':
-            return object_goal('collect_amber','Collect Old Amber','Revive Aerodactyl at the Cinnabar lab','MUSEUM_1F','SCIENTIST2')
-        return None
 
     _partner_cache = [None, ()]
 
@@ -1777,61 +1660,8 @@ class Collection:
 
     def goal(self, s, project=None, appearances=None):
         """The goal of ``project``, the one under way unless given. ``appearances`` is the League count a
-        rematch adds to, the collection's own unless given."""
-        from ..trade.preferences import identity
-        p=self.project if project is None else project
+        rematch adds to, the collection's own unless given. Each kind's rules give it (policies/kinds.py)."""
+        p = self.project if project is None else project
         if not p:
             return None
-        if p['method'] == 'rematch' and s.map not in LEAGUE:
-            rotation = self.league_rotation_goal(s, p, appearances)
-            if rotation:
-                return rotation
-        if p['method'] == 'trade':
-            partner = self.trade_candidate(s, p)
-            if partner is None:
-                return None
-            p['parent'] = p['give']
-            p['box'] = partner.get('box')
-            p['give_key'] = identity(partner)
-            if 'party_index' not in partner:
-                return Goal('party_collection', 'Prepare an NPC trade',
-                            'Retrieve ' + name(p['give']) + ' from storage for ' + name(p['species']),
-                            CENTERS, 'up', True)
-        if p['method'] in ('evolve', 'train'):
-            if p.get('trainee_key') and len(self.partner_matches(s, p)) != 1:
-                return None
-            index = self.trainee(s, p)
-            if index is None:
-                if p.get('trainee_key'):
-                    matches = [mon for mon in self.partner_matches(s, p) if 'party_index' not in mon]
-                    if len(matches) != 1:
-                        return None
-                    p['box'] = matches[0]['box']
-                if not partner_exchange_possible(s):
-                    return None
-                return Goal('party_collection','Withdraw a training partner','Keep the main battlers and bring a reserve out of storage',CENTERS,'up',True)
-            if p['method'] == 'train':
-                return Goal('collect_train', f'Train {s.party[index].nick or name(s.party[index].species)} to level {p["target_level"]}',
-                            f'Level {s.party[index].level} of {p["target_level"]}. Stay with this partner while training is productive',
-                            training_targets(self.version, s.party[index].level), kind=TRAIN)
-            evo=p['evolution']
-            if evo['method']=='item':
-                wait_for = evolution_wait(asdict(s.party[index]), evo)
-                if wait_for:
-                    level, move = wait_for
-                    return Goal('collect_train', f'Learn {move_name(move)} before evolving',
-                                f'Train {s.party[index].nick or name(p["parent"])} to level {level} before using a stone',
-                                evolution_training_targets(self.version, s.party[index].level), kind=TRAIN)
-                if not dict(s.items).get(ITEMS[evo['requirement']]):
-                    return at('collect_stone','Buy an evolution stone','Complete another Pokédex entry','CELADON_MART_4F',5,5,'down')
-                return Goal('collect_evolve','Evolve '+name(p['parent']), 'Use '+evo['requirement'].replace('_',' ').title(),((s.map,s.x,s.y),))
-            return Goal('collect_train','Train '+name(p['parent'])+' toward '+name(p['species']),
-                        f'Work toward level {evo["requirement"]}, then resume other activities',
-                        evolution_training_targets(self.version, s.party[index].level), kind=TRAIN)
-        if p['method'] in ('gift','fossil') and len(s.party)>=6:
-            # A party of field-move holders, Yellow's Pikachu and the strongest battler has nothing to
-            # deposit. Offering the gift anyway parked the adventure at a PC until the project timed out.
-            if not partner_exchange_possible(s):
-                return None
-            return Goal('party_collection_space','Make room for a gift','Store a reserve before receiving a Pokémon',CENTERS,'up',True)
-        return self.project_goal(s,p)
+        return kinds.rules(p['method']).step(kinds.View(self, s, appearances=appearances), p)

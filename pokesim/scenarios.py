@@ -413,9 +413,8 @@ class Gen1Watch(PlannerMarks):
         return project.get('checkpoint') if project.get('method') == 'marathon' else None
 
     def stand_downs(self):
-        from .planning.monitor import STOOD_DOWN
         director = getattr(getattr(self.run.policy, 'collection', None), 'director', None)
-        return director.monitor._table(STOOD_DOWN) if director is not None else {}
+        return director.monitor.stood_down() if director is not None else {}
 
     def marks(self, snapshot=None):
         """What the planner just did, as (kind, detail, title): a Pokédex entry or a stand-down."""

@@ -6,25 +6,16 @@ tables (runtime.supervision.Tables), so a reload keeps them, and their times are
 from copy import deepcopy
 
 from ..planning import arbiter
-from ..planning.monitor import SPENT, STAND_DOWNS, STOOD_DOWN, Backoff, Monitor
+from ..planning.monitor import STAND_DOWNS, STOOD_DOWN, Backoff, Monitor
 from ..runtime.supervision import Tables
 
 
 def category(project):
+    """The project's category for the outcome counts, its kind's (policies/kinds.py) unless it is a legendary."""
     if project.get('legendary'):
         return 'legendary'
-    method = project['method']
-    if method == 'marathon':
-        return 'recreation'
-    if method == 'evolve':
-        return 'evolution'
-    if method == 'train':
-        return 'training'
-    if method in ('trainer', 'explore'):
-        return 'exploration'
-    if method in ('rematch', 'rod'):
-        return 'supplies'
-    return 'collection'
+    from .kinds import rules
+    return rules(project['method']).category
 
 
 def new_entry(project):
@@ -56,11 +47,6 @@ class AdventureDirector:
         self.progress = tables
         self.monitor = Monitor(tables, RETRY)
 
-    @property
-    def failures(self):
-        """Stand-downs in a row per project key."""
-        return self.monitor._table(STAND_DOWNS)
-
     def state_dict(self):
         return deepcopy({key: getattr(self, key) for key in ('outcomes', 'completed')})
 
@@ -89,10 +75,7 @@ class AdventureDirector:
         return True
 
     def trim(self):
-        for name in (STOOD_DOWN, STAND_DOWNS, SPENT):
-            table = self.monitor._table(name)
-            for key in list(table)[:-REMEMBERED]:
-                del table[key]
+        self.monitor.trim(REMEMBERED)
 
     def waiting(self, key, clock):
         """Whether the project ``key`` stood down and its wait has not run out at PlayClock frame ``clock``."""
@@ -100,9 +83,7 @@ class AdventureDirector:
 
     def forget_expired(self, clock):
         """Drop retry times that have passed. The counts stay, so the next stand-down still doubles."""
-        stood = self.monitor._table(STOOD_DOWN)
-        for key in [key for key in stood if not self.waiting(key, clock)]:
-            del stood[key]
+        self.monitor.expire(clock)
 
     @staticmethod
     def select(candidates, projects, pinned=None):
@@ -125,13 +106,8 @@ class AdventureDirector:
             self.monitor.clear(key)
             retry = 0
         else:
-            # Move the key to the newest end so trimming drops the projects left alone longest.
-            count = self.failures.pop(key, None)
-            if count is not None:
-                self.failures[key] = count
-            retry = self.monitor.stand_down(key, clock, progressed=progressed)
-            if key in self.failures:
-                self.failures[key] = min(self.failures[key], RETRY.doublings + 1)
+            # The key moves to the newest end so trimming drops the projects left alone longest.
+            retry = self.monitor.stand_down(key, clock, progressed=progressed, most=RETRY.doublings + 1)
             self.trim()
         self.outcomes = (self.outcomes + [{
             'key': key, 'category': kind, 'status': 'completed' if success else 'advanced' if progressed else 'deferred',

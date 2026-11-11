@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from .battle import BALLS, CURES, HEALING, shopping_item
 from .progression import Goal
 from .collection import legendary_project
+from . import kinds
 from .menus import MenuDecision, tap
 from ..planning.ledger import MONEY
 from ..strategy_data import DATA, ITEMS, MAPS, PRICES, WORLD
@@ -29,7 +30,7 @@ DUNGEON_KEY_SLOTS = 2
 
 def hunting(project):
     """True for a repeat catch outside the Safari Zone, which brings its own balls."""
-    return bool(project and project.get('repeat') and project['method'] in ('grass', 'surf', 'fish'))
+    return bool(project and project.get('repeat') and kinds.rules(project['method']).own_balls)
 
 
 def unfunded(snapshot, balls):

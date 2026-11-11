@@ -86,7 +86,8 @@ def test_the_battle_budget_is_the_former_heal_line():
     {'method': 'fish', 'species': sid(129), 'map': MAPS['PALLET_TOWN']},
 ])
 def test_every_pokedex_partner_and_quality_hunt_is_a_hunt(project):
-    goal = Collection().project_goal(state(), project)
+    from pokesim.policies import kinds
+    goal = kinds.rules(project['method']).target(kinds.View(Collection(), state()), project)
     assert goal.key == 'collect_hunt' and goal.kind == HUNT
 
 

@@ -21,6 +21,7 @@ def test_restore_discards_shop_and_pc_intents_but_preserves_durable_project():
     policy = StrategicPolicy(7)
     project = {'method': 'train', 'parent': 153, 'key': 'train:153:20'}
     policy.collection.project = project
+    run = policy.collection.project
     policy.shop.buying = policy.shop.restocking = True
     policy.pc.operation = 'withdraw'
     policy.pc.pending_release = (0, 0, {'nick': 'OLD'})
@@ -28,7 +29,7 @@ def test_restore_discards_shop_and_pc_intents_but_preserves_durable_project():
     policy.on_restore()
     assert policy.shop == ShoppingController() and policy.pc == StorageController()
     assert policy.pending_trade_key is None
-    assert policy.collection.project is project
+    assert policy.collection.project is run and run == project
 
 
 def test_restored_pc_cannot_accept_an_old_release_confirmation():
