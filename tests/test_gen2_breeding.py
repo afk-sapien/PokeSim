@@ -337,20 +337,27 @@ def test_eggs_of_a_registered_species_never_hold_up_training(real_data, monkeypa
     policy, state = hatcher(real_data, party[:5], [mon(215, box=1), *sneasel], owned=owned)
     # Every Sneasel egg would only add another copy of a registered species, so no trip fetches one.
     assert hatching(policy, state, Goal) is None
+    # With no Sneasel held, the first egg hatches the only copy, which the PC keeps. An egg with rarer
+    # DVs than the held Sneasel is kept as a rarer catch would be.
+    for stored in (sneasel, [mon(215, box=1), egg(215, box=0, dvs=(9,) * 5)]):
+        policy, other = hatcher(real_data, party[:5], stored, owned=owned)
+        assert hatching(policy, other, Goal).key == 'collection_hatch_pc'
+    policy, state = hatcher(real_data, party[:5], [mon(215, box=1), *sneasel], owned=owned)
     # Cable demand for a Sneasel the PC lacks makes one worth hatching again.
     policy.demand = {215: 1}
     assert hatching(policy, state, Goal).key == 'collection_hatch_pc'
     # An egg of an unregistered species is brought ahead of the duplicates, whatever box it is in.
-    policy, state = hatcher(real_data, party[:5], [*sneasel, egg(204, box=3, position=0)], owned=owned - {204, 205})
+    policy, state = hatcher(real_data, party[:5], [mon(215, box=1), *sneasel, egg(204, box=3, position=0)],
+                            owned=owned - {204, 205})
     policy.goal = hatching(policy, state, Goal)
     assert policy.goal.key == 'collection_hatch_pc'
     assert arrive(policy, state) == 'a' and policy.menu == ChangeBox(3)
     state.active_box = 3
     assert arrive(policy, state) == 'a' and policy.menu == Storage('WITHDRAW', 0, 5)
     # A duplicate egg already in a full party walks with no one waiting, but never blocks the trainee swap.
-    carried = egg(215, box=None, dvs=(9,) * 5)
+    carried = egg(215, box=None, dvs=(2,) * 5)
     trainee = mon(169, box=3, position=4, dvs=(2, 10, 8, 13, 8), level=40)
-    policy, state = hatcher(real_data, [*party[:5], carried], [trainee, *sneasel], owned=owned)
+    policy, state = hatcher(real_data, [*party[:5], carried], [trainee, mon(215, box=1), *sneasel], owned=owned)
     policy.collection['training'] = {'identity': [4321, [2, 10, 8, 13, 8]], 'target': 169, 'item': None,
                                      'species': 169, 'terminal': True, 'level_goal': 54}
     policy.collection['hatching'] = [egg_key(carried)]

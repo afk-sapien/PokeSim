@@ -250,7 +250,7 @@ def teaching_policy(real_data, monkeypatch):
     policy.journey = lambda snapshot, mem: Goal('explore', 'Explore', 'NEW_BARK_TOWN', 1, 1)
     policy.release_goal = lambda snapshot, mem, releasing=False: None
     policy.level_lead = lambda snapshot: None
-    policy.nav.observe = lambda snapshot: None
+    policy.nav.observe = lambda snapshot, interrupted=False: None
     # Zeroed RAM has no map width, which reads as a cartridge back at its opening.
     policy.unloaded = lambda snapshot, mem: False
 
