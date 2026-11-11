@@ -1,14 +1,16 @@
 from copy import deepcopy
 import hashlib
 import json
+import logging
 import os
 import threading
+import time
 from types import SimpleNamespace
 
 import httpx
 import pytest
 
-from pokesim.app.coordinator import Coordinator
+from pokesim.app.coordinator import SUMMARY_SECONDS, Coordinator
 from pokesim.app.registry import Registry, identifier
 from pokesim.interactions.cable_metadata import ADAPTER_ID
 
@@ -720,6 +722,46 @@ def test_gen2_experience_progress_rates_like_its_total():
     assert spare_slots(shown) == spare_slots(plain) != []
 
 
+APP_PROCESS_RATING = '''
+import json, sys
+from pathlib import Path
+from pokesim.app.manager import Manager
+
+manager = Manager(Path(sys.argv[1]), game_data_dir=sys.argv[2])
+try:
+    manager.assets.prepare()
+    from pokesim.trade.worth import gain, spares
+    mon = lambda box, position, dvs: {'dex': 25, 'name': 'Pikachu', 'level': 20, 'dvs': dvs, 'egg': False,
+                                      'box': box, 'position': position, 'experience': 6400}
+    inventory = {'version': 'red', 'generation': 1, 'owned': [25], 'party': [mon(None, None, [8] * 5)],
+                 'storage': {'pokemon': [mon(1, position, [position] * 5) for position in (1, 2, 3)]}}
+    offer = {'dex': 25, 'name': 'Pikachu', 'level': 20, 'dvs': [15] * 5, 'experience': 6400}
+    print(json.dumps({'points': gain(inventory, offer).points,
+                      'spares': len(spares(inventory['party'], inventory['storage']['pokemon'], inventory))}))
+finally:
+    manager.close()
+'''
+
+
+def test_the_app_process_rates_red_offers_with_the_game_data_it_keeps(tmp_path):
+    """The image runs the app with DATA_DIR set to its data folder and no GAME_DATA_DIR, and keeps the
+    Gen I tables in that folder's assets. Live, the first Red or Blue offer the trade pass rated
+    looked for them in DATA_DIR/game-data, which does not exist there, and every pass failed."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    from pokesim import game_data
+    data = tmp_path / 'data'
+    env = {key: value for key, value in os.environ.items() if key != 'GAME_DATA_DIR'}
+    env.update(DATA_DIR=str(data), PYTHONPATH=os.pathsep.join(filter(None, (
+        str(Path(__file__).resolve().parents[1]), os.environ.get('PYTHONPATH')))))
+    done = subprocess.run([sys.executable, '-c', APP_PROCESS_RATING, str(data), str(game_data.directory())],
+                          env=env, cwd=tmp_path, capture_output=True, text=True, timeout=300)
+    assert done.returncode == 0, done.stderr[-3000:]
+    result = json.loads(done.stdout.splitlines()[-1])
+    assert result['points'] > 0 and result['spares'] > 0
+
+
 def trade_display_fixture(setup, nickname='HAUNTER'):
     c = setup.coordinator
     c.display_species = {'147': {'name': 'Haunter', 'dex': 93},
@@ -1285,3 +1327,28 @@ def test_trade_views_build_only_the_rows_they_return(setup):
     mine = c.adventure_status(left)
     assert len(mine['history']) == 20 and len(mine['recent_failures']) == 5 and mine['active'] == []
     assert len(built) <= 25
+
+
+def test_the_scheduler_logs_a_count_of_its_passes_every_five_minutes(setup, caplog):
+    # A pass that goes well logs nothing else, so this line is what shows trading runs at all.
+    c = setup.coordinator
+    caplog.set_level(logging.INFO, logger='pokesim.app.coordinator')
+    summaries = lambda: [r.getMessage() for r in caplog.records if r.getMessage().startswith('Automatic trading over')]
+    c._schedule()
+    assert setup.cable_calls and summaries() == []
+
+    def broken():
+        raise RuntimeError('Game data is missing')
+    c.schedule_once = broken
+    with pytest.raises(RuntimeError):
+        c._schedule()
+    del c.schedule_once
+    c.summary_started = time.monotonic() - SUMMARY_SECONDS
+    c._schedule()
+    # The two Red games rated each other's offers in the first pass. The failed pass counts apart.
+    line, = summaries()
+    assert line == ('Automatic trading over 5 minutes: 2 passes, 1 failed, 1 rated Red, Blue or Yellow offers, '
+                    '0 rated Gold, Silver or Crystal offers')
+    assert not any(aid in line for aid in setup.peers)
+    c._schedule()
+    assert len(summaries()) == 1

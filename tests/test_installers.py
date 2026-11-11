@@ -9,7 +9,7 @@ import tomllib
 import pytest
 
 from tools.check_container import compose_command, compose_environment
-from tools.release_version import installed_version
+from tools.release import installed_version
 
 ROOT = Path(__file__).resolve().parents[1]
 

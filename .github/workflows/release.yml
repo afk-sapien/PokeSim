@@ -44,8 +44,14 @@ jobs:
       - name: Refuse unfinished release pins and compare the locked assets with the published ones
         # No temporary wheel URL, branch ref, temp-wheels directory or TEMP marker may remain, the pyproject URLs must
         # carry the locked #sha256 fragments, the Dockerfile checksum must match the source archive, and every locked
-        # emulator asset must download with exactly the hash recorded in uv.lock.
-        run: python tools/check_release_pins.py --remote
+        # emulator asset must download with exactly the hash recorded in uv.lock. A tag cut before tools/release.py
+        # existed still has the old tool, so it runs that.
+        run: |
+          if [ -f tools/release.py ]; then
+            python tools/release.py check-pins --remote
+          else
+            python tools/check_release_pins.py --remote
+          fi
       - name: Validate public release destination
         id: release
         env:
@@ -120,7 +126,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVISION: ${{ needs.validate.outputs.revision }}
-        run: python tools/check_release_gates.py --sha "$REVISION" --tree release-source --timeout 2100
+        run: python tools/release.py check-gates --sha "$REVISION" --tree release-source --timeout 2100
   build:
     # Runs in parallel with the gate. It holds no credentials that can publish and uploads nothing public.
     # Each image is built and tested on a runner of its own architecture, so nothing runs under emulation.
@@ -230,7 +236,12 @@ jobs:
           cp compose.yaml compose.quickstart.yaml install.sh install.ps1 rehearsal/
           cp .env.example rehearsal/env.example
           docker run --rm --network none "$IMAGE-linux-amd64" cat /usr/share/pokesim/python-dependencies.json > rehearsal/python-dependencies.json
-          python tools/assemble_release.py rehearsal --version "$VERSION" --revision "$REVISION" --without-desktop
+          # A tag cut before tools/release.py existed still has the old tool, so it runs that.
+          if [ -f tools/release.py ]; then
+            python tools/release.py assemble rehearsal --version "$VERSION" --revision "$REVISION" --without-desktop
+          else
+            python tools/assemble_release.py rehearsal --version "$VERSION" --revision "$REVISION" --without-desktop
+          fi
   publish:
     # The only job that can push an image or change a release. A dry run never reaches it.
     if: ${{ inputs.dry_run != true }}
@@ -277,17 +288,17 @@ jobs:
             built=$(docker image inspect "$IMAGE-linux-$arch" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')
             [ "$built" = "$REVISION" ] || { echo "The $arch image was built from $built, not $REVISION"; exit 1; }
             # A rerun may push the same image again, never a different one under a version already in GHCR.
-            python dispatch/tools/check_registry_image.py "$IMAGE-linux-$arch" --unchanged
-            python dispatch/tools/check_registry_image.py "$IMAGE" --unchanged --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
+            python dispatch/tools/release.py check-image "$IMAGE-linux-$arch" --unchanged
+            python dispatch/tools/release.py check-image "$IMAGE" --unchanged --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
             docker push "$IMAGE-linux-$arch"
             # Record the pushed digest now. The anonymous pulls below add more digests to the local image.
             docker image inspect "$IMAGE-linux-$arch" --format '{{json .}}' > "release/image-metadata-linux-$arch.json"
           done
           docker buildx imagetools create --tag "$IMAGE" "$IMAGE-linux-amd64" "$IMAGE-linux-arm64"
-          digest=$(python dispatch/tools/check_registry_image.py "$IMAGE" --index linux/amd64,linux/arm64)
+          digest=$(python dispatch/tools/release.py check-image "$IMAGE" --index linux/amd64,linux/arm64)
           echo "index_digest=$digest" >> "$GITHUB_OUTPUT"
           for arch in amd64 arm64; do
-            python dispatch/tools/check_registry_image.py "$IMAGE" --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
+            python dispatch/tools/release.py check-image "$IMAGE" --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
           done
       - name: Remove registry credentials
         if: always()
@@ -304,8 +315,14 @@ jobs:
           cp compose.yaml compose.quickstart.yaml install.sh install.ps1 release/
           cp .env.example release/env.example
           docker run --rm --network none "$IMAGE-linux-amd64" cat /usr/share/pokesim/python-dependencies.json > release/python-dependencies.json
-          python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION" --image "$IMAGE" \
-            --index-digest "$INDEX_DIGEST" --without-desktop
+          # A tag cut before tools/release.py existed still has the old tool, so it runs that.
+          if [ -f tools/release.py ]; then
+            python tools/release.py assemble release --version "$VERSION" --revision "$REVISION" --image "$IMAGE" \
+              --index-digest "$INDEX_DIGEST" --without-desktop
+          else
+            python tools/assemble_release.py release --version "$VERSION" --revision "$REVISION" --image "$IMAGE" \
+              --index-digest "$INDEX_DIGEST" --without-desktop
+          fi
       - name: Upload and verify the release downloads
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -343,7 +360,12 @@ jobs:
           DOCKER_CONFIG: ${{ runner.temp }}/pokesim-publish-auth
         run: |
           published=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft | not) | .tag_name')
-          tags=$(python tools/floating_tags.py "$VERSION" $published)
+          # A tag cut before tools/release.py existed still has the old tool, so it runs that.
+          if [ -f tools/release.py ]; then
+            tags=$(python tools/release.py floating-tags "$VERSION" $published)
+          else
+            tags=$(python tools/floating_tags.py "$VERSION" $published)
+          fi
           [ -n "$tags" ] || { echo 'No floating tags move for this release'; exit 0; }
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           for tag in $tags; do
@@ -351,9 +373,9 @@ jobs:
           done
           docker logout ghcr.io
           for tag in $tags; do
-            python dispatch/tools/check_registry_image.py "${IMAGE%:*}:$tag" --index linux/amd64,linux/arm64
+            python dispatch/tools/release.py check-image "${IMAGE%:*}:$tag" --index linux/amd64,linux/arm64
             for arch in amd64 arm64; do
-              python dispatch/tools/check_registry_image.py "${IMAGE%:*}:$tag" --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
+              python dispatch/tools/release.py check-image "${IMAGE%:*}:$tag" --platform "linux/$arch" --tested "$IMAGE-linux-$arch"
             done
           done
       - name: Remove registry credentials after the floating tags

@@ -8,7 +8,7 @@ remains available as a checksummed release download for offline loading.
 ## Trigger and checks
 
 Ordinary branch pushes and pull requests do not publish anything. When ready to
-release, run `python tools/release_version.py <version>`. It moves every pinned
+release, run `python tools/release.py version <version>`. It moves every pinned
 version together: `pyproject.toml`, the lockfile, both installers, the Dockerfile, the
 Compose files including `compose.quickstart.yaml`, `.env.example`, and the install
 commands in the docs. Then run `uv lock --check`, write the release notes and write the
@@ -53,13 +53,13 @@ The workflow does not repeat the verification matrix. The CI and Python install
 workflows run the full matrix on every tag, every night and when started by hand. A pull
 request or a push to `main` runs Linux x86 and Python 3.12 only, so the tag's own runs are
 the ones that pass the gate. The `gate` job runs
-`tools/check_release_gates.py` and requires push runs of both workflows for the exact
+`tools/release.py check-gates` and requires push runs of both workflows for the exact
 release commit in which every job succeeded, every required job is present by its exact
 name, and none was skipped or cancelled. Required jobs are the whole CI workflow (lint, the
 dependency audit, tests on Python 3.11, 3.12 and 3.14, the four browser shards, and both
 container jobs) and the whole Python install workflow (the native test shards on Linux x86
 and ARM, macOS Intel and ARM and all four Windows shards, the fresh installs on the same
-platforms, and the acceleration job). The job list in `tools/check_release_gates.py` is
+platforms, and the acceleration job). The job list in `tools/release.py` is
 compared with the workflow files by `tests/test_release_gates.py`, so adding, renaming or
 removing a job in a workflow fails the tests until the gate agrees. The gate waits for runs
 that are still in progress, up to 35 minutes, and fails for a missing or failed run. The
@@ -102,13 +102,13 @@ included in the checksums. The Python matrix exercises both installer scripts on
 respective platforms, including repeat installation. The container checks exercise a
 fresh named volume and verify that it survives container removal and recreation. The workflow uploads the
 downloads to the release and verifies every uploaded checksum. Versions containing
-`rc` are marked as prereleases. After publication, `tools/floating_tags.py` moves
+`rc` are marked as prereleases. After publication, `tools/release.py floating-tags` moves
 `latest` to the newest stable release and `<major>.<minor>`, such as `0.5`, to the newest
 stable release of its line. A fix to an older line moves only that line, and release
 candidates move neither. Each moved tag is pulled anonymously and checked against the tested image.
 
 After each publication, move `main` to the next development version, such as
-`python tools/release_version.py 0.7.0.dev0`. A development version moves only
+`python tools/release.py version 0.7.0.dev0`. A development version moves only
 `pyproject.toml`, `pokesim/__init__.py`, the lockfile and the Dockerfile, so builds from
 `main` report it. The installers, Compose files and docs keep naming the published
 release, and the pin check requires them to agree on it.
@@ -161,17 +161,17 @@ and it never becomes the latest release, so `/releases/latest/` keeps serving Po
    It runs the pokecore suite on Python 3.11, 3.12 and 3.14 with no skips, builds both files, installs each
    alone, and compares the wheel with the member source. It publishes the draft only after the attached files
    download with the hashes in `SHA256SUMS.txt`.
-4. In the PokeSim release pull request, run `python tools/pin_pokecore.py <version>`. It refuses a wheel whose
+4. In the PokeSim release pull request, run `python tools/release.py pin-pokecore <version>`. It refuses a wheel whose
    hash is not the listed one or whose files differ from `packages/pokecore/src/pokecore`, and rewrites only
    the pin's URL and fragment. `uv.lock` does not change.
-5. The release workflow's `tools/check_release_pins.py --remote` repeats that comparison, so a PokeSim tag
+5. The release workflow's `tools/release.py check-pins --remote` repeats that comparison, so a PokeSim tag
    cannot ship a pin whose wheel differs from `packages/pokecore`.
 
 ### Temporary pins and how they are finalized
 
 While the upstream releases do not exist, one commit marked TEMP points the pins at copies in
 `tools/temp-wheels/` (see `TEMP_REMOVE_BEFORE_RELEASE.md`). Those pins must not reach a tag.
-`tools/check_release_pins.py` fails if any of these remain: a URL containing `refs/heads/` or
+`tools/release.py check-pins` fails if any of these remain: a URL containing `refs/heads/` or
 `temp-wheels`, the `tools/temp-wheels/` directory, `TEMP_REMOVE_BEFORE_RELEASE.md`, a TEMP comment in the
 Dockerfile, a pyproject URL without a `#sha256=` fragment equal to the locked hash, an empty or malformed
 `EMULATOR_SOURCE_SHA256`, or a source archive name that differs from the locked pyboy-rs version. The
@@ -181,15 +181,15 @@ the `gate` job runs the local half against the release revision. A dry run fails
 
 To finalize, once both upstream releases are public:
 
-1. Write a manifest of the final asset URLs and hashes (see the docstring of
-   `tools/finalize_release_pins.py`). The asset names are the same wheels as the temporary copies.
-2. `python tools/finalize_release_pins.py manifest.json` rewrites `pyproject.toml` (final URLs with
+1. Write a manifest of the final asset URLs and hashes (see `python tools/release.py finalize-pins --help`).
+   The asset names are the same wheels as the temporary copies.
+2. `python tools/release.py finalize-pins manifest.json` rewrites `pyproject.toml` (final URLs with
    `#sha256=` fragments, no temp-wheels `[tool.uv.sources]` entry), `uv.lock` (URL sources and
    hashes), and the Dockerfile (source archive URL and checksum, no temp-wheels COPY), removes the TEMP
    comments, and deletes `tools/temp-wheels/` and `TEMP_REMOVE_BEFORE_RELEASE.md`. It re-checks its own
    result and, if anything is left over, puts every file back and fails.
 3. `uv lock --check` confirms the lock still matches. Run `uv lock` if the upstream metadata changed.
-4. `python tools/check_release_pins.py --remote` downloads the published assets and compares hashes.
+4. `python tools/release.py check-pins --remote` downloads the published assets and compares hashes.
 5. Commit, let CI pass on the release commit, then tag.
 
 Reverting the TEMP commit and running `uv lock` is the equivalent manual route. After either route,

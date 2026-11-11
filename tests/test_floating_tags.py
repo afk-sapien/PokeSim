@@ -1,6 +1,6 @@
 import pytest
 
-from tools.floating_tags import floating
+from tools.release import floating
 
 
 def test_the_newest_release_moves_latest_and_its_line():

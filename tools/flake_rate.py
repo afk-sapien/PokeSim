@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from check_release_gates import REQUIRED, api  # noqa: E402
+from release import REQUIRED, api  # noqa: E402
 
 
 def runs_of(repo, workflow, since, token):

@@ -7,9 +7,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-import finalize_release_pins  # noqa: E402
-import release_pins  # noqa: E402
+from tools import release
 
 TEMP_BASE = 'https://raw.githubusercontent.com/example/PokeSim/refs/heads/release/9.9.9/tools/temp-wheels/'
 FINAL_BASE = 'https://github.com/example/pyboy-rs/releases/download/v0.1.1/'
@@ -51,7 +49,7 @@ def final_tree(root, **kwargs):
 
 def test_temporary_pins_fail_every_marker(tmp_path):
     (tmp_path / 'tools').mkdir()
-    problems = '\n'.join(release_pins.local_problems(make_tree(tmp_path)))
+    problems = '\n'.join(release.local_problems(make_tree(tmp_path)))
     for marker in ('refs/heads/', 'temp-wheels', 'TEMP_REMOVE_BEFORE_RELEASE', 'tools/temp-wheels still exists'):
         assert marker in problems, marker
 
@@ -60,16 +58,16 @@ def test_a_dockerfile_temp_comment_alone_fails(tmp_path):
     final_tree(tmp_path)
     with (tmp_path / 'Dockerfile').open('a') as stream:
         stream.write('# TEMP-0.5.0-RELEASE-WHEELS: leftover\n')
-    assert any('TEMP-' in problem for problem in release_pins.temp_problems(tmp_path))
+    assert any('TEMP-' in problem for problem in release.temp_problems(tmp_path))
 
 
 def test_final_tree_passes(tmp_path):
-    assert release_pins.local_problems(final_tree(tmp_path)) == []
+    assert release.local_problems(final_tree(tmp_path)) == []
 
 
 @pytest.mark.parametrize('checksum', ['', 'abc', '0' * 63, 'G' * 64])
 def test_empty_or_malformed_dockerfile_checksum_fails(tmp_path, checksum):
-    problems = release_pins.local_problems(final_tree(tmp_path, sdist_hash=checksum))
+    problems = release.local_problems(final_tree(tmp_path, sdist_hash=checksum))
     assert any('EMULATOR_SOURCE_SHA256' in problem for problem in problems)
 
 
@@ -77,25 +75,25 @@ def test_dockerfile_archive_must_match_the_locked_version(tmp_path):
     final_tree(tmp_path)
     path = tmp_path / 'Dockerfile'
     path.write_text(path.read_text().replace('0.1.1', '0.1.0'))
-    assert any('does not match the locked pyboy-rs' in problem for problem in release_pins.local_problems(tmp_path))
+    assert any('does not match the locked pyboy-rs' in problem for problem in release.local_problems(tmp_path))
 
 
 def test_pyproject_url_without_a_matching_hash_fragment_fails(tmp_path):
     final_tree(tmp_path)
     path = tmp_path / 'pyproject.toml'
     path.write_text(path.read_text().replace('#sha256=' + HASHES[WHEEL], '#sha256=' + '0' * 64))
-    assert any('fragment' in problem for problem in release_pins.local_problems(tmp_path))
+    assert any('fragment' in problem for problem in release.local_problems(tmp_path))
     path.write_text(path.read_text().replace('#sha256=' + '0' * 64, ''))
-    assert any('fragment' in problem for problem in release_pins.local_problems(tmp_path))
+    assert any('fragment' in problem for problem in release.local_problems(tmp_path))
 
 
 def test_remote_check_compares_published_bytes(tmp_path):
     final_tree(tmp_path)
     served = {FINAL_BASE + name: blob for name, blob in BLOBS.items()}
-    assert release_pins.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]]) == []
+    assert release.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]]) == []
     served[FINAL_BASE + WHEEL] = b'replaced after the lock was written'
     served[FINAL_BASE + SDIST] = b'another archive'
-    problems = release_pins.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]])
+    problems = release.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]])
     assert len(problems) == 2 and all('differs' in problem for problem in problems)
 
 
@@ -105,7 +103,7 @@ def test_remote_check_reports_unreachable_assets(tmp_path):
     def offline(url):
         raise OSError('offline')
 
-    assert len(release_pins.remote_problems(tmp_path, opener=offline)) == 3
+    assert len(release.remote_problems(tmp_path, opener=offline)) == 3
 
 
 def workspace_tree(root, member_version='0.2.0', fragment=True):
@@ -138,16 +136,16 @@ def core_wheel(files):
 
 
 def test_a_workspace_member_pin_at_the_member_version_passes(tmp_path):
-    assert release_pins.local_problems(workspace_tree(tmp_path)) == []
+    assert release.local_problems(workspace_tree(tmp_path)) == []
 
 
 def test_a_workspace_member_pin_at_another_version_fails(tmp_path):
-    problems = release_pins.local_problems(workspace_tree(tmp_path, member_version='0.3.0'))
+    problems = release.local_problems(workspace_tree(tmp_path, member_version='0.3.0'))
     assert problems == [f'pyproject pins pokecore 0.2.0 but packages/pokecore is 0.3.0: {FINAL_BASE + CORE}']
 
 
 def test_a_workspace_member_pin_needs_a_hash_fragment(tmp_path):
-    problems = release_pins.local_problems(workspace_tree(tmp_path, fragment=False))
+    problems = release.local_problems(workspace_tree(tmp_path, fragment=False))
     assert problems == [f'pyproject URL lacks a #sha256 fragment: {FINAL_BASE + CORE}']
 
 
@@ -157,14 +155,14 @@ def test_remote_check_compares_a_workspace_member_wheel_with_its_fragment_and_so
     served = {FINAL_BASE + WHEEL: BLOBS[WHEEL], FINAL_BASE + SDIST: BLOBS[SDIST], FINAL_BASE + CORE: wheel}
     path = tmp_path / 'pyproject.toml'
     path.write_text(path.read_text().replace(HASHES[CORE], hashlib.sha256(wheel).hexdigest()))
-    assert release_pins.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]]) == []
+    assert release.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]]) == []
     (tmp_path / 'packages/pokecore/src/pokecore/__init__.py').write_bytes(b'VERSION = 2\n')
     (tmp_path / 'packages/pokecore/src/pokecore/new.py').write_bytes(b'')
-    problems = release_pins.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]])
+    problems = release.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]])
     assert problems == ['published pokecore wheel differs from the workspace source: '
                         'pokecore/__init__.py, pokecore/new.py']
     served[FINAL_BASE + CORE] = b'not a wheel'
-    problems = release_pins.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]])
+    problems = release.remote_problems(tmp_path, opener=lambda url: served[url.partition('#')[0]])
     assert [problem.split(':')[0] for problem in problems] == ['published asset differs from the pyproject fragment',
                                                                'published asset is not a wheel']
 
@@ -181,9 +179,9 @@ def test_finalize_rewrites_everything_consistently(tmp_path):
     tree = tmp_path / 'tree'
     (tree / 'tools').mkdir(parents=True)
     make_tree(tree)
-    assets, sdist = finalize_release_pins.load_manifest(manifest(tmp_path))
-    finalize_release_pins.finalize(tree, assets, sdist)
-    assert release_pins.local_problems(tree) == []
+    assets, sdist = release.load_manifest(manifest(tmp_path))
+    release.finalize(tree, assets, sdist)
+    assert release.local_problems(tree) == []
     assert not (tree / 'tools/temp-wheels').exists() and not (tree / 'TEMP_REMOVE_BEFORE_RELEASE.md').exists()
     assert '#sha256=' + HASHES[WHEEL] in (tree / 'pyproject.toml').read_text()
     assert 'temp' not in (tree / 'uv.lock').read_text().lower()
@@ -194,11 +192,11 @@ def test_finalize_takes_new_hashes_from_the_manifest(tmp_path):
     (tree / 'tools').mkdir(parents=True)
     make_tree(tree)
     new = '1' * 64
-    assets, sdist = finalize_release_pins.load_manifest(manifest(tmp_path, **{WHEEL: {'url': FINAL_BASE + WHEEL, 'sha256': new}}))
-    finalize_release_pins.finalize(tree, assets, sdist)
+    assets, sdist = release.load_manifest(manifest(tmp_path, **{WHEEL: {'url': FINAL_BASE + WHEEL, 'sha256': new}}))
+    release.finalize(tree, assets, sdist)
     assert f'hash = "sha256:{new}"' in (tree / 'uv.lock').read_text()
     assert f'#sha256={new}' in (tree / 'pyproject.toml').read_text()
-    assert release_pins.local_problems(tree) == []
+    assert release.local_problems(tree) == []
 
 
 def test_finalize_refuses_an_incomplete_or_malformed_manifest(tmp_path):
@@ -207,13 +205,13 @@ def test_finalize_refuses_an_incomplete_or_malformed_manifest(tmp_path):
     make_tree(tree)
     path = tmp_path / 'incomplete.json'
     path.write_text(json.dumps({'assets': {SDIST: {'url': FINAL_BASE + SDIST, 'sha256': HASHES[SDIST]}}, 'pyboy_rs_sdist': SDIST}))
-    assets, sdist = finalize_release_pins.load_manifest(path)
+    assets, sdist = release.load_manifest(path)
     with pytest.raises(SystemExit, match='lacks'):
-        finalize_release_pins.finalize(tree, assets, sdist)
+        release.finalize(tree, assets, sdist)
     with pytest.raises(SystemExit, match='branch ref'):
-        finalize_release_pins.load_manifest(manifest(tmp_path, **{WHEEL: {'url': TEMP_BASE + WHEEL, 'sha256': HASHES[WHEEL]}}))
+        release.load_manifest(manifest(tmp_path, **{WHEEL: {'url': TEMP_BASE + WHEEL, 'sha256': HASHES[WHEEL]}}))
     with pytest.raises(SystemExit, match='64'):
-        finalize_release_pins.load_manifest(manifest(tmp_path, **{WHEEL: {'url': FINAL_BASE + WHEEL, 'sha256': 'abc'}}))
+        release.load_manifest(manifest(tmp_path, **{WHEEL: {'url': FINAL_BASE + WHEEL, 'sha256': 'abc'}}))
 
 
 def path_sourced_tree(root):
@@ -243,15 +241,15 @@ def path_sourced_tree(root):
 
 
 def test_pin_check_reports_a_path_sourced_wheel_instead_of_crashing(tmp_path):
-    problems = release_pins.local_problems(path_sourced_tree(tmp_path))
+    problems = release.local_problems(path_sourced_tree(tmp_path))
     assert any('pyproject URL is not in uv.lock' in problem for problem in problems)
 
 
 def test_finalize_rewrites_a_path_sourced_tree(tmp_path):
     tree = path_sourced_tree(tmp_path / 'tree')
-    assets, sdist = finalize_release_pins.load_manifest(manifest(tmp_path))
-    finalize_release_pins.finalize(tree, assets, sdist)
-    assert release_pins.local_problems(tree) == []
+    assets, sdist = release.load_manifest(manifest(tmp_path))
+    release.finalize(tree, assets, sdist)
+    assert release.local_problems(tree) == []
     pyproject = (tree / 'pyproject.toml').read_text()
     assert pyproject.count('#sha256=' + HASHES[CORE]) == 1 and 'tool.uv.sources' not in pyproject
     assert '[tool.uv]' in pyproject
@@ -269,9 +267,9 @@ def test_finalize_changes_nothing_when_its_result_fails_the_checks(tmp_path):
     assets[other] = {'url': FINAL_BASE + other, 'sha256': HASHES[SDIST]}
     path = tmp_path / 'manifest.json'
     path.write_text(json.dumps({'assets': assets, 'pyboy_rs_sdist': other}))
-    assets, sdist = finalize_release_pins.load_manifest(path)
+    assets, sdist = release.load_manifest(path)
     with pytest.raises(SystemExit, match='nothing was changed'):
-        finalize_release_pins.finalize(tree, assets, sdist)
+        release.finalize(tree, assets, sdist)
     assert {path: path.read_bytes() for path in tree.rglob('*') if path.is_file()} == before
 
 
@@ -289,12 +287,12 @@ def run_bundle(tmp_path, name, version):
     import subprocess
     archive = tmp_path / 'source.tar.gz'
     make_sdist(archive, name, version)
-    return subprocess.run([sys.executable, str(Path(release_pins.ROOT) / 'tools/bundle_dependency_sources.py'),
+    return subprocess.run([sys.executable, str(Path(release.ROOT) / 'tools/bundle_dependency_sources.py'),
                            str(tmp_path / 'out'), '--emulator-source', str(archive)], capture_output=True, text=True)
 
 
 def test_bundled_emulator_source_must_match_the_locked_version(tmp_path):
-    locked = release_pins.locked_version(release_pins.read_lock(release_pins.ROOT), 'pyboy-rs')
+    locked = release.locked_version(release.read_lock(release.ROOT), 'pyboy-rs')
     good = run_bundle(tmp_path, 'pyboy_rs', locked)
     assert good.returncode == 0, good.stderr
     assert (tmp_path / 'out/sources' / f'pyboy-rs-{locked}.tar.gz').is_file()

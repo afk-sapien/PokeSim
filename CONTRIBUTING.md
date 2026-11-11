@@ -77,7 +77,7 @@ checkpoints for policy scenarios.
 | `pokesim/web/` | HTTP routes, presentation helpers, and browser assets |
 | `pokesim/trade/`, `pokesim/broker/` | Checkpoint exchanges, coordination, and inventory matching |
 | `tests/` | Python scenarios and Node browser tests |
-| `tools/` | Data preparation, validation, replay, and packaging commands |
+| [`tools/`](tools/README.md) | Data preparation, validation, release, and operations commands |
 | `deploy/`, `compose*.yaml` | Server deployment examples |
 | `docs/` | Current guides, plans, and indexed historical evidence |
 

@@ -1,5 +1,6 @@
 #!/bin/sh
-# Build one commit into an image and deploy it to the managed app on a Docker host over SSH.
+# Deploy the image a passing tools/image_trial.py run played, or build an older commit for a rollback,
+# to the managed app on a Docker host over SSH.
 # Usage: DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh <full commit sha>
 #        DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh --rollback-to <full commit sha>
 #        DEPLOY_HOST=<ssh alias> sh tools/deploy_host.sh --behind-main <full commit sha>
@@ -16,7 +17,10 @@
 # on main cannot sit outside production. --behind-main deploys it anyway. A rollback skips this check.
 # The commit must have green `ci gate` and `install gate` checks on GitHub, and a passing smoke from
 # tools/live_soak.py in LIVE_SOAK_REPORTS/smoke, by default data/live-soak/reports/smoke, for it or for
-# a commit with the same git tree. The script stops the app,
+# a commit with the same git tree. A deploy that is not a rollback also needs a passing image trial under
+# a day old, from tools/image_trial.py run, for the image the tag names now, and ships that image without
+# building it again. The host's compose.yaml must be the one the trial ran. A rollback builds its image
+# here and needs no trial. The script stops the app,
 # takes a cold backup of the folder, tests it with gzip -t, starts the new image with up --wait and runs
 # the smoke check. If any step after the backup fails, it puts .env back and restarts the old image.
 # Beside each backup, a json file names the image that wrote its data, the one running before the
@@ -123,6 +127,16 @@ if ! python3 "$(dirname "$0")/live_soak.py" check "$SHA"; then
   exit 1
 fi
 
+# Only the image a trial ran for 30 minutes as a container on a copy of the live data is deployed. The
+# check prints the sha256 of the compose.yaml the trial ran, which the host must still have.
+COMPOSE_SHA=
+if [ -z "$ROLLBACK" ]; then
+  if ! COMPOSE_SHA=$(python3 "$(dirname "$0")/image_trial.py" check "$SHA" "$TAG"); then
+    echo "deploy: $SHORT has no passing image trial of $TAG, run tools/image_trial.py run --candidate $SHA, refusing" >&2
+    exit 1
+  fi
+fi
+
 free_gb() { df -Pk "$1" | awk 'NR == 2 { print int($4 / 1048576) }'; }
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -131,8 +145,10 @@ if [ "$(free_gb "$WORK")" -lt "$MIN_FREE_GB" ]; then
   exit 1
 fi
 
-git -C "$ROOT" archive "$SHA" | tar x -C "$WORK"
-docker build -q --build-arg VERSION="$VERSION" --build-arg REVISION="$SHA" --build-arg SCHEMA="$SCHEMA" -t "$TAG" "$WORK"
+if [ -n "$ROLLBACK" ]; then
+  git -C "$ROOT" archive "$SHA" | tar x -C "$WORK"
+  docker build -q --build-arg VERSION="$VERSION" --build-arg REVISION="$SHA" --build-arg SCHEMA="$SCHEMA" -t "$TAG" "$WORK"
+fi
 docker run --rm --entrypoint python -e CHECK_CORE="${CHECK_CORE:-}" -e CHECK_FILE="${CHECK_FILE:-}" \
   -e CHECK_TEXT="${CHECK_TEXT:-}" -e REVISION="$SHA" "$TAG" -c "
 import importlib.metadata as m, importlib.util as u, os
@@ -146,9 +162,9 @@ print('image ok, pokesim', m.version('pokesim'), 'pokecore', m.version('pokecore
 
 # The host step holds the lock from the first check to the last prune.
 docker save "$TAG" | nice -n 10 gzip -1 | ssh "$HOST" 'gunzip | docker load' >/dev/null
-ssh "$HOST" sh -s -- "$DIR" "$SHA" "$TAG" "$MIN_FREE_GB" <<'REMOTE'
+ssh "$HOST" sh -s -- "$DIR" "$SHA" "$TAG" "$MIN_FREE_GB" "$COMPOSE_SHA" <<'REMOTE'
 set -eu
-DIR=$1 SHA=$2 TAG=$3 MIN_FREE_GB=$4
+DIR=$1 SHA=$2 TAG=$3 MIN_FREE_GB=$4 COMPOSE_SHA=${5:-}
 SHORT=$(echo "$SHA" | cut -c1-7)
 cd "$DIR"
 TS=$(date -u +%Y%m%dT%H%M%SZ)
@@ -159,6 +175,10 @@ if [ -e deploy.lock ] && [ -n "$(find deploy.lock -mmin -15)" ]; then
 fi
 echo "$SHA $TS" > deploy.lock
 trap 'rm -f "$DIR/deploy.lock"' EXIT
+if [ -n "$COMPOSE_SHA" ] && [ "$(sha256sum compose.yaml | cut -d' ' -f1)" != "$COMPOSE_SHA" ]; then
+  log "refused: compose.yaml is not the file the image trial ran"
+  exit 1
+fi
 
 # A backup needs room for itself beside the newest one, and the host keeps its floor after that.
 newest=$(ls -t backups/pre-*.tar.gz 2>/dev/null | head -1)

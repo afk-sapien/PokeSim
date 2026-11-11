@@ -7,7 +7,7 @@ import zipfile
 
 import pytest
 
-from tools.assemble_release import DESKTOP_ARCHIVES, IMAGE_ARCHITECTURES, assemble, digest
+from tools.release import DESKTOP_ARCHIVES, IMAGE_ARCHITECTURES, assemble, digest
 
 
 VERSION = '0.2.0rc99'

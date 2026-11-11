@@ -58,12 +58,12 @@ in PokeSim on the next `uv sync`, with no release.
 
 pip and pipx users install the PokeSim wheel, whose metadata keeps the
 `pokecore` dependency as a versioned GitHub release wheel with its SHA256 hash.
-`tools/check_release_pins.py` fails when that pin names another version than
+`tools/release.py check-pins` fails when that pin names another version than
 `packages/pokecore/pyproject.toml`. With `--remote` it also downloads the wheel
 and fails when its files differ from the workspace source. So a PokeSim release
 that ships a Core change needs a pokecore release of the same source first. The
 [release guide](publishing.md#pokecore-releases) gives the steps, from the version bump to
-`tools/pin_pokecore.py`.
+`tools/release.py pin-pokecore`.
 
 Test a Core change from the checkout:
 
