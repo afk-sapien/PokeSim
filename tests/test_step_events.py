@@ -39,7 +39,7 @@ def test_native_opportunity_requires_new_steps_and_consumes_once(world, key):
         events.write(memory, bit, True)
     original = bytes(memory)
     assert events.observe(store, snapshot, memory) == ([], False)
-    assert store.get(events.KEY)['tickets'][key]['next_at'] == 5100
+    assert store.get(events.KEY)['clocks'][key]['next_at'] == 5100
     steps(store, 5099)
     assert events.observe(store, snapshot, memory) == ([], False)
     assert bytes(memory) == original
@@ -50,14 +50,14 @@ def test_native_opportunity_requires_new_steps_and_consumes_once(world, key):
     # The reopened event remains available through later milestones.
     steps(store, 5500)
     assert not events.observe(store, snapshot, memory)[0]
-    assert store.get(events.KEY)['tickets'][key]['cycle'] == 1
+    assert store.get(events.KEY)['clocks'][key]['cycle'] == 1
     # A real native acquisition changes inventory and the native completion bit.
     acquired = (replace(snapshot, items=(*snapshot.items, (ITEMS[spec.item], 1))) if spec.item
                 else replace(snapshot, party=(*snapshot.party, mon(species=sid(spec.dex)))))
     events.write(memory, spec.done[0], True)
     rows, _ = events.observe(store, acquired, memory)
     assert key not in events.available(store)
-    assert store.get(events.KEY)['tickets'][key]['next_at'] == 5600
+    assert store.get(events.KEY)['clocks'][key]['next_at'] == 5600
     assert not events.observe(store, acquired, memory)[0]
     # Old checkpoint flags cannot reopen a spent opportunity.
     for bit in spec.bits:
@@ -93,6 +93,83 @@ def test_old_pre_reset_save_does_not_consume_available_opportunity(world):
     assert not events.read(memory, spec.done[0])
 
 
+def test_a_reload_from_before_a_return_opens_it_again_without_a_second_notice(world):
+    store, snapshot, memory = world
+    snapshot = replace(snapshot, owned=frozenset({133}))
+    play = [500]
+    store.clock = lambda: play[0]
+    spec = events.activities()[0]
+    events.write(memory, spec.done[0], True)
+    events.observe(store, snapshot, memory)
+    steps(store, 5100)
+    original = bytes(memory)
+    rows, changed = events.observe(store, snapshot, memory)
+    assert changed and len(rows) == 1
+    returned = bytes(memory)
+    # A save from after the return already holds its cleared flags.
+    assert rewards.rewound(store, {'play_clock': {'frames': 600}}) == []
+    # A save from before it does not, so the claim opens and the flags are cleared again.
+    memory[:] = original
+    assert rewards.rewound(store, {'play_clock': {'frames': 400}}) == [('event', 'eevee')]
+    assert events.available(store) == {}
+    play[0] = 450
+    assert events.observe(store, snapshot, memory) == ([], True)
+    assert bytes(memory) == returned and 'eevee' in events.available(store)
+
+
+def test_a_restart_lets_the_new_games_events_wait_for_their_story(world):
+    store, snapshot, memory = world
+    events.write(memory, events.activities()[0].done[0], True)
+    events.observe(store, snapshot, memory)
+    steps(store, 5100)
+    events.observe(store, snapshot, memory)
+    assert 'eevee' in events.available(store)
+    store.restart(1, {})
+    steps(store, 5200)
+    # The last game's open Eevee visit does not send the new game to Celadon before its own story.
+    assert events.available(store) == {}
+    fresh = bytearray(len(memory))
+    assert events.observe(store, replace(snapshot, owned=frozenset()), fresh) == ([], False)
+    assert fresh == bytes(len(memory)) and events.available(store) == {}
+
+
+def test_the_schema_moves_event_tickets_into_claims_rows_once(tmp_path):
+    import json
+    import sqlite3
+    from pokesim import return_claims
+    from pokesim.gen2.returns import EVENTS
+    from pokesim.state import claims as ledger
+    Store(tmp_path).close()
+    clock = {'next_at': 300, 'interval': 100, 'choice': 'helix', 'dojo': 106}
+    gen1 = {'eevee': {**clock, 'cycle': 2, 'state': 'available'},
+            'dojo': {**clock, 'cycle': 1, 'state': 'walking'},
+            'fossil': {**clock, 'cycle': 0, 'state': 'walking'}}
+    gen2 = {'sudowoodo': {'next_at': 300, 'interval': 100, 'cycle': 1, 'state': 'caught'},
+            'gift_eevee': {'next_at': 300, 'interval': 100, 'cycle': 1, 'state': 'walking', 'skipped': True,
+                           'name': 'Eevee gift', 'dex': 133}}
+    with sqlite3.connect(tmp_path / 'pokesim.sqlite') as db:
+        db.execute('PRAGMA user_version = 3')
+        for key, tickets in ((events.KEY, gen1), (EVENTS, gen2)):
+            db.execute('INSERT OR REPLACE INTO kv(k, v) VALUES (?, ?)',
+                       (key, json.dumps({'tickets': tickets, 'guards': {}})))
+    store = Store(tmp_path)
+    try:
+        moved = {key: (row['state'], row['species'], row['frame'])
+                 for key, row in return_claims.events(store.db).items()}
+        assert moved == {'eevee': (ledger.DELIVERED, None, None), 'dojo': (ledger.CONSUMED, None, None),
+                         'sudowoodo': (ledger.CONSUMED, None, None), 'gift_eevee': (ledger.DECLINED, 133, None)}
+        assert store.get(events.KEY) == {'guards': {}, 'clocks': {
+            'eevee': {**clock, 'cycle': 2}, 'dojo': {**clock, 'cycle': 1}, 'fossil': {**clock, 'cycle': 0}}}
+        # Gen II reports the capture it had not journaled yet, and not the skip it already had.
+        noted = {key: clock['noted'] for key, clock in store.get(EVENTS)['clocks'].items()}
+        assert noted == {'sudowoodo': 0, 'gift_eevee': 1} and 'tickets' not in store.get(EVENTS)
+        assert set(events.available(store)) == {'eevee'}
+        # A moved row has no frame, so no reload reopens it.
+        assert rewards.rewound(store, {'play_clock': {'frames': 0}}) == []
+    finally:
+        store.close()
+
+
 def test_disabled_steps_do_not_build_a_backlog(world, monkeypatch):
     store, snapshot, memory = world
     events.write(memory, events.activities()[0].done[0], True)
@@ -102,7 +179,7 @@ def test_disabled_steps_do_not_build_a_backlog(world, monkeypatch):
     steps(store, 20000)
     monkeypatch.setattr(config, 'EVENT_RETURN_STEPS', 100)
     assert not events.observe(store, snapshot, memory)[1]
-    assert store.get(events.KEY)['tickets']['eevee']['next_at'] == 20100
+    assert store.get(events.KEY)['clocks']['eevee']['next_at'] == 20100
 
 
 def test_fossil_does_not_interrupt_pending_revival(world):
@@ -190,7 +267,7 @@ def test_trade_claim_survives_duplicate_cleanup_during_preparation(world):
     events.observe(store, snapshot, memory)
     at_house = replace(snapshot, map=spec.room, stored_pokemon=twins[:1])
     events.observe(store, at_house, memory)
-    assert store.get(events.KEY)['tickets']['trade_6']['baseline'] == 1
+    assert store.get(events.KEY)['clocks']['trade_6']['baseline'] == 1
     # The cartridge sets the trade bit before playing the exchange animation.
     events.write(memory, spec.done[0], True)
     events.observe(store, at_house, memory)
@@ -249,7 +326,7 @@ def test_snorlax_lost_to_a_blackout_still_returns(world):
     # A blackout ends the script before the beaten flag, leaving Snorlax hidden.
     events.write(memory, hidden, True)
     events.observe(store, snapshot, memory)
-    assert 'snorlax' in store.get(events.KEY)['tickets']
+    assert 'snorlax' in store.get(events.KEY)['clocks']
     steps(store, 5100)
     assert events.observe(store, snapshot, memory)[1]
     assert not events.read(memory, hidden) and not events.read(memory, beaten)

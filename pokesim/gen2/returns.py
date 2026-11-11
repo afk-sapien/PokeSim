@@ -4,7 +4,8 @@ Gen II hides an overworld object while its event flag is set and reloads that st
 loads, so clearing a flag away from the map brings the encounter back on the next visit. A gift
 giver checks its GOT flag and a trader its wTradeFlags bit the same way.
 The legendaries' returns are ``legendary`` rows in the claims ledger (return_claims), and the kv
-value under KEY keeps only the walking clock.
+value under KEY keeps only the walking clock. The other returns are ``event`` rows, and the kv value
+under EVENTS keeps each one's walking clock and the count at the venue.
 """
 import json
 
@@ -174,14 +175,9 @@ def observe(store, snapshot, memory, walking=None):
 def consume(db, dex):
     """Close a return in the same transaction as its verified capture receipt."""
     return_claims.consume(db, dex)
-    value = kv.get(db, EVENTS)
-    if value is None:
-        return
-    tickets = value.get('tickets', {})
-    ticket = next((tickets.get(name) for name, _, number, _, _ in ACTIVITIES if number == dex), None)
-    if ticket and ticket['state'] == 'available':
-        ticket['state'] = 'caught'
-        kv.update(db, EVENTS, value)
+    for key, _, number, _, _ in ACTIVITIES:
+        if number == dex:
+            return_claims.consume_event(db, key)
 
 
 decline, claims = return_claims.decline, return_claims.claims
@@ -200,49 +196,65 @@ def observe_events(store, snapshot, memory, walking=None, keeps=None):
     every = event_interval()
     total = steps.get('total', 0)
     saved = store.get(EVENTS)
-    value = json.loads(json.dumps(saved)) if saved else {'tickets': {}}
-    tickets = value['tickets']
+    value = json.loads(json.dumps(saved)) if saved else {'clocks': {}}
+    clocks = value['clocks']
     events, changed = [], False
     ok = safe(snapshot, memory)
-    for key, name, dex, room, flags in ACTIVITIES:
-        here = snapshot.map == data.map_ids[room]
-        ticket = tickets.get(key)
-        if ticket is None:
-            if not snapshot.event(flags[0]):
+    from ..progress_events import frame
+    now = frame(store)
+    with store.transaction() as db:
+        found = return_claims.events(db)
+        for key, name, dex, room, flags in ACTIVITIES:
+            here = snapshot.map == data.map_ids[room]
+            clock, row = clocks.get(key), found.get(key)
+            state = row['state'] if row else None
+            if row is None and not snapshot.event(flags[0]):
+                # The claims reset on restart, so a new game's encounter waits for its story battle.
                 continue
-            ticket = tickets[key] = {'state': 'walking', 'next_at': total + every, 'interval': every, 'cycle': 0}
-        if ticket['interval'] != every:
-            ticket.update(interval=every, next_at=total + every)
-        if not ok or here:
-            continue
-        if ticket['state'] == 'caught':
-            ticket.update(state='walking', next_at=total + every)
-            events.append(Event('event_return', f'Caught the returning {name}',
-                                'The next return starts after more walking.', priority=3))
-        elif ticket['state'] == 'available' and snapshot.event(flags[1]):
-            # The battle ended without a capture, so the encounter waits on the next visit.
-            changed |= open_activity(memory, data, key, flags)
-        elif every and ticket['state'] == 'walking' and total >= ticket['next_at'] and skipped(ticket, events, name, dex, keeps):
-            ticket.update(next_at=total + every)
-        elif every and ticket['state'] == 'walking' and total >= ticket['next_at']:
-            ticket.update(state='available', cycle=ticket['cycle'] + 1, skipped=False)
-            changed |= open_activity(memory, data, key, flags)
-            events.append(Event('event_return', f'{name} has returned!',
-                                'A walking milestone brought it back to where it first appeared.', priority=3))
-        elif ticket['state'] == 'walking' and ticket['cycle'] and not snapshot.event(flags[1]):
-            # An older checkpoint cannot reopen a return that was already caught.
-            for flag in flags:
-                changed |= write_flag(memory, data, flag, True)
-        if key == 'sudowoodo' and ticket['state'] == 'walking' and ticket['cycle']:
-            # Between returns the variable sprite belongs to Route 37's twins, as after the first battle.
-            changed |= write_byte(memory, data, 'wVariableSprites', SPRITE_TWIN, WEIRD_TREE)
-    for key, name, room, done, dexes in offers(data):
-        changed |= _offer(tickets, events, snapshot, memory, ok, (key, name, room, done, dexes), total, every,
-                          keeps if key.startswith('gift_') else None)
-    if ok and (sprite := weird_tree(snapshot)) is not None:
-        changed |= write_byte(memory, data, 'wVariableSprites', sprite, WEIRD_TREE)
-    if value != saved:
-        store.set(EVENTS, value)
+            if clock is None:
+                clock = clocks[key] = {'next_at': total + every, 'interval': every, 'cycle': 0, 'noted': 0}
+            if clock['interval'] != every:
+                clock.update(interval=every, next_at=total + every)
+            if not ok or here:
+                continue
+            due = every and state not in (ledger.OPEN, ledger.DELIVERED) and total >= clock['next_at']
+            if state == ledger.CONSUMED and clock.get('noted', clock['cycle']) < clock['cycle']:
+                # The capture receipt closed the claim, so the journal reports it on this safe frame.
+                clock.update(next_at=total + every, noted=clock['cycle'])
+                events.append(Event('event_return', f'Caught the returning {name}',
+                                    'The next return starts after more walking.', priority=3))
+            elif state == ledger.OPEN:
+                # A reload went back to before the return, so it waits again with no second notice.
+                changed |= open_activity(memory, data, key, flags)
+                return_claims.mark(db, key, ledger.DELIVERED, now, dex)
+                state = ledger.DELIVERED
+            elif state == ledger.DELIVERED and snapshot.event(flags[1]):
+                # The battle ended without a capture, so the encounter waits on the next visit.
+                changed |= open_activity(memory, data, key, flags)
+            elif due and skipped(db, key, state, events, name, dex, keeps, now):
+                clock.update(next_at=total + every)
+                state = ledger.DECLINED
+            elif due:
+                clock['cycle'] += 1
+                return_claims.mark(db, key, ledger.DELIVERED, now, dex)
+                state = ledger.DELIVERED
+                changed |= open_activity(memory, data, key, flags)
+                events.append(Event('event_return', f'{name} has returned!',
+                                    'A walking milestone brought it back to where it first appeared.', priority=3))
+            elif state in (ledger.CONSUMED, ledger.DECLINED) and clock['cycle'] and not snapshot.event(flags[1]):
+                # An older checkpoint cannot reopen a return that was already caught.
+                for flag in flags:
+                    changed |= write_flag(memory, data, flag, True)
+            if key == 'sudowoodo' and state in (ledger.CONSUMED, ledger.DECLINED) and clock['cycle']:
+                # Between returns the variable sprite belongs to Route 37's twins, as after the first battle.
+                changed |= write_byte(memory, data, 'wVariableSprites', SPRITE_TWIN, WEIRD_TREE)
+        for key, name, room, done, dexes in offers(data):
+            changed |= _offer(db, found, clocks, events, snapshot, memory, ok, (key, name, room, done, dexes),
+                              total, every, now, keeps if key.startswith('gift_') else None)
+        if ok and (sprite := weird_tree(snapshot)) is not None:
+            changed |= write_byte(memory, data, 'wVariableSprites', sprite, WEIRD_TREE)
+        if value != saved:
+            kv.put(db, EVENTS, value)
     return events, changed
 
 
@@ -299,12 +311,12 @@ def population(snapshot, dexes):
     return sum(mon.species in dexes for mon in (*getattr(snapshot, 'party', ()), *getattr(snapshot, 'stored', ())))
 
 
-def skipped(ticket, events, name, dex, keeps):
-    """Whether a due return or gift is skipped because the PC would release it. Journaled once per run of skips."""
+def skipped(db, key, state, events, name, dex, keeps, now):
+    """Whether a due return or gift is declined because the PC would release it. Journaled once per run of skips."""
     if keeps is None or keeps(dex):
         return False
-    if not ticket.get('skipped'):
-        ticket['skipped'] = True
+    if state != ledger.DECLINED:
+        return_claims.mark(db, key, ledger.DECLINED, now, dex, return_claims.SKIPPED)
         events.append(Event('event_skip', f'Skipped the {name}' if name.endswith(('gift', 'exchange'))
                             else f'Skipped the returning {name}',
                             'The PC would release it as a spare, so it waits for the next walking milestone.',
@@ -312,43 +324,52 @@ def skipped(ticket, events, name, dex, keeps):
     return True
 
 
-def _offer(tickets, events, snapshot, memory, ok, offer, total, every, keeps=None):
-    """Walk one gift or trade through its walking, available and completed states."""
+def _offer(db, found, clocks, events, snapshot, memory, ok, offer, total, every, now, keeps=None):
+    """Walk one gift or trade's claim from walking to delivered to consumed."""
     key, name, room, bit, dexes = offer
     data = snapshot.data
     done, here = _done(snapshot, memory, data, bit), snapshot.map == data.map_ids[room]
-    ticket = tickets.get(key)
-    if ticket is None:
-        if not done:
-            return False
-        ticket = tickets[key] = {'state': 'walking', 'next_at': total + every, 'interval': every, 'cycle': 0,
-                                 'name': name, 'dex': dexes[0]}
-    if ticket['interval'] != every:
-        ticket.update(interval=every, next_at=total + every)
+    clock, row = clocks.get(key), found.get(key)
+    state = row['state'] if row else None
+    if row is None and not done:
+        # The claims reset on restart, so a new game's gift or trade waits for its story visit.
+        return False
+    if clock is None:
+        clock = clocks[key] = {'next_at': total + every, 'interval': every, 'cycle': 0, 'name': name, 'dex': dexes[0]}
+    if clock['interval'] != every:
+        clock.update(interval=every, next_at=total + every)
     if not ok:
         return False
-    if ticket['state'] == 'available':
+    if state == ledger.OPEN:
+        # A reload went back to before the offer, so it opens again with no second notice.
+        if here:
+            return False
+        return_claims.mark(db, key, ledger.DELIVERED, now, dexes[0])
+        return _set(memory, data, bit, False)
+    if state == ledger.DELIVERED:
         if not done:
             if here:
                 # Storage visits may move copies before the visit, so the gain is judged at the venue.
-                ticket['baseline'] = population(snapshot, dexes)
+                clock['baseline'] = population(snapshot, dexes)
             return False
-        if population(snapshot, dexes) > ticket.get('baseline', 0):
-            ticket.update(state='walking', next_at=total + every)
+        if population(snapshot, dexes) > clock.get('baseline', 0):
+            clock['next_at'] = total + every
+            return_claims.mark(db, key, ledger.CONSUMED, now, dexes[0])
             events.append(Event('event_return', f'Completed the {name}',
                                 'The next opportunity starts after more walking.', priority=3))
             return False
         # The bit is set without a new copy, so an older checkpoint was loaded. Offer it again.
         return _set(memory, data, bit, False) if not here else False
-    if every and ticket['state'] == 'walking' and total >= ticket['next_at'] and not here:
-        if skipped(ticket, events, name, dexes[0], keeps):
-            ticket.update(next_at=total + every)
+    if every and total >= clock['next_at'] and not here:
+        if skipped(db, key, state, events, name, dexes[0], keeps, now):
+            clock['next_at'] = total + every
             return False
-        ticket.update(state='available', cycle=ticket['cycle'] + 1, baseline=population(snapshot, dexes), skipped=False)
+        clock.update(cycle=clock['cycle'] + 1, baseline=population(snapshot, dexes))
+        return_claims.mark(db, key, ledger.DELIVERED, now, dexes[0])
         events.append(Event('event_return', f'{name} available',
                             'A walking milestone unlocked another visit.', priority=3))
         return _set(memory, data, bit, False)
-    if ticket['state'] == 'walking' and ticket['cycle'] and not done:
+    if state in (ledger.CONSUMED, ledger.DECLINED) and clock['cycle'] and not done:
         # An older checkpoint cannot reopen a gift or trade that was already completed.
         return _set(memory, data, bit, True)
     return False
@@ -378,11 +399,10 @@ def open_activity(memory, data, key, flags):
 def returned_events(store):
     if not event_interval():
         return set()
-    tickets = (store.get(EVENTS) or {}).get('tickets', {})
-    found = {dex for key, _, dex, _, _ in ACTIVITIES if tickets.get(key, {}).get('state') == 'available'}
+    ready = return_claims.delivered(store)
+    found = {dex for key, _, dex, _, _ in ACTIVITIES if key in ready}
     # A reopened trade makes its Pokémon worth trading for again. Gifts need no catch, so they stay out.
-    return found | {ticket['dex'] for key, ticket in tickets.items()
-                    if key.startswith('trade_') and ticket.get('state') == 'available' and 'dex' in ticket}
+    return found | {row['species'] for key, row in ready.items() if key.startswith('trade_') and row['species']}
 
 
 def status(store, data=None):
@@ -401,8 +421,9 @@ def status(store, data=None):
 def event_status(store):
     total = (store.get(STEPS) or {}).get('total', 0)
     every = event_interval()
-    tickets = (store.get(EVENTS) or {}).get('tickets', {})
+    clocks = (store.get(EVENTS) or {}).get('clocks', {})
+    ready = return_claims.delivered(store)
     return {'enabled': bool(every), 'interval': every, 'activities': [
-        {'key': key, 'name': ticket.get('name'), 'ready': bool(every) and ticket['state'] == 'available',
-         'remaining': max(0, ticket['next_at'] - total)}
-        for key, ticket in tickets.items()]}
+        {'key': key, 'name': clock.get('name'), 'ready': bool(every) and key in ready,
+         'remaining': max(0, clock['next_at'] - total)}
+        for key, clock in clocks.items()]}

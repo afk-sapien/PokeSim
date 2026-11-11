@@ -316,7 +316,7 @@ def test_overworld_statics_return_after_walking_until_caught(world, key, dex, fl
         world.flag(flag)
     world.walk(10)
     assert observe_events(world.store, snap, world.memory) == ([], False)
-    assert world.store.get(EVENTS)['tickets'][key]['next_at'] == 60
+    assert world.store.get(EVENTS)['clocks'][key]['next_at'] == 60
     world.walk(60)
     events, changed = observe_events(world.store, snap, world.memory)
     assert changed and events[0].type == 'event_return' and events[0].title.endswith('has returned!')
@@ -339,6 +339,53 @@ def test_overworld_statics_return_after_walking_until_caught(world, key, dex, fl
     assert all(world.event(flag) for flag in flags)
     if key == 'sudowoodo':
         assert world.byte('wVariableSprites', 4) == 0x26
+
+
+def test_a_reload_from_before_an_event_return_writes_it_again_without_a_second_notice(world):
+    from pokesim import rewards
+    from pokesim.gen2.returns import observe_events, returned_events
+    snap = world.snapshot
+    play = [500]
+    world.store.clock = lambda: play[0]
+    for flag in ('EVENT_FOUGHT_SUDOWOODO', 'EVENT_ROUTE_36_SUDOWOODO'):
+        world.flag(flag)
+    world.walk(10)
+    observe_events(world.store, snap, world.memory)
+    world.walk(60)
+    original = bytes(world.memory.raw)
+    events, changed = observe_events(world.store, snap, world.memory)
+    assert changed and events[0].title == 'Sudowoodo has returned!'
+    returned = bytes(world.memory.raw)
+    # A save from after the return already holds its encounter.
+    assert rewards.rewound(world.store, {'play_clock': {'frames': 600}}) == []
+    # A save from before it does not, so the claim opens and the encounter is written again.
+    world.memory.raw[:] = original
+    assert rewards.rewound(world.store, {'play_clock': {'frames': 400}}) == [('event', 'sudowoodo')]
+    assert returned_events(world.store) == set()
+    play[0] = 450
+    assert observe_events(world.store, snap, world.memory) == ([], True)
+    assert bytes(world.memory.raw) == returned and returned_events(world.store) == {185}
+
+
+def test_a_restart_lets_the_new_games_sudowoodo_wait_for_its_story_battle(world):
+    from pokesim.gen2.returns import observe_events, returned_events
+    snap = world.snapshot
+    for flag in ('EVENT_FOUGHT_SUDOWOODO', 'EVENT_ROUTE_36_SUDOWOODO'):
+        world.flag(flag)
+    world.walk(10)
+    observe_events(world.store, snap, world.memory)
+    world.walk(60)
+    observe_events(world.store, snap, world.memory)
+    assert returned_events(world.store) == {185}
+    world.store.restart(2, {})
+    world.walk(110)
+    assert returned_events(world.store) == set()
+    # A new game that has not fought Sudowoodo keeps its tree where the story put it.
+    for flag in ('EVENT_FOUGHT_SUDOWOODO', 'EVENT_ROUTE_36_SUDOWOODO'):
+        world.flag(flag, False)
+    before = bytes(world.memory.raw)
+    assert observe_events(world.store, snap, world.memory) == ([], False)
+    assert bytes(world.memory.raw) == before and returned_events(world.store) == set()
 
 
 def test_route_37_twins_keep_their_sprite_while_sudowoodo_is_out(world):
@@ -480,13 +527,15 @@ def test_only_gifts_and_trades_with_no_other_source_return(data):
 
 
 def test_a_gift_returns_after_walking_and_waits_for_the_new_copy(world):
+    from pokesim import return_claims
     from pokesim.gen2.returns import EVENTS, event_status, observe_events, returned_events
+    from pokesim.state import claims as ledger
     data, snap = world.data, world.snapshot
     snap.party, snap.stored = [SimpleNamespace(species=133)], []
     world.flag('EVENT_GOT_EEVEE')
     world.walk(10)
     observe_events(world.store, snap, world.memory)
-    assert world.store.get(EVENTS)['tickets']['gift_eevee']['next_at'] == 60
+    assert world.store.get(EVENTS)['clocks']['gift_eevee']['next_at'] == 60
     world.walk(60)
     events, changed = observe_events(world.store, snap, world.memory)
     assert changed and events[0].title == 'Eevee gift available' and not world.event('EVENT_GOT_EEVEE')
@@ -501,7 +550,7 @@ def test_a_gift_returns_after_walking_and_waits_for_the_new_copy(world):
     snap.party.append(SimpleNamespace(species=133))
     events, _ = observe_events(world.store, snap, world.memory)
     assert events[0].title == 'Completed the Eevee gift'
-    assert world.store.get(EVENTS)['tickets']['gift_eevee']['state'] == 'walking'
+    assert return_claims.events(world.store.db)['gift_eevee']['state'] == ledger.CONSUMED
     # An older checkpoint from the open window is closed again.
     snap.map = data.map_ids['NEW_BARK_TOWN']
     world.flag('EVENT_GOT_EEVEE', False)
@@ -528,7 +577,9 @@ def test_a_gift_flag_without_a_new_copy_opens_again_away_from_the_room(world):
     ('EVENT_FOUGHT_SUDOWOODO', 185, 'Skipped the returning Sudowoodo')])
 def test_a_return_or_gift_the_pc_would_release_is_skipped_and_journaled_once(world, flag, dex, title):
     # Live, Gold released the returning Sudowoodo 11 seconds after catching it, and Eevee every 20 hours.
-    from pokesim.gen2.returns import EVENTS, observe_events
+    from pokesim import return_claims
+    from pokesim.gen2.returns import observe_events
+    from pokesim.state import claims as ledger
     snap = world.snapshot
     snap.party, snap.stored = [SimpleNamespace(species=dex)], []
     world.flag(flag)
@@ -541,12 +592,14 @@ def test_a_return_or_gift_the_pc_would_release_is_skipped_and_journaled_once(wor
                                          keeps=lambda species: asked.append(species) or False)
         assert [event.title for event in events] == ([title] if total == 60 else [])
         assert not changed and world.event(flag)
-    assert asked == [dex, dex] and any(ticket.get('skipped') for ticket in world.store.get(EVENTS)['tickets'].values())
+    rows = return_claims.events(world.store.db).values()
+    assert asked == [dex, dex] and any(row['state'] == ledger.DECLINED for row in rows)
     # Once the PC would keep it, the next milestone opens it as before.
     world.walk(160)
     events, _ = observe_events(world.store, snap, world.memory, keeps=lambda species: True)
     assert events[0].type == 'event_return' and events[0].title.endswith(('available', 'has returned!'))
-    assert all(ticket['state'] == 'available' for ticket in world.store.get(EVENTS)['tickets'].values())
+    rows = return_claims.events(world.store.db).values()
+    assert rows and all(row['state'] == ledger.DELIVERED for row in rows)
 
 
 def test_kims_aerodactyl_trade_reopens_and_makes_aerodactyl_worth_trading_for(world):

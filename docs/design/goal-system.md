@@ -411,8 +411,8 @@ One table, `claims` (`pokesim/state/claims.py`, schema version 2):
 
 | Field | Meaning |
 |---|---|
-| `source` | `league` and `legendary` today. `event` and `mew` join in PRs 5b-2 and 5b-3 |
-| `key` | dex number or reward seed |
+| `source` | `league`, `legendary` and `event` today. `mew` joins in PR 5b-3 |
+| `key` | dex number, reward seed or event activity key |
 | `state` | `open`, `delivered`, `declined`, or `consumed` once a delivered encounter is caught |
 | `frame` | PlayClock frame of the last change, or none for a claim moved from the old League ledger |
 | `species` | the Pokémon a delivery wrote |
@@ -436,6 +436,8 @@ Before PR 5a, both generations took the next League gift from a stored `delivere
 PR 5a moves League rewards in both generations onto the `league` rows, and `store.league_marks` now reads them. PR 5b goes in three parts. 5b-1 moves the legendary returns of both generations (`legendary_returns.py` and `gen2/returns.py`) onto `legendary` rows through `return_claims.py`. 5b-2 moves the event returns (`step_events.py` and the event half of `gen2/returns.py`). 5b-3 moves Mew (`mew_returns.py` and `gen2/steps.py`). The single pipeline then replaces `runtime/reward_delivery.py` and `gen2/rewards.py`.
 
 A legendary return is delivered when its encounter is written into the cartridge, at a safe moment away from its room. The capture receipt consumes it and a refused catch declines it, and either stays closed until the next walking milestone. A reload to a save from before the delivery reopens it, so the encounter is written again, with no second notice. The claims reset on restart, so a new game's legendaries wait in their first homes whatever the last game caught. Schema version 3 moves each old kv ticket into a row with no frame, and the kv value keeps only the walking clock.
+
+An event return (a gift, an NPC trade, a fossil, the Dojo choice or a static encounter like Snorlax or Sudowoodo) follows the same rules on `event` rows keyed by its activity. It is delivered when a walking milestone clears its flags away from its room, and consumed when the gift, trade or capture is verified. In Gen II, one the PC would release is declined until the next milestone. A reload to a save from before the delivery reopens it, and the flags are cleared again with no second notice. A row is made only once the story has done the event, so after a restart the new game's events wait for its own story. Schema version 4 moves each old event ticket into a row with no frame. The kv value keeps the walking clock, the fossil and Dojo choice and, for Gen II, the last capture the journal reported.
 
 ## 8. Frame budgets per tier
 
