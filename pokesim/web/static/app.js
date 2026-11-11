@@ -276,7 +276,7 @@ async function refreshState() {
   if (stateBusy) return
   stateBusy = true
   try {
-    const response = await PokeSim.fetch('/api/state', {cache: 'no-store'})
+    const response = await PokeSim.fetch('/api/state?view=live', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
     const state = await response.json()
     if ($('#connection').classList.contains('is-offline')) window.pokesimScreen?.reconnect()

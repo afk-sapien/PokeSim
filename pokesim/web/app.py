@@ -100,6 +100,23 @@ def without_stored_pokemon(status):
     return {**status, 'game': {**game, 'storage': {key: value for key, value in storage.items() if key != 'pokemon'}}}
 
 
+# The plan fields the live page draws. The rest of the plan, the Red, Blue and Yellow collection
+# list above all, is for the Pokédex, the bots and tools, which read the default view.
+LIVE_PLAN_FIELDS = ('objective', 'next', 'reason', 'action', 'visited_tiles', 'pin')
+
+
+def live_view(status):
+    """Live state for the live page, which reads it every 2 seconds: the plan trimmed to what it draws."""
+    strategy = status.get('strategy') if isinstance(status, dict) else None
+    if not isinstance(strategy, dict):
+        return status
+    plan = pick(strategy, LIVE_PLAN_FIELDS)
+    collection = strategy.get('collection')
+    if isinstance(collection, dict) and 'version' in collection:
+        plan['collection'] = {'version': collection['version']}
+    return {**status, 'strategy': plan}
+
+
 def status_summary(status):
     """What the supervisor and backups read: playback, health and pace, with no game data."""
     if not isinstance(status, dict):
@@ -523,11 +540,14 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/state")
-    def state(storage: bool = Query(False)):
-        """Live state. `?storage=1` adds the boxed Pokémon list, which the live page never draws."""
+    def state(storage: bool = Query(False), view: Literal['live'] | None = Query(None)):
+        """Live state. `?storage=1` adds the boxed Pokémon list, which the live page never draws.
+        `?view=live` trims the plan to the fields the live page draws."""
         status = emu.status()
         if not storage:
             status = without_stored_pokemon(status)
+        if view == 'live':
+            status = live_view(status)
         if not isinstance(status, dict):
             return status
         game = status.get('game')
