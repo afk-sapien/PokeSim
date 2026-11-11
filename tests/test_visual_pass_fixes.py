@@ -103,6 +103,35 @@ def test_frame_endpoint_prefers_the_last_picture(tmp_path):
     assert client.get('/frame.jpg').content == b'picture'
 
 
+def test_the_stream_opens_on_a_fresh_frame_and_repeats_a_quiet_one(tmp_path, monkeypatch):
+    import asyncio
+    from pokesim import config
+    monkeypatch.setattr('pokesim.web.app.STREAM_KEEPALIVE_SECONDS', 0.05)
+    monkeypatch.setattr(config, 'STREAM_FPS', 60)
+    emu = gen2_emulator()
+    emu.frame_seq, emu.frame_image, emu.watch = 0, b'old', lambda: None
+
+    def current_frame(timeout=1):
+        # A paused Gold or Silver draws its screen when asked, so the stream never opens on a stale one.
+        emu.frame_seq, emu.frame_image = 1, b'fresh'
+        return emu.frame_image
+    emu.current_frame = current_frame
+    app = create_app(emu, Store(tmp_path))
+    endpoint = next(route.endpoint for route in app.routes if getattr(route, 'path', None) == '/stream')
+
+    async def parts(count):
+        body = (await endpoint()).body_iterator
+        try:
+            return [await anext(body) for _ in range(count)]
+        finally:
+            await body.aclose()
+
+    first, again = asyncio.run(parts(2))
+    assert first == b'--pokesimframe\r\nContent-Type: image/png\r\nContent-Length: 5\r\n\r\nfresh\r\n'
+    # Nothing new was drawn, so the stream sends the same frame again rather than going quiet.
+    assert again == first
+
+
 def test_gen2_thumbnail_skips_blank_transition_frames():
     from pokesim.gen2.emulator import Emulator, solid
     white = Image.new('RGB', (160, 144), 'white')
