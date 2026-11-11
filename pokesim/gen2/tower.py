@@ -7,7 +7,7 @@ from pokecore.gen2.ram import Memory, calculated_stats
 from ..planning.ledger import FIELD_MOVES
 from ..planning.monitor import STAND_DOWNS, STOOD_DOWN, Backoff
 from ..planning.stance import TRAVEL
-from .standdown import monitor, stand_down, standing_down
+from .standdown import DECISION_FRAMES, monitor, stand_down, standing_down
 from .teams import assemble, assembled, key, no_room
 
 MACHINES = ((70, 'HM04'), (57, 'HM03'), (19, 'HM02'), (94, 'TM29'), (89, 'TM26'), (188, 'TM36'), (247, 'TM30'))
@@ -50,10 +50,10 @@ def forecast(mon, cap):
         stats=calculated_stats(data.species[species]['stats'], cap, mon.dvs, mon.stat_exp))
 
 
-# A challenge that fell short backs its level cap off for 100000 decisions, doubling with each
-# shortfall in a row up to 1.6 million. When the next challenge comes is the collection arbiter's
+# A challenge that fell short backs its level cap off for 2 million frames (100000 decisions), doubling
+# with each shortfall in a row up to 32 million. When the next challenge comes is the collection arbiter's
 # call, which weighs a repeat challenge as filler (see collection.journey).
-CAP_BACKOFF = Backoff(100000, doublings=4)
+CAP_BACKOFF = Backoff(100000 * DECISION_FRAMES, doublings=4)
 # The stand-down of a team that cannot be put together because storage is full.
 ROOM_KEY = 'tower:room'
 
@@ -72,13 +72,14 @@ def migrate(policy):
     for cap, row in failed.items():
         streak = max(1, int(row.get('streak', 1)))
         counts[cap_key(cap)] = streak
-        stood[cap_key(cap)] = row.get('until', 0) - CAP_BACKOFF.wait(streak)
+        # These saves counted in decisions, which standdown.migrate turns into frames.
+        stood[cap_key(cap)] = row.get('until', 0) - CAP_BACKOFF.wait(streak) // DECISION_FRAMES
 
 
 def resting_caps(policy):
     """Level caps whose last challenge fell short of seven wins and are still backing off."""
     # The room stand-down shares the prefix, so only a key naming a level is a cap.
-    caps = {int(key.split(':', 1)[1]) for key in policy.collection.get(STOOD_DOWN) or {}
+    caps = {int(key.split(':', 1)[1]) for key in policy.monitor_tables.get(STOOD_DOWN) or {}
             if key.startswith('tower:') and key.split(':', 1)[1].isdigit()}
     return {cap for cap in caps if standing_down(policy, cap_key(cap), CAP_BACKOFF)}
 

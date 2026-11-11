@@ -4,14 +4,15 @@ from collections import Counter
 from ..planning import values
 from ..planning import arbiter, pin
 from ..planning.arbiter import Candidate, Tier
-from ..planning.cost import DECISIONS_PER_BATTLE, FRAMES_PER_BATTLE, FRAMES_PER_TILE
+from ..planning.cost import FRAMES_PER_BATTLE, FRAMES_PER_TILE
 from ..planning.ledger import FIELD_MOVES
 from ..planning.stance import HUNT
 from .menus import ChangeBox, FieldMove, Storage, Teach, Use
 from .navigation import DIRS
 from pokecore.gen2.ram import Memory
 from ..planning.monitor import STOOD_DOWN
-from .standdown import (exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down, standing_down)
+from .standdown import (DECISION_FRAMES, exhausted, forget, hunt_key, rung_key, search_expected, spend, stand_down,
+                        standing_down)
 
 
 def matching_time(value, current):
@@ -578,9 +579,6 @@ def ladder_candidates(goal, inner):
 
 # Frames of one map crossed on the way to a rung's goal, about thirty steps.
 MAP_FRAMES = 30 * FRAMES_PER_TILE
-# Frames per decision, the unit of the hunt and postgame estimates: a wild battle takes about 1500
-# frames and 75 decisions with the walking that finds it.
-DECISION_FRAMES = FRAMES_PER_BATTLE // DECISIONS_PER_BATTLE
 # Frames a rung's work takes once its walk is over. A short errand is a talk, a gift, a pickup or a
 # purchase, as Gen I prices it (policies/strategic.py).
 ERRAND_FRAMES = 3000
@@ -636,6 +634,8 @@ class Ladder:
     def _slots(self):
         policy = self.policy
         slots = {('collection', key): value for key, value in policy.collection.items()}
+        # A rung's stand-downs and spent budgets are undone with its other changes.
+        slots.update({('monitor', key): value for key, value in policy.monitor_tables.items()})
         slots['menu'] = getattr(policy, 'menu', None)
         slots['completed'] = getattr(policy, 'completed', None)
         return slots
@@ -659,10 +659,11 @@ class Ladder:
         if slot == 'menu':
             policy.menu = None if value is _MISSING else value
         elif isinstance(slot, tuple):
+            table = policy.collection if slot[0] == 'collection' else policy.monitor_tables
             if value is _MISSING:
-                policy.collection.pop(slot[1], None)
+                table.pop(slot[1], None)
             else:
-                policy.collection[slot[1]] = deepcopy(value)
+                table[slot[1]] = deepcopy(value)
         elif hasattr(policy, slot):
             if slot == 'completed' and isinstance(policy.completed, dict) and isinstance(value, dict):
                 policy.completed.clear()
@@ -700,7 +701,7 @@ class Ladder:
             return
         if self.pick is not None and arbiter.ahead(self.pick, tier) and not self.survey and name != self.pin_rung:
             return
-        if (name != self.pin_rung and self.policy.collection.get(STOOD_DOWN)
+        if (name != self.pin_rung and self.policy.monitor_tables.get(STOOD_DOWN)
                 and standing_down(self.policy, rung_key(name))):
             # The watchdog gave up on this rung after its reloads did not help (emulator.py).
             return

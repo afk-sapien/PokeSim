@@ -138,7 +138,7 @@ def contest_case(monkeypatch, day=2, flags=0, decisions=100, started=0):
     values = {'wCurDay': day, 'wDailyFlags1': flags, 'wStatusFlags2': 0}
     monkeypatch.setattr(contest, 'Memory', lambda memory, data: SimpleNamespace(byte=lambda name: values.get(name, 0)))
     data = SimpleNamespace(maps={1: {'constant': 'ROUTE_35'}})
-    policy = SimpleNamespace(memory=None, data=data, decisions=decisions,
+    policy = SimpleNamespace(memory=None, data=data, decisions=decisions, clock=decisions, monitor_tables={},
                              collection={'contest': {'entered': False, 'started': started}})
     snapshot = SimpleNamespace(map=1, x=5, y=5)
     return contest, policy, snapshot
@@ -180,7 +180,7 @@ def real_data(request):
 
 def rock_case(data, party, items=()):
     flags = {'EVENT_GOT_MASTER_BALL_FROM_ELM', 'EVENT_GOT_TM08_ROCK_SMASH'}
-    policy = SimpleNamespace(data=data, collection={}, returned=set(), decisions=1000,
+    policy = SimpleNamespace(data=data, collection={}, monitor_tables={}, returned=set(), decisions=1000, clock=1000,
                              nav=SimpleNamespace(regions=SimpleNamespace(cleared_rocks={})),
                              person=lambda snapshot, key, *args: SimpleNamespace(key=key))
     # Celebi is registered, so Crystal's GS Ball errand comes after the rock.
@@ -305,7 +305,7 @@ def test_a_stone_gone_before_the_evolution_drops_the_project(real_data):
     stone = (real_data.items['SUN_STONE'], 1)
     snapshot = SimpleNamespace(party=(gloom,), stored=(), owned=set(range(1, 252)) - {182}, items=(stone,),
                                map=real_data.map_ids['GOLDENROD_CITY'], x=1, y=1)
-    policy = SimpleNamespace(data=real_data, collection={}, menu=None)
+    policy = SimpleNamespace(data=real_data, collection={}, monitor_tables={}, clock=0, menu=None)
     policy.goal = journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal)
     assert policy.goal.key == 'collection_evolve_item' and policy.collection['training']['identity'] == identity(gloom)
     assert arrive(policy, snapshot) == 'wait' and isinstance(policy.menu, Remedy)
@@ -321,7 +321,8 @@ def test_npc_trade_waits_while_the_party_and_every_box_are_full(monkeypatch):
     data = SimpleNamespace(symbols={'wTradeFlags': (0, 0)}, game='gold',
                            species={69: {'name': 'Bellsprout'}, 95: {'name': 'Onix'}})
     storage = SimpleNamespace(map_name='VIOLET_POKECENTER_1F', x=1, y=1, face='up')
-    policy = SimpleNamespace(data=data, collection={}, demand={}, decisions=1, storage_goal=lambda snapshot: storage,
+    policy = SimpleNamespace(data=data, collection={}, monitor_tables={}, demand={}, decisions=1, clock=1,
+                             storage_goal=lambda snapshot: storage,
                              person=lambda snapshot, key, *args: SimpleNamespace(key=key))
     party = [SimpleNamespace(species=155, level=40, box=None, position=None, held_item=0, moves=[33], gender='Male', egg=False)
              for _ in range(6)]

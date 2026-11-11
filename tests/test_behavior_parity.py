@@ -148,7 +148,8 @@ def gen2_ladder():
     from pokesim.gen2.emulator import Emulator
     from pokesim.gen2.policy import Goal
     steps = []
-    policy = SimpleNamespace(collection={}, decisions=100, menu=None, completed={}, pin=None, recoveries=0,
+    policy = SimpleNamespace(collection={}, monitor_tables={}, decisions=100, clock=0, menu=None, completed={}, pin=None,
+                             recoveries=0,
                              ladder_rung='quality', goal=Goal('collection_quality', 'Catch a better Pidgey', 'X', 0, 0),
                              in_league=lambda snap: False, on_restore=lambda: None)
     emu = SimpleNamespace(policy=policy, supervisor=Supervisor(), reloads=0, loop_guard=None, frame=10 ** 6,

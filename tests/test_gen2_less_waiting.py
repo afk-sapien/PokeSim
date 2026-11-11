@@ -72,7 +72,8 @@ def stub_activities(monkeypatch, **goals):
 
 
 def expedition(data):
-    return SimpleNamespace(data=data, collection={}, demand={}, decisions=1000, completed={'tower': 1}, returned=set(),
+    return SimpleNamespace(data=data, collection={}, monitor_tables={}, demand={}, decisions=1000, clock=1000,
+                           completed={'tower': 1}, returned=set(),
                            in_league=lambda snapshot: False, no_room=lambda snapshot: False, memory=None)
 
 
@@ -215,7 +216,8 @@ def test_without_exp_share_a_levelling_plan_trains_the_partner_in_the_lead(data,
     eggs = [mon(175, box=2, position=i, egg=True, level=5, dvs=(i,) * 5) for i in range(3)]
     state = snapshot([lead()], [trainee, *eggs])
     storage = SimpleNamespace(map_name='GOLDENROD_POKECENTER_1F', x=1, y=1, face='up')
-    policy = SimpleNamespace(data=data, collection={}, demand={}, decisions=1000, storage_goal=lambda snapshot: storage,
+    policy = SimpleNamespace(data=data, collection={}, monitor_tables={}, demand={}, decisions=1000, clock=1000,
+                             storage_goal=lambda snapshot: storage,
                              release_target=lambda snapshot: None, no_room=lambda snapshot: False)
     # A roamer lead plan set this levelling project after the cartridge's only Exp. Share was traded away.
     policy.collection['training'] = {'identity': identity(trainee), 'target': 94, 'item': None, 'species': 94,
@@ -235,7 +237,8 @@ def test_without_exp_share_the_terminal_walk_still_trains_someone(data, monkeypa
     from pokesim.gen2.training import journey
     walk_anywhere(monkeypatch)
     state = snapshot([lead(), mon(94, box=None, position=1, level=99, experience=1050000)])
-    policy = SimpleNamespace(data=data, collection={}, demand={}, decisions=1000, no_room=lambda snapshot: False)
+    policy = SimpleNamespace(data=data, collection={}, monitor_tables={}, demand={}, decisions=1000, clock=1000,
+                             no_room=lambda snapshot: False)
     goal = journey(policy, state, clock(), Goal, terminal=True)
     assert goal.key == 'collection_train' and goal.label == 'Train 94 toward level 100 in the lead'
     assert policy.collection['training']['terminal']
@@ -245,7 +248,7 @@ def shareless_policy(data, party, project):
     from pokesim.gen2.policy import Policy
     from pokesim.gen2.training import identity
     policy = Policy.__new__(Policy)
-    policy.data, policy.goal = data, None
+    policy.data, policy.goal, policy.monitor_tables = data, None, {}
     policy.collection = {'training': {'identity': identity(project), 'target': project.species, 'item': None,
                                       'species': project.species, 'terminal': True}}
     return policy, snapshot(party)
@@ -290,7 +293,7 @@ def test_a_sleeper_kept_after_every_beast_is_caught_gives_the_strongest_the_lead
     strong = lead()
     strong.position = 1
     policy = Policy.__new__(Policy)
-    policy.data, policy.goal, policy.returned = data, None, set()
+    policy.data, policy.goal, policy.returned, policy.monitor_tables = data, None, set(), {}
     policy.collection = {'roam_lead': identity(sleeper)}
     state = snapshot([sleeper, strong])
     state.roamers = []
@@ -415,7 +418,8 @@ def test_without_exp_share_a_stone_evolution_still_runs(data):
     state = snapshot([lead(), eevee], owned=set(range(1, 252)) - {134})
     state.items = ((data.items['WATER_STONE'], 1),)
     state.map = data.map_ids['GOLDENROD_CITY']
-    policy = SimpleNamespace(data=data, collection={}, demand={}, decisions=1000, no_room=lambda snapshot: False)
+    policy = SimpleNamespace(data=data, collection={}, monitor_tables={}, demand={}, decisions=1000, clock=1000,
+                             no_room=lambda snapshot: False)
     goal = journey(policy, state, clock(), Goal)
     assert goal.key == 'collection_evolve_item' and policy.collection['training']['target'] == 134
 

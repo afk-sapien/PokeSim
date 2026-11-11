@@ -41,7 +41,8 @@ def clock():
 
 
 def expedition(data, decisions=1000):
-    return SimpleNamespace(data=data, collection={}, demand={}, decisions=decisions, completed={'champion': 1},
+    return SimpleNamespace(data=data, collection={}, monitor_tables={}, demand={}, decisions=decisions,
+                           clock=decisions, completed={'champion': 1},
                            returned=set(), no_room=lambda snapshot: False, memory=None, goal=None)
 
 

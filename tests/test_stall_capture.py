@@ -15,6 +15,7 @@ from pokesim.gen2.emulator import Emulator as Gen2Emulator
 from pokesim.replay import capture as scenario
 from pokesim.replay.__main__ import main
 from pokesim.runtime import capture, trace
+from pokesim.runtime.supervision import Tables
 from pokesim.stalls import BEFORE_STALL_CHECKPOINT, FRAMES_PER_GAME_MINUTE as MINUTE, LOOP_LIMIT, LoopGuard, StallWatch
 from pokesim.store import Store
 
@@ -166,7 +167,7 @@ def gen2(tmp_path, seen, **extra):
     playing = game(tmp_path, steps=SimpleNamespace(flush=lambda force=False: None),
                    statistics=SimpleNamespace(flush=lambda snapshot: None), history={}, screen_frame=0,
                    battle_frame=None, _event=lambda event, snapshot: seen.append(event), **extra)
-    playing.policy.recoveries = 0
+    playing.policy.recoveries, playing.policy.monitor_tables = 0, Tables()
     return playing
 
 

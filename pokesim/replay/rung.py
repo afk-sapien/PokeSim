@@ -168,14 +168,13 @@ def idle(run, frames):
 
 def _stand_downs(run, seen):
     """Stand-downs since the last call, as goal keys. ``seen`` carries what was already counted."""
-    collection = run.policy.collection
     if run.generation == 2:
-        stood = dict(collection.get('stood_down') or {})
+        stood = dict(run.policy.monitor_tables.get('stood_down') or {})
         found = [key for key, when in stood.items() if seen.get(key) != when]
         seen.clear()
         seen.update(stood)
         return found
-    outcomes = collection.director.outcomes
+    outcomes = run.policy.collection.director.outcomes
     last = outcomes[-1] if outcomes else None
     if last is None or seen.get('last') is last:
         return []

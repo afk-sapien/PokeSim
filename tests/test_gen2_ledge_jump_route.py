@@ -38,7 +38,7 @@ def walk_to(x, y):
                                  explore=lambda snapshot, memory, surf=False: explored.append(1) or ['up'])
     policy.walk = lambda snapshot, memory, path: SimpleNamespace(button=path[0])
     policy.goal = Goal('mystery_egg', 'Visit Mr. Pokémon', 'ROUTE_29', x, y)
-    policy.collection, policy.decisions = {}, 100
+    policy.collection, policy.monitor_tables, policy.decisions, policy.clock = {}, {}, 100, 100
     policy.stranded = policy.unreachable_waits = 0
     policy.failure, policy.recoveries = None, 0
     return policy, explored

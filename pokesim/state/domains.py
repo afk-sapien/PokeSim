@@ -99,8 +99,7 @@ DOMAINS = (
     Domain('supervisor-ladder-v1', 'pokesim.runtime.supervision', RESETS_ON_RESTART),
     # A reload keeps the run's bests, so the replay after it cannot count as new progress.
     Domain('supervisor-best-v1', 'pokesim.runtime.supervision', RESETS_ON_RESTART),
-    # A reload keeps the goals' stand-downs and spent frames, as the frames were really used. Red, Blue
-    # and Yellow keep them here so far.
+    # A reload keeps the goals' stand-downs and spent budgets, as the frames were really used.
     Domain('supervisor-monitor-v1', 'pokesim.runtime.supervision', RESETS_ON_RESTART, policy_reads=True),
     Domain('goal-time-v1', 'pokesim.goal_time', RESETS_ON_RESTART),
 

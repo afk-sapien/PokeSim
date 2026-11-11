@@ -65,7 +65,7 @@ def crystal_run(party=2):
         poke(memory, 'wPartyMon1', [0, 0, 0, 200, 0, 200], base + 32)             # healthy, 200/200 HP
     pb = Clock(3600.0)
     pb.memory = memory
-    policy = SimpleNamespace(collection={}, completed={}, ladder_rung=None)
+    policy = SimpleNamespace(collection={}, monitor_tables={}, clock=0, completed={}, ladder_rung=None)
     data = SimpleNamespace(symbols=SYMBOLS, species={191: {'name': 'Sunkern'}})
     return SimpleNamespace(pb=pb, data=data, game='crystal', history={'owned': [1, 191]}, policy=policy, clock=None)
 
@@ -159,18 +159,19 @@ def test_box_fill_copies_one_stored_pokemon_into_every_free_slot():
 
 def test_the_tower_edit_forgets_rested_caps_and_the_finished_challenge():
     run = crystal_run()
-    run.policy.collection = {'stood_down': {'tower:100': 5, 'tower:room': 6, 'hunt:12': 7}, 'stand_downs': {'tower:100': 3},
-                             'tower_result': {'wins': 3}}
+    run.policy.monitor_tables = {'stood_down': {'tower:100': 5, 'tower:room': 6, 'hunt:12': 7},
+                                 'stand_downs': {'tower:100': 3}}
+    run.policy.collection = {'tower_result': {'wins': 3}}
     run.policy.completed = {'tower': 9, 'league': 1}
     apply_gen2_edits(run, {'tower': {'rested': True, 'first': True}})
-    assert run.policy.collection == {'stood_down': {'hunt:12': 7}, 'stand_downs': {}, 'progress_frames': {}}
-    assert run.policy.completed == {'league': 1}
+    assert run.policy.monitor_tables == {'stood_down': {'hunt:12': 7}, 'stand_downs': {}, 'progress_frames': {}}
+    assert run.policy.collection == {} and run.policy.completed == {'league': 1}
 
 
 def test_the_tower_room_stand_down_is_not_a_level_cap():
     # Once the room stand-down ended, the next team choice read "room" as a level and raised.
     from pokesim.gen2 import tower
-    policy = SimpleNamespace(collection={'stood_down': {'tower:room': 0, 'tower:50': 10 ** 6}}, decisions=10 ** 6 + 1)
+    policy = SimpleNamespace(monitor_tables={'stood_down': {'tower:room': 0, 'tower:50': 10 ** 6}}, clock=10 ** 6 + 1)
     assert tower.resting_caps(policy) == {50}
 
 
@@ -181,7 +182,7 @@ def test_gen2_scenarios_refuse_an_edit_they_do_not_have():
 
 def test_the_watch_marks_rungs_timed_hunts_and_stand_downs_and_names_a_retry_loop():
     run = crystal_run()
-    run.policy.collection = {'stood_down': {'hunt:12': 1}}
+    run.policy.monitor_tables = {'stood_down': {'hunt:12': 1}}
     watch = Gen2Watch(run)
     assert watch.marks() == []                                     # what the save already held is not new
     run.policy.ladder_rung = 'hunt'
@@ -189,13 +190,13 @@ def test_the_watch_marks_rungs_timed_hunts_and_stand_downs_and_names_a_retry_loo
     assert watch.marks() == [('rung', 'hunt', 'The ladder picked hunt'), ('timed_hunt', '191', 'Hunting Sunkern in the day')]
     assert watch.marks() == []
     run.policy.collection['target'] = {'species': 12, 'time': 'any'}
-    run.policy.collection['stood_down']['tower:room'] = 5
+    run.policy.monitor_tables['stood_down']['tower:room'] = 5
     assert watch.marks() == [('stand_down', 'tower:room', 'tower:room stood down')]
     for when in (6, 7):
-        run.policy.collection['stood_down']['tower:room'] = when
+        run.policy.monitor_tables['stood_down']['tower:room'] = when
         watch.marks()
     assert watch.loop is None
-    run.policy.collection['stood_down']['tower:room'] = 8
+    run.policy.monitor_tables['stood_down']['tower:room'] = 8
     watch.marks()
     assert watch.loop == 'tower:room stood down 4 times in a row'
     watch.reset()
@@ -217,7 +218,7 @@ class Run:
 
     def __init__(self, script):
         self.frame, self.script = 0, script
-        self.policy = SimpleNamespace(collection={'stood_down': {}}, ladder_rung=None, recoveries=0,
+        self.policy = SimpleNamespace(collection={}, monitor_tables={'stood_down': {}}, ladder_rung=None, recoveries=0,
                                       details=lambda: {'reason': 'test'})
         self.data = SimpleNamespace(species={})
         self.history = {}
@@ -246,7 +247,7 @@ def scenario(tmp_path, **settings):
 
 
 def stand(when):
-    return lambda policy: policy.collection['stood_down'].__setitem__('tower:room', when)
+    return lambda policy: policy.monitor_tables['stood_down'].__setitem__('tower:room', when)
 
 
 def rung(name):

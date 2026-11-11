@@ -6,7 +6,7 @@ import pytest
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.menus import ChangeBox, Release, Storage
-from pokesim.gen2.standdown import standing_down, team_key
+from pokesim.gen2.standdown import STAND_DOWN, standing_down, team_key
 from pokesim.gen2.teams import BLOCKED_LIMIT, arrive, assemble, assembled, key
 
 
@@ -31,6 +31,7 @@ def snapshot(party, stored=(), *, active_box=0, boxes=(10,) * 14):
 class Policy:
     def __init__(self, spare=None):
         self.collection, self.decisions, self.menu, self.spare = {}, 100, None, spare
+        self.monitor_tables, self.clock = {}, 100
         self.goal = SimpleNamespace(key='collection_activity_team')
 
     def storage_goal(self, _):
@@ -93,9 +94,9 @@ def test_a_team_with_nothing_left_to_do_stands_down_and_waits_before_retrying():
         assert assemble(policy, view, wanted, Goal, 'Prepare') is not None
         assert arrive(policy, view) == 'b'
     assert assemble(policy, view, wanted, Goal, 'Prepare') is None
-    policy.decisions += 10
+    policy.clock += 10
     assert assemble(policy, view, wanted, Goal, 'Prepare') is None
-    policy.decisions += 10 ** 6
+    policy.clock += STAND_DOWN
     assert assemble(policy, view, wanted, Goal, 'Prepare') is not None
 
 

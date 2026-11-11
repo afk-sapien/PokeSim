@@ -44,7 +44,8 @@ def test_the_gift_room_visit_backs_out_of_a_pc_with_no_room():
 
 
 def ladder_policy():
-    return SimpleNamespace(collection={}, decisions=100, menu=None, completed={}, pin=None)
+    return SimpleNamespace(collection={}, monitor_tables={}, decisions=100, clock=100, menu=None, completed={},
+                           pin=None)
 
 
 def test_the_ladder_skips_a_rung_the_watchdog_blocked():

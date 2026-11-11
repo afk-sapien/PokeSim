@@ -20,6 +20,7 @@ from ..experimental.gen2 import identify
 from ..runtime import trace as trace_module
 from ..runtime.game_loop import GameLoop, Gen2
 from ..runtime.manifest import checkpoint_manifest
+from ..runtime.supervision import Tables
 from ..seeds import RELOAD_IDLE, reload_idle
 from .data import GameData
 from .emulator import BUTTONS, SCREEN_FRAMES, count_league
@@ -53,6 +54,8 @@ class HeadlessRun:
         follow_game_time(self.pb)
         StoreStock(self.data, champion=self._champion_catalogue).attach(self.pb)
         self.policy = Policy(self.data, seed=seed)
+        # The goals' stand-downs count on the run's frames, which a reload keeps, as the PlayClock does live.
+        self.policy.monitor_tables = Tables(clock=lambda: self.frame)
         self.history = {'maps': [], 'owned': [], 'badges': 0, 'league': 0}
         self.rng, self.seed = rng, seed
         self.frame = self.screen_frame = 0
@@ -60,7 +63,7 @@ class HeadlessRun:
         self.clock = None
         self.loop = GameLoop(self, Gen2(lambda: self.frame), self.tick)
         if checkpoint:
-            self._load(Path(checkpoint))
+            self._load(Path(checkpoint), first=True)
         else:
             # A new game, as the managed runtime starts one with no autosave: the clock follows game
             # time from the host clock's reading now.
@@ -79,7 +82,7 @@ class HeadlessRun:
         plan = self.policy.collection.get(champion_shop.PLAN)
         return champion_shop.catalogue(self.data, plan, self.policy.shop_offers)
 
-    def _load(self, path):
+    def _load(self, path, first=False):
         metadata = CheckpointStore(path.parent).checkpoint_metadata(path)
         if not metadata:
             raise ValueError('A checkpoint manifest is required for a faithful replay')
@@ -94,7 +97,11 @@ class HeadlessRun:
         self.clock = follow_game_time(self.pb, max(readings) if readings else None)
         for button in BUTTONS:
             self.pb.button_release(button)
-        self.frame = self.screen_frame = metadata.get('frame', 0)
+        if first:
+            # The run counts its frames on from the save's, before the policy reads a wait timed on them.
+            # A reload keeps counting, so the frames never go back.
+            self.frame = metadata.get('frame', 0)
+        self.screen_frame = self.frame
         self.screen_key = None
         self.policy.load_state_dict(metadata.get('policy_state', {}))
         self.policy.on_restore()
