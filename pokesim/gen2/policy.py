@@ -1739,6 +1739,17 @@ class Policy(protocol.Policy):
                 ballot = getattr(self, 'ballot', None)
                 self.goal = goal if ballot is None else ballot.errand(goal, 'sudowoodo')
                 return tree, False
+        if snapshot.map == self.data.map_ids.get('SLOWPOKE_WELL_B1F'):
+            # The Slowpoke Well boulder can shut the player in on the ladder side, so push it out of the way
+            # of the walk's first warp.
+            from .quests import well_boulder
+            walk = self.nav.walk(snapshot, target)
+            push = well_boulder(self, snapshot, Goal, walk[0][2][0]) if walk else None
+            stand = None if push is None else self.nav.toward(snapshot, snapshot.map, [(push.x, push.y)], memory, surf=surf)
+            if stand is not None:
+                ballot = getattr(self, 'ballot', None)
+                self.goal = push if ballot is None else ballot.errand(push, 'well_boulder')
+                return stand, False
         return None, False
 
     def follow(self, snapshot, memory, path, waypoint, surf):
