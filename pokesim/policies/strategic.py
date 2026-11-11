@@ -42,6 +42,7 @@ from ..ram import W_TILEMAP
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
 from ..pc_list import guarded
 from ..shortcuts import ShortcutRunner, gen1_ui
+from ..runtime.supervision import CHAT_REST, DETOUR_REST, LOOK_AROUND, PARTNER_TRAINING
 from .. import config
 
 EXPLORATION_CHANCE = 0.12
@@ -287,6 +288,11 @@ class StrategicPolicy(Policy):
         self.shortcut = ShortcutRunner()
         # Run attempts the battle stance made over the whole run, which the replay audit reads.
         self.flees = Counter()
+        # The PlayClock frame of the latest decision, never saved. The waits below count on it, so a
+        # reload neither restarts nor stretches them.
+        self.clock = 0
+        self.next_conversation = 0
+        self.development_cooldown = 0
         self.on_restore()
 
     def reset(self):
@@ -354,14 +360,12 @@ class StrategicPolicy(Policy):
         self.trash_pending = None
         self.trash_first = None
         self.social_target = None
-        self.next_conversation = 0
         self.watch = ActionWatch()
         self.last_action = None
         self.excursion = None
         # The partner a development excursion trains, with its level and experience at the start and the
         # frame it last gained experience.
         self.development = None
-        self.development_cooldown = 0
         self.development_index = None
         self.assessment_token = None
         self.menu_context = None
@@ -477,7 +481,7 @@ class StrategicPolicy(Policy):
 
     def _step(self, ctx):
         s, mem = ctx.snapshot, ctx.mem
-        self.collection.clock = ctx.clock
+        self.clock = self.collection.clock = ctx.clock
         scr = Screen(mem)
         kind = scr.kind(s)
         frame = s.frame
@@ -526,7 +530,7 @@ class StrategicPolicy(Policy):
         if self.release_changed(s):
             return tap('b')
         if self.shortcut.active:
-            actions = self.shortcut.step(mem, self._ui(), frame)
+            actions = self.shortcut.step(mem, self._ui(), self.clock)
             if actions:
                 self.mode = f'shortcut: {self.shortcut.machine.kind}'
                 self.reason = self.shortcut.purpose
@@ -1468,7 +1472,7 @@ class StrategicPolicy(Policy):
         # instead of the same menu failing again and again.
         # Without the stack pointer a nickname can stop the PC list short of a slot, so that slot waits too.
         self.pc.avoid = frozenset(key[1:] for key, until in self.shortcut.failures.items()
-                                  if key[0] == 'release' and until > snapshot.frame) | guarded(snapshot, self.sp)
+                                  if key[0] == 'release' and until > self.clock) | guarded(snapshot, self.sp)
         self.pc.partners = frozenset(self.trade_partners()) if hasattr(self, 'trade_partners') else frozenset()
         target = self.pc.release_target(snapshot, self.collection.project, self._preferences(), self.collection,
                                         self.pc.avoid, self.pc.partners, *self.release_inputs(), team=self.pc.team)
@@ -1688,7 +1692,7 @@ class StrategicPolicy(Policy):
             if on_done is not None:
                 on_done(result, finished_machine)
 
-        actions = self.shortcut.start(machine, key, s.frame, self.mem, self._ui(), purpose, finished)
+        actions = self.shortcut.start(machine, key, self.clock, self.mem, self._ui(), purpose, finished)
         if actions:
             self.mode = f'shortcut: {machine.kind}'
             self.reason = purpose
@@ -1927,7 +1931,7 @@ class StrategicPolicy(Policy):
             ended = self._development_done(s) if key == 'development' else s.frame >= expires
             if ended or s.map != goal.targets[0][0]:
                 self.excursion = None
-                self.next_conversation = s.frame + 3600
+                self.next_conversation = DETOUR_REST.until(self.clock)
                 return None
             self.goal = goal
             self.next_goal = main_goal.to_dict()
@@ -1941,7 +1945,7 @@ class StrategicPolicy(Policy):
                     direction = self.rng.choice(choices)[0]
                 else:
                     self.excursion = None
-                    self.next_conversation = s.frame + 3600
+                    self.next_conversation = DETOUR_REST.until(self.clock)
                     self.mode = 'following a curiosity'
                     facing = goal.facing_at(pos)
                     if mem[W_FACING] != FACING[facing]:
@@ -1953,12 +1957,12 @@ class StrategicPolicy(Policy):
                 direction = self.nav.route(pos, goal.targets, s.frame)
                 if not direction or len(self.nav.path) > 20:
                     self.excursion = None
-                    self.next_conversation = s.frame + 1800
+                    self.next_conversation = LOOK_AROUND.until(self.clock)
                     return None
             self.mode = 'training a partner' if key == 'development' else 'following a curiosity'
             self.nav.issued(pos, direction, s.frame)
             return tap(direction, 8, 12)
-        if s.frame < self.next_conversation or self.rng.random() > EXPLORATION_CHANCE * 0.15:
+        if self.clock < self.next_conversation or self.rng.random() > EXPLORATION_CHANCE * 0.15:
             return None
         w = WORLD.get(s.map, {})
         if any(p.status for p in s.party) or max((p.hp / max(1, p.max_hp) for p in s.party), default=0) < 0.8:
@@ -1971,14 +1975,14 @@ class StrategicPolicy(Policy):
                                         wild.battle_experience(s.map) if wild is not None else None)
         grass = tuple((s.map, x, y) for y, row in enumerate(w.get('tiles', [])) for x, tile in enumerate(row)
                       if tile == 0x52 and abs(x - s.x) + abs(y - s.y) <= 8)
-        if trainee is not None and grass and s.frame >= self.development_cooldown:
+        if trainee is not None and grass and self.clock >= self.development_cooldown:
             goal = Goal('train_partner', 'Give a promising partner some experience',
                         f'Train {s.party[trainee].nick or s.party[trainee].name} in nearby manageable encounters', grass,
                         kind=TRAIN)
             mon = s.party[trainee]
             self.development = {'partner': (mon.species, mon.nick, mon.dvs), 'level': mon.level,
                                 'experience': mon.experience, 'since': s.frame}
-            self.development_cooldown = s.frame + 18000
+            self.development_cooldown = PARTNER_TRAINING.until(self.clock)
             self.development_index = trainee
             self.excursion = (goal, None, 'development')
             if trainee != 0:
@@ -2002,7 +2006,7 @@ class StrategicPolicy(Policy):
         candidates += [(x, y, f'{s.map}:{name}', 'Read a local sign', 3 if self.personality == 'Explorer' else 1)
                        for x, y, name in w.get('backgrounds', []) if 'SIGN' in name or 'TRAINER_TIPS' in name]
         candidates = [c for c in candidates if c[2] not in self.interactions and 1 < abs(c[0] - s.x) + abs(c[1] - s.y) <= 8]
-        self.next_conversation = s.frame + 1800
+        self.next_conversation = LOOK_AROUND.until(self.clock)
         if candidates:
             x, y, key, title, _ = self.rng.choices(candidates, weights=[c[4] for c in candidates])[0]
             approaches = tuple((s.map, x - dx, y - dy, dr) for dr, (dx, dy) in DIRS.items()
@@ -2023,11 +2027,11 @@ class StrategicPolicy(Policy):
             self.social_target = None
             if origin == pos and mem[W_FACING] == FACING[facing]:
                 self.pending_social = (key, snapshot.frame)
-                self.next_conversation = snapshot.frame + 900
+                self.next_conversation = CHAT_REST.until(self.clock)
                 self.mode = label
                 self.reason = "Take a moment to learn about the area before continuing"
                 return tap("a")
-        if snapshot.frame < self.next_conversation or self.rng.random() > 0.15:
+        if self.clock < self.next_conversation or self.rng.random() > 0.15:
             return None
         world = WORLD.get(snapshot.map, {})
         positions = self.nav.live_positions if self.nav.live_map == snapshot.map else []
