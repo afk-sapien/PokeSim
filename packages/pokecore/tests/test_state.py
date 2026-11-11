@@ -7,7 +7,8 @@ import pytest
 
 from pokecore import gen1, yellow
 from pokecore.gen2 import memory_map
-from pokecore.state import ABSENT, GENERATIONS, GameState, Party, read_state
+from pokecore.identity import GEN1_DEX
+from pokecore.state import ABSENT, BATTLE_KINDS, GENERATIONS, GameState, Party, read_battle, read_state
 
 GEN1_MOVES = {84: {'pp': 30}, 45: {'pp': 40}}
 GEN2_MOVES = {33: {'pp': 35}, 45: {'pp': 40}}
@@ -119,8 +120,71 @@ def gen2_memory(game):
     return memory
 
 
-def memory_for(game):
-    return gen1_memory(game) if GENERATIONS[game] == 1 else gen2_memory(game)
+def gen1_battler(species, level, hp, dvs):
+    block = bytearray(gen1.BATTLE_STRUCT)
+    block[0], block[1:3], block[4] = species, hp.to_bytes(2, 'big'), 0x40
+    block[5:7], block[8:12], block[12:14] = bytes((23, 0)), bytes((84, 45, 0, 0)), bytes(dvs)
+    block[14] = level
+    block[15:25] = b''.join(value.to_bytes(2, 'big') for value in (35, 15, 18, 20, 22))
+    block[25:29] = bytes((0xC5, 12, 0, 0))
+    return bytes(block)
+
+
+def gen1_battle(raw, game, *, mode=1, battle_type=0, link=0, status1=0, player_status3=0, enemy_status3=0):
+    """A battle in ``raw``: the party's Pikachu, slot 0, against a level 3 Rattata."""
+    mem = yellow.red_layout(raw, game)
+
+    def put(address, data):
+        mem[address:address + len(data)] = bytes(data)
+
+    put(gen1.W_IS_IN_BATTLE, [mode])
+    put(gen1.W_BATTLE_TYPE, [battle_type])
+    put(gen1.W_LINK_STATE, [link])
+    put(gen1.W_PLAYER_MON_NUMBER, [0])
+    put(gen1.W_BATTLE_MON, gen1_battler(84, 10, 28, (0x11, 0x11)))
+    put(gen1.W_BATTLE_MON_NICK, text('PIKA'))
+    put(gen1.W_ENEMY_MON, gen1_battler(165, 3, 9, (0xFE, 0xDC)))
+    put(gen1.W_ENEMY_MON_NICK, text('RATTATA'))
+    put(gen1.W_TRANSFORMED_ENEMY_DVS, [0x98, 0x76])
+    put(gen1.W_PLAYER_BATTLE_STATUS3, [player_status3])
+    put(gen1.W_ENEMY_BATTLE_STATUS1, [status1])
+    put(gen1.W_ENEMY_BATTLE_STATUS3, [enemy_status3])
+    return raw
+
+
+def gen2_battler(species, level, hp, dvs, item=0):
+    raw = bytearray(32)
+    raw[0], raw[1], raw[2:6], raw[6:8] = species, item, bytes((33, 45, 0, 0)), bytes(dvs)
+    raw[8:12], raw[13], raw[14] = bytes((35 | 0x40, 40, 0, 0)), level, 0x08
+    raw[16:18] = hp.to_bytes(2, 'big')
+    raw[18:30] = b''.join(value.to_bytes(2, 'big') for value in (21, 11, 12, 13, 14, 15))
+    raw[30:32] = bytes((22, 0))
+    return bytes(raw)
+
+
+def gen2_battle(memory, *, mode=1, battle_type=0, link=0, player_sub5=0, enemy_sub5=0, wrap=0):
+    """A battle in ``memory``: the party's Chikorita, slot 0, against a level 3 Sentret."""
+    memory.put('wBattleMode', [mode])
+    memory.put('wBattleType', [battle_type])
+    memory.put('wLinkMode', [link])
+    memory.put('wCurBattleMon', [0])
+    memory.put('wBattleMon', gen2_battler(152, 5, 20, (0x11, 0x11), item=7))
+    memory.put('wBattleMonNickname', text('CHIKO'))
+    memory.put('wEnemyMon', gen2_battler(161, 3, 9, (0xFE, 0xDC), item=3))
+    memory.put('wEnemyMonNickname', text('SENTRET'))
+    memory.put('wEnemyBackupDVs', [0x98, 0x76])
+    memory.put('wPlayerSubStatus5', [player_sub5])
+    memory.put('wEnemySubStatus5', [enemy_sub5])
+    memory.put('wPlayerWrapCount', [wrap])
+    return memory
+
+
+def memory_for(game, battle=False):
+    if GENERATIONS[game] == 1:
+        raw = gen1_memory(game)
+        return gen1_battle(raw, game) if battle else raw
+    memory = gen2_memory(game)
+    return gen2_battle(memory) if battle else memory
 
 
 @pytest.mark.parametrize('game', ['red', 'blue', 'yellow'])
@@ -192,7 +256,8 @@ def walk(value):
 
 @pytest.mark.parametrize('game', ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal'])
 def test_every_field_is_filled_or_absent_by_design(game):
-    state = read_state(memory_for(game), game, GEN1_MOVES if GENERATIONS[game] == 1 else GEN2_MOVES)
+    """In a battle, so the battle fields count too."""
+    state = read_state(memory_for(game, battle=True), game, GEN1_MOVES if GENERATIONS[game] == 1 else GEN2_MOVES)
     names = dict(walk(state))
     absent = ABSENT[state.generation]
     assert set(absent) <= set(names)
@@ -207,6 +272,106 @@ def test_state_is_frozen_and_names_its_game():
         state.party = None
     with pytest.raises(ValueError):
         read_state(gen1_memory('red'), 'green')
+
+
+@pytest.mark.parametrize('game', ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal'])
+def test_outside_a_battle_there_is_no_battle(game):
+    battle = read_state(memory_for(game), game).battle
+    assert battle.kind == 'none' and not battle.active
+    assert battle.player is battle.enemy is battle.player_slot is battle.enemy_hp is None
+    assert not (battle.trapped or battle.can_run or battle.link)
+
+
+@pytest.mark.parametrize('game', ['red', 'blue', 'yellow'])
+def test_gen1_battle(game):
+    raw = gen1_battle(gen1_memory(game), game)
+    battle = read_state(raw, game).battle
+    assert battle == read_battle(raw, game) == read_battle(yellow.red_layout(raw, game), game)
+    assert (battle.kind, battle.battle_type, battle.player_slot) == ('wild', 0, 0) and battle.active
+    assert battle.can_run and not battle.trapped and not battle.link
+    pika, rattata = battle.player, battle.enemy
+    assert (pika.species, pika.dex, pika.nick, pika.level, pika.hp, pika.max_hp) == (84, 25, 'PIKA', 10, 28, 35)
+    assert pika.stats == (35, 15, 18, 20, 22) and pika.types == (23, 0) and pika.status == 0x40
+    assert pika.moves == (84, 45, 0, 0) and pika.pp == (5, 12, 0, 0) and pika.held_item is None
+    assert pika.dvs == (15, 1, 1, 1, 1) and not pika.transformed
+    assert (rattata.species, rattata.dex, rattata.nick, rattata.level) == (165, GEN1_DEX[165], 'RATTATA', 3)
+    assert rattata.dvs == (10, 15, 14, 13, 12) and battle.enemy_hp == rattata.hp == 9
+
+
+@pytest.mark.parametrize('game', ['red', 'yellow'])
+def test_gen1_transform_keeps_each_side_s_own_dvs(game):
+    raw = gen1_battle(gen1_memory(game), game, player_status3=0x08, enemy_status3=0x08)
+    battle = read_battle(raw, game)
+    assert battle.player.transformed and battle.enemy.transformed
+    # The player's from the party structure, the enemy's from the backup Transform keeps.
+    assert battle.player.dvs == (5, 10, 11, 12, 13) and battle.enemy.dvs == (10, 9, 8, 7, 6)
+
+
+@pytest.mark.parametrize('mode, battle_type, link, status1, expected', [
+    (0, 0, 0, 0, ('none', False, False, False)),
+    (0xFF, 0, 0, 0, ('none', False, False, False)),
+    (1, 0, 0, 0, ('wild', True, False, False)),
+    (1, gen1.BATTLE_TYPE_SAFARI, 0, 0, ('wild', True, False, False)),
+    (1, 0, 0, 0x20, ('wild', True, True, False)),
+    (2, 0, 0, 0, ('trainer', False, False, False)),
+    (2, 0, 4, 0, ('trainer', True, False, True)),
+    (1, gen1.BATTLE_TYPE_OLD_MAN, 0, 0, ('tutorial', False, False, False)),
+    (1, gen1.BATTLE_TYPE_PIKACHU, 0, 0, ('scripted', False, False, False)),
+])
+def test_gen1_battle_kinds_and_flags(mode, battle_type, link, status1, expected):
+    raw = gen1_battle(gen1_memory('yellow'), 'yellow', mode=mode, battle_type=battle_type, link=link,
+                      status1=status1)
+    battle = read_battle(raw, 'yellow')
+    assert (battle.kind, battle.can_run, battle.trapped, battle.link) == expected
+    assert battle.kind in BATTLE_KINDS and battle.battle_type == battle_type
+
+
+@pytest.mark.parametrize('game', ['gold', 'silver', 'crystal'])
+def test_gen2_battle(game):
+    memory = gen2_battle(gen2_memory(game))
+    battle = read_state(memory, game).battle
+    assert battle == read_battle(memory, game)
+    assert (battle.kind, battle.battle_type, battle.player_slot) == ('wild', 0, 0) and battle.active
+    assert battle.can_run and not battle.trapped and not battle.link
+    chiko, sentret = battle.player, battle.enemy
+    assert (chiko.species, chiko.dex, chiko.nick, chiko.level, chiko.hp, chiko.max_hp) == (152, 152, 'CHIKO', 5, 20, 21)
+    assert chiko.stats == (21, 11, 12, 13, 14, 15) and chiko.types == (22, 0) and chiko.status == 0x08
+    assert chiko.moves == (33, 45, 0, 0) and chiko.pp == (35, 40, 0, 0) and chiko.held_item == 7
+    assert chiko.dvs == (15, 1, 1, 1, 1) and not chiko.transformed
+    assert (sentret.species, sentret.dex, sentret.nick, sentret.level, sentret.held_item) == (161, 161, 'SENTRET', 3, 3)
+    assert sentret.dvs == (10, 15, 14, 13, 12) and battle.enemy_hp == sentret.hp == 9
+
+
+@pytest.mark.parametrize('game', ['gold', 'crystal'])
+def test_gen2_transform_keeps_each_side_s_own_dvs(game):
+    battle = read_battle(gen2_battle(gen2_memory(game), player_sub5=0x08, enemy_sub5=0x08), game)
+    assert battle.player.transformed and battle.enemy.transformed
+    assert battle.player.dvs == (0, 10, 10, 10, 10) and battle.enemy.dvs == (10, 9, 8, 7, 6)
+
+
+@pytest.mark.parametrize('mode, battle_type, flags, expected', [
+    (0, 0, {}, ('none', False, False, False)),
+    (1, 0, {}, ('wild', True, False, False)),
+    (1, 4, {}, ('wild', True, False, False)),
+    (1, 0, {'enemy_sub5': 0x80}, ('wild', False, True, False)),
+    (1, 0, {'wrap': 2}, ('wild', False, True, False)),
+    (1, 2, {'enemy_sub5': 0x80}, ('wild', True, True, False)),
+    (1, 6, {'wrap': 2}, ('wild', True, True, False)),
+    (1, 0, {'link': 1, 'wrap': 2}, ('wild', True, True, True)),
+    (2, 0, {}, ('trainer', False, False, False)),
+    (2, 1, {}, ('trainer', False, False, False)),
+    (2, 0, {'link': 1}, ('trainer', True, False, True)),
+    (1, 3, {}, ('tutorial', False, False, False)),
+    (1, 7, {}, ('scripted', False, False, False)),
+    (1, 8, {}, ('scripted', True, False, False)),
+    (1, 9, {'link': 1}, ('scripted', False, False, True)),
+    (1, 11, {}, ('scripted', False, False, False)),
+    (1, 12, {}, ('scripted', False, False, False)),
+])
+def test_gen2_battle_kinds_and_flags(mode, battle_type, flags, expected):
+    battle = read_battle(gen2_battle(gen2_memory('crystal'), mode=mode, battle_type=battle_type, **flags), 'crystal')
+    assert (battle.kind, battle.can_run, battle.trapped, battle.link) == expected
+    assert battle.kind in BATTLE_KINDS and battle.battle_type == battle_type
 
 
 def test_pc_items_are_bounded_to_fifty_slots():

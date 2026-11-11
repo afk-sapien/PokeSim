@@ -11,6 +11,15 @@
   `W_NUM_BOX_ITEMS`, `W_BOX_ITEMS`, `PC_ITEM_CAPACITY`, `W_PLAYTIME_M` and
   `W_PLAYTIME_S`.
 - `gen2.ram.max_pp(base, pp_ups)` is the maximum PP rule the Gen II decoder uses.
+- `GameState.battle` and `state.read_battle(memory, game)` give a `BattleState`:
+  its kind, both active mons as `BattleMon`, and the flags trapped, can run and link
+  battle, for all six games.
+- `gen1` names the battle structures and flags: `W_BATTLE_MON`, `W_BATTLE_MON_NICK`,
+  `W_ENEMY_MON_NICK`, `W_ENEMY_HP`, `W_ENEMY_DVS`, `W_TRANSFORMED_ENEMY_DVS`,
+  `W_PLAYER_MON_NUMBER`, the four battle status bytes, `W_LINK_STATE`,
+  `BATTLE_STRUCT`, the `BATTLE_TYPE_*` values and two status bits.
+- The Gen II memory map gains `wBattleMon`, `wBattleMonNickname`,
+  `wEnemyMonNickname` and `wPlayerSubStatus5`.
 
 ## 0.11.0
 

@@ -5,13 +5,14 @@ Red, Blue and Yellow and :mod:`pokecore.gen2.state` for Gold, Silver and Crystal
 and reads the same bytes they do. It never writes memory. The state holds the
 cartridge's IDs and no tables, so species, move and item names stay with the
 caller. A field a generation does not have is ``None``, and :data:`ABSENT` gives
-the reason for each one.
+the reason for each one. :func:`read_battle` reads the battle part alone.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from . import gen1
+from .dvs import hp_dv
 from .gen2 import state as gen2_state
 from .gen2.ram import max_pp
 from .identity import GEN1_DEX
@@ -31,6 +32,7 @@ ABSENT = {
         'Bag.balls': 'Gen I keeps every item in one pocket',
         'Bag.key_items': 'Gen I keeps every item in one pocket',
         'Bag.tms_hms': 'Gen I keeps every item in one pocket',
+        'BattleMon.held_item': 'Gen I has no held items',
     },
     2: {
         'Mon.types': 'Gen II structures do not store types, which come from the species table',
@@ -142,6 +144,67 @@ class MapState:
 
 
 @dataclass(frozen=True, slots=True)
+class BattleMon:
+    """One side's active Pokémon, as the battle structure holds it.
+
+    ``stats`` is in the cartridge's order, as in :class:`Mon`, and reflects
+    Transform. ``dvs`` are the mon's own DVs even while it is transformed.
+    """
+    species: int
+    dex: int | None
+    nick: str
+    level: int
+    hp: int
+    status: int
+    types: tuple[int, int]
+    moves: tuple[int, ...]
+    pp: tuple[int, ...]
+    stats: tuple[int, ...]
+    dvs: tuple[int, ...]
+    held_item: int | None
+    transformed: bool
+
+    @property
+    def max_hp(self) -> int:
+        return self.stats[0]
+
+
+BATTLE_KINDS = ('none', 'wild', 'trainer', 'tutorial', 'scripted')
+
+
+@dataclass(frozen=True, slots=True)
+class BattleState:
+    """The battle in progress, if any.
+
+    ``kind`` is one of :data:`BATTLE_KINDS`. ``tutorial`` is Gen I's old man and
+    Gen II's catching lesson. ``scripted`` is a fixed encounter the game sets up:
+    Yellow's Pikachu, or Gen II's shiny Gyarados, Headbutt trees, trap battles,
+    forced items, Celebi and Suicune. ``battle_type`` is the cartridge's raw battle
+    type byte. ``player_slot`` is the party slot of the player's active mon.
+    ``player`` and ``enemy`` are None outside a battle or before a side has sent a
+    mon out. ``trapped`` means the enemy holds the player with a trapping move or,
+    in Gen II, Mean Look or Spider Web. ``can_run`` says whether the game lets the
+    player try to run at all, and a link battle counts, since running forfeits it.
+    """
+    kind: str
+    battle_type: int
+    player_slot: int | None
+    player: BattleMon | None
+    enemy: BattleMon | None
+    trapped: bool
+    can_run: bool
+    link: bool
+
+    @property
+    def active(self) -> bool:
+        return self.kind != 'none'
+
+    @property
+    def enemy_hp(self) -> int | None:
+        return None if self.enemy is None else self.enemy.hp
+
+
+@dataclass(frozen=True, slots=True)
 class GameState:
     """The typed state. ``seen`` and ``owned`` are national Pokédex numbers."""
     game: str
@@ -152,6 +215,7 @@ class GameState:
     bag: Bag
     seen: frozenset[int]
     owned: frozenset[int]
+    battle: BattleState
 
 
 def read_state(memory, game, move_data=None) -> GameState:
@@ -164,11 +228,133 @@ def read_state(memory, game, move_data=None) -> GameState:
     ``move_data`` maps a move ID to a mapping with its base ``pp`` and fills
     ``Mon.max_pp``.
     """
+    game, generation = _game(game)
+    return (_gen1 if generation == 1 else _gen2)(memory, game, move_data)
+
+
+def read_battle(memory, game) -> BattleState:
+    """The battle state of ``game`` in ``memory``, read as :func:`read_state` reads."""
+    game, generation = _game(game)
+    if generation == 1:
+        return _gen1_battle(red_layout(memory, game))
+    return _gen2_battle(gen2_state.memory_reader(memory, game))
+
+
+def _game(game):
     game = getattr(game, 'version', game)
     generation = GENERATIONS.get(game)
     if generation is None:
         raise ValueError(f'Unknown game {game!r}')
-    return (_gen1 if generation == 1 else _gen2)(memory, game, move_data)
+    return game, generation
+
+
+def _dvs(raw):
+    attack, defense, speed, special = raw[0] >> 4, raw[0] & 15, raw[1] >> 4, raw[1] & 15
+    return (hp_dv(attack, defense, speed, special), attack, defense, speed, special)
+
+
+_NO_BATTLE = {'player_slot': None, 'player': None, 'enemy': None, 'trapped': False, 'can_run': False, 'link': False}
+
+
+def _gen1_battler(mem, base, nick, dvs, transformed):
+    block = bytes(mem[base:base + gen1.BATTLE_STRUCT])
+    if not block[0]:
+        return None
+    word = lambda offset: int.from_bytes(block[offset:offset + 2], 'big')
+    return BattleMon(
+        species=block[0], dex=GEN1_DEX.get(block[0]), nick=gen1.decode_text(bytes(mem[nick:nick + 11])),
+        level=block[14], hp=word(1), status=block[4], types=(block[5], block[6]), moves=tuple(block[8:12]),
+        pp=tuple(value & 63 for value in block[25:29]), stats=tuple(word(offset) for offset in range(15, 25, 2)),
+        dvs=_dvs(dvs), held_item=None, transformed=transformed,
+    )
+
+
+def _gen1_battle(mem):
+    mode, battle_type = mem[gen1.W_IS_IN_BATTLE], mem[gen1.W_BATTLE_TYPE]
+    if mode not in (1, 2):
+        return BattleState(kind='none', battle_type=battle_type, **_NO_BATTLE)
+    if battle_type == gen1.BATTLE_TYPE_OLD_MAN:
+        kind = 'tutorial'
+    elif battle_type == gen1.BATTLE_TYPE_PIKACHU:
+        kind = 'scripted'
+    else:
+        kind = 'wild' if mode == 1 else 'trainer'
+    link = bool(mem[gen1.W_LINK_STATE])
+    slot = mem[gen1.W_PLAYER_MON_NUMBER]
+    player_transformed = bool(mem[gen1.W_PLAYER_BATTLE_STATUS3] >> gen1.BIT_TRANSFORMED & 1)
+    enemy_transformed = bool(mem[gen1.W_ENEMY_BATTLE_STATUS3] >> gen1.BIT_TRANSFORMED & 1)
+    # Transform copies the target's DVs, so the originals come from the party or the backup.
+    player_dvs = (gen1.W_PARTY_MONS + slot * gen1.PARTY_STRUCT + 27 if player_transformed
+                  else gen1.W_BATTLE_MON + 12)
+    enemy_dvs = gen1.W_TRANSFORMED_ENEMY_DVS if enemy_transformed else gen1.W_ENEMY_DVS
+    return BattleState(
+        kind=kind, battle_type=battle_type, player_slot=slot,
+        player=_gen1_battler(mem, gen1.W_BATTLE_MON, gen1.W_BATTLE_MON_NICK,
+                             bytes(mem[player_dvs:player_dvs + 2]), player_transformed),
+        enemy=_gen1_battler(mem, gen1.W_ENEMY_MON, gen1.W_ENEMY_MON_NICK,
+                            bytes(mem[enemy_dvs:enemy_dvs + 2]), enemy_transformed),
+        trapped=bool(mem[gen1.W_ENEMY_BATTLE_STATUS1] >> gen1.BIT_USING_TRAPPING_MOVE & 1),
+        can_run=kind in ('wild', 'trainer') and (link or kind == 'wild'), link=link,
+    )
+
+
+# Gen II wBattleType values, by pret/pokecrystal name.
+BATTLETYPE_DEBUG, BATTLETYPE_TUTORIAL, BATTLETYPE_CONTEST = 2, 3, 6
+# Shiny Gyarados, Headbutt trees, trap battles, forced items, Celebi and Suicune.
+GEN2_SCRIPTED_BATTLES = frozenset({7, 8, 9, 10, 11, 12})
+# The ones TryToRunAwayFromBattle refuses before it looks at anything else.
+GEN2_NO_ESCAPE_BATTLES = frozenset({7, 9, 11, 12})
+SUBSTATUS_TRANSFORMED, SUBSTATUS_CANT_RUN = 0x08, 0x80
+GEN2_BATTLE_STRUCT = 32
+
+
+def _gen2_battler(mem, struct, nick, dvs, transformed):
+    raw = mem.read(struct, GEN2_BATTLE_STRUCT)
+    if not raw[0]:
+        return None
+    word = lambda offset: int.from_bytes(raw[offset:offset + 2], 'big')
+    return BattleMon(
+        species=raw[0], dex=raw[0] if 1 <= raw[0] <= 251 else None, nick=mem.text(nick), level=raw[13],
+        hp=word(16), status=raw[14], types=(raw[30], raw[31]), moves=tuple(raw[2:6]),
+        pp=tuple(value & 63 for value in raw[8:12]), stats=tuple(word(offset) for offset in range(18, 30, 2)),
+        dvs=_dvs(dvs), held_item=raw[1], transformed=transformed,
+    )
+
+
+def _gen2_battle(mem):
+    mode, battle_type = mem.byte('wBattleMode'), mem.byte('wBattleType')
+    if mode not in (1, 2):
+        return BattleState(kind='none', battle_type=battle_type, **_NO_BATTLE)
+    if battle_type == BATTLETYPE_TUTORIAL:
+        kind = 'tutorial'
+    elif mode == 2:
+        kind = 'trainer'
+    else:
+        kind = 'scripted' if battle_type in GEN2_SCRIPTED_BATTLES else 'wild'
+    link = bool(mem.byte('wLinkMode'))
+    slot = mem.byte('wCurBattleMon')
+    player_transformed = bool(mem.byte('wPlayerSubStatus5') & SUBSTATUS_TRANSFORMED)
+    enemy_transformed = bool(mem.byte('wEnemySubStatus5') & SUBSTATUS_TRANSFORMED)
+    trapped = bool(mem.byte('wEnemySubStatus5') & SUBSTATUS_CANT_RUN or mem.byte('wPlayerWrapCount'))
+    # The order of pokecrystal's TryToRunAwayFromBattle.
+    if kind == 'tutorial':
+        can_run = False
+    elif battle_type in (BATTLETYPE_DEBUG, BATTLETYPE_CONTEST):
+        can_run = True
+    elif battle_type in GEN2_NO_ESCAPE_BATTLES:
+        can_run = False
+    else:
+        can_run = link or (mode == 1 and not trapped)
+    # Transform copies the target's DVs, so the originals come from the party or the backup.
+    player_dvs = (mem.read('wPartyMons', 2, offset=slot * gen2_state.PARTY_STRUCT + 21) if player_transformed
+                  else mem.read('wBattleMon', 2, offset=6))
+    enemy_dvs = mem.read('wEnemyBackupDVs', 2) if enemy_transformed else mem.read('wEnemyMon', 2, offset=6)
+    return BattleState(
+        kind=kind, battle_type=battle_type, player_slot=slot,
+        player=_gen2_battler(mem, 'wBattleMon', 'wBattleMonNickname', player_dvs, player_transformed),
+        enemy=_gen2_battler(mem, 'wEnemyMon', 'wEnemyMonNickname', enemy_dvs, enemy_transformed),
+        trapped=trapped, can_run=can_run, link=link,
+    )
 
 
 def _gen1(memory, game, move_data):
@@ -205,7 +391,7 @@ def _gen1(memory, game, move_data):
     owned = frozenset(gen1.flag_bits(bytes(mem[gen1.W_DEX_OWNED:gen1.W_DEX_OWNED + 19]))) & seen
     return GameState(game=game, generation=1, player=player,
                      map=MapState(map=number, group=None, number=number, x=mem[gen1.W_X], y=mem[gen1.W_Y]),
-                     party=Party(tuple(party)), bag=bag, seen=seen, owned=owned)
+                     party=Party(tuple(party)), bag=bag, seen=seen, owned=owned, battle=_gen1_battle(mem))
 
 
 def _gen2_mon(row, move_data):
@@ -241,5 +427,5 @@ def _gen2(memory, game, move_data):
         party=Party(party),
         bag=Bag(items=items['items'], pc_items=items['pc'], balls=items['balls'],
                 key_items=tuple(item for item, _ in items['key']), tms_hms=items['tms_hms']),
-        seen=dex['seen'], owned=dex['caught'],
+        seen=dex['seen'], owned=dex['caught'], battle=_gen2_battle(gen2_state.memory_reader(memory, game)),
     )
