@@ -322,13 +322,15 @@ def test_a_yellow_scenario_replays_with_yellow_game_data(tmp_path, monkeypatch):
     assert play(Scenario(name='s', folder=tmp_path, checkpoint=checkpoint)) == {'passed': True} and calls == ['yellow']
 
 
-def _hunt(tmp_path, monkeypatch, battles, flees):
+def _hunt(tmp_path, monkeypatch, battles, flees, under_way=None):
     """Play a Gen II hunt for Mareep (179) through ``battles``, the wild species met in order, with
-    ``flees`` run attempts, and return the replay's result."""
+    ``flees`` run attempts, and return the replay's result. ``under_way`` is the species of a battle the
+    checkpoint starts in."""
     import pokesim.scenarios as scenarios
     checkpoint = tmp_path / 'start.state'
     checkpoint.with_suffix('.json').write_text(json.dumps({'generation': 2, 'rom_sha1': 'f' * 40}))
-    steps = [SimpleNamespace(in_battle=0, enemy_species=0)]
+    steps = [SimpleNamespace(in_battle=1, enemy_species=under_way)] if under_way else []
+    steps += [SimpleNamespace(in_battle=0, enemy_species=0)]
     for species in battles:
         steps += [SimpleNamespace(in_battle=1, enemy_species=species), SimpleNamespace(in_battle=0, enemy_species=0)]
     for step in steps:
@@ -354,4 +356,12 @@ def test_a_hunt_whose_first_wild_battle_is_its_target_owes_no_run(tmp_path, monk
     assert _hunt(tmp_path, monkeypatch, [41, 179], flees=1)['passed']
     # A Zubat fought out on the way still fails the hunt.
     assert _hunt(tmp_path, monkeypatch, [41, 179], flees=0)['failure'] == (
+        '0 run attempts, fewer than 1, in 1 other wild battles')
+
+
+def test_a_battle_under_way_at_the_checkpoint_owes_no_run(tmp_path, monkeypatch):
+    # The Gold Mareep hunt starts in a Graveler battle in the Silver Cave. With a field cure the run met
+    # Mareep first on Route 42, and min_flees failed it for the Graveler battle it never chose.
+    assert _hunt(tmp_path, monkeypatch, [179], flees=0, under_way=75)['passed']
+    assert _hunt(tmp_path, monkeypatch, [41, 179], flees=0, under_way=75)['failure'] == (
         '0 run attempts, fewer than 1, in 1 other wild battles')
