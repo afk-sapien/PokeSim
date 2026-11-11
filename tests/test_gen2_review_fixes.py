@@ -30,22 +30,26 @@ def gen2_emu(tmp_path, monkeypatch):
 
 def test_restart_clears_the_old_runs_watch_and_bests(gen2_emu):
     """The new run starts at frame 0, so the old frames and bests kept guards off and the run stalled."""
-    from pokesim.gen2.emulator import STALL_RELOADS
+    from pokesim.runtime.supervision import BEST_KEY, KEY, STALL_RELOADS, Supervisor
     emu = gen2_emu
     emu.frame = 500000
     emu.last_reload_frame = emu._reward_check_frame = emu.guard_frame = 499000
-    emu.best_progress = (8, 900, 120, 40, 400000, 3)
-    emu.best_experience = {(1, (), 7): 400000}
-    emu.best_egg_cycles = {'egg': 3}
-    emu.unstick_streak, emu.reloads_exhausted = STALL_RELOADS + 5, True
+    emu.supervisor = Supervisor(emu.store)
+    emu.supervisor.progressed(SimpleNamespace(badges=255, event_flags=b'\xff', owned={1, 2},
+                                              party=[SimpleNamespace(trainer_id=1, dvs=(), species=7, experience=400000,
+                                                                     egg=False)]), 40, 3)
+    assert emu.store.get(BEST_KEY)
+    emu.supervisor.reloads, emu.supervisor.exhausted = STALL_RELOADS + 5, True
+    emu.supervisor._save()
     emu.stall = StallWatch()
     emu.stall.progress(400000, 0.0)
     emu.stall.alerted = 1.0
     emu._handle_command('restart', None)
     assert emu.frame == 0 and emu.last_reload_frame == 0
     assert emu._reward_check_frame == 0 and emu.guard_frame == 0
-    assert emu.best_progress == (0,) * 6 and emu.best_experience == {} and emu.best_egg_cycles == {}
-    assert emu.unstick_streak == 0 and not emu.reloads_exhausted
+    assert emu.supervisor.best == () and emu.supervisor.trained == {} and emu.supervisor.eggs == {}
+    assert emu.store.get(BEST_KEY) is None
+    assert not emu.supervisor.stalled and emu.supervisor.reloads == 0 and emu.store.get(KEY) is None
     assert emu.stall.frame is None and emu.stall.alerted is None
 
 

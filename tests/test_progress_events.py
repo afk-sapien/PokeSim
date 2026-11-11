@@ -285,6 +285,7 @@ def test_both_reloads_write_the_reload_row(tmp_path, monkeypatch):
     from pokesim.checkpoints import CheckpointStore
     from pokesim.gen2.emulator import Emulator as Gen2
     from pokesim.play_clock import PlayClock
+    from pokesim.runtime.supervision import Supervisor
     reasons = []
     monkeypatch.setattr(progress_events, 'reload', lambda store, why: reasons.append(why))
     store = CheckpointStore(tmp_path)
@@ -292,10 +293,10 @@ def test_both_reloads_write_the_reload_row(tmp_path, monkeypatch):
     game = SimpleNamespace(store=SimpleNamespace(autosaves=store.autosaves, state_path=store.state_path,
                                                  checkpoint_metadata=store.checkpoint_metadata),
                            snapshot=SimpleNamespace(map=emulator.MAPS['ROUTE_1']), reloads=0, frame=10 ** 6,
-                           play_clock=PlayClock(), adventure_seed=7,
+                           play_clock=PlayClock(), adventure_seed=7, supervisor=Supervisor(),
                            _restore_first_valid=lambda paths: None, _tick=lambda n: None)
     emulator.Emulator._unstick(game, game.frame, 'battle cannot end')
-    gen2 = SimpleNamespace(unstick_streak=0, snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'),
+    gen2 = SimpleNamespace(supervisor=Supervisor(), snapshot=SimpleNamespace(valid=True, started=True, map_name='Route 29'),
                            store=SimpleNamespace(autosaves=lambda: []), play_clock=PlayClock(), adventure_seed=7,
                            policy=SimpleNamespace(recoveries=4, menu=None, on_restore=lambda: None, collection={},
                                                   goal=None, decisions=0, in_league=lambda snapshot: False),

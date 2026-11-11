@@ -17,6 +17,7 @@ import pytest
 from pokesim import rewards
 from pokesim.play_clock import PlayClock
 from pokesim.policies.collection import Collection
+from pokesim.runtime.supervision import Supervisor
 from pokesim.store import Store
 from pokesim.strategy_data import MAPS
 from test_collection import sid, state
@@ -26,7 +27,6 @@ from test_strategy import mon
 PAIRS = [('red', 'gold'), ('blue', 'silver'), ('yellow', 'crystal')]
 GEN1_ROMS = {'red': 'ea9bcae617fdf159b045185467ae58b2e4a48b9a', 'blue': 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2',
              'yellow': 'cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1'}
-PR6 = 'goal system v2 PR 6: runtime/supervision.py with one ladder'
 
 
 def even(value):
@@ -130,7 +130,7 @@ def gen1_ladder():
     steps = []
     policy = SimpleNamespace(collection=SimpleNamespace(project={'method': 'grass'}, abandon=lambda reason: True),
                              goal=SimpleNamespace(title='Catch a better Pidgey'), on_restore=lambda: None)
-    emu = SimpleNamespace(policy=policy, unstick_streak=0, reloads=0, input_epoch=0, loop_guard=None, frame=10 ** 6,
+    emu = SimpleNamespace(policy=policy, supervisor=Supervisor(), reloads=0, input_epoch=0, loop_guard=None, frame=10 ** 6,
                           play_clock=PlayClock(), adventure_seed=7,
                           snapshot=SimpleNamespace(started=True, map_name='Route 1', map=12, in_battle=0, valid=True),
                           store=SimpleNamespace(autosaves=lambda: [save()], checkpoint_metadata=lambda path: {'frame': 0},
@@ -151,7 +151,7 @@ def gen2_ladder():
     policy = SimpleNamespace(collection={}, decisions=100, menu=None, completed={}, pin=None, recoveries=0,
                              ladder_rung='quality', goal=Goal('collection_quality', 'Catch a better Pidgey', 'X', 0, 0),
                              in_league=lambda snap: False, on_restore=lambda: None)
-    emu = SimpleNamespace(policy=policy, unstick_streak=0, reloads=0, loop_guard=None, frame=10 ** 6,
+    emu = SimpleNamespace(policy=policy, supervisor=Supervisor(), reloads=0, loop_guard=None, frame=10 ** 6,
                           play_clock=PlayClock(), adventure_seed=7,
                           snapshot=SimpleNamespace(started=True, valid=True, map_name='Route 1', in_battle=0,
                                                    hall_of_fame_count=0),
@@ -172,10 +172,9 @@ def test_both_stall_ladders_reload_twelve_times_then_give_up():
         assert steps.count('reload') == 12 and steps[-1] == 'give up'
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason=f'{PR6}. Only Gen II reports the stall after its second reload')
 def test_both_stall_ladders_climb_the_same_rungs_in_the_same_order():
     assert gen1_ladder() == gen2_ladder()
+    assert gen1_ladder()[:4] == ['reload', 'reload', 'report', 'reload']
 
 
 # 3. A marathon checkpoint.

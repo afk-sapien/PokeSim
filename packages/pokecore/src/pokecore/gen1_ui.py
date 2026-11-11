@@ -8,7 +8,8 @@ fields take ``version`` like the ``gen1`` readers.
 """
 from .yellow import red_layout
 from .storage import decode_box, memory_bytes
-from .gen1 import W_TILEMAP, decode_text, W_CURRENT_BOX, W_BOX_COUNT, BOX_DATA_SIZE
+from .gen1 import (W_TILEMAP, decode_text, W_CURRENT_BOX, W_BOX_COUNT, BOX_DATA_SIZE, W_CURRENT_MENU_ITEM,
+                   W_LIST_SCROLL_OFFSET, W_TOP_MENU_ITEM_X, W_TOP_MENU_ITEM_Y)
 
 
 _RAW_GLYPHS = tuple(decode_text(bytes([tile])) or " " for tile in range(256))
@@ -29,10 +30,10 @@ def read_screen(memory, *, raw_text=False):
     raw = bytes(memory[W_TILEMAP:W_TILEMAP + 360])
     rows = screen_rows(raw, raw_text=raw_text)
     cursors = [(i % 20, i // 20) for i, tile in enumerate(raw) if tile == 0xED]
-    active = (memory[0xCC25], memory[0xCC24] + 2 * memory[0xCC26])
+    active = (memory[W_TOP_MENU_ITEM_X], memory[W_TOP_MENU_ITEM_Y] + 2 * memory[W_CURRENT_MENU_ITEM])
     cursor = active if active in cursors else next(iter(cursors), None)
-    return {"rows": rows, "cursor": cursor, "menu_index": memory[0xCC26],
-            "scroll": memory[0xCC36], "textbox": raw[240] == 0x79,
+    return {"rows": rows, "cursor": cursor, "menu_index": memory[W_CURRENT_MENU_ITEM],
+            "scroll": memory[W_LIST_SCROLL_OFFSET], "textbox": raw[240] == 0x79,
             "pause": raw[10] == 0x79, "tiles": list(raw)}
 
 

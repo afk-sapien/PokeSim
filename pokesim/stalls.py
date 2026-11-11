@@ -18,7 +18,10 @@ PROGRESS_EVENTS = ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'tr
 
 class StallWatch:
     """Game time decides a stall, so pace does not matter. Real time only paces the alert and its
-    repeat, so Max pace does not send one every few minutes."""
+    repeat, so Max pace does not send one every few minutes.
+
+    The frames are PlayClock frames, which a reload never takes back. A reload is not progress, so the
+    quiet stretch goes on through every reload that tries to escape it."""
 
     def __init__(self, game_minutes=120, real_minutes=15, repeat_hours=6):
         self.game_frames = game_minutes * FRAMES_PER_GAME_MINUTE
@@ -54,26 +57,24 @@ class StallWatch:
 
     def quiet(self, frame, now):
         """Game minutes and real minutes since the last progress, starting the clocks on first use."""
-        if self.frame is None or frame < self.frame:
-            # A reloaded save restarts the clocks, but it is not progress: the save kept from
-            # before the trouble must outlive the reloads that try to escape it.
+        if self.frame is None:
             self.frame, self.since, self.alerted = frame, now, None
-        return (frame - self.frame) // FRAMES_PER_GAME_MINUTE, int(now - self.since) // 60
+        return max(0, frame - self.frame) // FRAMES_PER_GAME_MINUTE, int(now - self.since) // 60
 
     def game_minutes(self, frame):
         """Game minutes since the last progress, for the status page. Like ``stalled`` it changes nothing."""
-        if frame is None or self.frame is None or frame < self.frame:
+        if frame is None or self.frame is None:
             return 0
-        return (frame - self.frame) // FRAMES_PER_GAME_MINUTE
+        return max(0, frame - self.frame) // FRAMES_PER_GAME_MINUTE
 
     def stalled(self, frame):
         """Whether the game clock has passed the stall limit since the last progress.
 
         It changes nothing, so the web status thread can ask at any time without moving the clocks
-        the emulator thread keeps. A frame from before the last progress is a reload, not a stall.
+        the emulator thread keeps.
         """
         return (bool(self.game_frames) and frame is not None and self.frame is not None
-                and self.frame <= frame and frame - self.frame >= self.game_frames)
+                and frame - self.frame >= self.game_frames)
 
     def check(self, frame, now):
         """Return the quiet minutes when an alert is due, otherwise None."""
@@ -86,8 +87,7 @@ class StallWatch:
 
     def capture_due(self, frame):
         """True once for each quiet stretch past the game-minute limit, so its capture never waits
-        for the real-minute pacing of the alert. Call it after ``check``, which restarts the clocks
-        on a reload, so the stretch after a reload gets its own capture."""
+        for the real-minute pacing of the alert. Call it after ``check``, which starts the clocks."""
         if not self.stalled(frame) or self.captured == self.frame:
             return False
         self.captured = self.frame
@@ -109,26 +109,6 @@ def advanced(previous, snapshot):
     """True when the run caught something or earned experience since the previous snapshot."""
     return held(snapshot) > held(previous) or (len(snapshot.party) == len(previous.party)
                                                and experience(snapshot) > experience(previous))
-
-
-def boss_attempt(stall, guard, store, boss, blackout):
-    """Hold back the progress of a boss attempt until it ends, and drop it when the attempt blacks out.
-
-    A team too weak for the Elite Four lost to Lance for 12 hours, and each run earned experience,
-    levels and trainer wins on the way, so the stall alert never fired. A loss to a boss is never
-    progress. ``boss`` says an attempt is under way, ``blackout`` that the party just fainted.
-    """
-    if blackout and stall.held is not None:
-        stall.lost()
-        if guard is not None:
-            guard.lost(store)
-    elif boss:
-        if stall.attempt() and guard is not None:
-            guard.hold(store)
-    elif stall.held is not None:
-        stall.settle()
-        if guard is not None:
-            guard.settle()
 
 
 def stalled_state(live, waiting, stuck, loop):
@@ -190,7 +170,7 @@ class LoopGuard:
             self.checked = None
 
     def hold(self, store):
-        """Note where real progress stood as a boss attempt starts (stalls.boss_attempt)."""
+        """Note where real progress stood as a boss attempt starts (Supervisor.watch_boss)."""
         with self.lock:
             with store.reading() as db:
                 self._advance(db)

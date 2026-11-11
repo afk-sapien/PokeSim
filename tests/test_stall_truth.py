@@ -11,6 +11,7 @@ from pokesim import config, progress_events, stall_truth
 from pokesim.app.manager import Manager
 from pokesim.app.registry import identifier
 from pokesim.play_clock import PlayClock
+from pokesim.runtime.supervision import Supervisor
 from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, StallWatch
 from pokesim.store import Store
 from pokesim.web.app import create_app
@@ -40,8 +41,8 @@ def stalled_game(store, loop):
     """The parts of a stalled run that a help request reads, for both generations."""
     stall = StallWatch(game_minutes=120, real_minutes=0)
     stall.progress(0, 0)
-    return dict(store=store, stall=stall, frame=130 * MINUTE, paused=False, manual_mode=False,
-                loop_guard=LastScan(loop))
+    return dict(store=store, stall=stall, frame=130 * MINUTE, play_clock=PlayClock({'frames': 130 * MINUTE}),
+                paused=False, manual_mode=False, loop_guard=LastScan(loop))
 
 
 def gen1_help(game):
@@ -63,8 +64,8 @@ def gen2_game(store, loop):
     now = time.time()
     policy = SimpleNamespace(mode='exploring', describe=lambda: '', details=dict, boxes_full=False)
     return SimpleNamespace(**stalled_game(store, loop), last_achievement=None, progress_frame=0, waiting=False,
-                           unstick_streak=0, last_reload=0, policy=policy, frozen=False, health=dict, speed=1,
-                           snapshot=None, rom_note='', play_clock=PlayClock(), executed_frames=0, started_at=now,
+                           supervisor=Supervisor(), last_reload=0, policy=policy, frozen=False, health=dict, speed=1,
+                           snapshot=None, rom_note='', executed_frames=0, started_at=now,
                            stuck_frame=130 * MINUTE, history={'maps': set()}, reloads=0, invalid_frame=None,
                            legendary_recovery=SimpleNamespace(state_dict=dict))
 
@@ -81,10 +82,10 @@ def help_story(tmp_path, make, ask):
         loop[0] = LOOP
         assert ask(game)['reason'] == f'The run is caught in a loop. {LOOP}'
         assert ask(game)
-        loop[0], game.frame = None, 10 * MINUTE
-        game.stall.progress(game.frame, 0)
+        loop[0] = None
+        game.stall.progress(game.play_clock.frames, 0)
         assert ask(game) is None
-        game.frame = 200 * MINUTE
+        game.play_clock.frames += 120 * MINUTE
         assert ask(game)
         return truth(store)
     finally:
