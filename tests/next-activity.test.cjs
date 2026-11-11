@@ -170,3 +170,27 @@ test('Set needs a species from the list, matched without case or punctuation', a
   assert.deepEqual(sent.at(-1).body, {action: 'pin_goal', value: 'train', target: {species: 'Farfetch’d', stop: 'evolved'}})
   assert.equal(element('#next-activity-status').textContent, 'Next: Train a Pokémon')
 })
+
+test('a state refresh keeps a half-typed species name and leaves the lists as drawn', async () => {
+  const {NextActivity, element, settle} = load({goals: {goals: [...GOALS, TRAIN], pin: null}})
+  NextActivity.update({strategy: {pin: null}})
+  await settle()
+  element('#next-activity-goal').value = 'train'
+  element('#next-activity-goal').listeners.change()
+  element('#next-activity-species').value = 'Pik'
+  element('#next-activity-stop').value = 'evolved'
+  const species = element('#next-activity-species-list').options
+  const stops = element('#next-activity-stop').options
+  // The live page refreshes its state every 2 seconds while the name is being typed.
+  NextActivity.update({strategy: {pin: null}})
+  NextActivity.update({strategy: {pin: null}})
+  assert.equal(element('#next-activity-species').value, 'Pik')
+  assert.equal(element('#next-activity-stop').value, 'evolved')
+  assert.equal(element('#next-activity-species-list').options, species)
+  assert.equal(element('#next-activity-stop').options, stops)
+  // Another goal still draws its own fields.
+  element('#next-activity-goal').value = 'hunt'
+  element('#next-activity-goal').listeners.change()
+  assert.equal(element('#next-activity-species').value, '')
+  assert.equal(element('#next-activity-species-field').hidden, true)
+})
