@@ -14,13 +14,14 @@ import hashlib
 import hmac
 import secrets
 
+from pokecore.gen1 import (W_BATTLE_TYPE, W_ENEMY_BATTLE_STATUS3, W_ENEMY_DVS, W_IS_IN_BATTLE,
+                           W_LINK_STATE, WRAM_END, WRAM_START)
+
 from . import config
 from .state import kv
 
 KEY = 'fair-wild-dvs-v1'
 # Red addresses. A Yellow emulator translates them through its memory view.
-DVS = 0xcff1
-IN_BATTLE, BATTLE_TYPE, ENEMY_STATUS3, LINK_STATE = 0xd057, 0xd05a, 0xd069, 0xd12b
 WILD, OLD_MAN, TRANSFORMED = 1, 1, 8
 
 
@@ -58,15 +59,15 @@ def wild(mem):
     Trainer Pokémon have fixed DVs, Transform restores the original DVs through the same
     instruction, cable battles load the partner's party, and the old man's Weedle is a tutorial.
     """
-    return (mem[IN_BATTLE] == WILD and mem[BATTLE_TYPE] != OLD_MAN
-            and not mem[ENEMY_STATUS3] & TRANSFORMED and not mem[LINK_STATE])
+    return (mem[W_IS_IN_BATTLE] == WILD and mem[W_BATTLE_TYPE] != OLD_MAN
+            and not mem[W_ENEMY_BATTLE_STATUS3] & TRANSFORMED and not mem[W_LINK_STATE])
 
 
 def reroll(mem, key):
     """Replace the wild DVs just stored. Returns the new bytes, or None when left alone."""
     if not wild(mem):
         return None
-    dvs = hmac.new(key, bytes(mem[0xc000:0xe000]), hashlib.sha256).digest()[:2]
-    mem[DVS] = dvs[0]
-    mem[DVS + 1] = dvs[1]
+    dvs = hmac.new(key, bytes(mem[WRAM_START:WRAM_END]), hashlib.sha256).digest()[:2]
+    mem[W_ENEMY_DVS] = dvs[0]
+    mem[W_ENEMY_DVS + 1] = dvs[1]
     return dvs

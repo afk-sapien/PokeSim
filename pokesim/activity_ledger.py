@@ -4,6 +4,11 @@ import hashlib
 import re
 import time
 
+from pokecore.gen1 import (H_VENDING_MACHINE_ITEM, W_BAG_ITEMS, W_BATTLE_TYPE, W_CUR_ITEM,
+                           W_ENEMY_BATTLE_STATUS3, W_ENEMY_HP, W_ENEMY_SPECIES2, W_IS_IN_BATTLE,
+                           W_ITEM_QUANTITY, W_LINK_STATE, W_NUM_BAG_ITEMS, W_WHICH_POKEMON,
+                           WRAM_END, WRAM_START)
+
 from .ram import DEX_NAMES, ITEM_NAMES
 from .state import kv, tracking
 from .strategy_data import SPECIES
@@ -111,7 +116,7 @@ class ActivityLedger:
         kind, pb = context
         mem = pb.memory
         # Cable battles and the old man's tutorial are not this adventure's actions.
-        if mem[0xd12b] or mem[0xd057] and mem[0xd05a] == 1:
+        if mem[W_LINK_STATE] or mem[W_IS_IN_BATTLE] and mem[W_BATTLE_TYPE] == 1:
             return
         if kind == 'npc_trade':
             from .trade_statistics import npc
@@ -119,29 +124,29 @@ class ActivityLedger:
             return
         amount = 1
         if kind in {'wild', 'trainer', 'defeated'}:
-            if mem[0xd057] not in (1, 2):
+            if mem[W_IS_IN_BATTLE] not in (1, 2):
                 return
-            if kind == 'wild' and mem[0xd057] != 1:
+            if kind == 'wild' and mem[W_IS_IN_BATTLE] != 1:
                 return
-            if kind == 'trainer' and (mem[0xd057] != 2 or mem[0xd069] & 8):
+            if kind == 'trainer' and (mem[W_IS_IN_BATTLE] != 2 or mem[W_ENEMY_BATTLE_STATUS3] & 8):
                 return
             # Species2 remains the original species when Ditto uses Transform.
-            species = mem[0xcfd8]
+            species = mem[W_ENEMY_SPECIES2]
             if species not in SPECIES:
                 return
             subject = SPECIES[species]['dex']
-            if kind == 'defeated' and (mem[0xcfe6] or mem[0xcfe7]):
+            if kind == 'defeated' and (mem[W_ENEMY_HP] or mem[W_ENEMY_HP + 1]):
                 return
         else:
-            subject = mem[0xcf91]
+            subject = mem[W_CUR_ITEM]
             if kind in {'ball', 'used'}:
                 # wCurItem aliases wCurPartySpecies and is overwritten on capture.
                 # Read the exact bag slot the cartridge is about to consume.
-                slot = mem[0xcf92]
-                if not 0 <= slot < mem[0xd31d] <= 20:
+                slot = mem[W_WHICH_POKEMON]
+                if not 0 <= slot < mem[W_NUM_BAG_ITEMS] <= 20:
                     return
-                subject = mem[0xd31e + slot * 2]
-                if not mem[0xd31f + slot * 2]:
+                subject = mem[W_BAG_ITEMS + slot * 2]
+                if not mem[W_BAG_ITEMS + 1 + slot * 2]:
                     return
             if kind == 'safari':
                 subject = 8
@@ -150,15 +155,15 @@ class ActivityLedger:
                     return
                 kind = 'used'
             elif kind == 'vending':
-                subject = mem[0xffdb]
+                subject = mem[H_VENDING_MACHINE_ITEM]
                 if subject not in (60, 61, 62):
                     return
                 kind = 'bought'
             else:
-                amount = mem[0xcf96]
+                amount = mem[W_ITEM_QUANTITY]
             if subject not in ITEMS or not 1 <= amount <= 99:
                 return
-        fingerprint = hashlib.sha256(bytes(mem[0xc000:0xe000])).digest()
+        fingerprint = hashlib.sha256(bytes(mem[WRAM_START:WRAM_END])).digest()
         with self.store.transaction() as db:
             if tracking.add_activity_receipt(db, kind, fingerprint):
                 increment(db, kind, subject, amount)

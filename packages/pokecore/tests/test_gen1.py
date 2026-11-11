@@ -137,6 +137,13 @@ def test_named_addresses_match_pret_pokered():
     assert (gen1.W_STATUS_FLAGS1, gen1.W_MOVEMENT_FLAGS) == (0xD728, 0xD736)
     assert gen1.W_SPRITE_STATE_DATA2 + gen1.SPRITE_STRUCT + gen1.SPRITE_MAP_Y == 0xC214
     assert gen1.FACINGS[4] == 'up'
+    assert (gen1.W_CUR_ITEM, gen1.W_ITEM_QUANTITY, gen1.W_OPTIONS) == (0xCF91, 0xCF96, 0xD355)
+    assert (gen1.W_IN_GAME_TRADE_GIVE_MON_SPECIES, gen1.W_IN_GAME_TRADE_TEXT_INDEX) == (0xCD0F, 0xCD12)
+    assert gen1.W_COMPLETED_IN_GAME_TRADE_FLAGS == 0xD737
+    assert (gen1.W_ENEMY_HP, gen1.W_ENEMY_DVS, gen1.W_ENEMY_MAX_HP) == (0xCFE6, 0xCFF1, 0xCFF4)
+    assert (gen1.W_BATTLE_MON_HP, gen1.W_BATTLE_MON_STATUS, gen1.W_BATTLE_MON_PP) == (0xD015, 0xD018, 0xD02D)
+    assert (gen1.H_RANDOM_ADD, gen1.H_RANDOM_SUB, gen1.H_VENDING_MACHINE_ITEM) == (0xFFD3, 0xFFD4, 0xFFDB)
+    assert (gen1.WRAM_START, gen1.WRAM_END) == (0xC000, 0xE000)
 
 
 def test_sprite_tile_reads_the_map_block_position():
