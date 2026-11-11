@@ -166,9 +166,9 @@ jobs:
       - if: matrix.arch == 'amd64'
         run: uv build
       - if: matrix.arch == 'amd64'
-        run: python tools/check_package.py
+        run: python tools/check_install.py package
       - if: matrix.arch == 'amd64'
-        run: python tools/check_python_install.py
+        run: python tools/check_install.py python-install
       - name: Build and test the versioned image
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
@@ -178,8 +178,8 @@ jobs:
         run: |
           docker build --platform "linux/$ARCH" --build-arg VERSION="$VERSION" --build-arg REVISION="$REVISION" \
             -t "$IMAGE" -t "$IMAGE-linux-$ARCH" .
-          python tools/check_container.py "$IMAGE"
-          python tools/check_quickstart.py "$IMAGE"
+          python tools/check_container.py compose "$IMAGE"
+          python tools/check_container.py quickstart "$IMAGE"
       - name: Keep the tested image and packages for the publish job
         # The archive carries the plain version tag too, so an offline load works with the release Compose file.
         run: |

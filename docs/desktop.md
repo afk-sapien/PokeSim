@@ -274,10 +274,10 @@ The emulator ships as one prebuilt wheel per platform: Linux x86-64 and ARM64 (g
 
 ```sh
 uv sync --python 3.12 --locked --extra dev
-uv run --locked python tools/prepare_test_data.py
+uv run --locked python tools/check_install.py prepare-data
 uv build
-uv run --locked python tools/check_package.py
-uv run --locked python tools/check_python_install.py
+uv run --locked python tools/check_install.py package
+uv run --locked python tools/check_install.py python-install
 ```
 
 The install check creates a temporary isolated environment, installs the built wheel and its dependencies, and launches the installed `pokesim-desktop` command outside the checkout. It verifies the Library, static assets, duplicate launch, CSRF protection, and clean shutdown. It then launches two actual worker processes and checks private credentials, independent save files, and shutdown when their parent closes its pipe.

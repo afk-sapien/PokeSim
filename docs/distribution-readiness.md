@@ -170,7 +170,7 @@ those checks in private release validation with user-supplied inputs.
 Add an installed-wheel check outside the source directory, including launcher entry
 points and packaged static files. The current archive checker is useful, but source
 tests can hide missing installed resources. Require both wheel and source archive
-to exist. Currently `tools/check_package.py` accepts either one on its own.
+to exist. `tools/check_install.py package` now requires both.
 
 Smoke-test desktop archives after extraction as well as their build directories.
 This checks the actual downloadable packaging and permission preservation. Retain

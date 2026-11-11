@@ -300,7 +300,7 @@ A missing revision or unknown dirty state is represented as `null`.
 
 ```sh
 uv build
-uv run --locked python tools/check_package.py
+uv run --locked python tools/check_install.py package
 ```
 
 For source container builds, supply the reviewed revision explicitly:
@@ -319,8 +319,8 @@ On Linux, build both packages and install the wheel in a fresh temporary environ
 
 ```sh
 uv build
-uv run --locked python tools/check_package.py
-uv run --locked python tools/check_installed_wheel.py
+uv run --locked python tools/check_install.py package
+uv run --locked python tools/check_install.py installed-wheel
 ```
 
 The wheel check runs outside the repository and resolves the wheel's declared
@@ -334,7 +334,7 @@ For an isolated server installation test:
 
 ```sh
 docker build -t pokesim:check .
-uv run --locked python tools/check_container.py pokesim:check
+uv run --locked python tools/check_container.py compose pokesim:check
 ```
 
 The test creates a uniquely named Compose project, disposable named volume, and
