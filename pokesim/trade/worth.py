@@ -48,6 +48,16 @@ def inputs(inventory, demand=None):
                   owned=None if owned is None else frozenset(owned))
 
 
+def experience(mon):
+    """A payload record's total experience. Gold, Silver and Crystal records carry the progress through
+    the level (pokecore's experience_progress) in its place. pcvalue.rate keys its rows by Entry, so a
+    row holding that dict cannot be rated."""
+    value = mon.get('experience')
+    if isinstance(value, dict):
+        value = value.get('total')
+    return value if type(value) is int else 0
+
+
 def entries(party, stored):
     """PC value rows for a payload's party and boxed Pokémon, grouped by Pokédex number. Keep and
     Never trade lock a Pokémon, and Prefer to trade marks an offered partner."""
@@ -56,7 +66,7 @@ def entries(party, stored):
         preference = mon.get('trade_preference')
         rows.append(Entry(None if index < len(party) else (mon.get('box', 1), mon.get('position', index)),
                           (mon.get('dex') or mon['species'], 0), mon.get('name', ''), mon.get('level', 0),
-                          mon.get('experience', 0), tuple(mon.get('dvs') or ()), tuple(mon.get('stat_exp') or ()),
+                          experience(mon), tuple(mon.get('dvs') or ()), tuple(mon.get('stat_exp') or ()),
                           bool(mon.get('egg')), locked=preference in ('locked', 'withdrawn'),
                           stock=preference == 'offered', trade=preference == 'offered', record=mon))
     return rows

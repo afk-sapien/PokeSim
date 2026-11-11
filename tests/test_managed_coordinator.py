@@ -689,6 +689,37 @@ def test_scheduler_preserves_quality_benefits_without_new_dex_entries():
     assert gain(inventory, {'dex': 25, 'level': 20}).points == 0
 
 
+def test_gen2_experience_progress_rates_like_its_total():
+    """Gold, Silver and Crystal payloads carry each Pokémon's experience as pokecore's progress dict, in
+    the party, the boxes and the offers. Live, the first trade pass rated an offer against one and
+    raised TypeError, since pcvalue.rate keys its rows by Entry."""
+    from pokecore.formulas import experience_progress
+    from pokesim.trade.worth import entries, gain, spares
+
+    def record(box, position, dvs, progress):
+        total = 6400 + position if position else 6400
+        return {'species': 25, 'dex': 25, 'name': 'Pikachu', 'nick': 'PIKACHU', 'level': 20, 'dvs': dvs,
+                'stat_exp': (0,) * 5, 'egg': False, 'box': box, 'position': position,
+                'experience': experience_progress(total, 20, 'FAST') if progress else total}
+
+    def payload(progress):
+        return {'version': 'crystal', 'generation': 2, 'owned': [25],
+                'party': [record(None, None, (8, 8, 8, 8, 8), progress)],
+                'storage': {'pokemon': [record(1, position, (position,) * 5, progress) for position in (1, 2, 3)]}}
+
+    shown, plain = payload(True), payload(False)
+    rows = entries(shown['party'], shown['storage']['pokemon'])
+    assert [row.experience for row in rows] == [6400, 6401, 6402, 6403]
+    assert len({*rows}) == 4
+    offer = {'dex': 25, 'level': 20, 'name': 'Pikachu', 'dvs': [15, 15, 15, 15, 15],
+             'experience': experience_progress(6400, 20, 'FAST')}
+    assert gain(shown, offer) == gain(plain, offer)
+
+    def spare_slots(inventory):
+        return [(mon['box'], mon['position']) for mon in spares(inventory['party'], inventory['storage']['pokemon'], inventory)]
+    assert spare_slots(shown) == spare_slots(plain) != []
+
+
 def trade_display_fixture(setup, nickname='HAUNTER'):
     c = setup.coordinator
     c.display_species = {'147': {'name': 'Haunter', 'dex': 93},
