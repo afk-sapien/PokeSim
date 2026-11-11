@@ -4,12 +4,13 @@ from test_managed_coordinator import Peer, setup
 
 
 def offer(key, dex, level=20):
-    return {'trade_key': key, 'dex': dex, 'arrived_dex': dex, 'level': level}
+    # Rarer than the held copy, so a peer gains it as a quality upgrade (trade/worth.py).
+    return {'trade_key': key, 'dex': dex, 'arrived_dex': dex, 'level': level, 'dvs': [0, 12, 12, 12, 12]}
 
 
 def inventory(*offers):
     return {'owned': [16, 19, 25],
-            'party': [{'dex': dex, 'level': 10} for dex in [16, 19, 25]],
+            'party': [{'dex': dex, 'level': 10, 'dvs': [0, 6, 6, 6, 6]} for dex in [16, 19, 25]],
             'offers': list(offers)}
 
 
@@ -131,7 +132,7 @@ def test_a_trade_the_receiver_would_release_is_skipped_and_its_pair_waits(setup,
         asked.append((aid, mon['dex']))
         return mon['dex'] != 25
     monkeypatch.setattr(c, '_would_keep', would_keep)
-    # Both gain a level, and the lower level 25 ranks first.
+    # Both are rarer copies, and the lower level 25 ranks first.
     inventories = {left: inventory(offer('spare', 25), offer('kept', 16, 30)), right: inventory(offer('new-right', 19))}
     selected = selection(setup, monkeypatch, inventories)
     assert 'kept' in selected.values() and (right, 25) in asked

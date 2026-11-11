@@ -4,64 +4,33 @@ from ..shiny import is_shiny
 from ..milestones import is_perfect
 from ..ram import DEX_NAMES
 from ..trade.preferences import name as setting_name
+from ..trade.worth import gain, why
 from ..policies.collection import EVOS
-from ..pcvalue import RARITY_STEP
-from ..rarity import RatingUnavailable
-from .inventory import species_rarity
 
 EVOLVES = {sid: row['species'] for sid, rows in EVOS.items() for row in rows if row['method'] == 'trade'}
 
 
 def benefit(inv, incoming):
-    arrived = EVOLVES.get(incoming.species, incoming.species)
-    dex = SPECIES[arrived]['dex']
-    new = {incoming.dex, dex} - inv.owned - {None}
-    if new:
-        return 100 * len(new), f"{inv.instance.title()} registers {' and '.join(DEX_NAMES[n] for n in sorted(new))}"
-    if arrived != incoming.species:
-        # The cable is the only way these evolve, so a swap that triggers one is worth more than
-        # any level or DV upgrade even when the entry is already registered.
-        return 40, f'{inv.instance.title()} evolves {DEX_NAMES[incoming.dex]} into {DEX_NAMES[dex]} on arrival'
-    copies = [p for p in inv.party if p['species'] == arrived]
-    copies += [p.as_side() for p in inv.stored if p.species == arrived]
-    if not copies:
-        return 20, f'{inv.instance.title()} restores a missing collection partner'
-    best_level = max(p['level'] for p in copies)
-    if incoming.level >= best_level + 5:
-        return 10, f'{inv.instance.title()} gains a partner at least five levels stronger'
-    if incoming.level >= best_level - 5 and len(incoming.dvs) == 5:
-        # Rarer by the step the PC keeps a new copy for (pcvalue.worth), by the version's own rarity.
-        rarity = species_rarity(inv.version)
-        try:
-            known = [rarity(p['species'], tuple(p['dvs'])) for p in copies if len(p.get('dvs', ())) == 5]
-            new = rarity(arrived, tuple(incoming.dvs))
-        except RatingUnavailable:
-            known, new = [None], None
-        if (len(known) == len(copies) and None not in known and new is not None
-                and new * RARITY_STEP <= min(known)):
-            return 5, f'{inv.instance.title()} gains a copy at least {RARITY_STEP} times as rare'
-    if incoming.level >= best_level and len(incoming.stat_exp) == 5:
-        known = [sum(p['stat_exp']) for p in copies if len(p.get('stat_exp', ())) == 5]
-        if len(known) == len(copies) and sum(incoming.stat_exp) >= max(known) + 20000:
-            return 5, f'{inv.instance.title()} gains at least 20,000 stat experience'
-    return 0, ''
+    """What ``incoming`` is worth to ``inv`` (trade/worth.py), as (points, reason)."""
+    side = {**incoming.as_side(), 'arrived_dex': SPECIES[EVOLVES.get(incoming.species, incoming.species)]['dex']}
+    payload = {'owned': inv.owned, 'version': inv.version, 'party': list(inv.party),
+               'storage': {'pokemon': [{**copy.as_side(), 'trade_preference': copy.trade_preference}
+                                       for copy in inv.stored]}}
+    found = gain(payload, side)
+    species = ' and '.join(DEX_NAMES[dex] for dex in found.new) or DEX_NAMES.get(side['arrived_dex'], incoming.label)
+    return found.points, why(inv.instance.title(), species, found)
 
 
-def offers(inv, allow_last_copies, demanded=None):
-    """Boxed copies this run can trade away.
-
-    ``demanded`` maps Pokédex numbers to the copies peers asked for. A species a peer needs is
-    offered whenever a second copy stays behind, even a keeper: a Jynx from Red's Cerulean
-    exchange otherwise sat beside the veteran (or was released) while Yellow never got one.
-    """
+def offers(inv, allow_last_copies):
+    """Boxed copies this run can trade away: its spares, which include the copies kept for a peer
+    that lacks the species (trade/worth.py), the last copy of a species when ``allow_last_copies``,
+    and copies set to Prefer to trade while another copy stays behind."""
     held = inv.held
     slots = inv.spare_slots
-    wanted = {int(key) for key, count in (demanded or {}).items() if count}
     return inv.spares + tuple(copy for copy in inv.tradeable
                              if (copy.box, copy.position) not in slots
                              and ((held[copy.species] == 1 and allow_last_copies)
-                                  or (held[copy.species] > 1 and (copy.trade_preference == 'offered'
-                                                                  or copy.dex in wanted))))
+                                  or (held[copy.species] > 1 and copy.trade_preference == 'offered')))
 
 
 def listings(inv, allow_last_copies=False):

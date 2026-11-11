@@ -41,6 +41,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from pokecore.gen1 import S_BOXES
+
 from ..ram import (BOX_CAPACITY, BOX_COUNT, BOX_DATA_SIZE, SPECIES_NAMES,
                    W_BOX_COUNT, W_CURRENT_BOX, decode_text)
 
@@ -54,7 +56,7 @@ OFF_MONS = 22
 OFF_OT_NAMES = OFF_MONS + BOX_CAPACITY * BOX_STRUCT             # 682
 OFF_NICKNAMES = OFF_OT_NAMES + BOX_CAPACITY * NAME_LENGTH       # 902
 
-SRAM_BOXES = 0xA000
+SRAM_BOXES = S_BOXES
 SRAM_ALL_BOXES_CHECKSUM = SRAM_BOXES + BOXES_PER_BANK * BOX_DATA_SIZE   # 0xBA4C
 SRAM_BOX_CHECKSUMS = SRAM_ALL_BOXES_CHECKSUM + 1                        # 0xBA4D..0xBA52
 

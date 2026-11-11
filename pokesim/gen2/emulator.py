@@ -24,7 +24,7 @@ from ..runtime.reload import FRAMES_PER_SECOND, reload_target
 from ..runtime.restart import restart
 from ..runtime.supervision import CANNOT_END, GIVE_UP, HOLD, LEAGUE_RESTARTS, Supervisor
 from ..runtime.supervision import report as stuck_report
-from ..stalls import LoopGuard, StallWatch, stalled_state
+from ..stalls import LoopGuard, StallWatch
 from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import validate_runtime
 from .data import GameData
@@ -1257,21 +1257,16 @@ class Emulator:
 
     def status(self):
         from .. import rewards
-        from ..pcvalue import BOXES_FULL, boxes_full
+        from ..pcvalue import boxes_full
         from ..randomized import status as randomizer_status
         from ..stall_truth import observe_help
         from .release import room
-        achievement = self.last_achievement
-        if achievement:
-            # The live page says how long ago it was, the same as Red, Blue and Yellow.
-            achievement = {'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
-                           'age_seconds': max(0, int(time.time() - achievement['ts']))}
-        quiet_minutes = max(0, self.frame - self.progress_frame) / 3600
-        live = not self.paused and not self.manual_mode
-        waiting = live and self.waiting
-        loop = live and Emulator._looping(self)
-        stalled = stalled_state(live, waiting, self.stall.stalled(self.play_clock.frames) or self.supervisor.stalled, loop)
-        recovering = time.time() - self.last_reload < 30 or self.policy.mode == 'finding another approach'
+        # The same help request and progress line as Red, Blue and Yellow (Supervisor.help_request).
+        held, frames = self.paused or self.manual_mode, self.play_clock.frames
+        shared = dict(held=held, waiting=self.waiting, loop=None if held else Emulator._looping(self))
+
+        def full():
+            return boxes_full(getattr(self.policy, 'boxes_full', False), room(self.snapshot) if self.snapshot else None)
         return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
                 'stopped': self.frozen,
                 'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,
@@ -1281,14 +1276,11 @@ class Emulator:
                 'uptime': int(time.time() - self.started_at), 'stuck_seconds': max(0, self.frame - self.stuck_frame) // FRAMES_PER_SECOND,
                 'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,
-                'help_request': observe_help(self, {
-                    'reason': f'The run is caught in a loop. {loop}' if loop else 'The policy has stopped making game progress',
-                    'action': self.policy.mode} if stalled else
-                    {'reason': BOXES_FULL, 'action': self.policy.mode} if live and boxes_full(
-                        getattr(self.policy, 'boxes_full', False), room(self.snapshot) if self.snapshot else None) else None),
-                'progress': {'state': 'stalled' if stalled else 'waiting' if waiting else 'recovering' if recovering
-                             else 'making_progress',
-                             'last_achievement': achievement, 'quiet_game_minutes': round(quiet_minutes, 1)},
+                'help_request': observe_help(self, self.supervisor.help_request(
+                    self.stall, frames, full=full, action=self.policy.mode, **shared)),
+                'progress': self.supervisor.progress(
+                    self.stall, frames, time.time(), achievement=self.last_achievement, glitched=self.invalid_frame is not None,
+                    last_reload=self.last_reload, mode=self.policy.mode, **shared),
                 'league_rewards': rewards.status(self.store), 'legendary_recovery': self.legendary_recovery.state_dict(),
                 'randomizer': randomizer_status()}
 

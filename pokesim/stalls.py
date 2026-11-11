@@ -111,11 +111,6 @@ def held_rose(previous, snapshot):
             and held(snapshot) > held(previous))
 
 
-def stalled_state(live, waiting, stuck, loop):
-    """Whether the status shows a run as stalled: live, stuck or looping, and never while it waits."""
-    return bool(live and not waiting and (stuck or loop))
-
-
 # Events a gift and release loop cannot fake. A received gift, an item and a release are left out.
 REAL_PROGRESS = ('badge', 'catch', 'event_return', 'evolve', 'hatch', 'champion', 'trainer', 'level', 'map')
 # Repeats that count as a loop: the same Pokémon received and released.

@@ -92,11 +92,13 @@ def test_unavailable_current_value_is_not_replaced_by_historical_value(page, gam
 
 @pytest.mark.parametrize('width', [320, 1280])
 def test_legendary_return_progress_is_readable_and_lists_available_hunts(page, game, width):
+    from pokesim import return_claims
     from pokesim.legendary_returns import KEY, STEPS
     url, store, _, _ = game
     store.set(STEPS, {'available': True, 'total': 1250000, 'started_at': time.time()})
-    store.set(KEY, {'cycle': 1, 'interval': 1000000, 'next_at': 2000000,
-                   'tickets': {'150': {'state': 'available', 'cycle': 1}}})
+    store.set(KEY, {'cycle': 1, 'interval': 1000000, 'next_at': 2000000})
+    with store.transaction() as db:
+        return_claims.deliver(db, 150, None)
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(url + '/journal/stats')
     card = page.locator('#event-return-list [data-return=legendary]')

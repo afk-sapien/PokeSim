@@ -3,6 +3,7 @@ import pytest
 
 from pokesim.app import coordinator as coordinator_module, ownership, trade_settings
 from pokesim.app.coordinator import Waiting
+from pokesim.trade.worth import Gain
 
 from test_accounts import library, meanwhile, people  # noqa: F401  (fixtures)
 from test_user_deletion import quiet  # noqa: F401  (fixture)
@@ -18,7 +19,7 @@ def recorded_plans(coordinator, monkeypatch, manual):
     else:
         monkeypatch.setattr(coordinator, 'inventory', lambda aid: {'offers': [{}]})
         monkeypatch.setattr(coordinator_module, 'find', lambda offers, key: {})
-        monkeypatch.setattr(coordinator, '_benefit', lambda inventory, offer: None)
+        monkeypatch.setattr(coordinator_module, 'gain', lambda inventory, offer: Gain(0))
         monkeypatch.setattr(coordinator, '_last_copies_useful', lambda *values: True)
     monkeypatch.setattr(coordinator, '_mon_display', lambda offer: {})
     monkeypatch.setattr(coordinator, '_offer_for', lambda offer, inventory: {})

@@ -20,10 +20,14 @@ Progress is one rule in both generations: a new high, kept under ``BEST_KEY``. A
 game, and the replay journals the same maps, trainers and levels again, which is not progress. A boss
 attempt holds the ladder until it ends, and a blackout or a reload out of it is a loss whose progress
 does not count.
+
+The status page's help request and progress line are written here too, once for both generations.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from ..pcvalue import BOXES_FULL
 
 KEY = 'supervisor-ladder-v1'
 BEST_KEY = 'supervisor-best-v1'
@@ -40,6 +44,14 @@ LEAGUE_RESTARTS = 3
 MAX_RELOADS = 12
 # The guards' reason for a battle that neither side can finish. Waiting longer cannot help it.
 CANNOT_END = 'battle cannot end'
+# The help request of a run that has stopped making game progress.
+STOPPED = 'The policy has stopped making game progress'
+# The policy's mode once it drops its way to a goal and looks for another.
+ANOTHER_APPROACH = 'finding another approach'
+# Real seconds after a reload that the status page says the run is recovering.
+RECOVERING_SECONDS = 30
+# Real seconds after an achievement that the status page says the run is making progress.
+FRESH_SECONDS = 120
 
 GIVE_UP, HOLD, RELOAD = 'give up', 'hold', 'reload'
 
@@ -229,6 +241,52 @@ class Supervisor:
             stall.lost()
         if guard is not None:
             guard.lost(self.store)
+
+    def stuck(self, stall, frames, *, held=False, waiting=False, loop=None):
+        """Whether the status shows the run as stalled: looping, high on the ladder or quiet past the
+        stall watch's limit in game time. Never while it is paused, in manual play or waiting.
+
+        ``frames`` is the PlayClock. ``loop`` is the loop guard's last answer, which the status reads
+        and never scans for, so the status page cannot move a scan to a frame a replay would not reach.
+        """
+        if held or waiting:
+            return False
+        return bool(loop) or self.stalled or bool(stall is not None and stall.stalled(frames))
+
+    def help_request(self, stall, frames, *, held=False, waiting=False, loop=None, full=lambda: False, action=''):
+        """Ask the owner for a hand, the same in all six games, or None.
+
+        A loop asks first, then a stall. ``full`` says a missing entry is left uncaught for want of a
+        slot, with nothing in the PC that may go. It reads the boxes, so it is asked only when the run
+        is not stalled. ``action`` is what the policy is doing.
+        """
+        if held:
+            return None
+        if self.stuck(stall, frames, waiting=waiting, loop=loop):
+            return {'reason': f'The run is caught in a loop. {loop}' if loop else STOPPED, 'action': action}
+        if full():
+            return {'reason': BOXES_FULL, 'action': action}
+        return None
+
+    def progress(self, stall, frames, now, *, achievement=None, held=False, waiting=False, loop=None,
+                 glitched=False, last_reload=0.0, mode=''):
+        """The status page's progress line, the same in all six games.
+
+        ``achievement`` is the newest journal achievement, ``last_reload`` the real time of the last
+        reload and ``mode`` what the policy is doing. ``quiet_game_minutes`` is the stall watch's.
+        """
+        age = max(0, int(now - achievement['ts'])) if achievement else None
+        if self.stuck(stall, frames, held=held, waiting=waiting, loop=loop):
+            state = 'stalled'
+        elif waiting and not held:
+            state = 'waiting'
+        elif glitched or now - last_reload < RECOVERING_SECONDS or mode == ANOTHER_APPROACH:
+            state = 'recovering'
+        else:
+            state = 'making_progress' if age is not None and age < FRESH_SECONDS else 'exploring'
+        return {'state': state, 'quiet_game_minutes': stall.game_minutes(frames) if stall is not None else 0,
+                'last_achievement': {'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
+                                     'age_seconds': age} if achievement else None}
 
     def _save(self):
         if self.store is not None:

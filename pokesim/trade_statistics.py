@@ -3,6 +3,9 @@ import hashlib
 import json
 import time
 
+from pokecore.gen1 import (PARTY_STRUCT, W_IN_GAME_TRADE_GIVE_MON_SPECIES, W_IN_GAME_TRADE_TEXT_INDEX,
+                           W_PARTY_COUNT, W_PARTY_MONS, WRAM_END, WRAM_START)
+
 from .activity_ledger import increment
 from .state import kv, ledgers
 from .strategy_data import SPECIES
@@ -117,12 +120,12 @@ def backfill_gen2(db):
 
 def npc(store, memory):
     # TradeText THANKS is written only after the replacement and evolution finish.
-    count = memory[0xd163]
-    if memory[0xcd12] != 3 or not 1 <= count <= 6:
+    count = memory[W_PARTY_COUNT]
+    if memory[W_IN_GAME_TRADE_TEXT_INDEX] != 3 or not 1 <= count <= 6:
         return
-    sent = memory[0xcd0f]
-    received = memory[0xd16b + (count - 1) * 44]
-    identity = 'npc:' + hashlib.sha256(bytes(memory[0xc000:0xe000])).hexdigest()
+    sent = memory[W_IN_GAME_TRADE_GIVE_MON_SPECIES]
+    received = memory[W_PARTY_MONS + (count - 1) * PARTY_STRUCT]
+    identity = 'npc:' + hashlib.sha256(bytes(memory[WRAM_START:WRAM_END])).hexdigest()
     with store.transaction() as db:
         record(db, identity, sent, received)
 

@@ -84,10 +84,10 @@ class BrowserErrors:
     def failed(self, request):
         text = request.failure or ''
         # A navigation cancels what the old page was loading, and the live screen drops a frame
-        # it has already replaced or cancels its frame fetch when the page hides. None is a failure.
+        # it has already replaced or cancels its frame fetch or stream when the page hides. None is a failure.
         cancelled = text == 'net::ERR_ABORTED' and (
             self.started.get(request, self.navigations) != self.navigations or request.resource_type == 'image'
-            or urlsplit(request.url).path.endswith('/frame.jpg'))
+            or urlsplit(request.url).path.endswith(('/frame.jpg', '/stream')))
         if not cancelled:
             self.add('requestfailed', request.url, f'{request.method} {text}')
 

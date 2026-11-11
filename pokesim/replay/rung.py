@@ -4,7 +4,7 @@
 ``tools/stage_ladder.py gate-rung``, which the ladder gate and ``python -m pokesim.replay`` start in a
 process of their own. The policy modules load inside ``run_one``, after ``randomize`` or ``prepare`` has
 set the worker's environment, since Gen I modules read their tables at import time. Only the standard
-library loads with this module.
+library and pokecore's Gen I names load with this module.
 """
 from __future__ import annotations
 
@@ -17,8 +17,10 @@ from pathlib import Path
 import re
 import sys
 
+from pokecore.gen1 import H_RANDOM_ADD, H_RANDOM_SUB
+
 # hRandomAdd and hRandomSub in pret/pokered, which Yellow keeps. Gold, Silver and Crystal read theirs from the symbols.
-GEN1_RANDOM = (0xFFD3, 0xFFD4)
+GEN1_RANDOM = (H_RANDOM_ADD, H_RANDOM_SUB)
 DIVIDER = 0xFF04  # Any write restarts the divider at zero.
 VBLANK = 0x0040  # The VBlank interrupt vector, the same in all six games.
 HUNTS = frozenset({'collection_hunt', 'collection_fish', 'collection_field', 'collect_hunt'})

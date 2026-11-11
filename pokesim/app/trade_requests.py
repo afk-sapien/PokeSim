@@ -162,16 +162,8 @@ class TradeRequests:
         dex = incoming.get('arrived_dex', incoming.get('dex'))
         if dex in wished:
             return f'{game} wished for {species}'
-        benefit = self.coordinator._benefit(inventory, incoming)
-        if benefit >= 100:
-            return f'New Pokédex entry for {game}: {species}'
-        if benefit >= 20:
-            return f'{game} has no {species} right now'
-        if benefit >= 10:
-            return f'A higher level {species} for {game}'
-        if benefit >= 5:
-            return f'A {species} with better stats for {game}'
-        return ''
+        from ..trade.worth import gain, why
+        return why(game, species, gain(inventory, incoming))
 
     def clear(self, reason='Ask me first was turned off'):
         """Expire every pending request, for example when automatic trades no longer ask."""

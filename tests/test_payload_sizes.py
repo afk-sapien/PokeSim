@@ -44,10 +44,10 @@ def status():
             'progress': {'state': 'stalled'}, 'strategy': {'collection': {'version': 'red'}}, 'game': game()}
 
 
-def client(tmp_path, monkeypatch, **kwargs):
+def client(tmp_path, monkeypatch, state=status, **kwargs):
     store = SimpleNamespace(shots=tmp_path, get=lambda _: None, trade_preferences=lambda: {},
                             release_requests=lambda: {}, pc_favor=lambda: None)
-    emu = SimpleNamespace(status=status)
+    emu = SimpleNamespace(status=state)
     return TestClient(create_app(emu, store, **kwargs))
 
 
@@ -72,6 +72,43 @@ def test_live_state_leaves_out_boxed_pokemon_unless_asked(tmp_path, monkeypatch)
 
 def test_live_page_never_reads_boxed_pokemon_from_state():
     assert 'storage' not in (STATIC / 'app.js').read_text()
+
+
+def planned_status():
+    """A Red, Blue or Yellow plan the size of a real one: the collection list is most of it."""
+    entries = [{'dex': dex, 'name': f'Species {dex}', 'owned': dex % 3 == 0,
+                'sources': [{'kind': 'wild', 'detail': 'Route 1 grass, morning and day' * 3}]} for dex in range(1, 152)]
+    plan = {'objective': {'id': 'gym', 'title': 'Beat Brock'}, 'next': {'title': 'Cross Mt. Moon'}, 'reason': 'Badge',
+            'action': 'walk', 'visited_tiles': 900, 'pin': {'kind': 'catch', 'label': 'Catch Pikachu'},
+            'history': [{'title': 'Left Pallet Town', 'frame': 1}] * 20, 'readiness': {'level': 12},
+            'collection': {'version': 'yellow', 'phase': 'story', 'entries': entries,
+                           'director': {'queue': [{'key': f'catch-{dex}', 'score': 1.5} for dex in range(80)]}}}
+    return {**status(), 'strategy': plan}
+
+
+def test_live_view_trims_the_plan_to_what_the_live_page_draws(tmp_path, monkeypatch):
+    api = client(tmp_path, monkeypatch, state=planned_status)
+    full, live = api.get('/api/state'), api.get('/api/state', params={'view': 'live'})
+    plan = planned_status()['strategy']
+    # Bots, tools and the Pokédex read the default view, which keeps the whole plan.
+    assert full.json()['strategy'] == plan
+    assert live.json()['strategy'] == {**{key: plan[key] for key in web.LIVE_PLAN_FIELDS},
+                                       'collection': {'version': 'yellow'}}
+    assert live.json()['game'] == full.json()['game']
+    assert size(live) < size(full) - 20_000
+    assert api.get('/api/state', params={'view': 'other'}).status_code == 422
+    # A plan with no collection, or no plan at all, comes through without one.
+    assert web.live_view({'strategy': {'action': 'walk'}}) == {'strategy': {'action': 'walk'}}
+    assert web.live_view({'game': {}}) == {'game': {}}
+
+
+def test_live_page_asks_for_the_live_view_and_reads_only_its_plan_fields():
+    text = (STATIC / 'app.js').read_text()
+    assert "'/api/state?view=live'" in text
+    read = set(re.findall(r'\bstrategy\??\.([a-z_]+)', text + (STATIC / 'next-activity.js').read_text()))
+    assert {'objective', 'pin', 'collection'} <= read
+    assert read <= set(web.LIVE_PLAN_FIELDS) | {'collection'}, read - set(web.LIVE_PLAN_FIELDS)
+    assert set(re.findall(r'\bcollection\??\.([a-z_]+)', text)) == {'version'}
 
 
 def test_supervisor_summary_carries_playback_and_health_without_game_data(tmp_path, monkeypatch):

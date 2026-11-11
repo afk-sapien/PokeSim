@@ -10,6 +10,10 @@ the default version.
 """
 from .yellow import red_layout
 
+# Work RAM, from WRAM_START up to WRAM_END.
+WRAM_START = 0xC000
+WRAM_END = 0xE000
+
 W_TILEMAP = 0xC3A0
 
 W_ENEMY_SPECIES2 = 0xCFD8
@@ -61,6 +65,10 @@ W_RIVAL_STARTER = 0xD715
 
 W_PLAYER_STARTER = 0xD717
 
+# wOptions: bits 0 to 2 the text delay (1 fast, 3 medium, 5 slow), bit 6 the set battle style,
+# bit 7 battle animations off.
+W_OPTIONS = 0xD355
+
 W_BADGES = 0xD356
 
 W_CUR_MAP = 0xD35E
@@ -110,8 +118,16 @@ SPRITE_STRUCT = 16
 SPRITE_MAP_Y, SPRITE_MAP_X = 4, 5
 # wWalkCounter: nonzero while a step animation runs.
 W_WALK_COUNTER = 0xCFC5
+# wCurPartySpecies, which is also wCurItem: the species or item the last menu chose.
+W_CUR_ITEM = 0xCF91
 # wWhichPokemon: the party or box slot the last menu chose, from 0.
 W_WHICH_POKEMON = 0xCF92
+# wItemQuantity: how many of W_CUR_ITEM a shop, toss or deposit menu chose.
+W_ITEM_QUANTITY = 0xCF96
+# The in-game trade under way: the species the player gives, and
+# wInGameTradeTextPointerTableIndex, the trade dialogue shown last (3 is the thanks).
+W_IN_GAME_TRADE_GIVE_MON_SPECIES = 0xCD0F
+W_IN_GAME_TRADE_TEXT_INDEX = 0xCD12
 # wPlayerDisabledMove: the disabled move (1 to 4) in the high nibble, turns left in the low nibble.
 W_PLAYER_DISABLED_MOVE = 0xD06D
 # wMoveNum: the move the move menus and the move relearner work on.
@@ -131,6 +147,13 @@ BIT_STRENGTH_ACTIVE = 0
 BIT_GAVE_SAFFRON_GUARDS_DRINK = 6
 W_MOVEMENT_FLAGS = 0xD736
 BIT_SPINNING = 7    # riding the arrow tiles in the Rocket Hideout and Viridian Gym
+# wCompletedInGameTradeFlags: 2 bytes, one bit per in-game trade, set once that trade is done.
+W_COMPLETED_IN_GAME_TRADE_FLAGS = 0xD737
+# hRandomAdd and hRandomSub: the two bytes the random number routine updates.
+H_RANDOM_ADD = 0xFFD3
+H_RANDOM_SUB = 0xFFD4
+# hVendingMachineItem: the drink a vending machine is selling.
+H_VENDING_MACHINE_ITEM = 0xFFDB
 
 # Battle state, by pret/pokered name. W_IS_IN_BATTLE is 1 in a wild battle, 2 in a trainer battle,
 # and 0 or 0xFF outside one. wBattleMon and wEnemyMon are BATTLE_STRUCT bytes:
@@ -142,8 +165,12 @@ W_TRANSFORMED_ENEMY_DVS = 0xCCEB    # wTransformedEnemyMonOriginalDVs, kept whil
 W_ENEMY_MON_NICK = 0xCFDA
 W_ENEMY_HP = W_ENEMY_MON + 1
 W_ENEMY_DVS = W_ENEMY_MON + 12
+W_ENEMY_MAX_HP = W_ENEMY_MON + 15
 W_BATTLE_MON_NICK = 0xD009
 W_BATTLE_MON = 0xD014
+W_BATTLE_MON_HP = W_BATTLE_MON + 1
+W_BATTLE_MON_STATUS = W_BATTLE_MON + 4
+W_BATTLE_MON_PP = W_BATTLE_MON + 25
 W_PLAYER_BATTLE_STATUS1 = 0xD062
 W_PLAYER_BATTLE_STATUS3 = 0xD064
 W_ENEMY_BATTLE_STATUS1 = 0xD067

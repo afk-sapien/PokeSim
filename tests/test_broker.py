@@ -36,7 +36,7 @@ def inv(instance, owned, party=(), stored=(), **kw):
 def test_the_json_spare_rules_agree_with_the_snapshot_rules():
     # Covers every branch of team.spare_copies: a party member standing in as the surviving copy,
     # a lone Pokemon that is never offered, a level tie, and a keeper that appears after a spare.
-    # The Pokédex is full, since the broker's spare list does not count family demand yet.
+    # The Pokédex is full, so no copy is kept to evolve for a missing entry.
     stored = ((0, DEX_TO_SPECIES[KADABRA], 20, ''), (0, DEX_TO_SPECIES[HAUNTER], 30, ''),
               (0, DEX_TO_SPECIES[HAUNTER], 30, ''), (0, DEX_TO_SPECIES[PIDGEY], 5, 'SOLO'),
               (1, DEX_TO_SPECIES[HAUNTER], 12, ''), (1, DEX_TO_SPECIES[MACHOKE], 50, ''),
@@ -82,7 +82,8 @@ def test_the_first_pokemon_in_a_box_is_position_one():
     stored = read_stored_pokemon(memory)
     assert [entry[1] for entry in stored] == [DEX_TO_SPECIES[d] for d in (PIDGEY, RATTATA, PIDGEY)]
 
-    s = full_box(party=(), stored_pokemon=stored, box_counts=(3,) + (0,) * 11, boxed_pokemon=((1, 1),) * 3)
+    s = full_box(owned=frozenset(range(1, 152)), party=(), stored_pokemon=stored,
+                 box_counts=(3,) + (0,) * 11, boxed_pokemon=((1, 1),) * 3)
     live = inventory.normalise('red', 'http://red', live_status(s.to_dict(), None))
     assert [(copy.box, copy.position, copy.level) for copy in live.stored] == [(1, 1, 5), (1, 2, 6), (1, 3, 7)]
     assert [(copy.box, copy.position) for copy in live.spares] == [(1, 1)]   # the lower Pidgey
@@ -147,8 +148,9 @@ def test_a_spare_is_preferred_when_a_spare_and_a_keeper_could_both_pay():
 
 def test_a_give_must_be_a_species_the_peer_is_missing():
     # Red's only spare is a Pidgey, which Blue already has, so Blue's spare Rattata stays put.
-    red = inv('red', {PIDGEY}, stored=[(PIDGEY, 5), (PIDGEY, 9)])
-    blue = inv('blue', {PIDGEY, RATTATA}, stored=[(RATTATA, 5), (RATTATA, 9)], version='blue')
+    # Both own the later stages, so no copy is kept to evolve.
+    red = inv('red', {PIDGEY, PIDGEY + 1, PIDGEY + 2}, stored=[(PIDGEY, 5), (PIDGEY, 9)])
+    blue = inv('blue', {PIDGEY, RATTATA, RATTATA + 1}, stored=[(RATTATA, 5), (RATTATA, 9)], version='blue')
 
     assert red.spares and blue.spares
     assert negotiation.proposals([red, blue]) == []
@@ -394,8 +396,9 @@ def test_a_species_a_peer_asked_for_is_offered_while_another_copy_stays():
         row.update(dvs=dvs, stat_exp=stat_exp, moves=[1])
     red = inventory.normalise('red', 'http://red', payload)
     assert [copy.level for copy in offers(red, True) if copy.dex == JYNX] == [5]
-    asked = [copy for copy in offers(red, True, {'124': 1}) if copy.dex == JYNX]
-    assert [copy.level for copy in asked] == [5]
+    # Kept for Yellow, the fresh copy is still one a trade may give.
+    asked = inventory.normalise('red', 'http://red', payload, demand={'124': 1})
+    assert [copy.level for copy in offers(asked, True) if copy.dex == JYNX] == [5]
     # A lone copy still waits for the last-copy rule.
-    lone = inv('red', {JYNX}, stored=[(JYNX, 5)])
-    assert [copy.dex for copy in offers(lone, False, {124: 1})] == []
+    lone = inventory.normalise('red', 'http://red', status({JYNX}, stored=[(JYNX, 5)]), demand={124: 1})
+    assert [copy.dex for copy in offers(lone, False)] == []
