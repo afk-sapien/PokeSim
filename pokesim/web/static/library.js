@@ -369,8 +369,12 @@
       // A refresh redraws a card whose summary changed. Keep its More menu open through that.
       const reopen = openMenu && previous?.querySelector(`#${CSS.escape(openMenu)}`) ? openMenu : null
       const focused = reopen && previous.contains(document.activeElement) ? document.activeElement.dataset.action || 'toggle' : null
+      // A redraw keeps the picture already on the card. A new one would show the frame the page
+      // first loaded, since the browser reuses an image it already has for the same address.
+      const picture = previous?.querySelector('.card-screen img')
       if (previous) previous.outerHTML = markup
       else container.insertAdjacentHTML('beforeend', markup)
+      if (picture) container.querySelector(`[data-adventure-id="${game.id}"] .card-screen img`)?.replaceWith(picture)
       if (reopen) {
         openMenu = null
         const toggle = container.querySelector(`[aria-controls="${CSS.escape(reopen)}"]`)
@@ -1338,11 +1342,32 @@
       notice(error.message, true) }
     finally { connecting = false }
   }
+  // Running cards on screen show a new frame every few seconds. The next frame loads and decodes
+  // off screen, then takes the old picture's place, so a card never shows a blank picture.
+  const FRAME_MS = 5000
+  let framesAt = 0
+  const framing = new WeakSet()
+  function refreshFrames() {
+    if (page !== 'library' || Date.now() - framesAt < FRAME_MS) return
+    framesAt = Date.now()
+    document.querySelectorAll('#adventure-list .card-screen img').forEach(picture => {
+      const box = picture.getBoundingClientRect()
+      if (framing.has(picture) || box.bottom < 0 || box.top > innerHeight) return
+      framing.add(picture)
+      const next = picture.cloneNode()
+      next.removeAttribute('loading')
+      // A new address each time, so the browser fetches the frame instead of reusing the last one.
+      next.src = `${picture.src.replace(/\?.*$/, '')}?at=${Date.now()}`
+      next.decode().then(() => { if (picture.isConnected) picture.replaceWith(next) }, () => {})
+        .finally(() => framing.delete(picture))
+    })
+  }
   boot()
   function tick() {
     if (document.hidden || busy || closing) return
     if ($('#workspace').hidden) return boot()
     refresh()
+    refreshFrames()
     if (page === 'settings' && owner) {
       if (artworkDue('portraits')) refreshPortraits().catch(error => { $('#portrait-feedback').textContent = error.message })
       if (artworkDue('items')) refreshItemArtwork().catch(error => { $('#item-artwork-feedback').textContent = error.message })

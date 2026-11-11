@@ -858,7 +858,8 @@ test('a game paused for a trade shows Paused rather than a measured 0.0× speed'
   view.element('#adventure-list').querySelector = selector => {
     const id = selector.match(/data-adventure-id="(\w+)"/)?.[1]
     return id && {querySelector: usage => {
-      const key = usage.match(/data-usage="(\w+)"/)[1]
+      const key = usage.match(/data-usage="(\w+)"/)?.[1]
+      if (!key) return null
       return {set textContent(value) { labels[`${id[0]}-${key}`] = value }, get textContent() { return labels[`${id[0]}-${key}`] }, classList: {toggle() {}}}
     }}
   }

@@ -130,7 +130,7 @@ def frame_jpeg():
 def serve_screens(page):
     """Library cards marked running show their game screen. No game process runs behind these registries."""
     frame = frame_jpeg()
-    page.route('**/frame.jpg', lambda route: route.fulfill(body=frame, content_type='image/jpeg'))
+    page.route('**/frame.jpg*', lambda route: route.fulfill(body=frame, content_type='image/jpeg'))
 
 
 @pytest.fixture
