@@ -140,7 +140,7 @@ def test_real_cartridge_probe(tmp_path, profile):
     directory = os.environ.get('GEN2_CARTRIDGE_DIR')
     if not directory:
         pytest.skip('Set GEN2_CARTRIDGE_DIR to private extracted cartridges')
-    from tools.probe_gen2 import probe
+    from tools.verify_cartridge import probe
     source = Path(directory) / f'{profile.game}.gbc'
     result = probe(source, tmp_path / profile.game)
     assert all(result['checks'].values())

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.check_managed_app import exercise_app
+from tools.verify_cartridge import exercise_app
 
 
 def test_three_workers_and_committed_manager_recovery(tmp_path):

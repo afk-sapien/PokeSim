@@ -3,7 +3,7 @@
 PokeSim plays Generation II adventures in the normal Library and
 adventure runtime. Gold, Silver and Crystal have each completed Johto, the
 Pokémon League, all eight Kanto gyms, and Red through ordinary cartridge input.
-The original boot experiment remains available in `tools/probe_gen2.py`.
+The original boot experiment remains available as `tools/verify_cartridge.py gen2-probe`.
 
 Gen II support ships in PokeSim 0.5.0 and runs on the Rust emulator (PyBoy RS through
 PokeSim Core 0.7.0 with PyBoy RS 0.1.2) only. It was developed on PyBoy 2.7.0 in builds that were never released, then moved to the Rust
@@ -127,8 +127,8 @@ saved states byte for byte (state format 15 is identical), and the checks listed
 re-run on it for 0.5.0. They are not a replay of the campaigns.
 
 Re-run on the Rust backend with Python 3.12 and PyBoy RS 0.1.1: the runtime API and checkpoint
-restart for Gold, Silver and Crystal; `verify_gen2_save` (a fresh cartridge Continue with the
-saved clock) for each; `verify_gen2_trading --time-capsule` for each; `verify_timecapsule` for
+restart for Gold, Silver and Crystal; `verify_cartridge gen2-save` (a fresh cartridge Continue with the
+saved clock) for each; `verify_cartridge gen2-trading --time-capsule` for each; `verify_timecapsule` for
 each Gen II game with both Red and Blue; and the Red and Blue Cable Club exchange in both
 directions with different party slots. The full test suite passed with the private cartridges
 available; the remaining skips need browser, cable-fixture or reference-checkout setups.
@@ -227,7 +227,7 @@ Focused scenarios include ruins, tower, celebi, contest, gifts, legends, breedin
 Headbutt, Rock Smash and a specified encounter. The test suite covers runtime
 APIs, capture accounting, portable saves, trade preparation, durable exchange,
 custom reward delivery and worker restart during trade preparation.
-`tools/verify_gen2_trading.py --time-capsule` prepares a compatible boxed offer.
+`tools/verify_cartridge.py gen2-trading --time-capsule` prepares a compatible boxed offer.
 
 `tools/play_gen2.py --until all251` stops only after the observed owned count is 251.
 Optional Mew, GS Ball and earned League starter gifts use the existing runtime
@@ -245,7 +245,7 @@ including already registered intermediate evolutions. A planned contest cannot
 intercept an unrelated wild battle. Native roaming searches use the ruins gate
 to avoid the cartridge's last-map exclusion, then stay on the route when a beast
 is present. Capture does not spend the escape turn switching to a weaker partner.
-An explicit `tools/verify_gen2_trading.py --evolve` request can swap a held item
+An explicit `tools/verify_cartridge.py gen2-trading --evolve` request can swap a held item
 for an available evolution item through the native Pack. The Scizor proof
 preserved the original Bitter Berry and consumed Metal Coat during evolution.
 Completed legendary collections skip wing errands, including imported Ho-Oh.

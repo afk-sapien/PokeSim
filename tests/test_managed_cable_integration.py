@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.check_managed_cable import exercise
+from tools.verify_cartridge import exercise_cable
 
 
 @pytest.mark.parametrize('abort', [False, True])
@@ -14,5 +14,5 @@ def test_real_managed_cable_flow(tmp_path, abort):
     data = os.environ.get('GAME_DATA_DIR')
     if not all((fixtures, roms, data)):
         pytest.skip('Private cartridge fixtures, ROMs, and generated game data are required')
-    result = exercise(tmp_path / 'application', Path(fixtures), Path(roms), Path(data), abort)
+    result = exercise_cable(tmp_path / 'application', Path(fixtures), Path(roms), Path(data), abort)
     assert result['status'] == 'passed'

@@ -69,7 +69,7 @@ export POKESIM_CABLE_FIXTURES=/path/to/private/fixtures
 export POKESIM_CABLE_ROMS=/path/to/private/roms
 python -m pytest -q tests/test_cable_session.py
 
-python tools/qualify_cable_session.py \
+python tools/verify_cartridge.py cable-session \
   --roms "$POKESIM_CABLE_ROMS" \
   --fixtures "$POKESIM_CABLE_FIXTURES" \
   --out NEW_QUALIFICATION_DIRECTORY
@@ -85,10 +85,10 @@ The executor does not own reservations, participant policy memory, database jour
 
 ## Managed worker integration
 
-`tools/check_managed_cable.py` and `tests/test_managed_cable_integration.py` exercise two real adventure worker processes and a separate link child. Disposable copies start with a full party and boxed offers. They use ordinary PC menus to prepare different selected individuals, export held sources, run the trade, and independently validate and stage both outputs.
+`tools/verify_cartridge.py managed-cable` and `tests/test_managed_cable_integration.py` exercise two real adventure worker processes and a separate link child. Disposable copies start with a full party and boxed offers. They use ordinary PC menus to prepare different selected individuals, export held sources, run the trade, and independently validate and stage both outputs.
 
 The integration checks duplicate stage, apply, and release calls, restarts one participant while committed and held, restarts both after release, and checks that each incoming individual survives with exactly one journal receipt. A second case damages one staged result, aborts both participants, and verifies the exact prepared parties survive both abort and restart without a committed journal entry.
 
 These checks use authenticated loopback HTTP and require permission to create local sockets. Source fixtures and ROMs remain untouched. The harness copies them into the explicitly named new output directory.
 
-`tools/check_managed_app.py` additionally exercises the actual manager and coordinator with three worker processes. Two selected games complete the trade while the third keeps advancing. An injected participant failure after durable commitment leaves recovery pending. Reopening the manager completes both sides from the preserved results, retains one completed history record, and resumes the unrelated game. The test also checks the latest preview images and unchanged source fixture hashes.
+`tools/verify_cartridge.py managed-app` additionally exercises the actual manager and coordinator with three worker processes. Two selected games complete the trade while the third keeps advancing. An injected participant failure after durable commitment leaves recovery pending. Reopening the manager completes both sides from the preserved results, retains one completed history record, and resumes the unrelated game. The test also checks the latest preview images and unchanged source fixture hashes.

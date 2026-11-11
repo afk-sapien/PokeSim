@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.compress_release_backups import candidates, compress
+from tools.maintain import candidates, compress
 
 
 def test_compression_preserves_backup_bytes_and_permissions(tmp_path):
@@ -54,7 +54,7 @@ def test_scan_excludes_live_data_and_symlinks(tmp_path):
 
 
 def test_source_change_preserves_original(tmp_path, monkeypatch):
-    from tools import compress_release_backups as module
+    from tools import maintain as module
     source = tmp_path / 'before.tar'
     source.write_bytes(b'original')
     original_digest = module.digest
