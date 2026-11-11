@@ -18,15 +18,10 @@ def play(generation, rom, checkpoint, folder, pins=None):
     from pokecore import trace as core
 
     from pokesim.runtime import trace
-    if generation == 1:
-        from pokesim.headless import HeadlessRun
-        from pokesim.ram import read_snapshot
-        run = HeadlessRun(rom, checkpoint, seed=7, trace=folder, pins=pins)
-        snapshot = lambda: read_snapshot(run.pb.memory, run.frame)  # noqa: E731
-    else:
-        from pokesim.gen2.headless import HeadlessRun
-        run = HeadlessRun(rom, checkpoint, seed=7, trace=folder, data_root=os.environ['GEN2_DATA_DIR'], pins=pins)
-        snapshot = run.read
+    from pokesim.runtime.headless import HeadlessRun
+    data_root = os.environ['GEN2_DATA_DIR'] if generation == 2 else None
+    run = HeadlessRun(rom, checkpoint, seed=7, trace=folder, data_root=data_root, pins=pins)
+    snapshot = run.read
     pinned = None
     try:
         end, steps = run.frame + REPLAY_FRAMES, 0

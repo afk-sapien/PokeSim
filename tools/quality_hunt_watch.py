@@ -70,8 +70,12 @@ def saved_game(root, meta):
     reference = root / 'assets' / 'reference' / SOURCE_REVISION
     if reference.is_dir():
         os.environ['GAME_DATA_DIR'] = str(reference)
-    from pokesim.gen2.headless import HeadlessRun
     from pokesim.gen2.views import state_view
+    try:
+        from pokesim.runtime.headless import HeadlessRun
+    except ImportError:
+        # The app this reads may ship a release from before the shared headless run.
+        from pokesim.gen2.headless import HeadlessRun
 
     folder = root / 'adventures' / meta['id'] / 'states'
     rom = root / 'assets' / 'roms' / meta['rom_id'] / 'rom.gb'

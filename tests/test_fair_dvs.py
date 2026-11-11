@@ -188,8 +188,8 @@ def test_unverified_cartridges_never_reroll(tmp_path, monkeypatch):
 def wild_encounters(tmp_path, monkeypatch, count=3, headless=None):
     """Play from a private Viridian Forest checkpoint and return the DVs at each storeDVs and in battle.
     ``headless`` is a key the headless run rerolls with instead of an adventure's tracker."""
-    from pokesim.headless import HeadlessRun
     from pokesim.ram import read_snapshot
+    from pokesim.runtime.headless import HeadlessRun
     monkeypatch.setattr(config, 'FAIR_WILD_DVS', headless is None, raising=False)
     run = HeadlessRun(ROM, CHECKPOINT, seed=5, fair_wild_dvs=headless)
     hooked, battled = [], set()

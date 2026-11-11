@@ -19,17 +19,18 @@ from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
 from ..runtime import capture, trace
+from ..runtime.emulator import (BEFORE_LOAD_CHECKPOINT, BEFORE_RESTART_CHECKPOINT,  # noqa: F401
+                                LEAGUE_CHECKPOINT, MANUAL_QUEUE, EmulatorBase)
 from ..runtime.game_loop import GEN2_WAIT, Decider, GameLoop
-from ..runtime.manifest import checkpoint_manifest
 from ..runtime.policy import BUTTONS, Action
-from ..runtime.reload import FRAMES_PER_SECOND, reload_target
-from ..runtime.restart import restart
+from ..runtime.reload import FRAMES_PER_SECOND, reload_target  # noqa: F401
 from ..planning import decide
 from ..runtime.supervision import CANNOT_END, GIVE_UP, HOLD, LEAGUE_RESTARTS, PARK, Supervisor
 from ..runtime.supervision import report as stuck_report
 from ..stalls import LoopGuard, StallWatch
 from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import validate_runtime
+from .adapter import SCREEN_FRAMES, new_history
 from .data import GameData
 from . import journal
 from .policy import Policy
@@ -41,11 +42,6 @@ log = logging.getLogger('pokesim.gen2')
 
 # The running cartridge clock's latest reading, in seconds since its zero point (see core.clock_elapsed).
 CLOCK_KEY = 'gen2-clock-v1'
-
-
-def new_history():
-    """The maps, Pokédex and League progress a new game's journal starts from."""
-    return {'maps': [], 'owned': [], 'badges': 0, 'league': 0}
 
 
 # pret engine/events/halloffame.asm: the cartridge stops counting Hall of Fame entries at
@@ -104,8 +100,6 @@ def solid(image):
     extrema = image.getextrema()
     bands = extrema if isinstance(extrema[0], tuple) else (extrema,)
     return all(low == high for low, high in bands)
-# A screen that has not changed for half a game minute is a loop, not a pause.
-SCREEN_FRAMES = 1800
 # The first stall of the collection's goal sets it aside in place of a reload, and a second stall before
 # any new progress reloads as before (runtime/supervision.py).
 RELOAD_AFTER_PARK = True
@@ -113,10 +107,6 @@ RELOAD_AFTER_PARK = True
 PARKS = {'stuck': decide.STUCK, 'no progress': decide.NO_PROGRESS, 'a menu task kept failing': decide.MENU_FAILED}
 # The pipeline sources of the collection's goal: an activity under way and the ladder's pick.
 PARK_SOURCES = frozenset({'holds', 'ladder'})
-# Written on arriving at the Indigo Plateau Pokémon Center, the last place before an Elite Four attempt.
-LEAGUE_CHECKPOINT = 'league-entry.state'
-BEFORE_LOAD_CHECKPOINT = 'before-load.state'
-BEFORE_RESTART_CHECKPOINT = 'before-restart.state'
 
 
 @dataclass(frozen=True)
@@ -157,7 +147,7 @@ def progress_key(tiles, maps, snapshot):
             snapshot.step_count if snapshot.breeding_compatible else None)
 
 
-class Emulator:
+class Emulator(EmulatorBase):
     generation = 2
 
     def __init__(self, store, ntfy=None, *, isolated_ram=True):
@@ -200,7 +190,7 @@ class Emulator:
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.commands = queue.Queue()
-        self.manual = queue.Queue(maxsize=16)
+        self.manual = queue.Queue(maxsize=MANUAL_QUEUE)
         self.started_at = time.time()
         self.last_activity = time.monotonic()
         self.progress_frame = 0
@@ -374,51 +364,6 @@ class Emulator:
             log.warning('Clearing a trade hold with no live exchange')
             self.store.set('trade_hold', None)
 
-    def stop(self):
-        self.commands.put(('stop', None))
-        self.thread.join(timeout=20)
-        if self.thread.is_alive():
-            raise RuntimeError('Gen II emulator did not stop within 20 seconds')
-
-    def command(self, name, arg=None):
-        self.commands.put((name, arg))
-
-    def call(self, function, timeout=30):
-        if threading.current_thread() is self.thread:
-            return function()
-        if not self.thread.is_alive():
-            raise RuntimeError('The adventure is not running')
-        done, response = threading.Event(), {}
-        self.commands.put(('runtime_call', (function, done, response)))
-        if not done.wait(timeout):
-            raise TimeoutError('The adventure is busy')
-        if 'error' in response:
-            raise response['error']
-        return response['result']
-
-    def goals(self, query=None):
-        """The goals a manager can set as the next activity, named like ``query`` if given. Runs on the
-        game thread."""
-        from ..planning.pin import listing
-        goals, reason = self.policy.goals(self.snapshot, query)
-        return listing(goals, self.policy.pin, reason)
-
-    def catalogue(self, query=None, limit=None):
-        """The goal catalogue (planning/catalogue.py), named like ``query`` if given. Runs on the game
-        thread and changes nothing the run does."""
-        if limit is None:
-            return self.policy.catalogue(self.snapshot, query)
-        return self.policy.catalogue(self.snapshot, query, limit)
-
-    def pin_goal(self, key):
-        """Set the next activity. A ValueError says why the planner cannot take it now."""
-        trace.note(self, 'pin', {'key': key})
-        return self.policy.pin_goal(self.snapshot, key).to_dict()
-
-    def unpin_goal(self):
-        trace.note(self, 'pin', {'key': None})
-        self.policy.unpin_goal()
-
     def _drop_pin(self, reason):
         """Drop the manager's pin before a recovery, and journal it here since a reload loses any note."""
         from ..events import Event as Entry
@@ -438,30 +383,11 @@ class Emulator:
         for row in rows:
             self._event(Entry(**row), snapshot)
 
-    def press(self, button):
-        if button in BUTTONS:
-            self.command('press', button)
-
     def held_back(self, name):
         """Why the game drops this command now, or None when it runs it."""
         if name != 'stop' and self.store.get('trade_hold'):
             return 'An exchange is holding this adventure'
         return None
-
-    def control(self, name, timeout=4, gate=None):
-        """Run take_control, resume or pause now. Returns why the game held it back, or None.
-        `gate` is asked on the game thread first: None runs it, '' counts it as done already."""
-        def apply():
-            reason = self.held_back(name)
-            if reason is None and gate is not None:
-                reason = gate()
-            if reason is None:
-                self._handle_command(name, None)
-            return reason or None
-        return self.call(apply, timeout)
-
-    def watch(self):
-        self._watch_until = time.monotonic() + 2
 
     def current_frame(self, timeout=1):
         self.watch()
@@ -471,15 +397,6 @@ class Emulator:
             if not self.frame_image:
                 self.frame_cond.wait(timeout)
         return self.frame_image
-
-    def audio_packet(self, after):
-        state = 'playing' if not self.paused or self.manual_mode else 'paused'
-        sequence, pcm, measured, dropped = self.audio.read(after, state)
-        # The worker catches up in bursts after a stall, and the measured pace then reads well above
-        # the setting, past the point where the page mutes. Report the setting as Red and Blue do.
-        # Unlimited has no setting to report, so it keeps the measurement.
-        speed = 1 if self.manual_mode else self.speed
-        return state, sequence, pcm, speed if speed > 0 else measured, dropped
 
     def _shot_png(self):
         output = io.BytesIO()
@@ -495,34 +412,16 @@ class Emulator:
         frame = self.current_frame(timeout)
         return getattr(self, 'still_image', b'') or frame
 
-    def _publish_frame(self):
-        with self.frame_cond:
-            self.frame_image = self._shot_png()
-            self.frame_seq += 1
-            self.frame_cond.notify_all()
+    def _frame_png(self):
+        return self._shot_png()
 
-    def _state_bytes(self):
+    def _before_save(self):
         # The raw state keeps only the clock's zero point. Rebasing it on the host clock first means
         # an unlocked copy (a cable session or a save export) reads this game time or later.
         rebase_to_host(self.pb)
-        output = io.BytesIO()
-        self.pb.save_state(output)
-        return output.getvalue()
 
-    def _manifest(self):
-        return checkpoint_manifest(self.policy, rom_sha1=self.rom_sha1, frame=self.frame, generation=2, pb=self.pb,
-                                   play_clock=self.play_clock, store=self.store,
-                                   legendary_recovery=self.legendary_recovery, history=self.history)
-
-    def _checkpoint_before(self, name):
-        """Keep the game as it is now under `name` before a rewind or restart replaces it."""
-        if self.store.get('trade_hold'):
-            return
-        try:
-            # A named checkpoint, not an autosave: as the newest autosave it would undo the rewind on the next start.
-            self.store.write_checkpoint(self._state_bytes(), self._manifest(), name)
-        except Exception:
-            log.exception('cannot keep the save from before %s', name)
+    def _manifest_fields(self):
+        return {'generation': 2, 'pb': self.pb, 'history': self.history}
 
     def _autosave(self, trade_prepare=False):
         if self.store.get('trade_hold') and not trade_prepare:
@@ -558,17 +457,6 @@ class Emulator:
         self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
         self.store.prune_reward_results()
         return path
-
-    def _behind_barrier(self, metadata):
-        """Whether a checkpoint predates the latest completed trade or custom reward.
-
-        Loading one would undo that trade or reward, so it is never a place to go back to.
-        """
-        for key, field in [('trade_barrier', 'trade_id'), ('custom-reward-barrier-v1', 'reward_id')]:
-            barrier = self.store.get(key)
-            if barrier and (metadata or {}).get(field) != barrier:
-                return True
-        return False
 
     def _load_state_file(self, path):
         metadata = self.store.checkpoint_metadata(path)
@@ -983,22 +871,7 @@ class Emulator:
                 log.error('%s and %d reloads did not help, not reloading again', why, rung.reloads)
             self._reset_watch()
             return
-        all_saves = self.store.autosaves()
-        # A save from before a completed trade or reward is refused on load. Choosing it anyway
-        # spent a reload on an error and fell back to whatever came next, so the watchdog swung
-        # between the refused save and the newest one until it ran out of reloads.
-        saves = [path for path in all_saves if not self._behind_barrier(self.store.checkpoint_metadata(path))]
-        target = reload_target(self.store, saves, since_frame)
-        entry = None
-        if rung.league:
-            # A save part way through the League keeps the PP already spent, so going back a little
-            # replays the same lost battle. Restart the attempt from before it began instead.
-            entry = self.store.state_path(LEAGUE_CHECKPOINT)
-            if entry and not self._behind_barrier(self.store.checkpoint_metadata(entry)):
-                log.warning('%s inside the League, restarting the attempt', why)
-                target, saves = entry, [entry] + saves
-            else:
-                entry = None
+        all_saves, saves, target, entry = Emulator._reload_saves(self, since_frame, rung.league, why)
         if rung.report and self.snapshot is not None and self.snapshot.valid and self.snapshot.started:
             title, body = stuck_report(why, self.snapshot.map_name)
             self._event(Event('stall', title, body, priority=HIGH), self.snapshot)
@@ -1126,89 +999,16 @@ class Emulator:
                           f'Objective: {objective}. On {snapshot.map_name} after {quiet[1]} real minutes '
                           f'and {self.policy.recoveries} recoveries.', priority=HIGH), snapshot)
 
-    def _tick(self, frames):
-        while frames > 0:
-            audible = self.audio.active()
-            chunk = min(frames, 1 if audible else 4)
-            now = time.monotonic()
-            observing = (self.frame + chunk) // 30 != self.frame // 30
-            publishing = now < self._watch_until and now - self._last_publish >= 1 / config.STREAM_FPS
-            self.pb.tick(chunk, render=observing or publishing, sound=audible)
-            if audible:
-                self.audio.publish(self.pb.sound.raw_buffer[:self.pb.sound.raw_buffer_head])
-            self.frame += chunk
-            self.executed_frames += chunk
-            self.play_clock.advance(chunk)
-            frames -= chunk
-            if observing:
-                self._observe()
-            if publishing:
-                self._publish_frame()
-                self._last_publish = now
-            speed = 1 if self.manual_mode else self.speed
-            if speed:
-                self._target = getattr(self, '_target', now) + chunk / 60 / speed
-                delay = self._target - time.monotonic()
-                if 0 < delay < 1:
-                    time.sleep(delay)
-                elif abs(delay) >= 1:
-                    self._target = time.monotonic()
-            self.last_activity = time.monotonic()
+    def _take_control(self, name):
+        self.policy.menu = None
+        self.policy.on_restore()
 
-    def _handle_command(self, name, arg):
-        if name == 'runtime_call':
-            function, done, response = arg
-            try:
-                response['result'] = function()
-            except Exception as error:
-                response['error'] = error
-            finally:
-                done.set()
-        elif self.held_back(name):
-            return True
-        elif name == 'stop':
-            return False
-        elif name == 'pause':
-            self.paused, self.manual_mode = True, False
-        elif name in {'take_control', 'press'}:
-            if name == 'take_control':
-                # A new holder of the control lease never inherits presses someone else queued.
-                while not self.manual.empty():
-                    self.manual.get_nowait()
-            self.paused, self.manual_mode = True, True
-            self.policy.menu = None
-            self.policy.on_restore()
-            if name == 'press' and arg in BUTTONS:
-                try:
-                    self.manual.put_nowait(Action(arg, 8, 8))
-                except queue.Full:
-                    pass
-        elif name == 'resume':
-            self.paused = self.manual_mode = False
-            self.policy.on_restore()
-        elif name == 'speed':
-            self.speed = float(arg)
-        elif name == 'save':
-            self._autosave()
-        elif name == 'load_state':
-            path = self.store.state_path(arg)
-            if path:
-                # Undoing a rewind loads before-load itself, so it is held while the checkpoint replaces it.
-                with self.store.held(path, BEFORE_LOAD_CHECKPOINT) as source:
-                    self._checkpoint_before(BEFORE_LOAD_CHECKPOINT)
-                    try:
-                        with trace.reason(self, 'rewind'):
-                            self._load_state_file(source)
-                    except (ValueError, OSError, EOFError) as error:
-                        # A refused rewind (ownership barrier, other cartridge) must never end the adventure.
-                        log.warning('Rewind to %s refused: %s', path.name, error)
-        elif name == 'restart':
-            # The restart removes every autosave, so the game from before it stays as a named checkpoint.
-            self._checkpoint_before(BEFORE_RESTART_CHECKPOINT)
-            self.steps.flush(force=True)
-            self.statistics.flush(self.snapshot)
-            restart(self, 2, self._new_game(), self._start_new_game)
-        return True
+    def _resume(self):
+        self.policy.on_restore()
+
+    def _flush_before_restart(self):
+        self.steps.flush(force=True)
+        self.statistics.flush(self.snapshot)
 
     def _new_game(self):
         """The rows the new game starts with, which the restart's transaction writes. The trade and
@@ -1321,11 +1121,6 @@ class Emulator:
                 tracer.close()
             self.pb.stop(save=False)
             self.stopping = True
-
-    def health(self):
-        age = max(0, time.monotonic() - self.last_activity)
-        return {'ok': self.thread.is_alive() and not self.fatal_error and age < 30 and not self.stopping,
-                'worker_alive': self.thread.is_alive(), 'activity_age_seconds': age, 'error': self.fatal_error}
 
     def status(self):
         from .. import rewards

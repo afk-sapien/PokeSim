@@ -115,7 +115,7 @@ def test_red_rolls_match_after_a_goal_start_whatever_the_timing_before():
     state = SCENARIOS / 'red-cerulean-cave-hunt-20261008' / 'start.state'
     if not state.exists():
         pytest.skip('no private Red scenario')
-    from pokesim.headless import HeadlessRun
+    from pokesim.runtime.headless import HeadlessRun
     assert_reseeding_aligns(lambda: HeadlessRun(RED_ROM, state))
 
 
@@ -125,5 +125,5 @@ def test_gen2_rolls_match_after_a_goal_start_whatever_the_timing_before(game, sc
     rom, state = CARTRIDGES / f'{game}.gbc', SCENARIOS / scenario / 'start.state'
     if not GEN2_DATA or not rom.exists() or not state.exists():
         pytest.skip('needs GEN2_DATA_DIR, the cartridge and the private scenario')
-    from pokesim.gen2.headless import HeadlessRun
+    from pokesim.runtime.headless import HeadlessRun
     assert_reseeding_aligns(lambda: HeadlessRun(rom, state, data_root=Path(GEN2_DATA)))

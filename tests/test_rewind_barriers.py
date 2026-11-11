@@ -101,6 +101,47 @@ def test_a_restart_keeps_the_barriers_so_an_older_checkpoint_stays_refused(tmp_p
 BARRIER_FIELDS = [('trade_barrier', 'trade_id'), ('custom-reward-barrier-v1', 'reward_id')]
 
 
+@pytest.mark.parametrize('generation', [1, 2])
+def test_a_rewind_to_a_damaged_save_is_refused_and_not_fatal(tmp_path, generation):
+    """Red, Blue and Yellow caught only a refused rewind, so a damaged save raised out of the command."""
+    if generation == 1:
+        from pokesim.emulator import Emulator
+    else:
+        from pokesim.gen2.emulator import Emulator
+    store = Store(tmp_path)
+    try:
+        store.write_checkpoint(b'x', {}, 'old.state')
+        emu = object.__new__(Emulator)
+        emu.store, emu.pb, emu.fatal_error = store, Mock(), None
+        emu._load_state_file = Mock(side_effect=EOFError('truncated'))
+        assert emu._handle_command('load_state', 'old.state') is True
+        emu._load_state_file.assert_called_once()
+        assert emu.fatal_error is None
+    finally:
+        store.close()
+
+
+def test_gen1_unstick_keeps_playing_when_every_save_predates_a_trade():
+    """Red, Blue and Yellow picked among every save, so the refused one spent a reload, and with no
+    other save a power cycle fell back on the cartridge's own save, which can predate the trade too."""
+    from pathlib import Path
+    from types import SimpleNamespace
+    from pokesim.emulator import Emulator
+    from pokesim.play_clock import PlayClock
+    from pokesim.runtime.supervision import Supervisor
+    saves = {Path('auto-old'): {'frame': 300000, 'trade_id': 'trade-1'}}
+    restored, boots = [], []
+    game = SimpleNamespace(store=SimpleNamespace(autosaves=lambda: list(saves), checkpoint_metadata=saves.get,
+                                                 get=lambda key: 'trade-2' if key == 'trade_barrier' else None,
+                                                 state_path=lambda name: None),
+                           snapshot=None, reloads=0, frame=500000, play_clock=PlayClock(), adventure_seed=7,
+                           supervisor=Supervisor(), _restore_first_valid=restored.append, _tick=lambda n: None,
+                           _boot=lambda **_: boots.append(1))
+    game._behind_barrier = lambda metadata: Emulator._behind_barrier(game, metadata)
+    Emulator._unstick(game, 495000, 'stuck')
+    assert not restored and not boots and game.reloads == 0
+
+
 @pytest.mark.parametrize('barrier', BARRIERS)
 def test_gen2_load_state_command_refused_by_a_barrier_is_not_fatal(tmp_path, barrier):
     from pokesim.gen2.emulator import Emulator

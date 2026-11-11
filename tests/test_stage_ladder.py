@@ -159,12 +159,11 @@ def test_ladders_stay_out_of_the_tracked_checkout():
 
 @pytest.mark.skipif(not RED_ROM.exists(), reason='no ROM')
 def test_a_fresh_red_run_saves_compressed_and_replays(tmp_path):
-    from pokesim.headless import HeadlessRun
-    from pokesim.ram import read_snapshot
+    from pokesim.runtime.headless import HeadlessRun
     run = HeadlessRun(RED_ROM)
     try:
         while run.frame < 20000:
-            run.step(read_snapshot(run.pb.memory, run.frame))
+            run.step(run.read())
         path = run.save(tmp_path / 'fresh.state', compress=True)
         frame = run.frame
     finally:
@@ -190,7 +189,7 @@ def test_a_randomized_run_boots_the_patched_cartridge(monkeypatch):
     booted = []
     real = pokesim.randomized.rom_stream
     monkeypatch.setattr(pokesim.randomized, 'rom_stream', lambda rom: booted.append(rom) or real(rom))
-    from pokesim.headless import HeadlessRun
+    from pokesim.runtime.headless import HeadlessRun
     HeadlessRun(RED_ROM).stop()
     assert booted == [RED_ROM]
 

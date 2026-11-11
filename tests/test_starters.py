@@ -37,6 +37,15 @@ def test_legacy_checkpoints_retain_the_old_starter_and_fixed_choice_survives_res
     assert policy.starter == 'bulbasaur'
 
 
+def test_a_new_game_keeps_the_cartridges_version_odds_and_map():
+    """A restart resets the policy. Blue and Yellow used to fall back to Red's odds after one."""
+    policy = StrategicPolicy(5)
+    wild = {'route': 'odds'}
+    policy.collection.version, policy.collection.wild, policy.nav.use_world = 'yellow', wild, False
+    policy.reset()
+    assert (policy.collection.version, policy.collection.wild, policy.nav.use_world) == ('yellow', wild, False)
+
+
 def test_invalid_starter_setting_fails_before_play():
     with pytest.raises(ValueError, match='starter'):
         StrategicPolicy(1, 'pikachu')

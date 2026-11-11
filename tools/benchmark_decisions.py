@@ -277,7 +277,10 @@ def simulate(fixture_path, frames, capture):
         from pokecore.emulator_state import validate_runtime
         # The source root's own headless run plays the decisions, so a root from before the shared
         # game loop still plays the loop it shipped with.
-        from pokesim.headless import HeadlessRun
+        try:
+            from pokesim.runtime.headless import HeadlessRun
+        except ImportError:
+            from pokesim.headless import HeadlessRun
         from pokesim.ram import read_snapshot
         Action, _ = policy_types()
         if hashlib.sha1(Path(settings.rom_path).read_bytes()).hexdigest() != metadata['rom_sha1']:
