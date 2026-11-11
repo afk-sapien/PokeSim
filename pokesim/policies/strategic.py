@@ -32,6 +32,7 @@ from ..planning import boss
 from ..planning import decide
 from ..planning import league
 from ..planning import catalogue
+from ..planning.monitor import hold_key
 from .pipeline import ERRAND_FRAMES, ERRANDS, Ballot
 from .ledger import battle_room, fighters, league_treatment
 from ..planning.ledger import PP
@@ -111,6 +112,8 @@ GOAL_KINDS = (('heal', 'heal'), ('party_collection', 'collection'), ('party_leag
               ('hideout_elevator', 'passage'), ('collect_', 'collection'), ('catch_', 'catch'))
 # An item ball the goal picks up this many steps away comes before a heal, so the trip does not return for it.
 BALL_STEPS = 4
+# The storage visits that make room for catches, which a stall sets aside under their own key.
+ROOM_GOALS = frozenset(('party_release', 'party_box'))
 
 
 def goal_kind(key):
@@ -616,14 +619,15 @@ class StrategicPolicy(Policy):
         if release is None:
             # With no spare to let go, no release visit is under way.
             self.release_spare = None
-        if release and not withdrawing_partner and s.map not in league_rooms:
+        if release and not withdrawing_partner and s.map not in league_rooms and not self._room_parked('party_release'):
             # Room to catch is a precondition of every catch. Its spare and the swap it ends are written
             # only when the step ends with the release running (decide pipeline rule A).
             self.goal = choice.offer(Goal('party_release', 'Make room in storage',
                                           'Let a spare duplicate go so there is room for new catches',
                                           CENTERS, 'up', True), choice.errand_candidate('party_release', 'party'),
                                      site='release', commit=partial(self._commit_release, release))
-        elif s.box_full and not withdrawing_partner and s.next_free_box is not None and s.map not in league_rooms:
+        elif (s.box_full and not withdrawing_partner and s.next_free_box is not None and s.map not in league_rooms
+              and not self._room_parked('party_box')):
             self.goal = choice.offer(Goal('party_box', 'Make room for new catches',
                                           f'Box {s.active_box + 1} is full. Visit a PC and switch to Box '
                                           f'{s.next_free_box + 1}', CENTERS, 'up', True),
@@ -1919,10 +1923,23 @@ class StrategicPolicy(Policy):
         return wait()
 
     def recover_stall(self, snapshot):
-        """Change the plan in the current world before considering a save rewind."""
-        if self.pickups.active:
+        """Change the plan in the current world before considering a save rewind.
+
+        Only the goal the last decision ran is set aside, never another: a pickup defers, the project
+        stands down, and a visit that makes room in storage stands down under its own key (hold_key). A
+        story goal or another errand sets nothing aside and keeps the recovery walk. With no decision
+        known, the pickup under way or else the project is set aside.
+        """
+        offer = self.goal_offer if self.goal_offer is not None and self.goal_offer.goal is self.goal else None
+        kind = None if offer is None else offer.kind
+        if offer is not None and offer.goal.key in ROOM_GOALS:
+            self.collection.director.monitor.stand_down(hold_key(offer.goal.key), self.collection.clock,
+                                                        failure=decide.STUCK.kind)
+            # The visit is no longer the errand under way, so no step resumes it.
+            self.errand = self.errand_offer = None
+        elif self.pickups.active and kind in (None, 'pickup'):
             self.pickups.defer(self.clock, 'Pickup approach was stationary too long')
-        else:
+        elif kind in (None, 'collection'):
             self.collection.abandon('The run was stationary too long', failure=decide.STUCK.kind)
         self.collection.idle_token = None
         self._remember_failure(snapshot, 'Stationary objective abandoned without reloading')
@@ -1930,6 +1947,10 @@ class StrategicPolicy(Policy):
         self.recoveries += 1
         self.recovery_until = snapshot.frame + 180
         self.mode = 'finding another approach'
+
+    def _room_parked(self, key):
+        """Whether a stall set the storage visit ``key`` aside (recover_stall) and its wait has not run out."""
+        return self.collection.director.waiting(hold_key(key), self.collection.clock)
 
     def _recovery_step(self, snapshot):
         self.mode = "finding another approach"
