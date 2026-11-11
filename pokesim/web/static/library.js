@@ -543,12 +543,17 @@
     if (refreshing || $('#workspace').hidden) return
     refreshing = true
     try {
-      const data = await api('/api/v1/adventures')
+      const shelf = page === 'library' || page === 'settings'
+      // The first read asks for the adventures and the shelf together, so the page draws after one round trip.
+      const both = shelf && !cartridgesLoaded
+      const [data] = await Promise.all([api('/api/v1/adventures'), both ? refreshCartridges() : null])
       adventures = data.adventures || []
       // The inbox badge reads its unread count from this poll instead of polling on its own.
       if (data.inbox && typeof CustomEvent === 'function') document.dispatchEvent?.(new CustomEvent('pokesim:inbox', {detail: data.inbox}))
       renderAttention(data.attention)
-      if (page === 'library' || page === 'settings') await refreshCartridges()
+      const users = shelfUsers(adventures)
+      if (shelf && !both && (users !== shelfFor || Date.now() - shelfAt > SLOW_POLL)) await refreshCartridges()
+      if (shelf) shelfFor = users
       renderAdventures()
       if (page === 'notifications') renderNotifyAdventures()
       connection('Connected', false)
@@ -606,6 +611,13 @@
   // The cartridge shelf: one slot per game, filled from GET /api/v1/cartridges.
   let cartridges = []
   let cartridgesLoaded = false
+  // The shelf changes only with an upload or a removal, or when an adventure that uses a
+  // cartridge is added, renamed, archived or deleted. It is read again then, when the tab comes
+  // back into view, and once a minute for changes made in another tab.
+  const SLOW_POLL = 60000
+  let shelfAt = 0
+  let shelfFor = null
+  const shelfUsers = list => list.map(game => [game.id, game.rom_id, game.name, game.archived].join('\u0001')).join('\u0002')
   let supportedGames = 'Red, Blue, Yellow, Gold, Silver or Crystal'
   let shelfSignature = ''
   let pickerSignature = ''
@@ -673,6 +685,7 @@
   }
   async function refreshCartridges() {
     const data = await api('/api/v1/cartridges')
+    shelfAt = Date.now()
     supportedGames = data.supported || supportedGames
     renderCartridges(data.slots || [])
   }
@@ -1216,7 +1229,12 @@
     notice('PokeSim is saving and closing. You can close this tab.')
     $('#workspace').hidden = true
   })
+  // Artwork changes only while a pack downloads, so Settings reads it every refresh only then.
+  // Otherwise it is read when the tab comes back into view and once a minute.
+  const artwork = {portraits: {busy: false, at: 0}, items: {busy: false, at: 0}}
+  const artworkDue = kind => artwork[kind].busy || Date.now() - artwork[kind].at > SLOW_POLL
   function renderPortraits(data) {
+    artwork.portraits = {busy: Boolean(data.busy), at: Date.now()}
     $('#portrait-state').textContent = data.busy ? `Downloading ${data.completed} / ${data.total}` : data.active === 'community' ? 'Community sprites active' : 'Default sprites active'
     const install = $('#portrait-install')
     const partial = !data.installed && Object.values(data.sets || {}).some(Boolean)
@@ -1252,6 +1270,7 @@
     notice('Default sprites restored. Reopen an adventure page to see them.')
   })
   function renderItemArtwork(data) {
+    artwork.items = {busy: Boolean(data.busy), at: Date.now()}
     $('#item-artwork-state').textContent = data.busy ? `Downloading ${data.completed} / ${data.total}` : data.active === 'community' ? 'Item icons active' : 'Item icons hidden'
     const install = $('#item-artwork-install')
     // An older pack covers only Red and Blue, so the button stays to fetch the other games.
@@ -1297,16 +1316,16 @@
     $('#workspace').hidden = false
     document.querySelectorAll('[data-view]').forEach(section => { section.hidden = section.dataset.view !== page })
     document.querySelector(`[data-nav="${page === 'stopped' ? 'library' : page}"]`)?.setAttribute('aria-current', 'page')
-    if (page === 'settings' && owner) {
-      renderNicknameSettings(await api('/api/v1/settings'))
-      renderCaps(await api('/api/v1/running-caps'))
-      await refreshBackups()
-      await refreshPortraits()
-      await refreshItemArtwork()
-    }
-    if (page === 'notifications' && owner && !notifyDirty) renderNotifications(await api('/api/v1/notifications'))
+    // Each page asks for all its panels and the adventures at once, so it draws after one round
+    // trip. Settings used to wait for seven in a row.
+    const panels = page === 'settings' && owner ? [
+      api('/api/v1/settings').then(renderNicknameSettings),
+      api('/api/v1/running-caps').then(renderCaps),
+      refreshBackups(), refreshPortraits(), refreshItemArtwork(),
+    ] : []
+    if (page === 'notifications' && owner && !notifyDirty) panels.push(api('/api/v1/notifications').then(renderNotifications))
+    await Promise.all([...panels, refresh()])
     permissions()
-    await refresh()
   }
   async function boot() {
     if (connecting || closing) return
@@ -1320,16 +1339,22 @@
     finally { connecting = false }
   }
   boot()
-  setInterval(() => {
-    if (!document.hidden && !busy && !closing) {
-      if ($('#workspace').hidden) boot()
-      else {
-        refresh()
-        if (page === 'settings' && owner) {
-          refreshPortraits().catch(error => { $('#portrait-feedback').textContent = error.message })
-          refreshItemArtwork().catch(error => { $('#item-artwork-feedback').textContent = error.message })
-        }
-      }
+  function tick() {
+    if (document.hidden || busy || closing) return
+    if ($('#workspace').hidden) return boot()
+    refresh()
+    if (page === 'settings' && owner) {
+      if (artworkDue('portraits')) refreshPortraits().catch(error => { $('#portrait-feedback').textContent = error.message })
+      if (artworkDue('items')) refreshItemArtwork().catch(error => { $('#item-artwork-feedback').textContent = error.message })
     }
-  }, 3000)
+  }
+  setInterval(tick, 3000)
+  // Back in view, the page catches up at once and reads the shelf and artwork again, since
+  // another tab may have changed them.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return
+    shelfAt = 0
+    artwork.portraits.at = artwork.items.at = 0
+    tick()
+  })
 })()
