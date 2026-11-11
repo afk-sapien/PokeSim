@@ -112,7 +112,10 @@
       showAccount(session)
       permissions()
       // Settings for accounts reuse this session, since a second first request would make
-      // another anonymous session and leave one of the two CSRF tokens stale.
+      // another anonymous session and leave one of the two CSRF tokens stale. The session can
+      // arrive before the deferred accounts.js and inbox.js have run, so it also stays on the
+      // document for a script that loads after the event.
+      document.pokesimSession = session
       if (typeof CustomEvent === 'function') document.dispatchEvent?.(new CustomEvent('pokesim:session', {detail: session}))
     }).finally(() => { sessionPending = null })
     return sessionPending

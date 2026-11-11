@@ -117,11 +117,15 @@
     if (!panel.hidden && !panel.contains(event.target) && !toggle.contains(event.target)) close(false)
   })
 
-  document.addEventListener('pokesim:session', event => {
-    const session = event.detail || {}
+  // The session can arrive before this deferred script runs, and then the event has passed, so the
+  // session library.js kept is used instead.
+  const begin = given => {
+    const session = given || {}
     csrf = session.csrf_token || ''
     toggle.hidden = session.auth !== 'accounts' || !session.user || Boolean(session.user.placeholder)
-  }, {once: true})
+  }
+  if (document.pokesimSession) begin(document.pokesimSession)
+  else document.addEventListener('pokesim:session', event => begin(event.detail), {once: true})
   // library.js hands over the unread count with every adventure list it reads.
   document.addEventListener('pokesim:inbox', event => {
     if (!toggle.hidden && event.detail) showCount(event.detail.unread)
