@@ -567,16 +567,6 @@ def hunt_candidates(choices):
     return candidates
 
 
-def ladder_candidates(goal, inner):
-    """The ladder's own pick as the arbiter's only candidate, for shadow mode only.
-
-    The ladder takes the first rung with a goal, and asking the rungs below it could change their
-    saved state, so the ladder point is uncontested. Its kind is what an inner point, the hunt or
-    postgame pick, would have chosen in the same decision, or else the rung named by the goal's key.
-    """
-    return [Candidate(goal.key, Tier.PROGRESS, values.SMALL, 1, goal=inner or goal.key.split(' ')[0])]
-
-
 # Frames of one map crossed on the way to a rung's goal, about thirty steps.
 MAP_FRAMES = 30 * FRAMES_PER_TILE
 # Frames a rung's work takes once its walk is over. A short errand is a talk, a gift, a pickup or a
@@ -806,6 +796,8 @@ def journey(policy, snapshot, mem, Goal):
     back active work.
     """
     data, state = policy.data, policy.collection
+    # The decision that asked the collection, which tells the decide pipeline the story goal is its own.
+    policy.collection_decision = getattr(policy, 'decisions', None)
     from .npc_trades import requests as trade_requests
     state['prerequisites'] = sorted(prerequisites(data, snapshot) | trade_requests(policy, snapshot, getattr(mem, 'memory', None)))
     goal = holds(policy, snapshot, mem, Goal)
@@ -950,7 +942,8 @@ def survey(policy, snapshot, mem, Goal):
     ladder if one does. Each rung is asked as a decision would ask it and then everything is undone."""
     ladder = Ladder(policy, snapshot)
     saved = ladder.save()
-    names = ('ladder_rung', 'ladder_offers', 'ladder_pick', 'ladder_decision', 'ladder_labels', 'ladder_hold')
+    names = ('ladder_rung', 'ladder_offers', 'ladder_pick', 'ladder_decision', 'ladder_labels', 'ladder_hold',
+             'collection_decision')
     kept = {name: getattr(policy, name, _MISSING) for name in names}
     rng = policy.rng.getstate() if hasattr(policy, 'rng') else None
     events = list(pin_events(policy))

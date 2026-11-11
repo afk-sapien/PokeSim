@@ -1,8 +1,8 @@
 """Shadow mode changes no decision: a stuck scenario plays the same goals with the shadow arbiter on or off.
 
 The replays need private checkpoints, kept as stuck scenarios under the data folder: two Red runs whose
-collection picks the shadow compares and whose overworld decisions the decide pipeline weighs, and a Gold and a Silver postgame run whose ladder
-and postgame rotation it compares. Each plays twice from the same seed, and every step's goal, frame
+collection picks the shadow compares and whose overworld decisions the decide pipeline weighs, and a Gold and a Silver postgame run whose
+overworld decisions the pipeline weighs and whose postgame rotation the shadow compares. Each plays twice from the same seed, and every step's goal, frame
 and position must match, then the saved policy state.
 """
 import json
@@ -60,8 +60,8 @@ def replay(loaded, enabled, frames=FRAMES):
 # decides after about 57400 frames.
 CASES = [('red-partial-training-20260915', 1, {'pipeline'}, FRAMES),
          ('red-cerulean-cave-hunt-20261008', 1, {'pipeline'}, FRAMES),
-         ('gold-expshare-full-bag-20261027', 2, {'ladder'}, FRAMES),
-         ('silver-np-gate-corner-20261020', 2, {'ladder', 'postgame'}, 60000)]
+         ('gold-expshare-full-bag-20261027', 2, {'pipeline'}, FRAMES),
+         ('silver-np-gate-corner-20261020', 2, {'pipeline', 'postgame'}, 60000)]
 
 
 @pytest.mark.slow

@@ -1,6 +1,6 @@
 # Decide pipeline
 
-Status: accepted on 2026-11-11. Slices 1, 2 and 3 are built. Every line number was read from main at `2d02e6c2`. This is phase 2 item 4 of the architecture plan of 2026-11-09, the new PR before [Goal system v2](goal-system.md) PR 7. Shadow mode reuses `planning/shadow.py`, and the trace is the one in [Replayable bugs](replayable-bugs.md).
+Status: accepted on 2026-11-11. Slices 1, 2, 3 and 4a are built. Every line number was read from main at `2d02e6c2`. This is phase 2 item 4 of the architecture plan of 2026-11-09, the new PR before [Goal system v2](goal-system.md) PR 7. Shadow mode reuses `planning/shadow.py`, and the trace is the one in [Replayable bugs](replayable-bugs.md).
 
 Today each generation rebuilds its goal on every decision through an ordered chain. A source low in the chain wins because it comes later in the file, not because it is worth more, and nothing records that two sources fought. This note replaces both chains with one pipeline. Every source offers, one filter decides what can run, and the arbiter ranks everything that is left in one call.
 
@@ -56,9 +56,10 @@ Two shadow points watch it today. `overworld` (L1104-1106) compares the arbiter 
 | policy.py:1564, L1570 | partner move, delete an HM | direct assignment |
 | policy.py:1593-1594 | heal or shop errand | replace |
 | policy.py:1601 | an errand with no route gives way to the journey goal | direct assignment |
+| policy.py:1624-1627 | a side errand the walk cannot reach from here gives way to the journey goal | direct assignment |
 | policy.py:1720 | Sudowoodo walls off Route 36 | direct assignment inside the detour |
 
-Gen II shadow points are `ladder` (policy.py:1489-1496), `hunt` (collection.py:1079) and `postgame` (postgame.py:348).
+Gen II shadow points are `ladder` (policy.py:1489-1496), `hunt` (collection.py:1079) and `postgame` (postgame.py:348). Slice 4a replaces `ladder` with `pipeline`.
 
 ### The manager pin
 
@@ -93,6 +94,22 @@ class Offer:
 
 The needs table is read off today's chain, so the switch starts from today's behaviour. A goal needs every enabler that replaces it today, which is every enabler whose replace comes later in the chain. Slice 1 writes the table for Gen I and slice 4 for Gen II. Any later change to the table is a behaviour change and goes to the lead first.
 
+Both tables come from one function, `decide.needs`, over each generation's sites in the order its step reaches them. Gen II's sites are in `gen2/pipeline.py`:
+
+| Site | Source | Serves | Needs, the most urgent first |
+|---|---|---|---|
+| `story`, `holds`, `ladder`, `current` (a battle that is starting keeps its goal) | itself | nothing | `healthy`, `supplies`, `field_move`, `room`, `trained` |
+| `boss` | boss training | `trained` | `healthy`, `supplies`, `field_move`, `room` |
+| `release` | party | `room` | `healthy`, `supplies`, `field_move` |
+| `talk_heal` | heal | `healthy` | `healthy`, `supplies`, `field_move` |
+| `partner` | party | `field_move` | `healthy`, `supplies`, `field_move` |
+| `delete_hm` | moves | `field_move` | `healthy`, `supplies` |
+| `shop` | supplies | `supplies` | `healthy` |
+| `heal` | heal | `healthy` | nothing |
+| `sudowoodo` | forced | nothing | nothing |
+
+The story site is `holds` when the collection returned an activity under way, `ladder` when the ladder picked a rung, and `story` otherwise. A ladder offer takes the rung's name as its kind, so the report shows which rung disagreed.
+
 The Gen I party upgrade (L980) is an offer today, but only one that wins is made, so it overrides every goal before it as the replaces do. Slice 2 makes it the enabler of the `team` need, at its own place in the table. Slice 1 recorded it as an offer, so the pipeline ranked it against the story goal, and that was the one disagreement in slice 1's shadow data.
 
 Item uses where the party stands take one action and end the step before the chain finishes. They are the League treatment, field cures, vitamins in a full bag, medicine during a heal and teaching from TM development (strategic.py:986-1052, L1639-1655). They stay in the step until phase 3 makes them task objects. A step that ends in one is not a decision, and shadow does not count it.
@@ -113,6 +130,8 @@ A director is one more source. It holds at most one standing choice, a goal key 
 ### How it runs
 
 On each decision, after the chain sets the goal, `decide` runs on the same state. No commit runs, so shadow changes no state and draws no random number. In slice 1 each chain site records its offer, named by its source, when it calls `offer` or `replace` or sets the goal. At the end of the decision the pipeline ranks those offers. So it weighs what the chain weighed, nothing runs twice and no source draws again. Guards that read the chain's pick at that moment, such as `not choice.errand`, stay at their sites in slice 1. Each switch slice turns its sites into source functions, moves those guards into the hold rule, and measures again in shadow before it switches. Gen II's ladder stays one source in shadow and reuses the pick and the candidates the ladder already built, so no rung is asked twice.
+
+In Gen II, slice 4a records each `_step` site on the step's `Ballot` (`gen2/pipeline.py`), and at the end of `step` the shadow weighs the ballot's decision against the chain's goal. The errand restore offers the errand again as it was picked, as in Gen I. An errand with no route lately, and a side goal the walk cannot reach, are parked. One difference is known and accepted. When a heal or shop errand is parked for no route in a step that also offered a partner or an HM deletion, the chain goes back to the journey goal (L1601, L1627), but the pipeline runs the partner or deletion trip that the journey goal needs. Slice 4b names it as a behaviour change.
 
 ### What it records
 
@@ -159,8 +178,12 @@ The lead approved all three on 2026-11-11.
 | the pickup's `active`, its `expires` and the cleared walk | `policies/pickups.py:110-112`, now `Pickups._start` | pickup (slice 3) |
 | `tm_plan` and `tm_frame` for a TM purchase | strategic.py:1664-1665, now `_commit_purchase` | TM development (slice 3) |
 | `next_goal`, the goal shown behind an errand | strategic.py:1067, L1075, now `_commit_pick` | collection, pickup (slice 3) |
+| the shop's `shopping` and `shop_location`, the purchase and the chosen shop | `gen2/policy.py:1329`, L1381-1383, before its offer | supplies (slice 4b) |
+| `partner_move`, the field move a partner is fetched for | `gen2/policy.py:1563`, before its offer | party partner (slice 4b) |
 
-Observations that every decision makes stay where they are, such as the heal latch update (L959), the pickup scan timer (`pickups.py:90`) and clearing a finished swap (L599). Two more stay in slice 2. With no spare to let go, `release_spare` is cleared on every decision. A supplies plan that keeps the goal, because the legendary's supplies are ready or the hunt cannot pay for its balls, writes `supplies_prepared` and its abandon at once, since no goal of its own can be picked. Slice 4a adds the Gen II `_step` writes to this table before 4b moves them.
+Observations that every decision makes stay where they are, such as the heal latch update (L959), the pickup scan timer (`pickups.py:90`) and clearing a finished swap (L599). Two more stay in slice 2. With no spare to let go, `release_spare` is cleared on every decision. A supplies plan that keeps the goal, because the legendary's supplies are ready or the hunt cannot pay for its balls, writes `supplies_prepared` and its abandon at once, since no goal of its own can be picked.
+
+In Gen II the heal latch, `healing_map` and `pp_heal` (`gen2/policy.py:1223-1233`), stays where it is, as Gen I's does. So does every clear of `shop_location` when no shop is chosen, since nothing is offered then. Boss training and the release write nothing while they choose. The ladder already undoes the rungs that lose (L634-683), so the rungs need no row.
 
 Slice 3 keeps these collection and TM writes in place, since each one is made when the source offers no goal, or reads the game rather than a goal:
 
@@ -198,7 +221,7 @@ Each switch slice deletes the old call sites it replaces in the same PR. Estimat
 | 1 | Pipeline and Gen I shadow: `planning/decide.py`, every Gen I chain site recording its offer with its source, the Gen I needs table, the trace field, the `pipeline` point and the report | the `overworld` shadow point (strategic.py:1104-1106), which agrees by construction | 5 hours |
 | 2 | Gen I upkeep and party switch: heal, upgrade, release, box, supplies and trash become enablers that the need walk (`decide.serve`) runs, and their writes move to commits (rule A). The heal latch stays the party's observation, and its site offers the heal as an enabler. The errand restore stays, since it sets the goal on battle, menu and dialogue steps that make no overworld decision, so no hold can replace it before the errand is a goal under way in slice 3 | replaces at L603, L634, L640, L650, L967, L1022, L1056, the offer at L980 | 3 hours |
 | 3 | Gen I story and collection switch: base goal and boss training, the project, `collection.choose`, pickups, teaching, TM development and the forced moves. Every Gen I overworld goal is picked by `decide.decide` over the step's `Ballot` (`policies/pipeline.py`). The errand restore becomes `Ballot.resume`: the errand the last decision picked is offered again, as it was picked, at the end of each step that makes no overworld decision. An enabler meets the same need, a forced move is forced again, and a goal is under way. It carries no writes, since they ran when it was picked | `Choice` (L168-230) with `offer` and `replace`, replaces at L594, L1068, L1083, L1098, offers at L596, L1045, L1076, L1640-1666, direct assignments at L518, L582-587, L1047, L1138-1139, L1286, L1288, L1294, the restore at L489, the `legacy` source, the `collection` shadow point (`collection.py:1144`) | 4 hours |
-| 4 | Gen II, in two PRs. 4a is shadow: story, holds, ladder and the `_step` sites as sources, with the Gen II needs table. 4b switches them | 4a: the `ladder` shadow point (policy.py:1489-1496). 4b: boss training (L368-369), release (L1486), heal (L1532, L1593-1594), partner and HM (L1564, L1570), the no-route fallback (L1601), Sudowoodo (L1720), the errand restore (L1399), the `holds` return (`collection.py:811`) | 4 hours |
+| 4 | Gen II, in two PRs. 4a is shadow: story, holds, ladder and the `_step` sites as sources, with the Gen II needs table. 4b switches them | 4a: the `ladder` shadow point (policy.py:1489-1496) and `ladder_candidates` (`collection.py:570`). 4b: boss training (L368-369), release (L1486), heal (L1532, L1593-1594), partner and HM (L1564, L1570), the no-route fallback (L1601), the unreachable errand fallback (L1624-1627), Sudowoodo (L1720), the errand restore (L1399), the `holds` return (`collection.py:811`) | 4 hours |
 | 5 | Director source: the manager pin becomes the director in both generations, and its choices go into the trace. A parked pin's reason reaches the API state and the UI, and a test checks that a Gen I project resumes intact after a pin | the pin exemptions (`gen2/collection.py:627-629`, L702, L704, L712), the Gen I pin abandon (`policies/collection.py:1446`) | 2 hours |
 
 The total is 18 agent hours, plus the shadow runs before each switch. Slices 2 and 3 wait for slice 1's shadow data, and 4b waits for 4a's.

@@ -52,18 +52,7 @@ HOLDS = frozenset({'pickup', 'tm_trip'})
 FORCED = frozenset({'passage', 'elevator', 'ceremony'})
 
 
-def _needs(sites):
-    table = {}
-    for index, (site, _, _) in enumerate(sites):
-        later = []
-        for _, _, serves in reversed(sites[index + 1:]):
-            if serves and serves not in later:
-                later.append(serves)
-        table[site] = tuple(later)
-    return table
-
-
-NEEDS = _needs(SITES)
+NEEDS = decide.needs(SITES)
 SOURCES = {site: source for site, source, _ in SITES}
 SERVES = {site: serves for site, _, serves in SITES}
 

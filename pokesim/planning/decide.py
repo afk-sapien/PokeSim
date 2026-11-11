@@ -72,6 +72,20 @@ class Decision:
         return {'goal': self.pick.key, 'source': self.pick.source, 'rule': self.rule}
 
 
+def needs(sites):
+    """The needs table read off a chain of sites, each ``(site, source, serves)`` in chain order. A site
+    needs the serves of every later site, since a later enabler overrode it there, and the latest site's
+    need is the most urgent, so it comes first."""
+    table = {}
+    for index, (site, _, _) in enumerate(sites):
+        later = []
+        for _, _, serves in reversed(sites[index + 1:]):
+            if serves and serves not in later:
+                later.append(serves)
+        table[site] = tuple(later)
+    return table
+
+
 def gather(sources, view):
     """Every offer from ``sources``, in source order. A source is a function of the view that only reads."""
     return [offer for source in sources for offer in source(view) or ()]

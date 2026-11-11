@@ -3,7 +3,7 @@ import json
 import logging
 from types import SimpleNamespace
 
-from pokesim.gen2.collection import hunt_candidates, ladder_candidates
+from pokesim.gen2.collection import hunt_candidates
 from pokesim.gen2.postgame import QUALITY_WEIGHT, catch_value
 from pokesim.planning import values
 from pokesim.planning.arbiter import Candidate, Tier
@@ -39,9 +39,9 @@ def test_a_comparison_counts_agreement_differences_and_the_pick_kind():
     assert shadow.picked['hunt'] is near
     # An inner pick waits for the outer point, which takes it once.
     assert shadow.take() == 'hunt new entry' and shadow.take() is None
-    shadow.compare('ladder', lambda: [far], 'far', outer=True)
+    shadow.compare('outer', lambda: [far], 'far', outer=True)
     assert shadow.take() is None and shadow.pick == 'hunt repeat'
-    assert json.loads(json.dumps(shadow.summary()))['agreed'] == {'hunt': 1, 'ladder': 1}
+    assert json.loads(json.dumps(shadow.summary()))['agreed'] == {'hunt': 1, 'outer': 1}
 
 
 def test_a_failure_is_logged_once_and_never_reaches_the_run(caplog):
@@ -125,7 +125,7 @@ def test_an_overworld_errand_takes_the_tier_and_value_of_the_goal_it_unblocks():
     assert story.tier == Tier.STORY and story.goal == 'story'
 
 
-def test_gen2_hunts_value_new_entries_and_the_ladder_stands_alone():
+def test_gen2_hunts_value_new_entries():
     row = {'species': 7, 'map': 3, 'method': 'grass', 'chance': 20}
     choices = [(False, False, 40 + 50 / 20, 7, 3, 'grass', row),
                (True, True, 10 + 50 / 20, 8, 3, 'grass', {**row, 'species': 8})]
@@ -133,9 +133,6 @@ def test_gen2_hunts_value_new_entries_and_the_ladder_stands_alone():
     assert (new.key, new.value, new.goal) == ('7:3:grass', values.NEW_ENTRY, 'hunt new entry')
     assert (repeat.value, repeat.goal) == (values.SMALL, 'hunt repeat')
     assert repeat.expected_frames < new.expected_frames
-    goal = SimpleNamespace(key='collection_train Quilava')
-    assert ladder_candidates(goal, None)[0].goal == 'collection_train'
-    assert ladder_candidates(goal, 'postgame train')[0].goal == 'postgame train'
 
 
 def test_the_audit_reports_agreement_shares_and_disagreements(tmp_path, capsys):
