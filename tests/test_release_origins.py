@@ -28,6 +28,8 @@ def stored(position, species=16, **changes):
 
 
 def snapshot(copies, player=PLAYER, active=0, **changes):
+    # A full Pokédex, so no copy is kept for a missing later stage of its family.
+    changes.setdefault('owned', frozenset(range(1, 152)))
     return snap(stored_details=tuple(copies), stored_pokemon=tuple((p.box, p.species, p.level, p.nick) for p in copies),
                 player_id=player, active_box=active, **changes)
 

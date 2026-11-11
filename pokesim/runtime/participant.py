@@ -427,9 +427,9 @@ class Participant:
         rows = policy.pc_rated(snapshot, extra=(incoming,))
         # The PC visit the trade brings must not release it or a rarer copy (pcvalue.pushes_out).
         counts = getattr(snapshot, 'box_counts', None)
-        return {'keep': pcvalue.keeps_new(rows, missing=owned is not None and dex not in owned,
-                                          headroom=sum(20 - count for count in counts) if counts else None,
-                                          active_box=getattr(snapshot, 'active_box', None))}
+        return {'keep': pcvalue.worth(rows, missing=owned is not None and dex not in owned,
+                                      headroom=sum(20 - count for count in counts) if counts else None,
+                                      active_box=getattr(snapshot, 'active_box', None)).keep}
 
     def collection_demand(self, data):
         requests = data.get('requests', {})

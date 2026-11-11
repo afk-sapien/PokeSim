@@ -300,7 +300,7 @@ def test_both_generations_judge_a_copy_by_one_rule():
     from pokesim.gen2.data import GameData
     from pokesim.gen2.release import rarity
     from pokesim.investment import dex_rarity
-    from pokesim.pcvalue import Entry, Inputs, worth
+    from pokesim.pcvalue import Entry, Inputs, rate, worth
     import os
     directory = os.environ.get('GEN2_DATA_DIR')
     if not directory:
@@ -313,6 +313,6 @@ def test_both_generations_judge_a_copy_by_one_rule():
     copy = lambda slot, dvs: Entry(slot, (65, 0), 'Alakazam', 30, dvs=dvs)  # noqa: E731
     for held in samples:
         for found in samples:
-            first = worth(copy((0, 1), found), [copy((0, 0), held)], Inputs(rarity=dex_rarity))
-            second = worth(copy((0, 1), found), [copy((0, 0), held)], Inputs(rarity=gen2))
+            first = worth(rate([copy((0, 0), held), copy((0, 1), found)], Inputs(rarity=dex_rarity)))
+            second = worth(rate([copy((0, 0), held), copy((0, 1), found)], Inputs(rarity=gen2)))
             assert first == second

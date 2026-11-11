@@ -70,18 +70,22 @@ class CatchTracker:
         dvs = bytes(memory[0xcff1:0xcff3])
         trainer_id = int.from_bytes(bytes(memory[0xd359:0xd35b]), 'big')
         self.record(fingerprint, dex, shiny=shiny_bytes(dvs), perfect=dvs == b'\xff\xff',
-                    species=species, trainer_id=trainer_id, identity=progress_events.identity(trainer_id, dvs, dex))
+                    species=species, trainer_id=trainer_id, identity=progress_events.identity(trainer_id, dvs, dex),
+                    dvs=dvs)
 
-    def record(self, fingerprint, dex, *, perfect=False, shiny=False, species=None, trainer_id=None, identity=None):
+    def record(self, fingerprint, dex, *, perfect=False, shiny=False, species=None, trainer_id=None, identity=None,
+               dvs=None):
         with self.store.transaction() as db:
-            record_receipt(db, fingerprint, dex, perfect=perfect, shiny=shiny,
-                           species=species, trainer_id=trainer_id, frame=progress_events.frame(self.store),
-                           identity=identity)
+            new = record_receipt(db, fingerprint, dex, perfect=perfect, shiny=shiny,
+                                 species=species, trainer_id=trainer_id, frame=progress_events.frame(self.store),
+                                 identity=identity)
+            if new and dvs is not None:
+                progress_events.improved(self.store, db, dex, dvs, identity)
 
 
 def record_receipt(db, fingerprint, dex, *, perfect=False, shiny=False, species=None, trainer_id=None,
                    frame=None, identity=None, progress=True):
-    """Record once inside the caller transaction.
+    """Record once inside the caller transaction, and say whether the receipt was new.
 
     A new receipt also writes its progress row, a ``receive`` for a custom gift and a ``catch``
     otherwise. ``progress`` False skips it for a gift found again in an older journal.
@@ -89,7 +93,7 @@ def record_receipt(db, fingerprint, dex, *, perfect=False, shiny=False, species=
     if not 1 <= dex <= 151:
         raise ValueError('Capture has an invalid Pokédex number')
     if not tracking.add_capture(db, fingerprint, dex, time.time()):
-        return
+        return False
     if progress:
         progress_events.record(db, 'receive' if fingerprint.startswith('gift-event:') else 'catch',
                                frame=frame, species=dex, identity=identity)
@@ -109,6 +113,7 @@ def record_receipt(db, fingerprint, dex, *, perfect=False, shiny=False, species=
         from .milestones import record_capture
         record_capture(db, species, trainer_id)
     kv.update(db, KEY, value)
+    return True
 
 
 def initialize(db):

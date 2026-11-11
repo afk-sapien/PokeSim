@@ -221,7 +221,7 @@ class Emulator:
         # A reset replaces the clock, so the store asks for the current one each time.
         store.clock = lambda: self.play_clock.frames
         from ..progress_events import GoalWatch
-        self.goal_watch = store.goal_watch = GoalWatch()
+        self.goal_watch = store.goal_watch = self.policy.goal_watch = GoalWatch()
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.commands = queue.Queue()
@@ -785,11 +785,13 @@ class Emulator:
             self._event(event, snapshot)
         for event in self.releases.observe(self.policy.menu, snapshot, self.data, Event, self._pc_value_text):
             self._event(event, snapshot)
-        from ..pcvalue import DEADLOCK, full_notice
+        from ..pcvalue import full_alert, full_notice
         from .release import headroom
         # The ledger sets the flag only when it looks for room, so a box with room again clears it here.
         if full_notice(self.store, bool(getattr(self.policy, 'pc_deadlock', False)) and headroom(snapshot) <= 0):
-            self._event(Event('pc_full', 'PC full', f'{DEADLOCK} Release or unlock one from the PC tab.',
+            goal = getattr(self.policy, 'goal', None)
+            text = full_alert(getattr(snapshot, 'box_counts', ()), [getattr(goal, 'label', None)])
+            self._event(Event('pc_full', 'PC full', f'{text} Release or unlock one from the PC tab.',
                               priority=HIGH), snapshot)
         if before:
             for mon in snapshot.party:
@@ -1232,6 +1234,7 @@ class Emulator:
         # The restart's transaction dropped the old seed, so the new game draws its own starter and choices.
         self.adventure_seed = seeds.adventure_seed(self.store)
         self.policy = Policy(self.data, seed=self.adventure_seed, starter=config.STARTER)
+        self.policy.goal_watch = getattr(self, 'goal_watch', None)
         self.store.attach(self.policy, 2)
         self.play_clock = PlayClock()
         self.paused = self.manual_mode = False

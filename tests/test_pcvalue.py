@@ -224,8 +224,8 @@ def test_a_configured_cartridge_that_cannot_be_read_rates_and_releases_nothing(c
     rows = rate(held, table)
     assert [row.reason for row in rows] == ['Not rated', 'Not rated', 'Only copy']
     assert queue(rows) == [] and pcvalue.releases(rows, 3) == []
-    assert not pcvalue.worth(mon(16, (0, 3), dvs=(0, 12, 12, 12, 12)), held, table).keep
-    assert pcvalue.worth(mon(18, (0, 3)), held, table, missing=True).keep
+    assert not judge(mon(16, (0, 3), dvs=(0, 12, 12, 12, 12)), held, table).keep
+    assert judge(mon(18, (0, 3)), held, table, missing=True).keep
     # The owner may still release a copy, and the only copy still needs its name.
     asked = rate([Entry(**{**vars(held[1]), 'requested': 'release'}), held[0],
                   Entry(**{**vars(held[2]), 'requested': 'release'})], table)
@@ -249,27 +249,81 @@ TAILS = {HELD: 0.3, RARER: 0.2, RAREST: 0.15, (0, 2, 2, 2, 2): 0.9}
 TABLE = Inputs(rarity=lambda dex, dvs: TAILS.get(tuple(dvs)))
 
 
+def judge(candidate, held, inputs=Inputs(), **options):
+    """pcvalue.worth for ``candidate`` beside the ``held`` entries, rated as a release rates them."""
+    return pcvalue.worth(rate([*held, candidate], inputs), **options)
+
+
 def test_a_new_copy_is_kept_only_when_twice_as_rare():
     held = [mon(16, (0, 0), dvs=HELD)]
-    assert not pcvalue.worth(mon(16, (0, 1), dvs=RARER), held, TABLE).keep
-    found = pcvalue.worth(mon(16, (0, 1), dvs=RAREST), held, TABLE)
+    assert not judge(mon(16, (0, 1), dvs=RARER), held, TABLE).keep
+    found = judge(mon(16, (0, 1), dvs=RAREST), held, TABLE)
     assert found.keep and found.rarity == 0.15 and found.best == 0.3
+    assert pcvalue.improvement(found) == 'Rarer' and not pcvalue.improvement(judge(mon(16, (0, 1), dvs=RARER), held, TABLE))
     # A held copy without DVs is not counted, and a gift whose DVs are not known is not kept.
-    assert pcvalue.worth(mon(16, (0, 1), dvs=RARER), [mon(16, (0, 0), dvs=())], TABLE).keep
-    assert not pcvalue.worth(mon(16, (0, 1), dvs=()), held, TABLE).keep
+    assert judge(mon(16, (0, 1), dvs=RARER), [mon(16, (0, 0), dvs=())], TABLE).keep
+    assert not judge(mon(16, (0, 1), dvs=()), held, TABLE).keep
 
 
 def test_a_missing_entry_and_a_shiny_are_always_kept():
     held = [mon(16, (0, 0), dvs=(15,) * 5)]
-    assert pcvalue.worth(mon(16, (0, 1), dvs=(0, 2, 2, 2, 2)), held, missing=True).keep
-    assert pcvalue.worth(mon(16, (0, 1), dvs=(0, 2, 10, 10, 10)), held).keep
-    assert not pcvalue.worth(mon(16, (0, 1), dvs=(0, 2, 2, 2, 2)), held).keep
+    assert judge(mon(16, (0, 1), dvs=(0, 2, 2, 2, 2)), held, missing=True).keep
+    shiny = judge(mon(16, (0, 1), dvs=(0, 2, 10, 10, 10)), held)
+    assert shiny.keep and pcvalue.improvement(shiny) == 'Shiny' and 'Shiny' in shiny.reasons
+    assert not judge(mon(16, (0, 1), dvs=(0, 2, 2, 2, 2)), held).keep
+
+
+# Squirtle, Wartortle and Blastoise.
+SQUIRTLE = {7: (8,), 8: (9,), 9: ()}
+
+
+def test_a_bred_squirtle_is_kept_for_the_stages_the_pokedex_lacks():
+    held = [mon(7, (0, 0), dvs=HELD)]
+    bred = mon(7, (0, 1), dvs=(0, 2, 2, 2, 2))
+    family = Inputs(rarity=TABLE.rarity, evolutions=SQUIRTLE, owned=frozenset({7}))
+    found = judge(bred, held, family)
+    assert found.keep and found.reason == pcvalue.FAMILY and pcvalue.improvement(found) == pcvalue.FAMILY
+    # One Squirtle for each missing stage, the best copy among them, so a third Squirtle is a spare.
+    assert not judge(mon(7, (0, 2), dvs=(0, 2, 2, 2, 2)), [*held, bred], family).keep
+    # A held Wartortle evolves for Blastoise, so the bred Squirtle is a spare.
+    caught = Inputs(rarity=TABLE.rarity, evolutions=SQUIRTLE, owned=frozenset({7, 8}))
+    assert not judge(bred, [*held, mon(8, (0, 5))], caught).keep
+    assert pcvalue.family_need({7: 1, 8: 1}, caught) == {8: 1}
+    # Once the Pokédex holds the family, or without the game's evolutions, the bred copy is a spare.
+    assert not judge(bred, held, Inputs(rarity=TABLE.rarity, evolutions=SQUIRTLE, owned=frozenset({7, 8, 9}))).keep
+    assert not judge(bred, held, TABLE).keep
+    assert pcvalue.family_need({7: 1}, family) == {7: 2}
+
+
+def test_an_open_hunt_locks_its_best_candidate():
+    held = [mon(16, (0, 0), dvs=HELD), mon(16, (0, 1), dvs=(0, 2, 2, 2, 2))]
+    hunt = Inputs(rarity=TABLE.rarity, focus=frozenset({16}))
+    rows = rate(held, hunt)
+    assert rows[0].reason == pcvalue.HUNT_BEST and pcvalue.locked(rows[0]) and not pcvalue.locked(rows[1])
+    found = judge(mon(16, (0, 2), dvs=RAREST), held, hunt)
+    assert found.keep and found.reason == 'Rarer' and found.locked
+
+
+def test_a_full_box_of_locked_mons_parks_the_producer():
+    locked = [mon(dex, (0, dex), locked=True) for dex in range(20, 40)]
+    found = judge(mon(20, (-1, 0), dvs=RAREST), locked, TABLE, room=0)
+    assert not found.keep and found.reason == pcvalue.FULL_LOCKED
+    # One free slot is no deadlock, and a spare that may go is none either.
+    assert judge(mon(20, (-1, 0), dvs=SHINY), locked, TABLE, room=1).reason != pcvalue.FULL_LOCKED
+    assert judge(mon(20, (-1, 0)), [*locked, mon(21, (1, 0))], TABLE, room=0).reason != pcvalue.FULL_LOCKED
+    text = pcvalue.full_alert([20, 0], waiting=['Mew', ''])
+    assert text == f'{pcvalue.DEADLOCK} 2 boxes hold 20 Pokémon. Waiting for room: Mew.'
+
+
+def test_training_is_worth_it_up_to_ten_battles_a_level():
+    assert pcvalue.trains(None) and pcvalue.trains(pcvalue.TRAINING_BATTLES)
+    assert not pcvalue.trains(pcvalue.TRAINING_BATTLES + 1)
 
 
 def test_a_fresh_rare_copy_stays_and_the_common_one_goes():
     old, older = mon(16, (0, 0), level=50, dvs=HELD), mon(16, (0, 1), level=40, dvs=(0, 2, 2, 2, 2))
     fresh = mon(16, (0, 2), level=5, dvs=RAREST)
-    assert pcvalue.worth(fresh, [old, older], TABLE).keep
+    assert judge(fresh, [old, older], TABLE).keep
     rated = {row.entry: row for row in rate([old, older, fresh], TABLE)}
     assert rated[fresh].reason == 'Best copy'
     assert [row.entry for row in queue(rated.values())] == [older, old]
@@ -286,7 +340,7 @@ def test_a_release_never_takes_a_copy_rarer_than_the_catch_that_pushed_it_out():
                 for index in range(rng.randrange(1, 25))]
         candidate = mon(rng.choice((16, 19, 25)), (9, 0), 5, tuple(rng.randrange(16) for _ in range(5)))
         needed, active = rng.randrange(1, 11), rng.choice((0, 1, None))
-        found = pcvalue.worth(candidate, rows, needed=needed, active_box=active)
+        found = pcvalue.verdict(rate([*rows, candidate]), needed=needed, active_box=active)
         if not found.keep or found.reason != 'Rarer':
             continue
         caught += 1
@@ -335,15 +389,19 @@ def test_a_catch_is_refused_when_its_visit_would_release_it_or_a_rarer_copy():
     better = mon(19, (9, 0), 5, dvs=(0, 12, 12, 12, 12))
     # The old Rattata goes for the better one.
     alone = [mon(19, (0, 0), dvs=common)]
-    assert pcvalue.worth(better, alone, needed=1).keep
+    visit = lambda held, needed=0: pcvalue.verdict(rate([*held, better]), needed=needed)  # noqa: E731
+    assert visit(alone, 1).keep
     # A rarer Pidgey is the only spare a visit for two can take beside the old Rattata.
     pidgeys = [mon(16, (0, 0), dvs=(0, 15, 15, 15, 15)), mon(16, (0, 1), dvs=rare)]
     held = [*pidgeys, mon(19, (0, 2), dvs=common)]
-    assert pcvalue.worth(better, held, needed=1).keep
-    refused = pcvalue.worth(better, held, needed=2)
+    assert visit(held, 1).keep
+    refused = visit(held, 2)
     assert not refused.keep and refused.reason == 'Pushes out a rarer copy'
     # With room left no visit comes, so the catch is judged as before.
-    assert pcvalue.worth(better, held).keep
+    assert visit(held).keep and judge(better, held).keep
+    # The visit a catch brings names the old Rattata it replaces.
+    from pokesim.planning.ledger import BOX_RESERVE
+    assert judge(better, alone, headroom=BOX_RESERVE).replaces == (alone[0],)
 
 
 def test_a_catch_visit_comes_only_once_the_reserve_is_spent():
@@ -363,21 +421,21 @@ def test_the_last_slot_takes_an_upgrade_even_when_every_boxed_copy_is_the_only_o
     reserve = pcvalue.UPGRADE_RESERVE
     rows = rate([*ONLY_COPIES, mon(16, (-1, 0), dvs=RAREST)], TABLE)
     assert pcvalue.deadlocked(rate(ONLY_COPIES, TABLE), 0) and pcvalue.upgrade(rows)
-    assert pcvalue.keeps_new(rows, headroom=reserve, room=reserve)
+    assert pcvalue.worth(rows, headroom=reserve, room=reserve).keep
     # The copy it replaces is the one spare, so the visit after the catch releases it first.
     assert [row.entry for row in pcvalue.releases(rows, 1)] == [ONLY_COPIES[0]]
     # A copy not rare enough is no upgrade, and a trained copy it would replace cannot go.
-    assert not pcvalue.keeps_new(rate([*ONLY_COPIES, mon(16, (-1, 0), dvs=RARER)], TABLE), room=reserve)
+    assert not pcvalue.worth(rate([*ONLY_COPIES, mon(16, (-1, 0), dvs=RARER)], TABLE), room=reserve).keep
     trained = Entry(**{**vars(ONLY_COPIES[0]), 'stat_exp': (30000,) * 5})
-    assert not pcvalue.keeps_new(rate([trained, *ONLY_COPIES[1:], mon(16, (-1, 0), dvs=RAREST)], TABLE), room=reserve)
+    assert not pcvalue.worth(rate([trained, *ONLY_COPIES[1:], mon(16, (-1, 0), dvs=RAREST)], TABLE), room=reserve).keep
 
 
 def test_only_an_upgrade_may_take_the_reserved_slot():
     # A copy a plan's demand keeps is no upgrade, so it waits for room.
     needed = Inputs(demand={16: 2}, rarity=TABLE.rarity)
     rows = rate([*ONLY_COPIES, mon(16, (-1, 0), dvs=(0, 2, 2, 2, 2))], needed)
-    assert pcvalue.keeps_new(rows) and pcvalue.keeps_new(rows, room=pcvalue.UPGRADE_RESERVE + 1)
-    assert not pcvalue.keeps_new(rows, room=pcvalue.UPGRADE_RESERVE)
+    assert pcvalue.worth(rows).keep and pcvalue.worth(rows, room=pcvalue.UPGRADE_RESERVE + 1).keep
+    assert not pcvalue.worth(rows, room=pcvalue.UPGRADE_RESERVE).keep
 
 
 def test_a_missing_entry_takes_the_reserved_slot_only_when_a_release_can_follow():

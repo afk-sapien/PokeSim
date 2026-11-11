@@ -182,10 +182,22 @@ def test_delivery_counts_gift_atomically_with_ownership(tmp_path, monkeypatch, f
         store.close()
 
 
+def gift_rows(slot, status='spare'):
+    """The PC rated with a Pidgey gift at ``slot`` that the rating calls ``status``: a spare beside a
+    rarer copy, a copy a plan keeps, or the only copy, a floor."""
+    from pokesim.pcvalue import Entry, Inputs, rate
+    copy = lambda at, level, dvs: Entry(at, (16, 0), '#16', level, dvs=dvs, stat_exp=(0,) * 5)  # noqa: E731
+    gift = copy(slot, 5, (8,) * 5)
+    rows = rate([gift] if status == 'floor' else [copy((5, 0), 50, (15,) * 5), gift],
+                Inputs(demand={16: 2}) if status == 'kept' else Inputs())
+    assert next(row for row in rows if row.entry is gift).status == status
+    return rows
+
+
 def spare_at(slot):
     """A policy whose PC rating calls the Pokémon at ``slot`` a spare."""
-    row = SimpleNamespace(entry=SimpleNamespace(slot=slot), status='spare')
-    return SimpleNamespace(on_restore=lambda: None, pc_rated=lambda *_, **__: [row])
+    rows = gift_rows(slot)
+    return SimpleNamespace(on_restore=lambda: None, pc_rated=lambda *_, **__: rows)
 
 
 @pytest.mark.parametrize('shiny', [False, True])
@@ -269,8 +281,8 @@ def test_a_gen2_league_gift_the_pc_would_release_is_settled_without_sending_it(t
     ('spare', 100, True), ('kept', 100, False), ('kept', 3, True), ('floor', 3, False)])
 def test_a_league_gift_short_of_the_best_copy_is_wasted_when_the_pc_needs_room(status, free, wasted):
     from pokesim import rewards
-    row = SimpleNamespace(entry=SimpleNamespace(slot=(1, 1)), status=status)
-    policy = SimpleNamespace(pc_rated=lambda *_, **__: [row])
+    rows = gift_rows((1, 1), status)
+    policy = SimpleNamespace(pc_rated=lambda *_, **__: rows)
     counts = [20] * 12
     for index in range(12):
         take = min(free, 20)
@@ -289,7 +301,7 @@ def test_a_staged_league_gift_is_rated_as_a_reward_not_a_traded_copy(generation,
 
     def rate(_policy, _snapshot, marks=frozenset()):
         seen.append(marks)
-        return [SimpleNamespace(entry=SimpleNamespace(slot=(1, 1)), status='spare')]
+        return gift_rows((1, 1))
 
     hook = lambda: frozenset({('old', ())})  # noqa: E731
     policy = SimpleNamespace(league_marks=hook)

@@ -233,6 +233,8 @@ class Choice:
 
 class StrategicPolicy(Policy):
     name = "strategic"
+    # The emulator's progress_events.GoalWatch, where a catch kept for an improve reason is noted.
+    goal_watch = None
 
     @property
     def shadow(self):
@@ -746,7 +748,7 @@ class StrategicPolicy(Policy):
         if kind == "safari":
             missing = SPECIES.get(s.enemy_species, {}).get('dex') not in s.owned
             targeted = self.collection.repeat_target(s.enemy_species, s.map, s, enemy_dvs(mem),
-                                                     self.catch_rating(s)) == s.enemy_species
+                                                     self.catch_rating(s), self.goal_watch) == s.enemy_species
             if not s.can_catch or not ((s.enemy_shiny or missing) and self._reserve(s, s.enemy_species, mem)() or targeted
                                        or useful_capture(s, s.enemy_species, s.enemy_level, keeps=self._keeps(s, s.enemy_species, mem))):
                 self.reason = ('Leave the encounter because the party and active box are full' if not s.can_catch
@@ -787,7 +789,7 @@ class StrategicPolicy(Policy):
                                             capture_species=self.collection.project['species']
                                             if legendary_project(self.collection.project) else None,
                                             repeat_species=self.collection.repeat_target(enemy.species, s.map, s, enemy_dvs(mem),
-                                                                                         self.catch_rating(s)),
+                                                                                         self.catch_rating(s), self.goal_watch),
                                             training_index=self.collection.trainee(s, self.collection.project)
                                             if self.collection.project and self.collection.project['method'] == 'train' else None,
                                             kind=getattr(self.goal, 'kind', STORY), flee_tries=self.flee_tries,
@@ -1480,7 +1482,7 @@ class StrategicPolicy(Policy):
 
     def _keeps(self, snapshot, species, mem):
         """Whether the PC would keep the wild ``species`` in battle, asked only when a catch rule needs it."""
-        return lambda: improves(snapshot, species, enemy_dvs(mem), self.catch_rating(snapshot))
+        return lambda: improves(snapshot, species, enemy_dvs(mem), self.catch_rating(snapshot), self.goal_watch)
 
     def _reserve(self, snapshot, species, mem):
         """Whether a catch with its own rule may take the upgrade slot (collection.reserve_allows), asked

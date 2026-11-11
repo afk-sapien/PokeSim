@@ -154,8 +154,10 @@ class Tracker:
             if not tracking.add_capture(db, fingerprint, species, time.time()):
                 return
             trainer = mem.word('wPlayerID') if 'wPlayerID' in self.data.symbols else None
+            identity = progress_events.identity(trainer, dvs, species)
             progress_events.record(db, 'catch', frame=progress_events.frame(self.store), species=species,
-                                   identity=progress_events.identity(trainer, dvs, species))
+                                   identity=identity)
+            progress_events.improved(self.store, db, species, dvs, identity)
             from ..activity_ledger import increment
             increment(db, 'caught', species)
             from .returns import consume

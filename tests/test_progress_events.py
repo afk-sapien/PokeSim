@@ -330,3 +330,59 @@ def test_the_hunt_helpers_name_the_target_and_rule():
     collection.project = {'method': 'grass', 'species': 0x99, 'dv_hunt': True}
     species, rule = collection.hunt(snapshot([stored(0, dvs=(0, 8, 8, 8, 8))]))
     assert species == 1 and rule(b'\x2a\xaa') and not rule(b'\x22\x22')
+
+
+@pytest.mark.parametrize(('gen1', 'gen2'), PAIRS)
+def test_both_write_one_improve_row_for_a_copy_the_worth_oracle_kept_better(tmp_path, gen1, gen2, monkeypatch):
+    """A catch the worth oracle kept for an improve reason writes one net ``improve`` row under the goal
+    that asked, and a plain catch or a new entry writes none (its dex row is the progress)."""
+    from pokesim.catches import CatchTracker
+    from pokesim.gen2 import activity
+    from pokecore.gen2.ram import Memory
+    from pokesim.gen2.postgame import wild_dvs as gen2_dvs
+    from pokesim.gen2.tracking import Tracker
+    from pokesim.pcvalue import FAMILY, Worth
+    from pokesim.policies.collection import wild_dvs as gen1_dvs
+    from test_behavior_parity import GEN1_ROMS, replace_game
+    from test_gen2_activity import Emulator, fake_data
+
+    def watching(store):
+        store.clock = lambda: 7
+        store.goal_watch = progress_events.GoalWatch()
+        store.goal_watch.key, store.goal_watch.tier = 'hunt:16', 'PROGRESS'
+        return store
+
+    first = watching(Store(tmp_path / 'gen1'))
+    tracker = CatchTracker(first, GEN1_ROMS[gen1], fresh=True)
+    raw = (0x9a, 0xbc)
+    first.goal_watch.expect(16, gen1_dvs(raw), Worth(True, 'Rarer'))
+    first.goal_watch.expect(19, gen1_dvs(raw), Worth(True, 'New entry'))
+    for trainer, species in ((1, 16), (2, 16), (3, 19)):
+        memory = bytearray(0x10000)
+        memory[0xd11c], memory[0xd057] = sid(species), 1
+        memory[0xd359:0xd35b] = trainer.to_bytes(2, 'big')
+        memory[0xcff1:0xcff3] = bytes(raw)
+        tracker.completed(SimpleNamespace(memory=memory))
+
+    second = watching(Store(tmp_path / 'gen2'))
+    data = replace_game(fake_data(), gen2)
+    activity.start(second, fresh=True)
+    gen2_tracker = Tracker(second, data, fresh=True)
+    # A repeat of the exact same capture is not counted twice, so each catch differs in its DVs.
+    for dvs, noted in (((0x9a, 0xbc), True), ((0x9a, 0xbd), False), ((0x22, 0x22), False)):
+        pb = Emulator()
+        for name, value in (('wWildMon', 16), ('wBattleMode', 1), ('wBattleType', 0)):
+            pb.memory.put(name, value)
+        pb.memory.put('wEnemyMonDVs', *dvs)
+        if noted:
+            # Both rules key a copy by the two DV bytes the cartridge holds, from the five DVs worth reads.
+            second.goal_watch.expect(16, gen2_dvs(Memory(pb.memory, data).read('wEnemyMonDVs', 2)), Worth(True, FAMILY))
+        gen2_tracker.captured(pb)
+    try:
+        for store in (first, second):
+            assert [(kind, frame, goal, tier, species, net) for kind, frame, goal, tier, species, _, _, net
+                    in rows(store, 'improve')] == [('improve', 7, 'hunt:16', 'PROGRESS', 16, 1)]
+            assert len(rows(store, 'catch')) == 3 and store.goal_watch.expected == {}
+    finally:
+        first.close()
+        second.close()

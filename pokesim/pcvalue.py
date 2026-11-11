@@ -8,11 +8,14 @@ itself. Level is not in it, since any copy can be trained.
 When room is needed, the lowest-value Pokémon goes first, so among plain spares the most common DVs
 go first. A few never go: Keep-locked Pokémon, eggs, party members, trained copies, the best and the
 rarest copy of each species (each Unown letter), so the Pokédex never loses an entry, and the copies
-a running plan relies on. Each species keeps those, or the copies a plan or the focus needs. The rest
-are spares, released lowest score first, and only when room is needed. Copies the demand needs come
-after every spare. So the PC can only fill with nothing to release when every slot is locked.
+a running plan relies on. Each species keeps those, or the copies a plan or its evolution family
+needs. An open DV hunt keeps only its best candidate. The rest are spares, released lowest score first, and only when room is needed. Copies
+the demand needs come after every spare. So the PC can only fill with nothing to release when every
+slot is locked.
 
-``worth`` asks whether a new copy should be kept at all, for a catch or a gift, by the same rows.
+``worth`` is the one worth call (docs/design/goal-system.md, section 5). Every producer asks it before
+it takes a Pokémon: a catch, a gift, a return, a trade, a hatch and a hunt. It reads the same rows as a
+release, with the new copy last.
 
 The generation adapters (release.py in each generation) turn their snapshot into ``Entry`` rows, so
 this module knows nothing about either cartridge.
@@ -20,7 +23,7 @@ this module knows nothing about either cartridge.
 import math
 import unicodedata
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from pokecore.dvs import is_shiny
 
@@ -31,7 +34,7 @@ WEIGHTS = {
     'role': 400,        # a plan relies on it: breeding parent or stock, trainee, team member, offered trade
     'shiny': 900,       # shiny DVs, above the rarest plain DVs, so it only goes once every plain spare is gone
     'rarity': 50,       # each halving of the share of copies that score as well (rarity.py), 800 at the rarest
-    'focus': 150,       # a copy the post-game focus or standing target is working on
+    'focus': 150,       # the best candidate of an open DV hunt, locked until the hunt ends
     'demand': 50,       # each linked adventure that wishes for the species in trade
     'demand_cap': 100,  # the most trade demand can add
     'legendary': 200,   # a legendary or one-time event Pokémon: it only returns on a long timer, and trades best
@@ -44,8 +47,6 @@ WEIGHTS = {
 # Breeding stock and offered trade partners hold a plan role for at most this many copies of a
 # species, so a breeding plan cannot pin a whole box.
 ROLE_COPIES = 2
-# Copies of a species the post-game focus or a standing target keeps.
-FOCUS_COPIES = 2
 # Stat experience summed over the five stats that counts as fully trained. A trained copy is never
 # released automatically.
 TRAINED_STAT_EXP = 100000
@@ -56,6 +57,14 @@ LAST_COPY = 'last copy'
 # The reason on every row when the PC cannot rate (rate).
 UNRATED = 'Not rated'
 DEADLOCK = 'PC full: every stored Pokémon is Keep-locked, trained, a plan\'s or the best copy of its species.'
+# The reason worth gives when no slot is free and nothing may go, so the producer parks.
+FULL_LOCKED = 'PC full'
+# The reasons for the best candidate of an open hunt and for a copy its evolution family needs.
+HUNT_BEST, FAMILY = 'Hunt best', 'Family'
+# A trainee whose next level takes more than this many wild battles at a map's top encounter level is
+# not worth training there. A level 41 partner on Route 11's level 15 grass gained a little in every
+# battle, so its development excursion never timed out.
+TRAINING_BATTLES = 10
 
 
 @dataclass(frozen=True)
@@ -87,13 +96,17 @@ class Inputs:
     """What the adventure wants. ``demand`` maps a dex number to the copies a plan needs and ``wishes``
     to the linked adventures that want it in trade. ``rarity`` gives a copy's rarity from its dex number
     and DVs (rarity.py), or None when it cannot be told. ``team`` holds the (dex, DVs) of the party as
-    the PC visit began, so a team member deposited at this visit is no spare."""
+    the PC visit began, so a team member deposited at this visit is no spare. ``focus`` holds the dex
+    numbers an open hunt works on. ``evolutions`` maps a dex number to the dex numbers it evolves into,
+    from the game data, and ``owned`` is the Pokédex, or None to leave family demand out."""
     demand: dict = field(default_factory=dict)
     focus: frozenset = frozenset()
     wishes: Counter = field(default_factory=Counter)
     favor: str | None = None   # 'shiny' or 'dvs'
     rarity: object = generic
     team: frozenset = frozenset()
+    evolutions: dict = field(default_factory=dict)
+    owned: frozenset | None = None
 
 
 @dataclass
@@ -170,11 +183,42 @@ def rate(entries, inputs=Inputs()):
         return [Rated(entry, 0, [], 'floor', reason(entry)) for entry in entries]
 
 
+def family_need(held, inputs=Inputs()):
+    """The copies each held species keeps for its evolution family, by dex number.
+
+    Each later stage the Pokédex still lacks, or a plan asks more copies of, needs one Pokémon of an
+    earlier stage to evolve. The copies of a held later stage cover the stages after it first, so the
+    rest falls to the stage before. A bred Squirtle counts toward Wartortle and Blastoise while both are
+    missing, and an Oddish is kept for Bellossom once the only Gloom is spoken for by Vileplume. There
+    is no backward step: a baby the Pokédex lacks keeps no copy of its later stages. ``held`` counts the
+    held copies by dex number. Without ``inputs.owned`` there is no family demand."""
+    need = Counter()
+    if inputs.owned is None or not inputs.evolutions:
+        return need
+    above = {}
+
+    def from_above(dex, path=()):
+        # The Pokémon an earlier stage must supply for ``dex`` and every stage after it.
+        if dex not in above:
+            later = sum(from_above(child, (*path, dex)) for child in inputs.evolutions.get(dex, ())
+                        if child not in path and child != dex)
+            asked = max(int(dex not in inputs.owned), inputs.demand.get(dex, 0))
+            above[dex] = max(0, asked + later - held.get(dex, 0))
+        return above[dex]
+
+    for dex in held:
+        total = sum(from_above(child, (dex,)) for child in inputs.evolutions.get(dex, ()) if child != dex)
+        if total:
+            need[dex] = total
+    return need
+
+
 def _rate(entries, inputs):
     groups = defaultdict(list)
     for entry in entries:
         if not entry.egg:
             groups[entry.group].append(entry)
+    family = family_need(Counter({group[0]: len(copies) for group, copies in groups.items() if not group[1]}), inputs)
     rows = {}
     for group, copies in groups.items():
         # Breeding stock and offered partners hold a role for their best ROLE_COPIES only.
@@ -190,16 +234,20 @@ def _rate(entries, inputs):
         # The rarest copy stays too when another part, such as a gift's, puts a commoner copy first.
         known = [row for row in rated if row.rarity is not None]
         rarest = min(known, key=lambda row: row.rarity) if known else None
-        need = max(1, inputs.demand.get(group[0], 0), FOCUS_COPIES if group[0] in inputs.focus else 1)
+        planned = inputs.demand.get(group[0], 0)
+        kin = 0 if group[1] else family[group[0]]
+        need = max(1, planned + kin)
         if group[0] in inputs.focus:
-            # Only the copies the focus keeps. A plainer copy stays a spare, so a hunt for a better
+            # Only the hunt's best candidate. A plainer copy stays a spare, so a hunt for a better
             # one can make room by releasing it.
-            for row in rated[:FOCUS_COPIES]:
-                row.parts.append(('Focus', WEIGHTS['focus']))
-                row.score += WEIGHTS['focus']
+            rated[0].parts.append(('Focus', WEIGHTS['focus']))
+            rated[0].score += WEIGHTS['focus']
         for index, row in enumerate(rated):
             if index == 0:
                 row.status, row.reason = 'floor', 'Only copy' if len(rated) == 1 else 'Best copy'
+                if len(rated) > 1 and group[0] in inputs.focus:
+                    # The best candidate of an open hunt stays until the hunt ends.
+                    row.reason = HUNT_BEST
             elif row.entry in roles and not row.entry.trade:
                 # A plan's trainee, partner or stock within ROLE_COPIES. Only an owner's request takes it.
                 row.status, row.reason = 'floor', 'Plan role'
@@ -210,6 +258,9 @@ def _rate(entries, inputs):
                 row.status, row.reason = 'floor', 'Trained'
             elif index < need or row.entry in roles:
                 row.status = 'kept'
+                if max(1, planned) <= index < need and kin and row.entry not in roles:
+                    # A copy a later stage of its family still needs, after the plan's own copies.
+                    row.reason = FAMILY
             if row.entry.locked:
                 row.status, row.reason = 'floor', 'Keep'
             elif row.entry.slot is None:
@@ -226,28 +277,80 @@ def _rate(entries, inputs):
 
 @dataclass(frozen=True)
 class Worth:
-    """Whether a new copy is worth keeping, why, its rarity and the rarest held copy's."""
+    """What a new copy is worth: whether the PC keeps it if it is taken now, why, its rarity and the
+    rarest held copy's, its score, whether it is locked, the held Pokémon the PC visit it brings would
+    release, cheapest first, and the score parts for the journal."""
     keep: bool
     reason: str
     rarity: float | None = None
     best: float | None = None
+    score: int = 0
+    locked: bool = False
+    replaces: tuple = ()
+    reasons: tuple = ()
 
 
 # Floors a new copy earns only by being better than what is held.
-BETTER = ('Best copy', 'Rarest copy')
+BETTER = ('Best copy', 'Rarest copy', HUNT_BEST)
+# The reasons a kept copy moves the adventure on, so its catch or receive writes an improve row
+# (progress_events). A new entry writes its own dex row.
+IMPROVES = frozenset({'Rarer', 'Shiny', FAMILY, 'Needed'})
 
 
-def worth(candidate, held, inputs=Inputs(), *, missing=False, needed=0, active_box=None):
-    """Whether the PC would keep ``candidate``, an Entry not yet held, beside the ``held`` rows.
+def locked(row):
+    """Whether a Pokémon is invested and never a spare: Keep-locked, trained, named by a running plan,
+    or the best candidate of an open hunt. A hatch is not locked by hatching. Family demand and the
+    plan's needs keep it, as any other copy."""
+    entry = row.entry
+    return bool(entry.locked or entry.role or sum(entry.stat_exp) >= TRAINED_STAT_EXP or row.reason == HUNT_BEST)
 
-    A copy for a missing Pokédex entry and a shiny are always kept. Otherwise it is rated with the
-    held rows and kept when it is not a spare: a plan or the demand needs it, or it is at least
-    RARITY_STEP times rarer than the rarest copy of its species held. Its DVs can be unknown, as for
-    a gift before it is received. Then it is kept only when the plan needs it or none is held.
-    ``needed`` and ``active_box`` are what the release path would pass to ``releases`` once it is
-    boxed (catch_visit), and a copy is not kept when that visit would take it or a rarer copy.
-    """
-    return verdict(rate([*held, candidate], inputs), missing=missing, needed=needed, active_box=active_box)
+
+def worth(rows, *, missing=False, headroom=None, active_box=None, room=None):
+    """The one worth call for a new copy, the last of ``rows``: the PC rated as the next release rates
+    it. The copy may be a phantom whose DVs are not rolled yet, as a return or a gift is before it
+    arrives. Then it beats held copies only through a plan, its family or by being the first.
+
+    A missing Pokédex entry and a shiny are kept. Otherwise the copy is kept when it is not a spare: a
+    plan or its evolution family needs it, or it is at least RARITY_STEP times rarer than
+    the rarest copy of its species held. ``headroom`` is the free box slots before it, or None when the
+    snapshot does not show them, and the copy is not kept when the PC visit it brings would release it
+    or a rarer copy (pushes_out). ``room`` is the free party and box slots a catch may fill, and the
+    last UPGRADE_RESERVE of them take only an upgrade (reserve_allows). With no slot free and nothing
+    that may go, the PC is full of locked Pokémon and the answer is FULL_LOCKED, so the producer parks.
+    Rarity has no level term, so a higher level copy is no better."""
+    row = rows[-1]
+    held = rows[:-1]
+    reasons = tuple(label for label, points in row.parts if points) + ((row.reason,) if row.reason else ())
+    extra = dict(score=row.score, locked=locked(row), reasons=reasons)
+    if room is not None and deadlocked(held, room):
+        return Worth(False, FULL_LOCKED, row.rarity, **extra)
+    needed = 0 if headroom is None else catch_visit(headroom, len(requested(rows)))
+    found = verdict(rows, missing=missing, needed=needed, active_box=active_box)
+    if found.keep and not reserve_allows(rows, room, missing=missing):
+        found = Worth(False, 'Upgrade slot only', found.rarity, found.best)
+    replaces = tuple(other.entry for other in releases(rows, needed, active_box)
+                     if other is not row and not other.entry.requested) if found.keep and needed else ()
+    return replace(found, replaces=replaces, **extra)
+
+
+def improvement(found):
+    """The reason for the improve row a kept copy writes once it arrives, or ''."""
+    return found.reason if found.keep and found.reason in IMPROVES else ''
+
+
+def trains(battles):
+    """Whether training is worth its frames where the trainee's next level takes ``battles`` wild
+    battles: no more than TRAINING_BATTLES. None, when the cartridge's tables are not known, trains."""
+    return battles is None or battles <= TRAINING_BATTLES
+
+
+def full_alert(box_counts, waiting=()):
+    """The journal text once the PC fills with locked Pokémon: DEADLOCK, the box counts and the goals
+    ``waiting`` for room."""
+    counts = list(box_counts or ())
+    text = f'{DEADLOCK} {len(counts)} boxes hold {sum(counts)} Pokémon.'
+    waiting = [goal for goal in waiting if goal]
+    return text + (f" Waiting for room: {', '.join(waiting)}." if waiting else '')
 
 
 def catch_visit(headroom, requests=0):
@@ -279,17 +382,6 @@ class VisitTeam:
         item off, is no team member unless it already was one. A trainee, a League partner or any other
         Pokémon withdrawn for a role is never an errand, so it stays a team member."""
         self.errands |= {key}
-
-
-def keeps_new(rows, *, missing=False, headroom=None, active_box=None, room=None):
-    """The one rule for a new copy of an owned species, the last of ``rows``: whether the PC keeps it
-    at the visit it brings (verdict). Every catch of an owned species in both gens and an incoming
-    trade ask it. ``headroom`` is the free box slots before it, or None when the snapshot does not
-    show them. ``room`` is the free party and box slots a catch may fill (reserve_allows). Rarity has
-    no level term, so a higher level copy is no better."""
-    needed = 0 if headroom is None else catch_visit(headroom, len(requested(rows)))
-    return (verdict(rows, missing=missing, needed=needed, active_box=active_box).keep
-            and reserve_allows(rows, room, missing=missing))
 
 
 # Free slots, across the party and every box, that only an upgrade may fill. When the boxes fill with
@@ -328,7 +420,8 @@ def boxes_full(refused, room):
 
 
 def verdict(rows, *, missing=False, needed=0, active_box=None):
-    """``worth`` for rows already rated with the new copy last."""
+    """Whether the PC keeps the new copy, the last of ``rows``, at a visit that releases ``needed``
+    Pokémon (worth, before its reserve rule)."""
     row = rows[-1]
     candidate = row.entry
     if missing:
