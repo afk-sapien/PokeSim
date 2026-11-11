@@ -243,7 +243,7 @@ The total is 18 agent hours, plus the shadow runs before each switch. Slices 2 a
 
 ## 7. What it leaves
 
-To PR 7:
+To PR 7, which [Typed goals](typed-goals.md) plans. Frame budgets per tier and the `interrupt_frames` commitment move on from there to a follow-up:
 
 - The typed goal record of goal-system section 2. Until then an offer carries today's `Goal` and a reason constant.
 - Typed failures that park a goal in place of a reload, and the parked reason a director reads.

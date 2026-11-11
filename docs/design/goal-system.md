@@ -624,8 +624,9 @@ Each PR is proved by the live soak gate and by behavioral parity tests. The soak
 | 4 | Worth oracle with locks, family demand and the `full_locked` state. Every call site in section 5 moves to it | 6 hours | parity tests, soak, the bred Squirtle case as a test, a full box of locked mons parks producers and fires one alert |
 | 5 | Claims ledger and shared gift pipeline, with idempotent delivery | 6 hours | parity tests, soak, staged and delivered claims reopen after a rewind, a second delivery of a held mon writes nothing |
 | 6 | `runtime/supervision.py`, one ladder, the rewind event, frame clocks, the liveness check in the supervisor and the watchdog, Gen II stall bundles | 6 hours | parity tests, soak, both generations give the same ladder for the same scripted stall, a frozen PlayClock raises one liveness alert after 15 real minutes |
-| 7 | Goal record with the `what` hash in the key, hunt template, stop when in active frames, per-tier budgets with support children charged to the root's tier, the shared goal shape in `state.strategy` | 8 hours | the three test goals as headless tests, soak, the `state.strategy` entry leaves ALLOWED |
-| 8 | Hidden Pokémon and Stop when fields, share codes | 4 hours | round-trip tests for codes, a page test for the form |
+| 7 | Typed goal records, typed failures that park a goal in place of a reload, the goal catalogue, the director on catalogue goals, the shared goal shape in `state.strategy`, in five slices ([Typed goals](typed-goals.md)) | 16 hours plus 5 hours of gate and replays | the gate and the 51 stuck replays per slice, the `state.strategy` entry leaves ALLOWED |
+| 8 | The `what` hash in the key, the hunt template, Hidden Pokémon and Stop when fields in active frames, share codes | 8 hours | round-trip tests for codes, a page test for the form, the three test goals as headless tests |
+| 8a | Per-tier budgets with support children charged to the root's tier, and `interrupt_frames` commitment | 4 hours | the gate and the replays, every rung whose play changes named |
 | 9 | Report button, `stall-report.yml`, redaction test, guide and self-hosting text | 4 hours | `tests/test_stall_report.py`, `tests/test_no_private_strings.py` |
 
 Total agent time is about 45 hours plus about 2.5 hours of soak time. Boss ready and the live soak land first, as Steps 2h and 3 already plan.
