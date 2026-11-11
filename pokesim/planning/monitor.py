@@ -24,6 +24,11 @@ SPENT = 'progress_frames'
 FAILURES = 'failures'
 
 
+def hold_key(goal_key):
+    """The key of a goal under way, such as making room in the box, that a stall set aside."""
+    return f'hold:{goal_key}'
+
+
 @dataclass(frozen=True)
 class ProgressEvent:
     """Something a goal was for: a dex entry, a catch, an item, a level, a badge or a map reached."""

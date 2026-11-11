@@ -807,8 +807,9 @@ class Emulator(EmulatorBase):
         """How a stall for ``why`` sets the goal that stopped aside in place of a reload, or None when it cannot.
 
         Only the collection's goal parks: the activity under way or a rung's goal, when the last decision
-        picked it, it is still the goal and it has objectives to stand down. A story goal, a battle, a
-        glitch and the League reload as before, since standing down gets none of them going.
+        picked it, it is still the goal and it has objectives of its own to stand down. A park never sets
+        aside another goal's (standdown.stalled_objectives). A story goal, a battle, a glitch and the League
+        reload as before, since standing down gets none of them going.
         """
         from .collection import RUNGS
         failure = PARKS.get(why)
@@ -823,7 +824,7 @@ class Emulator(EmulatorBase):
         if getattr(snapshot, 'in_battle', 0) or policy.in_league(snapshot):
             return None
         from .standdown import stalled_objectives
-        stalled = stalled_objectives(policy)
+        stalled = stalled_objectives(policy, picked[0])
         if not stalled['keys']:
             return None
         return lambda: Emulator._park(self, failure, stalled)
