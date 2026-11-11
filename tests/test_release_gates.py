@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from tools import check_release_gates as gates
+from tools import release
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,29 +16,29 @@ def job(name, conclusion='success', status='completed', steps=()):
 
 
 def complete(workflow):
-    names = list(gates.REQUIRED[workflow])
-    steps = list(gates.REQUIRED_STEPS[workflow])
+    names = list(release.REQUIRED[workflow])
+    steps = list(release.REQUIRED_STEPS[workflow])
     return [job(names[0], steps=steps)] + [job(name) for name in names[1:]]
 
 
-@pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
+@pytest.mark.parametrize('workflow', sorted(release.REQUIRED))
 def test_complete_successful_run_passes(workflow):
-    assert gates.judge(workflow, complete(workflow))[0] == 'ok'
+    assert release.judge(workflow, complete(workflow))[0] == 'ok'
 
 
-@pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
+@pytest.mark.parametrize('workflow', sorted(release.REQUIRED))
 def test_failed_skipped_cancelled_or_missing_jobs_do_not_pass(workflow):
     jobs = complete(workflow)
     for conclusion in ('failure', 'skipped', 'cancelled'):
-        assert gates.judge(workflow, [{**jobs[0], 'conclusion': conclusion}, *jobs[1:]])[0] == 'fail'
-    assert gates.judge(workflow, jobs[:-1])[0] == 'fail'
-    assert gates.judge(workflow, [{**jobs[0], 'steps': []}, *jobs[1:]])[0] == 'fail'
+        assert release.judge(workflow, [{**jobs[0], 'conclusion': conclusion}, *jobs[1:]])[0] == 'fail'
+    assert release.judge(workflow, jobs[:-1])[0] == 'fail'
+    assert release.judge(workflow, [{**jobs[0], 'steps': []}, *jobs[1:]])[0] == 'fail'
 
 
 def test_unfinished_runs_are_waited_for_not_passed():
     jobs = complete('ci.yml')
-    assert gates.judge('ci.yml', [{**jobs[0], 'status': 'in_progress', 'conclusion': None}, *jobs[1:]])[0] == 'wait'
-    assert gates.judge('ci.yml', [])[0] == 'wait'
+    assert release.judge('ci.yml', [{**jobs[0], 'status': 'in_progress', 'conclusion': None}, *jobs[1:]])[0] == 'wait'
+    assert release.judge('ci.yml', [])[0] == 'wait'
 
 
 # A matrix axis that is the full list on a tag, the nightly run or a manual run, and a short list otherwise.
@@ -97,10 +97,10 @@ def workflow_job_names(workflow, fast=False):
     return names
 
 
-@pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
+@pytest.mark.parametrize('workflow', sorted(release.REQUIRED))
 def test_required_jobs_are_exactly_the_jobs_of_the_workflow(workflow):
     """Every job, every matrix shard (Windows included), is required, and nothing is required that does not exist."""
-    assert sorted(gates.REQUIRED[workflow]) == sorted(workflow_job_names(workflow))
+    assert sorted(release.REQUIRED[workflow]) == sorted(workflow_job_names(workflow))
 
 
 FAST = {
@@ -110,15 +110,15 @@ FAST = {
 }
 
 
-@pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
+@pytest.mark.parametrize('workflow', sorted(release.REQUIRED))
 def test_pull_requests_run_one_platform_and_keep_the_required_gate(workflow):
     """A pull request runs Linux x86 and Python 3.12 only, and still reports the gate the ruleset requires."""
     fast = workflow_job_names(workflow, fast=True)
     assert sorted(fast) == sorted(FAST[workflow])
-    assert set(fast) <= set(gates.REQUIRED[workflow])
+    assert set(fast) <= set(release.REQUIRED[workflow])
 
 
-@pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
+@pytest.mark.parametrize('workflow', sorted(release.REQUIRED))
 def test_the_full_matrix_runs_on_tags_nightly_and_by_hand(workflow):
     switches = matrix_switches(workflow)
     assert switches
@@ -127,7 +127,7 @@ def test_the_full_matrix_runs_on_tags_nightly_and_by_hand(workflow):
     assert on['push']['tags'] == ['**'] and on['schedule'] and 'workflow_dispatch' in on
 
 
-@pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
+@pytest.mark.parametrize('workflow', sorted(release.REQUIRED))
 def test_only_a_pull_request_run_is_ever_cancelled(workflow):
     """Push, tag and nightly runs are evidence for one exact commit, so each has its own group and finishes."""
     concurrency = load_workflow(workflow)['concurrency']
@@ -135,30 +135,30 @@ def test_only_a_pull_request_run_is_ever_cancelled(workflow):
     assert "github.event_name == 'pull_request' && github.ref || github.sha" in concurrency['group']
 
 
-@pytest.mark.parametrize('workflow', sorted(gates.REQUIRED))
+@pytest.mark.parametrize('workflow', sorted(release.REQUIRED))
 def test_required_steps_exist_in_the_workflow_files(workflow):
     text = (ROOT / '.github/workflows' / workflow).read_text()
-    for step in gates.REQUIRED_STEPS[workflow]:
+    for step in release.REQUIRED_STEPS[workflow]:
         assert f'name: {step}' in text, step
 
 
 def test_a_job_whose_name_only_shares_a_prefix_does_not_satisfy_the_gate():
     jobs = complete('python-install.yml')
     renamed = [job_ for job_ in jobs if job_['name'] != 'install (macos-15)']
-    assert gates.judge('python-install.yml', renamed)[0] == 'fail'
+    assert release.judge('python-install.yml', renamed)[0] == 'fail'
     ci = complete('ci.yml')
-    assert gates.judge('ci.yml', [job_ for job_ in ci if job_['name'] != 'container (arm64)']
+    assert release.judge('ci.yml', [job_ for job_ in ci if job_['name'] != 'container (arm64)']
                        + [job('container (arm64)-extra')])[0] == 'fail'
 
 
 def test_every_native_test_shard_is_required():
-    required = gates.REQUIRED['python-install.yml']
+    required = release.REQUIRED['python-install.yml']
     for shard in range(1, 5):
         assert f'native tests (windows-latest, {shard}/4)' in required
     jobs = complete('python-install.yml')
     for index, item in enumerate(jobs):
         if item['name'].startswith('native tests'):
-            assert gates.judge('python-install.yml', jobs[:index] + jobs[index + 1:])[0] == 'fail', item['name']
+            assert release.judge('python-install.yml', jobs[:index] + jobs[index + 1:])[0] == 'fail', item['name']
 
 
 def test_publish_job_is_the_only_writer_and_never_runs_in_a_dry_run():
@@ -176,7 +176,7 @@ def test_publish_checks_come_from_the_dispatching_commit_and_guard_every_push():
     text = (ROOT / '.github/workflows/release.yml').read_text()
     publish = text.split('\n  publish:')[1]
     assert 'path: dispatch' in publish and 'run-id: ${{ inputs.images_from_run || github.run_id }}' in publish
-    assert ' tools/check_registry_image.py' not in publish
+    assert ' tools/release.py check-image' not in publish
     before_push = publish.split('docker push')[0]
     assert '--unchanged' in before_push and '"$REVISION"' in before_push
 
@@ -259,7 +259,7 @@ def test_slow_tests_skip_unless_asked(monkeypatch):
 def test_validate_and_gate_both_refuse_unfinished_pins():
     text = (ROOT / '.github/workflows/release.yml').read_text()
     validate = text.split('\n  gate:')[0]
-    assert 'python tools/check_release_pins.py --remote' in validate
+    assert 'python tools/release.py check-pins --remote' in validate
     gate = text.split('\n  gate:')[1].split('\n  build:')[0]
     assert '--tree release-source' in gate
     assert 'ref: ${{ needs.validate.outputs.revision }}' in gate
@@ -270,9 +270,8 @@ def test_gate_main_stops_on_temporary_pins(tmp_path, monkeypatch, capsys):
     (tmp_path / 'uv.lock').write_text('')
     (tmp_path / 'Dockerfile').write_text('')
     monkeypatch.setenv('GH_TOKEN', 'unused')
-    monkeypatch.setattr('sys.argv', ['gate', '--repo', 'o/r', '--sha', 'abc', '--tree', str(tmp_path)])
     with pytest.raises(SystemExit) as stopped:
-        gates.main()
+        release.main(['check-gates', '--repo', 'o/r', '--sha', 'abc', '--tree', str(tmp_path)])
     assert 'Release pins are not final' in str(stopped.value)
 
 

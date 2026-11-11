@@ -33,7 +33,7 @@ by store:
 
 ## Before submitting
 
-1. Submit from a release tag. `tools/release_version.py` moves the version in every
+1. Submit from a release tag. `tools/release.py version` moves the version in every
    template with the rest of the release, so the tag's templates name its image.
 2. Check that the release image covers linux/arm64 if the store lists arm64.
 3. Umbrel needs a 256x256 icon and gallery images uploaded to its gallery repository,
