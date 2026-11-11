@@ -19,16 +19,18 @@ def policy(**extra):
     data = SimpleNamespace(map_ids={'HERE': 1, 'NEAR': 2, 'FAR': 3})
     hops = {(1, 1): [], (1, 2): [None], (1, 3): [None] * 20}
     nav = SimpleNamespace(walk=lambda snapshot, target: hops.get((snapshot.map, target)))
-    return SimpleNamespace(data=data, nav=nav, collection={'target': None}, menu=None, completed={}, decisions=10, **extra)
+    return SimpleNamespace(data=data, nav=nav, collection={'target': None}, monitor_tables={}, menu=None, completed={},
+                           decisions=10, clock=10, **extra)
 
 
 def ladder(owner):
     return Ladder(owner, SimpleNamespace(map=1))
 
 
-def build(owner, key, result, **changes):
+def build(owner, key, result, tables=None, **changes):
     def run():
         owner.collection.update(changes)
+        owner.monitor_tables.update(tables or {})
         return result
     return run
 
@@ -36,12 +38,16 @@ def build(owner, key, result, **changes):
 def test_the_cheaper_rung_wins_in_a_tier_and_the_losers_change_nothing():
     owner = policy()
     rungs = ladder(owner)
-    rungs.offer('far', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, build(owner, 'far', goal('far', 'FAR'), far=1))
+    rungs.offer('far', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES,
+                build(owner, 'far', goal('far', 'FAR'), {'spent': {'far': 5}}, far=1))
     rungs.offer('near', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, build(owner, 'near', goal('near', 'NEAR'), near=1))
-    rungs.offer('later', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, build(owner, 'later', goal('later', 'FAR'), later=1))
+    rungs.offer('later', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES,
+                build(owner, 'later', goal('later', 'FAR'), {'stood_down': {'later': 3}}, later=1))
     assert rungs.rung == 'near' and rungs.goal.key == 'near'
     # The far pick was beaten, so what it saved is undone. The later loser never kept its change.
     assert owner.collection == {'target': None, 'near': 1}
+    # The same holds for a budget it spent or a stand-down it wrote.
+    assert owner.monitor_tables == {}
     near = next(candidate for candidate in rungs.candidates if candidate.goal == 'near')
     assert near.expected_frames == ERRAND_FRAMES + MAP_FRAMES
 
@@ -79,8 +85,8 @@ def test_the_collector_style_asks_a_hunt_rung_below_the_pick_and_ranks_it_with_p
 def test_a_rung_that_offers_nothing_keeps_its_stand_down():
     owner = policy()
     rungs = ladder(owner)
-    rungs.offer('hunt', Tier.PROGRESS, values.NEW_ENTRY, 0, build(owner, 'hunt', None, stood_down={'hunt:7': 3}))
-    assert rungs.pick is None and owner.collection['stood_down'] == {'hunt:7': 3}
+    rungs.offer('hunt', Tier.PROGRESS, values.NEW_ENTRY, 0, build(owner, 'hunt', None, {'stood_down': {'hunt:7': 3}}))
+    assert rungs.pick is None and owner.monitor_tables['stood_down'] == {'hunt:7': 3}
 
 
 def test_the_day_care_walk_is_passive_and_runs_only_without_other_work():

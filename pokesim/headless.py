@@ -64,7 +64,7 @@ class HeadlessRun:
         self.policy = StrategicPolicy(seed)
         # The goals' stand-downs count on the run's frames, which a reload keeps, as the PlayClock does live.
         self.policy.monitor_tables = Tables(clock=lambda: self.frame)
-        self.policy.collection.version =('yellow' if self.rom_sha1 == YELLOW_SHA1
+        self.policy.collection.version = ('yellow' if self.rom_sha1 == YELLOW_SHA1
                                           else 'blue' if self.rom_sha1 == BLUE_SHA1 else 'red')
         from .planning.cost import wild_odds
         self.policy.collection.wild = wild_odds(rom, self.policy.collection.version)

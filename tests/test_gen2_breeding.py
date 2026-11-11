@@ -43,7 +43,8 @@ def snapshot(stored, *, owned=None, boxes=(5,) * 14):
 
 def planner(data, demand):
     storage = SimpleNamespace(map_name='GOLDENROD_POKECENTER_1F', x=1, y=1, face='up')
-    return SimpleNamespace(data=data, collection={}, demand=demand, storage_goal=lambda snapshot: storage)
+    return SimpleNamespace(data=data, collection={}, monitor_tables={}, clock=0, demand=demand,
+                           storage_goal=lambda snapshot: storage)
 
 
 def test_gift_and_static_families_have_no_wild_source(real_data):

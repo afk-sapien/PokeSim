@@ -1352,7 +1352,8 @@ def test_slowking_branch_breeds_another_slowpoke(real_data):
     ditto = SimpleNamespace(species=132, moves=(144,), egg=False, box=None, gender='Genderless', trainer_id=1, dvs=(0, 1, 3, 5, 7))
     snapshot = SimpleNamespace(party=(slowbro, slowbro, ditto), stored=(), daycare=(None, None),
                                owned={79, 80, 132}, money=10000, egg_ready=False)
-    policy = SimpleNamespace(data=real_data, collection={}, demand={}, person=lambda *args: 'deposit')
+    policy = SimpleNamespace(data=real_data, collection={}, monitor_tables={}, clock=0, demand={},
+                             person=lambda *args: 'deposit')
     assert journey(policy, snapshot, Goal) == 'deposit'
     assert policy.collection['breeding']['target'] == 79
     assert policy.collection['breeding']['duplicate']
@@ -1367,7 +1368,8 @@ def test_level_100_chansey_breeds_a_partner_that_can_evolve(real_data):
         trainer_id=1, dvs=(0, 1, 3, 5, 7), level=20)
     snapshot = SimpleNamespace(party=(chansey, chansey, ditto), stored=(), daycare=(None, None),
         owned={113, 132}, money=10000, egg_ready=False)
-    policy = SimpleNamespace(data=real_data, collection={}, demand={}, person=lambda *args: 'deposit')
+    policy = SimpleNamespace(data=real_data, collection={}, monitor_tables={}, clock=0, demand={},
+                             person=lambda *args: 'deposit')
     assert journey(policy, snapshot, Goal) == 'deposit'
     assert policy.collection['breeding']['target'] == 113
     assert policy.collection['breeding']['duplicate']
@@ -1415,7 +1417,7 @@ def test_level_100_partners_can_still_use_evolution_stones(real_data):
         items=((real_data.items['SUN_STONE'], 1), (real_data.items['EXP_SHARE'], 1)),
         map=real_data.map_ids['GOLDENROD_CITY'], x=1, y=1)
     assert {row[4] for row in projects(real_data, snapshot, 'day')} == {182}
-    policy = SimpleNamespace(data=real_data, collection={})
+    policy = SimpleNamespace(data=real_data, collection={}, monitor_tables={}, clock=0)
     assert journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal).key == 'collection_evolve_item'
 
 
@@ -1900,7 +1902,7 @@ def test_boxed_tower_partner_with_an_hm_can_breed_its_missing_baby(real_data):
     lead = SimpleNamespace(species=157, egg=False, trainer_id=2, dvs=(1,) * 5)
     snapshot = SimpleNamespace(party=(lead,), stored=(magmar, ditto), daycare=(None, None),
         owned={126, 132, 157}, money=10000, egg_ready=False)
-    policy = SimpleNamespace(data=real_data, collection={}, demand={},
+    policy = SimpleNamespace(data=real_data, collection={}, monitor_tables={}, clock=0, demand={},
         storage_goal=lambda snapshot: Goal('pc', 'Use the PC', 'OLIVINE_POKECENTER_1F', 9, 2, 'up'))
     assert journey(policy, snapshot, Goal).key == 'collection_breed_pc'
     assert policy.collection['breeding']['target'] == 240
@@ -1974,7 +1976,8 @@ def test_tower_berry_respects_native_daily_flags_and_bag_capacity(real_data, mon
     from pokesim.gen2.policy import Goal
     values = {'wDailyFlags1': 16, 'wFruitTreeFlags': 0}
     monkeypatch.setattr(tower, 'Memory', lambda *args: SimpleNamespace(byte=lambda name, *args: values[name]))
-    policy = SimpleNamespace(data=real_data, collection={}, decisions=0, memory=None, person=lambda *args: 'berry')
+    policy = SimpleNamespace(data=real_data, collection={}, monitor_tables={}, decisions=0, clock=0, memory=None,
+                             person=lambda *args: 'berry')
     snapshot = SimpleNamespace(event=lambda name: True, items=(), pockets={'items': ()}, party=(), stored=())
     assert tower.journey(policy, snapshot, Goal) == 'berry'
     values['wFruitTreeFlags'] = 1
@@ -2350,7 +2353,8 @@ def test_a_carrier_hunt_stands_down_after_its_decision_budget(real_data):
     # Nine carriers in ten battles holding the item 2% of the time is about 56 battles to expect,
     # so three times that at 75 decisions a battle. A rare carrier is capped at two game hours.
     hunt = SimpleNamespace(key='collection_hunt')
-    policy = SimpleNamespace(data=real_data, demand={}, decisions=0, collection={'target': dict(target)}, goal=hunt)
+    policy = SimpleNamespace(data=real_data, demand={}, decisions=0, clock=0, collection={'target': dict(target)},
+                             monitor_tables={}, goal=hunt)
     snapshot = SimpleNamespace(party=(), stored=stored, items=(), owned=owned)
     assert round(3 * target_expected(policy, snapshot, target)) == 12500
     assert 3 * target_expected(policy, snapshot, {**target, 'chance': 10}) > MOST_DECISIONS
@@ -2371,11 +2375,11 @@ def test_a_carrier_hunt_stands_down_after_its_decision_budget(real_data):
     step(100)
     policy.goal = hunt
     step(budget // 2 - 1)
-    assert policy.collection['progress_frames'] == {hunt_key(61): budget - 1}
+    assert policy.monitor_tables['progress_frames'] == {hunt_key(61): budget - 1}
     assert not standing_down(policy, hunt_key(61))
     step()
-    assert standing_down(policy, hunt_key(61)) and policy.collection['progress_frames'] == {}
-    policy.decisions += STAND_DOWN
+    assert standing_down(policy, hunt_key(61)) and policy.monitor_tables['progress_frames'] == {}
+    policy.clock += STAND_DOWN
     assert not standing_down(policy, hunt_key(61))
 
 
@@ -2395,7 +2399,8 @@ def test_a_peer_requested_evolution_is_boxed_so_it_can_be_offered(real_data):
     snapshot = SimpleNamespace(party=party, stored=(), box_counts=[20, 3] + [0] * 12, active_box=0,
                                map=real_data.map_ids['VIOLET_POKECENTER_1F'], x=3, y=3)
     goal = SimpleNamespace(map_name='VIOLET_POKECENTER_1F', x=1, y=1, face='up')
-    policy = SimpleNamespace(data=real_data, demand={103: 2, 250: 1}, decisions=0, storage_goal=lambda s: goal,
+    policy = SimpleNamespace(data=real_data, demand={103: 2, 250: 1}, decisions=0, clock=0, monitor_tables={},
+                             storage_goal=lambda s: goal,
                              collection={'training': {'identity': [1005, [5, 8, 9, 10, 11]]}})
     assert peer_store_slots(policy, snapshot) == [1, 2]
     policy.collection['training']['identity'] = [1002, [2, 8, 9, 10, 11]]
@@ -2439,7 +2444,8 @@ def _item_policy(data, demand=None):
 
     def person(snapshot, key, label, map_name, script):
         return Goal(key, label, map_name, 0, 0)
-    return SimpleNamespace(data=data, demand=demand or {}, collection={}, decisions=0, person=person,
+    return SimpleNamespace(data=data, demand=demand or {}, collection={}, monitor_tables={}, decisions=0, clock=0,
+                           person=person,
                            storage_goal=lambda snapshot: Goal('storage', 'PC', 'SILVER_CAVE_POKECENTER_1F', 9, 2, 'up'),
                            nav=SimpleNamespace(route=lambda start, end: [], walk=lambda snapshot, end: []))
 
@@ -2503,7 +2509,7 @@ def test_phone_waits_and_full_phone_lists_stand_down_instead_of_looping(real_dat
         assert item_sources.phones(policy, snapshot, registered, Goal).key == 'collection_phone_wait'
         policy.decisions += 500
     assert item_sources.phones(policy, snapshot, registered, Goal) is None
-    policy.decisions += STAND_DOWN
+    policy.clock += STAND_DOWN
     assert item_sources.phones(policy, snapshot, registered, Goal).key == 'collection_phone_wait'
     # A step interrupted by other work counts again from the start when it comes back.
     policy.decisions += item_sources.WAIT_DECISIONS + item_sources.GAP + 1
@@ -2511,7 +2517,7 @@ def test_phone_waits_and_full_phone_lists_stand_down_instead_of_looping(real_dat
     full = _ItemMemory(real_data, wPhoneList=list(range(1, 11)))
     fresh = _item_policy(real_data, {103: 1})
     assert item_sources.phones(fresh, snapshot, full, Goal) is None
-    assert 'phone:LEAF_STONE' in fresh.collection['stood_down']
+    assert 'phone:LEAF_STONE' in fresh.monitor_tables['stood_down']
 
 
 def test_phone_number_prompt_is_accepted_only_while_registering(real_data):

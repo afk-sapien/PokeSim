@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from pokesim.planning.unreachable import DECISIONS, FRAMES, NoRoute
+from pokesim.planning.unreachable import FRAMES, NoRoute
 from pokesim.stalls import StallWatch
 
 ROUTE_23, OLIVINE = 1, 99
@@ -26,16 +26,16 @@ def gen2_walk():
                                                          memberships=lambda *args, **kwargs: {1}),
                                  explore=lambda *args, **kwargs: explored.append(1) or ['up'])
     policy.goal = Goal('olivine', 'Travel to Olivine', 'OLIVINE_CITY', 5, 6)
-    policy.collection, policy.decisions = {}, 100
+    policy.collection, policy.monitor_tables, policy.decisions, policy.clock = {}, {}, 100, 100
     policy.stranded = policy.unreachable_waits = 0
     policy.failure, policy.recoveries = None, 0
     where = SimpleNamespace(map=ROUTE_23, map_name='Route 23', x=3, y=3, badges=0, party=[])
     action = policy.follow(where, None, None, False, False)
     assert action.button is None and not explored
     assert policy.no_route_waiting(policy.goal)
-    policy.decisions += DECISIONS.wait(1)
+    policy.clock += FRAMES.wait(1)
     assert not policy.no_route_waiting(policy.goal)
-    return policy, NoRoute(policy.collection, DECISIONS).attempts(), ('OLIVINE_CITY', [[5, 6]], 'Route 23')
+    return policy, NoRoute(policy.monitor_tables, FRAMES).attempts(), ('OLIVINE_CITY', [[5, 6]], 'Route 23')
 
 
 def gen1_walk():
@@ -130,7 +130,7 @@ def test_a_gen1_step_tried_while_a_trainer_engages_is_not_a_failed_step():
 
 
 def test_a_target_that_keeps_failing_waits_longer_each_time():
-    record = NoRoute({}, DECISIONS)
+    record = NoRoute({}, FRAMES)
     first = record.record('olivine', 'OLIVINE_CITY', [(5, 6)], 0)
     second = record.record('olivine', 'OLIVINE_CITY', [(5, 6)], first)
     assert second - first == 2 * (first - 0)

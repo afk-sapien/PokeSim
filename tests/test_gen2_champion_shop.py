@@ -39,7 +39,7 @@ def snap(data, party=(), items=(), money=500000, champion=1, stored=()):
 
 
 def policy_for(data, **extra):
-    state = SimpleNamespace(data=data, collection={}, decisions=10000, goal=None, menu=None, shop_offers=set(),
+    state = SimpleNamespace(data=data, collection={}, monitor_tables={}, decisions=10000, clock=10000, goal=None, menu=None, shop_offers=set(),
                             clerk_present=lambda *args: True,
                             person=lambda snap, key, label, place, script: SimpleNamespace(
                                 key=key, label=label, map=place, script=script))

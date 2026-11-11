@@ -529,6 +529,8 @@ class Emulator:
         # The first save after an achievement is the last one known to be from before any stall.
         capture.keep_before(self, path, self.snapshot)
         self.store.set('play_clock', self.play_clock.state_dict())
+        # The goals' stand-downs and budgets sit beside the clock they count on, not in the save.
+        self.policy.monitor_tables.flush()
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
         capture.prune_trace(self)
         self.store.prune_events(config.EVENT_RETENTION_DAYS)

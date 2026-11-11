@@ -109,6 +109,9 @@ class Policy:
         # The best fighter level that lost to each boss. Store.attach keeps it in the adventure's store.
         from ..planning.losses import Losses
         self.losses = Losses()
+        # The progress monitor's stand-downs and budgets, timed on ``clock``. Store.attach gives the adventure's.
+        from ..runtime.supervision import Tables
+        self.monitor_tables = Tables(clock=lambda: self.clock)
         # Owned one-time encounters that a walking return brought back for another capture.
         self.returned = set()
         # The party seen at this PC visit, so a member deposited at it is no spare (pcvalue.VisitTeam).
@@ -180,7 +183,7 @@ class Policy:
         self.completed = state.get('completed', {})
         self.collection = state.get('collection', {'target': None})
         from .standdown import migrate
-        migrate(self)
+        migrate(self, state.get('decisions', 0))
         self.demand = {int(key): value for key, value in state.get('demand', {}).items()}
         self.decisions = state.get('decisions', 0)
         self.naming.load_state_dict(state.get('naming', {}))
@@ -1770,18 +1773,18 @@ class Policy:
                              cut=cut, surf=surf) is not None
 
     def unreachable(self):
-        """The walks that found no route lately (planning/unreachable.py), kept with the collection state."""
-        from ..planning.unreachable import DECISIONS, NoRoute
-        return NoRoute(self.collection, DECISIONS)
+        """The walks that found no route lately (planning/unreachable.py), kept in the monitor's tables."""
+        from ..planning.unreachable import FRAMES, NoRoute
+        return NoRoute(self.monitor_tables, FRAMES)
 
     def no_route_waiting(self, goal):
         """Whether ``goal`` found no route lately and waits before it is walked again."""
-        return goal is not None and self.unreachable().waiting(goal.key, goal.map_name, [(goal.x, goal.y)], self.decisions)
+        return goal is not None and self.unreachable().waiting(goal.key, goal.map_name, [(goal.x, goal.y)], self.clock)
 
     def no_route(self, snapshot):
         """End the turn of a walk with no route and record the failed attempt, with its map and target."""
         goal = self.goal
-        self.unreachable().record(goal.key, goal.map_name, [(goal.x, goal.y)], self.decisions, snapshot.map_name)
+        self.unreachable().record(goal.key, goal.map_name, [(goal.x, goal.y)], self.clock, snapshot.map_name)
         self.unreachable_waits = 0
         self.mode = f'No route to {goal.label}'
         return Action(None, 0, 24)

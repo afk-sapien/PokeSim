@@ -131,7 +131,7 @@ def test_sealed_storage_trains_only_the_party_and_never_walks_to_the_pc(data, mo
     # The Poliwhirl closest to level 100 is boxed, and the Exp. Share it holds cannot come out either.
     assert training.journey(policy, snapshot, mem, Goal, terminal=True) is None
     assert policy.collection['training']['identity'] != training.identity(stored[0])
-    assert not policy.collection.get('stood_down')
+    assert not policy.monitor_tables.get('stood_down')
     policy.collection['training'] = None
     policy.no_room = lambda snapshot: False
     goal = training.journey(policy, snapshot, mem, Goal, terminal=True)
@@ -140,15 +140,16 @@ def test_sealed_storage_trains_only_the_party_and_never_walks_to_the_pc(data, mo
 
 def test_a_losing_tower_cap_backs_off_and_other_caps_are_tried():
     from pokesim.gen2 import tower
-    policy = SimpleNamespace(decisions=1000, collection={})
+    from pokesim.gen2.standdown import DECISION_FRAMES
+    policy = SimpleNamespace(decisions=1000, clock=1000, collection={}, monitor_tables={})
     tower.record_result(policy, 100, 0)
     assert tower.resting_caps(policy) == {100}
     until = tower.monitor(policy, tower.CAP_BACKOFF).until
     first = until('tower:100')
-    assert first - 1000 == 100000 and not hasattr(tower, 'RETRY_AFTER')
+    assert first - 1000 == 100000 * DECISION_FRAMES and not hasattr(tower, 'RETRY_AFTER')
     tower.record_result(policy, 100, 3)
     assert until('tower:100') - 1000 == 2 * (first - 1000)
-    policy.decisions = until('tower:100')
+    policy.clock = until('tower:100')
     assert tower.resting_caps(policy) == set()
     tower.record_result(policy, 100, 7)
     assert until('tower:100') is None
@@ -156,16 +157,21 @@ def test_a_losing_tower_cap_backs_off_and_other_caps_are_tried():
 
 def test_an_older_save_keeps_its_tower_and_team_back_off():
     from pokesim.gen2 import tower
-    from pokesim.gen2.standdown import migrate, standing_down, team_key
-    policy = SimpleNamespace(decisions=1000, collection={
+    from pokesim.gen2.standdown import DECISION_FRAMES, migrate, standing_down, team_key
+    from pokesim.runtime.supervision import Tables
+    policy = SimpleNamespace(decisions=1000, clock=5000, collection={
         'tower_failed': {'50': {'streak': 2, 'until': 201000}},
         'activity_failed': {'team': ['a', 'b'], 'until': 40000}})
-    migrate(policy)
+    policy.monitor_tables = Tables(clock=lambda: policy.clock)
+    migrate(policy, 1000)
     assert 'tower_failed' not in policy.collection and 'activity_failed' not in policy.collection
-    assert tower.monitor(policy, tower.CAP_BACKOFF).until('tower:50') == 201000
+    # The save stood at decision 1000, the moment the cap's second shortfall began its wait.
+    assert tower.monitor(policy, tower.CAP_BACKOFF).until('tower:50') == 5000 + tower.CAP_BACKOFF.wait(2)
     assert tower.resting_caps(policy) == {50}
+    # The team had 39000 decisions left to wait, which now run in frames from the PlayClock.
+    policy.clock = 5000 + 39000 * DECISION_FRAMES - 1
     assert standing_down(policy, team_key(['a', 'b']))
-    policy.decisions = 40000
+    policy.clock += 1
     assert not standing_down(policy, team_key(['a', 'b']))
 
     def mon(species, level, strength):

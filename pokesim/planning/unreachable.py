@@ -6,16 +6,14 @@ replays the same missing route after a full stall timeout. The attempt stands it
 shared progress monitor (monitor.py), one key per goal and target, so the wait doubles while the same
 target keeps failing and the picker passes it over until the wait runs out.
 
-Each caller passes ``now`` in its own unit, as the monitor does: decisions for Gold, Silver and Crystal
-and PlayClock frames for Red, Blue and Yellow.
+Each caller passes ``now`` in PlayClock frames, as the monitor does.
 """
 from .monitor import SPENT, STAND_DOWNS, STOOD_DOWN, Backoff, Monitor
 
-# Name of the table of failed attempts inside the monitor's saved state.
+# Name of the table of failed attempts inside the monitor's state.
 ATTEMPTS = 'no_route'
-# A target with no route waits about a game minute, doubled for each failure in a row and four times at most.
+# A target with no route waits a game minute, doubled for each failure in a row and four times at most.
 # A short first wait lets a route that a person or a failed step only closed for a moment come back soon.
-DECISIONS = Backoff(150, doublings=4)
 FRAMES = Backoff(3600, doublings=4)
 # Attempts remembered, oldest dropped first.
 REMEMBERED = 32

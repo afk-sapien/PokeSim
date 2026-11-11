@@ -3,13 +3,15 @@ from types import SimpleNamespace
 
 from pokesim.gen2 import collection, training
 from pokesim.gen2.menus import ChangeBox, Release, Use
-from pokesim.gen2.standdown import (STAND_DOWN, TRAINING_DECISIONS, carry_over, hunt_key, migrate, pc_key,
-                                    search_expected, stalled_objectives, standing_down, team_key, train_key)
+from pokesim.gen2.standdown import (DECISION_FRAMES, STAND_DOWN, TRAINING_DECISIONS, carry_over, hunt_key, migrate,
+                                    pc_key, search_expected, stalled_objectives, standing_down, team_key, train_key)
+from pokesim.runtime.supervision import Tables
 
 
 class Policy:
     def __init__(self, goal, *, blocked=(), spare=None):
-        self.collection, self.decisions, self.menu = {}, 1000, None
+        self.collection, self.decisions, self.clock, self.menu = {}, 1000, 1000, None
+        self.monitor_tables = Tables(clock=lambda: self.clock)
         self.goal = SimpleNamespace(key=goal)
         self.data = SimpleNamespace(items={'SUPER_ROD': 61, 'EXP_SHARE': 57})
         self.blocked, self.spare = list(blocked), spare
@@ -32,7 +34,7 @@ def test_a_refused_rod_drops_the_hunt_and_stands_it_down():
     assert collection.arrive(policy, SimpleNamespace()) == 'wait'
     assert policy.menu is None and policy.collection['target'] is None
     assert standing_down(policy, hunt_key(223))
-    policy.decisions += STAND_DOWN
+    policy.clock += STAND_DOWN
     assert not standing_down(policy, hunt_key(223))
 
 
@@ -74,26 +76,30 @@ def test_a_reload_keeps_the_stalled_hunt_and_training_standing_down():
     stuck = Policy('collection_train_pc')
     stuck.collection['target'] = {'species': 201}
     stuck.collection['training'] = {'identity': [5, [1, 2, 3, 4, 5]]}
-    stuck.collection['stood_down'] = {hunt_key(223): 900}
+    stuck.monitor_tables['stood_down'] = {hunt_key(223): 900}
     stalled = stalled_objectives(stuck)
+    # The reload rewinds the save but keeps the monitor's tables, and the PlayClock runs on.
     restored = Policy(None)
-    restored.decisions = 400
+    restored.monitor_tables, restored.decisions, restored.clock = stuck.monitor_tables, 400, 1200
     restored.collection = {'target': {'species': 201}, 'training': {'identity': [5, [1, 2, 3, 4, 5]]}}
     carry_over(restored, stalled)
     assert restored.collection['target'] is None and restored.collection['training'] is None
     for key in (hunt_key(201), train_key([5, [1, 2, 3, 4, 5]]), hunt_key(223)):
         assert standing_down(restored, key)
-    assert restored.collection['stood_down'][hunt_key(223)] == 400
+    # The earlier stand-down keeps its time.
+    assert restored.monitor_tables['stood_down'][hunt_key(223)] == 900
 
 
 def test_a_reload_during_team_assembly_stands_the_team_down():
     stuck = Policy('collection_activity_team')
     stuck.collection['activity_team'] = ['a', 'b']
+    stuck.monitor_tables['progress_frames'] = {pc_key(['a', 'b']): 3}
     restored = Policy(None)
-    restored.collection = {'activity_team': ['a', 'b'], 'progress_frames': {pc_key(['a', 'b']): 3}}
+    restored.monitor_tables = stuck.monitor_tables
+    restored.collection = {'activity_team': ['a', 'b']}
     carry_over(restored, stalled_objectives(stuck))
     assert 'activity_team' not in restored.collection
-    assert pc_key(['a', 'b']) not in restored.collection['progress_frames']
+    assert pc_key(['a', 'b']) not in restored.monitor_tables['progress_frames']
     assert standing_down(restored, team_key(['a', 'b']))
 
 
@@ -108,14 +114,14 @@ def test_training_stands_down_after_three_trips_without_experience_and_gains_res
         training.observe(policy, view)
     gained = SimpleNamespace(party=(SimpleNamespace(trainer_id=1, dvs=(1, 2, 3, 4, 5), experience=1100),))
     training.observe(policy, gained)
-    assert policy.collection['training'] and not policy.collection['progress_frames']
+    assert policy.collection['training'] and not policy.monitor_tables['progress_frames']
     for _ in range(budget):
         policy.decisions += 1
         training.observe(policy, gained)
     assert policy.collection['training'] is None
     # The trip had gained experience, so it waits the base time only.
     assert standing_down(policy, train_key(training.identity(trainee)))
-    assert not policy.collection['stand_downs']
+    assert not policy.monitor_tables['stand_downs']
 
 
 def test_a_better_dv_hunt_is_budgeted_per_catch():
@@ -174,8 +180,18 @@ def test_battles_on_the_way_do_not_spend_a_hunt_budget():
 def test_an_older_save_moves_its_counts_onto_the_monitor():
     policy = Policy(None)
     policy.collection = {'carrier_decisions': {'61': 500}, 'activity_team': ['a'], 'activity_blocked': 5,
-                         'postgame': {'activity': {'kind': 'shiny', 'unavailable_steps': 4}}}
-    migrate(policy)
-    assert policy.collection['progress_frames'] == {pc_key(['a']): 5}
+                         'postgame': {'activity': {'kind': 'shiny', 'unavailable_steps': 4}},
+                         'stood_down': {hunt_key(40): 900}, 'stand_downs': {hunt_key(40): 2}}
+    policy.clock = 50000
+    migrate(policy, 1000)
+    tables = policy.monitor_tables
+    assert tables['progress_frames'] == {pc_key(['a']): 5} and tables['stand_downs'] == {hunt_key(40): 2}
+    # The save stood 100 decisions after the stand-down, so it keeps the wait it had left, in frames.
+    assert tables['stood_down'] == {hunt_key(40): 50000 - 100 * DECISION_FRAMES}
+    assert 'stood_down' not in policy.collection and 'progress_frames' not in policy.collection
     assert 'carrier_decisions' not in policy.collection and 'activity_blocked' not in policy.collection
     assert 'unavailable_steps' not in policy.collection['postgame']['activity']
+    # An adventure that has tables already keeps its own, as a reload to an older save does.
+    policy.collection['stood_down'] = {hunt_key(41): 999}
+    migrate(policy, 1000)
+    assert hunt_key(41) not in tables['stood_down'] and 'stood_down' not in policy.collection

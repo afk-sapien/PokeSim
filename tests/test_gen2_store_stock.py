@@ -35,7 +35,8 @@ def case(data, party=(), stored=(), items=(), money=50000, events=(), owned=(), 
              *store_stock.ONE_TIME.values()} - set(events)
     snapshot = SimpleNamespace(party=tuple(party), stored=tuple(stored), items=list(items), money=money,
                                owned=frozenset(owned), daycare=(), event=lambda name: name in spent)
-    state = SimpleNamespace(data=data, collection={}, decisions=100, demand={}, peers=0, peer_supply=set(),
+    state = SimpleNamespace(data=data, collection={}, monitor_tables={}, decisions=100, clock=100, demand={}, peers=0,
+                            peer_supply=set(),
                             goal=None, menu=None, clerk_present=lambda *args: True,
                             person=lambda snap, key, label, place, script: SimpleNamespace(
                                 key=key, label=label, map=place, script=script))

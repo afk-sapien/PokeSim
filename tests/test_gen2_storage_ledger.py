@@ -33,6 +33,7 @@ class Policy:
             items={'EVERSTONE': EVERSTONE, 'BITTER_BERRY': BERRY}, item_names={}, species={},
             item_attributes={BERRY: {'price': 20, 'pocket': 'ITEM'}, EVERSTONE: {'price': 200, 'pocket': 'ITEM'}})
         self.demand, self.collection, self.decisions, self.menu = {}, {}, 0, None
+        self.monitor_tables, self.clock = {}, 0
         self.refused = list(refused)
 
     def trade_preferences(self):
@@ -335,7 +336,7 @@ def visit(party_size, room):
     from pokesim.gen2.policy import Goal, Policy as Gen2Policy
     view = SimpleNamespace(party=[mon(None, box=None)] * party_size, stored=[], map=1,
                            box_counts=(BOX_CAPACITY - room,) + (BOX_CAPACITY,) * 13)
-    fake = SimpleNamespace(collection={}, in_league=lambda view: False, in_transmitter_room=lambda view: False,
+    fake = SimpleNamespace(collection={}, monitor_tables={}, clock=0, in_league=lambda view: False, in_transmitter_room=lambda view: False,
                            data=SimpleNamespace(map_ids={'POKECENTER_2F': 2}), storage_target=lambda view: object(),
                            storage_goal=lambda view: Goal('storage', 'PC', 'GOLDENROD_POKECENTER_1F', 1, 1))
     memory = SimpleNamespace(byte=lambda name: 0)

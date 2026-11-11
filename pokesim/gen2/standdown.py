@@ -1,20 +1,25 @@
 """Objectives that cannot progress stand down for a while instead of repeating forever.
 
 A hunt or a training project that stalled is remembered by key: ``hunt:<species>`` or
-``train:<identity>``. A reload restores the policy from an older checkpoint, so the emulator
-carries these keys over and the restored run does not walk straight back into the same trouble.
+``train:<identity>``. A reload for lack of progress stands these keys down in the policy it
+restores, so the run does not walk straight back into the same trouble.
 
-The shared ``Monitor`` keeps the record in the policy's collection state, counted in decisions.
+The shared ``Monitor`` keeps the record in the supervisor's tables (runtime/supervision.py), which a
+reload keeps. A stand-down waits on the PlayClock and a budget counts decisions.
 """
 import json
 
 # search_expected is shared now. Hunts and the postgame still take it from here.
-from ..planning.cost import DECISIONS_PER_BATTLE, DECISIONS_PER_MAP
+from ..planning.cost import DECISIONS_PER_BATTLE, DECISIONS_PER_MAP, FRAMES_PER_BATTLE
 from ..planning.cost import search_expected as search_expected
 from ..planning.monitor import SPENT, STAND_DOWNS, STOOD_DOWN, Backoff, Monitor
+from ..planning.unreachable import ATTEMPTS
 
-# Decisions an objective that stood down waits before it is tried again.
-STAND_DOWN = 50000
+# Frames per decision, the unit of the hunt and postgame estimates: a wild battle takes about 1500
+# frames and 75 decisions with the walking that finds it.
+DECISION_FRAMES = FRAMES_PER_BATTLE // DECISIONS_PER_BATTLE
+# Frames an objective that stood down waits before it is tried again, 50000 decisions.
+STAND_DOWN = 50000 * DECISION_FRAMES
 BACKOFF = Backoff(STAND_DOWN)
 
 # A goal stands down once it spent three times its expected decisions (planning/cost.py) without
@@ -25,7 +30,7 @@ TRAINING_DECISIONS = 4 * DECISIONS_PER_MAP + DECISIONS_PER_BATTLE
 
 
 def monitor(policy, backoff=BACKOFF):
-    return Monitor(policy.collection, backoff=backoff)
+    return Monitor(policy.monitor_tables, backoff=backoff)
 
 
 def exhausted(policy, key, budget, amount=1, events=()):
@@ -46,7 +51,7 @@ def spend(policy, key, expected, events=(), amount=1, progressed=False):
     budget = min(MOST_DECISIONS, round(3 * expected))
     if not exhausted(policy, key, budget, amount, events):
         return False
-    monitor(policy).stand_down(key, policy.decisions, progressed=progressed)
+    monitor(policy).stand_down(key, policy.clock, progressed=progressed)
     return True
 
 
@@ -126,20 +131,25 @@ def pc_key(team):
 
 
 def stand_down(policy, key, backoff=BACKOFF):
-    return monitor(policy, backoff).stand_down(key, policy.decisions)
+    return monitor(policy, backoff).stand_down(key, policy.clock)
 
 
 def standing_down(policy, key, backoff=BACKOFF):
     until = monitor(policy, backoff).until(key)
-    return until is not None and policy.decisions < until
+    return until is not None and policy.clock < until
 
 
-def migrate(policy):
-    """Move a save's older retry records onto the monitor."""
+def migrate(policy, decisions):
+    """Move a save's older retry records onto the monitor's tables.
+
+    A save from before the tables left it kept them in its collection state, timed in decisions, and
+    stood at ``decisions``. An adventure with no tables yet takes them, each stand-down with the wait it
+    had left (runtime/supervision.py). Otherwise the save's are older than the adventure's and are dropped.
+    """
     state = policy.collection
     failed = state.pop('activity_failed', None)
     if isinstance(failed, dict) and failed.get('team') is not None:
-        state.setdefault(STOOD_DOWN, {})[team_key(failed['team'])] = failed.get('until', 0) - STAND_DOWN
+        state.setdefault(STOOD_DOWN, {})[team_key(failed['team'])] = failed.get('until', 0) - STAND_DOWN // DECISION_FRAMES
     # Older saves counted carrier decisions, refused PC presses and loading steps in their own fields.
     state.pop('carrier_decisions', None)
     # Older saves kept the decision of each hunt's last failed attempt, which a stand-down replaces.
@@ -152,6 +162,8 @@ def migrate(policy):
         activity.pop('unavailable_steps', None)
     from .tower import migrate as tower
     tower(policy)
+    saved = {name: state.pop(name) for name in (STOOD_DOWN, STAND_DOWNS, SPENT, ATTEMPTS) if name in state}
+    policy.monitor_tables.adopt(saved, decisions, DECISION_FRAMES)
 
 
 def stalled_objectives(policy):
@@ -174,20 +186,15 @@ def stalled_objectives(policy):
     team = state.get('activity_team') if goal is not None and goal.key == 'collection_activity_team' else None
     if team:
         keys.add(team_key(team))
-    return {'keys': sorted(keys), 'earlier': dict(state.get(STOOD_DOWN) or {}),
-            'counts': dict(state.get(STAND_DOWNS) or {}), 'team': team}
+    return {'keys': sorted(keys), 'team': team}
 
 
 def carry_over(policy, stalled):
-    """Stand the stalled objectives down in the policy a reload just restored."""
+    """Stand the stalled objectives down in the policy a reload just restored.
+
+    The earlier stand-downs need no carrying, since the reload keeps the monitor's tables.
+    """
     state = policy.collection
-    stood = state.setdefault(STOOD_DOWN, {})
-    for key, when in stalled['earlier'].items():
-        # Decisions rewind with the reload, so an earlier stand-down is kept at most from now.
-        stood[key] = min(stood.get(key, when), when, policy.decisions)
-    counts = state.setdefault(STAND_DOWNS, {})
-    for key, count in stalled.get('counts', {}).items():
-        counts[key] = max(counts.get(key, 0), count)
     for key in stalled['keys']:
         stand_down(policy, key)
     target = state.get('target')

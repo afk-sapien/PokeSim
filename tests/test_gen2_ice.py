@@ -94,6 +94,7 @@ def test_a_policy_with_no_route_records_the_attempt_without_a_reload():
     policy.data = pocket
     policy.nav, policy.stranded, policy.unreachable_waits = Navigator(pocket), 0, 0
     policy.collection, policy.decisions, policy.failure = {}, 0, None
+    policy.monitor_tables, policy.clock = {}, 0
     policy.goal = SimpleNamespace(key='far_door', label='Reach the far door', map_name='TEST_HALL', x=0, y=0)
     where = SimpleNamespace(**vars(snapshot(0, 0)), map_name='Test Ice Room')
     # The ice pocket has no way out, so the first turn with no route records the attempt.

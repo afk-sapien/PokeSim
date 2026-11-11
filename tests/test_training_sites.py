@@ -119,7 +119,7 @@ def test_a_stint_without_experience_fails_its_site_for_the_next_trainee(data):
     assert policy.collection['training'] is None
     key = site_key(road)
     assert standing_down(policy, key)
-    assert policy.collection[STAND_DOWNS][key] == 1
+    assert policy.monitor_tables[STAND_DOWNS][key] == 1
     # The next trainee does not take the same walk.
     assert training.site(policy, snapshot, {'map': 'VICTORY_ROAD'}, second) not in {None, 'VICTORY_ROAD'}
 

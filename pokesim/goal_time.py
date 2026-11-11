@@ -31,7 +31,7 @@ def gen1_view(policy):
 def gen2_view(policy):
     """The current goal and the stand-down record of Gold, Silver and Crystal."""
     goal = getattr(policy, 'goal', None)
-    record = getattr(policy, 'collection', None)
+    record = getattr(policy, 'monitor_tables', None)
     return (goal.key, goal.label) if goal else None, record if isinstance(record, dict) else {}
 
 

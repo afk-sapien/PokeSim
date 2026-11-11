@@ -17,6 +17,7 @@ def policy_with(toward, goal):
     policy.goal = goal
     policy.stranded, policy.unreachable_waits = 0, 0
     policy.collection, policy.decisions, policy.failure = {}, 0, None
+    policy.monitor_tables, policy.clock = {}, 0
     policy.walk = lambda snapshot, memory, path: SimpleNamespace(button=path[0])
     return policy
 

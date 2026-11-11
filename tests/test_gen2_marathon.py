@@ -38,8 +38,9 @@ def at(point, frame, *, flags=None, **extra):
 
 
 def runner_policy(data, finished=4):
-    policy = SimpleNamespace(data=data, collection={}, completed={'champion': 1, 'cut': 1, 'sudowoodo': 1},
-                             menu=None, decisions=1000, no_room=lambda snapshot: False, memory=None, goal=None)
+    policy = SimpleNamespace(data=data, collection={}, monitor_tables={}, menu=None, decisions=1000, clock=1000,
+                             completed={'champion': 1, 'cut': 1, 'sudowoodo': 1},
+                             no_room=lambda snapshot: False, memory=None, goal=None)
     postgame.state(policy)['finished'] = finished
     return policy
 
@@ -107,8 +108,9 @@ def test_entry_needs_champion_four_activities_cut_sudowoodo_and_the_cooldown(dat
 
 
 def test_older_saves_count_their_recent_activities_as_finished(data):
-    policy = SimpleNamespace(data=data, collection={'postgame': {'activity': None, 'recent': ['league'] * 6,
-                                                                 'searches': {}, 'shiny_break': 0, 'shiny_maps': []}})
+    policy = SimpleNamespace(data=data, monitor_tables={}, clock=0,
+                             collection={'postgame': {'activity': None, 'recent': ['league'] * 6,
+                                                      'searches': {}, 'shiny_break': 0, 'shiny_maps': []}})
     assert postgame.state(policy)['finished'] == 6
     postgame.state(policy)['activity'] = {'kind': 'league'}
     postgame.finish(policy)

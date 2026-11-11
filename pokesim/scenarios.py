@@ -221,7 +221,7 @@ def gen2_tower(run, rested=False, first=False):
     policy = run.policy
     if rested:
         tracker = monitor(policy)
-        for key in [key for key in policy.collection.get(STOOD_DOWN) or {} if key.startswith('tower:')]:
+        for key in [key for key in policy.monitor_tables.get(STOOD_DOWN) or {} if key.startswith('tower:')]:
             tracker.clear(key)
     if first:
         policy.completed.pop('tower', None)
@@ -473,7 +473,7 @@ class Gen2Watch(PlannerMarks):
 
     def stand_downs(self):
         policy = getattr(self.run, 'policy', None)
-        return getattr(policy, 'collection', self.collection).get('stood_down') or {}
+        return (getattr(policy, 'monitor_tables', None) or {}).get('stood_down') or {}
 
     def marks(self, snapshot=None):
         """What the planner just did, as (kind, detail, title): a ladder pick, a timed hunt, a Pokédex

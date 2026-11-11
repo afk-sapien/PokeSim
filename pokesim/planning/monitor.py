@@ -4,19 +4,19 @@ A goal is known by its key. The monitor counts the frames each key spends, clear
 goal makes progress, and says when a goal has spent its budget without any. A goal that stands down
 waits before it is tried again, and the wait doubles with each stand-down in a row.
 
-The monitor keeps no clock of its own. Each caller passes ``now`` in its own unit, which is decisions
-for Gold, Silver and Crystal and PlayClock frames for Red, Blue and Yellow, and the waits are in the same
-unit. The state lives in a dictionary the caller hands it. Red, Blue and Yellow keep theirs in the
-supervisor's tables (runtime/supervision.py), which a reload keeps, and Gold, Silver and Crystal save
-theirs with the policy. The frame counts behind ``shares`` are kept for the session only.
+The monitor keeps no clock of its own. Each caller passes ``now`` in PlayClock frames, and the waits are
+in frames too. A budget counts in the caller's unit, which is frames for Red, Blue and Yellow and
+decisions for Gold, Silver and Crystal. The state lives in a dictionary the caller hands it, which in
+both generations is the supervisor's tables (runtime/supervision.py), and a reload keeps them. The frame
+counts behind ``shares`` are kept for the session only.
 """
 from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
 
-# Names inside the saved state dictionary. ``stood_down`` maps a key to the time it last stood down,
-# which is the format Gold, Silver and Crystal saves already use.
+# Names inside the state dictionary. ``stood_down`` maps a key to the frame it last stood down, under
+# the name older Gold, Silver and Crystal saves used.
 STOOD_DOWN = 'stood_down'
 STAND_DOWNS = 'stand_downs'
 SPENT = 'progress_frames'
