@@ -22,6 +22,8 @@ BOX_CAPACITY = 20
 BOX_COUNT = 14
 BOX_SIZE = 1102
 PC_ITEM_CAPACITY = 50
+# Event flags at wEventFlags, eight to a byte.
+NUM_EVENTS = 0x800
 TIME_OF_DAY = ('morning', 'day', 'night', 'darkness')
 WEEKDAYS = ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
 FACING = ('down', 'up', 'left', 'right')

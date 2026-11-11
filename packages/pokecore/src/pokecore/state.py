@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from . import gen1
+from . import gen1, storage
 from .dvs import hp_dv
 from .gen1_ui import read_screen
 from .gen2 import state as gen2_state
@@ -30,6 +30,9 @@ ABSENT = {
         'Mon.held_item': 'Gen I has no held items',
         'Mon.friendship': 'Gen I party structures have no friendship byte',
         'Mon.pokerus': 'Gen I has no Pokérus',
+        'StoredMon.held_item': 'Gen I has no held items',
+        'StoredMon.friendship': 'Gen I box records have no friendship byte',
+        'StoredMon.pokerus': 'Gen I has no Pokérus',
         'Player.gender': 'Gen I has one player character',
         'Player.moms_money': 'Gen I has no savings with Mom',
         'MapState.group': 'Gen I numbers maps without groups',
@@ -40,6 +43,9 @@ ABSENT = {
     },
     2: {
         'Mon.types': 'Gen II structures do not store types, which come from the species table',
+        'StoredMon.types': 'Gen II structures do not store types, which come from the species table',
+        'StoredMon.hp': 'Gen II box records keep no HP, as a deposited Pokémon is healed',
+        'StoredMon.status': 'Gen II box records keep no status, as a deposited Pokémon is healed',
     },
 }
 
@@ -105,6 +111,62 @@ class Party:
 
     def __getitem__(self, index):
         return self.mons[index]
+
+
+@dataclass(frozen=True, slots=True)
+class StoredMon:
+    """One Pokémon in a PC box.
+
+    ``box`` and ``position`` count from 0. The other fields are those of :class:`Mon`.
+    A Gen I box record keeps HP, status and types but no stats, and a Gen II one keeps
+    the held item, friendship and Pokérus but no HP, status or stats. Records are
+    not filtered, so a corrupt box shows as it is.
+    """
+    box: int
+    position: int
+    species: int
+    dex: int | None
+    nick: str
+    ot_name: str
+    level: int
+    moves: tuple[int, ...]
+    pp: tuple[int, ...]
+    pp_ups: tuple[int, ...]
+    max_pp: tuple[int, ...] | None
+    experience: int
+    dvs: tuple[int, ...]
+    stat_exp: tuple[int, ...]
+    trainer_id: int
+    egg: bool
+    hp: int | None
+    status: int | None
+    types: tuple[int, int] | None
+    held_item: int | None
+    friendship: int | None
+    pokerus: int | None
+
+    @property
+    def shiny(self) -> bool:
+        """Shiny DVs, as :attr:`Mon.shiny`."""
+        return self.dvs[2:] == (10, 10, 10) and bool(self.dvs[1] & 2)
+
+
+@dataclass(frozen=True, slots=True)
+class Boxes:
+    """The PC boxes, counted from 0.
+
+    ``active`` is the selected box, or None before a Gen I game has selected one.
+    ``counts`` holds each box's count, or None for a box in a cartridge RAM bank the
+    memory cannot serve, such as an inactive Gen I box in flat memory. Gen I counts
+    inactive boxes as 0 until the game initializes them. ``mons`` lists every stored
+    Pokémon in box order.
+    """
+    active: int | None
+    counts: tuple[int | None, ...]
+    mons: tuple[StoredMon, ...]
+
+    def box(self, index) -> tuple[StoredMon, ...]:
+        return tuple(mon for mon in self.mons if mon.box == index)
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,15 +304,22 @@ class UiState:
 
 @dataclass(frozen=True, slots=True)
 class GameState:
-    """The typed state. ``seen`` and ``owned`` are national Pokédex numbers."""
+    """The typed state.
+
+    ``seen`` and ``owned`` are national Pokédex numbers. ``events`` holds the indices,
+    counted from 0, of the event flags that are set, the values of the ``EVENT_``
+    constants in the pret disassemblies.
+    """
     game: str
     generation: int
     player: Player
     map: MapState
     party: Party
+    boxes: Boxes
     bag: Bag
     seen: frozenset[int]
     owned: frozenset[int]
+    events: frozenset[int]
     battle: BattleState
     ui: UiState
 
@@ -427,6 +496,38 @@ def _gen2_battle(mem):
     )
 
 
+def _max_pp(move_data, moves, pp_ups):
+    if move_data is None:
+        return None
+    return tuple(max_pp(move_data.get(move, {}).get('pp', 0), ups) for move, ups in zip(moves, pp_ups))
+
+
+def _gen1_boxes(mem, move_data):
+    counts = storage.read_box_counts(mem)
+    if not counts:
+        return Boxes(active=None, counts=(), mons=())
+    active = mem[gen1.W_CURRENT_BOX] & 0x7F
+    records = storage.read_box_records(mem, counts)
+    read = {record.box: record.count for record in records}
+    mons = []
+    for record in records:
+        bank, base = storage.box_location(record.box, active)
+        ots = storage.memory_bytes(mem, bank, base + gen1.BOX_OTS_OFFSET, record.count * 11)
+        for mon in record.mons:
+            start = mon.position * 33
+            pp_ups = tuple(value >> 6 for value in record.structs[start + 29:start + 33])
+            mons.append(StoredMon(
+                box=record.box, position=mon.position, species=mon.species, dex=GEN1_DEX.get(mon.species),
+                nick=mon.nick, ot_name=gen1.decode_text(ots[mon.position * 11:(mon.position + 1) * 11]),
+                level=mon.level, moves=mon.moves, pp=mon.pp, pp_ups=pp_ups,
+                max_pp=_max_pp(move_data, mon.moves, pp_ups), experience=mon.experience, dvs=mon.dvs,
+                stat_exp=mon.stat_exp, trainer_id=mon.trainer_id, egg=False, hp=mon.hp, status=mon.status,
+                types=mon.types, held_item=None, friendship=None, pokerus=None,
+            ))
+    return Boxes(active=active, counts=tuple(read.get(box, None if count else 0) for box, count in enumerate(counts)),
+                 mons=tuple(mons))
+
+
 def _gen1(memory, game, move_data):
     mem = red_layout(memory, game)
     party = []
@@ -459,10 +560,16 @@ def _gen1(memory, game, move_data):
     # An owned flag without its seen flag is not Pokédex data, as in the snapshot reader.
     seen = frozenset(gen1.flag_bits(bytes(mem[gen1.W_DEX_SEEN:gen1.W_DEX_SEEN + 19])))
     owned = frozenset(gen1.flag_bits(bytes(mem[gen1.W_DEX_OWNED:gen1.W_DEX_OWNED + 19]))) & seen
+    flags = bytes(mem[gen1.W_EVENT_FLAGS:gen1.W_EVENT_FLAGS + gen1.NUM_EVENTS // 8])
     return GameState(game=game, generation=1, player=player,
                      map=MapState(map=number, group=None, number=number, x=mem[gen1.W_X], y=mem[gen1.W_Y]),
-                     party=Party(tuple(party)), bag=bag, seen=seen, owned=owned, battle=_gen1_battle(mem),
-                     ui=_gen1_ui(mem, game))
+                     party=Party(tuple(party)), boxes=_gen1_boxes(mem, move_data), bag=bag, seen=seen,
+                     owned=owned, events=_events(flags), battle=_gen1_battle(mem), ui=_gen1_ui(mem, game))
+
+
+def _events(flags):
+    # flag_bits counts from 1.
+    return frozenset(index - 1 for index in gen1.flag_bits(flags))
 
 
 def _gen2_mon(row, move_data):
@@ -470,13 +577,31 @@ def _gen2_mon(row, move_data):
     return Mon(
         species=species, dex=species if 1 <= species <= 251 else None, nick=row['nickname'],
         ot_name=row['ot_name'], level=row['level'], hp=row['hp'], status=row['status'], moves=row['moves'],
-        pp=row['pp'], pp_ups=row['pp_ups'],
-        max_pp=None if move_data is None else tuple(
-            max_pp(move_data.get(move, {}).get('pp', 0), ups) for move, ups in zip(row['moves'], row['pp_ups'])),
+        pp=row['pp'], pp_ups=row['pp_ups'], max_pp=_max_pp(move_data, row['moves'], row['pp_ups']),
         stats=row['stats'], experience=row['experience'], dvs=row['dvs'], stat_exp=row['stat_exp'],
         trainer_id=row['trainer_id'], egg=row['egg'], types=None, held_item=row['held_item'],
         friendship=row['friendship'], pokerus=pokerus['strain'] << 4 | pokerus['days'],
     )
+
+
+def _gen2_boxes(memory, game, move_data):
+    counts, active = gen2_state.read_box_counts(memory, game)
+    mons = []
+    for box, count in enumerate(counts):
+        if not count:
+            continue
+        for position, row in enumerate(gen2_state.read_box_structs(memory, game, box)):
+            species, pokerus = row['species'], row['pokerus']
+            mons.append(StoredMon(
+                box=box, position=position, species=species, dex=species if 1 <= species <= 251 else None,
+                nick=row['nickname'], ot_name=row['ot_name'], level=row['level'], moves=row['moves'],
+                pp=row['pp'], pp_ups=row['pp_ups'], max_pp=_max_pp(move_data, row['moves'], row['pp_ups']),
+                experience=row['experience'], dvs=row['dvs'], stat_exp=row['stat_exp'],
+                trainer_id=row['trainer_id'], egg=row['egg'], hp=None, status=None, types=None,
+                held_item=row['held_item'], friendship=row['friendship'],
+                pokerus=pokerus['strain'] << 4 | pokerus['days'],
+            ))
+    return Boxes(active=active, counts=counts, mons=tuple(mons))
 
 
 def _gen2(memory, game, move_data):
@@ -484,6 +609,7 @@ def _gen2(memory, game, move_data):
     items = gen2_state.read_items(memory, game)
     dex = gen2_state.read_pokedex(memory, game)
     party = tuple(_gen2_mon(row, move_data) for row in gen2_state.read_party_structs(memory, game))
+    flags = gen2_state.memory_reader(memory, game).read('wEventFlags', gen2_state.NUM_EVENTS // 8)
     return GameState(
         game=game, generation=2,
         player=Player(
@@ -495,9 +621,10 @@ def _gen2(memory, game, move_data):
         ),
         map=MapState(map=player['map'], group=player['map_group'], number=player['map_number'],
                      x=player['x'], y=player['y']),
-        party=Party(party),
+        party=Party(party), boxes=_gen2_boxes(memory, game, move_data),
         bag=Bag(items=items['items'], pc_items=items['pc'], balls=items['balls'],
                 key_items=tuple(item for item, _ in items['key']), tms_hms=items['tms_hms']),
-        seen=dex['seen'], owned=dex['caught'], battle=_gen2_battle(gen2_state.memory_reader(memory, game)),
+        seen=dex['seen'], owned=dex['caught'], events=_events(flags),
+        battle=_gen2_battle(gen2_state.memory_reader(memory, game)),
         ui=_gen2_ui(memory, game),
     )
