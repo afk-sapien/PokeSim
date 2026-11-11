@@ -23,24 +23,19 @@ class Raw:
         return bytes(self.data[start:stop])
 
 
-class Owner:
-    def __init__(self):
-        self.raw_memory = Raw()
-
-
 def machine(red):
     """A Yellow emulator stand-in whose raw RAM holds the Red-layout bytes `red` at Yellow addresses."""
     from types import SimpleNamespace
-    owner = Owner()
-    owner.raw_memory.data[:] = red
-    for a in [*range(0xC000, 0xE000), *yellow._HRAM]:
-        owner.raw_memory.data[yellow.address(a)] = red[a]
-    return SimpleNamespace(memory=yellow.YellowMemory(owner), raw_memory=owner.raw_memory)
+    raw = Raw()
+    raw.data[:] = red
+    for a in [*range(0xC000, 0xE000), *yellow.HRAM]:
+        raw.data[yellow.address(a)] = red[a]
+    return SimpleNamespace(memory=yellow.YellowMemory(raw), raw_memory=raw)
 
 
 @pytest.fixture
 def memory():
-    return yellow.YellowMemory(Owner())
+    return yellow.YellowMemory(Raw())
 
 
 def test_shifted_wram_reads_one_byte_lower(memory):
@@ -104,12 +99,23 @@ def test_snapshot_reads_pikachu_happiness(memory):
 
 def test_open_emulator_keeps_core_class_for_other_cartridges(tmp_path, monkeypatch):
     seen = []
-    monkeypatch.setattr(yellow, 'YellowEmulator', lambda rom, **kw: seen.append('yellow'))
+    from pokecore import yellow as core_yellow
+    monkeypatch.setitem(vars(core_yellow), 'YellowEmulator', lambda rom, **kw: seen.append('yellow'))
     rom = tmp_path / 'other.gb'
     rom.write_bytes(b'\0' * 32)
     yellow.open_emulator(rom, default=lambda rom, **kw: seen.append('core'), window='null')
     assert seen == ['core']
     assert not yellow.is_yellow(rom)
+
+
+def test_open_emulator_obeys_the_named_variant_of_a_patched_rom(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(yellow, 'YellowEmulator', lambda rom, **kw: seen.append(('yellow', kw)))
+    rom = tmp_path / 'patched.gbc'
+    rom.write_bytes(b'\0' * 32)
+    yellow.open_emulator(rom, default=lambda rom, **kw: seen.append(('core', kw)), yellow=True, window='null')
+    yellow.open_emulator(rom, default=lambda rom, **kw: seen.append(('core', kw)), yellow=False, window='null')
+    assert seen == [('yellow', {'window': 'null'}), ('core', {'window': 'null'})]
 
 
 # (Core constant, Red address, Yellow address) from the pret pokered and pokeyellow symbol files.
@@ -251,11 +257,7 @@ def red_and_yellow_games():
     for a in range(0xC000, 0xE000):
         raw.flat[yellow.address(a)] = red.flat[a]
     raw.banks = {bank: bytearray(data) for bank, data in red.banks.items()}
-
-    class Owner:
-        raw_memory = raw
-
-    return red, yellow.YellowMemory(Owner())
+    return red, yellow.YellowMemory(raw)
 
 
 def test_snapshot_of_a_shifted_save_matches_red():

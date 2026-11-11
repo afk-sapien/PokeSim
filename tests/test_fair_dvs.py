@@ -259,8 +259,8 @@ def test_the_audit_takes_fair_dvs_as_a_flag_or_an_adventure_key(monkeypatch):
 
 def test_yellow_rerolls_its_own_shifted_addresses():
     from pokesim import yellow
-    from test_yellow_memory import Owner
-    memory = yellow.YellowMemory(Owner())
+    from test_yellow_memory import Raw
+    memory = yellow.YellowMemory(Raw())
     raw = memory.raw.data
     raw[0xcff0:0xcff2] = b'\x98\x88'    # Yellow wEnemyMonDVs
     raw[0xd056] = 1                     # Yellow wIsInBattle

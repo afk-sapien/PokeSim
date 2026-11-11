@@ -287,19 +287,27 @@ def _yellow_emulator_class():
     return YellowEmulator
 
 
+def _yellow_emulator():
+    """The one ``YellowEmulator`` class, built on first use so importing this module needs no emulator."""
+    cls = globals().get('YellowEmulator')
+    if cls is None:
+        cls = globals()['YellowEmulator'] = _yellow_emulator_class()
+    return cls
+
+
 def __getattr__(name):
     if name == 'YellowEmulator':
-        cls = _yellow_emulator_class()
-        globals()['YellowEmulator'] = cls
-        return cls
+        return _yellow_emulator()
     raise AttributeError(name)
 
 
-def open_emulator(rom, default=None, **kwargs):
+def open_emulator(rom, default=None, yellow=None, **kwargs):
     """Construct the Core emulator that matches the cartridge.
 
     ``rom`` is a path or a binary stream. Yellow gets ``YellowEmulator``. Other
     cartridges use ``default``, which is the Core ``Emulator`` unless named.
+    ``yellow`` names the variant for a patched ROM, whose checksum no longer
+    identifies it.
     """
     import io
     from pathlib import Path
@@ -308,8 +316,8 @@ def open_emulator(rom, default=None, **kwargs):
         rom = io.BytesIO(raw)
     else:
         raw = Path(rom).read_bytes()
-    if is_yellow(raw):
-        return __getattr__('YellowEmulator')(rom, **kwargs)
+    if is_yellow(raw) if yellow is None else yellow:
+        return _yellow_emulator()(rom, **kwargs)
     if default is None:
         from .emulator import Emulator as default
     return default(rom, **kwargs)
