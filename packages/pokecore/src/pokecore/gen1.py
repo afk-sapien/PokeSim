@@ -115,6 +115,31 @@ BIT_GAVE_SAFFRON_GUARDS_DRINK = 6
 W_MOVEMENT_FLAGS = 0xD736
 BIT_SPINNING = 7    # riding the arrow tiles in the Rocket Hideout and Viridian Gym
 
+# Battle state, by pret/pokered name. W_IS_IN_BATTLE is 1 in a wild battle, 2 in a trainer battle,
+# and 0 or 0xFF outside one. wBattleMon and wEnemyMon are BATTLE_STRUCT bytes:
+# species, HP (2), party slot, status, two types, catch rate, four moves, DVs (2), level,
+# maximum HP, Attack, Defense, Speed and Special (2 each), then four PP bytes.
+BATTLE_STRUCT = 29
+W_PLAYER_MON_NUMBER = 0xCC2F    # wPlayerMonNumber: the party slot of the player's active mon, from 0
+W_TRANSFORMED_ENEMY_DVS = 0xCCEB    # wTransformedEnemyMonOriginalDVs, kept while the enemy is transformed
+W_ENEMY_MON_NICK = 0xCFDA
+W_ENEMY_HP = W_ENEMY_MON + 1
+W_ENEMY_DVS = W_ENEMY_MON + 12
+W_BATTLE_MON_NICK = 0xD009
+W_BATTLE_MON = 0xD014
+W_PLAYER_BATTLE_STATUS1 = 0xD062
+W_PLAYER_BATTLE_STATUS3 = 0xD064
+W_ENEMY_BATTLE_STATUS1 = 0xD067
+W_ENEMY_BATTLE_STATUS3 = 0xD069
+W_LINK_STATE = 0xD12B    # wLinkState: nonzero while a link is up, LINK_STATE_BATTLING (4) in a link battle
+# wBattleType values. BATTLE_TYPE_PIKACHU is Yellow's catch in Oak's lab.
+BATTLE_TYPE_OLD_MAN = 1
+BATTLE_TYPE_SAFARI = 2
+BATTLE_TYPE_PIKACHU = 4
+# Bits of the battle status bytes.
+BIT_USING_TRAPPING_MOVE = 5    # status 1: Wrap, Bind, Clamp or Fire Spin is holding the target
+BIT_TRANSFORMED = 3    # status 3
+
 PARTY_STRUCT = 44
 
 TILE_BOX_TL = 0x79

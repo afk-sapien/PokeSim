@@ -221,6 +221,11 @@ addresses from pret/pokered: `W_FACING` (a key of `FACINGS`), `W_WALK_COUNTER`,
 tiles). `W_SPRITE_STATE_DATA2`, `SPRITE_STRUCT`, `SPRITE_MAP_Y` and `SPRITE_MAP_X`
 locate sprite positions, and `sprite_tile(memory, sprite, *, version=None)` returns
 the (x, y) tile of sprite slot `sprite`: 0 is the player and 1 to 15 the map's objects.
+For battles it names `W_BATTLE_MON` and `W_ENEMY_MON` (each `BATTLE_STRUCT` bytes),
+their nicknames, `W_ENEMY_HP`, `W_ENEMY_DVS`, `W_TRANSFORMED_ENEMY_DVS`,
+`W_PLAYER_MON_NUMBER`, both sides' battle status 1 and 3 bytes with
+`BIT_USING_TRAPPING_MOVE` and `BIT_TRANSFORMED`, `W_LINK_STATE`, and the
+`BATTLE_TYPE_OLD_MAN`, `BATTLE_TYPE_SAFARI` and `BATTLE_TYPE_PIKACHU` values.
 Read Yellow through `yellow.red_layout` as with the other addresses.
 
 ## Game state
@@ -232,9 +237,9 @@ already in the Red layout. Gen II memory takes banked reads as `gen2.state` does
 The state is built from those decoders, reads the same bytes and never writes.
 
 `GameState` has `game`, `generation`, `player` (`Player`), `map` (`MapState`),
-`party` (`Party`, a sequence of `Mon`), `bag` (`Bag`), and `seen` and `owned` as
-national Pokédex numbers. Gen I drops an owned flag whose seen flag is clear, as the
-snapshot reader does.
+`party` (`Party`, a sequence of `Mon`), `bag` (`Bag`), `seen` and `owned` as
+national Pokédex numbers, and `battle` (`BattleState`). Gen I drops an owned flag
+whose seen flag is clear, as the snapshot reader does.
 
 - `Mon` has `species` (the cartridge's ID), `dex`, `nick`, `ot_name`, `level`, `hp`,
   `status`, `moves`, `pp`, `pp_ups`, `max_pp`, `stats`, `experience`, `dvs`,
@@ -248,6 +253,21 @@ snapshot reader does.
   times 256 plus the number.
 - `Bag` has `items` and `pc_items` as ID and quantity pairs, and Gen II's `balls`,
   `key_items` (IDs) and `tms_hms` (57 quantities).
+- `BattleState` has `kind` (one of `state.BATTLE_KINDS`: `none`, `wild`, `trainer`,
+  `tutorial` or `scripted`), the raw `battle_type`, `player_slot`, `player` and
+  `enemy` (`BattleMon`, None outside a battle or before a side sends a mon out), and
+  the flags `trapped`, `can_run` and `link`, plus `active` and `enemy_hp`.
+  `state.read_battle(memory, game)` reads it alone.
+- `BattleMon` has `species`, `dex`, `nick`, `level`, `hp`, `status`, `types`,
+  `moves`, `pp`, `stats`, `dvs`, `held_item` and `transformed`, plus `max_hp`.
+  `stats` reflects Transform, while `dvs` stay the mon's own.
+
+`tutorial` is Gen I's old man and Gen II's catching lesson. `scripted` is Yellow's
+Pikachu in Oak's lab, and Gen II's shiny Gyarados, Headbutt trees, trap battles,
+forced items, Celebi and Suicune. `trapped` means the enemy holds the player with a
+trapping move or, in Gen II, Mean Look or Spider Web. `can_run` follows the order in
+which each game's run command refuses. A link battle can always be run from, which
+forfeits it. Gen I still lets a trapped player run from a wild battle.
 
 A field a generation lacks is None, and `state.ABSENT` lists each one with its reason.
 The state holds IDs only. Names come from the caller's tables.
