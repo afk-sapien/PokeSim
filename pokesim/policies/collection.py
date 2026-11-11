@@ -104,7 +104,8 @@ def improves(s, species, dvs, rated=None, watch=None):
     copy without DV data, as in a compact snapshot, is not counted. ``rated`` rates the PC with extra
     rows as the next release does (the policy's pc_rated). Without it the PC is rated without trade
     settings or plans. A copy kept for an improve reason is noted on ``watch``, the goal watch, so
-    its catch writes an ``improve`` row.
+    its catch writes an ``improve`` row. Before the Champion a copy only its family would keep is not
+    caught (pcvalue.worth's story).
 
     This is the Gen I catch rule for an owned species. Every path that throws a ball at one asks it:
     an incidental catch, the Safari Zone, a DV hunt, a repeat project and a returned legendary. A
@@ -115,7 +116,8 @@ def improves(s, species, dvs, rated=None, watch=None):
     boxes = hasattr(s, 'box_counts')
     found = pcvalue.worth(_with_new(s, species, dvs, rated), missing=dex(species) not in s.owned,
                           headroom=storage_headroom(s) if boxes else None,
-                          active_box=getattr(s, 'active_box', None), room=catch_room(s) if boxes else None)
+                          active_box=getattr(s, 'active_box', None), room=catch_room(s) if boxes else None,
+                          story=not champion(s))
     if watch is not None:
         watch.expect(dex(species), dvs, found)
     return found.keep

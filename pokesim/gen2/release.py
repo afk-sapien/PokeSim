@@ -204,14 +204,17 @@ def keeps_another(policy, snapshot, dex, level=5, dvs=None):
     as the next release rates the PC, and not kept when the PC visit it brings would release it or a
     rarer copy for it (pcvalue.pushes_out). This is the Gen II catch rule for an owned species, the
     one every catch of an owned species asks with the wild DVs. A copy kept for an improve reason is
-    noted on the policy's goal watch, so its catch writes an ``improve`` row.
+    noted on the policy's goal watch, so its catch writes an ``improve`` row. Before the Hall of Fame
+    a catch only its family would keep is not taken.
     """
     from .. import pcvalue
     owned = getattr(snapshot, 'owned', None)
     boxes = hasattr(snapshot, 'box_counts')
+    # A catch before the Champion is not taken for its family alone (pcvalue.worth's story).
     found = pcvalue.worth(_with_new(policy, snapshot, dex, level, dvs), missing=owned is not None and dex not in owned,
                           headroom=headroom(snapshot) if boxes else None,
-                          active_box=getattr(snapshot, 'active_box', None), room=room(snapshot) if boxes else None)
+                          active_box=getattr(snapshot, 'active_box', None), room=room(snapshot) if boxes else None,
+                          story=bool(dvs) and not getattr(snapshot, 'hall_of_fame_count', 0))
     if dvs and (watch := getattr(policy, 'goal_watch', None)) is not None:
         watch.expect(dex, dvs, found)
     return found.keep

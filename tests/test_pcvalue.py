@@ -295,6 +295,18 @@ def test_a_bred_squirtle_is_kept_for_the_stages_the_pokedex_lacks():
     assert pcvalue.family_need({7: 1}, family) == {7: 2}
 
 
+def test_a_catch_before_the_champion_is_not_taken_for_its_family_alone():
+    # Blue's ladder caught extra copies on Route 25 for later stages, and the hurt party blacked out.
+    held = [mon(7, (0, 0), dvs=HELD)]
+    family = Inputs(rarity=TABLE.rarity, evolutions=SQUIRTLE, owned=frozenset({7}))
+    found = judge(mon(7, (0, 1), dvs=(0, 2, 2, 2, 2)), held, family, story=True)
+    assert not found.keep and found.reason == pcvalue.STORY_FIRST and not pcvalue.improvement(found)
+    # A rarer copy, a missing entry and a shiny are still caught during the story.
+    assert judge(mon(7, (0, 1), dvs=RAREST), held, family, story=True).keep
+    assert judge(mon(8, (0, 1), dvs=(0, 2, 2, 2, 2)), held, family, story=True, missing=True).keep
+    assert judge(mon(7, (0, 1), dvs=(0, 2, 10, 10, 10)), held, family, story=True).keep
+
+
 def test_an_open_hunt_locks_its_best_candidate():
     held = [mon(16, (0, 0), dvs=HELD), mon(16, (0, 1), dvs=(0, 2, 2, 2, 2))]
     hunt = Inputs(rarity=TABLE.rarity, focus=frozenset({16}))

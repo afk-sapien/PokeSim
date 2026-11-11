@@ -61,6 +61,8 @@ DEADLOCK = 'PC full: every stored Pokémon is Keep-locked, trained, a plan\'s or
 FULL_LOCKED = 'PC full'
 # The reasons for the best candidate of an open hunt and for a copy its evolution family needs.
 HUNT_BEST, FAMILY = 'Hunt best', 'Family'
+# The reason worth gives a catch before the Champion that only its family would keep (worth's story).
+STORY_FIRST = 'Story first'
 # A trainee whose next level takes more than this many wild battles at a map's top encounter level is
 # not worth training there. A level 41 partner on Route 11's level 15 grass gained a little in every
 # battle, so its development excursion never timed out.
@@ -305,7 +307,7 @@ def locked(row):
     return bool(entry.locked or entry.role or sum(entry.stat_exp) >= TRAINED_STAT_EXP or row.reason == HUNT_BEST)
 
 
-def worth(rows, *, missing=False, headroom=None, active_box=None, room=None):
+def worth(rows, *, missing=False, headroom=None, active_box=None, room=None, story=False):
     """The one worth call for a new copy, the last of ``rows``: the PC rated as the next release rates
     it. The copy may be a phantom whose DVs are not rolled yet, as a return or a gift is before it
     arrives. Then it beats held copies only through a plan, its family or by being the first.
@@ -317,7 +319,11 @@ def worth(rows, *, missing=False, headroom=None, active_box=None, room=None):
     or a rarer copy (pushes_out). ``room`` is the free party and box slots a catch may fill, and the
     last UPGRADE_RESERVE of them take only an upgrade (reserve_allows). With no slot free and nothing
     that may go, the PC is full of locked Pokémon and the answer is FULL_LOCKED, so the producer parks.
-    Rarity has no level term, so a higher level copy is no better."""
+    Rarity has no level term, so a higher level copy is no better.
+
+    ``story`` is True for a catch before the Champion. A copy only its family would keep is not
+    caught then (STORY_FIRST), since the Pokédex waits for the story and each extra catch battle costs
+    the walk HP and PP. The PC still keeps a family copy it holds, so a gift or a return is unchanged."""
     row = rows[-1]
     held = rows[:-1]
     reasons = tuple(label for label, points in row.parts if points) + ((row.reason,) if row.reason else ())
@@ -326,6 +332,8 @@ def worth(rows, *, missing=False, headroom=None, active_box=None, room=None):
         return Worth(False, FULL_LOCKED, row.rarity, **extra)
     needed = 0 if headroom is None else catch_visit(headroom, len(requested(rows)))
     found = verdict(rows, missing=missing, needed=needed, active_box=active_box)
+    if story and found.keep and found.reason == FAMILY:
+        found = Worth(False, STORY_FIRST, found.rarity, found.best)
     if found.keep and not reserve_allows(rows, room, missing=missing):
         found = Worth(False, 'Upgrade slot only', found.rarity, found.best)
     replaces = tuple(other.entry for other in releases(rows, needed, active_box)
