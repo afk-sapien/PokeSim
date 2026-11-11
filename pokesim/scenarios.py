@@ -614,16 +614,19 @@ def play(scenario, rom=None, progress=None):
         marks = getattr(watch, 'marks', None)
         # Wild battles against anything but an ``owned:`` target, each counted as it ends. These are
         # the battles min_flees asks the run to leave, so a hunt whose first wild battle is its target
-        # owes no run.
+        # owes no run. A battle already under way at the checkpoint is not one the hunt met, so it owes
+        # none either. The Gold Mareep hunt starts in a Silver Cave battle.
         name, _, value = (scenario.until or '').partition(':')
         target = int(value) if name == 'owned' and value.isdigit() else None
-        others, foe = 0, None
+        others, foe, inherited = 0, None, True
         while run.frame < end:
             snapshot = read()
             if snapshot.in_battle == 1:
-                foe = wild_dex(run.generation, snapshot)
-            elif foe is not None:
-                others, foe = others + (foe != target), None
+                foe = None if inherited else wild_dex(run.generation, snapshot)
+            else:
+                inherited = False
+                if foe is not None:
+                    others, foe = others + (foe != target), None
             gained, earned = watch.observe(snapshot)
             if gained or earned or run.generation == 2 and snapshot.started and run.waiting(snapshot):
                 progress_frame = run.frame
