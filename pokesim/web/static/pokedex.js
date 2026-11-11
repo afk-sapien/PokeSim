@@ -262,7 +262,8 @@ async function openCopy(index) {
       shown = true }
   } catch (_) {}
   try {
-    const response = await PokeSim.fetch('/api/pokedex/status?view=pc', {cache: 'no-store'})
+    // The popup never shows the PC values, which wait on the game, so it asks without them.
+    const response = await PokeSim.fetch('/api/pokedex/status?view=pc&values=0', {cache: 'no-store'})
     if (!response.ok) throw new Error('Unavailable')
     const full = await response.json()
     PokeSim.remember?.('pc', full)
