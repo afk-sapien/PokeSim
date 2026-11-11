@@ -145,6 +145,11 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   move, member or ball. Gold, Silver and Crystal had the bigger gap, and this closes the Tangela item.
   No rung moved down. gold/badges_4, silver/badges_6 and silver/badges_8 rose inside the tolerance and
   each plays its window differently, so the baseline stays.
+- The gate's story milestones, 2026-11-10: each rung in the baseline now lists the story milestones its
+  run earned inside the window, taken from a gate run at d918a2d1 on top of #463. No waste, stall or
+  error value moved. 16 rungs earn at least one milestone: every new_game rung, the champion_first and
+  kanto_entry rungs of Gold, Silver and Crystal, and gold/red and crystal/red. A rung that later earns more passes with a flag while its waste
+  stays within 10.0 points of this baseline, and one that earns fewer fails.
 
 ## Where each rung ended
 
