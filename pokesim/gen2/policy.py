@@ -345,13 +345,21 @@ class Policy:
         return goal_list(self, snapshot, Memory(self.memory, self.data), Goal, query, None if every else LIMIT)
 
     def pin_goal(self, snapshot, key):
-        """Set ``key``, a listed goal's key, as the next activity. A ValueError says why it cannot be."""
-        from ..planning.pin import UNAVAILABLE, Pin
-        goals, reason = self.goals(snapshot, every=True)
-        match = next((goal for goal in goals if goal['key'] == key), None)
+        """Set ``key``, a catalogue goal's key, as the next activity. A goal that cannot run now waits with
+        why in ``Pin.parked``. A ValueError says why ``key`` cannot be set."""
+        from ..planning.decide import Failure
+        from ..planning.pin import CHOOSE, Pin
+        from .collection import catalogue
+        if snapshot is None or self.memory is None:
+            raise ValueError('Not available now')
+        rows, reason = catalogue(self, snapshot, Memory(self.memory, self.data), Goal)
+        match = next((row for row in rows if row['key'] == key), None)
         if match is None:
-            raise ValueError(reason or UNAVAILABLE.capitalize())
-        self.pin = Pin(key, match['label'], started=getattr(self, 'ladder_pick', None) == key)
+            raise ValueError(reason or CHOOSE)
+        why = match['why_not']
+        parked = None if why is None else Failure(why['kind'], why['detail'])
+        self.pin = Pin(key, match['title'], started=parked is None and getattr(self, 'ladder_pick', None) == key,
+                       parked=parked)
         return self.pin
 
     def unpin_goal(self):
@@ -409,7 +417,7 @@ class Policy:
             ballot = Ballot()
         goal = self.story(snapshot, mem)
         if goal is not None:
-            ballot.offer(goal, self.story_site(), kind=self.story_kind())
+            ballot.offer(goal, self.story_site(), kind=self.story_kind(), pinned=self.ladder_pinned())
         training = self.boss_training(snapshot, goal)
         if training is not None:
             ballot.offer(training, 'boss')
@@ -421,6 +429,12 @@ class Policy:
         if getattr(self, 'collection_decision', None) != self.decisions:
             return 'story'
         return 'holds' if getattr(self, 'ladder_hold', None) is not None else 'ladder'
+
+    def ladder_pinned(self):
+        """Whether this decision's story goal is the ladder's pick of the goal a manager pinned."""
+        pin = getattr(self, 'pin', None)
+        return (pin is not None and pin.started and self.story_site() == 'ladder'
+                and pin.key == getattr(self, 'ladder_pick', None))
 
     def story_kind(self):
         """The ladder's rung as the kind of its pick, which the audit counts frames against."""

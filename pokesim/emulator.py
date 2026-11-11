@@ -862,7 +862,7 @@ class Emulator:
         path = self.store.write_checkpoint(state, manifest)
         tracer = getattr(self, 'tracer', None)
         if tracer is not None:
-            tracer.begin(path.stem, state, manifest, kept=path)
+            tracer.begin(path.stem, state, manifest, kept=path, pin=trace.pin_state(self.policy))
         # The first save after an achievement is the last one known to be from before any stall.
         capture.keep_before(self, path, snap)
         self.store.prune_autosaves(config.KEEP_AUTOSAVES)
@@ -1320,7 +1320,7 @@ class Emulator:
         while running and not getattr(self, "stopping", False):
             try:
                 if tracer is not None:
-                    tracer.ensure(self._manifest)
+                    tracer.ensure(self._manifest, self.policy)
                 while running and not self.commands.empty():
                     name, arg = self.commands.get_nowait()
                     trace.note(self, 'command', trace.command(name, arg))

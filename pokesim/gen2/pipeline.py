@@ -61,17 +61,21 @@ class Ballot:
     offers so far. ``park`` takes out an offer that cannot run now, and ``resume`` offers the errand an
     earlier decision picked again as it was picked. An offer's ``commit`` holds its writes, and only the
     offer that runs writes (rule A).
+
+    ``pinned`` is the key of the offer a manager pinned (planning/pin.py), which ranks after upkeep and
+    before every other source's goals. The source that offers the pin says so.
     """
 
     def __init__(self):
         self.offers = []
+        self.pinned = None
         self._decision = None
         self._committed = None
 
     @property
     def decision(self):
         if self._decision is None:
-            self._decision = decide.decide(self.offers)
+            self._decision = decide.decide(self.offers, self.pinned)
         return self._decision
 
     @property
@@ -89,10 +93,14 @@ class Ballot:
         self._decision = None
         return self.goal
 
-    def offer(self, goal, site, candidate=None, kind=None, commit=None):
+    def offer(self, goal, site, candidate=None, kind=None, commit=None, pinned=False):
         """Offer ``goal`` from ``site`` and return the goal that runs now. ``commit`` holds the writes that
-        run only if this offer is the one that runs."""
-        return self._add(offer(site, goal, candidate, kind, commit))
+        run only if this offer is the one that runs. ``pinned`` says the offer is the goal a manager
+        pinned."""
+        offered = offer(site, goal, candidate, kind, commit)
+        if pinned:
+            self.pinned = offered.candidate.key
+        return self._add(offered)
 
     def park(self, goal, reason=decide.NO_ROUTE):
         """Park the latest offer of ``goal``, which cannot run now for ``reason``, and return the goal that

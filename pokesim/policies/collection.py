@@ -752,7 +752,7 @@ class Collection:
         if not self.project:
             return False
         project = self.project
-        self.end_pin(self.project_key)
+        self.end_pin(self.project_key, failure)
         self.record_quality_search()
         self.finish_marathon(False)
         label = project_label(project)
@@ -1138,7 +1138,8 @@ class Collection:
         A new project is weighed here but not started: ``inner`` is its arbiter candidate, and ``start``
         writes the project and what it reads, which the overworld decision runs only when the step ends
         with the project's goal running (decide pipeline rule A). The abandon before the Champion, the idle
-        plan, the offers draw and a pin that dropped out are observations, so they are written here. A
+        plan, the offers draw and the pin's check are observations, so they are written here. A pin the
+        draw left out waits with why, and is checked again at the next draw. A
         project under way and the passage out of Victory Road have nothing to start. A new project with
         no first goal starts at once, so it ends on the next check as before.
         """
@@ -1162,16 +1163,22 @@ class Collection:
         token = self.plan_token(s)
         if token == self.idle_token:
             return None
-        offered = self.offers(s, nav, rng)
+        skipped = None if self.pin is None else {}
+        offered = self.offers(s, nav, rng, skipped)
         if isinstance(offered, Goal):
             return offered, None, None
         options, projects, travel, _ = offered
-        pinned = self.pin.key if self.pin else None
-        if pinned is not None and pinned not in projects:
-            # The pinned goal dropped out of the list, so it cannot run now.
-            self.activity_events.append(pin.gave_up(self.drop_pin(), pin.UNAVAILABLE))
-            pinned = None
-            if self.paused is not None:
+        pinned = None
+        if self.pin is not None:
+            # The pin is checked at each draw. One the draw ranks runs, one it left out waits with why,
+            # and one it no longer knows cannot run now.
+            if any(option.key == self.pin.key for option in options):
+                pinned, self.pin.parked = self.pin.key, None
+            elif self.pin.key in skipped:
+                self.pin.parked = skipped[self.pin.key][1]
+            else:
+                self.activity_events.append(pin.gave_up(self.drop_pin(), pin.UNAVAILABLE))
+            if pinned is None and self.paused is not None:
                 self.resume()
                 goal = self.goal(s)
                 return None if goal is None else (goal, None, None)
@@ -1191,7 +1198,7 @@ class Collection:
                        if project['method'] == 'rematch' else None)
         project['initial_owned'] = list(s.owned)
         goal = self.goal(s, project, appearances)
-        inner = arbiter.choose(options)
+        inner = arbiter.choose(options, pinned=pinned)
         start = partial(self._start, s, nav, project, appearances,
                         (project['key'], inner, {c.key: c for c in options}))
         if goal is None:
@@ -1502,6 +1509,32 @@ class Collection:
         copy.setstate(rng.getstate())
         return self.offers(s, nav, copy, skipped)
 
+    def _named(self, s, nav, rng):
+        """The collection goals a manager can name, best first, or why there are none.
+
+        Each goal is ``(key, project, rules, failure, option, group, title)``. The goals the draw ranks
+        come first in rank order with ``failure`` None. The goals it left out follow, each with why, and
+        with the candidate that priced it or None. ``group`` and ``title`` are the goal's picker_group.
+        Reading it draws on a copy of ``rng`` and writes no state.
+        """
+        reason = self.closed(s)
+        if reason:
+            return reason
+        skipped = {}
+        offered = self._drawn(s, nav, rng, skipped)
+        if isinstance(offered, Goal):
+            return offered.reason
+        options, projects, _, labels = offered
+        listed = [(projects[option.key], None, option) for option in arbiter.rank(options)]
+        listed += [entry for key, entry in skipped.items() if key not in projects or entry[2] is not None]
+        named = []
+        for project, failure, option in listed:
+            rules = kinds.rules(project['method'])
+            key = option.key if option else rules.key(project)
+            group, title = picker_group(project, labels.get(key) or rules.label(project), s.owned)
+            named.append((key, project, rules, failure, option, group, title))
+        return named
+
     def catalogue(self, s, nav, rng):
         """The collection goals for the goal catalogue (planning/catalogue.py), best first, and why there
         are none.
@@ -1510,26 +1543,13 @@ class Collection:
         priced. The goals it left out follow, each with why. Reading it draws on a copy of ``rng`` and
         writes no state.
         """
-        reason = self.closed(s)
-        if reason:
-            return [], reason
-        skipped = {}
-        offered = self._drawn(s, nav, rng, skipped)
-        if isinstance(offered, Goal):
-            return [], offered.reason
-        options, projects, _, labels = offered
-        listed = [(projects[option.key], None, option) for option in arbiter.rank(options)]
-        listed += [entry for key, entry in skipped.items() if key not in projects or entry[2] is not None]
-        named = []
-        for project, failure, option in listed:
-            rules = kinds.rules(project['method'])
-            key = option.key if option else rules.key(project)
-            title = picker_group(project, labels.get(key) or rules.label(project), s.owned)[1]
-            named.append((key, project, rules, failure, option, title))
+        named = self._named(s, nav, rng)
+        if isinstance(named, str):
+            return [], named
         # A species found in several places is one row for each, so a shared title names its place.
         shared = Counter(row[-1] for row in named)
         rows = []
-        for key, project, rules, failure, option, title in named:
+        for key, project, rules, failure, option, _, title in named:
             if shared[title] > 1 and project.get('map') is not None:
                 title = f'{title}, {place(project["map"])}'
             if option is None:
@@ -1540,25 +1560,18 @@ class Collection:
         return rows, (None if rows else 'Nothing to do until the game changes')
 
     def goal_list(self, s, nav, rng, query=None, limit=pin.LIMIT):
-        """The goals a manager can set as the next activity, best first, and why the list is empty.
+        """The goals a manager can set as the next activity, best first, then the goals that wait, and why
+        the list is empty.
 
-        Each goal is one group of projects (picker_group) under its best ranked project's key, so a
-        species is listed once for all the places it is found. ``query`` and ``limit`` are as in
-        pin.grouped. The plan is drawn on a copy of ``rng``, so listing the goals never changes what the
-        run does.
+        Each goal is one group of projects (picker_group) under its best project's key, so a species is
+        listed once for all the places it is found. ``query`` and ``limit`` are as in pin.grouped. The plan
+        is drawn on a copy of ``rng``, so listing the goals never changes what the run does.
         """
-        reason = self.closed(s)
-        if reason:
-            return [], reason
-        offered = self._drawn(s, nav, rng)
-        if isinstance(offered, Goal):
-            return [], offered.reason
-        options, projects, _, labels = offered
-        rows = []
-        for option in arbiter.rank(options):
-            title = labels.get(option.key, option.key)
-            group, label = picker_group(projects.get(option.key) or {'method': None}, title, s.owned)
-            rows.append((option.key, group, label, option.tier))
+        named = self._named(s, nav, rng)
+        if isinstance(named, str):
+            return [], named
+        rows = [(key, group, title, option.tier if option else None, failure)
+                for key, _, _, failure, option, group, title in named]
         goals = pin.grouped(rows, query, limit)
         if goals:
             return goals, None
@@ -1567,26 +1580,36 @@ class Collection:
         return [], 'Nothing to do until the game changes'
 
     def set_pin(self, s, nav, rng, key):
-        """Set ``key``, a listed goal's key, as the next activity. A ValueError says why it cannot be."""
-        goals, reason = self.goal_list(s, nav, rng, limit=None)
-        match = next((goal for goal in goals if goal['key'] == key), None)
+        """Set ``key``, a catalogue goal's key, as the next activity. A goal that cannot run now waits with
+        why in ``Pin.parked``. A ValueError says why ``key`` cannot be set."""
+        named = self._named(s, nav, rng)
+        if isinstance(named, str):
+            raise ValueError(named)
+        match = next((row for row in named if row[0] == key), None)
         if match is None:
-            if self.director.monitor.since(key) is not None and self.director.waiting(key, self.clock):
-                raise ValueError('It stood down after a failed try. Try again later')
-            raise ValueError(reason or pin.UNAVAILABLE.capitalize())
-        if self.project and self.project_key != key:
-            # The pin runs next and the project resumes after it. One project waits at a time, so a
-            # second pin set during the first one's run ends that run instead.
-            if self.paused is None:
-                self.pause()
-            else:
-                self.abandon('A manager set the next activity', stand_down=False)
-        if self.paused is not None and self.paused['project'].get('key') == key:
-            # The manager pinned the project set aside, so it comes back with what it had done.
-            self.resume()
-        self.pin = pin.Pin(key, match['label'], started=self.project_key == key)
+            raise ValueError(pin.CHOOSE)
+        failure, title = match[3], match[-1]
+        if failure is None:
+            if self.project and self.project_key != key:
+                # The pin runs next and the project resumes after it. One project waits at a time, so a
+                # second pin set during the first one's run ends that run instead.
+                if self.paused is None:
+                    self.pause()
+                else:
+                    self.abandon('A manager set the next activity', stand_down=False)
+            if self.paused is not None and self.paused['project'].get('key') == key:
+                # The manager pinned the project set aside, so it comes back with what it had done.
+                self.resume()
+        self.pin = pin.Pin(key, title, started=failure is None and self.project_key == key, parked=failure)
         self.idle_token = None
         return self.pin
+
+    def pinned(self, inner=None):
+        """Whether the collection offers the pinned goal: ``inner``, the candidate of a new project, or
+        else the project under way. A pin that waits is not offered."""
+        if self.pin is None or self.pin.parked is not None:
+            return False
+        return (inner.key if inner is not None else self.project_key) == self.pin.key
 
     def clear_pin(self):
         self.pin = None
@@ -1598,9 +1621,12 @@ class Collection:
         label, self.pin = self.pin.label, None
         return label
 
-    def end_pin(self, key):
-        """The pinned project ended, done or not, so the pin has had its one run."""
+    def end_pin(self, key, failure=None):
+        """The pinned project ended, done or not, so the pin has had its one run. A run that ended on the
+        kind of ``failure`` is journaled with it."""
         if self.pin is not None and self.pin.started and self.pin.key == key:
+            if failure is not None:
+                self.activity_events.append(pin.gave_up(self.pin.label, decide.FAILURES.get(failure, failure)))
             self.pin = None
 
     _partner_cache = [None, ()]

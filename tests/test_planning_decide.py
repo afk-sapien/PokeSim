@@ -173,6 +173,30 @@ def test_a_goal_whose_step_is_won_by_another_writes_nothing():
     assert wrote == ['pickup']
 
 
+def test_a_pinned_offer_ranks_over_every_other_source_but_not_upkeep():
+    # Slice 5 of docs/design/typed-goals.md: the goal a manager pinned ranks after upkeep and before the rest.
+    story, hunt = Goal('misty', 'Beat Misty', 'Badge'), Goal('collect_catch', 'Catch', 'Catch')
+    filler = Candidate('grass:1', Tier.FILLER, 0.1, 10 ** 6, goal='collection')
+    plain = Ballot(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
+    assert plain.offer(hunt, filler, site='collection') is story
+    pinned = Ballot(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), source='story')
+    assert pinned.offer(hunt, filler, site='collection', pinned=True) is hunt
+    assert pinned.decision.rule == decide.RANK
+    surf = Goal('party_surf', 'Surf partner', 'Fetch the Surf partner')
+    upkeep = Ballot(surf, Candidate('party_surf', Tier.UPKEEP, 0.05, 3000, goal='party'), source='story')
+    assert upkeep.offer(hunt, filler, site='collection', pinned=True) is surf
+    # The source under way says its own goal is the pin.
+    under_way = Ballot(hunt, filler, site='project', source='collection', pinned=True)
+    assert under_way.offer(story, Candidate('misty', Tier.STORY, 1.0, 1000, goal='story'), site='story') is hunt
+    # A Gen II ballot ranks the same way.
+    ballot = gen2_pipeline.Ballot()
+    ballot.offer(story, 'story')
+    assert ballot.offer(hunt, 'ladder', candidate=filler) is story
+    ballot = gen2_pipeline.Ballot()
+    ballot.offer(story, 'story')
+    assert ballot.offer(hunt, 'ladder', candidate=filler, pinned=True) is hunt
+
+
 def test_an_errand_under_way_is_offered_again_as_it_was_picked_and_writes_nothing():
     wrote = []
     surf = Goal('party_surf', 'Surf partner', 'Fetch the Surf partner')

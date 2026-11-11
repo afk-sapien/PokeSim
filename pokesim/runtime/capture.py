@@ -12,6 +12,7 @@ import time
 from .. import config
 from ..checkpoints import fresh_folder, write_bundle
 from ..stalls import BEFORE_STALL_CHECKPOINT
+from .trace import pin_state
 
 log = logging.getLogger(__name__)
 # What noticed the stall, as report.json and the progress replay's bundle row name it.
@@ -65,13 +66,13 @@ def report(host, snapshot, kind, why='', now=None):
                       for mon in snapshot.party]}
 
 
-def _segments(tracer, state, manifest, held):
+def _segments(tracer, state, manifest, held, policy=None):
     """The closed segments a bundle links. A new segment from this moment first closes the open one, so
-    the bundle's trace ends where its noticed state begins."""
+    the bundle's trace ends where its noticed state begins. Its header carries ``policy``'s pin."""
     if tracer is None:
         return []
     if tracer.recording:
-        tracer.begin(f'capture-{time.time_ns()}', state, manifest)
+        tracer.begin(f'capture-{time.time_ns()}', state, manifest, pin=pin_state(policy))
     return tracer.closed(held)
 
 
@@ -87,7 +88,7 @@ def keep(host, kind, why='', now=None):
         found = report(host, snapshot, kind, why, now)
         state, manifest = host._state_bytes(), host._manifest()
         held = before(store)
-        segments = _segments(getattr(host, 'tracer', None), state, manifest, held)
+        segments = _segments(getattr(host, 'tracer', None), state, manifest, held, getattr(host, 'policy', None))
         folder = store.write_stall_bundle(state, manifest, found, host._shot_png(), held, config.KEEP_STALL_BUNDLES,
                                           segments=segments)
     except Exception:
@@ -101,5 +102,5 @@ def keep_run(run, folder, report, before=None, png=None, compress=False):
     """Keep a bundle of a headless run's stall in ``folder``, or ``folder-2`` and on when it exists, and
     return the folder. ``before`` is the save from before the stall."""
     state, manifest = run.state(), run.manifest()
-    segments = _segments(getattr(run, 'tracer', None), state, manifest, before)
+    segments = _segments(getattr(run, 'tracer', None), state, manifest, before, getattr(run, 'policy', None))
     return write_bundle(fresh_folder(folder), state, manifest, report, png, before, segments, compress=compress)
