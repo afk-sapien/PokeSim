@@ -18,7 +18,7 @@ Both tables come from the schema version (pokesim.state).
 import logging
 import time
 
-from .state.journal import add_encounters, add_progress
+from .state.journal import add_encounters, add_progress, best_level
 
 log = logging.getLogger(__name__)
 
@@ -106,8 +106,7 @@ def gained(db, watch, ev, at, snapshot):
     Every gain writes one row with the level as its score, so the rows keep each Pokémon's highest
     level and a reload, a trade back or a loop of losses cannot count a level twice. The target
     moves only when the next boss changes, so such a loop adds at most the levels left to it."""
-    best = db.execute("SELECT MAX(score) FROM progress_events WHERE kind IN ('level', 'improve') "
-                      'AND species = ? AND identity = ?', (ev.species, ev.identity)).fetchone()[0]
+    best = best_level(db, ev.species, ev.identity)
     kind = 'level'
     if best is None or ev.score > best:
         aim = readiness(watch, snapshot)
