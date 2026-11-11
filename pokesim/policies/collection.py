@@ -248,6 +248,11 @@ def budget_key(project):
     return 'budget:' + project.get('key', project['method'])
 
 
+def project_label(project):
+    """A project's name in the plan history."""
+    return name(project['species']) if project.get('species') else project['method'].title()
+
+
 CENTERS = tuple((m, 13, 4) for m, w in WORLD.items() if 'Pokecenter' in w['name'] and w['width'] == 14)
 CENTERS += ((MAPS['INDIGO_PLATEAU_LOBBY'], 15, 8),)
 LEAGUE = {MAPS[n] for n in ('LORELEIS_ROOM','BRUNOS_ROOM','AGATHAS_ROOM','LANCES_ROOM','CHAMPIONS_ROOM','HALL_OF_FAME')}
@@ -567,6 +572,10 @@ class Collection:
         self.weighed = None
         # The next activity a manager set (planning/pin.py). Never saved.
         self.pin = None
+        # The project a pin set aside, with what it had done, which resumes when the pin's run ends.
+        self.paused = None
+        # The pick's weighing of the paused project, given back with it. Never saved.
+        self.paused_weighed = None
 
     def demand(self):
         return self.peer_demand if self.clock < self.demand_until else {}
@@ -602,7 +611,7 @@ class Collection:
         return target
 
     def state_dict(self):
-        return {**{k:getattr(self,k) for k in ('project','remaining','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','deferred_catches','next_marathon','marathon_records','activity_events')},
+        return {**{k:getattr(self,k) for k in ('project','remaining','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','deferred_catches','next_marathon','marathon_records','activity_events','paused')},
                 'director': self.director.state_dict()}
 
     def defer(self, s, species):
@@ -681,6 +690,8 @@ class Collection:
 
     def load(self, data):
         self.pin = None
+        self.paused = data.get('paused')
+        self.paused_weighed = None
         self.next_marathon = data.get('next_marathon', 0)
         self.marathon_records = data.get('marathon_records', {})
         self.activity_events = data.get('activity_events', [])
@@ -723,7 +734,7 @@ class Collection:
         self.end_pin(self.project_key)
         self.record_quality_search()
         self.finish_marathon(False)
-        label = name(project['species']) if project.get('species') else project['method'].title()
+        label = project_label(project)
         progressed = bool(project.get('gains', {}).get('experience', 0) or project.get('gains', {}).get('catches', 0))
         if stand_down:
             self.director.finish(project, self.clock, False, reason, progressed)
@@ -736,6 +747,35 @@ class Collection:
         self.project_flags = []
         self.progress_token = None
         return True
+
+    def pause(self):
+        """Set the running project aside for a pin. Its idle count and any budget it spends on the
+        monitor stay there under its own keys, so it resumes with the frames it had left."""
+        project = self.project
+        self.paused = {'project': project, 'remaining': self._remaining,
+                       'project_maps': self.project_maps, 'project_flags': self.project_flags}
+        self.paused_weighed = self.weighed
+        self.history = (self.history + [f'Set aside: {project_label(project)}. A manager set the next activity'])[-6:]
+        self.project = None
+        self.remaining = 0
+        self.idle_token = None
+        self.project_maps = []
+        self.project_flags = []
+        self.progress_token = None
+        self.weighed = None
+
+    def resume(self):
+        """Give back the project a pin set aside, with what it had done."""
+        paused, self.paused = self.paused, None
+        self.project = paused['project']
+        if not budgeted(self.project):
+            self.remaining = paused['remaining']
+        self.project_maps = list(paused['project_maps'])
+        self.project_flags = list(paused['project_flags'])
+        self.progress_token = None
+        self.idle_token = None
+        self.weighed, self.paused_weighed = self.paused_weighed, None
+        self.history = (self.history + [f'Resumed: {project_label(self.project)}'])[-6:]
 
     def finish_marathon(self, finished):
         project = self.project
@@ -1140,6 +1180,10 @@ class Collection:
             # battles on the way still catch missing species.
             self.abandon('The story comes before side projects until the Champion is beaten')
             return None
+        if self.project is None and self.paused is not None and self.pin is None:
+            # The pin's run ended, or the pin was cancelled or dropped, so the project it set aside
+            # comes back. This observes the pin, as its drop below does.
+            self.resume()
         if self.project:
             goal = self.goal(s)
             return None if goal is None else (goal, None, None)
@@ -1155,6 +1199,10 @@ class Collection:
             # The pinned goal dropped out of the list, so it cannot run now.
             self.activity_events.append(pin.gave_up(self.drop_pin(), pin.UNAVAILABLE))
             pinned = None
+            if self.paused is not None:
+                self.resume()
+                goal = self.goal(s)
+                return None if goal is None else (goal, None, None)
         if pinned is None:
             project = self.director.select(options, projects)
         else:
@@ -1486,7 +1534,15 @@ class Collection:
                 raise ValueError('It stood down after a failed try. Try again later')
             raise ValueError(reason or pin.UNAVAILABLE.capitalize())
         if self.project and self.project_key != key:
-            self.abandon('A manager set the next activity', stand_down=False)
+            # The pin runs next and the project resumes after it. One project waits at a time, so a
+            # second pin set during the first one's run ends that run instead.
+            if self.paused is None:
+                self.pause()
+            else:
+                self.abandon('A manager set the next activity', stand_down=False)
+        if self.paused is not None and self.paused['project'].get('key') == key:
+            # The manager pinned the project set aside, so it comes back with what it had done.
+            self.resume()
         self.pin = pin.Pin(key, match['label'], started=self.project_key == key)
         self.idle_token = None
         return self.pin

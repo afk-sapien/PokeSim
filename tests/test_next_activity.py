@@ -10,7 +10,7 @@ from pokesim import config
 from pokesim.emulator import Emulator
 from pokesim.gen2 import collection as ladder_module
 from pokesim.gen2.collection import ERRAND_FRAMES, Ladder, settle_pin
-from pokesim.planning import arbiter, pin, values
+from pokesim.planning import arbiter, decide, pin, values
 from pokesim.planning.arbiter import Tier
 from pokesim.planning.pin import Pin
 from pokesim.play_clock import PlayClock
@@ -81,6 +81,67 @@ def test_gen1_a_pin_that_drops_out_of_the_list_is_journaled():
     assert c.pin is None
     [event] = c.take_activity_events()
     assert event.title == 'Gave up on Find Mew: not available now'
+
+
+def started_with_progress():
+    """A post-game Red whose plan started a project and made progress on it."""
+    c, s, nav = postgame()
+    c.choose(s, nav, random.Random(3), PLAN)
+    running = c.project
+    assert running is not None and c.pin is None
+    running.setdefault('gains', {})['catches'] = 2
+    c.idle_frames = 500
+    c.remaining -= 1000
+    c.project_maps.append(MAPS['ROUTE_2'])
+    progress = {'key': c.project_key, 'idle': c.idle_frames, 'left': c.remaining, 'maps': list(c.project_maps)}
+    goals, _ = c.goal_list(s, nav, random.Random(3))
+    other = next(goal for goal in goals if goal['key'] != progress['key'])
+    return c, s, nav, running, progress, other
+
+
+def test_gen1_a_pin_sets_the_running_project_aside_and_it_resumes_intact_after_the_pin():
+    # Rule C of the decide pipeline: a pin runs next and the project under way resumes after it.
+    c, s, nav, running, progress, other = started_with_progress()
+    c.set_pin(s, nav, random.Random(3), other['key'])
+    assert c.project is None and c.paused['project'] is running
+    assert c.history[-1].startswith('Set aside: ')
+    c.choose(s, nav, random.Random(3), PLAN)
+    assert c.project_key == other['key'] and c.pin.started
+    c.idle_frames = 90
+    c.abandon('The hunt ended')
+    assert c.pin is None and c.paused is not None
+    c.choose(s, nav, random.Random(3), PLAN)
+    assert c.project is running and running['gains']['catches'] == 2 and c.paused is None
+    assert (c.idle_frames, c.remaining, c.project_maps) == (progress['idle'], progress['left'], progress['maps'])
+    assert c.history[-1].startswith('Resumed: ')
+
+
+def test_gen1_a_project_set_aside_is_saved_and_resumes_after_a_load():
+    import json
+    c, s, nav, running, progress, other = started_with_progress()
+    c.set_pin(s, nav, random.Random(3), other['key'])
+    c.choose(s, nav, random.Random(3), PLAN)
+    # A reload keeps the monitor, which holds each project's idle count and budget.
+    saved = json.loads(json.dumps(c.state_dict()))
+    c.paused = None
+    loaded = c
+    loaded.load(saved)
+    assert loaded.pin is None and loaded.project_key == other['key']
+    loaded.abandon('The hunt ended')
+    loaded.choose(s, nav, random.Random(3), PLAN)
+    assert loaded.project_key == progress['key'] and loaded.project['gains']['catches'] == 2
+    assert loaded.project_maps == progress['maps'] and loaded.idle_frames == progress['idle']
+
+
+def test_gen1_a_cancelled_pin_gives_the_project_back_and_pinning_it_resumes_it():
+    c, s, nav, running, progress, other = started_with_progress()
+    c.set_pin(s, nav, random.Random(3), other['key'])
+    c.clear_pin()
+    c.choose(s, nav, random.Random(3), PLAN)
+    assert c.project is running and c.idle_frames == progress['idle']
+    c.set_pin(s, nav, random.Random(3), other['key'])
+    c.set_pin(s, nav, random.Random(3), progress['key'])
+    assert c.project is running and c.pin.started and c.paused is None
 
 
 def full_postgame():
@@ -243,6 +304,33 @@ def test_gen2_a_pin_whose_rung_offers_something_else_is_dropped_and_journaled():
     settle_pin(owner, rungs)
     assert owner.pin is None
     assert [row['title'] for row in owner.pin_events] == ['Gave up on Label league: not available now']
+
+
+def test_gen2_a_pinned_rung_passes_every_check_and_a_parked_pin_says_why(monkeypatch):
+    # Rule B of the decide pipeline: a pin skips no check. A pin parked before it starts waits with the
+    # reason the API state carries, and a run that ends parked is journaled with it.
+    owner = gen2_policy(pin=Pin('league:league', 'Label league'))
+    owner.monitor_tables[ladder_module.STOOD_DOWN] = {'league': 1}
+    monkeypatch.setattr(ladder_module, 'standing_down', lambda policy, key: key == ladder_module.rung_key('league'))
+    rungs = weigh(owner)
+    assert rungs.rung == 'hunt' and 'league' not in rungs.asked
+    settle_pin(owner, rungs)
+    assert owner.pin.to_dict() == {'key': 'league:league', 'label': 'Label league', 'started': False,
+                                   'parked': decide.STOOD_DOWN}
+    owner.monitor_tables.clear()
+    owner.no_route_waiting = lambda goal: goal.key == 'league'
+    rungs = weigh(owner)
+    assert rungs.rung == 'hunt' and 'league' in rungs.asked
+    settle_pin(owner, rungs)
+    assert owner.pin.parked == decide.NO_ROUTE and not owner.pin.started
+    assert not ladder_module.pin_events(owner)
+    owner.no_route_waiting = lambda goal: False
+    settle_pin(owner, weigh(owner))
+    assert owner.pin.started and owner.pin.parked == ''
+    owner.no_route_waiting = lambda goal: goal.key == 'league'
+    settle_pin(owner, weigh(owner))
+    assert owner.pin is None
+    assert [row['title'] for row in owner.pin_events] == ['Gave up on Label league: no route']
 
 
 def test_gen2_a_survey_lists_the_rungs_and_changes_nothing(monkeypatch):
