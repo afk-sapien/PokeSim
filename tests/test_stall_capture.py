@@ -18,10 +18,11 @@ from pokesim.runtime import capture, trace
 from pokesim.stalls import BEFORE_STALL_CHECKPOINT, FRAMES_PER_GAME_MINUTE as MINUTE, LOOP_LIMIT, LoopGuard, StallWatch
 from pokesim.store import Store
 
+from test_loop_guard import add
 from test_stall_bundles import MANIFEST, game
 from test_supervision import ladder
 
-LOOP = 'It reloaded auto-v1-1.state 6 times without progress'
+LOOP = 'It received and released Totodile 6 times without other progress'
 
 
 def sha(data):
@@ -55,7 +56,8 @@ def test_each_new_loop_is_taken_once(tmp_path):
         guard = LoopGuard(clock=lambda: 1000.0)
         assert guard.take_trip() is None
         for _ in range(LOOP_LIMIT):
-            guard.reloaded('auto-v1-1.state')
+            add(store, 'obtain', 'Received Totodile from a custom PokeSim gift')
+            add(store, 'release', 'Said goodbye to a spare Totodile')
         reason = guard.looping(store)
         assert reason and guard.take_trip() == reason and guard.take_trip() is None
         # The same loop seen again is not a new one.
@@ -178,6 +180,8 @@ def test_a_gen2_quiet_stretch_keeps_a_bundle_from_the_first_autosave_after_progr
     Gen2Emulator._check_stall(playing)
     folder, report = kept(playing.store)
     assert report['kind'] == 'quiet' and report['why'] == 'no progress for 130 game minutes'
+    # The minutes are on the PlayClock. The emulator frame, still 0 here, goes back with every reload.
+    assert report['quiet_game_minutes'] == 130
     assert report['has_before'] and report['party'] == [['Lapras', 40, 0, 0]] and len(seen) == 1
     # The same stretch keeps no second bundle.
     playing.play_clock.frames += MINUTE

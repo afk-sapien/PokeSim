@@ -44,7 +44,7 @@ Agent time per slice is 1 to 4 hours plus CI and a 10 minute preflight.
 9. **BattleState.** Kind (none, wild, trainer, tutorial, scripted), both active mons, enemy HP, and named flags: transformed, trapped, can run, link battle. pokecore only.
 10. **UiState.** Text box, start menu, menu cursor and scroll, facing, walking, biking or surfing. pokecore only. The shortcut machine already detects most of this internally, so it is exposed, not rebuilt.
 11. **Boxes and events in the state.** `GameState.boxes` from slice 5 and `gen2.state.read_box_structs`, and `GameState.events` from the event flag arrays.
-12. **Consumer moves, one module per pull request.** Readers outside the policies first (`activity_ledger.py`, `shiny.py`, `fair_dvs.py`, `catches.py` to `BattleState`), then the Gen II policy symbol reads once the v2 pull requests that hold `gen2/policy.py` have merged. Each lowers the guard's counts.
+12. **Consumer moves, handed to phase 3.** Changed on 2026-11-11. The Gen I hook modules (`activity_ledger.py`, `shiny.py`, `fair_dvs.py`, `catches.py`) stay as they are. After slices 3 and 4 they read only pokecore names, so the guard counts none of their reads. At hook time they also need bytes `BattleState` does not hold: Species2, the link state outside a battle, the raw `wIsInBattle`, bag slots and the DV write. The Gen II policy reads move with phase 3 item 5, as section 6 says.
 
 Slices 8 to 11 change only pokecore, so they can run while slices 3 to 7 wait on open pull requests.
 
@@ -56,6 +56,14 @@ Slices 8 to 11 change only pokecore, so they can run while slices 3 to 7 wait on
 4. **Parity.** A pokecore test checks that every `GameState` field is filled for one game of each generation, or is listed as absent by design with a reason, like `tests/test_generation_parity.py` does for payloads.
 5. **Writes.** pokecore's decoders only read memory. Named writes live in `pokecore.repairs` and `pokecore.resets`, each with a test.
 
-## 6. Not in this note
+## 6. Hand-off to phase 3 item 5
+
+`pokesim/gen2/policy.py` keeps 72 direct symbol reads. 51 are on the battle side: the enemy and battle mon fields, substatus, screens, Disable and the wrap count. Most of the other 21 are menu, facing and bike state. They move when phase 3 item 5 splits and types `gen2/policy.py`.
+
+1. Call `pokecore.state.read_battle(memory, game)` and `read_ui` once per tick, next to the snapshot, and pass the results down. Calling them at each read site would decode both battle structs every time.
+2. Fields the policy reads that `BattleState` or `UiState` lacks, such as substatus, screens, Disable and the last enemy move, are added in pokecore first, each with a test. Gen I fills the same field or leaves it `None` with a written reason.
+3. Each pull request measures the tick with `pokesim/benchmark.py` and lowers the policy's numbers in `tests/test_ram_literals.py`. Until then the guard keeps them from rising.
+
+## 7. Not in this note
 
 The table reader that replaces the three table pipelines (boundary report F3) is scheduled last in the plan. Splitting `shortcuts/actions.py` per generation is a separate refactor.

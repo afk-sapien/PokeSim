@@ -38,7 +38,7 @@ from .runtime.restart import restart
 from .runtime.supervision import CANNOT_END, GIVE_UP, HOLD, Supervisor
 from .runtime.supervision import report as stuck_report
 from .screen import W_OPTIONS
-from .stalls import BEFORE_STALL_CHECKPOINT, PROGRESS_EVENTS, LoopGuard, StallWatch, advanced  # noqa: F401
+from .stalls import BEFORE_STALL_CHECKPOINT, LoopGuard, StallWatch, held_rose  # noqa: F401
 from .strategy_data import MAPS
 
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
@@ -133,7 +133,7 @@ class Emulator:
         self.last_achievement = achievements[0] if achievements else None
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
-        self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
+        self.loop_guard = LoopGuard(lambda: self.play_clock.frames, replaying=lambda: self.supervisor.reloads > 0)
         self.supervisor = Supervisor(store)
         self.commands: queue.Queue = queue.Queue()
         self.manual: queue.Queue = queue.Queue(maxsize=2)
@@ -350,39 +350,26 @@ class Emulator:
         }
 
     def help_request(self, strategy):
-        """Ask the owner for a hand when live play has stopped making game progress."""
-        stall = getattr(self, 'stall', None)
-        if self.paused or self.manual_mode:
-            return None
-        # The answer of the last scan. Only the guard check scans, on the emulator thread, so the
-        # status page cannot move a scan to a frame a replay would not reach.
-        guard = getattr(self, 'loop_guard', None)
-        if loop := guard and guard.reason:
-            return {'reason': f'The run is caught in a loop. {loop}', 'action': strategy.get('action', '')}
-        if not stall or not stall.stalled(self.play_clock.frames):
-            # A missing entry left uncaught for want of a slot, with nothing in the PC that may go.
-            from .pcvalue import BOXES_FULL, boxes_full
-            from .policies.collection import catch_room
+        """Ask the owner for a hand when live play has stopped making game progress (Supervisor.help_request)."""
+        from .pcvalue import boxes_full
+        from .policies.collection import catch_room
+
+        def full():
             snap = getattr(self, 'snapshot', None)
-            if boxes_full(getattr(getattr(self, 'policy', None), 'boxes_full', False), catch_room(snap) if snap else None):
-                return {'reason': BOXES_FULL, 'action': strategy.get('action', '')}
-            return None
-        return {'reason': 'The policy has stopped making game progress', 'action': strategy.get('action', '')}
+            return boxes_full(getattr(getattr(self, 'policy', None), 'boxes_full', False), catch_room(snap) if snap else None)
+        guard = getattr(self, 'loop_guard', None)
+        return self.supervisor.help_request(getattr(self, 'stall', None), self.play_clock.frames,
+                                            held=self.paused or self.manual_mode, loop=guard and guard.reason,
+                                            full=full, action=strategy.get('action', ''))
 
     def progress_status(self):
-        achievement = getattr(self, 'last_achievement', None)
-        age = max(0, int(time.time() - achievement['ts'])) if achievement else None
-        mode = self.policy.details().get('action', '')
-        state = 'recovering' if (self.invalid_frame is not None or time.time() - self.last_reload < 30
-                                 or mode == 'finding another approach') else 'making_progress' if age is not None and age < 120 else 'exploring'
-        stall, frames = getattr(self, 'stall', None), self.play_clock.frames
-        if stall and stall.stalled(frames) or self.supervisor.stalled:
-            state = 'stalled'
-        return {'state': state, 'quiet_game_minutes': stall.game_minutes(frames) if stall else 0,
-                'last_achievement': {
-                    'id': achievement['id'], 'title': achievement['title'], 'ts': achievement['ts'],
-                    'age_seconds': age,
-                } if achievement else None}
+        """The status page's progress line (Supervisor.progress)."""
+        guard = getattr(self, 'loop_guard', None)
+        return self.supervisor.progress(
+            getattr(self, 'stall', None), self.play_clock.frames, time.time(),
+            achievement=getattr(self, 'last_achievement', None), held=self.paused or self.manual_mode,
+            loop=guard and guard.reason, glitched=self.invalid_frame is not None, last_reload=self.last_reload,
+            mode=self.policy.details().get('action', ''))
 
     # ---------------- internals ----------------
     def health(self) -> dict:
@@ -665,6 +652,15 @@ class Emulator:
         blackout = before is not None and before.valid and snap.all_fainted and not before.all_fainted
         self.supervisor.watch_boss(boss, blackout, stall, getattr(self, 'loop_guard', None))
 
+    def _note_progress(self, previous, snap):
+        """Restart the stall clocks on a new high (Supervisor.progressed), which also starts the ladder
+        again. A journal entry alone is not progress, so neither a replay after a reload nor a gift
+        loop restarts them. A rise in Pokémon held does, until stalls.GEN1_HELD_RISE goes."""
+        gained = self.supervisor.progressed(snap, len(self.mem.seen_maps), self.mem.championships)
+        stall = getattr(self, 'stall', None)
+        if stall is not None and (gained or held_rose(previous, snap)):
+            stall.progress(self.play_clock.frames, time.time())
+
     def _observe_snapshot(self):
         snap = read_snapshot(self.pb.memory, self.frame)
         if snap.started:
@@ -672,14 +668,9 @@ class Emulator:
             self._enforce_options()
         came_from = self.prev_snapshot.map if self.prev_snapshot else None
         Emulator._watch_boss(self, self.prev_snapshot, snap)
-        if (self.prev_snapshot is not None and snap.valid and self.prev_snapshot.valid
-                and advanced(self.prev_snapshot, snap) and getattr(self, 'stall', None)):
-            # A long hunt catches plenty that the Pokédex already has, and training earns experience
-            # between level milestones. Neither is a stall.
-            self.stall.progress(self.play_clock.frames, time.time())
         new = diff(self.prev_snapshot, snap, self.mem)
         if snap.valid and snap.started:
-            self.supervisor.progressed(snap, len(self.mem.seen_maps), self.mem.championships)
+            Emulator._note_progress(self, self.prev_snapshot, snap)
         if snap.valid and snap.started and (watch := getattr(self, 'goal_watch', None)):
             watch.story(self.store, snap.event_flags)
         if (snap.valid and snap.map == LEAGUE_ENTRY and came_from is not None and came_from not in LEAGUE
@@ -788,11 +779,6 @@ class Emulator:
             eid = self.store.add_event(ev, snap, png, None)
             if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
                 self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
-            guard = getattr(self, 'loop_guard', None)
-            # A gift in a gift and release loop is not progress.
-            looped = ev.type == 'obtain' and guard and guard.looping(self.store)
-            if ev.type in PROGRESS_EVENTS and getattr(self, 'stall', None) and not looped:
-                self.stall.progress(self.play_clock.frames, time.time())
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
             if blank:
                 # Badges, warps and catches often land during a fade. Keep the entry now and
@@ -951,8 +937,6 @@ class Emulator:
         if target:
             log.warning("%s for %.1f game minutes, reloading %s", why,
                         max(0, self.frame - since_frame) / FRAMES_PER_SECOND / 60, target.name)
-            if guard:
-                guard.reloaded(target.name)
             candidates = [target] + [p for p in reversed(saves) if p != target]
             clock = self.play_clock.frames
             with trace.reason(self, 'reload'):
@@ -1267,7 +1251,7 @@ class Emulator:
         """Boot the committed new game, with trackers that hold nothing of the old one in memory."""
         from .goal_time import GoalTime
         self.pb.stop(save=False)
-        self.loop_guard = LoopGuard(lambda: self.play_clock.frames)
+        self.loop_guard = LoopGuard(lambda: self.play_clock.frames, replaying=lambda: self.supervisor.reloads > 0)
         # The restart emptied the old run's reload streak from the store, so it cannot hold the new one stalled.
         self.supervisor = Supervisor(self.store)
         if watch := getattr(self, 'goal_watch', None):

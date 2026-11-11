@@ -57,7 +57,8 @@ def gen2_help(game):
 
 
 def gen1_game(store, loop):
-    return SimpleNamespace(**stalled_game(store, loop), snapshot=None, policy=SimpleNamespace(boxes_full=False))
+    return SimpleNamespace(**stalled_game(store, loop), snapshot=None, policy=SimpleNamespace(boxes_full=False),
+                           supervisor=Supervisor())
 
 
 def gen2_game(store, loop):
@@ -97,6 +98,37 @@ def test_a_help_request_writes_one_row_when_it_starts_and_one_when_it_changes(tm
     assert [(row['request'], row['frame'], row['source']) for row in rows] == [
         ('stall', 42, ''), ('loop', 42, ''), ('stall', 42, '')]
     assert rows[1]['reason'] == f'The run is caught in a loop. {LOOP}' and rows[0]['action'] == 'exploring'
+
+
+def test_both_generations_show_the_same_progress_for_the_same_run(tmp_path):
+    from pokesim.emulator import Emulator as Gen1
+    from pokesim.gen2.emulator import Emulator as Gen2
+    store, loop = Store(tmp_path), [None]
+    try:
+        one, two = gen1_game(store, loop), gen2_game(store, loop)
+        one.policy.details, one.last_reload, one.invalid_frame = dict, 0, None
+
+        def progress():
+            seen = Gen1.progress_status(one), Gen2.status(two)['progress']
+            assert seen[0] == seen[1]
+            return seen[0]['state']
+        assert progress() == 'stalled' and Gen1.progress_status(one)['quiet_game_minutes'] == 130
+        # A paused run is never shown stalled, though it loops as well.
+        loop[0] = LOOP
+        one.paused = two.paused = True
+        assert progress() == 'exploring'
+        one.paused = two.paused = False
+        assert progress() == 'stalled'
+        loop[0] = None
+        found = {'id': 7, 'title': 'Caught Ditto', 'ts': time.time() - 60}
+        for game in (one, two):
+            game.stall.progress(game.play_clock.frames, 0)
+            game.last_achievement = found
+        assert progress() == 'making_progress'
+        one.last_achievement = two.last_achievement = dict(found, ts=found['ts'] - 440)
+        assert progress() == 'exploring'
+    finally:
+        store.close()
 
 
 def test_every_stall_bundle_keeps_its_row_after_the_folder_is_pruned(tmp_path, monkeypatch):

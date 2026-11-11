@@ -253,6 +253,8 @@ The five lists in section 1 become one function, `progress.counts(event) -> bool
 
 This switch happens in two steps (section 13). First the rows are written in shadow mode and nothing reads them for decisions. The five readers move to `net` only after the two-week replay meets its bar.
 
+Until the switch, the stall clock in all six games moves on the supervisor's high-water rule (`Supervisor.progressed`). Red, Blue and Yellow also move it on a rise in Pokémon held, so a long hunt is not a stall while the hunt rate is in shadow. That rise is one setting, `stalls.GEN1_HELD_RISE`, read by `stalls.held_rose` and the replay's `OldChecks.receipt`. The switch deletes all three, because a held rise is churn and the healthy hunt rate takes its place. Gold, Silver and Crystal never count it.
+
 ### The Kanto Marathon case
 
 Each marathon checkpoint writes a `checkpoint` row with `tier=RACE` and `net=1`. Gen I queues it through `activity_events` (`policies/collection.py:585`). Gen II queues it through `take_events` (`gen2/marathon.py:132`). A run that is racing now shows a fresh `net` row every checkpoint, so the watchdog sees it move.
@@ -357,7 +359,7 @@ class Supervisor:
 
 Every timer counts PlayClock frames. The Gen I wall-clock guard at `emulator.py:851` moves to frames. `STUCK_RELOAD_SECONDS` and `BATTLE_TIMEOUT_SECONDS` become frame limits at 60 frames a second. Reload counts persist in the store, so a worker restart does not reset them.
 
-`help_request` and `progress_status` are written once, in the supervisor. Gen II gets stall bundles through `Adapter.bundle`.
+`help_request` and `progress_status` are written once, in the supervisor (`Supervisor.help_request`, `Supervisor.progress`). Each generation only gathers what they read. Gen II keeps stall bundles through `runtime/capture.py`, the same as Gen I, so `Adapter.bundle` is not needed for them.
 
 ### Liveness, the one wall-clock check
 
@@ -367,6 +369,8 @@ Frames cannot see a hung worker, because a hung worker runs no frames. So there 
 2. While the adventure is running (not paused, not in manual mode, not stopping), PlayClock must advance. If it has not moved for 15 real minutes, the adventure is not live.
 3. The watchdog runs the same check from outside the worker, from the `play_clock` field in status. A worker that stops answering status counts as not moving.
 4. Not live raises one liveness alert. It is not a stall and it does not climb the reload ladder. The fix is a worker restart.
+
+PR 6 runs the check in the watchdog only (`Watchdog._live`, `Limits.not_live`). A worker whose game loop hangs still answers status with a clock that stands still, and a worker that hangs entirely stops answering, so the watchdog sees both. A second copy in the worker would only send the same alert twice. The library's monitor still restarts a worker whose frame count stands still for a minute (`app/supervisor.py` `check`), so the alert means a restart did not help. The watchdog's quiet window, `Limits.no_progress`, counts PlayClock seconds.
 
 The stall rule in section 4 runs only while the adventure is live. Stalls and liveness are reported as different alert types.
 

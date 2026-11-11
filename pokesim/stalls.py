@@ -5,15 +5,21 @@ import logging
 import re
 import threading
 
-from .state import Error, journal, kv
+from .state import journal
 
 log = logging.getLogger(__name__)
 
 FRAMES_PER_GAME_MINUTE = 3600
 # The first autosave after progress, kept under this name so a capture can start from before the stall.
 BEFORE_STALL_CHECKPOINT = 'before-stall.state'
-# A managed trade is arranged by the coordinator, so it says nothing about the run's own progress.
+# The journal kinds a Red, Blue or Yellow scenario report lists as achievements. A managed trade is
+# arranged by the coordinator, so it says nothing about the run's own progress.
 PROGRESS_EVENTS = ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map')
+# Red, Blue and Yellow also restart the stall clock when the run holds more Pokémon, so a long hunt
+# that catches species the Pokédex already has is not a stall. A held rise is churn (goal-system.md
+# section 4), and the hunt's encounter rate is what should tell a healthy hunt apart. This setting goes
+# when that rate leaves shadow, in the switch to net rows. Gold, Silver and Crystal never count it.
+GEN1_HELD_RISE = True
 
 
 class StallWatch:
@@ -99,26 +105,15 @@ def held(snapshot):
     return len(snapshot.party) + (sum(snapshot.box_counts) if snapshot.box_counts else len(snapshot.boxed_pokemon))
 
 
-def experience(snapshot):
-    """Experience across the party. Grinding for a gym earns it steadily between level milestones,
-    while a menu loop or a battle that cannot end earns none."""
-    return sum(getattr(mon, 'experience', 0) or 0 for mon in snapshot.party)
-
-
-def advanced(previous, snapshot):
-    """True when the run caught something or earned experience since the previous snapshot."""
-    return held(snapshot) > held(previous) or (len(snapshot.party) == len(previous.party)
-                                               and experience(snapshot) > experience(previous))
-
-
-def stalled_state(live, waiting, stuck, loop):
-    """Whether the status shows a run as stalled: live, stuck or looping, and never while it waits."""
-    return bool(live and not waiting and (stuck or loop))
+def held_rose(previous, snapshot):
+    """True when a Red, Blue or Yellow run holds more Pokémon than at the previous snapshot (GEN1_HELD_RISE)."""
+    return (GEN1_HELD_RISE and previous is not None and previous.valid and snapshot.valid
+            and held(snapshot) > held(previous))
 
 
 # Events a gift and release loop cannot fake. A received gift, an item and a release are left out.
 REAL_PROGRESS = ('badge', 'catch', 'event_return', 'evolve', 'hatch', 'champion', 'trainer', 'level', 'map')
-# Repeats that count as a loop: the same Pokémon received and released, or the same save reloaded.
+# Repeats that count as a loop: the same Pokémon received and released.
 LOOP_LIMIT = 6
 LOOP_EVENTS = 400
 # The loop guard reads the journal at most once in this many game frames, half a game minute.
@@ -126,8 +121,6 @@ SCAN_FRAMES = 1800
 # How far back a progress entry is compared after a reload. A reload rewinds the run, and the replay
 # journals the same maps, trainers and levels again, which is not progress.
 REPLAY_EVENTS = 2000
-# Reload counts are kept in the adventure, so a worker restart does not forget a save it keeps reloading.
-RELOADS_KEY = 'loop-guard-reloads-v1'
 # Gen II names the species, Gen I the nickname and then the species in brackets.
 _RECEIVED = re.compile(r'^Received (?:[^(]+ \()?(.+?)\)? (?:from|for) ')
 _RELEASED = re.compile(r'^Said goodbye to a spare (.+?)(?: Lv \d+)?$')
@@ -146,35 +139,32 @@ class LoopGuard:
 
     Live, a League gift went in and the same starter came out at every PC visit, hundreds of times,
     and each gift counted as progress, so neither the reload limit nor the stall alert ever fired.
-    The same save was also reloaded over and over. Once either repeats LOOP_LIMIT times, the run
-    asks for help, gifts stop and reloading stops, until it makes real progress again.
+    Once the same gift and release repeats LOOP_LIMIT times, the run asks for help, gifts stop and
+    reloading stops, until it makes real progress again. The reload ladder counts reloads itself.
 
     ``clock`` counts game frames, PlayClock frames in both emulators, so a scan falls at the same
-    point of a replay at any pace. Only the emulator thread scans. The web status thread reads
-    ``reason``, so when it asks cannot move a scan. The state is still behind a lock.
+    point of a replay at any pace. ``replaying`` says the run has reloaded since its last new high,
+    so a journal entry that repeats a recent one is the replay. Only the emulator thread scans. The
+    web status thread reads ``reason``, so when it asks cannot move a scan. The state is still
+    behind a lock.
     """
 
-    def __init__(self, clock, limit=LOOP_LIMIT, every=SCAN_FRAMES):
-        self.limit, self.every, self.clock = limit, every, clock
-        self.reloads, self.since, self.scanned, self.returned = {}, None, None, {}
-        self.reason, self.checked, self.saved = None, None, {}
-        # The last real progress and the reload counts from before a boss attempt under way.
+    def __init__(self, clock, limit=LOOP_LIMIT, every=SCAN_FRAMES, replaying=lambda: False):
+        self.limit, self.every, self.clock, self.replaying = limit, every, clock, replaying
+        self.since, self.scanned, self.returned = None, None, {}
+        self.reason, self.checked = None, None
+        # The last real progress from before a boss attempt under way.
         self.held = None
         # A new loop reason that the emulator has not kept a capture of yet (take_trip).
         self.tripped = None
         self.lock = threading.Lock()
-
-    def reloaded(self, name):
-        with self.lock:
-            self.reloads[name] = self.reloads.get(name, 0) + 1
-            self.checked = None
 
     def hold(self, store):
         """Note where real progress stood as a boss attempt starts (Supervisor.watch_boss)."""
         with self.lock:
             with store.reading() as db:
                 self._advance(db)
-            self.held = (self.since, dict(self.reloads))
+            self.held = self.since
 
     def settle(self):
         """Keep the progress of a boss attempt that ended without a blackout."""
@@ -182,17 +172,14 @@ class LoopGuard:
             self.held = None
 
     def lost(self, store):
-        """Drop the progress of a boss attempt that blacked out. Its entries are scanned past, and
-        ``since`` and the reload counts go back to where they stood when it started."""
+        """Drop the progress of a boss attempt that was lost. Its entries are scanned past, and
+        ``since`` goes back to where it stood when it started."""
         with self.lock:
             if self.held is None:
                 return
             with store.reading() as db:
                 self._advance(db)
-            self.since, reloads = self.held
-            for name, count in reloads.items():
-                self.reloads[name] = max(self.reloads.get(name, 0), count)
-            self.held, self.checked = None, None
+            self.since, self.held, self.checked = self.held, None, None
 
     def looping(self, store):
         """Why the run is in a loop, or None. Reads the journal at most once every ``every`` frames.
@@ -207,7 +194,6 @@ class LoopGuard:
             with store.reading() as db:
                 self._advance(db)
                 rows = journal.turnover(db, self.since or 0, LOOP_EVENTS)
-            self._save(store)
             received, released, names = {}, {}, {}
             for kind, title in rows:
                 match = (_RECEIVED if kind == 'obtain' else _RELEASED).match(title)
@@ -221,9 +207,6 @@ class LoopGuard:
             churn = max(((min(count, received.get(key, 0)), key) for key, count in released.items()), default=(0, ''))
             if churn[0] >= self.limit:
                 reason = f'It received and released {names[churn[1]]} {churn[0]} times without other progress'
-            elif self.reloads and max(self.reloads.values()) >= self.limit:
-                name, count = max(self.reloads.items(), key=lambda item: item[1])
-                reason = f'It reloaded {name} {count} times without progress'
             if reason and reason != self.reason:
                 log.error('Loop guard: %s', reason)
                 self.tripped = reason
@@ -237,17 +220,6 @@ class LoopGuard:
             tripped, self.tripped = self.tripped, None
             return tripped
 
-    def _save(self, store):
-        if self.reloads == self.saved:
-            return
-        try:
-            with store.transaction() as db:
-                kv.put(db, RELOADS_KEY, self.reloads)
-        except Error:
-            log.warning('Could not keep the loop guard reload counts', exc_info=True)
-            return
-        self.saved = dict(self.reloads)
-
     def _advance(self, db):
         """Move ``since`` to the newest real progress entry. Only entries after the last scan are read,
         and after a reload one that repeats a recent entry is the replay, not progress.
@@ -257,10 +229,6 @@ class LoopGuard:
         """
         kinds = (*REAL_PROGRESS, 'release')
         if self.scanned is None:
-            saved = kv.get(db, RELOADS_KEY) or {}
-            self.saved = dict(saved)
-            for name, count in saved.items():
-                self.reloads[name] = self.reloads.get(name, 0) + int(count)
             # A release already in the journal is scanned past, but only real progress moves ``since``.
             self.since, self.scanned = journal.marked(db, kinds)
             self.since, self.scanned = self.since or 0, self.scanned or 0
@@ -274,15 +242,15 @@ class LoopGuard:
                 if match:
                     self.returned.pop(species_key(match.group(1)), None)
                 continue
-            if self.reloads and journal.repeats(db, row_id - REPLAY_EVENTS, row_id - 1, kind, title):
+            if self.replaying() and journal.repeats(db, row_id - REPLAY_EVENTS, row_id - 1, kind, title):
                 continue
             if kind == 'event_return':
                 match = _RETURNED.match(title)
                 if match:
                     self.returned[species_key(match.group(1) or match.group(2))] = (row_id, now)
                 continue
-            self.since, self.reloads = row_id, {}
+            self.since = row_id
         for key, (row_id, seen) in list(self.returned.items()):
             if now - seen >= self.every:
                 del self.returned[key]
-                self.since, self.reloads = max(self.since, row_id), {}
+                self.since = max(self.since, row_id)

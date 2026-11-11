@@ -2,7 +2,9 @@
 from dataclasses import dataclass
 from functools import lru_cache
 
-from .gen1 import decode_text, individual_data
+from .gen1 import (BOX_CAPACITY, BOX_COUNT, BOX_DATA_SIZE, BOX_MONS_OFFSET, BOX_NICKS_OFFSET,
+                   S_BOXES, W_BOX_COUNT, W_CURRENT_BOX, decode_text, individual_data)
+from .yellow import red_layout
 
 
 def memory_bytes(memory, bank, start, size):
@@ -70,4 +72,83 @@ def decode_box(structs: bytes, names: bytes) -> tuple[BoxMon, ...]:
                           tuple(value & 63 for value in block[29:33]),
                           decode_text(names[index * 11:(index + 1) * 11]),
                           data['trainer_id'], data['experience'], tuple(data['dvs']), tuple(data['stat_exp'])))
+    return tuple(out)
+
+
+@dataclass(frozen=True)
+class BoxRecords:
+    """One Gen I box's raw bytes: the 33-byte records and 11-byte nicknames of its counted Pokémon."""
+    box: int
+    structs: bytes
+    names: bytes
+
+    @property
+    def count(self) -> int:
+        return len(self.structs) // 33
+
+    @property
+    def mons(self) -> tuple[BoxMon, ...]:
+        return decode_box(self.structs, self.names)
+
+
+def box_location(box, active):
+    """The (bank, address) of a Gen I box's count byte, with boxes counted from 0.
+
+    The active box is the WRAM copy at wBoxCount, read with bank None. Every other box,
+    and every box when ``active`` is None, is its cartridge RAM copy.
+    """
+    if box == active:
+        return None, W_BOX_COUNT
+    return 2 + box // 6, S_BOXES + (box % 6) * BOX_DATA_SIZE
+
+
+def _byte(memory, bank, address):
+    return memory[address] if bank is None else memory[bank, address]
+
+
+def read_box_counts(memory, *, version=None) -> tuple[int, ...]:
+    """Counted Pokémon in each Gen I box, or () before a box is selected.
+
+    Inactive boxes count 0 until the game has initialized the boxes, which bit 7 of
+    wCurrentBoxNum marks. Their counts are the raw bytes, and only the active box is
+    clamped to BOX_CAPACITY. Memory without cartridge RAM banks, such as a flat test
+    buffer, reports BOX_CAPACITY for every inactive box.
+    """
+    memory = red_layout(memory, version)
+    current = memory[W_CURRENT_BOX]
+    active = current & 0x7F
+    if active >= BOX_COUNT:
+        return ()
+    counts = [0] * BOX_COUNT
+    if current & 0x80:
+        try:
+            counts = [_byte(memory, *box_location(box, None)) for box in range(BOX_COUNT)]
+        except TypeError:
+            counts = [BOX_CAPACITY] * BOX_COUNT
+    counts[active] = min(memory[W_BOX_COUNT], BOX_CAPACITY)
+    return tuple(counts)
+
+
+def read_box_records(memory, counts=None, *, version=None) -> tuple[BoxRecords, ...]:
+    """Raw records of every Gen I box that holds Pokémon, in box order.
+
+    ``counts`` defaults to ``read_box_counts`` and each count is clamped to BOX_CAPACITY.
+    A box in a cartridge RAM bank the memory cannot serve is left out. Records are not
+    filtered by species or level, and nothing switches banks or writes memory.
+    """
+    memory = red_layout(memory, version)
+    counts = read_box_counts(memory) if counts is None else counts
+    active = memory[W_CURRENT_BOX] & 0x7F
+    out = []
+    for box, count in enumerate(counts):
+        count = min(count, BOX_CAPACITY)
+        if not count:
+            continue
+        bank, base = box_location(box, active)
+        try:
+            structs = memory_bytes(memory, bank, base + BOX_MONS_OFFSET, count * 33)
+            names = memory_bytes(memory, bank, base + BOX_NICKS_OFFSET, count * 11)
+        except TypeError:
+            continue
+        out.append(BoxRecords(box, structs, names))
     return tuple(out)

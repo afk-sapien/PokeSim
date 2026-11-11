@@ -9,17 +9,18 @@ import re
 
 from .ram import W_TILEMAP as W_TILEMAP
 from pokecore.textmatch import ScreenText
+from pokecore.gen1 import (
+    W_CURRENT_MENU_ITEM as W_CURRENT_MENU_ITEM,
+    W_ENEMY_HP as W_ENEMY_HP,
+    W_ENEMY_MAX_HP as W_ENEMY_MAX_HP,
+    W_LIST_SCROLL_OFFSET as W_LIST_SCROLL_OFFSET,
+    W_MAX_MENU_ITEM as W_MAX_MENU_ITEM,
+    W_OPTIONS as W_OPTIONS,
+    W_PLAYER_MON_NUMBER as W_PLAYER_MON_NUMBER,
+    W_TOP_MENU_ITEM_X as W_TOP_MENU_X,
+    W_TOP_MENU_ITEM_Y as W_TOP_MENU_Y,
+)
 from pokecore.gen1_ui import read_screen
-
-W_CURRENT_MENU_ITEM = 0xCC26
-W_TOP_MENU_Y = 0xCC24
-W_TOP_MENU_X = 0xCC25
-W_LIST_SCROLL_OFFSET = 0xCC36
-W_MAX_MENU_ITEM = 0xCC28
-W_PLAYER_MON_NUMBER = 0xCC2F      # index in party of the Pokémon currently out
-W_ENEMY_HP = 0xCFE6               # 2 bytes
-W_ENEMY_MAX_HP = 0xCFF4           # 2 bytes
-W_OPTIONS = 0xD355                # bits 0-2 text speed (1 fast/3 mid/5 slow), bit 6 battle style, bit 7 animations off
 
 
 def rows(mem) -> list[str]:

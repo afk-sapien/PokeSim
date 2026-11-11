@@ -1,7 +1,7 @@
 """Play an isolated adventure at full speed and keep a replayable bundle for every stall.
 
 Starts from a fresh cartridge or a copied checkpoint, never from live data. A stall is a
-stretch of game time with no achievement. Each one leaves stall-NN/ in the output folder:
+stretch of game time with no new best. Each one leaves stall-NN/ in the output folder:
 the moment it was noticed, the rolling checkpoint from before it began, a screenshot and
 a report. Both checkpoints replay with tools/validate_progress.py. Outputs contain
 private game data and must remain outside the checkout.
@@ -23,7 +23,8 @@ from pokesim.policies.progression import milestones
 from pokesim.ram import read_snapshot
 from pokesim.runtime.capture import keep_run
 from pokesim.screen import Screen
-from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, advanced
+from pokesim.runtime.supervision import Supervisor
+from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, held_rose
 from pokesim.strategy_data import MAPS
 
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
@@ -66,6 +67,8 @@ def main():
     open_stall = None
     escapes, league_entry = 0, args.output / 'league-entry.state'
     previous, pending, outcome = None, [], 'budget reached'
+    # The best so far, kept across a League restart as the application keeps it.
+    supervisor = Supervisor()
     wall = time.monotonic()
 
     def report(snapshot):
@@ -88,22 +91,24 @@ def main():
             new = diff(previous, snapshot, run.memory)
             pending = [event for event in new if event.still is not None]
             events += [event for event in new if event.still is None]
-            caught = previous is not None and previous.valid and snapshot.valid and advanced(previous, snapshot)
+            # Progress as the application counts it: a new best, or more Pokémon held (GEN1_HELD_RISE).
+            best = bool(snapshot.valid and snapshot.started
+                        and supervisor.progressed(snapshot, len(run.memory.seen_maps), run.memory.championships))
+            rose = snapshot.started and held_rose(previous, snapshot)
             previous = snapshot
             gained = [event for event in events if event.type in PROGRESS_EVENTS]
-            if caught and not gained:
-                progress_frame, escapes = run.frame, 0      # a repeat catch or earned experience is still progress
-            if gained:
+            if best or rose:
                 progress_frame, escapes = run.frame, 0
                 if open_stall:
+                    ended_by = gained[0].title if gained else 'A new best' if best else 'More Pokémon held'
                     open_stall['ended_after_minutes'] = (run.frame - open_stall['noticed_frame']) // MINUTE
-                    open_stall['ended_by'] = gained[0].title
-                    print(f'  recovered after {open_stall["ended_after_minutes"]} more minutes: {gained[0].title}', flush=True)
+                    open_stall['ended_by'] = ended_by
+                    print(f'  recovered after {open_stall["ended_after_minutes"]} more minutes: {ended_by}', flush=True)
                     open_stall = None
-                for event in gained:
-                    if event.type in ('badge', 'champion', 'item', 'trainer'):
-                        timeline.append({'game_clock': clock(run.frame - start), 'type': event.type, 'title': event.title})
-                        print(f'{clock(run.frame - start)} {event.title}', flush=True)
+            for event in gained:
+                if event.type in ('badge', 'champion', 'item', 'trainer'):
+                    timeline.append({'game_clock': clock(run.frame - start), 'type': event.type, 'title': event.title})
+                    print(f'{clock(run.frame - start)} {event.title}', flush=True)
             if args.until_champion and snapshot.started and milestones(snapshot)['champion']:
                 outcome = 'champion'
                 break

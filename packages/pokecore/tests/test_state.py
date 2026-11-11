@@ -6,11 +6,13 @@ from types import SimpleNamespace
 import pytest
 
 from pokecore import gen1, yellow
+from pokecore.gen2 import state as gen2_state
 from pokecore.identity import GEN1_DEX
 from pokecore.shortcuts import gen2ui
 from pokecore.shortcuts.screens import W_STATUS_FLAGS_6
-from pokecore.state import (ABSENT, BATTLE_KINDS, GENERATIONS, LIST_SCREENS, GameState, Party, read_battle,
+from pokecore.state import (ABSENT, BATTLE_KINDS, GENERATIONS, LIST_SCREENS, Boxes, GameState, Party, read_battle,
                             read_state, read_ui)
+from pokecore.storage import box_location
 
 GEN1_MOVES = {84: {'pp': 30}, 45: {'pp': 40}}
 GEN2_MOVES = {33: {'pp': 35}, 45: {'pp': 40}}
@@ -42,6 +44,52 @@ def battle_menu(draw, item):
     draw(9, 14, [CURSOR])
     for x, y, label in ((10, 14, 'FIGHT'), (16, 14, 'PKMN'), (10, 16, item), (16, 16, 'RUN')):
         draw(x, y, label)
+
+
+def name(value):
+    return text(value).ljust(11, b'\x50')
+
+
+def gen1_box_record(species, level):
+    """A 33-byte box record with Thundershock and Growl and one PP Up on Thundershock."""
+    block = bytearray(33)
+    block[0], block[1:3], block[3], block[4] = species, (30).to_bytes(2, 'big'), level, 0x08
+    block[8:12] = bytes((84, 45, 0, 0))
+    block[12:14], block[14:17] = (4321).to_bytes(2, 'big'), (2000).to_bytes(3, 'big')
+    block[27:29], block[29:33] = bytes((0xAB, 0xCD)), bytes((0x45, 40, 0, 0))
+    return bytes(block)
+
+
+def gen1_box(*entries):
+    """One box's data from (species, level, nickname, original trainer) entries."""
+    raw = bytearray(gen1.BOX_DATA_SIZE)
+    raw[0], raw[1 + len(entries)] = len(entries), 0xFF
+    for i, (species, level, nick, ot) in enumerate(entries):
+        raw[1 + i] = species
+        raw[gen1.BOX_MONS_OFFSET + i * 33:gen1.BOX_MONS_OFFSET + (i + 1) * 33] = gen1_box_record(species, level)
+        raw[gen1.BOX_OTS_OFFSET + i * 11:gen1.BOX_OTS_OFFSET + (i + 1) * 11] = name(ot)
+        raw[gen1.BOX_NICKS_OFFSET + i * 11:gen1.BOX_NICKS_OFFSET + (i + 1) * 11] = name(nick)
+    return bytes(raw)
+
+
+class Gen1Banked:
+    """Flat memory plus the cartridge RAM banks that hold the inactive boxes."""
+
+    def __init__(self, raw):
+        self.raw = raw
+        self.banks = {2: bytearray(0x2000), 3: bytearray(0x2000)}
+
+    def __getitem__(self, key):
+        if not isinstance(key, tuple):
+            return self.raw[key]
+        bank, inner = key
+        if isinstance(inner, slice):
+            return self.banks[bank][inner.start - gen1.S_BOXES:inner.stop - gen1.S_BOXES]
+        return self.banks[bank][inner - gen1.S_BOXES]
+
+    def put_box(self, box, data):
+        bank, base = box_location(box, None)
+        self.banks[bank][base - gen1.S_BOXES:base - gen1.S_BOXES + len(data)] = data
 
 
 def gen1_memory(game):
@@ -86,6 +134,10 @@ def gen1_memory(game):
     put(gen1.W_NUM_BOX_ITEMS, [1, 20, 1, 0xFF])
     put(gen1.W_DEX_SEEN, [0b011])
     put(gen1.W_DEX_OWNED, [0b111])
+    # Box 1 is active and holds a Rattata. The game has not initialized the other boxes.
+    put(gen1.W_BOX_COUNT, gen1_box((165, 3, 'RATTATA', 'ASH')))
+    put(gen1.W_EVENT_FLAGS, [0b1, 0, 0x80])
+    put(gen1.W_EVENT_FLAGS + gen1.NUM_EVENTS // 8 - 1, [0x80])
     return raw
 
 
@@ -131,6 +183,20 @@ def struct(species, level, *, item=0, pokerus=0, friendship=70):
     return bytes(raw)
 
 
+def gen2_box(*entries):
+    """One box's data from (structure, nickname, original trainer, egg) entries."""
+    raw = bytearray(gen2_state.BOX_SIZE)
+    raw[0], raw[1 + len(entries)] = len(entries), 0xFF
+    records, trainers = 22, 22 + gen2_state.BOX_STRUCT * gen2_state.BOX_CAPACITY
+    names = trainers + 11 * gen2_state.BOX_CAPACITY
+    for i, (record, nick, ot, egg) in enumerate(entries):
+        raw[1 + i] = gen2_state.EGG if egg else record[0]
+        raw[records + i * 32:records + (i + 1) * 32] = record[:32]
+        raw[trainers + i * 11:trainers + (i + 1) * 11] = name(ot)
+        raw[names + i * 11:names + (i + 1) * 11] = name(nick)
+    return bytes(raw)
+
+
 def gen2_memory(game):
     """A started ``game`` on the overworld."""
     memory = BankedMemory(game)
@@ -163,6 +229,11 @@ def gen2_memory(game):
     memory.put('wTMsHMs', [1] + [0] * 55 + [1])
     memory.put('wPokedexSeen', [0b11])
     memory.put('wPokedexCaught', [0b10])
+    # Box 1 is active and holds a Sentret. Box 3 holds a Chikorita and an egg.
+    memory.put('sBox', gen2_box((struct(161, 3, item=3), 'SENTRET', 'KRIS', False)))
+    memory.put('sBox3', gen2_box((struct(152, 9, pokerus=0x10), 'LEAF', 'GOLD', False),
+                                 (struct(175, 1, friendship=5), 'EGG', 'KRIS', True)))
+    memory.put('wEventFlags', [0b1, 0, 0x80] + [0] * (gen2_state.NUM_EVENTS // 8 - 4) + [0x80])
     if game == 'crystal':
         memory.put('wPlayerGender', [1])
     return memory
@@ -298,6 +369,60 @@ def test_gen2_state(game):
     assert read_state(gen2_memory(game), game).party[0].max_pp is None
 
 
+@pytest.mark.parametrize('game', ['red', 'blue', 'yellow'])
+def test_gen1_boxes_and_events(game):
+    state = read_state(gen1_memory(game), game, GEN1_MOVES)
+    boxes = state.boxes
+    assert boxes.active == 0 and boxes.counts == (1,) + (0,) * 11
+    (rattata,) = boxes.mons
+    assert boxes.box(0) == (rattata,) and boxes.box(1) == ()
+    assert (rattata.box, rattata.position, rattata.species, rattata.dex) == (0, 0, 165, 19)
+    assert (rattata.nick, rattata.ot_name, rattata.level) == ('RATTATA', 'ASH', 3)
+    assert rattata.hp == 30 and rattata.status == 0x08 and rattata.types == (0, 0)
+    assert rattata.moves == (84, 45, 0, 0) and rattata.pp == (5, 40, 0, 0) and rattata.pp_ups == (1, 0, 0, 0)
+    assert rattata.max_pp == (36, 40, 0, 0) and rattata.dvs == (5, 10, 11, 12, 13) and not rattata.shiny
+    assert rattata.trainer_id == 4321 and rattata.experience == 2000 and not rattata.egg
+    assert rattata.held_item is rattata.friendship is rattata.pokerus is None
+    assert state.events == {0, 23, gen1.NUM_EVENTS - 1}
+    assert read_state(gen1_memory(game), game).boxes.mons[0].max_pp is None
+
+
+@pytest.mark.parametrize('game', ['red', 'yellow'])
+def test_gen1_inactive_boxes_come_from_cartridge_ram(game):
+    raw = gen1_memory(game)
+    gen1_put(raw, game, gen1.W_CURRENT_BOX, [0x80])
+    flat = read_state(raw, game).boxes
+    assert flat.counts == (1,) + (None,) * 11 and len(flat.mons) == 1
+    memory = Gen1Banked(raw)
+    memory.put_box(0, gen1_box((84, 50, 'STALE', 'OLD')))
+    memory.put_box(7, gen1_box((84, 12, 'PIKA', 'RED'), (165, 4, 'RAT', 'BLUE')))
+    boxes = read_state(memory, game).boxes
+    assert boxes.counts == (1,) + (0,) * 6 + (2,) + (0,) * 4
+    assert [(mon.box, mon.position, mon.species, mon.level, mon.nick, mon.ot_name) for mon in boxes.mons] == [
+        (0, 0, 165, 3, 'RATTATA', 'ASH'), (7, 0, 84, 12, 'PIKA', 'RED'), (7, 1, 165, 4, 'RAT', 'BLUE')]
+    gen1_put(raw, game, gen1.W_CURRENT_BOX, [12])
+    assert read_state(raw, game).boxes == Boxes(active=None, counts=(), mons=())
+
+
+@pytest.mark.parametrize('game', ['gold', 'silver', 'crystal'])
+def test_gen2_boxes_and_events(game):
+    state = read_state(gen2_memory(game), game, GEN2_MOVES)
+    boxes = state.boxes
+    assert boxes.active == 0 and boxes.counts == (1, 0, 2) + (0,) * 11
+    sentret, leaf, egg = boxes.mons
+    assert boxes.box(0) == (sentret,) and boxes.box(2) == (leaf, egg)
+    assert (sentret.box, sentret.position, sentret.species, sentret.dex) == (0, 0, 161, 161)
+    assert (sentret.nick, sentret.ot_name, sentret.level, sentret.held_item) == ('SENTRET', 'KRIS', 3, 3)
+    assert sentret.hp is sentret.status is sentret.types is None
+    assert (leaf.box, leaf.position, leaf.nick, leaf.ot_name, leaf.level) == (2, 0, 'LEAF', 'GOLD', 9)
+    assert leaf.pokerus == 0x10 and leaf.friendship == 70 and leaf.experience == 729 and leaf.trainer_id == 12345
+    assert leaf.pp == (35, 40, 0, 0) and leaf.pp_ups == (1, 0, 0, 0) and leaf.max_pp == (42, 40, 0, 0)
+    assert leaf.dvs == (0, 10, 10, 10, 10) and leaf.shiny and not leaf.egg
+    assert (egg.box, egg.position, egg.species, egg.friendship) == (2, 1, 175, 5) and egg.egg
+    assert state.events == {0, 23, gen2_state.NUM_EVENTS - 1}
+    assert read_state(gen2_memory(game), game).boxes.mons[0].max_pp is None
+
+
 def walk(value):
     for field in fields(value):
         name, inner = f'{type(value).__name__}.{field.name}', getattr(value, field.name)
@@ -306,6 +431,8 @@ def walk(value):
             yield from walk(inner.mons[0])
         elif is_dataclass(inner):
             yield from walk(inner)
+            if isinstance(inner, Boxes):
+                yield from walk(inner.mons[0])
 
 
 @pytest.mark.parametrize('game', ['red', 'blue', 'yellow', 'gold', 'silver', 'crystal'])

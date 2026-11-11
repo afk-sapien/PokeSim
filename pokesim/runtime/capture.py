@@ -52,8 +52,10 @@ def report(host, snapshot, kind, why='', now=None):
     details = policy.details() if hasattr(policy, 'details') else {}
     since = getattr(stall, 'since', None)
     real = None if since is None else int((time.time() if now is None else now) - since) // 60
+    # The stall watch counts PlayClock frames. The emulator frame goes back with every reload.
+    played = getattr(getattr(host, 'play_clock', None), 'frames', None)
     return {'kind': kind, 'why': why,
-            'quiet_game_minutes': stall.game_minutes(frame) if stall is not None else None,
+            'quiet_game_minutes': stall.game_minutes(played) if stall is not None else None,
             'quiet_real_minutes': real, 'frame': frame, 'map': snapshot.map_name,
             'position': [snapshot.x, snapshot.y], 'in_battle': bool(snapshot.in_battle),
             'objective': details.get('objective'), 'action': details.get('action'), 'reason': details.get('reason'),
