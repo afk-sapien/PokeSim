@@ -158,7 +158,8 @@ def test_manual_takeover_stops_ai_and_keeps_idle_frames_running():
     emu.press('right')
     emu._run()
     assert emu.manual_mode and emu.paused
-    assert ticks == [6, 2, 0, 4]
+    # The press, then one idle frame, so the next press waits at most a frame.
+    assert ticks == [6, 2, 0, 1]
     emu.policy.step.assert_not_called()
     emu.policy.on_restore.assert_called_once()
     emu.pb.button_press.assert_called_once_with('right')
