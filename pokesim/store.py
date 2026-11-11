@@ -107,7 +107,7 @@ class Store:
                         won = record(self.db, snapshot, ev.title, eid)
                     progress.record(self.db, ts, snapshot, won)
                     adventure_counters.record(self.db, eid, ev.type)
-                    progress_events.entry(self, self.db, ev)
+                    progress_events.entry(self, self.db, ev, snapshot)
                     shot = f"{eid}.png" if shot_png else None
                     state = f"event-{eid}.state" if state_bytes else None
                     # A save state is about 167 KB of mostly zeroed RAM and compresses

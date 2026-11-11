@@ -2,7 +2,8 @@
 
 Each generation reads a boss into ``Boss`` and its party into ``Team`` (``team``). ``judge`` answers
 None to go in, or a ``Train`` verdict that names the reason and the level to train to. The boss check
-before the battle (boss.py) asks ``short`` here for the HP and PP each Pokémon needs. No other module
+before the battle (boss.py) asks ``short`` here for the HP and PP each Pokémon needs, and the
+progress rows (progress_events.py) ask ``target`` for the level a gain counts toward. No other module
 keeps a readiness threshold.
 
 The rules, in the order judge asks them:
@@ -119,6 +120,24 @@ def matched(best):
     return best >= READY
 
 
+def matchup_level(boss):
+    """The level the matchup rules train the best fighter to: the League's top ace, or MARGIN over one boss's ace."""
+    return boss.ace if boss.league else boss.ace + MARGIN
+
+
+def target(boss):
+    """The level training before ``boss`` aims at when no loss there raised it, or None when it sets none.
+
+    It is the matchup rules' level, never under the floor. A boss with no matchup rule (no
+    ``scores``) or no ace has its floor alone. A Pokémon's level gain at or under it counts as
+    progress (progress_events.gained). It moves only when the next boss changes, never with a loss,
+    so a loop of losses adds at most the levels left to it."""
+    if boss is None:
+        return None
+    level = max(boss.floor, matchup_level(boss)) if boss.scores and boss.ace is not None else boss.floor
+    return level or None
+
+
 def judge(boss, team, losses=None):
     """None when the team may take on ``boss``, or the ``Train`` verdict of the first rule it fails."""
     if boss.league and boss.inside:
@@ -128,13 +147,14 @@ def judge(boss, team, losses=None):
         return Train(LOSS, bar)
     scores = boss.scores
     if scores and None not in scores and not boss.inside and boss.ace is not None:
+        aim = matchup_level(boss)
         if boss.league:
             if team.partner is not None and team.partner < boss.ace - MARGIN and not all(map(matched, scores)):
                 return Train(PARTNER, boss.ace - MARGIN)
-            if team.level < boss.ace and any(best < LEAGUE_READY for best in scores):
-                return Train(MATCHUP, boss.ace)
-        elif not matched(max(scores)) and team.level < boss.ace + MARGIN:
-            return Train(MATCHUP, boss.ace + MARGIN)
+            if team.level < aim and any(best < LEAGUE_READY for best in scores):
+                return Train(MATCHUP, aim)
+        elif not matched(max(scores)) and team.level < aim:
+            return Train(MATCHUP, aim)
     if team.stamina < boss.opponents:
         return Train(STAMINA, boss.opponents)
     if boss.lost is not None and team.depth < (need := min(boss.lost + DEPTH_REGROWTH, 100 * team.size)):

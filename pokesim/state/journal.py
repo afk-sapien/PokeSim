@@ -63,6 +63,12 @@ def add_progress(db, frame, ts, kind, goal, tier, species, identity, score, net)
                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', (frame, ts, kind, goal, tier, species, identity, score, net))
 
 
+def best_level(db, species, identity):
+    """The highest level a level gain's row holds for one Pokémon, or None before its first gain."""
+    return db.execute("SELECT MAX(score) FROM progress_events WHERE kind IN ('level', 'improve') "
+                      'AND species = ? AND identity = ?', (species, identity)).fetchone()[0]
+
+
 def add_encounters(db, goal, hour, encounters, target, met_rule):
     """Add to the encounter counters of one goal in one game hour."""
     db.execute('INSERT INTO encounter_counts(goal, hour, encounters, target, met_rule) VALUES (?, ?, ?, ?, ?) '

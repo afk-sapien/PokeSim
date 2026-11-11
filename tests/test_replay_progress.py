@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from pokesim.replay.progress import (Axis, Episode, Flag, connect, ground_truth, load, main, rebuild, replay, score,
-                                     segments)
+                                     segments, stored_rows)
 from pokesim.progress_events import HOUR
 
 T0 = 1_700_000_000
@@ -31,6 +31,17 @@ def store(folder, version='red', events=(), receipts=(), progress=()):
                    (i, ts, kind, title, body, 'Route 1', playtime(int(ts - T0) + 3600)))
     db.executemany('INSERT INTO capture_receipts VALUES (?, ?, ?)', receipts)
     db.executemany('INSERT INTO progress VALUES (?, ?, ?, ?, ?, ?)', progress)
+    db.commit()
+    db.close()
+    return folder
+
+
+def shadow(folder, rows):
+    """Add the writers' progress_events rows, (ts, frame, kind, species, net, rewound), to a store."""
+    db = sqlite3.connect(folder / 'pokesim.sqlite')
+    db.execute('CREATE TABLE progress_events (id INTEGER PRIMARY KEY, frame INTEGER, ts REAL, kind TEXT, '
+               'species INTEGER, net INTEGER, rewound INTEGER)')
+    db.executemany('INSERT INTO progress_events (ts, frame, kind, species, net, rewound) VALUES (?, ?, ?, ?, ?, ?)', rows)
     db.commit()
     db.close()
     return folder
@@ -142,6 +153,37 @@ def test_cli_writes_report_and_leaves_input_alone(tmp_path, capsys):
     capsys.readouterr()
     assert main(['report', str(out)]) == 0
     assert 'Bar:' in capsys.readouterr().out
+
+
+def test_stored_rows_keep_their_frames_and_key_the_loop_by_dex(tmp_path):
+    folder = shadow(store(tmp_path / 'adv'), [
+        (T0 + 50, 5000, 'receive', 133, 0, 0),
+        (T0 + 20, None, 'badge', None, 1, 0),
+        (T0 + 100, 6000, 'release', 133, 0, 0),
+        (T0 + 110, 7000, 'dex', 133, 1, 1),
+    ])
+    adv = load(folder)
+    axis = [(T0, 0), (T0 + 100, 6000)]
+    rows = stored_rows(adv, Axis(axis, 'statistics'))
+    assert [(r.ts, r.frame, r.kind, r.net, r.key) for r in rows] == [
+        (T0 + 20, 1200, 'badge', 1, ''), (T0 + 50, 5000, 'receive', 0, 'dex:133'),
+        (T0 + 100, 6000, 'release', 0, 'dex:133'), (T0 + 110, 7000, 'dex', 0, '')]
+    assert [r.frame for r in stored_rows(adv, Axis(axis, 'playtime'))] == [1200, 3000, 6000, 6600]
+
+
+def test_the_replay_reads_stored_rows_when_the_window_has_any(tmp_path):
+    stores = tmp_path / 'stores'
+    shadow(churning(stores), [(T0 + i * 300, None, 'catch', 19, 0, 0) for i in range(1, 49)])
+    store(stores / 'plain', events=[(T0, 'map', 'Found Route 2', '')])
+
+    def sources(*extra):
+        out = tmp_path / 'out' / f'report{len(extra)}{"".join(extra)}.json'
+        assert main(['run', str(stores), '--days', '7', '--out', str(out), *extra]) == 0
+        report = json.loads(out.read_text(encoding='utf-8'))
+        return {result['adventure']: result['rows_source'] for result in report['inputs'][0]['adventures']}
+    assert sources() == {'adv': 'stored', 'plain': 'rebuilt'}
+    assert sources('--rows', 'rebuilt')['adv'] == 'rebuilt'
+    assert sources('--rows', 'stored') == {'adv': 'stored', 'plain': 'stored'}
 
 
 def test_cli_refuses_report_inside_input(tmp_path):
