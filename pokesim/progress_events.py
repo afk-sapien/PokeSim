@@ -4,7 +4,9 @@ Catches, receives, releases, marathon checkpoints and goal ends each write one r
 ``progress_events``. So do a new Pokédex entry, a badge, a League win, a new area and an item, each
 from the journal entry that reports it, and story flags set for the first time this run. A caught or
 received copy the worth oracle kept for an improve reason (pcvalue.improvement), such as rarer DVs
-or a later stage its family lacks, writes an ``improve`` row. Each reload writes a ``plan`` row that
+or a later stage its family lacks, writes an ``improve`` row. So does a level gain toward the next
+boss's readiness target, the first time that Pokémon reaches the level (gained). Any other level
+gain writes a ``level`` row. Each reload writes a ``plan`` row that
 names its reason. ``net`` says
 whether a row counts as progress, from the Kinds table. The rows are written in shadow mode: nothing
 reads them for a decision yet, and a stall, LoopGuard or the watchdog still go by the journal.
@@ -66,15 +68,53 @@ def journal(db, event_type, *, frame=None, species=None):
         record(db, kind, frame=frame, species=species)
 
 
-def entry(store, db, ev):
-    """The rows for a journal entry, in its own transaction: receive or release, and the kind the
-    detector tagged it with, such as ``dex`` or ``badge``, under the running goal."""
+def entry(store, db, ev, snapshot=None):
+    """The rows for a journal entry, in its own transaction: receive or release, a level gain's row,
+    and the kind the detector tagged it with, such as ``dex`` or ``badge``, under the running goal."""
     at, species = frame(store), getattr(ev, 'species', None)
     journal(db, ev.type, frame=at, species=species)
+    watch = getattr(store, 'goal_watch', None)
+    if ev.type == 'level' and species is not None and getattr(ev, 'identity', None):
+        gained(db, watch, ev, at, snapshot)
     if kind := getattr(ev, 'progress', ''):
-        watch = getattr(store, 'goal_watch', None)
         record(db, kind, frame=at, goal=watch.key if watch else '', tier=watch.tier if watch else '',
                species=species, net=getattr(ev, 'needed', None))
+
+
+def mon_identity(trainer_id, dvs, dex):
+    """``identity`` for a party Pokémon, from its DVs as read or as the two bytes the cartridge holds."""
+    return identity(trainer_id, packed(dvs), dex) if dvs else None
+
+
+def readiness(watch, snapshot):
+    """The next boss's readiness target from the emulator's hook (GoalWatch.readiness), or None."""
+    hook = getattr(watch, 'readiness', None)
+    if hook is None or snapshot is None:
+        return None
+    try:
+        return hook(snapshot)
+    except Exception:
+        # A shadow row must never cost the run its journal entry.
+        log.exception('Cannot read the readiness target')
+        return None
+
+
+def gained(db, watch, ev, at, snapshot):
+    """The row for a Pokémon's level gain: ``improve`` the first time it reaches the level and only at
+    or under the next boss's readiness target (planning/readiness.target), else ``level``.
+
+    Every gain writes one row with the level as its score, so the rows keep each Pokémon's highest
+    level and a reload, a trade back or a loop of losses cannot count a level twice. The target
+    moves only when the next boss changes, so such a loop adds at most the levels left to it."""
+    best = db.execute("SELECT MAX(score) FROM progress_events WHERE kind IN ('level', 'improve') "
+                      'AND species = ? AND identity = ?', (ev.species, ev.identity)).fetchone()[0]
+    kind = 'level'
+    if best is None or ev.score > best:
+        aim = readiness(watch, snapshot)
+        if aim is not None and ev.score <= aim:
+            kind = 'improve'
+    record(db, kind, frame=at, goal=watch.key if watch else '', tier=watch.tier if watch else '',
+           species=ev.species, identity=ev.identity, score=ev.score)
 
 
 def reload(store, why):
@@ -154,6 +194,8 @@ class GoalWatch:
     def __init__(self):
         self.key, self.tier, self.hunt = None, '', None
         self.pending, self.flags, self.expected = [], b'', {}
+        # The emulator's hook from a snapshot to the next boss's readiness target, for level gains (gained).
+        self.readiness = None
 
     def expect(self, species, dvs, found):
         """Note a copy ``found`` (pcvalue.Worth) keeps for an improve reason, under the running goal."""

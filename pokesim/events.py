@@ -8,6 +8,7 @@ from .ground_items import ground_item
 from .strategy_data import DATA as STRATEGY_DATA, SPECIES, WORLD
 from typing import Callable
 
+from .progress_events import mon_identity
 from .ram import (BADGES, DEX_NAMES, HALL_OF_FAME_MAP, ITEM_NAMES, KEY_ITEM_IDS, LEADERS, NOTABLE_TRAINERS,
                   SPECIES_NAMES, TRAINER_NAMES, Snapshot)
 
@@ -46,6 +47,9 @@ class Event:
     progress: str = ''
     # For an ``item`` row, whether the item was needed: True for a key item, False for a pickup.
     needed: bool | None = None
+    # For a level gain's row, the Pokémon's identity (progress_events.mon_identity) and its new level.
+    identity: str | None = None
+    score: int | None = None
 
     def __post_init__(self):
         if self.notable is None:
@@ -142,9 +146,11 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
     if len(prev.party) == len(cur.party):
         for a, b in zip(prev.party, cur.party):
             if a.species == b.species and b.level > a.level:
+                dex = SPECIES_DEX.get(b.species)
                 events.append(Event("level", f"{_mon_label(b)} grew to level {b.level}",
                                     priority=HIGH if b.level in (50, 100) else NORMAL if b.level % 10 == 0 else MINIMAL,
-                                    tags="arrow_up"))
+                                    tags="arrow_up", species=dex, identity=mon_identity(b.trainer_id, b.dvs, dex),
+                                    score=b.level))
             if a.species == b.species and a.hp > 0 and b.hp == 0 and not cur.all_fainted:
                 events.append(Event("faint", f"{_mon_label(b)} fainted", priority=MINIMAL,
                                     still=lambda s, i=len(events): True))
