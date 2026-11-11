@@ -232,6 +232,7 @@ def test_live_progress_uses_achievement_age_and_recovery_state(monkeypatch):
     emu.last_achievement = {'id': 1, 'title': 'Caught Ditto', 'ts': 1000}
     emu.invalid_frame = None
     emu.last_reload = 0
+    emu.paused = emu.manual_mode = False
     emu.supervisor = Supervisor()
     emu.play_clock = PlayClock()
     monkeypatch.setattr('pokesim.emulator.time.time', lambda: 1050)
@@ -252,6 +253,7 @@ def _stuck_emulator():
     emu.snapshot = snap(frame=1000)
     emu.supervisor = ladder(MAX_RELOADS)
     emu.play_clock = PlayClock()
+    emu.paused = emu.manual_mode = False
     emu.input_epoch = 0
     emu.events = []
     emu._handle_events = lambda events, snapshot: emu.events.extend(events)

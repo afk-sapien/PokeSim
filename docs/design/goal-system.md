@@ -357,7 +357,7 @@ class Supervisor:
 
 Every timer counts PlayClock frames. The Gen I wall-clock guard at `emulator.py:851` moves to frames. `STUCK_RELOAD_SECONDS` and `BATTLE_TIMEOUT_SECONDS` become frame limits at 60 frames a second. Reload counts persist in the store, so a worker restart does not reset them.
 
-`help_request` and `progress_status` are written once, in the supervisor. Gen II gets stall bundles through `Adapter.bundle`.
+`help_request` and `progress_status` are written once, in the supervisor (`Supervisor.help_request`, `Supervisor.progress`). Each generation only gathers what they read. Gen II keeps stall bundles through `runtime/capture.py`, the same as Gen I, so `Adapter.bundle` is not needed for them.
 
 ### Liveness, the one wall-clock check
 
