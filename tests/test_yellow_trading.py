@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pokesim.interactions.cable_metadata import BUILDS, CORE_BUILDS, YELLOW_CODE
+from pokesim.interactions.cable_metadata import BUILDS, YELLOW_CODE
 from pokesim.yellow import YELLOW_SHA1
 
 RED_SHA1 = 'ea9bcae617fdf159b045185467ae58b2e4a48b9a'
@@ -22,7 +22,7 @@ def test_yellow_build_reads_red_addresses_and_runs_yellow_code():
         else:
             # The Yellow emulator translates Red RAM, HRAM and cartridge RAM addresses.
             assert yellow['symbols'][name] == value, name
-    assert all(build in BUILDS for build in CORE_BUILDS)
+    assert {'Red', 'Blue', 'Yellow'} == {build['version'] for build in BUILDS.values()}
 
 
 def test_link_code_sites_are_banked_rom_addresses():
