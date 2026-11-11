@@ -54,6 +54,8 @@ ALLOWED = {
     'pokesim/gen2/trading.py': (0, 3),
     'pokesim/gen2/training.py': (0, 2),
     'pokesim/interactions/verification.py': (0, 6),
+    # Moved from tools/ with these reads.
+    'pokesim/replay/play_gen2.py': (0, 3),
     'pokesim/scenarios.py': (0, 5),
 }
 

@@ -16,7 +16,7 @@ PACKAGE = ROOT / 'pokesim'
 # Each module that opens one of the app's own databases, and the file it opens. A tool is named by its
 # path from the repository root, and a package module by its path inside pokesim/.
 APP_DATABASES = {'app/registry.py': 'app.sqlite', 'app/backup.py': 'app.sqlite', 'app/auth.py': 'auth.sqlite',
-                 'tools/live_soak.py': 'app.sqlite', 'tools/replay_progress.py': 'app.sqlite'}
+                 'replay/progress.py': 'app.sqlite', 'tools/live_soak.py': 'app.sqlite'}
 RAW = {'db', 'lock'}
 
 

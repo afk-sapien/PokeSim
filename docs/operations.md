@@ -71,7 +71,7 @@ Goldenrod Dept. Store sell evolution stones (2100 each) and the King’s Rock, M
 Scale and Up-Grade, so a spent one-time item never blocks a Pokédex entry. Turn it off to keep
 the store’s normal stock. After the Hall of Fame it also opens the TM shop (one-time TMs at
 Goldenrod 5F) and the Champion shop (supplies at 4F); see
-[Gen II exploration](gen2-exploration.md). `tools/play_gen2.py --extra-store-items` turns it on
+[Gen II exploration](gen2-exploration.md). `python -m pokesim.replay play-gen2 --extra-store-items` turns it on
 for a scenario run.
 
 ## Fair wild DVs

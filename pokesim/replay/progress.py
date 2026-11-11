@@ -5,8 +5,8 @@ never a live data folder. Every database opens read-only. The tool reads the jou
 receipts, the progress and statistics tables, kv and the stall bundle reports. It never reads save
 state and never writes into its input.
 
-    replay_progress.py run STORES_DIR [STORES_DIR ...] --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10]
-    replay_progress.py report REPORT_JSON
+    python -m pokesim.replay progress run STORES_DIR [STORES_DIR ...] --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10]
+    python -m pokesim.replay progress report REPORT_JSON
 
 A labels file is JSON, {"labels": [{"adventure": ID, "start": TS, "end": TS, "stall": true, "note": ""}]}.
 A label with "stall": false clears any true stall it overlaps.
@@ -26,8 +26,6 @@ import threading
 import time
 from types import SimpleNamespace
 from urllib.parse import quote
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pokesim import config, state
 from pokesim.app.watchdog import Limits, Watchdog
@@ -680,8 +678,8 @@ MISSING = [
 ]
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+def main(argv=None, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest='command', required=True)
     run = commands.add_parser('run')
     run.add_argument('stores', nargs='+', type=Path)

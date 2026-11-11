@@ -53,8 +53,8 @@ class Viewer:
                 self.stop.wait(2)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(argv=None, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__)
     parser.add_argument('--image', required=True, help='Immutable, locally loaded image ID')
     parser.add_argument('--rom', required=True, type=Path)
     parser.add_argument('--source', required=True, type=Path)
@@ -62,7 +62,7 @@ def main():
     parser.add_argument('--hours', type=float, default=48)
     parser.add_argument('--name-prefix', default='pokesim-release', help='Unique prefix for the isolated test containers')
     parser.add_argument('--base-port', type=int, default=18950, help='Two consecutive localhost ports for soak and campaign')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     assert args.image.startswith('sha256:'), 'Use the immutable loaded image ID'
     assert 0 < args.hours <= 72
     assert 1024 <= args.base_port <= 65534
