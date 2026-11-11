@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from tools.check_registry_image import check, check_index, check_unchanged
+from tools.release import check_index, check_pull, check_unchanged
 
 
 IMAGE = 'ghcr.io/afk-sapien/pokesim:0.2.0rc99'
@@ -57,7 +57,7 @@ def test_anonymous_pull_uses_empty_credentials_and_matches_tested_image(monkeypa
         configs.append(config)
 
     monkeypatch.setattr(subprocess, 'run', pull)
-    check(IMAGE)
+    check_pull(IMAGE)
     assert calls[1][0][:4] == ['docker', 'buildx', 'imagetools', 'inspect']
     assert calls[1][1]['env']['DOCKER_CONFIG'] == str(configs[0])
     assert configs and not configs[0].exists()
@@ -71,7 +71,7 @@ def test_inaccessible_registry_blocks_release_with_recovery_instructions(monkeyp
     monkeypatch.setattr(subprocess, 'check_output', docker(local(), config())[0])
     monkeypatch.setattr(subprocess, 'run', Mock(side_effect=error))
     with pytest.raises(RuntimeError, match='visibility to Public'):
-        check(IMAGE)
+        check_pull(IMAGE)
 
 
 def test_platform_pull_matches_the_tested_architecture_image(monkeypatch):
@@ -80,7 +80,7 @@ def test_platform_pull_matches_the_tested_architecture_image(monkeypatch):
     monkeypatch.setattr(subprocess, 'check_output', inspect)
     pulls = []
     monkeypatch.setattr(subprocess, 'run', lambda command, **kwargs: pulls.append(command[3:]))
-    check(IMAGE, tested=IMAGE + '-linux-arm64', platform='linux/arm64')
+    check_pull(IMAGE, tested=IMAGE + '-linux-arm64', platform='linux/arm64')
     assert calls[0][0][-1] == IMAGE + '-linux-arm64'
     assert calls[1][0][-1] == IMAGE
     assert pulls == [['pull', '--platform', 'linux/arm64', IMAGE]]
@@ -93,14 +93,14 @@ def test_changed_remote_image_blocks_release(monkeypatch, served):
     monkeypatch.setattr(subprocess, 'check_output', docker(local(), served)[0])
     monkeypatch.setattr(subprocess, 'run', Mock())
     with pytest.raises(ValueError, match='differs from the tested local image'):
-        check(IMAGE)
+        check_pull(IMAGE)
 
 
 def test_registry_without_the_tested_platform_blocks_release(monkeypatch):
     monkeypatch.setattr(subprocess, 'check_output', docker(local('arm64'), config())[0])
     monkeypatch.setattr(subprocess, 'run', Mock())
     with pytest.raises(ValueError, match='differs from the tested local image'):
-        check(IMAGE, platform='linux/arm64')
+        check_pull(IMAGE, platform='linux/arm64')
 
 
 def test_push_guard_passes_a_missing_tag_and_the_same_image(monkeypatch, capsys):

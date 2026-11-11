@@ -46,7 +46,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          python tools/pokecore_release.py "$TAG" >> "$GITHUB_OUTPUT"
+          # A tag cut before tools/release.py existed still has the old tool, so it runs that.
+          if [ -f tools/release.py ]; then
+            python tools/release.py check-pokecore "$TAG" >> "$GITHUB_OUTPUT"
+          else
+            python tools/pokecore_release.py "$TAG" >> "$GITHUB_OUTPUT"
+          fi
           revision=$(git rev-parse HEAD)
           git merge-base --is-ancestor "$revision" origin/main || { echo "::error::$TAG is not a commit on main"; exit 1; }
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
@@ -110,7 +115,12 @@ jobs:
           printf '%s\n' "pokecore-$VERSION-py3-none-any.whl" "pokecore-$VERSION.tar.gz" | sort > "$RUNNER_TEMP/expected.txt"
           ls dist | sort > "$RUNNER_TEMP/built.txt"
           diff "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/built.txt" || { echo "::error::unexpected build output"; exit 1; }
-          python tools/pokecore_release.py "$TAG" --notes "$RUNNER_TEMP/notes.md" --wheel "dist/pokecore-$VERSION-py3-none-any.whl"
+          # A tag cut before tools/release.py existed still has the old tool, so it runs that.
+          if [ -f tools/release.py ]; then
+            python tools/release.py check-pokecore "$TAG" --notes "$RUNNER_TEMP/notes.md" --wheel "dist/pokecore-$VERSION-py3-none-any.whl"
+          else
+            python tools/pokecore_release.py "$TAG" --notes "$RUNNER_TEMP/notes.md" --wheel "dist/pokecore-$VERSION-py3-none-any.whl"
+          fi
           for file in dist/*; do
             venv="$RUNNER_TEMP/clean-$(basename "$file")"
             python -m venv "$venv"

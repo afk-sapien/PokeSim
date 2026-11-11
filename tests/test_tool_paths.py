@@ -23,6 +23,11 @@ RECORDS = {
     'tools/gen1_wild.py': 'Removed by step 5 of the planner systems note, #203',
     'tools/link_spike.py': 'Removed after commit 7053c654. docs/link-spike.md keeps what it measured',
     'tools/temp-wheels': 'Exists only in the TEMP pin commit that docs/publishing.md describes',
+    # The release workflows still run these for a tag cut before tools/release.py existed.
+    'tools/assemble_release.py': 'Now tools/release.py assemble, named only in the release fallback',
+    'tools/check_release_pins.py': 'Now tools/release.py check-pins, named only in the release fallback',
+    'tools/floating_tags.py': 'Now tools/release.py floating-tags, named only in the release fallback',
+    'tools/pokecore_release.py': 'Now tools/release.py check-pokecore, named only in the release fallback',
 }
 
 
