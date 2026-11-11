@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import gzip
 import hashlib
+import inspect
 import json
 import logging
 import os
@@ -38,6 +39,20 @@ RETRY_SECONDS = 600
 # The most segments kept for the save from before a stall, about two and a half game hours at the
 # default autosave pace. A stall is noticed after two.
 HELD_SEGMENTS = 30
+
+
+_TAKES_PIPELINE = {}
+
+
+def _takes_pipeline(recorder):
+    """Whether ``recorder.decide`` takes the decide pipeline's pick, read once per recorder class."""
+    kind = type(recorder)
+    if kind not in _TAKES_PIPELINE:
+        try:
+            _TAKES_PIPELINE[kind] = 'pipeline' in inspect.signature(recorder.decide).parameters
+        except (TypeError, ValueError):
+            _TAKES_PIPELINE[kind] = False
+    return _TAKES_PIPELINE[kind]
 
 
 def stamp(name):
@@ -208,8 +223,14 @@ class Tracer:
         key = None if goal is None else getattr(goal, 'key', None)
         if goal is not None and not isinstance(key, str):
             key = type(goal).__name__
-        self.recorder.decide(key, getattr(snapshot, 'map', None), getattr(snapshot, 'x', None),
-                             getattr(snapshot, 'y', None))
+        where = getattr(snapshot, 'map', None), getattr(snapshot, 'x', None), getattr(snapshot, 'y', None)
+        # The decide pipeline's shadow pick goes in when this step made one. A pokecore release from
+        # before the field has no such argument, so its traces leave it out.
+        pipeline = getattr(policy, 'pipeline_pick', None)
+        if pipeline is not None and _takes_pipeline(self.recorder):
+            self.recorder.decide(key, *where, pipeline=pipeline)
+        else:
+            self.recorder.decide(key, *where)
 
     def input(self, source, payload=None):
         if self.recording:

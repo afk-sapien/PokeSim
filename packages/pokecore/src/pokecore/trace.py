@@ -497,10 +497,16 @@ class Recorder:
 
     # Caller records
 
-    def decide(self, goal, map, x, y):
-        """Log one policy step with a digest of the digest ranges."""
-        return self._emit("decide", goal=_json_value(goal), map=_json_value(map), x=x, y=y,
-                          digest=memory_digest(self.emulator, self.digest_ranges))
+    def decide(self, goal, map, x, y, pipeline=None):
+        """Log one policy step with a digest of the digest ranges.
+
+        ``pipeline`` is what a shadow decision pipeline picked at this step, as plain data. It is logged
+        only when given, and a replay compares it only when the log has it.
+        """
+        fields = {"goal": _json_value(goal), "map": _json_value(map), "x": x, "y": y}
+        if pipeline is not None:
+            fields["pipeline"] = _json_value(pipeline)
+        return self._emit("decide", **fields, digest=memory_digest(self.emulator, self.digest_ranges))
 
     def input(self, source, payload=None):
         """Log something from outside the cartridge that the policy uses, such as an owner command."""
@@ -883,6 +889,9 @@ class Comparator:
         logged_offset = expected["frame"] - self._start[1]
         for key in ("index", "hash"):
             actual.pop(key, None)
+        if actual["kind"] == "decide" and "pipeline" not in logged:
+            # A log from before the pipeline field, or a step it did not decide, leaves the field out.
+            actual.pop("pipeline", None)
         if (actual_offset, actual) != (logged_offset, logged):
             self._diverged("the run did something other than the log",
                            {"index": expected["index"], "frame": expected["frame"], "kind": expected["kind"],

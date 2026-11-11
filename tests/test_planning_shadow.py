@@ -63,9 +63,9 @@ def test_a_disabled_shadow_never_builds_candidates():
 
 def test_a_new_pick_is_a_changed_key():
     shadow = Shadow()
-    assert shadow.changed('overworld', ('heal', None))
-    assert not shadow.changed('overworld', ('heal', None))
-    assert shadow.changed('overworld', ('collect_train', 'train:1:40'))
+    assert shadow.changed('pipeline', ('heal', None))
+    assert not shadow.changed('pipeline', ('heal', None))
+    assert shadow.changed('pipeline', ('collect_train', 'train:1:40'))
 
 
 def test_the_shadow_is_never_saved():
@@ -149,7 +149,15 @@ def test_the_audit_reports_agreement_shares_and_disagreements(tmp_path, capsys):
               'frames_by_pick': {'collection new entry': 75, 'heal': 25}}
     (tmp_path / 'new.json').write_text(json.dumps({**base, 'shadow': shadow}))
     lines = shadow_lines(load(tmp_path)['red'])
-    assert '| collection | 4 | 75.0% |' in lines
     assert 'would have chosen: collection new entry 75.0%, heal 25.0%' in lines
     assert 'differences: collection score 1' in lines
     assert 'top collection disagreements: collection repeat -> collection new entry 1' in lines
+    # The decide pipeline adds frames and sources, which older run files lack.
+    assert '| collection | 4 | 75.0% | - |' in lines
+    piped = {**shadow, 'decisions': {'pipeline': 10}, 'agreed': {'pipeline': 9}, 'frames': {'pipeline': 200},
+             'frames_agreed': {'pipeline': 150}, 'sources': {'pipeline story': 6, 'pipeline heal': 4},
+             'sources_agreed': {'pipeline story': 6, 'pipeline heal': 3}}
+    (tmp_path / 'new.json').write_text(json.dumps({**base, 'shadow': piped}))
+    lines = shadow_lines(load(tmp_path)['red'])
+    assert '| pipeline | 10 | 90.0% | 75.0% |' in lines
+    assert '| pipeline | heal | 4 | 75.0% |' in lines and '| pipeline | story | 6 | 100.0% |' in lines

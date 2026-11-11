@@ -65,8 +65,8 @@ sys.path.insert(0, str(ROOT))
 
 # Policy modules load after ``prepare``, once the cartridge has set the Gen I variant and the randomizer.
 # The gate's rung runner and its comparison live in pokesim.replay.rung, which the replay bisect shares.
-from pokesim.replay.rung import (GATE_FRAMES, GATE_QUIET, GATE_TIMEOUT, GATE_WASTE_POINTS, _bundle, _cartridges, compare,
-                                 gate_rung, past_baseline, prepare)
+from pokesim.replay.rung import (GATE_FRAMES, GATE_QUIET, GATE_TIMEOUT, GATE_WASTE_POINTS, PIPELINE_BAR, _bundle,
+                                 _cartridges, agreement, compare, gate_rung, past_baseline, prepare, share)
 
 GEN1_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'post_game')
 GEN2_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'champion_first',
@@ -451,7 +451,11 @@ def _gate_line(result, base):
     change = f'{result["waste"] - base["waste"]:+5.1f}' if base else '  new'
     stall = f', stall: {result["stall"]["reason"]}' if result['stall'] else ''
     story = f', earned {", ".join(result["story"])}' if result.get('story') else ''
-    return f'{name:<30} {result["waste"]:5.1f}% wasted ({change}), {result["errors"]} errors{story}{stall}'
+    pipeline = result.get('pipeline')
+    agrees = (f', pipeline agrees {share(pipeline["agreed"], pipeline["decisions"]):.1f}% of '
+              f'{pipeline["decisions"]} decisions, {share(pipeline["frames_agreed"], pipeline["frames"]):.1f}% '
+              'of frames' if pipeline else '')
+    return f'{name:<30} {result["waste"]:5.1f}% wasted ({change}), {result["errors"]} errors{story}{stall}{agrees}'
 
 
 def attempt(folder, commit):
@@ -524,6 +528,12 @@ def gate(args):
     stalls = [result for result in results if result.get('stall')]
     print(f'{len(results)} rungs in {report["wall_seconds"]}s, {len(stalls)} stalls, attempt {report["attempt"]}, '
           f'report in {out}')
+    total, low = agreement(results)
+    if total:
+        print(f'decide pipeline: agrees on {share(total["agreed"], total["decisions"]):.1f}% of '
+              f'{total["decisions"]} decisions and {share(total["frames_agreed"], total["frames"]):.1f}% of frames')
+        if low:
+            print(f'decide pipeline under {100 * PIPELINE_BAR:g}% of frames: {", ".join(low)}')
     if args.write_baseline:
         failed = [result for result in results if result.get('failed')]
         if failed:

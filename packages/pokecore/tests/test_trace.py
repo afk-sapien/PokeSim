@@ -28,10 +28,11 @@ def hook_writes(game):
     game.hook_register(*HOOK, hook, None)
 
 
-def policy(choice='b', steps=6, retry=None, quiet=False):
+def policy(choice='b', steps=6, retry=None, quiet=False, pipeline=None):
     """A small deterministic player: decide, press, tick, write. ``choice`` changes what it presses.
 
-    ``quiet`` ticks with no rendering and no sound, as a headless production game does.
+    ``quiet`` ticks with no rendering and no sound, as a headless production game does. ``pipeline``
+    is the shadow pipeline pick each walk step logs.
     """
     flags = {'render': False, 'sound': False} if quiet else {}
 
@@ -39,7 +40,10 @@ def policy(choice='b', steps=6, retry=None, quiet=False):
         game = recorder.emulator
         hook_writes(game)
         for step in range(steps):
-            recorder.decide('walk', 1, step, 0)
+            if pipeline is None:
+                recorder.decide('walk', 1, step, 0)
+            else:
+                recorder.decide('walk', 1, step, 0, pipeline=pipeline)
             button = 'a' if step % 2 == 0 else choice
             game.press(button)
             game.tick(4, **flags)
@@ -265,6 +269,22 @@ def test_redecide_matches_the_same_policy_and_stops_at_a_changed_one(tmp_path):
     assert changed.details['last_decide']['goal'] == 'walk'
     shorter = redecide(path, machine(), policy(steps=2))
     assert shorter.code == DIVERGED
+
+
+def test_a_pipeline_pick_is_logged_when_given_and_compared_when_logged(tmp_path):
+    pick = {'goal': 'walk', 'source': 'story', 'rule': 'rank'}
+    path = record(tmp_path, policy(pipeline=pick))
+    decides = [record for record in Trace.read(path).records if record['kind'] == 'decide']
+    assert [record.get('pipeline') for record in decides] == [pick] * 6 + [None]
+    assert verify(path, machine()).code == OK
+    assert redecide(path, machine(), policy(pipeline=pick)).code == OK
+    changed = redecide(path, machine(), policy(pipeline={**pick, 'goal': 'heal'}))
+    assert changed.code == DIVERGED and changed.details['kind'] == 'decide'
+    assert redecide(path, machine(), policy()).code == DIVERGED
+    # A log from before the field still replays under a policy that logs it.
+    older = tmp_path / 'older'
+    older.mkdir()
+    assert redecide(record(older), machine(), policy(pipeline=pick)).code == OK
 
 
 def test_a_quiet_recording_logs_its_flags_and_replays_with_them(tmp_path):

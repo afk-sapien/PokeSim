@@ -28,6 +28,8 @@ from .collection import CENTERS, EXPECTED_FRAMES, Collection, LEAGUE, SUPPORT_TR
 from ..planning import values
 from ..planning import arbiter
 from ..planning import boss
+from ..planning import decide
+from . import pipeline
 from .ledger import battle_room, fighters, league_treatment
 from ..planning.ledger import PP
 from ..planning.arbiter import Candidate, Tier
@@ -173,11 +175,16 @@ class Choice:
     hurt party or a full box, cannot be weighed: the goal behind it cannot run until it is met, so its
     enabler replaces the pick. ``candidates`` lists what was weighed since the last replacement, so its
     arbiter pick is always ``pick``.
+
+    ``offers`` records each source's offer with its chain site, for the decide pipeline in shadow mode
+    (docs/design/decide-pipeline.md). An offer an errand under way leaves out is not recorded, since that
+    guard reads the chain's pick and stays at its site until a group switches on.
     """
 
-    def __init__(self, goal, candidate):
+    def __init__(self, goal, candidate, site='base', source='current'):
         self.goal, self.pick = goal, candidate
         self.candidates = [candidate]
+        self.offers = [pipeline.offer(site, goal, candidate, source)]
 
     @property
     def kind(self):
@@ -213,20 +220,22 @@ class Choice:
             return candidate.goal == self.kind
         return arbiter.choose([self.pick, candidate]) is candidate
 
-    def offer(self, goal, candidate):
-        """Offer ``goal`` as ``candidate`` and return the goal the arbiter keeps. An errand under way
-        weighs nothing but its own steps, so any other offer is left out of ``candidates``."""
-        if self.wins(candidate):
+    def offer(self, goal, candidate, site=None):
+        """Offer ``goal`` as ``candidate`` from chain ``site`` and return the goal the arbiter keeps. An
+        errand under way weighs nothing but its own steps, so any other offer is left out of ``candidates``."""
+        wins = self.wins(candidate)
+        if wins or not self.errand:
             self.candidates.append(candidate)
+            self.offers.append(pipeline.offer(site, goal, candidate))
+        if wins:
             self.goal, self.pick = goal, candidate
-        elif not self.errand:
-            self.candidates.append(candidate)
         return self.goal
 
-    def replace(self, goal, candidate):
-        """Put ``goal`` first, as the enabler of a failed precondition."""
+    def replace(self, goal, candidate, site=None):
+        """Put ``goal`` first, as the enabler of a failed precondition, from chain ``site``."""
         self.goal, self.pick = goal, candidate
         self.candidates = [candidate]
+        self.offers.append(pipeline.offer(site, goal, candidate))
         return goal
 
 
@@ -396,6 +405,8 @@ class StrategicPolicy(Policy):
         self.errand = None
         self.pick = None
         self.decided = False
+        # The decide pipeline's pick at this step's overworld decision, for the trace, or None.
+        self.pipeline_pick = None
 
     def describe(self):
         return f"strategic ({self.mode})"
@@ -480,7 +491,7 @@ class StrategicPolicy(Policy):
         return select(scr, target, one_based, scroll)
 
     def step(self, ctx):
-        self.pick, self.decided = None, False
+        self.pick, self.decided, self.pipeline_pick = None, False, None
         actions = self._step(ctx)
         if self.errand is not None and not self.decided and self.goal is self.pick and not ctx.snapshot.in_battle:
             # An errand under way is the goal until the next overworld decision ends it. Otherwise each
@@ -582,18 +593,23 @@ class StrategicPolicy(Policy):
         if self.collection.completed_champion and s.map not in LEAGUE:
             base = Goal('collect_plan', 'Plan the next adventure project',
                         'Choose a collecting, evolution, training, or exploration objective')
+            choice = Choice(base, goal_candidate(base, self.collection), source='plan')
         else:
             base = story_goal(s, self.starter, self.fossil) if s.started else self.goal
-            base = boss_training(s, base, self.losses) or base
-        choice = Choice(base, goal_candidate(base, self.collection))
+            choice = Choice(base, goal_candidate(base, self.collection), source='story' if s.started else 'current')
+            # Training for the next boss is the enabler the story goal needs.
+            trained = boss_training(s, base, self.losses)
+            if trained:
+                choice.replace(trained, goal_candidate(trained, self.collection), site='boss')
         if self.collection.project and s.map not in LEAGUE:
             project_goal = self.collection.goal(s)
             if project_goal:
                 # The collection weighed the project against the plan when it committed it, so the
                 # project under way is the pick, as before, even in a test that starts one early.
-                choice.replace(project_goal, goal_candidate(project_goal, self.collection, 'collection'))
+                choice.replace(project_goal, goal_candidate(project_goal, self.collection, 'collection'), site='project')
         if self.pickups.active and s.map not in LEAGUE:
-            choice.offer(self.pickups.goal(self.pickups.active), choice.errand_candidate('collect_pickup', 'pickup'))
+            choice.offer(self.pickups.goal(self.pickups.active), choice.errand_candidate('collect_pickup', 'pickup'),
+                         site='pickup')
         if self.pc.species:
             if any(p.species == self.pc.species for p in s.party) or self.pc.destination is None:
                 self.pc.species = None
@@ -603,7 +619,7 @@ class StrategicPolicy(Policy):
                 choice.replace(Goal('party_upgrade', 'Bring a stronger reserve onto the team',
                                     'Swap an underused reserve for a useful Pokémon already in storage',
                                     ((self.pc.destination, 13, 4),), 'up', True),
-                               choice.errand_candidate('party_upgrade', 'party'))
+                               choice.errand_candidate('party_upgrade', 'party'), site='swap')
         self.goal = self.pick = choice.goal
         self.next_goal = self.goal.to_dict()
         league_rooms = {MAPS[n] for n in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM')}
@@ -633,21 +649,22 @@ class StrategicPolicy(Policy):
             self.pc.destination = None
             self.goal = choice.replace(Goal('party_release', 'Make room in storage',
                                             'Let a spare duplicate go so there is room for new catches',
-                                            CENTERS, 'up', True), choice.errand_candidate('party_release', 'party'))
+                                            CENTERS, 'up', True), choice.errand_candidate('party_release', 'party'),
+                                       site='release')
         elif s.box_full and not withdrawing_partner and s.next_free_box is not None and s.map not in league_rooms:
             self.pc.species = None
             self.pc.destination = None
             self.goal = choice.replace(Goal('party_box', 'Make room for new catches',
                                             f'Box {s.active_box + 1} is full. Visit a PC and switch to Box '
                                             f'{s.next_free_box + 1}', CENTERS, 'up', True),
-                                       choice.errand_candidate('party_box', 'party'))
+                                       choice.errand_candidate('party_box', 'party'), site='box')
         if kind == 'overworld' and not s.in_battle:
             self._boss_check(s, self.pick, s.map in league_rooms)
             self._update_heal_latch(s)
         if self.heal_latch and s.map not in league_rooms and not ball_at_hand(s, choice.goal, self.nav):
             # The heal under way is the goal of every step, not only the overworld ones. Otherwise each
             # dialogue box, battle and poison tick on the way to the nurse ran under the story goal.
-            self.goal = choice.replace(healing_goal(s), choice.errand_candidate('heal', 'heal'))
+            self.goal = choice.replace(healing_goal(s), choice.errand_candidate('heal', 'heal'), site='heal_latch')
         self.choice = choice
         token =(s.badges, tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
         if s.party and token != self.assessment_token:
@@ -964,7 +981,7 @@ class StrategicPolicy(Policy):
             choice = Choice(self.goal, goal_candidate(self.goal, self.collection))
         self.choice = None
         if self.heal_latch and not in_league and not ball_at_hand(s, choice.goal, self.nav):
-            choice.replace(healing_goal(s), choice.errand_candidate('heal', 'heal'))
+            choice.replace(healing_goal(s), choice.errand_candidate('heal', 'heal'), site='heal')
         swap = choice.errand_candidate('party_upgrade', 'party')
         if (not s.box_full and not self.heal_latch and not choice.owns_party and choice.wins(swap)
                 and 'Pokecenter' in WORLD.get(s.map, {}).get('name', '') and WORLD[s.map]['width'] == 14):
@@ -979,7 +996,7 @@ class StrategicPolicy(Policy):
                     self.pc.destination = s.map
                     choice.offer(Goal('party_upgrade', 'Bring a stronger reserve onto the team',
                                       'Swap an underused reserve for a useful Pokémon already in storage',
-                                      ((s.map, 13, 4),), 'up', True), swap)
+                                      ((s.map, 13, 4),), 'up', True), swap, site='upgrade')
         goal = choice.goal
         if in_league:
             # Between rooms the bag heals toward the boss check's bar (planning/boss.py treatment), the same
@@ -1019,7 +1036,7 @@ class StrategicPolicy(Policy):
                                   completed_champion=self.collection.completed_champion)
         if supplies.goal is not goal:
             # The shop plans a restock only for supplies the goal cannot go on without.
-            goal = choice.replace(supplies.goal, choice.errand_candidate(supplies.goal.key, 'supplies'))
+            goal = choice.replace(supplies.goal, choice.errand_candidate(supplies.goal.key, 'supplies'), site='supplies')
         if supplies.prepared and self.collection.project:
             self.collection.project['supplies_prepared'] = True
         if supplies.abandon:
@@ -1042,7 +1059,8 @@ class StrategicPolicy(Policy):
                              f'Improve {mon.nick or mon.name} using an owned HM')
                 # Each teach is tried once for a party member and its moves, so one that fails does not
                 # start again until the moves change.
-                if attempt not in self.supply_attempts and choice.offer(teach, self.teach_candidate(choice, upgrade)) is teach:
+                if (attempt not in self.supply_attempts
+                        and choice.offer(teach, self.teach_candidate(choice, upgrade), site='teach') is teach):
                     self.supply_attempts.add(attempt)
                     self.goal = teach
                     self.reason = teach.reason
@@ -1053,7 +1071,7 @@ class StrategicPolicy(Policy):
         if tm_action:
             return tm_action
         if goal.key == "thunder" and not event_set(s.event_flags, "EVENT_2ND_LOCK_OPENED"):
-            goal = choice.replace(self._trash_goal(s), choice.errand_candidate('trash', 'trash'))
+            goal = choice.replace(self._trash_goal(s), choice.errand_candidate('trash', 'trash'), site='trash')
         if not self.heal_latch and not in_league and not choice.errand:
             # The collection pick weighs its own projects on the arbiter against the goal it is handed, and
             # commits the one it picks, so its pick is taken as it is. An errand under way is never handed
@@ -1065,7 +1083,7 @@ class StrategicPolicy(Policy):
                              else goal_candidate(collection_goal, self.collection, 'collection'))
                 if choice.kind not in ('collection', 'plan'):
                     self.next_goal = goal.to_dict()
-                goal = choice.replace(collection_goal, candidate)
+                goal = choice.replace(collection_goal, candidate, site='collection')
         # A legendary or a marathon under way loses its run when it leaves, so no pickup cuts into one.
         committed = legendary_project(self.collection.project) or (self.collection.project or {}).get('method') == 'marathon'
         pickup_errand = choice.errand_candidate('collect_pickup', 'pickup')
@@ -1073,7 +1091,7 @@ class StrategicPolicy(Policy):
             pickup = self.pickups.choose(s, self.nav, goal, self.clock)
             if pickup:
                 self.next_goal = goal.to_dict()
-                goal = choice.offer(pickup, pickup_errand)
+                goal = choice.offer(pickup, pickup_errand, site='pickup_new')
         # A plan made north of Victory Road cannot reach most of Kanto, so the passage replaces it.
         # North means no route to the southern entrance through the gates open now.
         south = ((MAPS['ROUTE_23'], 8, 138),)
@@ -1083,7 +1101,7 @@ class StrategicPolicy(Policy):
             goal = choice.replace(Goal('collect_passage', 'Return to Kanto for another expedition',
                                        'Solve the remaining passage puzzles and leave through the southern entrance',
                                        south),
-                                  choice.errand_candidate('collect_passage', 'passage'))
+                                  choice.errand_candidate('collect_passage', 'passage'), site='passage')
         if s.map in (MAPS["ROCKET_HIDEOUT_ELEVATOR"], MAPS["CELADON_MART_ELEVATOR"], MAPS["SILPH_CO_ELEVATOR"]):
             rocket_lift = s.map == MAPS["ROCKET_HIDEOUT_ELEVATOR"]
             if self.elevator_exit and not rocket_lift:
@@ -1098,12 +1116,15 @@ class StrategicPolicy(Policy):
             goal = choice.replace(Goal("hideout_elevator", "Use the Rocket Hideout elevator",
                                        f"Select {self.elevator_floor} and leave the lift",
                                        ((s.map, 1, 2) if rocket_lift else (s.map, 3, 1),), "up", True),
-                                  choice.errand_candidate('hideout_elevator', 'passage'))
+                                  choice.errand_candidate('hideout_elevator', 'passage'), site='elevator')
         else:
             self.elevator_exit = False
         shadow = self.shadow
-        if shadow is not None and shadow.changed('overworld', (goal.key, (self.collection.project or {}).get('key'))):
-            shadow.compare('overworld', lambda: list(choice.candidates), goal.key, outer=True)
+        if shadow is not None:
+            # The decide pipeline weighs the offers the chain recorded, beside the chain's pick.
+            decision = shadow.weigh('pipeline', lambda: decide.decide(choice.offers), goal.key,
+                                    (self.collection.project or {}).get('key'), s.frame)
+            self.pipeline_pick = decision.record() if decision is not None else None
         self.goal = goal
         self.errand = goal if choice.errand else None
         self.decided = True
@@ -1610,7 +1631,12 @@ class StrategicPolicy(Policy):
         ``choice``, and return the goal it keeps and the action that starts it, if any."""
         from .. import tm_shop, champion_shop
         if choice is None or choice.goal is not goal:
-            choice = Choice(goal, goal_candidate(goal, self.collection))
+            fresh = Choice(goal, goal_candidate(goal, self.collection))
+            if choice is not None:
+                # The offers made here still go on the overworld decision's record for the decide pipeline.
+                # The goal is already on it from its own site.
+                fresh.offers = choice.offers
+            choice = fresh
         teach = choice.errand_candidate('teach_tm', 'moves')
         # Every option here is an errand or an upgrade, and neither cuts into an errand under way.
         if not self.tm_moves or self.heal_latch or in_league or not choice.wins(teach):
@@ -1639,7 +1665,7 @@ class StrategicPolicy(Policy):
                 self.supply_attempts.add(attempt)
                 self.goal = choice.offer(Goal('teach_supply', f'Use {champion_shop.NAMES[item]}',
                                               f'Improve {mon.nick or mon.name} using an owned item'),
-                                         choice.errand_candidate('teach_supply', 'moves'))
+                                         choice.errand_candidate('teach_supply', 'moves'), site='tm')
                 return self.goal, self._use_item(s, item, target)
         if owned:
             item, target = owned['item'], owned['target']
@@ -1650,20 +1676,21 @@ class StrategicPolicy(Policy):
                 self.tm_plan = None
                 name = tm_shop.label(item, self.tm_moves)
                 self.goal = choice.offer(Goal('teach_tm', f'Teach {name}',
-                                              f'Improve {mon.nick or mon.name} using an owned TM'), teach)
+                                              f'Improve {mon.nick or mon.name} using an owned TM'), teach, site='tm')
                 self.reason = self.goal.reason
                 return self.goal, self._use_item(s, item, target)
         if self.tm_plan:
             if bag.get(self.tm_plan['item']):
                 return choice.goal, None
             # A trip under way is an errand, so only another errand's precondition stops it.
-            return choice.offer(self._buy_goal(s, self.tm_plan), choice.errand_candidate('buy_tm', 'moves')), None
+            return choice.offer(self._buy_goal(s, self.tm_plan), choice.errand_candidate('buy_tm', 'moves'),
+                                site='tm_trip'), None
         if purchase:
             candidate = self.purchase_candidate(purchase)
             if choice.wins(candidate):
                 self.tm_plan = purchase
                 self.tm_frame = s.frame
-            return choice.offer(self._buy_goal(s, purchase), candidate), None
+            return choice.offer(self._buy_goal(s, purchase), candidate, site='tm'), None
         return choice.goal, None
 
     @staticmethod
