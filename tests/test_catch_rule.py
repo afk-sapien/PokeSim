@@ -75,7 +75,7 @@ def test_gen1_a_missing_entry_waits_when_only_the_upgrade_slot_is_free():
     assert choose_battle(state, party[0], enemy, 0, collect_missing=True).kind == 'item'
     assert choose_battle(state, party[0], enemy, 0, collect_missing=True, reserve=reserve).kind != 'item'
     emulator = SimpleNamespace(paused=False, manual_mode=False, stall=None, loop_guard=None, policy=policy, snapshot=state,
-                               supervisor=Supervisor())
+                               supervisor=Supervisor(), play_clock=SimpleNamespace(frames=0))
     assert policy.boxes_full and Emulator.help_request(emulator, {'action': 'battle'})['reason'] == pcvalue.BOXES_FULL
     # With two slots free it is caught as before, and the request clears.
     roomy = replace(state, box_counts=(20,) * 11 + (18,), boxed_pokemon=((sid(1), 50),) * 18)

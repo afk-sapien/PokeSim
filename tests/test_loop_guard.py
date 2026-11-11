@@ -199,8 +199,10 @@ def test_the_web_thread_and_the_emulator_thread_share_one_guard(tmp_path):
 
 
 def test_a_waiting_run_is_not_shown_stalled_even_while_it_loops():
-    from pokesim.stalls import stalled_state
-    assert stalled_state(True, False, False, 'It received and released Totodile 6 times without other progress')
-    assert not stalled_state(True, True, False, 'It received and released Totodile 6 times without other progress')
-    assert not stalled_state(True, True, True, None) and not stalled_state(False, False, True, 'loop')
-    assert stalled_state(True, False, True, None)
+    from pokesim.runtime.supervision import STALL_RELOADS, Supervisor
+    loop = 'It received and released Totodile 6 times without other progress'
+    calm, stuck = Supervisor(), Supervisor()
+    stuck.reloads = STALL_RELOADS
+    assert calm.stuck(None, 0, loop=loop) and not calm.stuck(None, 0, waiting=True, loop=loop)
+    assert not stuck.stuck(None, 0, waiting=True) and not stuck.stuck(None, 0, held=True, loop=loop)
+    assert stuck.stuck(None, 0) and not calm.stuck(None, 0)
