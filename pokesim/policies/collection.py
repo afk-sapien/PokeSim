@@ -320,6 +320,13 @@ def dex(sid):
     return SPECIES.get(sid, {}).get('dex', 0)
 
 
+def wild_dvs(raw):
+    """A wild Pokémon's two DV bytes as HP, Attack, Defense, Speed and Special, the order held copies use."""
+    from pokecore.dvs import hp_dv
+    attack, defense, speed, special = raw[0] >> 4, raw[0] & 15, raw[1] >> 4, raw[1] & 15
+    return hp_dv(attack, defense, speed, special), attack, defense, speed, special
+
+
 def picker_group(project, title, owned):
     """The group and label a manager picks ``project`` under: one thing they want, whatever the place.
 
@@ -581,6 +588,20 @@ class Collection:
     @property
     def project_key(self):
         return self.project.get('key', self.project['method']) if self.project else None
+
+    def hunt(self, snapshot):
+        """The project's target species and DV rule for the encounter counters, or None.
+
+        Only a project that catches wild Pokémon over and over is a hunt. A DV hunt's rule is the
+        catch rule it throws a ball by (improves). Any other hunt takes any DVs.
+        """
+        project = self.project or {}
+        species = project.get('species')
+        if project.get('method') not in REPEATABLE or not species:
+            return None
+        if project.get('dv_hunt'):
+            return dex(species), lambda raw: improves(snapshot, species, wild_dvs(raw))
+        return dex(species), None
 
     @property
     def remaining(self):

@@ -134,4 +134,10 @@ The worst ones are the first cases for the replay tooling in the phase 1 design 
   19.0%, blue/badges_4 to 20.2%, red/badges_4 to 9.3%, blue/badges_6 to 9.2%, red/badges_6 to 5.3%,
   yellow/badges_4 to 12.1%, yellow/new_game to 1.1%, red-randomized/new_game to 1.3% and
   blue/badges_2 to 7.5%. The run itself did not change.
+- The Gen II field cure, 2026-11-10: Gold, Silver and Crystal had the same three gaps in their own code.
+  A status a cure in the bag can treat no longer latches a heal, the run cures it where it stands, and a
+  mart that sells an Antidote or a Full Heal stocks two for a bag without a cure. gold/red fell to 0.0%,
+  and the baseline moved for it. The run now makes one ball restock inside the window, not two. Main's
+  second restock was the Tangela throws, and they no longer fall inside the window, so that catch item
+  is still open.
 - The other rungs are still open.

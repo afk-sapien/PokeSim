@@ -33,15 +33,19 @@ def _species(data, dex):
 
 
 def catch(data, dex, before, snapshot, event):
-    """The Pokédex entry for a new catch, at the Red, Blue and Yellow wording when it is a legendary."""
+    """The Pokédex entry for a new catch, at the Red, Blue and Yellow wording when it is a legendary.
+
+    Every new owned entry comes through here, from a catch, a gift, a trade, a hatch or an evolution,
+    so it also writes the ``dex`` progress row.
+    """
     battle = snapshot.in_battle == 1 or before is not None and before.in_battle == 1
     name = _species(data, dex)
     if dex in LEGENDARY_DEX and battle:
         level = snapshot.enemy_level or (before.enemy_level if before else 0)
         return event('catch', f'Caught the legendary {name}!',
                      f'A level {level} {name} on {snapshot.map_name}. Pokédex: {len(snapshot.owned)} owned.',
-                     priority=URGENT)
-    return event('catch', f'{name} joined the Pokédex', priority=HIGH)
+                     priority=URGENT, progress='dex', species=dex)
+    return event('catch', f'{name} joined the Pokédex', priority=HIGH, progress='dex', species=dex)
 
 
 def _key_items(data, snapshot):
@@ -85,7 +89,7 @@ def events(before, snapshot, history, data, event):
     for item in dict.fromkeys(_key_items(data, snapshot)):
         if item not in held:
             out.append(event('item', f'Got the {data.item_names.get(item, f"item #{item}")}',
-                             f'On {snapshot.map_name}.', priority=HIGH))
+                             f'On {snapshot.map_name}.', priority=HIGH, progress='item', needed=True))
 
     reached = history.setdefault('money_milestones', [])
     for mark in MONEY_MILESTONES:

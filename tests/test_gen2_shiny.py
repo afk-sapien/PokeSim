@@ -69,6 +69,22 @@ def test_shiny_wild_encounters_and_catches_are_counted_once(real_data, tmp_path)
     store.close()
 
 
+def test_every_wild_encounter_counts_for_the_running_goal(real_data, tmp_path):
+    from pokesim import progress_events
+    from pokesim.gen2.tracking import Tracker
+    store = Store(tmp_path)
+    store.clock = lambda: 5
+    watch = store.goal_watch = progress_events.GoalWatch()
+    try:
+        tracker = Tracker(store, real_data, fresh=True)
+        for opened in (battle(real_data, dvs=PLAIN), battle(real_data), battle(real_data, mode=2),
+                       battle(real_data, kind=3)):
+            tracker.encountered(opened)
+        assert [(species, dvs) for *_, species, dvs in watch.pending] == [(130, PLAIN), (130, SHINY)]
+    finally:
+        store.close()
+
+
 def test_gen2_ledger_counts_all_251_species_without_touching_gen1(tmp_path):
     store = Store(tmp_path)
     with store.db:

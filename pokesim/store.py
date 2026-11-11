@@ -37,6 +37,8 @@ class Store:
         self.read_only = read_only
         # The running emulator's PlayClock frames, which dates progress rows. None where none runs.
         self.clock = None
+        # The running emulator's goal for progress rows and encounter counters. None where none runs.
+        self.goal_watch = None
         self.lock = threading.Lock()
         self._read_local = threading.local()
         self._read_cache = {}
@@ -101,8 +103,7 @@ class Store:
                         won = record(self.db, snapshot, ev.title, eid)
                     progress.record(self.db, ts, snapshot, won)
                     adventure_counters.record(self.db, eid, ev.type)
-                    progress_events.journal(self.db, ev.type, frame=progress_events.frame(self),
-                                            species=getattr(ev, 'species', None))
+                    progress_events.entry(self, self.db, ev)
                     shot = f"{eid}.png" if shot_png else None
                     state = f"event-{eid}.state" if state_bytes else None
                     # A save state is about 167 KB of mostly zeroed RAM and compresses

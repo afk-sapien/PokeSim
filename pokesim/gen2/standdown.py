@@ -82,6 +82,30 @@ def goal_key(policy):
     return None, ''
 
 
+def hunt(policy, snapshot):
+    """The running goal's target species and DV rule for the encounter counters, or None.
+
+    It follows goal_key, so the counters land under the same goal. A target of None takes any
+    species, as a shiny session does, and a rule of None takes any DVs, as a collection hunt does.
+    """
+    collection = getattr(policy, 'collection', None)
+    if not isinstance(collection, dict):
+        return None
+    activity = (collection.get('postgame') or {}).get('activity')
+    if activity:
+        if activity['kind'] == 'quality':
+            from .postgame import hunt_catch
+            species = activity['species']
+            return species, lambda raw: hunt_catch(policy, snapshot, species, raw)
+        if activity['kind'] == 'shiny':
+            from ..shiny import shiny_bytes
+            return None, shiny_bytes
+        return None
+    if target := collection.get('target'):
+        return target['species'], None
+    return None
+
+
 def site_key(mid):
     """A training site that gave a whole stint without experience."""
     return f'site:{int(mid)}'
