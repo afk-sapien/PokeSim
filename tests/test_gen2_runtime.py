@@ -624,15 +624,15 @@ def test_missed_legendary_retry_only_changes_unloaded_encounter_flags(real_data)
         map=real_data.map_ids['WHIRL_ISLAND_LUGIA_CHAMBER'], owned=set(), tiles=('',) * 18,
         event=lambda name: bool(memory.raw[base + real_data.events[name] // 8] & (1 << (real_data.events[name] % 8))))
     recovery = Recovery({'pending': {'249': 0}, 'attempts': {'249': 1}})
-    assert recovery.observe(snapshot, memory) == []
+    assert recovery.observe(snapshot, memory, 1) == []
     assert bytes(memory.raw) == before
     snapshot.map = real_data.map_ids['ECRUTEAK_CITY']
     snapshot.owned = {249}
-    assert recovery.observe(snapshot, memory) == []
+    assert recovery.observe(snapshot, memory, 1) == []
     assert bytes(memory.raw) == before
     snapshot.owned = set()
     recovery.pending['249'] = 0
-    assert recovery.observe(snapshot, memory) == [249]
+    assert recovery.observe(snapshot, memory, 1) == [249]
     expected = bytearray(before)
     for flag in flags:
         index = real_data.events[flag]

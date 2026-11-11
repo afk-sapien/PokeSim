@@ -1,8 +1,6 @@
 """Retry missed static encounters with the same resource preservation as Gen I."""
-from copy import deepcopy
-
 from .. import config
-from ..planning.monitor import LEGENDARY_RETRY
+from ..runtime.supervision import LegendaryRetries
 from pokecore.gen2.ram import Memory
 
 NOTICES = 'gen2-legendary-retry-notices-v1'
@@ -21,22 +19,15 @@ def first_notice(store, species, attempt):
     return True
 
 
-class Recovery:
-    def __init__(self, state=None):
-        state = state or {}
-        self.pending = deepcopy(state.get('pending', {}))
-        self.attempts = deepcopy(state.get('attempts', {}))
-        self.previous = None
+class Recovery(LegendaryRetries):
+    def observe(self, snapshot, memory, now, *, repeat=frozenset(), blocked=frozenset()):
+        """Reopen a missed encounter once its wait has passed at PlayClock frame ``now``.
 
-    def state_dict(self):
-        return deepcopy({'pending': self.pending, 'attempts': self.attempts})
-
-    def observe(self, snapshot, memory, *, repeat=frozenset(), blocked=frozenset()):
-        """Reopen a missed encounter. `repeat` holds walking returns that are owned but not yet caught again."""
+        `repeat` holds walking returns that are owned but not yet caught again.
+        """
         from .returns import celebi_spent, encounter, roaming, rooms
         data = snapshot.data
-        delta = min(120, max(0, snapshot.frame - self.previous)) if self.previous is not None else 0
-        self.previous = snapshot.frame
+        self.count_from(now)
         if not snapshot.valid or not snapshot.started or snapshot.in_battle:
             return []
         encounters = [(249, 'WHIRL_ISLAND_LUGIA_CHAMBER', 'LUGIA'), (250, 'TIN_TOWER_ROOF', 'HO_OH')]
@@ -63,10 +54,8 @@ class Recovery:
                 self.pending.pop(key, None)
                 continue
             if key not in self.pending:
-                self.attempts[key] = self.attempts.get(key, 0) + 1
-                self.pending[key] = LEGENDARY_RETRY.wait(self.attempts[key])
-            self.pending[key] = max(0, self.pending[key] - delta)
-            if (self.pending[key] or snapshot.map in rooms(data, species)
+                self.miss(key, now)
+            if (now < self.pending[key] or snapshot.map in rooms(data, species)
                     or mem.byte('wScriptRunning') or '┌' in snapshot.tiles[12]):
                 continue
             encounter(memory, data, species, present=True)

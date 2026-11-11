@@ -218,7 +218,7 @@ def main():
                             for record in records:
                                 events.write(json.dumps(record) + '\n')
                         continue
-                recovery.observe(snapshot, pb.memory)
+                recovery.observe(snapshot, pb.memory, frame)
                 visited.add((snapshot.map, snapshot.x, snapshot.y))
                 progress = (len(visited), snapshot.badges, snapshot.money,
                             snapshot.owned, snapshot.event_flags,

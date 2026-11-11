@@ -95,7 +95,7 @@ def test_milestone_reopens_only_encounter_bits_and_catch_consumes_once(tracking,
     events, changed = observe(store, s, memory)
     assert changed and not events
     assert bytes(memory) == original
-    assert LegendaryRecovery().observe(s, memory, blocked=claims(store)[1]) == ([], False)
+    assert LegendaryRecovery().observe(s, memory, 0, blocked=claims(store)[1]) == ([], False)
     assert StepTracker(store, sorted(SUPPORTED)[0]).value['total'] == 100
     walk(steps, 100)
     assert len(observe(store, s, memory)[0]) == 1
@@ -126,7 +126,7 @@ def test_unclaimed_return_does_not_accumulate_and_failed_catch_can_retry(trackin
     assert observe(store, s, memory)[0] == []
     ready, _ = claims(store)
     recovery = LegendaryRecovery({'pending': {'150': 0}, 'attempts': {'150': 1}})
-    assert recovery.observe(s, memory, repeat=ready)[1]
+    assert recovery.observe(s, memory, 0, repeat=ready)[1]
     CatchTracker(store, sorted(SUPPORTED)[0]).record('success', 150)
     assert claims(store) == (set(), {150})
     assert observe(store, s, memory)[0] == []
@@ -208,7 +208,7 @@ def test_refused_legendary_return_closes_until_the_next_milestone(tracking, monk
     recovery = LegendaryRecovery({'pending': {'150': 0}, 'attempts': {'150': 1}})
     ready, closed = claims(store)
     for frame in range(0, 120 * 5000, 120):
-        assert recovery.observe(replace(s, frame=frame), memory, repeat=ready, blocked=closed) == ([], False)
+        assert recovery.observe(replace(s, frame=frame), memory, frame, repeat=ready, blocked=closed) == ([], False)
     assert bytes(memory) == hidden
     assert observe(store, s, memory) == ([], False)
     walk(steps, 100)

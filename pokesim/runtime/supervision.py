@@ -31,7 +31,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 from ..pcvalue import BOXES_FULL
-from ..planning.monitor import STOOD_DOWN
+from ..planning.monitor import LEGENDARY_RETRY, STOOD_DOWN
 
 KEY = 'supervisor-ladder-v1'
 BEST_KEY = 'supervisor-best-v1'
@@ -90,6 +90,39 @@ CHAT_REST = Budget('chat rest', 900)
 PICKUP_SCAN = Budget('pickup scan', 300)
 PICKUP_DETOUR = Budget('pickup detour', 1800)
 PICKUP_RETRY = Budget('pickup retry', 18000)
+
+
+class LegendaryRetries:
+    """The missed legendary encounters a generation reopens: the misses in a row for each, and the
+    PlayClock frame each may return at, ``LEGENDARY_RETRY`` after its miss.
+
+    The state travels in each checkpoint, so a reload reopens a miss only while its RAM shows one. The
+    frames a battle takes count toward the wait, and the encounter still reopens only outside battle.
+    A checkpoint from before kept each wait as the frames it had left. ``count_from`` moves those
+    onto the PlayClock once, each with the wait it had left.
+    """
+    # The mark of a state whose waits are PlayClock frames.
+    CLOCK = 'play'
+
+    def __init__(self, state=None):
+        state = state or {}
+        self.pending = deepcopy(state.get('pending', {}))
+        self.attempts = deepcopy(state.get('attempts', {}))
+        self.on_clock = state.get('clock') == self.CLOCK
+
+    def state_dict(self):
+        state = {'pending': self.pending, 'attempts': self.attempts}
+        return deepcopy({**state, 'clock': self.CLOCK} if self.on_clock else state)
+
+    def count_from(self, now):
+        if not self.on_clock:
+            self.pending = {key: now + left for key, left in self.pending.items()}
+            self.on_clock = True
+
+    def miss(self, key, now):
+        """Count one more miss in a row, and wait before the encounter returns."""
+        self.attempts[key] = self.attempts.get(key, 0) + 1
+        self.pending[key] = now + LEGENDARY_RETRY.wait(self.attempts[key])
 
 
 class Tables(dict):

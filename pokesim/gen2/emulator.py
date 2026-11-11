@@ -702,7 +702,8 @@ class Emulator:
             self.policy.returned = ready | returns.returned_events(self.store)
             for event in notices + activity:
                 self._event(event, snapshot)
-            for species in self.legendary_recovery.observe(snapshot, self.pb.memory, repeat=ready, blocked=closed):
+            for species in self.legendary_recovery.observe(snapshot, self.pb.memory, self.play_clock.frames,
+                                                           repeat=ready, blocked=closed):
                 changed = True
                 if not first_notice(self.store, species, self.legendary_recovery.attempts.get(str(species), 0)):
                     continue
