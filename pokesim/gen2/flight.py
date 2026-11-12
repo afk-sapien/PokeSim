@@ -52,12 +52,29 @@ def shortcut(policy, snapshot, mem, destination):
 def destinations(data, mid, visited):
     """The visited Fly points the cartridge's Fly map lists on map ``mid``, as (index, point) in data order.
 
-    The map lists only the points of the region ``mid`` is in, so no flight crosses from Kanto to
+    The map lists only the points of the region :func:`shown` names, so no flight crosses from Kanto to
     Johto or back (#124).
     """
-    region = data.maps[mid]['region']
+    region = shown(data, mid, visited)
     return [(index, point) for index, point in enumerate(data.fly_points)
             if data.maps[point['map']]['region'] == region and visited & 1 << point['spawn']]
+
+
+def shown(data, mid, visited):
+    """The region whose Fly map the cartridge shows on map ``mid``.
+
+    It is the region ``mid`` is in, except that the cartridge keeps every region after the first shut
+    until the last Fly point, Indigo Plateau, is visited. Kanto's map starts its cursor there, so it
+    shows Johto's map in its place. Route 26 and 27 are Kanto's on the town map, so on the way to the
+    first League visit they show Johto's points.
+    """
+    region = data.maps[mid]['region']
+    if not data.fly_points:
+        return region
+    first, last = data.fly_points[0], data.fly_points[-1]
+    if not visited & 1 << last['spawn']:
+        return data.maps[first['map']]['region']
+    return region
 
 
 def landings(policy, destination, targets, mid, visited, cut, surf, snapshot):
@@ -73,7 +90,7 @@ def landings(policy, destination, targets, mid, visited, cut, surf, snapshot):
 def outside(policy, snapshot, mem, destination):
     """Where to walk to when no walking route leads to the destination, so Fly can take over.
 
-    Fly only works outside and only reaches Fly points of the region the player stands in, so this is
+    Fly only works outside and only reaches the Fly points of the map :func:`shown` names, so this is
     out of a building, or on into the other region (Kanto to Johto, say) when no Fly point here helps.
     Returns a map and a point there in the nearest reachable town or route region from which a visited
     Fly point leads to the destination, or None when walking works, Fly cannot be used or does not help.

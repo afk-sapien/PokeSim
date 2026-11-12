@@ -229,6 +229,25 @@ def test_a_fly_map_blind_to_regions_flies_from_route_23_into_johto(game):
     assert tool.check_flight(data, names) == {}
 
 
+def test_a_fly_map_that_forgets_indigo_plateau_flies_nowhere_from_route_26(game):
+    # Before the first League visit the cartridge shows Johto's Fly map on Route 26 and 27, whose
+    # landmarks are Kanto's, so a list from the map's own region offers nothing there.
+    _, data, _ = game
+    names = {mid: entry['constant'] for mid, entry in data.maps.items()}
+
+    def regional(data, mid, visited):
+        region = data.maps[mid]['region']
+        return [(index, point) for index, point in enumerate(data.fly_points)
+                if data.maps[point['map']]['region'] == region and visited & 1 << point['spawn']]
+
+    found = tool.check_flight(data, names, regional)
+    assert found[('fly', 'ROUTE_26', 'CHERRYGROVE_CITY', 'not listed before Indigo Plateau')] == (
+        'the Fly map on ROUTE_26 shows CHERRYGROVE_CITY before Indigo Plateau, which the policy never picks')
+    assert found[('fly', 'ROUTE_27', 'PALLET_TOWN', 'crosses regions before Indigo Plateau')] == (
+        'the Fly map on ROUTE_27 shows Johto before Indigo Plateau, not PALLET_TOWN')
+    assert not any(key[3] in ('crosses regions', 'not listed') for key in found)
+
+
 def test_each_starter_row_is_offered_by_a_policy_that_chose_it(game):
     name, _, _ = game
     starters = story.rows(2, name, 'starter')
