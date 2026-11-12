@@ -166,11 +166,35 @@ def test_the_readiness_target_is_the_level_the_matchup_rules_train_to():
     assert oracle.target(oracle.Boss('surge', 46)) is None
     assert oracle.target(oracle.Boss('hive', None, scores=(None,))) is None
     assert oracle.target(None) is None
-    # A loss can raise the training bar over the target, but never the target, so a loop of losses cannot move it.
+    # A loss raises the training bar, and the target once by CEILING, so a loop of losses cannot move it further.
     losses = Losses()
     losses.note('league', 55)
     assert oracle.judge(replace(league, scores=(0,) * 5), oracle.Team(level=45), losses) == oracle.Train(oracle.LOSS, 57)
     assert oracle.target(league) == 50
+    assert oracle.target(league, lost=True) == 50 + oracle.CEILING
+    assert oracle.target(gym, lost=True) == 16 + oracle.MARGIN + oracle.CEILING
+    # The raised target never passes the top level, and never falls under the floor.
+    assert oracle.target(oracle.Boss('red', 95, scores=(None,)), lost=True) == oracle.LEVEL_CAP
+    assert oracle.target(oracle.Boss('zephyr', 9, floor=40, scores=(None,)), lost=True) == 40
+    # A boss with no ace still has its floor alone.
+    assert oracle.target(oracle.Boss('hive', None, floor=14), lost=True) == 14
+    assert oracle.band(50) == (50 - oracle.TEAM_BAND, 50)
+    assert oracle.band(None) is None
+
+
+def test_a_loss_to_the_next_boss_raises_its_target():
+    from pokesim.planning.league import readiness_target
+    from pokesim.policies.progression import BOSS_TABLE
+    snapshot = SimpleNamespace(badges=0xff, hall_of_fame_count=0)
+    losses = Losses()
+    assert readiness_target(BOSS_TABLE, snapshot, losses=losses) == 65
+    # A loss kept for another boss leaves it alone.
+    losses.note('boulder', 20)
+    assert readiness_target(BOSS_TABLE, snapshot, losses=losses) == 65
+    losses.note('league', 60)
+    assert readiness_target(BOSS_TABLE, snapshot, losses=losses) == 65 + oracle.CEILING
+    # Once the League is won no boss is next, whatever the losses kept.
+    assert readiness_target(BOSS_TABLE, SimpleNamespace(badges=0xff, hall_of_fame_count=1), losses=losses) is None
 
 
 def test_gen1_targets_the_next_gym_in_badge_order_then_the_league():

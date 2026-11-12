@@ -125,18 +125,19 @@ def plain(row, ace=None):
                 scores=(None,) * len(row.scores), league=row.league)
 
 
-def readiness_target(table, snapshot, ace=None):
+def readiness_target(table, snapshot, ace=None, losses=None):
     """The level a Pokémon's gain counts toward as progress (readiness.target), or None.
 
     A boss with ``aim`` counts gains toward the matchup level over its ace with no matchup rule, as
-    Gold, Silver and Crystal do before Red. Only the progress rows read it, so play does not change."""
+    Gold, Silver and Crystal do before Red. A loss to the next boss that ``losses`` keeps raises the
+    target, since the boss is still not won. Only the progress rows read it, so play does not change."""
     row = next_row(table, snapshot)
     if row is None:
         return None
     boss = plain(row, ace)
     if row.aim and not boss.scores:
         boss = replace(boss, scores=(None,))
-    return target(boss)
+    return target(boss, losses is not None and row.key in losses.levels())
 
 
 def boss(table, row, here, score, ace=None):

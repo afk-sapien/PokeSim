@@ -135,6 +135,13 @@ def test_the_next_boss_in_story_order_sets_the_readiness_target(real_data):
     # With all sixteen badges Red at Mt. Silver is next, and gains count up to ten over Pikachu's Lv 81,
     # the most his loss bar asks.
     assert boss_ace(real_data, 'red') == 81 and target(0xffff, 1) == 91
+    # Gold lost to Red again and again while Typhlosion grew from Lv 92 to 100. Once a loss is kept,
+    # gains count up to the top level.
+    from pokesim.planning.losses import Losses
+    losses = Losses()
+    losses.note('red', 92)
+    assert readiness_target(BOSS_TABLE, SimpleNamespace(badges=0xffff, hall_of_fame_count=1),
+                            aces(real_data), losses) == 100
 
 
 def test_the_first_league_trains_until_the_team_matches_up_or_reaches_the_top_ace(real_data, walks):

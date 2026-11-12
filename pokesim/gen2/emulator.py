@@ -189,7 +189,8 @@ class Emulator(EmulatorBase):
         self.goal_watch = store.goal_watch = self.policy.goal_watch = GoalWatch()
         from ..planning.league import readiness_target
         from .readiness import BOSS_TABLE, aces
-        self.goal_watch.readiness = lambda snapshot: readiness_target(BOSS_TABLE, snapshot, aces(self.data))
+        self.goal_watch.readiness = lambda snapshot: readiness_target(
+            BOSS_TABLE, snapshot, aces(self.data), getattr(self.policy, 'losses', None))
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.commands = queue.Queue()

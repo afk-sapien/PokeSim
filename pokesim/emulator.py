@@ -112,7 +112,8 @@ class Emulator(EmulatorBase):
         self.goal_watch = store.goal_watch = self.policy.goal_watch = progress_events.GoalWatch()
         from .planning.league import readiness_target
         from .policies.progression import BOSS_TABLE
-        self.goal_watch.readiness = lambda snapshot: readiness_target(BOSS_TABLE, snapshot)
+        self.goal_watch.readiness = lambda snapshot: readiness_target(
+            BOSS_TABLE, snapshot, losses=getattr(self.policy, 'losses', None))
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
         # The newest autosave's manifest replaces this, and the policy's state, when start() loads it.
