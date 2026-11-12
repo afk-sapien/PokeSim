@@ -214,6 +214,21 @@ def test_switches_that_open_no_doors_cut_off_the_radio_tower_director(game):
     assert found[key] == 'no route from GOLDENROD_UNDERGROUND_SWITCH_ROOM_ENTRANCES (16, 2)'
 
 
+def test_a_fly_map_blind_to_regions_flies_from_route_23_into_johto(game):
+    # The cartridge's Fly map lists only the region the player stands in, so a run stuck on Route 23
+    # must walk back into Johto before it can fly to Olivine (#124).
+    _, data, _ = game
+    names = {mid: entry['constant'] for mid, entry in data.maps.items()}
+
+    def blind(data, mid, visited):
+        return list(enumerate(data.fly_points))
+
+    found = tool.check_flight(data, names, blind)
+    assert found[('fly', 'ROUTE_23', 'OLIVINE_CITY', 'crosses regions')] == (
+        'the Fly map on ROUTE_23 shows Kanto, not OLIVINE_CITY')
+    assert tool.check_flight(data, names) == {}
+
+
 def test_each_starter_row_is_offered_by_a_policy_that_chose_it(game):
     name, _, _ = game
     starters = story.rows(2, name, 'starter')

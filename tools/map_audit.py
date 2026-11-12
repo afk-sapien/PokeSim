@@ -21,7 +21,9 @@ Check E covers the story manifests in pokesim/story. It walks the rows in play o
 game the rows before leave. The story code must offer each row in turn, the row's place must be
 reachable from the row before, and after each badge a Pokémon Center must be reachable from every
 town and route the story walked. Gold, Silver and Crystal run it with the other checks. Gen I runs it
-with --gen1, for the variant the process loads.
+with --gen1, for the variant the process loads. In Gold, Silver and Crystal it also checks that the
+Fly points the policy may pick from a town or route are the ones the cartridge's Fly map lists there,
+which are only those of the region the player stands in (#124).
 
 Each finding that is true of the games today is on ALLOWED with the reason it is there. The audit
 fails on a finding that is not on ALLOWED, and on a row of ALLOWED that no longer matches a
@@ -456,6 +458,38 @@ def check_centers_gen2(data, regions, snapshot, walked, badge, names):
     return found
 
 
+def check_flight(data, names, destinations=None):
+    """The Fly points the policy may pick from each town and route are the ones the Fly map lists (#124).
+
+    The cartridge picks Kanto's map when the landmark of the player's map is Pallet Town's or later,
+    and Johto's map before that, so no flight crosses between the regions. Every spawn counts as
+    visited. Kanto's map also needs Indigo Plateau visited, which the story does before it reaches
+    Kanto. ``destinations`` replaces the policy's list, for tests.
+    """
+    from pokecore.gen2.maps import OUTSIDE
+    from pokesim.gen2 import flight
+    destinations = destinations or flight.destinations
+    pallet = data.maps[data.map_ids['PALLET_TOWN']]['landmark']
+
+    def region(mid):
+        return 'kanto' if data.maps[mid]['landmark'] >= pallet else 'johto'
+
+    every = (1 << 8 * 4) - 1
+    found = {}
+    for mid, entry in data.maps.items():
+        if entry['environment'] not in OUTSIDE:
+            continue
+        listed = {point['map'] for _, point in destinations(data, mid, every)}
+        shown = {point['map'] for point in data.fly_points if region(point['map']) == region(mid)}
+        for point in sorted(listed - shown):
+            found[('fly', names[mid], names[point], 'crosses regions')] = (
+                f'the Fly map on {names[mid]} shows {region(mid).title()}, not {names[point]}')
+        for point in sorted(shown - listed):
+            found[('fly', names[mid], names[point], 'not listed')] = (
+                f'the Fly map on {names[mid]} shows {names[point]}, which the policy never picks')
+    return found
+
+
 def check_story_gen2(data, rows=None):
     """Check E for one of Gold, Silver and Crystal.
 
@@ -534,7 +568,7 @@ def audit(data):
     regions, navigator = Regions(data), Navigator(data)
     return {**check_seams(data, regions, navigator, names), **check_warps(data, regions, names),
             **check_carpets(data, regions, navigator, names), **check_crossings(data, navigator, names),
-            **check_story_gen2(data)}
+            **check_story_gen2(data), **check_flight(data, names)}
 
 
 def problems(game, findings, allow=None):

@@ -36,9 +36,9 @@ def shortcut(policy, snapshot, mem, destination):
         choices = []
         # No walking route (a returned Sudowoodo blocking Route 36, say) still leaves the Fly points.
         if route is None or len(route) >= 6:
-            for index, point in enumerate(data.fly_points):
+            for index, point in destinations(data, snapshot.map, visited):
                 mid = point['map']
-                if mid == snapshot.map or data.maps[mid]['region'] != current['region'] or not visited & 1 << point['spawn']:
+                if mid == snapshot.map:
                     continue
                 landing = replace(snapshot, map=mid, x=point['x'], y=point['y'])
                 remainder = nav.regions.route(landing, destination, targets, cut=cut, surf=surf)
@@ -49,14 +49,22 @@ def shortcut(policy, snapshot, mem, destination):
     return Fly(slot, selected[0], snapshot.map, selected[1]) if selected else None
 
 
-def landings(policy, destination, targets, region, visited, cut, surf, snapshot):
-    """Whether some visited Fly point of the region has a walking route to the destination."""
+def destinations(data, mid, visited):
+    """The visited Fly points the cartridge's Fly map lists on map ``mid``, as (index, point) in data order.
+
+    The map lists only the points of the region ``mid`` is in, so no flight crosses from Kanto to
+    Johto or back (#124).
+    """
+    region = data.maps[mid]['region']
+    return [(index, point) for index, point in enumerate(data.fly_points)
+            if data.maps[point['map']]['region'] == region and visited & 1 << point['spawn']]
+
+
+def landings(policy, destination, targets, mid, visited, cut, surf, snapshot):
+    """Whether some visited Fly point the Fly map lists on map ``mid`` has a walking route to the destination."""
     data, nav = policy.data, policy.nav
-    for point in data.fly_points:
-        mid = point['map']
-        if data.maps[mid]['region'] != region or not visited & 1 << point['spawn']:
-            continue
-        landing = replace(snapshot, map=mid, x=point['x'], y=point['y'])
+    for _, point in destinations(data, mid, visited):
+        landing = replace(snapshot, map=point['map'], x=point['x'], y=point['y'])
         if nav.regions.route(landing, destination, targets, cut=cut, surf=surf) is not None:
             return True
     return False
@@ -99,7 +107,7 @@ def outside(policy, snapshot, mem, destination):
                     queue.append(node)
                     continue
                 if entry['region'] not in helps:
-                    helps[entry['region']] = landings(policy, destination, targets, entry['region'],
+                    helps[entry['region']] = landings(policy, destination, targets, node[0],
                                                       visited, cut, surf, snapshot)
                 if helps[entry['region']]:
                     labels = nav.regions.regions(node[0], cut, surf)
