@@ -191,6 +191,32 @@ def test_gen2_last_balls_wait_for_money_unless_the_encounter_comes_once():
     assert ledger.spare_throw(policy.data, snapshot, 16)
 
 
+def test_one_spare_ball_rule_keeps_three_balls_in_gen2_and_none_in_gen1():
+    from pokesim.planning import throws
+    assert not throws.spare_throw(2, 3) and throws.spare_throw(2, 4)
+    assert throws.spare_throw(2, 3, once=True) and throws.spare_throw(2, 0, restock=lambda: True)
+    # Red, Blue and Yellow throw the last ball, so the rule is the plain "needs a Poké Ball" there.
+    assert throws.spare_throw(1, 1) and not throws.spare_throw(1, 0)
+    assert throws.spare_words(1) == 'a Poké Ball'
+    assert throws.spare_words(2) == 'more than 3 Poké Balls or the money to buy more'
+
+
+def test_gen2_a_hunt_whose_catch_keeps_the_last_balls_is_not_feasible():
+    from pokesim.gen2 import collection
+    policy, snapshot = money_policy(balls=[('ULTRA_BALL', 1), ('POKE_BALL', 2)], money=1199)
+    policy.collection = {'target': {'species': 177}}
+    assert collection.hunt_blocked(policy, snapshot) is collection.NO_SPARE_BALL
+    assert str(collection.NO_SPARE_BALL) == 'needs more than 3 Poké Balls or the money to buy more'
+    # A species met only once still gets the hunt, and so does a run with money for the floor.
+    policy.collection = {'target': {'species': 130}}
+    assert collection.hunt_blocked(policy, snapshot) is None
+    policy.collection = {'target': {'species': 177}}
+    snapshot.money = 1200
+    assert collection.hunt_blocked(policy, snapshot) is None
+    policy.collection = {'target': None}
+    assert collection.hunt_blocked(policy, snapshot) is None
+
+
 def test_gen2_league_funding_covers_the_day_care_fees_or_a_ball_floor(monkeypatch):
     from pokesim.gen2 import ledger
     policy, snapshot = money_policy(balls=[('POKE_BALL', 3)], money=4799)

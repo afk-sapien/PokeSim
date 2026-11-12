@@ -18,7 +18,7 @@ REFUSES_EVOLUTION = {25} if YELLOW else set()
 from .navigation import DIRS
 from .director import AdventureDirector, category, new_entry
 from ..planning import values
-from ..planning import arbiter, catalogue, decide, pin
+from ..planning import arbiter, catalogue, decide, pin, throws
 from ..planning.arbiter import NOT_HUNT, Candidate, Tier, hunt
 from ..planning import cost
 from ..planning.cost import FRAMES_PER_TILE
@@ -381,12 +381,15 @@ def storage_exchange_possible(s):
 
 
 CATCH_MODES = ('grass', 'surf', 'fish', 'safari', 'static')
-ANY_BALL = Count(tuple(ITEMS[n] for n in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL', 'MASTER_BALL')))
+BALL_ITEMS = tuple(ITEMS[n] for n in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL', 'MASTER_BALL'))
+# A ball the battle would throw, by the spare ball rule both generations share (planning/throws.py). Red,
+# Blue and Yellow keep no last balls, so any ball in the bag is a spare one.
+SPARE_BALL = Can('throw')
 # A repeat hunt for an owned species throws more than one ball, and the Master Ball is never one of them.
 HUNT_BALLS = Count(tuple(ITEMS[n] for n in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')), 5)
 SAFARI_ENTRY = Need(money=800)
 # Plain words for each condition source_requires asks, for the goal catalogue's why_not.
-NEED_WORDS = {Can('catch'): 'room to keep a catch', ANY_BALL: 'a Poké Ball', Can('surf'): 'a Pokémon that can use Surf',
+NEED_WORDS = {Can('catch'): 'room to keep a catch', SPARE_BALL: throws.spare_words(1), Can('surf'): 'a Pokémon that can use Surf',
               Can('take'): 'room to take it', HUNT_BALLS: 'five Poké Balls',
               **{Item(ITEMS[rod]): 'the ' + rod.replace('_', ' ').title() for rod in RODS}}
 # Why the catalogue lists a source the offers draw left out, beside the failures in planning/decide.py.
@@ -432,6 +435,8 @@ class CollectionWorld:
     def can(self, action):
         if action == 'catch':
             return self.snapshot.can_catch
+        if action == 'throw':
+            return throws.spare_throw(1, sum(self.item_count(item) for item in BALL_ITEMS))
         if action == 'surf':
             return self.nav.can_surf
         if action == 'take':
@@ -446,7 +451,7 @@ def source_requires(source, owned):
     mode = source['method']
     conditions = ()
     if mode in CATCH_MODES:
-        conditions += (Can('catch'), ANY_BALL)
+        conditions += (Can('catch'), SPARE_BALL)
     if mode == 'surf':
         conditions += (Can('surf'),)
     if mode == 'fish':
