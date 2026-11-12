@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from battle_fakes import fight
 from pokesim.gen2.data import GameData
 
 
@@ -125,7 +126,7 @@ def test_a_refused_lugia_return_closes_until_the_next_milestone(world, monkeypat
         in_battle=1, enemy_species=249, owned={249}, can_catch=True, badges=65535, money=10000,
         pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
     mem = SimpleNamespace(byte=lambda name: 0, read=lambda name, size: b'\xff' * size)
-    assert policy.battle(battle, mem).button != ('Throw', data.items['ULTRA_BALL'])
+    assert fight(policy, battle, mem).button != ('Throw', data.items['ULTRA_BALL'])
     assert policy.declined == {249} and 249 not in policy.returned
     for dex in policy.declined:
         decline(world.store, dex)

@@ -119,8 +119,8 @@ class StoryPart:
             return step('hive', 'Challenge Bugsy')
         self.completed.setdefault('hive', snapshot.frame)
         if not snapshot.event('EVENT_HERDED_FARFETCHD'):
-            if 'wFarfetchdPosition' in self.data.symbols:
-                position = mem.byte('wFarfetchdPosition') or 1
+            if snapshot.farfetchd_position is not None:
+                position = snapshot.farfetchd_position or 1
             else:
                 forest = self.data.maps[self.data.map_ids['ILEX_FOREST']]
                 position = next((int(obj['script'].removeprefix('FarfetchdPosition'))

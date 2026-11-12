@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from battle_fakes import fight
 from pokesim import config
 from pokesim.gen2.data import GameData
 from pokecore.gen2.screens import mask_hud, mask_roster
@@ -57,7 +58,7 @@ def memory(**values):
 def action_of(policy, snapshot, **values):
     # A Core battle shortcut is reported by what it asks for, since the fake memory has no RAM to drive it.
     policy.battle_task = lambda task, snapshot, mem: SimpleNamespace(button=task.key(), hold=0, gap=0)
-    action = policy.battle(snapshot, memory(**values))
+    action = fight(policy, snapshot, memory(**values))
     return action.button, action.hold, action.gap
 
 

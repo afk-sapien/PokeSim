@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from battle_fakes import fight
 from pokesim.gen2.data import GameData
 from pokesim.planning.throws import THROW_BAR, gen2_throw
 
@@ -49,7 +50,8 @@ def meeting(real_data, species, party, ball='POKE_BALL', hp=60):
     policy.remedy = lambda *args, **kwargs: False
     snapshot = SimpleNamespace(party=party, stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
         in_battle=1, enemy_species=species, enemy_hp=hp, enemy_max_hp=60, enemy_level=30, owned=set(),
-        can_catch=True, badges=65535, money=10000, items=(), pockets={'balls': [(real_data.items[ball], 20)]})
+        can_catch=True, badges=65535, money=10000, items=(), pockets={'balls': [(real_data.items[ball], 20)]},
+        bug_contest=False)
     mem = SimpleNamespace(byte=lambda name: 1 if name in {'wMenuCursorX', 'wMenuCursorY'} else 0,
                           word=lambda name: 40, read=lambda name, size: bytes(size))
     return policy, snapshot, mem
@@ -57,7 +59,7 @@ def meeting(real_data, species, party, ball='POKE_BALL', hp=60):
 
 def test_a_long_shot_switches_to_a_member_that_can_weaken_it(real_data):
     policy, snapshot, mem = meeting(real_data, TANGELA, (LEAD, HELPER))
-    assert policy.battle(snapshot, mem).button == ('Send', 1)
+    assert fight(policy, snapshot, mem).button == ('Send', 1)
 
 
 def test_a_member_the_target_knocks_out_in_one_hit_is_not_switched_in(real_data):
@@ -65,31 +67,31 @@ def test_a_member_the_target_knocks_out_in_one_hit_is_not_switched_in(real_data)
     policy, snapshot, mem = meeting(real_data, TANGELA, (LEAD, HELPER))
     mem.read = lambda name, size: bytes([33, 0, 0, 0]) if name == 'wEnemyMonMoves' else bytes(size)
     policy.move_score = lambda move, attacker, target: 40 if target.enemy_species == HELPER.species else 1
-    assert policy.battle(snapshot, mem).button == ('Flee',)
+    assert fight(policy, snapshot, mem).button == ('Flee',)
 
 
 def test_a_long_shot_nobody_can_weaken_is_left_for_a_new_move_member_or_ball(real_data):
     from pokesim.gen2.collection import deferred
     policy, snapshot, mem = meeting(real_data, TANGELA, (LEAD,))
-    assert policy.battle(snapshot, mem).button == ('Flee',)
+    assert fight(policy, snapshot, mem).button == ('Flee',)
     assert deferred(policy, snapshot, TANGELA)
     # An Ultra Ball lifts the throw over 1 in 10, so the deferral ends and the balls go.
     policy, snapshot, mem = meeting(real_data, TANGELA, (LEAD,), ball='ULTRA_BALL')
     policy.collection['deferred'] = {str(TANGELA): 'before the Ultra Balls'}
     assert not deferred(policy, snapshot, TANGELA)
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['ULTRA_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['ULTRA_BALL'])
 
 
 def test_a_weakened_target_gets_throws_whatever_the_odds(real_data):
     # Chansey at 24 of 60 HP is still under 1 in 10 a Poké Ball, and nobody here can weaken it further.
     assert gen2_throw(30, 1, 24, 60, 0) < THROW_BAR
     policy, snapshot, mem = meeting(real_data, CHANSEY, (LEAD,), hp=24)
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
 
 
 def test_a_one_time_encounter_always_gets_throws(real_data):
     policy, snapshot, mem = meeting(real_data, SNORLAX, (LEAD,))
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
 
 
 def test_a_battle_a_map_script_started_always_gets_throws(real_data):
@@ -100,7 +102,7 @@ def test_a_battle_a_map_script_started_always_gets_throws(real_data):
     policy, snapshot, mem = meeting(real_data, ELECTRODE, (LEAD,))
     snapshot.map = real_data.map_ids['TEAM_ROCKET_BASE_B2F']
     mem.byte = lambda name: {'wMenuCursorX': 1, 'wMenuCursorY': 1, 'wBattleScriptFlags': 0x80}.get(name, 0)
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
 
 
 def test_a_deferred_species_is_not_hunted(real_data):

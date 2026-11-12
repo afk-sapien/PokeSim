@@ -23,6 +23,7 @@ from .items import ItemPart
 from .menus import MenuPart
 from .navigation import NavigationPart
 from .pins import PinPart
+from .reads import Reads
 from .state import SAVE_VERSION, Goal, Saved
 from .storage import StoragePart
 from .story import StoryPart
@@ -109,6 +110,8 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
         self.puzzle_cache = {}
         self.memory = None
         self.sp = None
+        # The battle and screen state of the decision under way, read when first asked. Never saved.
+        self.reads = None
         # The next activity a manager set (planning/pin.py). Never saved.
         self.pin = None
         self.resetting_puzzle = None
@@ -218,7 +221,11 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
         self.clock = ctx.clock
         self.pick, self.decided = None, False
         self.ballot = self.pipeline_pick = None
-        action = self._step(snapshot, ctx.mem, ctx.sp)
+        try:
+            action = self._step(snapshot, ctx.mem, ctx.sp)
+        finally:
+            # The reads belong to this decision's memory, which the emulator changes before the next one.
+            self.reads = None
         ballot = self.ballot
         if self.trip.goal is not None and not self.decided and self.goal is self.pick and not snapshot.in_battle:
             # An errand under way is the goal until the next errand decision ends it. Otherwise each
@@ -244,6 +251,7 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
 
     def _step(self, snapshot, memory, sp=None):
         self.memory, self.sp = memory, sp
+        self.reads = Reads(memory, self.data.game)
         self.decisions += 1
         from ..release import team_keys
         self.visit_team.observe(snapshot.map, team_keys(snapshot.party))
@@ -278,7 +286,7 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
         if snapshot.hall_of_fame_count and snapshot.map == self.data.map_ids['HALL_OF_FAME']:
             self.mode = 'Hall of Fame and credits'
             return Action('a', 8, 52)
-        if not snapshot.started or self.unloaded(snapshot, mem):
+        if not snapshot.started or self.unloaded(snapshot):
             self.mode = 'opening'
             return Action('start' if self.decisions % 20 == 1 else 'a', 8, 52)
         from ..contest import control as contest_control
@@ -311,13 +319,13 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
         if snapshot.in_battle:
             self.mode = 'battle'
             return self.battle(snapshot, mem)
-        if not ('┌' in snapshot.tiles[12] or mem.byte('wScriptRunning')):
+        if not ('┌' in snapshot.tiles[12] or snapshot.script_running):
             self.talk_key, self.talk_frames = None, 0
         self.nav.observe(snapshot, interrupted=script_running(memory, self.data.game))
         if self.resetting_puzzle is not None and self.resetting_puzzle != snapshot.map:
             self.resetting_puzzle = None
         releasing = self.goal is not None and self.goal.key == 'collection_release'
-        starting = self.goal is not None and self.battle_starting(mem)
+        starting = self.goal is not None and self.battle_starting(snapshot)
         # Each site that sets the goal from here on offers it on the step's ballot, and the goal is the
         # ballot's pick (gen2/pipeline.py). A site writes its state only when its goal is picked (rule A).
         from ..pipeline import Ballot
@@ -360,7 +368,7 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
             negative = any(word in snapshot.text for word in ('FLASH', 'CHARMANDER', 'APRIKORN', 'MARIE'))
             return Action(choose(snapshot.tiles, 'NO' if negative else 'YES', exact=True) or 'a', 8, 28)
         # Textboxes cover the bottom six rows. Scripted walking is allowed to finish.
-        if '┌' in snapshot.tiles[12] or mem.byte('wScriptRunning'):
+        if '┌' in snapshot.tiles[12] or snapshot.script_running:
             self.mode = 'conversation'
             # The nurse and every other talk on the way run under the heal, not the journey goal, so one
             # trip stays one goal and the restore lands inside it.
@@ -498,12 +506,12 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
                     return action
             if self.goal.key.startswith('collection_'):
                 from ..collection import arrive
-                if self.goal.face and mem.byte('wPlayerDirection') & 12 != {'down': 0, 'up': 4, 'left': 8, 'right': 12}[self.goal.face]:
+                if self.goal.face and self.reads.ui.facing != self.goal.face:
                     return Action(self.goal.face, 8, 16)
                 button = arrive(self, snapshot)
                 if button:
                     return Action(None, 0, 24) if button == 'wait' else Action(button, 8, 36)
-            if self.goal.key == 'snorlax' and mem.byte('wMapMusic') != 0x40:
+            if self.goal.key == 'snorlax' and snapshot.map_music != 0x40:
                 self.menu = Radio()
                 return Action(None, 0, 24)
             if self.goal.key.startswith('delete_hm_') and self.interaction == self.goal.key:
@@ -535,7 +543,7 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
                         return Action('b', 8, 36)
                     self.menu = Storage('WITHDRAW', mon.position, len(snapshot.party))
                 return Action('a', 8, 36)
-            if self.goal.key.startswith('push_') and mem.byte('wBikeFlags') & 1:
+            if self.goal.key.startswith('push_') and snapshot.strength:
                 self.nav.issued(snapshot, self.goal.face)
                 return Action(self.goal.face, 16, 32)
             if self.goal.key == 'fish_surf' and self.interaction == self.goal.key:

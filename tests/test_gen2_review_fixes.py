@@ -254,7 +254,7 @@ def teaching_policy(real_data, monkeypatch):
     policy.level_lead = lambda snapshot: None
     policy.nav.observe = lambda snapshot, interrupted=False: None
     # Zeroed RAM has no map width, which reads as a cartridge back at its opening.
-    policy.unloaded = lambda snapshot, mem: False
+    policy.unloaded = lambda snapshot: False
 
     def onward(snapshot):
         raise Onward
@@ -265,7 +265,7 @@ def teaching_policy(real_data, monkeypatch):
 def teaching_snapshot(data, lead, *, events=(), items=(), badges=0):
     return SimpleNamespace(started=True, valid=True, in_battle=0, hall_of_fame_count=0, map=data.map_ids['NEW_BARK_TOWN'],
                            tiles=(' ' * 20,) * 18, text='', party=(lead,), event=lambda name: name in events,
-                           items=tuple(items), badges=badges, frame=1000, box_counts=(0,) * 14)
+                           items=tuple(items), badges=badges, frame=1000, box_counts=(0,) * 14, script_running=0)
 
 
 def test_a_refused_hm_lesson_is_not_asked_for_again_at_once(teaching_policy, real_data):

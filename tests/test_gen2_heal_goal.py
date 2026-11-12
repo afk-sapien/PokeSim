@@ -15,6 +15,7 @@ HEAL = Goal('heal', 'Restore the team at a Pokémon Center', 'VIOLET_POKECENTER_
 def test_a_conversation_on_the_heal_trip_keeps_the_heal_goal(data, monkeypatch):
     policy, snapshot, hunt, _ = policy_on_route(data, monkeypatch)
     policy.heal.offer = lambda policy, snapshot: (HEAL, None)
+    snapshot.script_running = 255
     policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data, wScriptRunning=255, wMapWidth=20)))
     assert policy.mode == 'conversation' and policy.goal is HEAL
 
@@ -22,6 +23,7 @@ def test_a_conversation_on_the_heal_trip_keeps_the_heal_goal(data, monkeypatch):
 def test_a_conversation_with_nothing_to_heal_keeps_the_journey_goal(data, monkeypatch):
     policy, snapshot, hunt, _ = policy_on_route(data, monkeypatch)
     policy.heal.offer = lambda policy, snapshot: (None, None)
+    snapshot.script_running = 255
     policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data, wScriptRunning=255, wMapWidth=20)))
     assert policy.mode == 'conversation' and policy.goal.key == 'collection_wait'
 
@@ -30,6 +32,7 @@ def test_a_starting_battle_keeps_its_goal_through_the_script(data, monkeypatch):
     policy, snapshot, hunt, _ = policy_on_route(data, monkeypatch)
     policy.goal = hunt
     policy.heal.offer = lambda policy, snapshot: (HEAL, None)
+    snapshot.script_running, snapshot.wild_pending = 255, 55
     policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data, wScriptRunning=255, wTempWildMonSpecies=55,
                                                                 wMapWidth=20)))
     assert policy.goal is hunt

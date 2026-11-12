@@ -62,7 +62,7 @@ class ErrandPart:
         well_item = (self.goal.key == 'collection_trade_item'
                      and self.constant(snapshot) in {'SLOWPOKE_WELL_B1F', 'SLOWPOKE_WELL_B2F'})
         return (not self.goal.key.startswith('push_') and not well_item
-                and (not self.collection.get('contest') or not mem.byte('wStatusFlags2') & 4))
+                and (not self.collection.get('contest') or not snapshot.bug_contest))
 
     def league_boss(self, snapshot):
         """The League as the oracle judges a postgame run (collection.league_run), its scores read."""
