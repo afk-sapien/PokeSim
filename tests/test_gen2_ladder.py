@@ -7,8 +7,9 @@ import pytest
 
 from pokesim.gen2 import collection, errands, tower
 from pokesim.gen2.collection import ERRAND_FRAMES, INTERRUPT_FRAMES, MAP_FRAMES, Rungs
-from pokesim.planning import values
+from pokesim.planning import decide, values
 from pokesim.planning.arbiter import Candidate, Tier
+from pokesim.planning.pin import Pin
 
 
 def goal(key, map_name='HERE'):
@@ -59,6 +60,24 @@ def test_the_cheaper_rung_wins_in_a_tier_and_only_the_pick_writes():
     assert owner.monitor_tables == {}
     near = next(candidate for candidate in rungs.candidates if candidate.goal == 'near')
     assert near.expected_frames == ERRAND_FRAMES + MAP_FRAMES
+
+
+def test_a_blocked_rung_is_not_offered_writes_nothing_and_a_pin_on_it_says_why():
+    failure = decide.Failure(decide.NEEDS, 'needs more balls')
+    for survey in (False, True):
+        owner = policy(pin=Pin('hunt:hunt', 'hunt'), ladder_survey=survey)
+        rungs = ladder(owner)
+        rungs.offer('hunt', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES,
+                    build(owner, 'hunt', goal('hunt'), target={'species': 177}), blocked=lambda goal: failure)
+        rungs.offer('training', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, build(owner, 'training', goal('training')))
+        assert picked(rungs) == 'training' and rungs.pin_parked is failure
+        assert rungs.skipped == ([('hunt:hunt', 'hunt', failure)] if survey else [])
+        assert owner.collection == {'target': None}
+    owner = policy()
+    rungs = ladder(owner)
+    rungs.offer('hunt', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, build(owner, 'hunt', goal('hunt')),
+                blocked=lambda goal: None)
+    assert picked(rungs) == 'hunt'
 
 
 def test_a_later_rung_builds_from_the_starting_state():

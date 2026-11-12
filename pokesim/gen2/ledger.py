@@ -13,7 +13,7 @@ from collections import Counter
 from dataclasses import replace
 import math
 
-from ..planning import boss
+from ..planning import boss, throws
 from ..planning.ledger import BOX, HP, MONEY, PARTY, PP, PRICELESS, Ledger, Need, Resources, Shortfall, Unit
 from .champion_shop import SUPPLIES
 from .menus import Release
@@ -467,9 +467,8 @@ MEDICINE = {'POTION': (boss.RESTORE, 20), 'SUPER_POTION': (boss.RESTORE, 50), 'H
             'ELIXER': (boss.ELIXIR, 10), 'MAX_ELIXER': (boss.ELIXIR, 0)}
 # The goals of the League rooms, which buy the League kit (boss.kit) before the first.
 LEAGUE_GOALS = frozenset({'league_will', 'league_koga', 'league_bruno', 'league_karen', 'league_lance'})
-# An ordinary catch keeps the last few balls while money cannot buy the floor back. Species met only
-# once, such as Sudowoodo, Snorlax, the red Gyarados and the legendaries, always get a throw.
-LAST_BALLS = 3
+# An ordinary catch keeps the last few balls while money cannot buy the floor back (planning/throws.py).
+# Species met only once, such as Sudowoodo, Snorlax, the red Gyarados and the legendaries, always get a throw.
 ONE_CHANCE = frozenset({130, 143, 185, 243, 244, 245, 249, 250, 251})
 # One sale tier is worth this much more per money freed than the tier before it.
 TIER = 10 ** 7
@@ -593,12 +592,12 @@ def supplies(policy, snapshot):
 
 
 def spare_throw(data, snapshot, species):
-    """Whether an ordinary catch may throw a ball: a one-time encounter, more than the last few balls,
-    or money past the reservations to buy the floor back."""
-    if species in ONE_CHANCE or balls(snapshot) > LAST_BALLS:
-        return True
-    books = money_books(data, snapshot, sales=False)
-    return books.reserve('throw', Need(money=price(data, 'POKE_BALL') * BALL_FLOOR)).ok
+    """Whether an ordinary catch may throw a ball, by the rule in planning/throws.py: a one-time
+    encounter, more than the last few balls, or money past the reservations to buy the floor back."""
+    def restock():
+        books = money_books(data, snapshot, sales=False)
+        return books.reserve('throw', Need(money=price(data, 'POKE_BALL') * BALL_FLOOR)).ok
+    return throws.spare_throw(2, balls(snapshot), species in ONE_CHANCE, restock)
 
 
 def funding_short(policy, snapshot):

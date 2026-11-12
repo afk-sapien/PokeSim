@@ -8,6 +8,10 @@ get throws, and so does a Gold, Silver or Crystal battle a map script started.
 """
 
 THROW_BAR = 0.1
+# The balls an ordinary catch keeps, by generation, while money cannot buy the restock floor back. Gold,
+# Silver and Crystal keep the last three for a species met only once. Red, Blue and Yellow keep none and
+# throw the last ball. The difference is an owner choice (docs/design/one-bot.md).
+LAST_BALLS = {1: 0, 2: 3}
 # Sleep and freeze in the status byte, the same bits in both generations.
 SLEEP_OR_FREEZE = 0b100111
 # What Gold, Silver and Crystal multiply a catch rate by for each ball. The other Apricorn balls have
@@ -15,6 +19,20 @@ SLEEP_OR_FREEZE = 0b100111
 GEN2_BALLS = {'ULTRA BALL': 2, 'GREAT BALL': 1.5, 'PARK BALL': 1.5}
 # What Red, Blue and Yellow draw a ball's first random number below, and the HP divisor of its second.
 GEN1_BALLS = {'POKE_BALL': (256, 12), 'GREAT_BALL': (201, 8), 'ULTRA_BALL': (151, 12), 'SAFARI_BALL': (151, 12)}
+
+
+def spare_throw(generation, balls, once=False, restock=lambda: False):
+    """Whether an ordinary catch may throw one of ``balls``, the one rule for the battle and for the goal
+    picker. A species met only once (``once``) always may. Any other needs more balls than its
+    generation keeps, or ``restock()`` true when money past the reservations buys the floor back. A
+    catch goal whose throw is not spare is not feasible, and says why with ``spare_words``."""
+    return once or balls > LAST_BALLS[generation] or restock()
+
+
+def spare_words(generation):
+    """What a catch goal with no spare throw needs, in the words of the goal catalogue's why_not."""
+    last = LAST_BALLS[generation]
+    return f'more than {last} Poké Balls or the money to buy more' if last else 'a Poké Ball'
 
 
 def gen1_throw(rate, ball, hp, max_hp, status):
