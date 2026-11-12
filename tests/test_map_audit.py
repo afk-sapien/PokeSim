@@ -1,10 +1,14 @@
-"""The Gen II map audit passes on every game, and still catches the map facts behind #254 and #241, and walks through Ilex Forest or over a gate link without the field move."""
+"""The map audit passes on every game, and still catches the map facts behind #254, #241, #268 and #124, and walks through Ilex Forest or over a gate link without the field move."""
 import importlib.util
 import os
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import pytest
 
+from pokesim import game_data, story
 from pokesim.gen2.navigation import Navigator
 from pokesim.gen2.routes import CARPETS, Regions, walk_crossings
 
@@ -157,3 +161,86 @@ def test_a_carpet_read_as_a_door_cuts_off_the_olivine_port_pier(game):
     names = {mid: entry['constant'] for mid, entry in data.maps.items()}
     before = tool.check_carpets(data, Regions(view), Navigator(view), names)
     assert ('carpet', 'OLIVINE_PORT', 7, 17, 'walled in') in before
+
+
+# Check E runs the whole story, so a run past this many seconds fails, as it would slow every push.
+STORY_SECONDS = 60
+
+
+def gen1_tool(variant='red'):
+    """Skip unless the Gen I data of ``variant`` is prepared."""
+    try:
+        game_data.bundle_path(variant=variant)
+    except RuntimeError:
+        pytest.skip(f'{variant.title()} game data is not prepared')
+
+
+def timed_story_check(*args, **kwargs):
+    import time
+    start = time.perf_counter()
+    found = tool.check_story_gen1(*args, **kwargs)
+    seconds = time.perf_counter() - start
+    assert seconds < STORY_SECONDS, f'check E took {seconds:.0f} s'
+    return found
+
+
+def test_every_gen1_story_step_is_offered_and_reachable_in_turn():
+    gen1_tool()
+    assert timed_story_check() == {}
+
+
+def test_every_yellow_story_step_is_offered_and_reachable_in_turn():
+    gen1_tool('yellow')
+    env = dict(os.environ, **{game_data.VARIANT_ENV: 'yellow'})
+    script = textwrap.dedent(f'''
+        import importlib.util, time
+        spec = importlib.util.spec_from_file_location('map_audit_tool', {str(ROOT / 'tools' / 'map_audit.py')!r})
+        tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tool)
+        from pokesim.policies.progression import GAME
+        start = time.perf_counter()
+        found = tool.check_story_gen1()
+        print(GAME, len(found), round(time.perf_counter() - start), sorted(map(str, found)))
+    ''')
+    result = subprocess.run([sys.executable, '-c', script], cwd=ROOT, env=env, capture_output=True, text=True,
+                            timeout=120)
+    assert result.returncode == 0, result.stderr[-3000:]
+    game, count, seconds, *rest = result.stdout.split(maxsplit=3)
+    assert (game, count) == ('yellow', '0'), result.stdout
+    assert int(seconds) < STORY_SECONDS
+
+
+def test_a_lift_that_always_goes_to_b1f_cuts_off_mr_fuji():
+    # The Rocket Hideout lift once always left for B1F, whatever floor the player picked, so the
+    # walk to the Silph Scope never reached B4F and the run looped in the lift (#268).
+    gen1_tool()
+    from pokesim.policies.navigation import Navigator
+
+    class LiftToB1F(Navigator):
+        def hideout_lift_floor(self):
+            return 'B1F'
+
+    found = timed_story_check(LiftToB1F)
+    assert found[('story', 'fuji', 'MR_FUJI', 'no route')] == 'no route from ROCKET_HIDEOUT_B4F (24, 2)'
+
+
+def test_a_story_row_the_manifest_drops_is_not_offered_in_turn():
+    gen1_tool()
+    from pokesim.policies.progression import GAME
+    rows = story.steps(1, GAME)
+    skipped, after = rows[1], rows[2]
+    found = timed_story_check(rows=rows[:1] + rows[2:])
+    first = next(iter(found))
+    assert first == ('story', after['key'], tool.where(after), 'not offered')
+    assert found[first] == f"the story offers {skipped['key']} here"
+
+
+def test_each_cinnabar_gym_door_row_names_its_gate_and_its_trainer():
+    gen1_tool()
+    from pokesim.policies.navigation import CINNABAR_GYM_DOORS
+    from pokesim.policies.progression import GAME
+    doors = [row for row in story.rows(1, GAME, 'volcano') if not row.get('gym')]
+    assert len(doors) == len(CINNABAR_GYM_DOORS)
+    for number, (row, (gate, _)) in enumerate(zip(doors, CINNABAR_GYM_DOORS), 1):
+        assert row['done_when']['flags'] == [gate.flag] == [f'EVENT_CINNABAR_GYM_GATE{number}_UNLOCKED']
+        assert row['map'] == 'CINNABAR_GYM' and row['object'] == f'SUPER_NERD{number + 1}'

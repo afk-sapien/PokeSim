@@ -1,6 +1,7 @@
-"""Audit the Gen II map facts the route planners trust, and list every finding the allow list does not cover.
+"""Audit the map facts the route planners trust, and list every finding the allow list does not cover.
 
 Usage: python tools/map_audit.py <generated Gen II data directory> [gold silver crystal]
+       python tools/map_audit.py --gen1    (Red and Blue, or Yellow with POKESIM_GEN1_VARIANT=yellow)
 
 Check B covers map links. The walk router counts a link as one step between two maps, and the
 storage, shop, heal, roamer, postgame and collection choices rank places by that count. So each
@@ -15,6 +16,11 @@ Check D covers crossings. A walk crosses a map from the map before it to the map
 with the field moves that join the ground it lands on to the ground it leaves from, so before Cut
 no walk goes through Ilex Forest. For each crossing that needs a field move, a walk with each set
 of moves that does not join it must take no crossing those moves do not join.
+
+Check E covers the story manifests in pokesim/story. It walks the rows in play order, holding the
+game the rows before leave. The story code must offer each row in turn, the row's place must be
+reachable from the row before, and after each badge a Pokémon Center must be reachable from every
+town and route the story walked. Gen I runs it with --gen1, for the variant the process loads.
 
 Each finding that is true of the games today is on ALLOWED with the reason it is there. The audit
 fails on a finding that is not on ALLOWED, and on a row of ALLOWED that no longer matches a
@@ -186,6 +192,145 @@ def check_crossings(data, navigator, names):
     return found
 
 
+def gen1_state(rows, done):
+    """The Red, Blue or Yellow game a player holds once the story rows in ``done`` are done.
+
+    Every object the game can hide is hidden, except one that a row not done yet names in its
+    done_when, such as the Snorlax on Route 12. So check E checks walls, warps, gates and lifts,
+    not the people a script moves.
+    """
+    from pokesim.ram import PartyMon
+    from pokesim.strategy_data import DATA, EVENTS, ITEMS, MAPS
+    flags, items, moves = bytearray(320), [], []
+    badges, party, saffron = 0, False, False
+    for row in done:
+        facts = row['done_when']
+        for flag in facts.get('flags', ()):
+            index = EVENTS[fill_choices(flag)]
+            flags[index // 8] |= 1 << index % 8
+        items = [item for item in items + [ITEMS[name] for name in facts.get('items', ())]
+                 if item not in {ITEMS[name] for name in facts.get('drop', ())}]
+        moves += facts.get('moves', [])
+        badges |= facts.get('badges', 0)
+        party = party or facts.get('party', False)
+        saffron = saffron or facts.get('saffron', False)
+    toggles = DATA['toggle_objects']
+    hidden = bytearray([0xFF] * ((len(toggles) + 7) // 8))
+    for row in rows:
+        if not any(row is finished for finished in done):
+            for name, number in row['done_when'].get('hidden', ()):
+                index = toggles.index([MAPS[name], number])
+                hidden[index // 8] &= ~(1 << index % 8)
+    mon = PartyMon(0x99, 20, 20, 50, 'PARTNER', moves=tuple(moves[:4]) or (33,))
+    return dict(badges=badges, event_flags=bytes(flags), items=tuple((item, 1) for item in items),
+                party=(mon,) if party else (), saffron_open=saffron, hidden_objects=bytes(hidden))
+
+
+# The run's choices that fill "{starter}" and "{fossil}" in a story row.
+CHOICES = {'starter': 'BULBASAUR', 'fossil': 'HELIX_FOSSIL'}
+
+
+def fill_choices(text):
+    from pokesim import story
+    return story.fill(text, **CHOICES)
+
+
+def gen1_goal(row):
+    """The goal a Gen I story row asks for, with an empty title."""
+    from pokesim.policies.progression import GYMS, at, object_goal
+    if row.get('gym'):
+        _, key, _, gym, trainer, *_ = next(gym for gym in GYMS if gym[1] == row['key'])
+        return object_goal(key, '', '', gym, trainer)
+    if 'object' in row:
+        return object_goal(row['key'], '', '', row['map'], fill_choices(row['object']))
+    return at(row['key'], '', '', row['map'], row['x'], row['y'])
+
+
+def where(row):
+    """A short name for a story row, which tells apart the rows one key holds."""
+    return 'gym' if row.get('gym') else row.get('object') or f"{row['x']},{row['y']}"
+
+
+# A route between two story steps may cross much of Kanto, so it may search past the walk limit.
+STORY_LIMIT = 400000
+
+
+def gen1_snapshot(position, state):
+    from pokesim.ram import Snapshot
+    return Snapshot(frame=0, map=position[0], x=position[1], y=position[2], owned=frozenset(), seen=frozenset(),
+                    money=0, in_battle=0, battle_type=0, enemy_species=0, enemy_level=0, opponent=0,
+                    player_name='RED', rival_name='BLUE', playtime=(0, 0, 0), textbox=False, start_menu=False, **state)
+
+
+# The tilesets of Kanto's towns and routes.
+OUTDOOR = frozenset({'OVERWORLD', 'PLATEAU'})
+
+
+def check_centers_gen1(navigator, snapshot, walked, badge, names):
+    """After a badge, a Pokémon Center is reachable from each town and route the story walked."""
+    from pokesim.policies.progression import healing_goal
+    nav = navigator()
+    nav.update_story(snapshot)
+    centers = frozenset(healing_goal(snapshot).targets)
+    found = {}
+    for mid, tile in walked.items():
+        if tile not in centers and nav.route(tile, centers, 0, limit=STORY_LIMIT) is None:
+            found[('center', badge, names[mid])] = f'no Pokémon Center is reachable from {names[mid]} {tile[1:]}'
+    return found
+
+
+def check_story_gen1(navigator=None, rows=None):
+    """Check E for Red, Blue or Yellow, whichever Gen I data this process loaded.
+
+    Each story row's place must be reachable from the place of the row before, with the game the
+    rows before it leave. The story code must offer each row in turn, at the row's own place. After
+    each badge, a Pokémon Center must be reachable from every town and route the story walked.
+    ``navigator`` and ``rows`` replace the Navigator class and the manifest rows, for tests.
+    """
+    from pokesim import story
+    from pokesim.policies.navigation import Navigator
+    from pokesim.policies.progression import GAME, story_goal
+    from pokesim.strategy_data import MAPS, WORLD
+    navigator = navigator or Navigator
+    names = {mid: name for name, mid in MAPS.items()}
+    rows = story.steps(1, GAME) if rows is None else rows
+    first = story.start(1)
+    position = (MAPS[first['map']], first['x'], first['y'])
+    found, done, walked = {}, [], {}
+    for row in rows:
+        snapshot = gen1_snapshot(position, gen1_state(rows, done))
+        goal, wanted = story_goal(snapshot, CHOICES['starter'].lower(), CHOICES['fossil']), gen1_goal(row)
+        if (goal.key, goal.targets) != (row['key'], wanted.targets):
+            found[('story', row['key'], where(row), 'not offered')] = f'the story offers {goal.key} here'
+        legs, targets = [], wanted.targets
+        if 'arrive' in row:
+            arrive, mid = row['arrive'], MAPS[row['map']]
+            legs.append((position, ((mid, arrive['x'], arrive['y']),)))
+            position = (mid, arrive['then']['x'], arrive['then']['y'])
+        legs.append((position, targets))
+        nav = navigator()
+        nav.update_story(snapshot)
+        for start, goals in legs:
+            position = start
+            if start in goals:
+                continue
+            if nav.route(start, goals, 0, limit=STORY_LIMIT) is None:
+                found[('story', row['key'], where(row), 'no route')] = f'no route from {names[start[0]]} {start[1:]}'
+                position = goals[0]
+                break
+            for _, _, tile in nav.path:
+                if WORLD[tile[0]]['tileset'] in OUTDOOR:
+                    walked.setdefault(tile[0], tile)
+            position = nav.path[-1][2]
+        if 'then' in row:
+            position = (MAPS[row['then']['map']], row['then']['x'], row['then']['y'])
+        done.append(row)
+        if 'badges' in row['done_when']:
+            after = gen1_snapshot(position, gen1_state(rows, done))
+            found.update(check_centers_gen1(navigator, after, walked, row['key'], names))
+    return found
+
+
 def audit(data):
     """Every finding for one game, as {finding: detail}."""
     names = {mid: entry['constant'] for mid, entry in data.maps.items()}
@@ -204,10 +349,20 @@ def problems(game, findings, allow=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('data', type=Path, help='generated Gen II data directory')
+    parser.add_argument('data', type=Path, nargs='?', help='generated Gen II data directory')
     parser.add_argument('games', nargs='*', default=list(GAMES))
     parser.add_argument('--all', action='store_true', help='also print the findings the allow list covers')
+    parser.add_argument('--gen1', action='store_true', help='run check E on the Gen I variant this process loads')
     args = parser.parse_args()
+    if args.gen1:
+        from pokesim.policies.progression import GAME
+        findings = check_story_gen1()
+        print(f'{GAME}: {len(findings)} findings')
+        for key, detail in findings.items():
+            print(f'  NEW {key}: {detail}')
+        return 1 if findings else 0
+    if args.data is None:
+        parser.error('give the generated Gen II data directory, or --gen1')
     failed = False
     for game in args.games:
         findings = audit(GameData.load(args.data, game))
