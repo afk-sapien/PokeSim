@@ -19,7 +19,8 @@ def make(money, items, hall_of_fame_count=1, league=False, beaten=()):
                            item_attributes={1: {'price': 3000}, 2: {'price': 2500}, 3: {'price': 1200}, 4: {'price': 1500}})
     policy = SimpleNamespace(data=data, collection={}, completed={},
                              in_league=lambda snapshot: league,
-                             person=lambda snapshot, key, *args: key)
+                             person=lambda snapshot, key, *args: key,
+                             story_step=lambda snapshot, key, *args: key)
     snapshot = SimpleNamespace(map=1, badges=65535, frame=100, money=money, items=items,
                                hall_of_fame_count=hall_of_fame_count,
                                event=lambda name: name not in EVENTS_FALSE or name in beaten)
