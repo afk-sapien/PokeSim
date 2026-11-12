@@ -14,7 +14,7 @@ from .navigation import DIRS
 from pokecore.gen2.ram import Memory
 from ..planning.monitor import STOOD_DOWN
 from .standdown import (DECISION_FRAMES, exhausted, forget, hold_key, hunt_key, rung_key, search_expected, spend,
-                        stand_down, standing_down)
+                        stand_down, standing_down, train_key)
 from .standdown import monitor as standdown_monitor
 from . import kinds
 
@@ -479,6 +479,69 @@ def league_verdict(policy, snapshot):
     return judge(boss, fighters, getattr(policy, 'losses', None))
 
 
+def league_key(identity):
+    """The stand-down that keeps a trainee out of League runs after a run it was in failed.
+
+    The monitor keeps it, so the reload to the League entry save, which rewinds the run's own records
+    and the loss it noted, leaves it in place.
+    """
+    return 'league:' + train_key(identity)
+
+
+def league_trainees(policy, snapshot):
+    """The training project's trainee in the party, below the lowest level the League's lineup fields
+    (planning/league.run), with its identity. A list of at most one."""
+    from .training import identity
+    want = (getattr(policy, 'collection', {}).get('training') or {}).get('identity')
+    if want is None:
+        return []
+    low = league_run(policy, snapshot)[0].low or 0
+    return [(mon, want) for mon in snapshot.party if not mon.egg and identity(mon) == want and mon.level < low]
+
+
+def trainee_out(policy, snapshot):
+    """Whether a trainee a failed League run took in still stands down from League runs."""
+    return any(standing_down(policy, league_key(want)) for _, want in league_trainees(policy, snapshot))
+
+
+def league_closed(policy, snapshot):
+    """Whether a postgame League run may not start, or go on from outside the League: the oracle's Train
+    verdict (league_verdict), or a trainee a failed run took in that is still below the lineup's lowest level."""
+    return league_verdict(policy, snapshot) is not None or trainee_out(policy, snapshot)
+
+
+def funding_closed(policy, snapshot):
+    """Whether a League run for prize money may not start, or go on from outside the League.
+
+    A funding run is for money the work needs, not for a ready team, so the oracle stops one only after
+    a run lost (``league_lost``). A Gold run took a level 100 Typhlosion and a level 22 trainee to the
+    Elite Four for prize money, lost, and restarted from the entry save again and again. The trainee
+    such a run took in stays out until it reaches the lineup's lowest level.
+    """
+    if policy.collection.get('league_lost') is not None and league_closed(policy, snapshot):
+        return True
+    return trainee_out(policy, snapshot)
+
+
+def league_restarted(policy, snapshot):
+    """Stand down from League runs the trainee the run under way took in, after a reload restarted
+    the run from its entry save. ``snapshot`` is the game before the reload. True when one stood down."""
+    trainees = league_trainees(policy, snapshot)
+    for _, want in trainees:
+        stand_down(policy, league_key(want))
+    return bool(trainees)
+
+
+def lose_league(policy, snapshot):
+    """End the League run under way as lost: the oracle counts the loss (``league_lost``), and the
+    trainee the run took in stands down from League runs."""
+    state = policy.collection
+    for key in ('league_loop', 'funding', 'league_entered'):
+        state.pop(key, None)
+    state['league_lost'] = league_run(policy, snapshot)[1].depth
+    league_restarted(policy, snapshot)
+
+
 def league_funding(policy, snapshot, Goal, *, again=False):
     """Run the Elite Four again for prize money, ending with a Hall of Fame entry.
 
@@ -505,10 +568,11 @@ def call_off_league(policy):
 
     The guards call this after restarting the same attempt from the entry save again and again. The
     entry save was taken before the run went in, so this marks it entered and the League loop then
-    sees a team outside the League without its Hall of Fame entry, as after a black out.
+    sees a team outside the League without its Hall of Fame entry, as after a black out. A run for
+    prize money (``funding``) is called off the same way.
     """
     state = policy.collection
-    if state.get('league_loop') is None:
+    if state.get('league_loop') is None and state.get('funding') is None:
         return False
     state['league_entered'] = True
     return True
@@ -526,10 +590,8 @@ def league_loop(policy, snapshot, Goal):
         # Leaving the League without its Hall of Fame entry means the team blacked out. A live Crystal
         # run took one level 71 Poliwhirl and its trainees back to Lance every twenty minutes and lost
         # each time, so the next run waits for the team to grow.
-        state.pop('league_loop', None)
-        state.pop('league_entered', None)
-        state['league_lost'] = league_run(policy, snapshot)[1].depth
-    elif loop is not None and not policy.in_league(snapshot) and league_verdict(policy, snapshot) is not None:
+        lose_league(policy, snapshot)
+    elif loop is not None and not policy.in_league(snapshot) and league_closed(policy, snapshot):
         # A postgame run is optional, so a team too weak to finish it trains instead of trying.
         state.pop('league_loop', None)
     elif loop is not None:
@@ -840,13 +902,36 @@ def holds(policy, snapshot, mem, Goal):
         if any(count < 20 for count in snapshot.box_counts):
             goal = policy.storage_goal(snapshot)
             return Goal('collection_box', 'Make room for new catches', goal.map_name, goal.x, goal.y, goal.face)
-    funding = state.get('funding')
-    if funding is not None and snapshot.hall_of_fame_count >= funding:
-        state.pop('funding', None)
-    elif funding is not None:
-        state['phase'] = 'league'
-        return league_funding(policy, snapshot, Goal)
+    if state.get('funding') is not None:
+        goal = funding_run(policy, snapshot, Goal)
+        if state.get('funding') is not None:
+            state['phase'] = 'league'
+            return goal
     return league_loop(policy, snapshot, Goal)
+
+
+def funding_run(policy, snapshot, Goal):
+    """The next step of the League run for prize money under way, or None once it is over, lost or
+    closed (funding_closed). ``funding`` is left set while the run goes on."""
+    state = policy.collection
+    funding = state.get('funding')
+    if funding is None:
+        return None
+    if snapshot.hall_of_fame_count >= funding:
+        state.pop('funding', None)
+        state.pop('league_entered', None)
+        state.pop('league_lost', None)
+    elif not policy.in_league(snapshot) and state.get('league_entered'):
+        # Out of the League without its Hall of Fame entry: the team blacked out, or the run was called
+        # off after it restarted from the entry save (call_off_league). It is lost, as a League loop's is.
+        lose_league(policy, snapshot)
+    elif not policy.in_league(snapshot) and funding_closed(policy, snapshot):
+        state.pop('funding', None)
+    else:
+        if policy.in_league(snapshot):
+            state['league_entered'] = True
+        return league_funding(policy, snapshot, Goal)
+    return None
 
 
 def held(policy, snapshot, mem, Goal):
@@ -873,6 +958,8 @@ def start_funding(policy, snapshot, Goal):
             or snapshot.money < BREEDING_FUNDS and not state.get('breeding')
             and getattr(snapshot, 'daycare', None) is not None and pairings(policy, snapshot)
             or store_shortfall(policy, snapshot)):
+        return None
+    if funding_closed(policy, snapshot):
         return None
     state['funding'] = snapshot.hall_of_fame_count + 1
     state['phase'] = 'league'
@@ -990,6 +1077,8 @@ def journey(policy, snapshot, mem, Goal):
     policy.ladder_labels = rungs.labels
     if rungs.survey:
         policy.ladder_skipped = rungs.skipped
+    if state.get('funding') is not None and not policy.in_league(snapshot) and funding_closed(policy, snapshot):
+        state.pop('funding', None)
     if state.get('funding') is not None:
         # A rung that offered nothing, such as the Game Corner prize partner, just asked for League prize
         # money. Start that run now, or one decision picks a later goal such as the Tohjo Falls Moon
@@ -1255,7 +1344,7 @@ def postgame_league(policy, snapshot, mem, current_time):
     """
     if 'champion' not in getattr(policy, 'completed', {}) or not snapshot.hall_of_fame_count:
         return False
-    return league_verdict(policy, snapshot) is None
+    return not league_closed(policy, snapshot)
 
 
 HUNT_METHODS = {'grass', 'surf', 'old rod', 'good rod', 'super rod', 'headbutt', 'rock smash'}

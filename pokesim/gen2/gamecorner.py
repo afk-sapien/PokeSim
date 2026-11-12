@@ -23,7 +23,9 @@ def journey(policy, snapshot, Goal):
                         'CELADON_GAME_CORNER', 11, 6, 'right')
         required = min(9950, (price + 49) // 50 * 50) - snapshot.coins
         if snapshot.money < required * 20 + 5000:
-            policy.collection.setdefault('funding', snapshot.hall_of_fame_count + 1)
+            from .collection import funding_closed
+            if not funding_closed(policy, snapshot):
+                policy.collection.setdefault('funding', snapshot.hall_of_fame_count + 1)
             return None
         return policy.person(snapshot, 'collection_coins', 'Buy coins for the prize partner',
                              'GOLDENROD_GAME_CORNER', 'GoldenrodGameCornerCoinVendorScript')

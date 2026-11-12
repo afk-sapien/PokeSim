@@ -75,15 +75,12 @@ def red_funding(policy, snapshot, Goal):
     Each loss to Red halves the money, so without this the policy keeps walking back to Mt. Silver
     with an empty bag and no way to buy the potions the shop asks for.
     """
-    state = policy.collection
-    funding = state.get('funding')
-    if funding is not None and snapshot.hall_of_fame_count >= funding:
-        state.pop('funding', None)
-        funding = None
+    from .collection import funding_closed, funding_run, league_funding
+    goal = funding_run(policy, snapshot, Goal)
+    if policy.collection.get('funding') is not None:
+        return goal
     from .ledger import red_short
-    if funding is None and red_short(policy, snapshot):
-        state['funding'] = funding = snapshot.hall_of_fame_count + 1
-    if funding is None:
+    if not red_short(policy, snapshot) or funding_closed(policy, snapshot):
         return None
-    from .collection import league_funding
+    policy.collection['funding'] = snapshot.hall_of_fame_count + 1
     return league_funding(policy, snapshot, Goal)

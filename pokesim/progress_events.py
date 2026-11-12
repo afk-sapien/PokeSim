@@ -31,6 +31,8 @@ KINDS = frozenset(NET) | {'item'}
 JOURNAL = {'obtain': 'receive', 'trade': 'receive', 'hatch': 'receive', 'release': 'release'}
 # Active PlayClock frames in one game hour, the encounter counters' bucket.
 HOUR = 216000
+# The story flags this run has seen set, as hex. A reload keeps it and a restart empties it (state/domains.py).
+FLAGS_KEY = 'goal-watch-flags-v1'
 
 
 def frame(store):
@@ -237,23 +239,49 @@ class GoalWatch:
         """Write an ``event`` row when story flags are set that this run has not seen set before.
 
         The first reading only takes the flags already set, so a start or a restart counts none of
-        them. The flags seen stay seen, so a reload that sets them again writes nothing. The score is
-        the count of flags seen.
+        them. The flags seen stay seen, so a reload that sets them again writes nothing. They are kept
+        on the store, so a worker that starts again after a reload does too: a Gold League run that
+        restarted from its entry save beat Will, Koga and Bruno again after each worker start, and each
+        win wrote a net row though the reload had taken it back. The score is the count of flags seen.
         """
         flags = bytes(flags)
         if not flags:
             return
         if not self.flags:
-            self.flags = flags
+            kept = stored_flags(store)
+            self.flags = union(kept, flags) if kept else flags
+            if self.flags != kept:
+                save_flags(store, self.flags)
             return
         seen = self.flags.ljust(len(flags), b'\0')
         if any(now & ~old for old, now in zip(seen, flags)):
-            self.flags = bytes(old | now for old, now in zip(seen, flags)) + seen[len(flags):]
+            self.flags = union(seen, flags)
+            save_flags(store, self.flags)
             write(store, 'event', goal=self.key, tier=self.tier, score=sum(byte.bit_count() for byte in self.flags))
 
     def restart(self):
-        """A new game: no encounters, flags or kept copies of the old one carry over."""
+        """A new game: no encounters, flags or kept copies of the old one carry over. The restart's
+        transaction empties the stored flags (Store.restart)."""
         self.pending, self.flags, self.expected = [], b'', {}
+
+
+def union(seen, flags):
+    """Every flag set in either reading, as long as the longer one."""
+    seen = seen.ljust(len(flags), b'\0')
+    return bytes(old | now for old, now in zip(seen, flags)) + seen[len(flags):]
+
+
+def stored_flags(store):
+    """The story flags the run has seen set, as the store keeps them, or b'' when it keeps none."""
+    try:
+        return bytes.fromhex(store.get(FLAGS_KEY) or '')
+    except (AttributeError, TypeError, ValueError):
+        return b''
+
+
+def save_flags(store, flags):
+    if hasattr(store, 'set'):
+        store.set(FLAGS_KEY, flags.hex())
 
 
 def met(rule, dvs):

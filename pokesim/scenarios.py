@@ -677,6 +677,12 @@ def play(scenario, rom=None, progress=None):
                     break
                 if scenario.fallback and (reloads >= 2 or hopeless and watch.in_league(snapshot)):
                     run.reload(scenario.fallback)
+                    if run.generation == 2:
+                        # As the application does after a League attempt restarts from its entry save, a
+                        # trainee the run took in stands down from League runs and the run is called off.
+                        from .gen2.collection import call_off_league, league_restarted
+                        if league_restarted(run.policy, snapshot):
+                            call_off_league(run.policy)
                 else:
                     run.reload(scenario.checkpoint)
                     if run.generation == 1:

@@ -290,18 +290,19 @@ class Supervisor:
         self._save()
         return call_off
 
-    def call_off_league(self, wins, call_off):
+    def call_off_league(self, wins, call_off, now=False):
         """Count a League attempt restarted from its entry save and call the League run off when it is time.
         True when it did. One rule for both generations.
 
         It is time on the third restart without a new Hall of Fame entry (``restarted_league``), or on a
         restart the ladder would report as stalled. A live Red run was reported at the third reload and
         gave up by itself at the twelfth, so the call-off acts first and the owner is only asked when it
-        cannot. ``call_off`` calls the generation's run off and says whether there was one to call off.
+        cannot. ``now`` makes it time at once, as when the run took in a trainee the team cannot carry.
+        ``call_off`` calls the generation's run off and says whether there was one to call off.
         A first League run has none and restarts as before. A run called off starts the ladder again,
         as a give up does.
         """
-        due = self.restarted_league(wins) or self.reloads >= STALL_RELOADS
+        due = self.restarted_league(wins) or now or self.reloads >= STALL_RELOADS
         if not due or not call_off():
             return False
         self.league = (self.league[0], 0)

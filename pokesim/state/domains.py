@@ -102,6 +102,8 @@ DOMAINS = (
     # A reload keeps the goals' stand-downs and spent budgets, as the frames were really used.
     Domain('supervisor-monitor-v1', 'pokesim.runtime.supervision', RESETS_ON_RESTART, policy_reads=True),
     Domain('goal-time-v1', 'pokesim.goal_time', RESETS_ON_RESTART),
+    # A reload keeps the story flags seen, so the replay after it writes no event row for them.
+    Domain('goal-watch-flags-v1', 'pokesim.progress_events', RESETS_ON_RESTART),
 
     Domain(RESTART_PENDING, 'pokesim.store', SURVIVES),
 
