@@ -166,8 +166,11 @@ class BattlePart:
                               if i != active and not mon.egg and mon.hp > mon.max_hp // 2
                               and (partner or mon.level * 2 >= snapshot.enemy_level)]
                 if static:
+                    # A sleeper that faints before it can land sleep only spends a turn and a Pokémon.
+                    from ..quests import sleep_chance
                     candidates = [row for row in candidates if row[0] is not None and self.data.moves.get(
-                        snapshot.party[row[1]].moves[row[0]], {}).get('effect') == 'EFFECT_SLEEP']
+                        snapshot.party[row[1]].moves[row[0]], {}).get('effect') == 'EFFECT_SLEEP'
+                        and sleep_chance(self, snapshot.party[row[1]], snapshot.enemy_species, snapshot.enemy_level) > 0]
                 switch = next((i for move, i in candidates if move is not None), None)
             if catch and weaken is None and switch is None and not (partner or trapped):
                 odds = self.long_odds(snapshot, catch_species, active, escape=can_escape)
