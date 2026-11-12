@@ -166,6 +166,14 @@ H_VENDING_MACHINE_ITEM = 0xFFDB
 BATTLE_STRUCT = 29
 W_PLAYER_MON_NUMBER = 0xCC2F    # wPlayerMonNumber: the party slot of the player's active mon, from 0
 W_TRANSFORMED_ENEMY_DVS = 0xCCEB    # wTransformedEnemyMonOriginalDVs, kept while the enemy is transformed
+# wPlayerDisabledMoveNumber and wEnemyDisabledMoveNumber: the move ID Disable holds, while it lasts.
+W_PLAYER_DISABLED_MOVE_NUMBER = 0xCCEE
+W_ENEMY_DISABLED_MOVE_NUMBER = 0xCCEF
+# wPlayerUsedMove and wEnemyUsedMove: the move each side used last, which Mirror Move copies.
+W_PLAYER_USED_MOVE = 0xCCF1
+W_ENEMY_USED_MOVE = 0xCCF2
+# wEnemyDisabledMove: as W_PLAYER_DISABLED_MOVE, for the enemy.
+W_ENEMY_DISABLED_MOVE = 0xD072
 W_ENEMY_MON_NICK = 0xCFDA
 W_ENEMY_HP = W_ENEMY_MON + 1
 W_ENEMY_DVS = W_ENEMY_MON + 12
@@ -187,6 +195,8 @@ BATTLE_TYPE_SAFARI = 2
 BATTLE_TYPE_PIKACHU = 4
 # Bits of the battle status bytes.
 BIT_USING_TRAPPING_MOVE = 5    # status 1: Wrap, Bind, Clamp or Fire Spin is holding the target
+BIT_HAS_LIGHT_SCREEN_UP = 1    # status 3
+BIT_HAS_REFLECT_UP = 2    # status 3
 BIT_TRANSFORMED = 3    # status 3
 
 PARTY_STRUCT = 44

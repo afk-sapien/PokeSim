@@ -18,7 +18,9 @@ SYMBOLS = {'wPartyCount': 1, 'wPartySpecies': 7, 'wPartyMons': 288, 'wPartyMonNi
            'wJohtoBadges': 1, 'wKantoBadges': 1, 'wMoney': 3, 'wCoins': 2, 'wEnemyMonSpecies': 1,
            'wEnemyMonLevel': 1, 'wEnemyMonHP': 2, 'wEnemyMonMaxHP': 2, 'wTrainerClass': 1, 'wBattleType': 1,
            'wGameTimeHours': 2, 'wGameTimeMinutes': 1, 'wGameTimeSeconds': 1, 'wHallOfFameCount': 1,
-           'wStepCount': 1, 'wHappinessStepCount': 1, 'wEnemyMonDVs': 2, 'wEnemyBackupDVs': 2, 'wEnemySubStatus5': 1}
+           'wStepCount': 1, 'wHappinessStepCount': 1, 'wEnemyMonDVs': 2, 'wEnemyBackupDVs': 2, 'wEnemySubStatus5': 1,
+           'wStatusFlags2': 1, 'wScriptRunning': 1, 'wTempWildMonSpecies': 1, 'wMapMusic': 1, 'wBikeFlags': 1,
+           'wMapWidth': 1}
 
 
 def synthetic_data():
@@ -327,6 +329,25 @@ def test_transformed_ditto_reports_its_own_dvs():
     assert not read_snapshot(memory, data, cache=False).enemy_shiny
     put(memory, data, 'wBattleMode', 2)
     assert not read_snapshot(memory, data, cache=False).enemy_shiny
+
+
+def test_the_snapshot_carries_world_facts_outside_its_equality():
+    data, memory = synthetic_data(), BankedMemory()
+    first = read_snapshot(memory, data, cache=False)
+    assert (first.bug_contest, first.script_running, first.wild_pending, first.map_music) == (False, False, 0, 0)
+    assert (first.strength, first.map_width, first.farfetchd_position) == (False, 0, None)
+    for name, value in (('wStatusFlags2', 4), ('wScriptRunning', 1), ('wTempWildMonSpecies', 201),
+                        ('wMapMusic', 0x40), ('wBikeFlags', 1), ('wMapWidth', 20)):
+        put(memory, data, name, value)
+    second = read_snapshot(memory, data, cache=False)
+    assert (second.bug_contest, second.script_running, second.wild_pending, second.map_music) == (True, True, 201, 64)
+    assert (second.strength, second.map_width) == (True, 20)
+    # Snapshots of the same game state stay equal while these change.
+    assert first == second
+    crystal = copy.copy(data)
+    crystal.symbols = dict(data.symbols, wFarfetchdPosition=(5, 0xD000))
+    put(memory, crystal, 'wFarfetchdPosition', 3)
+    assert read_snapshot(memory, crystal, cache=False).farfetchd_position == 3
 
 
 def test_memory_maps_place_the_transform_backup_dvs():

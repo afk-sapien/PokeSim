@@ -274,14 +274,23 @@ the `EVENT_` constants of the pret disassemblies are.
   `tutorial` or `scripted`), the raw `battle_type`, `player_slot`, `player` and
   `enemy` (`BattleMon`, None outside a battle or before a side sends a mon out), and
   the flags `trapped`, `can_run` and `link`, plus `active` and `enemy_hp`.
-  `state.read_battle(memory, game)` reads it alone.
+  `player_screens` and `enemy_screens` are frozensets of names from `state.SCREENS`
+  (`light_screen`, `reflect`, and Gen II's `safeguard` and `spikes`). `from_script`
+  means a Gen II map script started the battle. `state.read_battle(memory, game)`
+  reads it alone, and `state.read_battlers(memory, game)` reads both sides'
+  `BattleMon` whatever the battle mode says, None for an empty structure.
 - `BattleMon` has `species`, `dex`, `nick`, `level`, `hp`, `status`, `types`,
   `moves`, `pp`, `stats`, `dvs`, `held_item` and `transformed`, plus `max_hp`.
-  `stats` reflects Transform, while `dvs` stay the mon's own.
+  `stats` reflects Transform, while `dvs` stay the mon's own. `shown_dvs` are the
+  structure's two raw DV bytes. `disabled_move` is the move ID Disable holds, None
+  once its count runs out. `last_move` is the move ID the side used last, and
+  `holds_foe` means its Gen II Mean Look or Spider Web keeps the other side in.
 - `UiState` has `screen` (a name from `shortcuts.screens.SCREENS`, as the shortcuts
   name it), `text_box`, `start_menu`, `cursor` (the active menu cursor's tile as x
   and y, or None), `menu_item`, `scroll`, `facing`, `movement` (`walking`, `biking`,
-  `surfing` or None) and the raw `movement_state`. `state.read_ui(memory, game)`
+  `surfing` or None) and the raw `movement_state`. Gen II adds `menu_cursor`, the
+  (column, row) menu cursor counted from 1, and `pocket`, one of `state.POCKETS`.
+  `party_slot` is the party slot a menu chose last. `state.read_ui(memory, game)`
   reads it alone.
 
 `menu_item` counts from the top entry shown. `scroll` counts the entries a screen in

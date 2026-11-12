@@ -10,8 +10,8 @@ from pokecore.gen2 import state as gen2_state
 from pokecore.identity import GEN1_DEX
 from pokecore.shortcuts import gen2ui
 from pokecore.shortcuts.screens import W_STATUS_FLAGS_6
-from pokecore.state import (ABSENT, BATTLE_KINDS, GENERATIONS, LIST_SCREENS, Boxes, GameState, Party, read_battle,
-                            read_state, read_ui)
+from pokecore.state import (ABSENT, BATTLE_KINDS, GENERATIONS, LIST_SCREENS, POCKETS, SCREENS, Boxes, GameState, Party,
+                            read_battle, read_battlers, read_state, read_ui)
 from pokecore.storage import box_location
 
 GEN1_MOVES = {84: {'pp': 30}, 45: {'pp': 40}}
@@ -250,7 +250,10 @@ def gen1_battler(species, level, hp, dvs):
 
 
 def gen1_battle(raw, game, *, mode=1, battle_type=0, link=0, status1=0, player_status3=0, enemy_status3=0):
-    """A battle in ``raw``: the party's Pikachu, slot 0, against a level 3 Rattata."""
+    """A battle in ``raw``: the party's Pikachu, slot 0, against a level 3 Rattata.
+
+    Disable holds the Rattata's Growl. The Pikachu's Disable has run out, with its old move left behind.
+    """
     mem = yellow.red_layout(raw, game)
 
     def put(address, data):
@@ -264,6 +267,12 @@ def gen1_battle(raw, game, *, mode=1, battle_type=0, link=0, status1=0, player_s
     put(gen1.W_BATTLE_MON_NICK, text('PIKA'))
     put(gen1.W_ENEMY_MON, gen1_battler(165, 3, 9, (0xFE, 0xDC)))
     put(gen1.W_ENEMY_MON_NICK, text('RATTATA'))
+    put(gen1.W_PLAYER_DISABLED_MOVE, [0])
+    put(gen1.W_PLAYER_DISABLED_MOVE_NUMBER, [84])
+    put(gen1.W_ENEMY_DISABLED_MOVE, [0x23])
+    put(gen1.W_ENEMY_DISABLED_MOVE_NUMBER, [45])
+    put(gen1.W_PLAYER_USED_MOVE, [84])
+    put(gen1.W_ENEMY_USED_MOVE, [45])
     put(gen1.W_TRANSFORMED_ENEMY_DVS, [0x98, 0x76])
     put(gen1.W_PLAYER_BATTLE_STATUS3, [player_status3])
     put(gen1.W_ENEMY_BATTLE_STATUS1, [status1])
@@ -285,8 +294,21 @@ def gen2_battler(species, level, hp, dvs, item=0):
     return bytes(raw)
 
 
-def gen2_battle(memory, *, mode=1, battle_type=0, link=0, player_sub5=0, enemy_sub5=0, wrap=0):
-    """A battle in ``memory``: the party's Chikorita, slot 0, against a level 3 Sentret."""
+def gen2_battle(memory, *, mode=1, battle_type=0, link=0, player_sub5=0, enemy_sub5=0, wrap=0, script_flags=0):
+    """A battle in ``memory``: the party's Chikorita, slot 0, against a level 3 Sentret.
+
+    Disable holds the Sentret's Growl. The Chikorita's Disable has run out, with its old move left behind.
+    Light Screen and Reflect guard the player's side, and Safeguard and Spikes the enemy's.
+    """
+    memory.put('wPlayerDisableCount', [0])
+    memory.put('wDisabledMove', [33])
+    memory.put('wEnemyDisableCount', [0x13])
+    memory.put('wEnemyDisabledMove', [45])
+    memory.put('wLastPlayerMove', [33])
+    memory.put('wLastEnemyMove', [45])
+    memory.put('wPlayerScreens', [0b11000])
+    memory.put('wEnemyScreens', [0b00101])
+    memory.put('wBattleScriptFlags', [script_flags])
     memory.put('wBattleMode', [mode])
     memory.put('wBattleType', [battle_type])
     memory.put('wLinkMode', [link])
@@ -460,7 +482,8 @@ def test_outside_a_battle_there_is_no_battle(game):
     battle = read_state(memory_for(game), game).battle
     assert battle.kind == 'none' and not battle.active
     assert battle.player is battle.enemy is battle.player_slot is battle.enemy_hp is None
-    assert not (battle.trapped or battle.can_run or battle.link)
+    assert not (battle.trapped or battle.can_run or battle.link or battle.from_script)
+    assert battle.player_screens == battle.enemy_screens == frozenset()
 
 
 @pytest.mark.parametrize('game', ['red', 'blue', 'yellow'])
@@ -486,6 +509,23 @@ def test_gen1_transform_keeps_each_side_s_own_dvs(game):
     assert battle.player.transformed and battle.enemy.transformed
     # The player's from the party structure, the enemy's from the backup Transform keeps.
     assert battle.player.dvs == (5, 10, 11, 12, 13) and battle.enemy.dvs == (10, 9, 8, 7, 6)
+    # The DVs on show stay the structure's own bytes.
+    assert (battle.player.shown_dvs, battle.enemy.shown_dvs) == (b'\x11\x11', b'\xfe\xdc')
+
+
+@pytest.mark.parametrize('game', ['red', 'yellow'])
+def test_gen1_disable_screens_and_last_moves(game):
+    raw = gen1_battle(gen1_memory(game), game, player_status3=0b110, enemy_status3=0b010)
+    battle = read_battle(raw, game)
+    pika, rattata = battle.player, battle.enemy
+    # The Pikachu's Disable count ran out, so the move byte left behind holds nothing.
+    assert pika.disabled_move is None and rattata.disabled_move == 45
+    assert (pika.last_move, rattata.last_move) == (84, 45)
+    assert (pika.shown_dvs, rattata.shown_dvs) == (b'\x11\x11', b'\xfe\xdc')
+    assert battle.player_screens == {'light_screen', 'reflect'} and battle.enemy_screens == {'light_screen'}
+    assert battle.player_screens <= set(SCREENS)
+    assert pika.holds_foe is rattata.holds_foe is battle.from_script is None
+    assert not (pika.transformed or rattata.transformed)
 
 
 @pytest.mark.parametrize('mode, battle_type, link, status1, expected', [
@@ -528,6 +568,62 @@ def test_gen2_transform_keeps_each_side_s_own_dvs(game):
     battle = read_battle(gen2_battle(gen2_memory(game), player_sub5=0x08, enemy_sub5=0x08), game)
     assert battle.player.transformed and battle.enemy.transformed
     assert battle.player.dvs == (0, 10, 10, 10, 10) and battle.enemy.dvs == (10, 9, 8, 7, 6)
+    assert (battle.player.shown_dvs, battle.enemy.shown_dvs) == (b'\x11\x11', b'\xfe\xdc')
+
+
+@pytest.mark.parametrize('game', ['gold', 'crystal'])
+def test_gen2_disable_screens_and_last_moves(game):
+    battle = read_battle(gen2_battle(gen2_memory(game)), game)
+    chiko, sentret = battle.player, battle.enemy
+    # The Chikorita's Disable count ran out, so the move byte left behind holds nothing.
+    assert chiko.disabled_move is None and sentret.disabled_move == 45
+    assert (chiko.last_move, sentret.last_move) == (33, 45)
+    assert (chiko.shown_dvs, sentret.shown_dvs) == (b'\x11\x11', b'\xfe\xdc')
+    assert battle.player_screens == {'light_screen', 'reflect'} and battle.enemy_screens == {'safeguard', 'spikes'}
+    assert battle.player_screens | battle.enemy_screens == set(SCREENS)
+    assert not (chiko.holds_foe or sentret.holds_foe or battle.from_script)
+
+
+@pytest.mark.parametrize('player_sub5, enemy_sub5, holds', [
+    (0x80, 0, (True, False)), (0, 0x80, (False, True)), (0x88, 0x88, (True, True)),
+])
+def test_gen2_mean_look_holds_the_other_side(player_sub5, enemy_sub5, holds):
+    battle = read_battle(gen2_battle(gen2_memory('crystal'), player_sub5=player_sub5, enemy_sub5=enemy_sub5),
+                         'crystal')
+    assert (battle.player.holds_foe, battle.enemy.holds_foe) == holds
+    # The enemy's hold is what traps the player.
+    assert battle.trapped == holds[1]
+
+
+@pytest.mark.parametrize('flags, expected', [(0, False), (0x80, True), (0x7F, False), (0xFF, True)])
+@pytest.mark.parametrize('game', ['gold', 'crystal'])
+def test_gen2_battle_a_map_script_started(game, flags, expected):
+    assert read_battle(gen2_battle(gen2_memory(game), script_flags=flags), game).from_script is expected
+
+
+@pytest.mark.parametrize('game', ['red', 'yellow', 'gold', 'crystal'])
+def test_battlers_are_read_whatever_the_battle_mode_says(game):
+    """After a press the mode can say no battle for a few frames while both structures still hold it."""
+    if GENERATIONS[game] == 1:
+        memory = gen1_battle(gen1_memory(game), game, mode=0)
+    else:
+        memory = gen2_battle(gen2_memory(game), mode=0)
+    battle = read_battle(memory, game)
+    assert battle.kind == 'none' and battle.player is battle.enemy is None
+    player, enemy = read_battlers(memory, game)
+    assert (player.species, enemy.species) in ((84, 165), (152, 161)) and enemy.disabled_move == 45
+    if GENERATIONS[game] == 1:
+        gen1_put(memory, game, gen1.W_IS_IN_BATTLE, [1])
+    else:
+        memory.put('wBattleMode', [1])
+    battle = read_battle(memory, game)
+    assert read_battlers(memory, game) == (battle.player, battle.enemy) == (player, enemy)
+    # A side whose structure is empty has no battler.
+    if GENERATIONS[game] == 1:
+        gen1_put(memory, game, gen1.W_ENEMY_MON, [0])
+    else:
+        memory.put('wEnemyMon', [0])
+    assert read_battlers(memory, game) == (player, None)
 
 
 @pytest.mark.parametrize('mode, battle_type, flags, expected', [
@@ -689,6 +785,36 @@ def test_gen2_bag_scroll(game, pocket, scroll):
     memory.put('wTMHMPocketScrollPosition', [9])
     ui = read_ui(memory, game)
     assert (ui.screen, ui.cursor, ui.menu_item, ui.scroll) == ('bag', (7, 4), 1, scroll)
+
+
+@pytest.mark.parametrize('pocket, expected', [
+    (0, 'items'), (1, 'balls'), (2, 'key_items'), (3, 'tms_hms'), (4, None), (0xFF, None),
+])
+@pytest.mark.parametrize('game', ['gold', 'crystal'])
+def test_gen2_menu_cursor_pocket_and_party_slot(game, pocket, expected):
+    memory = gen2_memory(game)
+    memory.put('wCurPocket', [pocket])
+    memory.put('wMenuCursorX', [2])
+    memory.put('wMenuCursorY', [3])
+    memory.put('wCurPartyMon', [1])
+    ui = read_ui(memory, game)
+    assert (ui.pocket, ui.menu_cursor, ui.party_slot) == (expected, (2, 3), 1)
+    assert ui.pocket is None or ui.pocket in POCKETS
+
+
+@pytest.mark.parametrize('game', ['red', 'yellow'])
+def test_gen1_party_slot(game):
+    raw = gen1_memory(game)
+    gen1_put(raw, game, gen1.W_WHICH_POKEMON, [2])
+    ui = read_ui(raw, game)
+    assert ui.party_slot == 2 and ui.menu_cursor is ui.pocket is None
+    assert read_ui(raw, game) == read_ui(yellow.red_layout(raw, game), game)
+
+
+@pytest.mark.parametrize('game', ['gold', 'crystal'])
+def test_gen2_trainer_id_alone(game):
+    memory = gen2_memory(game)
+    assert gen2_state.trainer_id(memory, game) == read_state(memory, game).player.trainer_id == 54321
 
 
 @pytest.mark.parametrize('loaded, screen', [(0, 'pc_party'), (3, 'pc_box')])

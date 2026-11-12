@@ -6,7 +6,8 @@ and reads the same bytes they do. It never writes memory. The state holds the
 cartridge's IDs and no tables, so species, move and item names stay with the
 caller. A field a generation does not have is ``None``, and :data:`ABSENT` gives
 the reason for each one. :func:`read_battle` reads the battle part alone, and
-:func:`read_ui` the screen part.
+:func:`read_ui` the screen part. :func:`read_battlers` reads both sides' battle
+structures whatever the battle mode says.
 """
 from __future__ import annotations
 
@@ -40,6 +41,10 @@ ABSENT = {
         'Bag.key_items': 'Gen I keeps every item in one pocket',
         'Bag.tms_hms': 'Gen I keeps every item in one pocket',
         'BattleMon.held_item': 'Gen I has no held items',
+        'BattleMon.holds_foe': 'Gen I has no Mean Look or Spider Web',
+        'BattleState.from_script': 'Gen I keeps no flag for a battle a map script started',
+        'UiState.menu_cursor': 'Gen I menus keep one highlighted item, not a column and a row',
+        'UiState.pocket': 'Gen I keeps every item in one pocket',
     },
     2: {
         'Mon.types': 'Gen II structures do not store types, which come from the species table',
@@ -215,6 +220,12 @@ class BattleMon:
 
     ``stats`` is in the cartridge's order, as in :class:`Mon`, and reflects
     Transform. ``dvs`` are the mon's own DVs even while it is transformed.
+    ``shown_dvs`` are the two raw DV bytes the structure holds, which Transform
+    replaces with the target's, so they decide the shiny look and the Unown letter.
+    ``disabled_move`` is the move ID Disable holds while it lasts, else None.
+    ``last_move`` is the move ID this side used last, which the other side's Mirror
+    Move copies, or 0. ``holds_foe`` means this side's Mean Look or Spider Web keeps
+    the other side from running or switching.
     """
     species: int
     dex: int | None
@@ -229,6 +240,10 @@ class BattleMon:
     dvs: tuple[int, ...]
     held_item: int | None
     transformed: bool
+    shown_dvs: bytes
+    disabled_move: int | None
+    last_move: int
+    holds_foe: bool | None
 
     @property
     def max_hp(self) -> int:
@@ -236,6 +251,7 @@ class BattleMon:
 
 
 BATTLE_KINDS = ('none', 'wild', 'trainer', 'tutorial', 'scripted')
+SCREENS = ('light_screen', 'reflect', 'safeguard', 'spikes')
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,6 +267,10 @@ class BattleState:
     mon out. ``trapped`` means the enemy holds the player with a trapping move or,
     in Gen II, Mean Look or Spider Web. ``can_run`` says whether the game lets the
     player try to run at all, and a link battle counts, since running forfeits it.
+    ``player_screens`` and ``enemy_screens`` name the screens up on each side, from
+    :data:`SCREENS`: Gen I has Light Screen and Reflect, and Gen II adds Safeguard
+    and Spikes. ``from_script`` means a map script started the battle, as Gen II's
+    ``loadwildmon`` and ``loadtrainer`` do.
     """
     kind: str
     battle_type: int
@@ -260,6 +280,9 @@ class BattleState:
     trapped: bool
     can_run: bool
     link: bool
+    player_screens: frozenset[str]
+    enemy_screens: frozenset[str]
+    from_script: bool | None
 
     @property
     def active(self) -> bool:
@@ -274,6 +297,8 @@ class BattleState:
 LIST_SCREENS = ('bag', 'mart_list', 'pc_items', 'pc_party', 'pc_box')
 # Gen II wPlayerState values by movement. Skating has no name, as the games never use it.
 GEN2_MOVEMENT = {0: 'walking', 1: 'biking', 4: 'surfing', 8: 'surfing'}
+# Gen II wCurPocket values, by the names of the Bag fields.
+POCKETS = ('items', 'balls', 'key_items', 'tms_hms')
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,7 +314,11 @@ class UiState:
     entries a screen in :data:`LIST_SCREENS` has scrolled past, so the list entry
     is ``scroll + menu_item``. ``facing`` is down, up, left or right. ``movement``
     is walking, biking or surfing, or None for a state without a name, and
-    ``movement_state`` is the cartridge's raw byte.
+    ``movement_state`` is the cartridge's raw byte. ``menu_cursor`` is Gen II's
+    (column, row) menu cursor, counted from 1, which the battle menu and the move
+    list keep between turns. ``pocket`` is the bag pocket the pack showed last, one
+    of :data:`POCKETS`, or None for a byte that names none. ``party_slot`` is the
+    party slot a menu chose last, counted from 0.
     """
     screen: str
     text_box: bool
@@ -300,6 +329,9 @@ class UiState:
     facing: str
     movement: str | None
     movement_state: int
+    menu_cursor: tuple[int, int] | None
+    pocket: str | None
+    party_slot: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -346,6 +378,19 @@ def read_battle(memory, game) -> BattleState:
     return _gen2_battle(gen2_state.memory_reader(memory, game))
 
 
+def read_battlers(memory, game) -> tuple[BattleMon | None, BattleMon | None]:
+    """The player's and the enemy's battlers as the battle structures stand.
+
+    :func:`read_battle` has no battlers while the battle mode says no battle, as
+    in the frames between a press and the next turn. This reads them whatever the
+    mode. A side whose structure is empty is None.
+    """
+    game, generation = _game(game)
+    if generation == 1:
+        return _gen1_sides(red_layout(memory, game))
+    return _gen2_sides(gen2_state.memory_reader(memory, game))
+
+
 def read_ui(memory, game) -> UiState:
     """The screen and movement state of ``game`` in ``memory``, read as :func:`read_state` reads."""
     game, generation = _game(game)
@@ -363,6 +408,7 @@ def _gen1_ui(mem, game):
         cursor=shown['cursor'], menu_item=shown['menu_index'],
         scroll=shown['scroll'] if screen in LIST_SCREENS else 0, facing=gen1.FACINGS[mem[gen1.W_FACING] & 12],
         movement=gen1.WALK_BIKE_SURF.get(movement), movement_state=movement,
+        menu_cursor=None, pocket=None, party_slot=mem[gen1.W_WHICH_POKEMON],
     )
 
 
@@ -370,12 +416,14 @@ def _gen2_ui(memory, game):
     view = gen2ui.View(memory, game)
     screen, extra = gen2ui.classify(view)
     scroll = gen2ui.list_scroll(view, screen)
-    movement = view.byte('wPlayerState')
+    movement, pocket = view.byte('wPlayerState'), view.byte('wCurPocket')
     return UiState(
         screen=screen, text_box=gen2ui.text_box_top(view) is not None, start_menu=screen == 'pause',
         cursor=extra['cursor'], menu_item=max(gen2ui.list_index(view, screen) - scroll, 0), scroll=scroll,
         facing=gen2_state.FACING[(view.byte('wPlayerDirection') >> 2) & 3],
         movement=GEN2_MOVEMENT.get(movement), movement_state=movement,
+        menu_cursor=(view.byte('wMenuCursorX'), view.byte('wMenuCursorY')),
+        pocket=POCKETS[pocket] if pocket < len(POCKETS) else None, party_slot=view.byte('wCurPartyMon'),
     )
 
 
@@ -392,10 +440,26 @@ def _dvs(raw):
     return (hp_dv(attack, defense, speed, special), attack, defense, speed, special)
 
 
-_NO_BATTLE = {'player_slot': None, 'player': None, 'enemy': None, 'trapped': False, 'can_run': False, 'link': False}
+_NO_BATTLE = {'player_slot': None, 'player': None, 'enemy': None, 'trapped': False, 'can_run': False, 'link': False,
+              'player_screens': frozenset(), 'enemy_screens': frozenset()}
+# The screen bits of Gen I's battle status 3 bytes and Gen II's wPlayerScreens and wEnemyScreens.
+GEN1_SCREENS = ((gen1.BIT_HAS_LIGHT_SCREEN_UP, 'light_screen'), (gen1.BIT_HAS_REFLECT_UP, 'reflect'))
+GEN2_SCREENS = ((0, 'spikes'), (2, 'safeguard'), (3, 'light_screen'), (4, 'reflect'))
 
 
-def _gen1_battler(mem, base, nick, dvs, transformed):
+def _screens(value, bits):
+    return frozenset(name for bit, name in bits if value >> bit & 1)
+
+
+# Each Gen I side's battle structure, nickname, Disable byte, disabled move and last move.
+GEN1_PLAYER = (gen1.W_BATTLE_MON, gen1.W_BATTLE_MON_NICK, gen1.W_PLAYER_DISABLED_MOVE,
+               gen1.W_PLAYER_DISABLED_MOVE_NUMBER, gen1.W_PLAYER_USED_MOVE)
+GEN1_ENEMY = (gen1.W_ENEMY_MON, gen1.W_ENEMY_MON_NICK, gen1.W_ENEMY_DISABLED_MOVE,
+              gen1.W_ENEMY_DISABLED_MOVE_NUMBER, gen1.W_ENEMY_USED_MOVE)
+
+
+def _gen1_battler(mem, side, dvs, transformed):
+    base, nick, disable, disabled_move, last_move = side
     block = bytes(mem[base:base + gen1.BATTLE_STRUCT])
     if not block[0]:
         return None
@@ -404,21 +468,12 @@ def _gen1_battler(mem, base, nick, dvs, transformed):
         species=block[0], dex=GEN1_DEX.get(block[0]), nick=gen1.decode_text(bytes(mem[nick:nick + 11])),
         level=block[14], hp=word(1), status=block[4], types=(block[5], block[6]), moves=tuple(block[8:12]),
         pp=tuple(value & 63 for value in block[25:29]), stats=tuple(word(offset) for offset in range(15, 25, 2)),
-        dvs=_dvs(dvs), held_item=None, transformed=transformed,
+        dvs=_dvs(dvs), held_item=None, transformed=transformed, shown_dvs=block[12:14],
+        disabled_move=mem[disabled_move] if mem[disable] else None, last_move=mem[last_move], holds_foe=None,
     )
 
 
-def _gen1_battle(mem):
-    mode, battle_type = mem[gen1.W_IS_IN_BATTLE], mem[gen1.W_BATTLE_TYPE]
-    if mode not in (1, 2):
-        return BattleState(kind='none', battle_type=battle_type, **_NO_BATTLE)
-    if battle_type == gen1.BATTLE_TYPE_OLD_MAN:
-        kind = 'tutorial'
-    elif battle_type == gen1.BATTLE_TYPE_PIKACHU:
-        kind = 'scripted'
-    else:
-        kind = 'wild' if mode == 1 else 'trainer'
-    link = bool(mem[gen1.W_LINK_STATE])
+def _gen1_sides(mem):
     slot = mem[gen1.W_PLAYER_MON_NUMBER]
     player_transformed = bool(mem[gen1.W_PLAYER_BATTLE_STATUS3] >> gen1.BIT_TRANSFORMED & 1)
     enemy_transformed = bool(mem[gen1.W_ENEMY_BATTLE_STATUS3] >> gen1.BIT_TRANSFORMED & 1)
@@ -426,14 +481,28 @@ def _gen1_battle(mem):
     player_dvs = (gen1.W_PARTY_MONS + slot * gen1.PARTY_STRUCT + 27 if player_transformed
                   else gen1.W_BATTLE_MON + 12)
     enemy_dvs = gen1.W_TRANSFORMED_ENEMY_DVS if enemy_transformed else gen1.W_ENEMY_DVS
+    return (_gen1_battler(mem, GEN1_PLAYER, bytes(mem[player_dvs:player_dvs + 2]), player_transformed),
+            _gen1_battler(mem, GEN1_ENEMY, bytes(mem[enemy_dvs:enemy_dvs + 2]), enemy_transformed))
+
+
+def _gen1_battle(mem):
+    mode, battle_type = mem[gen1.W_IS_IN_BATTLE], mem[gen1.W_BATTLE_TYPE]
+    if mode not in (1, 2):
+        return BattleState(kind='none', battle_type=battle_type, from_script=None, **_NO_BATTLE)
+    if battle_type == gen1.BATTLE_TYPE_OLD_MAN:
+        kind = 'tutorial'
+    elif battle_type == gen1.BATTLE_TYPE_PIKACHU:
+        kind = 'scripted'
+    else:
+        kind = 'wild' if mode == 1 else 'trainer'
+    link = bool(mem[gen1.W_LINK_STATE])
+    player, enemy = _gen1_sides(mem)
     return BattleState(
-        kind=kind, battle_type=battle_type, player_slot=slot,
-        player=_gen1_battler(mem, gen1.W_BATTLE_MON, gen1.W_BATTLE_MON_NICK,
-                             bytes(mem[player_dvs:player_dvs + 2]), player_transformed),
-        enemy=_gen1_battler(mem, gen1.W_ENEMY_MON, gen1.W_ENEMY_MON_NICK,
-                            bytes(mem[enemy_dvs:enemy_dvs + 2]), enemy_transformed),
+        kind=kind, battle_type=battle_type, player_slot=mem[gen1.W_PLAYER_MON_NUMBER], player=player, enemy=enemy,
         trapped=bool(mem[gen1.W_ENEMY_BATTLE_STATUS1] >> gen1.BIT_USING_TRAPPING_MOVE & 1),
         can_run=kind in ('wild', 'trainer') and (link or kind == 'wild'), link=link,
+        player_screens=_screens(mem[gen1.W_PLAYER_BATTLE_STATUS3], GEN1_SCREENS),
+        enemy_screens=_screens(mem[gen1.W_ENEMY_BATTLE_STATUS3], GEN1_SCREENS), from_script=None,
     )
 
 
@@ -445,9 +514,17 @@ GEN2_SCRIPTED_BATTLES = frozenset({7, 8, 9, 10, 11, 12})
 GEN2_NO_ESCAPE_BATTLES = frozenset({7, 9, 11, 12})
 SUBSTATUS_TRANSFORMED, SUBSTATUS_CANT_RUN = 0x08, 0x80
 GEN2_BATTLE_STRUCT = 32
+# wBattleScriptFlags bit 7, which loadwildmon and loadtrainer set for the battle a map script starts.
+BATTLESCRIPT_FROM_SCRIPT = 0x80
+# Each Gen II side's battle structure, nickname, substatus 5, Disable count, disabled move and last move.
+GEN2_PLAYER = ('wBattleMon', 'wBattleMonNickname', 'wPlayerSubStatus5', 'wPlayerDisableCount', 'wDisabledMove',
+               'wLastPlayerMove')
+GEN2_ENEMY = ('wEnemyMon', 'wEnemyMonNickname', 'wEnemySubStatus5', 'wEnemyDisableCount', 'wEnemyDisabledMove',
+              'wLastEnemyMove')
 
 
-def _gen2_battler(mem, struct, nick, dvs, transformed):
+def _gen2_battler(mem, side, dvs, transformed):
+    struct, nick, substatus5, disable, disabled_move, last_move = side
     raw = mem.read(struct, GEN2_BATTLE_STRUCT)
     if not raw[0]:
         return None
@@ -456,14 +533,28 @@ def _gen2_battler(mem, struct, nick, dvs, transformed):
         species=raw[0], dex=raw[0] if 1 <= raw[0] <= 251 else None, nick=mem.text(nick), level=raw[13],
         hp=word(16), status=raw[14], types=(raw[30], raw[31]), moves=tuple(raw[2:6]),
         pp=tuple(value & 63 for value in raw[8:12]), stats=tuple(word(offset) for offset in range(18, 30, 2)),
-        dvs=_dvs(dvs), held_item=raw[1], transformed=transformed,
+        dvs=_dvs(dvs), held_item=raw[1], transformed=transformed, shown_dvs=bytes(raw[6:8]),
+        disabled_move=mem.byte(disabled_move) if mem.byte(disable) else None, last_move=mem.byte(last_move),
+        holds_foe=bool(mem.byte(substatus5) & SUBSTATUS_CANT_RUN),
     )
+
+
+def _gen2_sides(mem):
+    slot = mem.byte('wCurBattleMon')
+    player_transformed = bool(mem.byte('wPlayerSubStatus5') & SUBSTATUS_TRANSFORMED)
+    enemy_transformed = bool(mem.byte('wEnemySubStatus5') & SUBSTATUS_TRANSFORMED)
+    # Transform copies the target's DVs, so the originals come from the party or the backup.
+    player_dvs = (mem.read('wPartyMons', 2, offset=slot * gen2_state.PARTY_STRUCT + 21) if player_transformed
+                  else mem.read('wBattleMon', 2, offset=6))
+    enemy_dvs = mem.read('wEnemyBackupDVs', 2) if enemy_transformed else mem.read('wEnemyMon', 2, offset=6)
+    return (_gen2_battler(mem, GEN2_PLAYER, player_dvs, player_transformed),
+            _gen2_battler(mem, GEN2_ENEMY, enemy_dvs, enemy_transformed))
 
 
 def _gen2_battle(mem):
     mode, battle_type = mem.byte('wBattleMode'), mem.byte('wBattleType')
     if mode not in (1, 2):
-        return BattleState(kind='none', battle_type=battle_type, **_NO_BATTLE)
+        return BattleState(kind='none', battle_type=battle_type, from_script=False, **_NO_BATTLE)
     if battle_type == BATTLETYPE_TUTORIAL:
         kind = 'tutorial'
     elif mode == 2:
@@ -471,9 +562,6 @@ def _gen2_battle(mem):
     else:
         kind = 'scripted' if battle_type in GEN2_SCRIPTED_BATTLES else 'wild'
     link = bool(mem.byte('wLinkMode'))
-    slot = mem.byte('wCurBattleMon')
-    player_transformed = bool(mem.byte('wPlayerSubStatus5') & SUBSTATUS_TRANSFORMED)
-    enemy_transformed = bool(mem.byte('wEnemySubStatus5') & SUBSTATUS_TRANSFORMED)
     trapped = bool(mem.byte('wEnemySubStatus5') & SUBSTATUS_CANT_RUN or mem.byte('wPlayerWrapCount'))
     # The order of pokecrystal's TryToRunAwayFromBattle.
     if kind == 'tutorial':
@@ -484,15 +572,13 @@ def _gen2_battle(mem):
         can_run = False
     else:
         can_run = link or (mode == 1 and not trapped)
-    # Transform copies the target's DVs, so the originals come from the party or the backup.
-    player_dvs = (mem.read('wPartyMons', 2, offset=slot * gen2_state.PARTY_STRUCT + 21) if player_transformed
-                  else mem.read('wBattleMon', 2, offset=6))
-    enemy_dvs = mem.read('wEnemyBackupDVs', 2) if enemy_transformed else mem.read('wEnemyMon', 2, offset=6)
+    player, enemy = _gen2_sides(mem)
     return BattleState(
-        kind=kind, battle_type=battle_type, player_slot=slot,
-        player=_gen2_battler(mem, 'wBattleMon', 'wBattleMonNickname', player_dvs, player_transformed),
-        enemy=_gen2_battler(mem, 'wEnemyMon', 'wEnemyMonNickname', enemy_dvs, enemy_transformed),
+        kind=kind, battle_type=battle_type, player_slot=mem.byte('wCurBattleMon'), player=player, enemy=enemy,
         trapped=trapped, can_run=can_run, link=link,
+        player_screens=_screens(mem.byte('wPlayerScreens'), GEN2_SCREENS),
+        enemy_screens=_screens(mem.byte('wEnemyScreens'), GEN2_SCREENS),
+        from_script=bool(mem.byte('wBattleScriptFlags') & BATTLESCRIPT_FROM_SCRIPT),
     )
 
 

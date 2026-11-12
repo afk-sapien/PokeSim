@@ -234,6 +234,11 @@ def script_running(memory, version):
     return bool(memory_reader(memory, version).byte('wScriptFlags') & 0b100)
 
 
+def trainer_id(memory, version):
+    """The player's trainer ID, from ``wPlayerID``, without the rest of :func:`read_player`."""
+    return memory_reader(memory, version).word('wPlayerID')
+
+
 def npc_trade_flags(memory, version):
     """The ``wTradeFlags`` byte. Bit ``trade.index`` is set once that in-game trade has happened."""
     return memory_reader(memory, version).byte('wTradeFlags')

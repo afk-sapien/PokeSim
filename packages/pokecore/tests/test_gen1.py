@@ -134,6 +134,9 @@ def test_progress_does_not_accept_empty_or_incomplete_party(memory):
 def test_named_addresses_match_pret_pokered():
     assert (gen1.W_FACING, gen1.W_WALK_COUNTER, gen1.W_WHICH_POKEMON, gen1.W_MOVE_NUM) == (0xC109, 0xCFC5, 0xCF92, 0xD0E0)
     assert (gen1.W_PLAYER_DISABLED_MOVE, gen1.W_WALK_BIKE_SURF_STATE) == (0xD06D, 0xD700)
+    assert (gen1.W_ENEMY_DISABLED_MOVE, gen1.W_PLAYER_DISABLED_MOVE_NUMBER) == (0xD072, 0xCCEE)
+    assert (gen1.W_ENEMY_DISABLED_MOVE_NUMBER, gen1.W_PLAYER_USED_MOVE, gen1.W_ENEMY_USED_MOVE) == (0xCCEF, 0xCCF1, 0xCCF2)
+    assert (gen1.BIT_HAS_LIGHT_SCREEN_UP, gen1.BIT_HAS_REFLECT_UP) == (1, 2)
     assert (gen1.W_STATUS_FLAGS1, gen1.W_MOVEMENT_FLAGS) == (0xD728, 0xD736)
     assert (gen1.W_STATUS_FLAGS7, 1 << gen1.BIT_TRAINER_BATTLE) == (0xD733, 0x08)
     assert gen1.W_CAPTURED_MON_SPECIES == 0xD11C
