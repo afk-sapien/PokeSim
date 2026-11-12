@@ -48,6 +48,17 @@ def test_a_battler_that_cannot_hurt_the_foe_hands_over_below_the_usual_bar():
         assert decision.kind == 'switch' and decision.index in (1, 2), decision
 
 
+def test_a_battler_that_never_had_an_attack_keeps_the_usual_path():
+    # A trainer's Weedle against a Kakuna with only Harden: switching it out changed which Pokémon
+    # gained levels and sent a Cut hunt down another route.
+    harden, poison_sting, string_shot = 106, 40, 81
+    kakuna = mon(species=113, level=6, hp=20, max_hp=22, types=(7, 3), moves=(harden, 0, 0, 0), pp=(30, 0, 0, 0))
+    weedle = mon(species=112, level=10, hp=30, max_hp=30, types=(7, 3), moves=(poison_sting, string_shot, 0, 0), pp=(35, 40, 0, 0))
+    squirtle = mon(species=177, level=12, hp=33, max_hp=33, types=(21, 21), moves=(TACKLE, 0, 0, 0), pp=(35, 0, 0, 0))
+    state = snap(party=(kakuna, squirtle), in_battle=2, items=BAG)
+    assert not choose_battle(state, kakuna, weedle, 0).reason.startswith('Nothing left here'), 'Kakuna is not spent'
+
+
 def test_with_no_partner_to_hand_over_to_no_item_is_spent_on_it():
     party = (spent_venusaur(), mon(hp=30, moves=(PECK, 0, 0, 0), pp=(35, 0, 0, 0)), spent_venusaur(211))
     decision = choose_battle(snap(party=party, in_battle=2, items=BAG), party[0], gengar(), 0)

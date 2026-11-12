@@ -95,6 +95,11 @@ def hurts(mon, enemy):
     return False
 
 
+def spent(mon):
+    """Whether a move it knows is out of PP. A Kakuna that only ever had Harden is not spent."""
+    return any(mid and not pp for mid, pp in zip(mon.moves, mon.pp))
+
+
 def lose_attempt(snapshot, enemy, active, slot):
     """Nobody can end the battle and this foe never knocks the battler out. A partner it does attack
     loses the attempt instead, and the blackout heals everyone at a Pokémon Center."""
@@ -474,9 +479,10 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
             return Decision("fight", max(weakening)[1], reason="Weaken the target without an expected knockout")
         if required:
             return Decision('item', balls[0][0], reason='Catch the field-move partner without knocking it out')
-    if snapshot.in_battle == 2 and not me.status & FROZEN and not hurts(me, enemy):
+    if snapshot.in_battle == 2 and not me.status & FROZEN and spent(me) and not hurts(me, enemy):
         # Nothing this battler has left can hurt the foe, such as Struggle into Agatha's Ghosts, so items
-        # spent on it only lengthen a battle it cannot win. A partner that can hurt the foe and take its
+        # spent on it only lengthen a battle it cannot win. A battler that never had an attack, such as
+        # an early Kakuna, keeps the usual path. A partner that can hurt the foe and take its
         # next hit comes in, below the usual bar of twice that hit. No switch brings back a battler that
         # cannot hurt the foe, so this one skips the wait between switches.
         partners = []
