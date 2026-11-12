@@ -187,7 +187,12 @@ def ambiguity(mon, twins):
 
 def read(db):
     """Saved settings by key, without the copies kept for 0.4.x."""
-    saved = {key[len(PREFIX):]: json.loads(raw) for key, raw in kv.starting(db, PREFIX)}
+    return parse(kv.starting(db, PREFIX))
+
+
+def parse(rows):
+    """read's settings from the (key, JSON text) rows kv.starting returns for PREFIX."""
+    saved = {key[len(PREFIX):]: json.loads(raw) for key, raw in rows}
     return {key: value for key, value in saved.items() if not is_mirror(value)}
 
 

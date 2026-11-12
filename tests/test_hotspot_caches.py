@@ -91,3 +91,33 @@ def test_rollback_external_commit_and_trade_reads_remain_visible(tmp_path):
         external.execute('UPDATE kv SET v=? WHERE k=?', ('{"total":4}', key))
     assert store.get(key)['total'] == 4
     store.close()
+
+
+def test_trade_settings_and_league_marks_are_read_again_only_after_a_change(tmp_path):
+    """A Gen II PC decision reads both once per boxed egg, so they are kept until the database changes."""
+    from pokesim import rewards
+    from pokesim.state import claims
+    store = Store(tmp_path)
+    store.set('trade_offer:a', {'state': 'never'})
+    queries = []
+    store.db.set_trace_callback(queries.append)
+    first = store.trade_preferences()
+    first['a']['state'] = 'changed'
+    assert store.trade_preferences() == {'a': {'state': 'never'}}
+    assert store.league_marks(2) == store.league_marks(2) == frozenset()
+    assert sum('FROM kv WHERE substr' in q for q in queries) == 1
+    assert sum('FROM claims' in q for q in queries) == 1
+    store.set('trade_offer:b', {'state': 'first'})
+    assert set(store.trade_preferences()) == {'a', 'b'}
+    with store.transaction():
+        claims.put(store.db, rewards.SOURCE, 'seed-1', claims.DELIVERED, seed='seed-1')
+        assert len(store.league_marks(2)) == 1
+    assert store.league_marks(2) == rewards.marks(store.db, 2)
+    external = sqlite3.connect(tmp_path / 'pokesim.sqlite')
+    with external:
+        external.execute('DELETE FROM kv WHERE k=?', ('trade_offer:a',))
+        claims.put(external, rewards.SOURCE, 'seed-2', claims.DELIVERED, seed='seed-2')
+    external.close()
+    assert set(store.trade_preferences()) == {'b'}
+    assert len(store.league_marks(2)) == 2 and store.league_marks(2) == rewards.marks(store.db, 2)
+    store.close()
