@@ -25,7 +25,7 @@ from typing import Callable, NamedTuple
 
 from .boss import UNREADY, Gate, healed_event, unready_event
 from .losses import best_level, boss_trainer
-from .readiness import Boss, judge, target, team
+from .readiness import Boss, band, judge, target, team
 
 LEAGUE = 'league'
 
@@ -125,18 +125,33 @@ def plain(row, ace=None):
                 scores=(None,) * len(row.scores), league=row.league)
 
 
-def readiness_target(table, snapshot, ace=None):
+def readiness_target(table, snapshot, ace=None, losses=None):
     """The level a Pokémon's gain counts toward as progress (readiness.target), or None.
 
     A boss with ``aim`` counts gains toward the matchup level over its ace with no matchup rule, as
-    Gold, Silver and Crystal do before Red. Only the progress rows read it, so play does not change."""
+    Gold, Silver and Crystal do before Red. A loss to the next boss that ``losses`` keeps raises the
+    target, since the boss is still not won. Only the progress rows read it, so play does not change."""
     row = next_row(table, snapshot)
-    if row is None:
-        return None
+    return None if row is None else row_target(row, ace, losses)
+
+
+def row_target(row, ace=None, losses=None):
+    """The readiness target of the boss ``row``, won or not, raised once after a loss ``losses`` keeps."""
     boss = plain(row, ace)
     if row.aim and not boss.scores:
         boss = replace(boss, scores=(None,))
-    return target(boss)
+    return target(boss, losses is not None and row.key in losses.levels())
+
+
+def top_level(snapshot):
+    """The party's highest level, eggs aside, or 0."""
+    return max((mon.level for mon in getattr(snapshot, 'party', ()) if not getattr(mon, 'egg', False)), default=0)
+
+
+def gain_band(table, snapshot, ace=None, losses=None):
+    """The levels a Pokémon's gain counts toward as progress (readiness.band), or None: from near the
+    party's best level up to the readiness target."""
+    return band(readiness_target(table, snapshot, ace, losses), top_level(snapshot))
 
 
 def boss(table, row, here, score, ace=None):

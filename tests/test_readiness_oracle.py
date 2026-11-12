@@ -166,11 +166,36 @@ def test_the_readiness_target_is_the_level_the_matchup_rules_train_to():
     assert oracle.target(oracle.Boss('surge', 46)) is None
     assert oracle.target(oracle.Boss('hive', None, scores=(None,))) is None
     assert oracle.target(None) is None
-    # A loss can raise the training bar over the target, but never the target, so a loop of losses cannot move it.
+    # A loss raises the training bar, and the target once by CEILING, so a loop of losses cannot move it further.
     losses = Losses()
     losses.note('league', 55)
     assert oracle.judge(replace(league, scores=(0,) * 5), oracle.Team(level=45), losses) == oracle.Train(oracle.LOSS, 57)
     assert oracle.target(league) == 50
+    assert oracle.target(league, lost=True) == 50 + oracle.CEILING
+    assert oracle.target(gym, lost=True) == 16 + oracle.MARGIN + oracle.CEILING
+    # The raised target never passes the top level, and never falls under the floor.
+    assert oracle.target(oracle.Boss('red', 95, scores=(None,)), lost=True) == oracle.LEVEL_CAP
+    assert oracle.target(oracle.Boss('zephyr', 9, floor=40, scores=(None,)), lost=True) == 40
+    # A boss with no ace still has its floor alone.
+    assert oracle.target(oracle.Boss('hive', None, floor=14), lost=True) == 14
+    # Gains count for the members near the best level, up to the target.
+    assert oracle.band(50, 45) == (45 - oracle.TEAM_BAND, 50)
+    assert oracle.band(None, 45) is None
+
+
+def test_a_loss_to_the_next_boss_raises_its_target():
+    from pokesim.planning.league import readiness_target
+    from pokesim.policies.progression import BOSS_TABLE
+    snapshot = SimpleNamespace(badges=0xff, hall_of_fame_count=0)
+    losses = Losses()
+    assert readiness_target(BOSS_TABLE, snapshot, losses=losses) == 65
+    # A loss kept for another boss leaves it alone.
+    losses.note('boulder', 20)
+    assert readiness_target(BOSS_TABLE, snapshot, losses=losses) == 65
+    losses.note('league', 60)
+    assert readiness_target(BOSS_TABLE, snapshot, losses=losses) == 65 + oracle.CEILING
+    # Once the League is won no boss is next, whatever the losses kept.
+    assert readiness_target(BOSS_TABLE, SimpleNamespace(badges=0xff, hall_of_fame_count=1), losses=losses) is None
 
 
 def test_gen1_targets_the_next_gym_in_badge_order_then_the_league():
@@ -185,3 +210,25 @@ def test_gen1_targets_the_next_gym_in_badge_order_then_the_league():
     assert target(0xff) == BOSS_TABLE.league_row.ace == 65
     # After the Hall of Fame no boss is next, so no level gain counts.
     assert target(0xff, 1) is None
+
+
+def test_gen1_postgame_gains_count_toward_an_evolution_or_a_league_rematch():
+    from pokesim.policies.progression import gain_band
+    party = (SimpleNamespace(level=58, egg=False), SimpleNamespace(level=30, egg=False))
+    champion = SimpleNamespace(badges=0xff, hall_of_fame_count=2, party=party)
+    # Training Doduo (84) to evolve into Dodrio, internal id 116, counts its gains up to level 31.
+    assert gain_band(champion, '116:evolve:0::trainee-84', 84) == (0, 31)
+    # A stone evolution trains for the moves the stone would cost first: Shellder (90) up to level 50.
+    assert gain_band(champion, '139:evolve:0::trainee-90', 90) == (0, 50)
+    # Another member's gains under that goal, or a goal of another kind, count toward no boss.
+    assert gain_band(champion, '116:evolve:0::trainee-84', 6) is None
+    assert gain_band(champion, '120:grass:161:', 84) is None
+    # A rematch counts gains toward the League's target, raised once after a loss there.
+    losses = Losses()
+    assert gain_band(champion, '0:rematch:0:', 6) == (58 - oracle.TEAM_BAND, 65)
+    losses.note('league', 60)
+    assert gain_band(champion, '0:rematch:0:', 6, losses) == (58 - oracle.TEAM_BAND, 65 + oracle.CEILING)
+    # Before the Champion any other goal counts toward the next boss, here the eighth gym.
+    from pokesim.policies.progression import GYMS
+    gyms = SimpleNamespace(badges=0x7f, hall_of_fame_count=0, party=party)
+    assert gain_band(gyms, '120:grass:161:', 6) == (58 - oracle.TEAM_BAND, GYMS[7][5] + oracle.MARGIN)

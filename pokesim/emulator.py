@@ -110,9 +110,9 @@ class Emulator(EmulatorBase):
         # A reset replaces the clock, so the store asks for the current one each time.
         store.clock = lambda: self.play_clock.frames
         self.goal_watch = store.goal_watch = self.policy.goal_watch = progress_events.GoalWatch()
-        from .planning.league import readiness_target
-        from .policies.progression import BOSS_TABLE
-        self.goal_watch.readiness = lambda snapshot: readiness_target(BOSS_TABLE, snapshot)
+        from .policies.progression import gain_band
+        self.goal_watch.readiness = lambda snapshot, key, species: gain_band(
+            snapshot, key, species, losses=getattr(self.policy, 'losses', None))
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
         # The newest autosave's manifest replaces this, and the policy's state, when start() loads it.
@@ -504,14 +504,18 @@ class Emulator(EmulatorBase):
 
         An attempt runs while the party is inside the League or on the map of the boss its goal challenges.
         """
-        from .planning.league import challenges
+        from .planning import league
         from .policies.progression import BOSS_TABLE
         stall = getattr(self, 'stall', None)
         if stall is None or not snap.valid:
             return
         goal = getattr(self.policy, 'goal', None)
-        boss = (snap.map in LEAGUE - {MAPS['HALL_OF_FAME']}
-                or challenges(BOSS_TABLE, goal) and any(target[0] == snap.map for target in goal.targets))
+        # The boss is named by the key its losses are kept under, for the loss loop check.
+        boss = None
+        if snap.map in LEAGUE - {MAPS['HALL_OF_FAME']}:
+            boss = league.LEAGUE
+        elif league.challenges(BOSS_TABLE, goal) and any(target[0] == snap.map for target in goal.targets):
+            boss = league.boss_key(goal.key)
         blackout = before is not None and before.valid and snap.all_fainted and not before.all_fainted
         self.supervisor.watch_boss(boss, blackout, stall, getattr(self, 'loop_guard', None))
 

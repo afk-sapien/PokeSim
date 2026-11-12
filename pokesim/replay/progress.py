@@ -6,7 +6,7 @@ receipts, the progress, progress_events and statistics tables, kv and the stall 
 never reads save state and never writes into its input. An adventure replays the progress_events rows
 the writers stored when its window holds any, and rows rebuilt from the journal otherwise.
 
-    python -m pokesim.replay progress run STORES_DIR [STORES_DIR ...] --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10] [--rows stored|rebuilt]
+    python -m pokesim.replay progress run STORES_DIR [STORES_DIR ...] --days 14 --out REPORT_JSON [--labels LABELS_JSON] [--churn-n 10] [--rows stored|reclassified|rebuilt]
     python -m pokesim.replay progress report REPORT_JSON
 
 A labels file is JSON, {"labels": [{"adventure": ID, "start": TS, "end": TS, "stall": true, "note": ""}]}.
@@ -16,7 +16,7 @@ import argparse
 from bisect import bisect_right
 from collections import Counter, deque, namedtuple
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import json
 from pathlib import Path
 import re
@@ -32,7 +32,7 @@ from pokesim import config, state
 from pokesim.app.watchdog import Limits, Watchdog
 from pokesim.progress_events import HOUR, JOURNAL, NET
 from pokesim.stalls import (FRAMES_PER_GAME_MINUTE, GEN1_HELD_RISE, LOOP_EVENTS, LOOP_LIMIT, PROGRESS_EVENTS,
-                            REAL_PROGRESS, LoopGuard, StallWatch, _RECEIVED, _RELEASED, species_key)
+                            REAL_PROGRESS, LossLoop, LoopGuard, StallWatch, _RECEIVED, _RELEASED, species_key)
 
 GEN2 = frozenset({'gold', 'silver', 'crystal'})
 # Gen I's last achievement, emulator.py: the progress events plus a trade.
@@ -56,6 +56,16 @@ RELOADED = 'Stuck? The adventure had to reload twice'
 GAVE_UP = re.compile(r'^Gave up on ')
 HATCHED = re.compile(r'^(.+?) hatched from its Egg')
 PLAYTIME = re.compile(r'^(\d+):(\d\d):(\d\d)$')
+# The League's rooms in both generations, and Red's room at Mt. Silver, as the journal names them.
+LEAGUE_ROOM = re.compile(r"^(Lorelei|Bruno|Agatha|Lance|Will|Koga|Karen|Champion)'s Room$")
+RED_ROOM = 'Silver Cave Room 3'
+# A badge entry's title names the badge: "Beat Brock! Got the Boulder Badge" or "Earned the Rising Badge".
+BADGE = re.compile(r'the (\w+) Badge')
+# The badge bits in order: Kanto's are bits 0 to 7 in Red, Blue and Yellow and bits 8 to 15 after
+# Johto's in Gold, Silver and Crystal.
+KANTO_BADGES = ('boulder', 'cascade', 'thunder', 'rainbow', 'soul', 'marsh', 'volcano', 'earth')
+JOHTO_BADGES = ('zephyr', 'hive', 'plain', 'fog', 'mineral', 'storm', 'glacier', 'rising')
+GREW = re.compile(r'^(.+?) grew to level (\d+)')
 
 Entry = namedtuple('Entry', 'id ts type title body map playtime')
 
@@ -85,6 +95,17 @@ class Flag:
     ts: float
     frame: float
     check: str
+    # The frame of the last progress before a quiet check's flag, which starts its quiet stretch, or None.
+    since: float | None = None
+
+
+@dataclass
+class Alarm:
+    """What a reader would see: the first flag, and the frames from the start of its quiet stretch, or
+    the flag itself, to the last flag that joined it."""
+    first: Flag
+    start: float
+    end: float
 
 
 @dataclass
@@ -98,7 +119,7 @@ class Adventure:
     stats: list
     bundles: list
     shadow_rows: int = 0
-    # The progress_events rows the writers stored: (ts, frame, kind, species, net, rewound).
+    # The progress_events rows the writers stored: (ts, frame, kind, species, net, rewound, goal, identity, score).
     stored: list = field(default_factory=list)
 
     @property
@@ -141,7 +162,9 @@ def load(folder):
                 stats.append((ts, frames))
         written = {row[1] for row in db.execute('PRAGMA table_info(progress_events)')} if 'progress_events' in tables else set()
         undone = 'rewound' if 'rewound' in written else '0'
-        stored = rows('progress_events', f'SELECT ts, frame, kind, species, net, {undone} FROM progress_events ORDER BY id')
+        noted = ', '.join(name if name in written else 'NULL' for name in ('goal', 'identity', 'score'))
+        stored = rows('progress_events', f'SELECT ts, frame, kind, species, net, {undone}, {noted} FROM progress_events '
+                                         'ORDER BY id')
     finally:
         db.close()
     bundles = []
@@ -215,12 +238,71 @@ def released_key(entry):
     return species_key(match.group(1)) if match else ''
 
 
+def constant(name):
+    """A map's journal name as its map constant: "Lance's Room" is LANCES_ROOM."""
+    return re.sub('[^A-Z0-9]+', '_', (name or '').upper().replace("'", '')).strip('_')
+
+
+class Readiness:
+    """The band a level gain is judged by (planning/readiness.band), rebuilt from the journal.
+
+    The badges and Hall of Fame entries come from the journal, a loss from a blackout in a boss's room
+    and the party's best level from the gains seen so far. The tracker also stands in for the
+    supervisor's losses, so a loss raises the next boss's target once, as it does live."""
+
+    def __init__(self, gen2):
+        # The tables read the game data as they load, so --help works on a machine without it.
+        self.badges = self.hall_of_fame = self.top = 0
+        self.lost, self.best = set(), {}
+        if gen2:
+            from pokesim.gen2.readiness import BOSS_TABLE
+            from pokesim.planning.league import gain_band
+            self.hook = lambda snapshot, key, species: gain_band(BOSS_TABLE, snapshot, losses=self)
+            self.room = constant
+            self.bits = {name: 1 << bit for bit, name in enumerate(JOHTO_BADGES + KANTO_BADGES)}
+        else:
+            from pokesim.policies.progression import BOSS_TABLE, gain_band
+            from pokesim.strategy_data import MAPS
+            self.hook = lambda snapshot, key, species: gain_band(snapshot, key, species, losses=self)
+            self.room = lambda name: MAPS.get(constant(name))
+            self.bits = {name: 1 << bit for bit, name in enumerate(KANTO_BADGES)}
+        self.table = BOSS_TABLE
+
+    def levels(self):
+        """The bosses lost to, as losses.Losses.levels keys them."""
+        return self.lost
+
+    def entry(self, entry):
+        if entry.type == 'badge' and (match := BADGE.search(entry.title)):
+            self.badges |= self.bits.get(match[1].lower(), 0)
+        elif entry.type == 'champion':
+            self.hall_of_fame += 1
+        elif entry.type == 'blackout' and (row := self.table.room(self.room(entry.map))) is not None:
+            self.lost.add(row.key)
+
+    def snapshot(self):
+        return SimpleNamespace(badges=self.badges, hall_of_fame_count=self.hall_of_fame,
+                               party=(SimpleNamespace(level=self.top, egg=False),))
+
+    def gain(self, who, level, key=None, species=None):
+        """``improve`` when ``who`` reaches a new best ``level`` inside the band, else ``level``, as
+        progress_events.gained classes it. ``key`` is the running goal and ``species`` a Pokédex number."""
+        self.top = max(self.top, level)
+        best = self.best.get(who)
+        if best is not None and level <= best:
+            return 'level'
+        self.best[who] = level
+        levels = self.hook(self.snapshot(), key, species)
+        return 'improve' if levels is not None and levels[0] <= level <= levels[1] else 'level'
+
+
 def rebuild(adventure, axis):
     """The progress_events rows the new writers would have written, from the journal, receipts and progress table.
 
     Catches come from the receipts and receives, releases and the STORY kinds from the journal. A new
     owned entry is a dex row, and a new level 100, perfect or shiny Pokémon is an improve row. A
-    finished marathon gets one checkpoint row per checkpoint, spread evenly over the race.
+    finished marathon gets one checkpoint row per checkpoint, spread evenly over the race. A level gain
+    is an improve row when its Pokémon reaches a new best level inside the band (Readiness).
     """
     rows = []
 
@@ -228,7 +310,9 @@ def rebuild(adventure, axis):
         rows.append(Row(ts, axis(ts), kind, int(NET[kind] if net is None else net), key))
     obtained = {entry.id for entry in adventure.events if entry.type == 'obtain'}
     items, trainers, race = set(), set(), None
+    tracker = Readiness(adventure.gen2)
     for entry in adventure.events:
+        tracker.entry(entry)
         kind = JOURNAL.get(entry.type)
         if kind == 'receive':
             add(entry.ts, kind, received_key(entry))
@@ -248,6 +332,8 @@ def rebuild(adventure, axis):
             # A story trainer's first defeat sets its event flag. A rematch sets nothing.
             trainers.add(entry.title)
             add(entry.ts, 'event')
+        elif entry.type == 'level' and (match := GREW.match(entry.title)):
+            add(entry.ts, tracker.gain(match[1], int(match[2])))
         elif entry.type in ('level', 'plan'):
             add(entry.ts, entry.type)
         elif entry.type == 'marathon' and (match := MARATHON.match(entry.title)):
@@ -293,9 +379,27 @@ def stored_rows(adventure, axis):
     own = axis.name == 'statistics'
     rows = [Row(ts, float(frame if own and frame is not None else axis(ts)), kind, 0 if rewound else int(net or 0),
                 f'dex:{species}' if species is not None and kind in ('receive', 'release') else '')
-            for ts, frame, kind, species, net, rewound in adventure.stored]
+            for ts, frame, kind, species, net, rewound, *_ in adventure.stored]
     rows.sort(key=lambda row: row.ts)
     return rows
+
+
+def reclassified(adventure, axis):
+    """The stored rows with each level gain classed again by today's band (planning/readiness.band).
+
+    A gain row keeps its goal, species, identity and level, and becomes ``improve`` when the Pokémon
+    reaches a new best level inside the band, else ``level``. The band reads the badges, Hall of Fame
+    entries and losses from the journal up to the row, and the best level any gain row reached."""
+    tracker, entries, at, rows = Readiness(adventure.gen2), adventure.events, 0, []
+    for ts, frame, kind, species, net, rewound, goal, identity, level in sorted(adventure.stored, key=lambda r: r[0]):
+        while at < len(entries) and entries[at].ts <= ts:
+            tracker.entry(entries[at])
+            at += 1
+        if kind in ('level', 'improve') and level is not None:
+            kind = tracker.gain((species, identity), int(level), goal, species)
+            net = NET[kind]
+        rows.append((ts, frame, kind, species, net, rewound, goal, identity, level))
+    return stored_rows(replace(adventure, stored=rows), axis)
 
 
 def ground_truth(adventure, axis, labels=()):
@@ -432,33 +536,51 @@ class OldChecks:
             flags.append(Flag(ts, frame, 'loopguard'))
         self.loop = reason
         if self.stall.check(frame, ts) is not None:
-            flags.append(Flag(ts, frame, 'stallwatch'))
+            flags.append(Flag(ts, frame, 'stallwatch', self.stall.frame))
         s = self.status
         quiet = Watchdog._quiet(self.watch, 'replay', {
             'watch': {'owned': s.owned, 'badges': s.badges, 'hall_of_fame': s.league, 'map': s.place},
             'progress': {'last_achievement': {'id': s.achievement}}, 'league_rewards': {'wins': s.league},
             'areas_discovered': s.areas, 'play_clock': {'seconds': int(frame // 60)}}, ts)
         if quiet and not self.quiet:
-            flags.append(Flag(ts, frame, 'watchdog'))
+            flags.append(Flag(ts, frame, 'watchdog', self.stall.frame))
         self.quiet = quiet
         return flags
 
 
-class NewChecks:
-    """The same three checks reading only net rows, and receive and release rows for the loop."""
+def loss_key(map_name):
+    """The boss a blackout on ``map_name`` lost to, as Supervisor.lost names it, or None: 'league' for
+    any League room, 'red' at Mt. Silver and the gym's own name for a gym."""
+    name = map_name or ''
+    if LEAGUE_ROOM.match(name):
+        return 'league'
+    if name == RED_ROOM:
+        return 'red'
+    return name if name.endswith(' Gym') else None
 
-    def __init__(self, status):
+
+class NewChecks:
+    """The same three checks reading only net rows, and receive and release rows for the loop, plus
+    the loss loop check (stalls.LossLoop) on the journal's blackouts in a boss's room."""
+
+    def __init__(self, status, losses):
         self.status = status
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
         self.watch, self.loop, self.quiet = watchdog(), None, False
+        # The loss loop's counts outlive a worker restart, as the supervisor keeps them in the store.
+        self.losses, self.pending = losses, []
 
     def row(self, row):
         if row.net:
             self.stall.progress(row.frame, row.ts)
 
+    def entry(self, entry, frame):
+        if entry.type == 'blackout' and (boss := loss_key(entry.map)) and self.losses.note(boss, frame):
+            self.pending.append(Flag(entry.ts, frame, 'lossloop'))
+
     def tick(self, ts, frame):
-        flags = []
+        flags, self.pending = self.pending, []
         received, released = Counter(), Counter()
         for kind, key in self.status.cycle:
             (received if kind == 'receive' else released)[key] += 1
@@ -468,12 +590,12 @@ class NewChecks:
             flags.append(Flag(ts, frame, 'loopguard'))
         self.loop = reason
         if self.stall.check(frame, ts) is not None:
-            flags.append(Flag(ts, frame, 'stallwatch'))
+            flags.append(Flag(ts, frame, 'stallwatch', self.stall.frame))
         quiet = Watchdog._quiet(self.watch, 'replay', {'watch': {'map': self.status.place},
                                                        'progress': {'last_achievement': {'id': self.status.net}},
                                                        'play_clock': {'seconds': int(frame // 60)}}, ts)
         if quiet and not self.quiet:
-            flags.append(Flag(ts, frame, 'watchdog'))
+            flags.append(Flag(ts, frame, 'watchdog', self.stall.frame))
         self.quiet = quiet
         return flags
 
@@ -487,7 +609,7 @@ def replay(adventure, axis, rows, start, end, churn_n=10):
               + [(p[0], 2, 'progress', p) for p in adventure.progress]
               + [(r.ts, 3, 'row', r) for r in rows])
     stream.sort(key=lambda item: (item[0], item[1]))
-    journal, status, clock = Journal(), Status(), [0.0]
+    journal, status, clock, losses = Journal(), Status(), [0.0], LossLoop()
     old_flags, new_flags, churn = [], [], []
     position, best_owned = 0, None
     old = new = None
@@ -509,6 +631,8 @@ def replay(adventure, axis, rows, start, end, churn_n=10):
                     status.achievement = item.id
                 if old:
                     old.entry(item, frame)
+                if new:
+                    new.entry(item, frame)
             elif kind == 'receipt':
                 if old:
                     old.receipt(ts, frame)
@@ -537,7 +661,7 @@ def replay(adventure, axis, rows, start, end, churn_n=10):
             continue
         consume(begun - 1e-6)
         old = OldChecks(adventure.gen2, journal, status, clock)
-        new = NewChecks(status)
+        new = NewChecks(status, losses)
         t = max(begun, start - WARMUP)
         while t <= min(ended, end):
             consume(t)
@@ -554,11 +678,22 @@ def replay(adventure, axis, rows, start, end, churn_n=10):
 
 
 def alarms(flags):
-    """One alarm per game hour, whichever check raised it."""
-    kept = []
+    """The alarms a reader would see, whichever check raised them.
+
+    The quiet checks' flags in one quiet stretch, which share the frame of its last progress, make one
+    alarm, so the repeat alert six hours on and the watchdog beside it do not count as more stalls.
+    Any other flag joins the alarm before it when within a game hour of its end."""
+    kept, stretches = [], {}
     for flag in sorted(flags, key=lambda f: f.frame):
-        if not kept or flag.frame > kept[-1].frame + HOUR:
-            kept.append(flag)
+        alarm = stretches.get(flag.since) if flag.since is not None else None
+        if alarm is None and kept and flag.frame <= kept[-1].end + HOUR:
+            alarm = kept[-1]
+        if alarm is None:
+            alarm = Alarm(flag, flag.frame if flag.since is None else min(flag.since, flag.frame), flag.frame)
+            kept.append(alarm)
+        alarm.end = max(alarm.end, flag.frame)
+        if flag.since is not None:
+            stretches[flag.since] = alarm
     return kept
 
 
@@ -575,21 +710,21 @@ def score(episodes, flags, start, end):
             frames.append(max(0, first.frame - episode.start_frame))
             minutes.append(max(0.0, first.ts - episode.start_ts) / 60)
     raised = alarms(flags)
-    false = [a for a in raised if not any(e.start_frame - HOUR <= a.frame <= e.end_frame + HOUR for e in episodes)]
+    false = [a for a in raised if not any(e.start_frame - HOUR <= a.end and a.start <= e.end_frame + HOUR for e in episodes)]
     return {'stalls': len(window), 'caught': caught, 'missed': len(window) - caught, 'false_alarms': len(false),
             'alarms': len(raised),
             'detect_frames': {'median': round(statistics.median(frames)) if frames else None,
                               'worst': round(max(frames)) if frames else None},
             'detect_minutes': {'median': round(statistics.median(minutes), 1) if minutes else None,
                                'worst': round(max(minutes), 1) if minutes else None},
-            'false_alarm_times': [round(a.ts) for a in false]}
+            'false_alarm_times': [round(a.first.ts) for a in false]}
 
 
 def model(episodes, flags, start, end):
     result = score(episodes, flags, start, end)
     result['checks'] = {check: {key: value for key, value in score(episodes, [f for f in flags if f.check == check],
                                                                     start, end).items() if key != 'false_alarm_times'}
-                        for check in ('stallwatch', 'loopguard', 'watchdog')}
+                        for check in ('stallwatch', 'loopguard', 'watchdog', 'lossloop')}
     return result
 
 
@@ -649,7 +784,7 @@ def run_input(stores, days, labels, churn_n, source=None):
         bundles += len(adventure.bundles)
         axis = axis_for(adventure, start, end)
         picked = source or ('stored' if any(start <= row[0] <= end for row in adventure.stored) else 'rebuilt')
-        rows = stored_rows(adventure, axis) if picked == 'stored' else rebuild(adventure, axis)
+        rows = {'stored': stored_rows, 'reclassified': reclassified, 'rebuilt': rebuild}[picked](adventure, axis)
         episodes = ground_truth(adventure, axis, labels)
         old_flags, new_flags, churn = replay(adventure, axis, rows, start, end, churn_n)
         window = [row for row in rows if start <= row.ts <= end]
@@ -687,6 +822,16 @@ AMBIGUITIES = [
     'with the newest net row as its fingerprint.',
     'Healthy rate: no input has encounter_counts, so the healthy-rate exception never applies and nothing is parked.',
     'improve: there is no worth oracle yet, so a new level 100, perfect or shiny Pokémon stands in for it.',
+    'Level gains: a rebuilt or reclassified gain is improve when its Pokémon reaches a new best level inside today\'s '
+    'band. The band reads the badges and Hall of Fame entries from the journal, and losses from blackouts in a '
+    'boss\'s room only, since a battle that cannot end and a loss on the way to a goal leave no journal entry. The '
+    'party\'s best level is the best any gain reached so far, so a Pokémon boxed or released still counts. Gold, '
+    'Silver and Crystal read each boss\'s ace from its table row, and Yellow\'s gyms read Red\'s aces unless the '
+    'Yellow variant is set. A rebuilt gain names its Pokémon by nickname and has no goal, so Red, Blue and Yellow\'s '
+    'postgame evolve and rematch bands apply to reclassified rows only.',
+    'Quiet stretches: the stall alerts and watchdog flags in one quiet stretch make one alarm, from the frame of the '
+    'stretch\'s last progress to its last flag, and the alarm is false only when that span is more than a game hour '
+    'from every true stall. Any other flag joins the alarm before it when within a game hour of its end.',
     'event: a story trainer\'s first defeat stands for an event flag. A rematch writes no row.',
     'item: only the first of each item title is a needed item.',
     'checkpoint: the journal keeps only a race\'s start and finish, so a finished race gets its checkpoints spread '
@@ -715,9 +860,10 @@ def main(argv=None, prog=None):
     run.add_argument('--out', type=Path, required=True)
     run.add_argument('--labels', type=Path)
     run.add_argument('--churn-n', type=int, default=10)
-    run.add_argument('--rows', choices=('stored', 'rebuilt'),
+    run.add_argument('--rows', choices=('stored', 'reclassified', 'rebuilt'),
                      help='the rows to replay. By default an adventure replays its stored rows when the window holds '
-                          'any, and rebuilds them from the journal otherwise')
+                          'any, and rebuilds them from the journal otherwise. Reclassified rows are the stored ones '
+                          'with each level gain classed again by today\'s band')
     show = commands.add_parser('report')
     show.add_argument('report', type=Path)
     args = parser.parse_args(argv)

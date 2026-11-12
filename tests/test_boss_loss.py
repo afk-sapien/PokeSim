@@ -119,6 +119,33 @@ def test_a_reload_out_of_a_boss_attempt_is_a_loss():
     assert supervisor.reloads == 1 and stall.frame == 10
 
 
+def test_a_loss_to_a_named_boss_writes_a_loss_row_and_counts_toward_the_loss_loop(tmp_path):
+    store, clock = Store(tmp_path), Clock()
+    # PlayClock frames are whole numbers.
+    clock.now = 0
+    store.clock = clock
+    try:
+        stall, supervisor = StallWatch(), Supervisor(store)
+        for _ in range(5):
+            supervisor.watch_boss('league', False, stall)
+            clock.now += 3600
+            supervisor.lost(stall)
+        # A boss attempt with no key, as an older caller passes, writes no row.
+        supervisor.watch_boss(True, False, stall)
+        supervisor.lost(stall)
+        rows = store.db.execute("SELECT identity, net FROM progress_events WHERE kind = 'loss'").fetchall()
+        assert [tuple(row) for row in rows] == [('league', 0)] * 5
+        assert supervisor.loss_loop.reason is None
+        # The count outlives a restart, and the sixth loss within two game hours is a loop.
+        supervisor = Supervisor(store)
+        supervisor.watch_boss('league', False, stall)
+        clock.now += 3600
+        supervisor.lost(stall)
+        assert supervisor.loss_loop.reason == 'Lost to league 6 times in 5 game minutes.'
+    finally:
+        store.close()
+
+
 def test_trainer_wins_before_a_blackout_do_not_end_a_loop(tmp_path):
     store, clock = Store(tmp_path), Clock()
     try:

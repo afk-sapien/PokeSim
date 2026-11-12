@@ -41,6 +41,11 @@ MARGIN = 10
 REGROWTH = 2
 CEILING = 10
 DEPTH_REGROWTH = 10
+# The highest level a Pokémon reaches, which caps the target a loss raises (target).
+LEVEL_CAP = 100
+# A gain counts as progress only for a Pokémon this close under the party's best level, one the boss
+# battle would use (band). Training a new member from a low level is not progress toward the boss.
+TEAM_BAND = 2 * MARGIN
 # A Pokémon under this share of its HP, or of its strong attacks' PP, is not ready for a boss.
 READY_HP = 0.5
 READY_PP = 0.5
@@ -125,17 +130,31 @@ def matchup_level(boss):
     return boss.ace if boss.league else boss.ace + MARGIN
 
 
-def target(boss):
-    """The level training before ``boss`` aims at when no loss there raised it, or None when it sets none.
+def target(boss, lost=False):
+    """The level a Pokémon's gain counts toward as progress before ``boss`` (progress_events.gained),
+    or None when it sets none.
 
     It is the matchup rules' level, never under the floor. A boss with no matchup rule (no
-    ``scores``) or no ace has its floor alone. A Pokémon's level gain at or under it counts as
-    progress (progress_events.gained). It moves only when the next boss changes, never with a loss,
-    so a loop of losses adds at most the levels left to it."""
+    ``scores``) or no ace has its floor alone. After a loss to the boss, ``lost``, the team was not
+    ready, so the target rises once by CEILING over the matchup level, up to LEVEL_CAP. Gold lost to
+    Red again and again while Typhlosion grew from Lv 92 to 100, over the target of 91. The target
+    rises only once, so a loop of losses still adds at most the levels left to it, and the loss loop
+    check (stalls.LossLoop) counts the losses themselves."""
     if boss is None:
         return None
     level = max(boss.floor, matchup_level(boss)) if boss.scores and boss.ace is not None else boss.floor
+    if lost and boss.ace is not None:
+        level = max(boss.floor, min(LEVEL_CAP, matchup_level(boss) + CEILING))
     return level or None
+
+
+def band(level, best):
+    """The levels a gain counts toward as progress, as (lowest, highest), or None with no target.
+
+    ``level`` is the target and ``best`` the party's highest level. Only a Pokémon the boss battle
+    would use counts, one within TEAM_BAND of the best, so training a new catch from Lv 5 beside a Lv 90
+    ace is not progress toward the boss."""
+    return None if level is None else (best - TEAM_BAND, level)
 
 
 def judge(boss, team, losses=None):

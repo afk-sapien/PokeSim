@@ -187,9 +187,10 @@ class Emulator(EmulatorBase):
         store.clock = lambda: self.play_clock.frames
         from ..progress_events import GoalWatch
         self.goal_watch = store.goal_watch = self.policy.goal_watch = GoalWatch()
-        from ..planning.league import readiness_target
+        from ..planning.league import gain_band
         from .readiness import BOSS_TABLE, aces
-        self.goal_watch.readiness = lambda snapshot: readiness_target(BOSS_TABLE, snapshot, aces(self.data))
+        self.goal_watch.readiness = lambda snapshot, key, species: gain_band(
+            BOSS_TABLE, snapshot, aces(self.data), getattr(self.policy, 'losses', None))
         self.lock = threading.Lock()
         self.frame_cond = threading.Condition()
         self.commands = queue.Queue()
@@ -736,15 +737,20 @@ class Emulator(EmulatorBase):
 
         An attempt runs while the party is inside the League or in the room of the boss its goal names.
         """
-        from ..planning.league import challenges
+        from ..planning import league
         from .readiness import BOSS_TABLE
         policy, stall = self.policy, getattr(self, 'stall', None)
         if stall is None or not hasattr(policy, 'in_league'):
             return
         goal = getattr(policy, 'goal', None)
-        boss = bool(snapshot.valid and snapshot.started) and (
-            policy.in_league(snapshot) and policy.constant(snapshot) != 'HALL_OF_FAME'
-            or challenges(BOSS_TABLE, goal) and self.data.map_ids.get(goal.map_name) == snapshot.map)
+        # The boss is named by the key its losses are kept under, for the loss loop check.
+        boss = None
+        if not (snapshot.valid and snapshot.started):
+            pass
+        elif policy.in_league(snapshot) and policy.constant(snapshot) != 'HALL_OF_FAME':
+            boss = league.LEAGUE
+        elif league.challenges(BOSS_TABLE, goal) and self.data.map_ids.get(goal.map_name) == snapshot.map:
+            boss = league.boss_key(goal.key)
         blackout = before is not None and snapshot.all_fainted and not before.all_fainted
         self.supervisor.watch_boss(boss, blackout, stall, getattr(self, 'loop_guard', None))
 
