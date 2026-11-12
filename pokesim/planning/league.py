@@ -66,8 +66,11 @@ class Table:
     the maps inside the League, where nothing turns back. A boss goal starts with ``challenge`` when
     the boss check guards it, or any boss goal does when it is None. ``partner`` gives the base HP of
     a species, by which the League partner is chosen, or is None when the League takes no partner.
-    ``rematch`` turns on the stamina and depth gate of a postgame League run. ``generation`` names
-    the boss trainer classes (losses.BOSS_CLASSES).
+    ``rematch`` turns on the stamina and depth gate of a postgame League run. ``rematches`` are the
+    goal keys of that run, room by room. The boss check guards them as it guards the League row's own
+    goals, and asks for a party restored in full before the first room (check). They name no row for
+    training, since league.run judges a postgame run. ``generation`` names the boss trainer classes
+    (losses.BOSS_CLASSES).
     """
     generation: int
     rows: tuple
@@ -76,6 +79,7 @@ class Table:
     challenge: str | None = None
     partner: Callable[[int], int] | None = None
     rematch: bool = False
+    rematches: frozenset = frozenset()
 
     def row(self, key):
         """The row a boss goal ``key`` names, or None for any other goal."""
@@ -205,9 +209,10 @@ def run(table, boss, party, power, pp, lineup, lost):
     With ``rematch`` set, nothing restores PP inside the League. A level 100 Vaporeon beside Pokémon
     too weak to face the Elite Four ran out of attacks at Lance and the battle never ended. So the
     oracle counts the attacks the Pokémon at the League's lowest level or over know, at full PP since
-    the run heals first. ``lineup`` gives the opponents and that lowest level. A live Crystal run took
-    one level 71 Poliwhirl and its trainees back to Lance every twenty minutes and lost each time, so
-    a lost run leaves ``lost``, the depth of the team that lost, for the next one to beat."""
+    the boss check restores the party in full at the last Pokémon Center before the run (check).
+    ``lineup`` gives the opponents and that lowest level. A live Crystal run took one level 71
+    Poliwhirl and its trainees back to Lance every twenty minutes and lost each time, so a lost run
+    leaves ``lost``, the depth of the team that lost, for the next one to beat."""
     if not table.rematch:
         return boss, team(party, power)
     opponents, low = lineup
@@ -234,9 +239,10 @@ def note_loss(table, losses, goal_key, here, snapshot, power, rooms=None):
 
 
 def challenges(table, goal):
-    """Whether ``goal`` takes on its boss, which the boss check guards."""
-    return (goal is not None and goal.key in table.goals
-            and (table.challenge is None or goal.title.startswith(table.challenge)))
+    """Whether ``goal`` takes on its boss, which the boss check guards. A postgame League run's goals
+    (``rematches``) take on the League."""
+    return goal is not None and (goal.key in table.rematches or goal.key in table.goals
+                                 and (table.challenge is None or goal.title.startswith(table.challenge)))
 
 
 def check(table, owner, goal, fighters, reachable, *, where, inside, center, treatment, title, names,
@@ -254,10 +260,15 @@ def check(table, owner, goal, fighters, reachable, *, where, inside, center, tre
         gate = owner.boss_gate = Gate()
     key = goal.key if challenges(table, goal) else None
     supply = key is not None and inside and treatment()
-    verdict = gate.decide(key, fighters, reachable, where=where, center=center, supply=supply)
+    # Nothing restores PP inside the League, and run counts a postgame run's attacks at full PP. So at
+    # a Pokémon Center before that run, a party short of full heals first, not only one under half. A
+    # Gold Typhlosion walked in from the Indigo Plateau Center with Earthquake at 8 of 10 and
+    # Flamethrower at 12 of 15, which the half rule calls ready.
+    full = key in table.rematches and center
+    verdict = gate.decide(key, fighters, reachable, where=where, center=center, supply=supply, full=full)
     rows = []
     if verdict == UNREADY and not quiet and gate.note():
         rows.append(unready_event(title(), fighters, names()))
     if not quiet and gate.healed():
-        rows.append(healed_event(title()))
+        rows.append(healed_event(title(), full))
     return verdict, rows

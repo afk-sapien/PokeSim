@@ -280,6 +280,41 @@ def replace_map(snapshot, mid):
     return snapshot
 
 
+def test_gen2_heals_in_full_at_the_indigo_center_before_a_league_rematch(gen2, monkeypatch):
+    # Gold walked from the Indigo Plateau Center into a postgame League run with its ace's strong
+    # attacks at four fifths of their PP. The run's goal was no boss goal, the half rule would have
+    # called that ready anyway, and nothing restores PP inside the League.
+    from pokesim.gen2.collection import pin_events
+    from pokesim.gen2.readiness import BOSS_TABLE
+    from pokesim.planning import league
+    mid = gen2.map_ids['INDIGO_PLATEAU_POKECENTER_1F']
+    nurse = next(obj for obj in gen2.maps[mid]['objects'] if obj['sprite'] == 'SPRITE_NURSE')
+    policy = gen2_policy(gen2, monkeypatch, (mid, nurse))
+    policy.goal = SimpleNamespace(key='funds_will', label='Challenge the League to fund the next expedition')
+    assert league.challenges(BOSS_TABLE, policy.goal) and BOSS_TABLE.row('funds_will') is None
+
+    def worn(map_name):
+        snapshot = replace_map(gen2_snapshot(gen2, 180), gen2.map_ids[map_name])
+        snapshot.party = (gen2_mon(180, (12, 12, 30, 20)),)
+        return snapshot
+    # Away from a Pokémon Center the half rule holds, so the walk there does not turn back for a few PP.
+    assert healing(policy, worn('ROUTE_23')) is None
+    assert healing(policy, worn('INDIGO_PLATEAU_POKECENTER_1F')).map_name == 'INDIGO_PLATEAU_POKECENTER_1F'
+    assert healing(policy, replace_map(gen2_snapshot(gen2, 180), mid)) is None
+    rows = [row for row in pin_events(policy) if row['title'].startswith('Healed before')]
+    assert len(rows) == 1 and rows[0]['body'].startswith('Nothing restores PP inside the League')
+
+
+def test_only_a_league_rematch_asks_for_a_heal_in_full():
+    worn = fighters(pp=(12, 12, 30, 20))
+    assert boss.Gate().decide('funds_will', worn, lambda: True) == boss.READY
+    assert boss.Gate().decide('funds_will', worn, lambda: True, full=True) == boss.HEAL
+    assert boss.Gate().decide('funds_will', fighters(), lambda: pytest.fail('searched'), full=True) == boss.READY
+    assert boss.Gate().decide('funds_will', worn, lambda: False, full=True) == boss.UNREADY
+    row = boss.unready_event('Challenge the League', worn)
+    assert row['body'].endswith('Not restored in full before the League.')
+
+
 def test_gen2_logs_a_pp_heal_at_the_center(gen2, monkeypatch):
     from pokesim.gen2.collection import pin_events
     from pokesim.gen2.policy import Policy

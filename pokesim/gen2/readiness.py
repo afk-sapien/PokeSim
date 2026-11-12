@@ -38,7 +38,9 @@ def _gym(key, name, ace, training, room, badge):
 # level floor. Red is never won, and his gains still count toward the matchup level over his ace,
 # Pikachu's Lv 81 plus MARGIN, which is also the most a loss bar before him asks (readiness.CEILING).
 # The rival's battles are scripted on the way to other goals, so none is a goal. A postgame League
-# run also needs the stamina and depth to finish (league.run).
+# run also needs the stamina and depth to finish (league.run). Its goals, which fund the next
+# expedition room by room (collection.league_funding), are guarded by the boss check as the League's
+# own are, and it heals in full at the Indigo Plateau Center before the first room (league.check).
 BOSS_TABLE = league.Table(
     generation=2,
     rows=(_row('zephyr', 'Falkner', 9, 'ROUTE_31', ('VIOLET_GYM',), 1, floor=14),
@@ -61,7 +63,8 @@ BOSS_TABLE = league.Table(
           _row('red', 'Red', 81, 'SILVER_CAVE_ROOM_1', ('SILVER_CAVE_ROOM_3',), None, aim=True)),
     goals=frozenset({'zephyr', 'hive', 'plain', 'fog', 'storm', 'mineral', 'glacier', 'clair', *LEAGUE,
                      'surge', 'sabrina', 'erika', 'janine', 'misty', 'brock', 'blaine', 'blue', 'red'}),
-    league=LEAGUE_ROOMS | {'HALL_OF_FAME'}, rematch=True)
+    league=LEAGUE_ROOMS | {'HALL_OF_FAME'}, rematch=True,
+    rematches=frozenset({'funds_will', 'funds_koga', 'funds_bruno', 'funds_karen', 'funds_lance'}))
 
 
 def league_lineup(data):

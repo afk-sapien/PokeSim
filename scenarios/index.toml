@@ -83,3 +83,10 @@ frames = [12070605, 12488265]
 expect = "passes"
 kind = "quiet"
 issue = 578
+
+[[scenario]]
+name = "gold-league-funding-pp-20261112"
+rom_sha1 = "d8b8a3600a465308c9953dfa04f0081c05bdcb94"
+state_sha256 = "06efe8de56a816685b1219d26fae62339ebbfded380b50535279688cfc620ecc"
+frames = [34181131, 34181131]
+expect = "passes"

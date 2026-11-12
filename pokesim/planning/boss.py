@@ -117,18 +117,21 @@ class Gate:
         self.leg = None
         self.done = False
 
-    def decide(self, key, fighters, reachable: Callable[[], bool], where=None, center=False, supply=False):
+    def decide(self, key, fighters, reachable: Callable[[], bool], where=None, center=False, supply=False,
+               full=False):
         """READY, HEAL or UNREADY before the boss goal ``key``, or READY when ``key`` is None.
 
         ``reachable`` says whether a Pokémon Center is in reach, and is only asked when a trip would
         start, since it searches the map. ``center`` says the caller's map ``where`` is a Pokémon
         Center, which starts a leg there. ``supply`` says the bag can treat a short fighter where no
         Center can be reached, as between League rooms (``treatment``). That answers HEAL too, with no
-        trip taken, since each item used leaves the bag smaller. The answer is kept while ``key``, the
-        party, ``where`` and ``supply`` stay the same, so a step costs one comparison.
+        trip taken, since each item used leaves the bag smaller. ``full`` asks for a party restored in
+        full, not only one with no Pokémon under half, as before a postgame League run
+        (league.check). The answer is kept while ``key``, the party, ``where``, ``supply`` and
+        ``full`` stay the same, so a step costs one comparison.
         """
         fighters = tuple(fighters)
-        memo = (key, fighters, where, center, supply, self.healing, self.trips)
+        memo = (key, fighters, where, center, supply, full, self.healing, self.trips)
         if self.memo is not None and self.memo[0] == memo:
             return self.memo[1]
         if key != self.key:
@@ -141,7 +144,7 @@ class Gate:
             self.trips = 0
             self.noted = False
         self.was_restored = now
-        if key is None or not short_slots(fighters):
+        if key is None or not short_slots(fighters) and (now or not full):
             if self.healing and key is not None:
                 self.done = True
             self.healing = False
@@ -156,7 +159,7 @@ class Gate:
             answer = HEAL
         else:
             answer = UNREADY
-        self.memo = ((key, fighters, where, center, supply, self.healing, self.trips), answer)
+        self.memo = ((key, fighters, where, center, supply, full, self.healing, self.trips), answer)
         return answer
 
     def note(self):
@@ -284,10 +287,12 @@ def boss_name(title):
     return title
 
 
-def healed_event(title):
-    """The journal row, low and kept off the feed, for a boss heal trip that left the party ready."""
+def healed_event(title, full=False):
+    """The journal row, low and kept off the feed, for a boss heal trip that left the party ready.
+    ``full`` is a heal in full before a postgame League run (Gate.decide)."""
     return {'type': 'plan', 'title': f'Healed before {boss_name(title)}',
-            'body': 'The party was under half HP or strong PP, so it healed at a Pokémon Center first.',
+            'body': ('Nothing restores PP inside the League, so the party healed in full at a Pokémon Center first.'
+                     if full else 'The party was under half HP or strong PP, so it healed at a Pokémon Center first.'),
             'priority': 1, 'notable': False, 'tags': 'hospital'}
 
 
@@ -303,8 +308,9 @@ def unready_event(title, fighters, names=None):
     slots = short_slots(fighters)
     names = names or [f'Slot {index + 1}' for index in range(len(fighters))]
     detail = ', '.join(names[index] for index in slots)
+    # A party held to a heal in full before a League run (Gate.decide) can be unready with none under half.
+    lack = f'Under half HP or strong PP: {detail}.' if slots else 'Not restored in full before the League.'
     return {'type': 'plan', 'title': f'Went in unready: {title}',
             'body': (f'No Pokémon Center was in reach, or this leg already took its heal trips, '
-                     f'and the bag held nothing to treat it. '
-                     f'Under half HP or strong PP: {detail}.'),
+                     f'and the bag held nothing to treat it. {lack}'),
             'priority': 2, 'tags': 'warning'}
