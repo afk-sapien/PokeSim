@@ -295,8 +295,15 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
     if legendary and not counts.get(ITEMS['MASTER_BALL']):
         if ITEMS['ULTRA_BALL'] not in stock:
             return None
-        repel = next((name for name in ('MAX_REPEL', 'SUPER_REPEL', 'REPEL') if ITEMS[name] in stock), 'MAX_REPEL')
-        for name, target in (('ULTRA_BALL', 20), (repel, 3), ('HYPER_POTION', 5)):
+        repels = ('MAX_REPEL', 'SUPER_REPEL', 'REPEL')
+        repel = next((name for name in repels if ITEMS[name] in stock), 'MAX_REPEL')
+        # The best repel in the bag is the one used and kept, and a crowded bag sells weaker ones as
+        # spare (ledger.room_units). A mart whose best repel is weaker than one held sells none to the
+        # kit, since the shop would sell it again before the next buy. Fuchsia Mart, with no Max Repel,
+        # bought and sold Super Repels until a Red run's money was gone.
+        held = next((name for name in repels if counts.get(ITEMS[name])), repel)
+        kit = (('ULTRA_BALL', 20),) + (((repel, 3),) if repels.index(repel) <= repels.index(held) else ())
+        for name, target in kit + (('HYPER_POTION', 5),):
             item = ITEMS[name]
             if item in stock and counts.get(item, 0) < target and PRICES[item] <= money - reserve:
                 if item in counts or len(items) < 20:

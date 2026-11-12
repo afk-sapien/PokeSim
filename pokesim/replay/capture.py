@@ -148,6 +148,8 @@ def capture(args):
         edits['items'] = {name: int(quantity) for name, _, quantity in (value.partition('=') for value in args.item)}
     if args.money is not None:
         edits['money'] = args.money
+    if args.returned:
+        edits['returned'] = args.returned
     scenario = {'name': args.name, 'description': args.description, 'checkpoint': 'start.state', 'edits': edits,
                 'budget_game_minutes': args.budget, 'max_quiet_game_minutes': args.quiet, 'seed': args.seed}
     if args.until:
@@ -181,6 +183,8 @@ def arguments(parser):
     parser.add_argument('--party', action='append', help='slot:status=frozen,hp=12,pp=0 (slot may be all)')
     parser.add_argument('--item', action='append', help='FULL_HEAL=0 removes an item, REVIVE=3 sets its quantity')
     parser.add_argument('--money', type=int)
+    parser.add_argument('--returned', type=int, action='append',
+                        help='the Pokédex number of a legendary that has come back (Red, Blue and Yellow)')
     parser.add_argument('--until', help='an event type that must happen, such as badge, trainer or champion')
     parser.add_argument('--fallback', type=Path, help='unedited save the second reload goes to, such as league-entry.state')
     parser.add_argument('--budget', type=int, default=240, help='game minutes to play')

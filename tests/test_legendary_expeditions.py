@@ -88,6 +88,47 @@ def test_legendary_supply_list_includes_repel_available_at_the_mart():
                          legendary=True) == ITEMS['MAX_REPEL']
 
 
+def test_legendary_kit_buys_no_repel_weaker_than_one_held():
+    fuchsia = [ITEMS['ULTRA_BALL'], ITEMS['SUPER_REPEL'], ITEMS['HYPER_POTION']]
+    assert shopping_item(((ITEMS['ULTRA_BALL'], 20), (ITEMS['MAX_REPEL'], 1)), fuchsia, 40000,
+                         legendary=True) == ITEMS['HYPER_POTION']
+    assert shopping_item(((ITEMS['ULTRA_BALL'], 20), (ITEMS['REPEL'], 1)), fuchsia, 40000,
+                         legendary=True) == ITEMS['SUPER_REPEL']
+
+
+def test_fuchsia_mart_does_not_buy_back_the_repels_it_sells_as_spare():
+    """A Red run back for Zapdos held three Max Repels at Fuchsia Mart, which sells none. Its kit
+    bought Super Repels, the crowded bag sold them as spare, and the kit bought them again until
+    most of 254,000 money was gone. The bag is the one the run held."""
+    from pokesim.policies.shopping import ShoppingController
+    from pokesim.strategy_data import PRICES
+    bag = tuple((ITEMS[name], count) for name, count in (
+        ('S_S_TICKET', 1), ('HM01', 1), ('LIFT_KEY', 1), ('SILPH_SCOPE', 1), ('POKE_FLUTE', 1), ('CARD_KEY', 1),
+        ('HM03', 1), ('HM04', 1), ('SECRET_KEY', 1), ('SUPER_ROD', 1), ('OLD_ROD', 1), ('GOOD_ROD', 1), ('HM05', 1),
+        ('COIN_CASE', 1), ('MAX_REPEL', 3), ('MOON_STONE', 1), ('ULTRA_BALL', 20), ('REVIVE', 2),
+        ('MAX_ELIXER', 1), ('SUPER_REPEL', 3)))
+    project = {'method': 'static', 'species': sid(145), 'fragment': 'ZAPDOS', 'legendary': True,
+               'legendary_return': True, 'repeat': True, 'key': 'legendary:75:83'}
+    s = state(map=MAPS['FUCHSIA_MART'], money=96286, items=bag, badges=255)
+    shop, bought = ShoppingController(), []
+    for _ in range(60):
+        request = shop.step(s, 'restock', project).request
+        if request is None:
+            break
+        kind, item, quantity = request
+        counts = dict(s.items)
+        counts[item] = counts.get(item, 0) + (quantity if kind == 'buy' else -quantity)
+        items = tuple((i, counts[i]) for i, _ in s.items if counts[i]) + (
+            ((item, quantity),) if item not in dict(s.items) else ())
+        money = s.money - PRICES[item] * quantity if kind == 'buy' else s.money + PRICES[item] // 2 * quantity
+        bought += [item] * (kind == 'buy')
+        s = replace(s, items=items, money=money)
+    else:
+        raise AssertionError(f'The shop was still trading after 60 requests, with {s.money} money left')
+    assert ITEMS['SUPER_REPEL'] not in bought
+    assert dict(s.items)[ITEMS['MAX_REPEL']] == 3 and s.money > 90000
+
+
 def test_crowded_bag_can_sell_a_booster_but_keeps_key_items():
     from pokesim.policies.strategic import StrategicPolicy
     keys = tuple((ITEMS[name], 1) for name in ('S_S_TICKET', 'HM01', 'LIFT_KEY', 'SILPH_SCOPE',
