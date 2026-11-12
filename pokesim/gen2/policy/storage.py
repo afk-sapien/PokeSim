@@ -1,7 +1,7 @@
 """Rate the PC and choose what the Generation II policy releases or stores."""
 from __future__ import annotations
 
-from pokecore.gen2.ram import Memory
+from pokecore.gen2.state import trainer_id
 from ..menus import Release
 from .state import Goal
 
@@ -23,7 +23,7 @@ class StoragePart:
         """The original trainers whose Pokémon a release may let go: the player and the linked adventures.
         None before the cartridge's memory is attached, which leaves the trainer out of the rules."""
         from ...trade.partners import owners
-        player = Memory(self.memory, self.data).word('wPlayerID') if self.memory is not None else None
+        player = trainer_id(self.memory, self.data.game) if self.memory is not None else None
         return owners(player, self.trade_partners())
 
     def rating_key(self, snapshot):
@@ -103,7 +103,7 @@ class StoragePart:
         room = headroom(snapshot) + (0 if releasing else max(6 - len(snapshot.party), 0))
         if (not (box_wanted(room, releasing) or unequipping) or self.in_league(snapshot) or self.in_transmitter_room(snapshot)
                 or snapshot.map == self.data.map_ids['POKECENTER_2F'] or self.collection.get('time_capsule_restore')
-                or self.collection.get('tower') or mem.byte('wStatusFlags2') & 4):
+                or self.collection.get('tower') or snapshot.bug_contest):
             return None
         if self.storage_target(snapshot) is None and not unequipping:
             return None

@@ -67,7 +67,11 @@ and `egg_cycles` to an egg. `Mon.to_dict(egg_view=True)` and
 with no Pokedex number, name or types. The default keeps the species. A
 `Snapshot` has `enemy_shiny` for a wild opponent, read from the Transform backup
 DVs when a wild Ditto has transformed. It is None when the symbol table has no
-enemy DVs.
+enemy DVs. It also carries world facts that stay out of its equality:
+`bug_contest`, `script_running`, `wild_pending` (the species a script set up),
+`map_music`, `strength`, `map_width` (0 while a map has not loaded) and Crystal's
+`farfetchd_position`, None in Gold and Silver. `gen2.state.trainer_id(memory,
+version)` reads the player's trainer ID alone.
 
 ## Portraits
 

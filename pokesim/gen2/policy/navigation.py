@@ -5,7 +5,7 @@ from dataclasses import replace
 
 from ...runtime.policy import Action
 from ..navigation import DIRS
-from pokecore.gen2.ram import Memory
+from .reads import Reads
 from .state import STUCK_WAITS, Goal
 
 
@@ -14,16 +14,16 @@ class NavigationPart:
 
     STRANDED_LIMIT = 60
 
-    def unloaded(self, snapshot, mem):
+    def unloaded(self, snapshot):
         """Whether the cartridge restarted to its opening while memory still shows the save it read.
 
         The main menu reads the save's party and place to describe it, so the run looks started.
         No map is loaded until Continue, though, and every loaded map has a width. A live Crystal run
         reset in the Battle Tower walked into the blank walls of that unloaded map for hours.
         """
-        return snapshot.started and not snapshot.in_battle and mem.byte('wMapWidth') == 0
+        return snapshot.started and not snapshot.in_battle and snapshot.map_width == 0
 
-    def battle_starting(self, mem):
+    def battle_starting(self, snapshot):
         """Whether the wild battle script has begun while the battle itself has not.
 
         The battle transition draws over the map blocks the plan reads, so a plan made then sees no
@@ -31,7 +31,7 @@ class NavigationPart:
         on that wait through the whole battle, so most of a Gold or Silver postgame hunt was counted
         as waiting. The goal that walked into the battle carries on through it instead.
         """
-        return bool(mem.byte('wScriptRunning') and mem.byte('wTempWildMonSpecies'))
+        return bool(snapshot.script_running and snapshot.wild_pending)
 
     def idle(self, snapshot):
         """Whether the run stands on its clock-wait tile, the moment between two patrol steps.
@@ -213,21 +213,25 @@ class NavigationPart:
         return self.walk(snapshot, memory, [step]) if step else None
 
     def walk(self, snapshot, memory, path):
-        mem = Memory(memory, self.data)
+        # A Tower preparation walks outside a decision, with memory of its own.
+        reads = getattr(self, 'reads', None)
+        if reads is None or reads.memory is not memory:
+            reads = Reads(memory, self.data.game)
         surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
         dx, dy = DIRS[path[0]]
         entry = self.data.maps[snapshot.map]
         nx, ny = snapshot.x + dx, snapshot.y + dy
         cut_tree = (0 <= nx < entry['width'] and 0 <= ny < entry['height']
                     and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in (0x12, 0x1A))
-        water = (surf and mem.byte('wPlayerState') not in (4, 8)
-                 and 0 <= nx < entry['width'] and 0 <= ny < entry['height']
-                 and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in (0x21, 0x29))
+        # The screen state is read last, only for a step onto water.
+        water = (surf and 0 <= nx < entry['width'] and 0 <= ny < entry['height']
+                 and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in (0x21, 0x29)
+                 and reads.ui.movement_state not in (4, 8))
         obstacle = (surf and 0 <= nx < entry['width'] and 0 <= ny < entry['height']
                     and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in ((0x24, 0x2C, 0x33) if path[0] == 'up' else (0x24, 0x2C)))
         if cut_tree or water or obstacle or (nx, ny) in {(x, y) for _, x, y in snapshot.objects}:
             key = (snapshot.map, snapshot.x + dx, snapshot.y + dy)
-            if self.interaction == key and mem.byte('wPlayerDirection') & 12 == {'down': 0, 'up': 4, 'left': 8, 'right': 12}[path[0]]:
+            if self.interaction == key and reads.ui.facing == path[0]:
                 return Action('a', 8, 36)
             self.interaction = key
             return Action(path[0], 8, 16)

@@ -4,9 +4,9 @@ from functools import lru_cache
 
 from .battle import replacement_slot
 from ..planning.stance import HUNT, STORY, TRAIN
-from .navigation import CINNABAR_GYM_DOORS, cinnabar_gate_open
 from .team import readiness
 
+from .. import story
 from ..game_data import current_variant
 from ..planning import league
 from ..planning.readiness import LOSS, PARTNER
@@ -83,6 +83,24 @@ STARTERS = ("bulbasaur", "charmander", "squirtle")
 # Yellow hands every player Pikachu. The adventure never chooses a starter there.
 YELLOW = current_variant() == "yellow"
 GAME_STARTERS = ("pikachu",) if YELLOW else STARTERS
+# The story rows of pokesim/story/gen1.json. Red and Blue share theirs.
+GAME = "yellow" if YELLOW else "red"
+
+
+def step(key, title, reason, help="", row=None, **choices):
+    """The goal for story step ``key`` at the place gen1.json gives it, or at ``row`` of that key."""
+    row = row or story.row(1, GAME, key)
+    if "object" in row:
+        goal = object_goal(key, title, reason, row["map"], story.fill(row["object"], **choices))
+    else:
+        goal = at(key, title, reason, row["map"], row["x"], row["y"], row.get("face"))
+    return replace(goal, help=help) if help else goal
+
+
+def open_row(s, key):
+    """The first place row of ``key`` whose done_when flags are not all set, or None once all are."""
+    return next((row for row in story.rows(1, GAME, key) if "map" in row
+                 and not all(event_set(s.event_flags, flag) for flag in row["done_when"].get("flags", ()))), None)
 
 
 def story_goal(snapshot, starter="bulbasaur", fossil="HELIX_FOSSIL"):
@@ -90,20 +108,18 @@ def story_goal(snapshot, starter="bulbasaur", fossil="HELIX_FOSSIL"):
     has = lambda name: any(item == ITEMS[name] and qty for item, qty in snapshot.items)
     if not event_set(flags, "EVENT_FOLLOWED_OAK_INTO_LAB") and not snapshot.party:
         # Yellow's Oak stops the player one row further north, at the edge of the grass.
-        return at("meet_oak", "Meet Professor Oak", "A starter is needed before leaving town", "PALLET_TOWN", 10, 0 if YELLOW else 1)
+        return step("meet_oak", "Meet Professor Oak", "A starter is needed before leaving town")
     if not snapshot.party and YELLOW:
         # The rival snatches the only Poké Ball on the table and Oak hands over Pikachu instead.
-        return object_goal("starter", "Receive Pikachu", "Oak has one Pokémon left for this adventure",
-                           "OAKS_LAB", "EEVEE_POKE_BALL")
+        return step("starter", "Receive Pikachu", "Oak has one Pokémon left for this adventure")
     if not snapshot.party:
-        return object_goal("starter", "Choose " + starter.title(),
-                           "Meet this adventure's first partner", "OAKS_LAB", starter.upper() + "_POKE_BALL")
+        return step("starter", "Choose " + starter.title(), "Meet this adventure's first partner", starter=starter.upper())
     if not event_set(flags, "EVENT_GOT_POKEDEX"):
         if has("OAKS_PARCEL") or event_set(flags, "EVENT_GOT_OAKS_PARCEL"):
-            return at("pokedex", "Deliver Oak’s parcel", "Obtain the Pokédex and open the northward route", "OAKS_LAB", 5, 3, "up")
-        return at("parcel", "Collect Oak’s parcel", "The Viridian clerk has a delivery for Oak", "VIRIDIAN_MART", 2, 5, "left")
+            return step("pokedex", "Deliver Oak’s parcel", "Obtain the Pokédex and open the northward route")
+        return step("parcel", "Collect Oak’s parcel", "The Viridian clerk has a delivery for Oak")
     if not snapshot.badges & 1:
-        return at("boulder", "Challenge Brock", "Earn the Boulder Badge to continue east", "PEWTER_GYM", 4, 2, "up")
+        return step("boulder", "Challenge Brock", "Earn the Boulder Badge to continue east")
     return campaign_goal(snapshot, fossil)
 
 
@@ -149,7 +165,9 @@ def training_goal(key, title, reason, map_name):
     return Goal("train_" + key, title, reason, tuple(targets), kind=TRAIN)
 
 
-LEAGUE_ROOMS = frozenset(MAPS[name] for name in ("LORELEIS_ROOM", "BRUNOS_ROOM", "AGATHAS_ROOM", "LANCES_ROOM", "CHAMPIONS_ROOM"))
+LEAGUE_TRAINERS = (("league_lorelei", "Lorelei"), ("league_bruno", "Bruno"), ("league_agatha", "Agatha"),
+                   ("league_lance", "Lance"), ("league_rival", "the Champion"))
+LEAGUE_ROOMS = frozenset(MAPS[story.row(1, GAME, key)["map"]] for key, _ in LEAGUE_TRAINERS)
 # Red, Blue and Yellow's bosses for planning/league.py: the gyms in badge order, then the League. The
 # matchup scorer (team.readiness) reads a gym by its badge bit and each League room by a bit from 256.
 # The League rooms share one loss bar, measured against the Champion's ace, and train on Route 23. The
@@ -192,13 +210,11 @@ def boss_training(s, goal, losses):
 
 def gym_goal(s, bit):
     _, key, trainer, gym, obj, *_ = next(g for g in GYMS if g[0] == bit)
-    if key == "volcano":
-        # Each locked door opens after beating the quiz trainer whose text follows the one before.
-        # Super Nerd 2 opens the first door, so the first locked door names the trainer to face.
-        locked = next((i for i in range(len(CINNABAR_GYM_DOORS)) if not cinnabar_gate_open(s.event_flags, i)), None)
-        if locked is not None:
-            return replace(object_goal(key, "Open Blaine's gym doors", "Beat the quiz trainer guarding the next locked door",
-                                       gym, f"SUPER_NERD{locked + 2}"), help=GYM_HELP[key])
+    # Each locked door opens after beating the quiz trainer whose text follows the one before, and
+    # gen1.json names the trainer for each door, so the first locked door names the trainer to face.
+    door = open_row(s, key) if key == "volcano" else None
+    if door is not None:
+        return step(key, "Open Blaine's gym doors", "Beat the quiz trainer guarding the next locked door", GYM_HELP[key], row=door)
     return replace(object_goal(key, f"Challenge {trainer}", f"Use the team's best available matchup against {trainer}", gym, obj),
                    help=GYM_HELP.get(key, "Approach the gym leader and start the battle."))
 
@@ -211,14 +227,17 @@ def teaching_goal(key, title, reason, s):
         held = [species for _, species, _, _ in s.stored_pokemon] or [species for species, _ in s.boxed_pokemon]
         stored = any(move in SPECIES.get(species, {}).get("hms", []) for species in held)
         if stored:
-            targets = tuple((m, 13, 4) for m, w in WORLD.items() if "Pokecenter" in w["name"] and w["width"] == 14)
+            pc = story.place(1, GAME, "party_pc")
+            targets = tuple((m, pc["x"], pc["y"]) for m, w in WORLD.items() if pc["named"] in w["name"] and w["width"] == pc["width"])
             return Goal("party_" + key.removeprefix("teach_"), "Bring a field-move partner onto the team",
-                        "Use Bill’s PC to store a reserve and withdraw a compatible partner", targets, "up", True)
+                        "Use Bill’s PC to store a reserve and withdraw a compatible partner", targets, pc["face"], True)
         lapras = next((sid for sid, d in SPECIES.items() if d.get('name') == 'LAPRAS'), 0)
         # The worker gives one Lapras. A registered Lapras that is no longer held was traded or released.
         if (move in SPECIES.get(lapras, {}).get('hms', []) and SPECIES.get(lapras, {}).get('dex') not in s.owned
                 and event_set(s.event_flags, 'EVENT_BEAT_SILPH_CO_GIOVANNI')):
-            return object_goal("lapras", "Meet the rescued Silph worker", "Accept an accessible Lapras for the missing field move", "SILPH_CO_7F", "SILPH_WORKER_M1")
+            worker = story.place(1, GAME, "lapras")
+            return object_goal("lapras", "Meet the rescued Silph worker", "Accept an accessible Lapras for the missing field move",
+                               worker["map"], worker["object"])
         name = key.removeprefix('teach_')
         # A carrier hunt, as in Gold, Silver and Crystal: it catches a partner for the move and runs
         # from every other wild battle (planner design S5).
@@ -248,8 +267,6 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
     done = lambda name: event_set(s.event_flags, name)
     has = lambda name: any(item == ITEMS[name] and qty for item, qty in s.items)
     knows = lambda move: any(move in p.moves for p in s.party)
-    def obj(key, title, reason, map_name, fragment, help=""):
-        return replace(object_goal(key, title, reason, map_name, fragment), help=help)
     if not s.badges & 2:
         # Everywhere that can be reached before Mt. Moon is cleared. A side project that led back to
         # Viridian Forest used to swap this goal for training on Route 24, which lies beyond the
@@ -258,20 +275,20 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
             ("PALLET", "REDS_HOUSE", "BLUES_HOUSE", "OAKS_LAB", "VIRIDIAN_", "PEWTER_", "MUSEUM", "MT_MOON", "ROUTE_2_", "ROUTE_22"))}
         if (s.map in west or (s.map == MAPS["ROUTE_4"] and s.x < 21)) and not (done("EVENT_GOT_DOME_FOSSIL") or done("EVENT_GOT_HELIX_FOSSIL")):
             if not done("EVENT_BEAT_MT_MOON_EXIT_SUPER_NERD"):
-                return obj("moon_trainer", "Find a way through Mt. Moon", "Defeat the Super Nerd guarding the fossils", "MT_MOON_B2F", "SUPER_NERD")
-            return obj("fossil", "Choose " + fossil.replace('_', ' ').title(), "Collect a fossil to clear the exit toward Cerulean", "MT_MOON_B2F", fossil)
+                return step("moon_trainer", "Find a way through Mt. Moon", "Defeat the Super Nerd guarding the fossils")
+            return step("fossil", "Choose " + fossil.replace('_', ' ').title(), "Collect a fossil to clear the exit toward Cerulean", fossil=fossil)
         return gym_goal(s, 2)
     if not s.badges & 4:
         if not (has("S_S_TICKET") or done("EVENT_GOT_SS_TICKET") or has("HM01") or knows(15)):
             if done("EVENT_USED_CELL_SEPARATOR_ON_BILL"):
-                return obj("ticket", "Collect Bill’s ticket", "Speak to the restored Bill for passage on the S.S. Anne", "BILLS_HOUSE", "BILL_SS_TICKET")
+                return step("ticket", "Collect Bill’s ticket", "Speak to the restored Bill for passage on the S.S. Anne")
             if done("EVENT_BILL_SAID_USE_CELL_SEPARATOR"):
-                return at("bill_pc", "Help Bill out of the machine", "Activate the PC on the left side of Bill’s house", "BILLS_HOUSE", 1, 5, "up")
-            return obj("bill", "Help Bill", "Cross Nugget Bridge and follow Route 25 to Bill’s house", "BILLS_HOUSE", "BILL_POKEMON")
+                return step("bill_pc", "Help Bill out of the machine", "Activate the PC on the left side of Bill’s house")
+            return step("bill", "Help Bill", "Cross Nugget Bridge and follow Route 25 to Bill’s house")
         if not done("EVENT_BEAT_CERULEAN_ROCKET_THIEF"):
-            return obj("rocket_thief", "Open the road south", "Go through the robbed house and defeat the Rocket behind it", "CERULEAN_CITY", "ROCKET", "Leave the robbed house through its rear exit and battle the Rocket. Continue south through the underground path toward Vermilion.")
+            return step("rocket_thief", "Open the road south", "Go through the robbed house and defeat the Rocket behind it", "Leave the robbed house through its rear exit and battle the Rocket. Continue south through the underground path toward Vermilion.")
         if not (has("HM01") or knows(15)):
-            return obj("cut", "Visit the ship’s captain", "Board the S.S. Anne and help its captain to receive Cut", "SS_ANNE_CAPTAINS_ROOM", "CAPTAIN")
+            return step("cut", "Visit the ship’s captain", "Board the S.S. Anne and help its captain to receive Cut")
         if not knows(15):
             return teaching_goal("teach_cut", "Teach Cut to a partner", "Teach HM01 to a compatible partner to open routes blocked by trees.", s)
         return gym_goal(s, 4)
@@ -281,85 +298,75 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
         if not (has("POKE_FLUTE") or done("EVENT_GOT_POKE_FLUTE")):
             if not has("SILPH_SCOPE") and not done("EVENT_RESCUED_MR_FUJI"):
                 if not done("EVENT_FOUND_ROCKET_HIDEOUT"):
-                    if not object_hidden(s, MAPS["GAME_CORNER"], 10):
-                        return obj("poster_guard", "Investigate the guarded poster", "Talk to the Rocket guarding the Game Corner poster", "GAME_CORNER", "ROCKET")
-                    return replace(at("hideout", "Investigate the Game Corner", "Defeat the Rocket and inspect the poster behind him", "GAME_CORNER", 9, 5, "up"), help="Battle the Rocket in front of the poster, then inspect the poster to reveal the stairs.")
+                    # The poster's guard leaves the Game Corner once beaten, which hides his object.
+                    guard = story.row(1, GAME, "poster_guard")["done_when"]["hidden"]
+                    if not all(object_hidden(s, MAPS[name], index) for name, index in guard):
+                        return step("poster_guard", "Investigate the guarded poster", "Talk to the Rocket guarding the Game Corner poster")
+                    return step("hideout", "Investigate the Game Corner", "Defeat the Rocket and inspect the poster behind him", "Battle the Rocket in front of the poster, then inspect the poster to reveal the stairs.")
                 if not has("LIFT_KEY") and not done("EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI"):
                     if not done("EVENT_ROCKET_DROPPED_LIFT_KEY"):
-                        return obj("lift_rocket", "Find the Lift Key", "Defeat the B4F Rocket and speak to him again so he drops the key", "ROCKET_HIDEOUT_B4F", "B4F_ROCKET" if YELLOW else "ROCKET3", "Navigate the hideout’s spin tiles to B4F. Defeat the Rocket in the northwest room and speak to him again.")
-                    return obj("lift_key", "Pick up the Lift Key", "Collect the key dropped by the Rocket", "ROCKET_HIDEOUT_B4F", "LIFT_KEY")
+                        return step("lift_rocket", "Find the Lift Key", "Defeat the B4F Rocket and speak to him again so he drops the key", "Navigate the hideout’s spin tiles to B4F. Defeat the Rocket in the northwest room and speak to him again.")
+                    return step("lift_key", "Pick up the Lift Key", "Collect the key dropped by the Rocket")
                 if not done("EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI"):
                     if s.map != MAPS["ROCKET_HIDEOUT_B4F"] or s.x < 22:
-                        return at("hideout_elevator", "Take the lift to Giovanni’s floor", "Use the Lift Key and choose B4F", "ROCKET_HIDEOUT_ELEVATOR", 1, 2, "up")
-                    if YELLOW and not done("EVENT_BEAT_ROCKET_HIDEOUT_4_JESSIE_JAMES"):
-                        # Jessie and James step out to guard the door when the player reaches this row.
-                        return at("boss_guard", "Open Giovanni’s door", "Defeat Jessie and James in front of the door",
-                                  "ROCKET_HIDEOUT_B4F", 24, 14)
-                    for index in range(0 if YELLOW else 2):
-                        if not done(f"EVENT_BEAT_ROCKET_HIDEOUT_4_TRAINER_{index}"):
-                            return obj("boss_guard", "Open Giovanni’s door", "Defeat both Rockets guarding the door", "ROCKET_HIDEOUT_B4F", f"ROCKET{index + 1}")
-                    return obj("rocket_boss", "Confront Giovanni", "Take the hideout elevator to B4F and defeat Giovanni", "ROCKET_HIDEOUT_B4F", "GIOVANNI", "Use the Lift Key and elevator to reach B4F. Defeat both door guards, then approach Giovanni.")
+                        return step("hideout_elevator", "Take the lift to Giovanni’s floor", "Use the Lift Key and choose B4F")
+                    # Yellow's Jessie and James step out to guard the door when the player reaches their row.
+                    guard = open_row(s, "boss_guard")
+                    if guard is not None:
+                        return step("boss_guard", "Open Giovanni’s door", "Defeat Jessie and James in front of the door"
+                                    if YELLOW else "Defeat both Rockets guarding the door", row=guard)
+                    return step("rocket_boss", "Confront Giovanni", "Take the hideout elevator to B4F and defeat Giovanni", "Use the Lift Key and elevator to reach B4F. Defeat both door guards, then approach Giovanni.")
                 if s.map != MAPS['ROCKET_HIDEOUT_B4F'] or s.x < 22:
-                    return at('hideout_elevator', 'Return for the Silph Scope',
-                              'Take the lift to B4F before collecting the Scope', 'ROCKET_HIDEOUT_ELEVATOR', 1, 2, 'up')
-                return obj("scope", "Collect the Silph Scope", "Pick up the Silph Scope left behind Giovanni", "ROCKET_HIDEOUT_B4F", "SILPH_SCOPE")
+                    return step('hideout_elevator', 'Return for the Silph Scope', 'Take the lift to B4F before collecting the Scope')
+                return step("scope", "Collect the Silph Scope", "Pick up the Silph Scope left behind Giovanni")
             if not done("EVENT_RESCUED_MR_FUJI"):
-                return obj("fuji", "Rescue Mr. Fuji", "Climb Pokémon Tower, resolve the Marowak encounter, and clear the Rockets", "POKEMON_TOWER_7F", "MR_FUJI")
-            return obj("flute", "Collect the Poké Flute", "Speak to Mr. Fuji in his Lavender house", "MR_FUJIS_HOUSE", "MR_FUJI")
+                return step("fuji", "Rescue Mr. Fuji", "Climb Pokémon Tower, resolve the Marowak encounter, and clear the Rockets")
+            return step("flute", "Collect the Poké Flute", "Speak to Mr. Fuji in his Lavender house")
         if not done("EVENT_BEAT_ROUTE12_SNORLAX") and s.map != MAPS["FUCHSIA_CITY"]:
-            return replace(obj("snorlax", "Wake the sleeping roadblock", "Reach Snorlax on Route 12 and play the Poké Flute", "ROUTE_12", "SNORLAX"), help="Stand next to Snorlax, use the Poké Flute from the bag, then let the AI handle the battle.")
+            return step("snorlax", "Wake the sleeping roadblock", "Reach Snorlax on Route 12 and play the Poké Flute", "Stand next to Snorlax, use the Poké Flute from the bag, then let the AI handle the battle.")
         return gym_goal(s, 16)
     if not s.badges & 32:
         if not s.saffron_open:
             if not any(has(n) for n in ("FRESH_WATER", "SODA_POP", "LEMONADE")):
-                return replace(at("guard_drink", "Bring a drink for the Saffron guards", "Buy Fresh Water from a vending machine on the Celadon department store roof", "CELADON_MART_ROOF", 10, 2, "up"), help="Use the rooftop vending machine and buy Fresh Water. Keep it in the bag for the Saffron guard.")
-            return at("saffron_gate", "Open the way into Saffron", "Offer the guard a drink by walking through the gate", "ROUTE_7_GATE", 3, 3)
+                return step("guard_drink", "Bring a drink for the Saffron guards", "Buy Fresh Water from a vending machine on the Celadon department store roof", "Use the rooftop vending machine and buy Fresh Water. Keep it in the bag for the Saffron guard.")
+            return step("saffron_gate", "Open the way into Saffron", "Offer the guard a drink by walking through the gate")
         if not done("EVENT_BEAT_SILPH_CO_GIOVANNI"):
             if not has("CARD_KEY"):
-                return obj("card_key", "Find Silph’s Card Key", "Collect the key in the south corridor on the fifth floor", "SILPH_CO_5F", "CARD_KEY", "Reach the fifth floor’s south corridor. Step onto the nearby warp pad and back to get around the blocking Rocket, then collect the Card Key.")
-            return obj("silph", "Free Silph Co.", "Use the Card Key and warp pads to reach Giovanni on the eleventh floor", "SILPH_CO_11F", "GIOVANNI", "Open the third-floor central door, take its warp to the rival on 7F, then the next pad to 11F. Open the president’s door and defeat Giovanni.")
+                return step("card_key", "Find Silph’s Card Key", "Collect the key in the south corridor on the fifth floor", "Reach the fifth floor’s south corridor. Step onto the nearby warp pad and back to get around the blocking Rocket, then collect the Card Key.")
+            return step("silph", "Free Silph Co.", "Use the Card Key and warp pads to reach Giovanni on the eleventh floor", "Open the third-floor central door, take its warp to the rival on 7F, then the next pad to 11F. Open the president’s door and defeat Giovanni.")
         return gym_goal(s, 32)
     if not (s.badges & 64 and s.badges & 128):
         if not (has("HM03") or knows(57)):
-            return obj("surf", "Find the Safari Zone’s secret house", "Reach the secret house in the west area to receive Surf", "SAFARI_ZONE_SECRET_HOUSE", "FISHING_GURU", "Enter the Safari Zone with room in the bag. Travel east, north, then west to the secret house before the step limit expires.")
+            return step("surf", "Find the Safari Zone’s secret house", "Reach the secret house in the west area to receive Surf", "Enter the Safari Zone with room in the bag. Travel east, north, then west to the secret house before the step limit expires.")
         if not knows(57):
             return teaching_goal("teach_surf", "Teach Surf to a partner", "Teach HM03 to a compatible partner so the team can cross water.", s)
         if not (has("HM04") or knows(70)):
             if not has("GOLD_TEETH"):
-                return obj("teeth", "Find the warden’s Gold Teeth", "Pick up the Gold Teeth near the Safari Zone’s secret house", "SAFARI_ZONE_WEST", "GOLD_TEETH")
-            return obj("strength", "Return the warden’s teeth", "Bring the Gold Teeth to the warden in Fuchsia to receive Strength", "WARDENS_HOUSE", "WARDEN")
+                return step("teeth", "Find the warden’s Gold Teeth", "Pick up the Gold Teeth near the Safari Zone’s secret house")
+            return step("strength", "Return the warden’s teeth", "Bring the Gold Teeth to the warden in Fuchsia to receive Strength")
         if not knows(70):
             return teaching_goal("teach_strength", "Teach Strength to a partner", "Teach HM04 to a compatible partner for the boulders on Victory Road.", s)
     if not s.badges & 64:
         if not has("SECRET_KEY"):
-            return obj("secret_key", "Unlock the Cinnabar gym", "Surf south from Pallet and explore the Pokémon Mansion for the Secret Key", "POKEMON_MANSION_B1F", "SECRET_KEY", "Surf from Pallet to Cinnabar. In the mansion, use the statue switches and the third-floor drop to reach the basement and collect the Secret Key.")
+            return step("secret_key", "Unlock the Cinnabar gym", "Surf south from Pallet and explore the Pokémon Mansion for the Secret Key", "Surf from Pallet to Cinnabar. In the mansion, use the statue switches and the third-floor drop to reach the basement and collect the Secret Key.")
         return gym_goal(s, 64)
     if not s.badges & 128:
         return gym_goal(s, 128)
-    rooms = (
-        ("LORELEIS_ROOM", "LORELEI", "EVENT_BEAT_LORELEIS_ROOM_TRAINER_0", "Lorelei"),
-        ("BRUNOS_ROOM", "BRUNO", "EVENT_BEAT_BRUNOS_ROOM_TRAINER_0", "Bruno"),
-        ("AGATHAS_ROOM", "AGATHA", "EVENT_BEAT_AGATHAS_ROOM_TRAINER_0", "Agatha"),
-        ("LANCES_ROOM", "LANCE", "EVENT_BEAT_LANCE", "Lance"),
-        ("CHAMPIONS_ROOM", "RIVAL", "EVENT_BEAT_CHAMPION_RIVAL", "the Champion"),
-    )
     if done("EVENT_BEAT_CHAMPION_RIVAL") or s.map == MAPS["HALL_OF_FAME"]:
         return Goal("champion", "Kanto Champion", "The team made it to the Hall of Fame", help="You won. Take a moment with the team.")
-    league_maps = {MAPS[r[0]] for r in rooms}
-    if s.map not in league_maps:
-        if s.map != MAPS['INDIGO_PLATEAU_LOBBY']:
-            return at('league_entrance', 'Return to the Pokémon League',
-                      'Begin a new challenge through the lobby, where the game resets the previous attempt',
-                      'INDIGO_PLATEAU_LOBBY', 8, 10)
-        return obj('league_lorelei', 'Challenge Lorelei', 'Start the next League attempt with Lorelei',
-                   'LORELEIS_ROOM', 'LORELEI')
-    current = next(i for i, row in enumerate(rooms) if MAPS[row[0]] == s.map)
-    for i, (room, trainer, flag, title) in enumerate(rooms):
+    if s.map not in LEAGUE_ROOMS:
+        if s.map != MAPS[story.row(1, GAME, 'league_entrance')['map']]:
+            return step('league_entrance', 'Return to the Pokémon League',
+                        'Begin a new challenge through the lobby, where the game resets the previous attempt')
+        return step('league_lorelei', 'Challenge Lorelei', 'Start the next League attempt with Lorelei')
+    rooms = [(key, title, story.row(1, GAME, key)) for key, title in LEAGUE_TRAINERS]
+    current = next(i for i, (*_, row) in enumerate(rooms) if MAPS[row["map"]] == s.map)
+    for i, (key, title, row) in enumerate(rooms):
         if i < current:
             continue
-        if i > current or not done(flag):
-            return obj("league_" + trainer.lower(), f"Challenge {title}", "Advance through the League one battle at a time", room, trainer,
-                       "Use Surf through Route 23 and Strength on Victory Road’s boulder switches. Heal and stock up at Indigo Plateau before entering. Inside the League, continue north after each battle.")
+        if i > current or not all(done(flag) for flag in row["done_when"]["flags"]):
+            return step(key, f"Challenge {title}", "Advance through the League one battle at a time",
+                        "Use Surf through Route 23 and Strength on Victory Road’s boulder switches. Heal and stock up at Indigo Plateau before entering. Inside the League, continue north after each battle.")
 
 
 def journey(snapshot, current):

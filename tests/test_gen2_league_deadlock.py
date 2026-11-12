@@ -7,18 +7,18 @@ reloaded the same save from Karen's room three times and gave up.
 """
 import importlib
 import os
-import pkgutil
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from pokesim.gen2 import collection
-from pokesim.gen2 import policy as policy_module
 from pokesim.gen2.emulator import CANNOT_END, LEAGUE_CHECKPOINT, Emulator
 from pokesim.runtime.supervision import LEAGUE_RESTARTS, Supervisor
 from test_supervision import ladder
-from pokesim.gen2.policy import SUBSTATUS_TRANSFORMED, Policy, transformed
+from pokesim.gen2.policy import Policy, transformed
+from pokesim.gen2.policy.reads import NO_MON
 from pokesim.planning.readiness import DEPTH, STAMINA, Train
 from pokesim.play_clock import PlayClock
 
@@ -52,7 +52,7 @@ DATA = SimpleNamespace(
 def data(request):
     """The moves, species and maps above, then each cartridge's own."""
     if request.param == 'synthetic':
-        return DATA
+        return SimpleNamespace(**vars(DATA), game='crystal')
     directory = os.environ.get('GEN2_DATA_DIR')
     if not directory:
         pytest.skip('Set GEN2_DATA_DIR to generated local game data')
@@ -74,26 +74,23 @@ def lance(party, items=(), in_battle=2):
                            enemy_hp=150, hall_of_fame_count=215)
 
 
-def patch_memory(monkeypatch, memory):
-    """Patch Memory in the policy package and in each of its modules that imports it."""
-    monkeypatch.setattr(policy_module, 'Memory', memory)
-    for info in pkgutil.iter_modules(policy_module.__path__):
-        module = importlib.import_module(f'{policy_module.__name__}.{info.name}')
-        if hasattr(module, 'Memory'):
-            monkeypatch.setattr(module, 'Memory', memory)
+def patch_battlers(monkeypatch, sides):
+    """Have hopeless_battle read ``sides`` as the live battlers."""
+    module = importlib.import_module('pokesim.gen2.policy.battle')
+    monkeypatch.setattr(module, 'Battlers', lambda memory, game: sides)
 
 
 def policy(data):
     fake = SimpleNamespace(data=data)
     fake.move_score = lambda mid, mon, snapshot: Policy.move_score(fake, mid, mon, snapshot)
-    fake.outlasts = lambda snapshot, mem, mon: Policy.outlasts(fake, snapshot, mem, mon)
+    fake.outlasts = lambda snapshot, battlers, mon: Policy.outlasts(fake, snapshot, battlers, mon)
     return fake
 
 
 def test_a_party_with_nothing_but_rest_and_growl_cannot_end_the_battle(data, monkeypatch):
     fake = policy(data)
     fake.memory = object()
-    patch_memory(monkeypatch, lambda memory, data: BattleMemory())
+    patch_battlers(monkeypatch, battlers())
 
     def hopeless(snapshot):
         return Policy.hopeless_battle(fake, snapshot)
@@ -111,24 +108,12 @@ def test_a_party_with_nothing_but_rest_and_growl_cannot_end_the_battle(data, mon
     assert not hopeless(lance((fainted, mon(134, 100, 359, (HYDRO_PUMP, GROWL, 0, 0), (0, 34, 0, 0)))))
 
 
-class BattleMemory:
-    """The few battle bytes the policy reads, with the active Pokémon optionally Transformed.
+def battlers(transformed=False, moves=(SURF, 0, 0, 0), pp=(5, 0, 0, 0), enemy=(WATERFALL, 0, 0, 0)):
+    """Both sides' battlers as pokecore reads them, the player's Gyarados optionally Transformed.
 
-    Every foe stat reads 150, and the foe knows ``enemy`` moves."""
-
-    def __init__(self, active=1, transformed=False, moves=(SURF, 0, 0, 0), pp=(5, 0, 0, 0), enemy=(WATERFALL, 0, 0, 0)):
-        self.bytes = {'wCurBattleMon': active, 'wPlayerSubStatus5': SUBSTATUS_TRANSFORMED if transformed else 0,
-                      'wBattleMonSpecies': GYARADOS}
-        self.lists = {'wBattleMonMoves': moves, 'wBattleMonPP': pp, 'wEnemyMonMoves': enemy}
-
-    def byte(self, name):
-        return self.bytes[name]
-
-    def word(self, name):
-        return 150
-
-    def read(self, name, count):
-        return self.lists[name][:count]
+    Every stat reads 150, and the foe knows ``enemy`` moves."""
+    player = replace(NO_MON, species=GYARADOS, moves=moves, pp=pp, stats=(150,) * 6, transformed=transformed)
+    return SimpleNamespace(player=player, enemy=replace(NO_MON, species=GYARADOS, moves=enemy, stats=(150,) * 6))
 
 
 def ditto(pp=10):
@@ -148,9 +133,9 @@ def test_a_ditto_left_standing_can_still_transform_and_end_the_battle(data, monk
     # Once Transformed it has five PP for each copied move, so Struggle is a few turns away even
     # after its copied attack runs out. Played on, it beat Koga's Crobat this way.
     fake.memory = object()
-    patch_memory(monkeypatch, lambda memory, data: BattleMemory(transformed=True, moves=(REST, 0, 0, 0)))
+    patch_battlers(monkeypatch, battlers(transformed=True, moves=(REST, 0, 0, 0)))
     assert not Policy.hopeless_battle(fake, lance((fainted, vaporeon())))
-    patch_memory(monkeypatch, lambda memory, data: BattleMemory())
+    patch_battlers(monkeypatch, battlers())
     assert Policy.hopeless_battle(fake, lance((fainted, vaporeon())))
 
 
@@ -170,7 +155,7 @@ def test_a_healer_the_foe_outhits_blacks_out_instead_of_reloading(data, monkeypa
     fake = policy(data)
     fake.memory = object()
     fainted = mon(84, 20, 0, (PECK, GROWL, 0, 0), (35, 40, 0, 0))
-    patch_memory(monkeypatch, lambda memory, data: BattleMemory(enemy=(SURF, 0, 0, 0)))
+    patch_battlers(monkeypatch, battlers(enemy=(SURF, 0, 0, 0)))
     assert not Policy.hopeless_battle(fake, chuck((fainted, hoppip())))
     # Vaporeon's Rest wins back a third of 359 HP a turn, more than Surf takes, so it outlasts him.
     assert Policy.hopeless_battle(fake, chuck((fainted, vaporeon())))
@@ -182,8 +167,8 @@ def test_a_healer_the_foe_outhits_blacks_out_instead_of_reloading(data, monkeypa
 
 def test_a_transformed_battler_takes_the_foes_species_moves_and_pp():
     own = ditto()
-    assert transformed(BattleMemory(), own) is own and transformed(None, own) is own
-    fighting = transformed(BattleMemory(transformed=True, pp=(0xC5, 0, 0, 0)), own)
+    assert transformed(battlers().player, own) is own and transformed(None, own) is own
+    fighting = transformed(battlers(transformed=True).player, own)
     assert (fighting.species, fighting.moves, fighting.pp) == (GYARADOS, (SURF, 0, 0, 0), (5, 0, 0, 0))
     assert fighting.stats == (own.stats[0], 150, 150, 150, 150, 150) and fighting.level == 100
 

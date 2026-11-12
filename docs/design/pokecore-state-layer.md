@@ -58,7 +58,7 @@ Slices 8 to 11 change only pokecore, so they can run while slices 3 to 7 wait on
 
 ## 6. Hand-off to phase 3 item 5
 
-`pokesim/gen2/policy/` keeps 72 direct symbol reads. 51 are on the battle side: the enemy and battle mon fields, substatus, screens, Disable and the wrap count. Most of the other 21 are menu, facing and bike state. Since the split, `policy/battle.py` holds 58 of them, `policy/__init__.py` and `policy/navigation.py` 5 each, `policy/storage.py` 2, and `policy/errands.py` and `policy/story.py` 1 each.
+Done. `pokesim/gen2/policy/` kept 72 direct symbol reads, 51 of them on the battle side and most of the other 21 menu, facing and bike state. None are left. Each decision now builds one `policy/reads.Reads`, which reads `read_battle` and `read_ui` when first asked, and the rest are snapshot fields that do not count toward snapshot equality. Modules outside the package that take memory still read it. The tick was measured before and after on three saves, and the per-decision dumps match. The steps it followed:
 
 1. Call `pokecore.state.read_battle(memory, game)` and `read_ui` once per tick, next to the snapshot, and pass the results down. Calling them at each read site would decode both battle structs every time.
 2. Fields the policy reads that `BattleState` or `UiState` lacks, such as substatus, screens, Disable and the last enemy move, are added in pokecore first, each with a test. Gen I fills the same field or leaves it `None` with a written reason.

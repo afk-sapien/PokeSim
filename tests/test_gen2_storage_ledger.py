@@ -335,7 +335,7 @@ def test_release_owners_reads_the_player_and_the_linked_adventures():
 
 def visit(party_size, room):
     from pokesim.gen2.policy import Goal, Policy as Gen2Policy
-    view = SimpleNamespace(party=[mon(None, box=None)] * party_size, stored=[], map=1,
+    view = SimpleNamespace(party=[mon(None, box=None)] * party_size, stored=[], map=1, bug_contest=False,
                            box_counts=(BOX_CAPACITY - room,) + (BOX_CAPACITY,) * 13)
     fake = SimpleNamespace(collection={}, monitor_tables={}, clock=0, in_league=lambda view: False, in_transmitter_room=lambda view: False,
                            data=SimpleNamespace(map_ids={'POKECENTER_2F': 2}), storage_target=lambda view: object(),

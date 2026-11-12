@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
+from battle_fakes import fight, reading
 from pokesim.cartridges import by_version, validate_starter, unpack
 from pokesim.gen2.data import GameData, constants, number
 from pokesim.gen2.navigation import Navigator
@@ -251,7 +252,7 @@ def test_battle_selects_an_available_move_after_disable(real_data):
     snapshot = SimpleNamespace(text='Disabled!', tiles=('Disabled!',), party=[mon], in_battle=2,
                                enemy_species=39, badges=0, owned=set(), can_catch=True, pockets={'balls': []})
     values = {'wCurBattleMon': 0, 'wMenuCursorY': 4, 'wPlayerDisableCount': 72, 'wDisabledMove': 52}
-    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: values.get(name, 0))).button == 'up'
+    assert fight(policy, snapshot, SimpleNamespace(byte=lambda name: values.get(name, 0))).button == 'up'
 
 
 def test_level_up_replacement_preserves_hm_moves(real_data):
@@ -266,7 +267,7 @@ def test_level_up_replacement_preserves_hm_moves(real_data):
     started = []
     # The Core shortcut is tried first. When it is refused, the move list is answered directly.
     policy.battle_task = lambda task, snapshot, mem: started.append(task)
-    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: values.get(name, 0))).button == 'down'
+    assert fight(policy, snapshot, SimpleNamespace(byte=lambda name: values.get(name, 0))).button == 'down'
     assert type(started[0]).__name__ == 'Learn' and started[0].forget in (1, 2, 3)
     assert policy.learn_slot(SimpleNamespace(moves=(15, 57, 70, 148))) == 'keep'
 
@@ -413,7 +414,7 @@ def test_pokedex_number_is_not_mistaken_for_a_tm_menu(real_data):
     snapshot = SimpleNamespace(text='\n'.join(rows), tiles=rows, party=[], in_battle=1,
                                enemy_species=161, owned=set(), can_catch=True,
                                pockets={'balls': [(1, 5)], 'key': []})
-    action = policy.battle(snapshot, SimpleNamespace(byte=lambda name: 3))
+    action = fight(policy, snapshot, SimpleNamespace(byte=lambda name: 3))
     assert action.button == 'a'
 
 
@@ -455,7 +456,7 @@ def test_battle_transition_graphics_do_not_open_the_pack(real_data):
     snapshot = SimpleNamespace(text='\n'.join(rows), tiles=rows, party=[], in_battle=2,
                                enemy_species=161, owned=set(), can_catch=True,
                                pockets={'balls': [(1, 5)], 'key': []})
-    action = policy.battle(snapshot, SimpleNamespace(byte=lambda name: 1))
+    action = fight(policy, snapshot, SimpleNamespace(byte=lambda name: 1))
     assert action.button == 'b' and action.gap >= 48
 
 
@@ -532,7 +533,7 @@ def test_battle_switch_submenu_without_a_shortcut_is_closed(real_data):
                                enemy_species=161, owned=set(), can_catch=True, pockets={'balls': [], 'key': []})
     policy = Policy(real_data)
     policy.needed_move = lambda snapshot: 57
-    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 0)).button == 'b'
+    assert fight(policy, snapshot, SimpleNamespace(byte=lambda name: 0)).button == 'b'
 
 
 def test_refused_switch_text_is_closed(real_data):
@@ -541,7 +542,7 @@ def test_refused_switch_text_is_closed(real_data):
     policy.needed_move = lambda snapshot: 57
     snapshot = SimpleNamespace(text='There is no will to battle!', tiles=(), party=[], in_battle=2,
                                enemy_species=161, owned=set(), can_catch=True, pockets={'balls': []})
-    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 0)).button == 'b'
+    assert fight(policy, snapshot, SimpleNamespace(byte=lambda name: 0)).button == 'b'
 
 
 def test_tyrogue_training_selects_the_actual_stat_branch(real_data):
@@ -635,7 +636,7 @@ def test_fighting_type_move_is_not_the_fight_command_menu(real_data):
                                tiles=(), party=[mon], in_battle=1, enemy_species=74, badges=65535,
                                owned={74}, can_catch=True, pockets={'balls': []})
     mem = SimpleNamespace(byte=lambda name: 4 if name == 'wMenuCursorY' else 0)
-    assert policy.battle(snapshot, mem).button == 'a'
+    assert fight(policy, snapshot, mem).button == 'a'
 
 
 def test_missed_legendary_retry_only_changes_unloaded_encounter_flags(real_data):
@@ -784,10 +785,10 @@ def test_capture_weakening_rejects_a_lethal_lead_move(real_data):
     snapshot = SimpleNamespace(party=(lead, helper), enemy_species=98, enemy_hp=47, enemy_max_hp=47,
                                pockets={'balls': [(real_data.items['POKE_BALL'], 2)]})
     mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: 40)
-    assert policy.capture_move(snapshot, mem) is None
-    assert policy.capture_move(snapshot, mem, slot=1) == 0
+    assert reading(policy, mem).capture_move(snapshot) is None
+    assert reading(policy, mem).capture_move(snapshot, slot=1) == 0
     snapshot.enemy_hp = 15
-    assert policy.capture_move(snapshot, mem, slot=1) is None
+    assert reading(policy, mem).capture_move(snapshot, slot=1) is None
 
 
 def test_ditto_capture_intent_survives_transform_into_an_owned_species(real_data):
@@ -801,7 +802,7 @@ def test_ditto_capture_intent_survives_transform_into_an_owned_species(real_data
         in_battle=1, enemy_species=157, owned={132, 157}, can_catch=True, badges=65535, money=10000,
         pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
     mem = SimpleNamespace(byte=lambda name: 8 if name == 'wEnemySubStatus5' else 1, read=lambda name, size: bytes(size))
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
 
 
 @pytest.mark.parametrize('field,value', [('wEnemySubStatus5', 128), ('wPlayerWrapCount', 2)])
@@ -816,14 +817,14 @@ def test_trapped_partner_does_not_retry_an_impossible_switch(real_data, field, v
         map=real_data.map_ids['SILVER_CAVE_ROOM_2'], in_battle=1, enemy_species=200,
         owned={200}, pockets={'balls': ()})
     mem = SimpleNamespace(byte=lambda name: value if name == field else int(name in {'wMenuCursorX', 'wMenuCursorY'}))
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
 
 
 def test_roamer_capture_does_not_spend_its_turn_switching_to_a_helper(real_data):
     from pokesim.gen2.policy import Policy
     policy = started(Policy(real_data))
     policy.needed_move = lambda snapshot: 0
-    policy.capture_move = lambda snapshot, mem, slot=None: None if slot is None else 0
+    policy.capture_move = lambda snapshot, slot=None: None if slot is None else 0
     policy.move_score = lambda *args: 1
     policy.remedy = lambda *args, **kwargs: False
     mon = SimpleNamespace(species=160, egg=False, hp=300, max_hp=300, level=100, moves=(33,), pp=(30,))
@@ -832,7 +833,7 @@ def test_roamer_capture_does_not_spend_its_turn_switching_to_a_helper(real_data)
         enemy_max_hp=140, enemy_level=40, owned=set(), can_catch=True, badges=65535, money=10000,
         pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
     mem = SimpleNamespace(byte=lambda name: 1 if name in {'wMenuCursorX', 'wMenuCursorY'} else 0)
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['ULTRA_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['ULTRA_BALL'])
 
 
 def test_slow_capture_partner_throws_a_ball_before_the_roamer_flees(real_data):
@@ -843,7 +844,7 @@ def test_slow_capture_partner_throws_a_ball_before_the_roamer_flees(real_data):
     snapshot = SimpleNamespace(party=(helper,), enemy_species=244, enemy_hp=145, enemy_max_hp=145,
         pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
     mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: 100)
-    assert policy.capture_move(snapshot, mem) is None
+    assert reading(policy, mem).capture_move(snapshot) is None
 
 
 def test_faster_roamer_lead_traps_then_sleeps_and_never_paralyzes(real_data):
@@ -856,15 +857,15 @@ def test_faster_roamer_lead_traps_then_sleeps_and_never_paralyzes(real_data):
         pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
     memory = {'wEnemyMonSpeed': 97}
     mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: memory.get(name, 0))
-    assert policy.capture_move(snapshot, mem) == 1
+    assert reading(policy, mem).capture_move(snapshot) == 1
     memory['wPlayerSubStatus5'] = 128
-    assert policy.capture_move(snapshot, mem) == 2
+    assert reading(policy, mem).capture_move(snapshot) == 2
     memory['wEnemyMonStatus'] = 3
-    assert policy.capture_move(snapshot, mem) is None
+    assert reading(policy, mem).capture_move(snapshot) is None
     # Without a sleep move the lead throws balls rather than paralyzing or hitting the beast.
     memory['wEnemyMonStatus'] = 0
     lead.pp = (20, 5, 0, 15)
-    assert policy.capture_move(snapshot, mem) is None
+    assert reading(policy, mem).capture_move(snapshot) is None
 
 
 def test_roamer_lead_is_the_cheapest_sleeper_that_outspeeds_the_beasts(real_data):
@@ -897,7 +898,7 @@ def test_last_balls_are_available_for_one_time_encounters(real_data, species, th
     snapshot = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
         in_battle=1, enemy_species=species, owned=set(), can_catch=True, badges=4, money=0,
         pockets={'balls': [(real_data.items['POKE_BALL'], 1)]})
-    button = policy.battle(snapshot, SimpleNamespace(byte=lambda name: 1)).button
+    button = fight(policy, snapshot, SimpleNamespace(byte=lambda name: 1)).button
     assert button == (('Throw', real_data.items['POKE_BALL']) if throw else 'a')
 
 
@@ -1787,16 +1788,16 @@ def test_tower_recovers_only_when_healing_can_outpace_damage(real_data):
     values = {'wBattleMonHP': 100, 'wBattleMonMaxHP': 300}
     moves = bytearray([33, 0, 0, 0])
     mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: values.get(name, 30), read=lambda *args: bytes(moves))
-    assert policy.recovery_move(snapshot, mem, mon, [(40, 1)]) == 0
+    assert reading(policy, mem).recovery_move(snapshot, mon, [(40, 1)]) == 0
     disabled = SimpleNamespace(byte=lambda name: {'wPlayerDisableCount': 1, 'wDisabledMove': 105}.get(name, 0))
-    assert policy.recovery_move(snapshot, disabled, mon, [(40, 1)]) is None
-    assert policy.recovery_move(snapshot, mem, mon, [(200, 1)]) is None
+    assert reading(policy, disabled).recovery_move(snapshot, mon,[(40, 1)]) is None
+    assert reading(policy, mem).recovery_move(snapshot, mon, [(200, 1)]) is None
     values['wEnemyMonAttack'] = 999
     snapshot.enemy_level = 100
     moves[0] = 38
-    assert policy.recovery_move(snapshot, mem, mon, [(40, 1)]) is None
+    assert reading(policy, mem).recovery_move(snapshot, mon, [(40, 1)]) is None
     values['wBattleMonHP'] = 290
-    assert policy.recovery_move(snapshot, mem, mon, [(40, 1)]) is None
+    assert reading(policy, mem).recovery_move(snapshot, mon, [(40, 1)]) is None
 
 
 def test_exp_share_goes_to_training_partner_after_storage_retrieval(real_data):
@@ -1872,16 +1873,16 @@ def test_tower_toxic_targets_healthy_bulky_opponents(real_data):
     snapshot = SimpleNamespace(enemy_species=143, enemy_hp=365)
     mem = SimpleNamespace(byte=lambda name: 0)
     options = [(0, 1), (60, 2)]
-    assert policy.poison_move(snapshot, mem, mon, options) == 1
+    assert reading(policy, mem).poison_move(snapshot, mon, options) == 1
     snapshot.enemy_species = 208
-    assert policy.poison_move(snapshot, mem, mon, options) is None
+    assert reading(policy, mem).poison_move(snapshot, mon, options) is None
     snapshot.enemy_species = 89
-    assert policy.poison_move(snapshot, mem, mon, options) is None
+    assert reading(policy, mem).poison_move(snapshot, mon, options) is None
     snapshot.enemy_species, snapshot.enemy_hp = 143, 60
-    assert policy.poison_move(snapshot, mem, mon, options) is None
+    assert reading(policy, mem).poison_move(snapshot, mon, options) is None
     snapshot.enemy_hp = 365
-    assert policy.poison_move(snapshot, SimpleNamespace(byte=lambda name: 8), mon, options) is None
-    assert policy.poison_move(snapshot, mem, mon, [(60, 2)]) is None
+    assert reading(policy, SimpleNamespace(byte=lambda name: 8)).poison_move(snapshot, mon, options) is None
+    assert reading(policy, mem).poison_move(snapshot, mon, [(60, 2)]) is None
 
 
 def test_tower_trains_an_evolution_to_cover_shared_weaknesses(real_data):
@@ -1907,7 +1908,7 @@ def test_recover_can_outpace_damage_between_two_fifths_and_half_hp(real_data):
     snapshot = SimpleNamespace(enemy_species=143, enemy_level=70, enemy_hp=365)
     values = {'wBattleMonHP': 100, 'wBattleMonMaxHP': 245, 'wBattleMonDefense': 205, 'wEnemyMonAttack': 217}
     mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: values.get(name, 30), read=lambda *args: bytes([157, 0, 0, 0]))
-    assert policy.recovery_move(snapshot, mem, mon, [(50, 2)]) == 0
+    assert reading(policy, mem).recovery_move(snapshot, mon, [(50, 2)]) == 0
 
 
 def test_tower_switches_away_from_a_lethal_fighting_matchup(real_data):
@@ -1922,15 +1923,15 @@ def test_tower_switches_away_from_a_lethal_fighting_matchup(real_data):
     stats = {'wEnemyMonMaxHP': 230, 'wEnemyMonAttack': 250, 'wEnemyMonDefense': 170,
              'wEnemyMonSpeed': 140, 'wEnemyMonSpclAtk': 110, 'wEnemyMonSpclDef': 160}
     mem = SimpleNamespace(byte=lambda name: 0, word=stats.__getitem__, read=lambda *args: bytes([238, 0, 0, 0]))
-    assert policy.tower_switch(snapshot, mem, 0) == 2
-    assert policy.tower_switch(snapshot, mem, 2) is None
+    assert reading(policy, mem).tower_switch(snapshot, 0) == 2
+    assert reading(policy, mem).tower_switch(snapshot, 2) is None
     snapshot.enemy_hp = 40
     party[0].stats = (*party[0].stats[:3], 150, *party[0].stats[4:])
-    assert policy.tower_switch(snapshot, mem, 0) is None
+    assert reading(policy, mem).tower_switch(snapshot, 0) is None
     party[0].status = 64
-    assert policy.tower_switch(snapshot, mem, 0) == 2
+    assert reading(policy, mem).tower_switch(snapshot, 0) == 2
     party[1].hp = party[2].hp = 1
-    assert policy.tower_switch(snapshot, mem, 0) is None
+    assert reading(policy, mem).tower_switch(snapshot, 0) is None
 
 
 def test_boxed_tower_partner_with_an_hm_can_breed_its_missing_baby(real_data):
@@ -1961,9 +1962,9 @@ def test_tower_uses_poison_against_counter_and_recovery(real_data):
              'wEnemyMonSpeed': 143, 'wEnemyMonSpclAtk': 166, 'wEnemyMonSpclDef': 250}
     status = [0]
     mem = SimpleNamespace(byte=lambda name: status[0], word=stats.__getitem__, read=lambda *args: bytes([68, 135, 247, 85]))
-    assert policy.tower_switch(snapshot, mem, 0) == 1
+    assert reading(policy, mem).tower_switch(snapshot, 0) == 1
     status[0] = 8
-    assert policy.recovery_move(snapshot, mem, lugia, [(15, 2)]) == 0
+    assert reading(policy, mem).recovery_move(snapshot, lugia, [(15, 2)]) == 0
 
 
 def test_tower_damage_estimate_uses_the_opponents_actual_defense(real_data):
@@ -1972,7 +1973,7 @@ def test_tower_damage_estimate_uses_the_opponents_actual_defense(real_data):
     mon = SimpleNamespace(species=248, level=70, stats=(268, 250, 205, 150, 190, 190))
     snapshot = SimpleNamespace(enemy_species=242, enemy_level=70, enemy_hp=495)
     values = {'wEnemyMonDefense': 80, 'wEnemyMonSpclDef': 250}
-    observed = policy.battle_target(snapshot, SimpleNamespace(word=values.__getitem__))
+    observed = reading(policy, SimpleNamespace(word=values.__getitem__)).battle_target(snapshot)
     assert policy.move_score(157, mon, observed) < policy.move_score(157, mon, snapshot) / 2
 
 
@@ -2234,33 +2235,33 @@ def test_static_legendary_is_slept_then_chipped_and_never_paralyzed(real_data):
     memory = {}
     mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: memory.get(name, 120),
                           read=lambda name, size: memory.get(name, (0,) * size))
-    assert policy.capture_move(snapshot, mem) == 1
+    assert reading(policy, mem).capture_move(snapshot) == 1
     # Asleep, it cannot Recover, so a weak hit with no KO risk brings it toward half HP.
     memory['wEnemyMonStatus'] = 3
-    assert policy.capture_move(snapshot, mem) == 2
+    assert reading(policy, mem).capture_move(snapshot) == 2
     # With one or two sleep turns left, a ball beats another chip.
     memory['wEnemyMonStatus'] = 2
-    assert policy.capture_move(snapshot, mem) is None
+    assert reading(policy, mem).capture_move(snapshot) is None
     memory['wEnemyMonStatus'] = 3
     snapshot.enemy_hp = 70
-    assert policy.capture_move(snapshot, mem) is None
+    assert reading(policy, mem).capture_move(snapshot) is None
     # Awake again: sleep it again before anything else, even below half HP.
     memory['wEnemyMonStatus'] = 0
-    assert policy.capture_move(snapshot, mem) == 1
+    assert reading(policy, mem).capture_move(snapshot) == 1
     # Safeguard blocks sleep, and a 3/256 throw is mostly a wasted ball: chip or stall until it drops.
     memory['wEnemyScreens'] = 4
     snapshot.enemy_hp = 141
-    assert policy.capture_move(snapshot, mem) == 2
+    assert reading(policy, mem).capture_move(snapshot) == 2
     # Lugia casts Safeguard again as it ends, so Disable it while it is the last move used.
     lead.moves, lead.pp = (86, 47, 33, 50), (20, 15, 35, 20)
     memory['wLastEnemyMove'] = 219  # Safeguard
-    assert policy.capture_move(snapshot, mem) == 3
+    assert reading(policy, mem).capture_move(snapshot) == 3
     memory['wEnemyDisableCount'] = 4
-    assert policy.capture_move(snapshot, mem) == 2
+    assert reading(policy, mem).capture_move(snapshot) == 2
     # With no sleeper left, an awake Lugia Recovers any chip: throw.
     memory['wEnemyScreens'], lead.pp = 0, (20, 0, 35, 20)
     memory['wEnemyMonMoves'] = (177, 219, 16, 105)  # Aeroblast, Safeguard, Gust, Recover
-    assert policy.capture_move(snapshot, mem) is None
+    assert reading(policy, mem).capture_move(snapshot) is None
 
 
 def test_static_legendary_awake_brings_in_the_sleeper(real_data):
@@ -2280,10 +2281,10 @@ def test_static_legendary_awake_brings_in_the_sleeper(real_data):
     mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: 120,
                           read=lambda name, size: memory.get(name, (0,) * size))
     started(policy)
-    assert policy.battle(snapshot, mem).button == ('Send', 1)
+    assert fight(policy, snapshot, mem).button == ('Send', 1)
     # Once it sleeps, no switch to a chipper: switching would spend a sleep turn.
     memory['wEnemyMonStatus'], snapshot.enemy_hp = 5, 141
-    assert policy.battle(snapshot, mem).button[0] != 'Send'
+    assert fight(policy, snapshot, mem).button[0] != 'Send'
 
 
 def test_master_ball_waits_for_the_roaming_beasts(real_data):
@@ -2613,7 +2614,7 @@ def shiny_battle(real_data, species, *, in_battle=1, shiny=True, owned=None, mon
     return SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
         in_battle=in_battle, enemy_species=species, enemy_shiny=shiny, owned={species} if owned is None else owned,
         can_catch=True, badges=4, money=money, enemy_hp=40, enemy_max_hp=40, enemy_level=20, roamers=(),
-        event=lambda name: False,
+        event=lambda name: False, bug_contest=False,
         pockets={'balls': [(real_data.items[name], count) for name, count in balls]})
 
 
@@ -2625,10 +2626,10 @@ def test_a_shiny_wild_mon_is_caught_even_when_owned_or_low_on_money(real_data, s
     policy.capture_move = lambda *args: None
     policy.remedy = lambda *args, **kwargs: False
     snapshot = shiny_battle(real_data, species, money=money, balls=balls)
-    button = policy.battle(snapshot, SimpleNamespace(byte=lambda name: 1)).button
+    button = fight(policy, snapshot, SimpleNamespace(byte=lambda name: 1)).button
     assert button == ('Throw', real_data.items['POKE_BALL'])
     snapshot.enemy_shiny = False
-    assert policy.battle(snapshot, SimpleNamespace(byte=lambda name: 1)).button != ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, SimpleNamespace(byte=lambda name: 1)).button != ('Throw', real_data.items['POKE_BALL'])
 
 
 def test_a_shiny_trainer_mon_is_not_a_catch_target(real_data):
@@ -2681,7 +2682,7 @@ def test_scripted_uncatchable_shiny_does_not_retry_forbidden_escape(real_data, b
     snapshot.party = (_shiny_lead(),)
     mem = SimpleNamespace(byte=lambda name: battle_type if name == 'wBattleType' else 0,
                           word=lambda name: 0, read=lambda name, size: bytes(size))
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
     assert policy.shiny_missed == 'no balls'
 
 
@@ -2885,15 +2886,15 @@ def test_an_uncatchable_shiny_is_run_from_not_knocked_out(real_data, can_catch, 
     snapshot.can_catch, snapshot.party = can_catch, (_shiny_lead(),)
     bytes_ = {}
     mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), word=lambda name: 0, read=lambda name, size: bytes(size))
-    assert policy.battle(snapshot, mem).button == ('Flee',)
+    assert fight(policy, snapshot, mem).button == ('Flee',)
     assert policy.shiny_missed == why
     # A Mean Look or a wrap forbids running, so the turn is fought instead.
     bytes_['wEnemySubStatus5'] = 128
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
     # A plain opponent is fought as before, and no notice is due.
     bytes_.clear()
     snapshot.enemy_shiny = False
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
     assert policy.shiny_missed is None
 
 
@@ -2906,13 +2907,11 @@ def test_a_catchable_shiny_and_a_contest_shiny_are_not_run_from(real_data):
     snapshot = shiny_battle(real_data, 130)
     snapshot.party = (_shiny_lead(),)
     mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: 0, read=lambda name, size: bytes(size))
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
     assert policy.shiny_missed is None
     # Park Balls never sit in the ball pocket: the contest has its own rules and is not run from here.
-    snapshot.pockets = {'balls': []}
-    contest = SimpleNamespace(byte=lambda name: 4 if name == 'wStatusFlags2' else 0, word=lambda name: 0,
-                              read=lambda name, size: bytes(size))
-    assert policy.battle(snapshot, contest).button != ('Flee',)
+    snapshot.pockets, snapshot.bug_contest = {'balls': []}, True
+    assert fight(policy, snapshot, mem).button != ('Flee',)
     assert policy.shiny_missed is None
 
 
@@ -2959,21 +2958,21 @@ def test_postgame_searches_flee_plain_battles_and_catch_their_species(real_data)
                'started': 0, 'shinies': 0}
     policy.collection['postgame'] = {'activity': session, 'searches': {}, 'shiny_maps': []}
     # The session alone no longer runs: the goal under way decides.
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
     policy.goal = Goal('postgame_hunt', 'Look for shiny Pokémon in Route 36', 'ROUTE_36', 5, 5, kind=HUNT)
-    assert policy.battle(snapshot, mem).button == ('Flee',) and policy.shiny_missed is None
+    assert fight(policy, snapshot, mem).button == ('Flee',) and policy.shiny_missed is None
     # A trap that forbids running leaves the turn to be fought.
     bytes_['wEnemySubStatus5'] = 128
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
     bytes_.clear()
     # A shiny met deep into a search still gets its capture attempt.
     session['encounters'] = 100
     snapshot.enemy_shiny = True
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
     snapshot.enemy_shiny = False
     policy.collection['postgame']['activity'] = {'kind': 'quality', 'species': 19, 'row': session['row'],
                                                  'started': 0, 'seen': [], 'caught': 0}
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
 
 
 def test_the_walk_to_olivine_for_the_battle_tower_flees_plain_wild_battles(real_data):
@@ -2990,23 +2989,23 @@ def test_the_walk_to_olivine_for_the_battle_tower_flees_plain_wild_battles(real_
     mem = SimpleNamespace(byte=lambda name: bytes_.get(name, 0), word=lambda name: 0, read=lambda name, size: bytes(size))
     from pokesim.planning.stance import TRAVEL
     policy.goal = Goal('heal', 'Restore the team at a Pokémon Center', 'INDIGO_PLATEAU_POKECENTER_1F', 5, 6)
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
     # The goal's kind decides, never its key.
     policy.goal = Goal('tower_travel', 'Travel to Olivine before preparing the Tower team', 'OLIVINE_POKECENTER_1F', 5, 6)
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
     policy.goal = Goal('tower_travel', 'Travel to Olivine before preparing the Tower team', 'OLIVINE_POKECENTER_1F', 5, 6,
                        kind=TRAVEL)
-    assert policy.battle(snapshot, mem).button == ('Flee',)
+    assert fight(policy, snapshot, mem).button == ('Flee',)
     policy.fleeing = False
     # A trap that forbids running leaves the turn to be fought.
     bytes_['wEnemySubStatus5'] = 128
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
     bytes_.clear()
     # A species the run still wants, or a shiny, is caught on the way.
     snapshot.owned = set()
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
     snapshot.owned, snapshot.enemy_shiny = {19}, True
-    assert policy.battle(snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
 
 
 def _stance_battle(real_data):
@@ -3029,7 +3028,7 @@ def test_each_goal_kind_meets_a_plain_wild_battle_its_own_way(real_data, kind, b
     from pokesim.gen2.policy import Goal
     policy, snapshot, mem, _ = _stance_battle(real_data)
     policy.goal = Goal('goal', 'A goal', 'ROUTE_37', 5, 5, kind=kind)
-    assert policy.battle(snapshot, mem).button == button
+    assert fight(policy, snapshot, mem).button == button
 
 
 def test_a_goal_whose_hp_or_pp_is_spent_runs_before_it_reaches_its_destination(real_data):
@@ -3038,16 +3037,16 @@ def test_a_goal_whose_hp_or_pp_is_spent_runs_before_it_reaches_its_destination(r
     policy, snapshot, mem, _ = _stance_battle(real_data)
     policy.goal = Goal('heal', 'Restore the team at a Pokémon Center', 'ROUTE_36', 5, 5)
     snapshot.party = (SimpleNamespace(**{**vars(_shiny_lead()), 'hp': 72}),)
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
     snapshot.party = (SimpleNamespace(**{**vars(_shiny_lead()), 'hp': 71}),)
-    assert policy.battle(snapshot, mem).button == ('Flee',)
+    assert fight(policy, snapshot, mem).button == ('Flee',)
     policy.fleeing = False
     snapshot.party = (SimpleNamespace(**{**vars(_shiny_lead()), 'pp': (0, 0, 0, 0)}),)
-    assert policy.battle(snapshot, mem).button == ('Flee',)
+    assert fight(policy, snapshot, mem).button == ('Flee',)
     policy.fleeing = False
     # Training spends HP and PP on purpose, so it fights until the heal walk takes over.
     policy.goal = Goal('collection_train', 'Train', 'ROUTE_36', 5, 5, kind='train')
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
 
 
 def test_a_hunt_runs_twice_then_fights_a_battle_it_cannot_escape(real_data):
@@ -3056,11 +3055,11 @@ def test_a_hunt_runs_twice_then_fights_a_battle_it_cannot_escape(real_data):
     from pokesim.planning.stance import HUNT
     policy, snapshot, mem, _ = _stance_battle(real_data)
     policy.goal = Goal('collection_hunt', 'Look for MON in Route 36', 'ROUTE_36', 5, 5, kind=HUNT)
-    assert policy.battle(snapshot, mem).button == ('Flee',)
+    assert fight(policy, snapshot, mem).button == ('Flee',)
     policy.menu = None
-    assert policy.battle(snapshot, mem).button == ('Flee',)
+    assert fight(policy, snapshot, mem).button == ('Flee',)
     policy.menu = None
-    assert policy.battle(snapshot, mem).button == ('Attack', 0)
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
     assert (policy.flee_tries, policy.flees) == (2, {'attempts': 2, 'failures': 2})
 
 
@@ -3070,7 +3069,7 @@ def test_a_shiny_the_run_cannot_catch_is_run_from_whatever_the_goal(real_data):
     policy, snapshot, mem, _ = _stance_battle(real_data)
     snapshot.enemy_shiny, snapshot.pockets = True, {'balls': []}
     policy.goal = Goal('collection_train', 'Train', 'ROUTE_36', 5, 5, kind=TRAIN)
-    assert policy.battle(snapshot, mem).button == ('Flee',) and policy.shiny_missed == 'no balls'
+    assert fight(policy, snapshot, mem).button == ('Flee',) and policy.shiny_missed == 'no balls'
 
 
 def test_every_hunt_goal_is_a_hunt_and_the_old_flee_rules_are_gone():

@@ -273,6 +273,18 @@ class Snapshot:
     step_count: int = 0
     happiness_cycle: int = 0
     enemy_shiny: bool | None = False
+    # World facts the policy reads each tick. They stay out of equality, so two snapshots of the
+    # same game state still compare equal while the music or a script flag changes. bug_contest is
+    # wStatusFlags2 bit 2, script_running is wScriptRunning, wild_pending is the species a script
+    # set up in wTempWildMonSpecies, strength is wBikeFlags bit 0, and map_width is 0 while a map
+    # has not loaded. farfetchd_position is Crystal's Ilex Forest Farfetch'd, None in Gold and Silver.
+    bug_contest: bool = field(default=False, compare=False)
+    script_running: bool = field(default=False, compare=False)
+    wild_pending: int = field(default=0, compare=False)
+    map_music: int = field(default=0, compare=False)
+    farfetchd_position: int | None = field(default=None, compare=False)
+    strength: bool = field(default=False, compare=False)
+    map_width: int | None = field(default=None, compare=False)
 
     @property
     def started(self):
@@ -464,4 +476,9 @@ def read_snapshot(memory, data, frame=0, *, cache=True):
                     daycare=daycare, egg_ready=bool(mem.byte('wDayCareMan') & 64),
                     breeding_compatible=bool(mem.byte('wDayCareMan') & 32), roamers=tuple(roamers),
                     step_count=mem.byte('wStepCount'), happiness_cycle=mem.byte('wHappinessStepCount'),
-                    enemy_shiny=_enemy_shiny(mem, battle))
+                    enemy_shiny=_enemy_shiny(mem, battle), bug_contest=bool(mem.byte('wStatusFlags2') & 4),
+                    script_running=bool(mem.byte('wScriptRunning')), wild_pending=mem.byte('wTempWildMonSpecies'),
+                    map_music=mem.byte('wMapMusic'),
+                    farfetchd_position=(mem.byte('wFarfetchdPosition') if 'wFarfetchdPosition' in data.symbols
+                                        else None),
+                    strength=bool(mem.byte('wBikeFlags') & 1), map_width=mem.byte('wMapWidth'))

@@ -1,50 +1,48 @@
-"""Kanto story objectives selected from cartridge progress flags."""
+"""Kanto story objectives selected from cartridge progress flags.
+
+Where each step happens is in pokesim/story/gen2.json. The order of the steps stays here.
+"""
 
 
 def journey(policy, snapshot, mem, Goal):
-    person = lambda key, label, area, script: policy.person(snapshot, key, label, area, script)
+    step = lambda key, title: policy.story_step(snapshot, key, title)
     name = policy.data.maps[snapshot.map]['constant']
     if not snapshot.event('EVENT_GOT_SS_TICKET_FROM_ELM'):
-        return person('ticket', 'Receive the S.S. Aqua ticket', 'ELMS_LAB', 'ProfElmScript')
+        return step('ticket', 'Receive the S.S. Aqua ticket')
     if not mem.byte('wPokegearFlags') & 2:
-        return person('radio_card', 'Get the Pokégear Radio Card', 'RADIO_TOWER_1F', 'RadioTower1FRadioCardWomanScript')
+        return step('radio_card', 'Get the Pokégear Radio Card')
     if not snapshot.event('EVENT_FAST_SHIP_FIRST_TIME'):
         if not name.startswith('FAST_SHIP'):
-            return person('board_ship', 'Board the S.S. Aqua for Kanto', 'OLIVINE_PORT', 'OlivinePortSailorAtGangwayScript')
+            return step('board_ship', 'Board the S.S. Aqua for Kanto')
         if not snapshot.event('EVENT_FAST_SHIP_INFORMED_ABOUT_LAZY_SAILOR'):
-            return person('ship_sailor', 'Help the crew find the missing sailor', 'FAST_SHIP_B1F', 'FastShipB1FSailorScript')
+            return step('ship_sailor', 'Help the crew find the missing sailor')
         if not snapshot.event('EVENT_FAST_SHIP_LAZY_SAILOR'):
-            return person('wake_sailor', 'Wake the sailor in his cabin', 'FAST_SHIP_CABINS_NNW_NNE_NE', 'FastShipLazySailorScript')
+            return step('wake_sailor', 'Wake the sailor in his cabin')
         if not snapshot.event('EVENT_FAST_SHIP_FOUND_GIRL'):
-            return person('find_girl', 'Find the missing granddaughter', 'FAST_SHIP_CABINS_SE_SSE_CAPTAINS_CABIN', 'SSAquaGranddaughterBefore')
-        return person('leave_ship', 'Disembark in Vermilion City', 'FAST_SHIP_1F', 'FastShip1FSailor1Script')
+            return step('find_girl', 'Find the missing granddaughter')
+        return step('leave_ship', 'Disembark in Vermilion City')
     policy.completed.setdefault('kanto', snapshot.frame)
-    for mask, key, area, script in [
-        (1024, 'surge', 'VERMILION_GYM', 'VermilionGymSurgeScript'),
-        (8192, 'sabrina', 'SAFFRON_GYM', 'SaffronGymSabrinaScript'),
-        (2048, 'erika', 'CELADON_GYM', 'CeladonGymErikaScript'),
-        (4096, 'janine', 'FUCHSIA_GYM', 'FuchsiaGymJanineScript'),
-    ]:
+    for mask, key in [(1024, 'surge'), (8192, 'sabrina'), (2048, 'erika'), (4096, 'janine')]:
         if not snapshot.badges & mask:
-            return person(key, f'Challenge {key.title()}', area, script)
+            return step(key, f'Challenge {key.title()}')
         policy.completed.setdefault(key, snapshot.frame)
     if not snapshot.event('EVENT_MET_MANAGER_AT_POWER_PLANT'):
-        return person('power_plant', 'Investigate the Power Plant theft', 'POWER_PLANT', 'PowerPlantManager')
+        return step('power_plant', 'Investigate the Power Plant theft')
     if not snapshot.event('EVENT_MET_ROCKET_GRUNT_AT_CERULEAN_GYM'):
-        return Goal('cerulean_rocket', 'Investigate Cerulean Gym', 'CERULEAN_GYM', 4, 12)
+        return step('cerulean_rocket', 'Investigate Cerulean Gym')
     if not snapshot.event('EVENT_ROUTE_24_ROCKET'):
-        return person('rocket_part', 'Find the Rocket on Nugget Bridge', 'ROUTE_24', 'Route24RocketScript')
+        return step('rocket_part', 'Find the Rocket on Nugget Bridge')
     if not snapshot.event('EVENT_FOUND_MACHINE_PART_IN_CERULEAN_GYM'):
-        return Goal('machine_part', 'Recover the missing Machine Part', 'CERULEAN_GYM', 3, 9, 'up')
+        return step('machine_part', 'Recover the missing Machine Part')
     if not snapshot.event('EVENT_RETURNED_MACHINE_PART'):
-        return person('restore_power', 'Restore power to Kanto', 'POWER_PLANT', 'PowerPlantManager')
+        return step('restore_power', 'Restore power to Kanto')
     if snapshot.event('EVENT_TRAINERS_IN_CERULEAN_GYM'):
-        return Goal('find_misty', 'Find Misty on Route 25', 'ROUTE_25', 42, 6)
+        return step('find_misty', 'Find Misty on Route 25')
     if not snapshot.badges & 512:
-        return person('misty', 'Challenge Misty', 'CERULEAN_GYM', 'CeruleanGymMistyScript')
+        return step('misty', 'Challenge Misty')
     if not mem.byte('wPokegearFlags') & 8:
-        return person('expansion', 'Receive the Kanto radio expansion', 'LAV_RADIO_TOWER_1F', 'LavRadioTower1FGentlemanScript')
-    snorlax = Goal('snorlax', 'Wake Snorlax with the Poké Flute channel', 'VERMILION_CITY', 36, 8, 'left')
+        return step('expansion', 'Receive the Kanto radio expansion')
+    snorlax = step('snorlax', 'Wake Snorlax with the Poké Flute channel')
     if not snapshot.event('EVENT_FOUGHT_SNORLAX'):
         return snorlax
     if not snapshot.event('EVENT_VERMILION_CITY_SNORLAX'):
@@ -53,19 +51,19 @@ def journey(policy, snapshot, mem, Goal):
         if goal is not None:
             return goal or snorlax
     if not snapshot.badges & 256:
-        return person('brock', 'Challenge Brock', 'PEWTER_GYM', 'PewterGymBrockScript')
+        return step('brock', 'Challenge Brock')
     if not snapshot.badges & 16384:
-        return person('blaine', 'Challenge Blaine', 'SEAFOAM_GYM', 'SeafoamGymBlaineScript')
+        return step('blaine', 'Challenge Blaine')
     if snapshot.event('EVENT_VIRIDIAN_GYM_BLUE'):
-        return person('find_blue', 'Invite Blue back to his Gym', 'CINNABAR_ISLAND', 'CinnabarIslandBlue')
+        return step('find_blue', 'Invite Blue back to his Gym')
     if not snapshot.badges & 32768:
-        return person('blue', 'Challenge Blue', 'VIRIDIAN_GYM', 'ViridianGymBlueScript')
+        return step('blue', 'Challenge Blue')
     policy.completed.setdefault('sixteen_badges', snapshot.frame)
     if not snapshot.event('EVENT_OPENED_MT_SILVER'):
-        return person('oak', 'Show Professor Oak all sixteen badges', 'OAKS_LAB', 'Oak')
+        return step('oak', 'Show Professor Oak all sixteen badges')
     if 'red' not in policy.completed and not snapshot.event('EVENT_RED_IN_MT_SILVER'):
         goal = red_funding(policy, snapshot, Goal)
-        return goal or person('red', 'Challenge Red on Mt. Silver', 'SILVER_CAVE_ROOM_3', 'Red')
+        return goal or step('red', 'Challenge Red on Mt. Silver')
     policy.completed.setdefault('red', snapshot.frame)
     from .collection import journey as collect
     return collect(policy, snapshot, mem, Goal)

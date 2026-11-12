@@ -17,7 +17,8 @@ SYMBOLS = {'wPartyCount': 1, 'wPartySpecies': 7, 'wPartyMons': 288, 'wPartyMonNi
            'wJohtoBadges': 1, 'wKantoBadges': 1, 'wMoney': 3, 'wCoins': 2, 'wEnemyMonSpecies': 1,
            'wEnemyMonLevel': 1, 'wEnemyMonHP': 2, 'wEnemyMonMaxHP': 2, 'wTrainerClass': 1, 'wBattleType': 1,
            'wGameTimeHours': 2, 'wGameTimeMinutes': 1, 'wGameTimeSeconds': 1, 'wHallOfFameCount': 1,
-           'wStepCount': 1, 'wHappinessStepCount': 1}
+           'wStepCount': 1, 'wHappinessStepCount': 1, 'wStatusFlags2': 1, 'wScriptRunning': 1,
+           'wTempWildMonSpecies': 1, 'wMapMusic': 1, 'wBikeFlags': 1, 'wMapWidth': 1}
 
 
 def synthetic_data():

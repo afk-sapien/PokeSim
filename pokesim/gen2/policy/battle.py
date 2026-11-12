@@ -8,9 +8,9 @@ from types import SimpleNamespace
 from ...planning.ledger import LEARN_KEPT
 from ...planning.stance import FLEE, STORY, Encounter, stance
 from ...runtime.policy import Action
-from pokecore.gen2.ram import Memory
 from pokecore.gen2.screens import ScreenText, mask_roster
 from ..menus import Attack, Flee, Lead, Learn, Send, Throw
+from .reads import Battlers
 
 # The wPlayerSubStatus5 bit the battle engine sets while the player's Pokémon is Transformed.
 SUBSTATUS_TRANSFORMED = 8
@@ -23,22 +23,18 @@ HEALING_MOVES = frozenset({'EFFECT_HEAL', 'EFFECT_MORNING_SUN', 'EFFECT_SYNTHESI
                            'EFFECT_LEECH_SEED'})
 # What long_odds answers when a catch should run and wait for a new move, member or ball.
 LEAVE = 'leave'
-# The bit the cartridge's loadwildmon script command sets in wBattleScriptFlags for the battle it starts.
-SCRIPTED_BATTLE = 0x80
 
 
-def transformed(mem, mon):
+def transformed(player, mon):
     """The active Pokémon as it fights. After Transform it has the foe's species, stats and moves.
 
-    The party record keeps a Transformed Ditto's own Transform, so judging it by the party alone
-    saw a level 100 Ditto with no attack at all.
+    ``player`` is the player's battler. The party record keeps a Transformed Ditto's own Transform,
+    so judging it by the party alone saw a level 100 Ditto with no attack at all.
     """
-    if mem is None or mon is None or not mem.byte('wPlayerSubStatus5') & SUBSTATUS_TRANSFORMED:
+    if player is None or mon is None or not player.transformed:
         return mon
-    stats = (mon.stats[0],) + tuple(mem.word(name) for name in (
-        'wBattleMonAttack', 'wBattleMonDefense', 'wBattleMonSpeed', 'wBattleMonSpclAtk', 'wBattleMonSpclDef'))
-    return replace(mon, species=mem.byte('wBattleMonSpecies'), moves=tuple(mem.read('wBattleMonMoves', 4)),
-                   pp=tuple(value & 63 for value in mem.read('wBattleMonPP', 4)), stats=stats)
+    return replace(mon, species=player.species, moves=tuple(player.moves), pp=tuple(player.pp),
+                   stats=(mon.stats[0],) + tuple(player.stats[1:]))
 
 
 class BattlePart:
@@ -58,9 +54,11 @@ class BattlePart:
         text = ScreenText(snapshot.text)
         if snapshot.tiles and '\n'.join(snapshot.tiles) == text:
             text = ScreenText('\n'.join(mask_roster(snapshot.tiles)))
-        opponent = self.battle_target(snapshot, mem) if self.collection.get('tower') else snapshot
+        reads = self.reads
+        battle, player, enemy = reads.battle, reads.player, reads.enemy
+        opponent = self.battle_target(snapshot) if self.collection.get('tower') else snapshot
         # The native capture routine restores transformed wild opponents as Ditto.
-        catch_species = 132 if mem.byte('wEnemySubStatus5') & 8 else snapshot.enemy_species
+        catch_species = 132 if enemy.transformed else snapshot.enemy_species
         needed = self.needed_move(snapshot)
         partner = (not any(needed in self.data.species[mon.species]['machines'] for mon in snapshot.party if not mon.egg)
                    and needed in self.data.species.get(catch_species, {}).get('machines', []))
@@ -75,11 +73,11 @@ class BattlePart:
             # A wild carrier is caught only for the trade item it holds, never as one more copy.
             from ..collection import item_hunts
             carried = item_hunts(self, snapshot).get(catch_species)
-            own_rule = bool(carried) and mem.byte('wEnemyMonItem') == carried
+            own_rule = bool(carried) and enemy.held_item == carried
         if catch_species == 201:
             # Each Unown letter counts separately in the Unown Pokédex, so catch every missing letter.
             from ..collection import unown_letter, unown_missing
-            own_rule |= unown_letter(mem.read('wEnemyMonDVs', 2)) in unown_missing(self, snapshot)
+            own_rule |= unown_letter(enemy.shown_dvs) in unown_missing(self, snapshot)
         # A wild shiny is always caught, an owned species too. Trainers' Pokémon never count.
         shiny = self.wild_shiny(snapshot)
         # A peer's request, a postgame better-DV hunt and a returned Pokémon catch an owned species only
@@ -89,7 +87,7 @@ class BattlePart:
         from ..release import keeps_another
         upgrade = (snapshot.in_battle == 1 and catch_species in snapshot.owned and not (partner or shiny or own_rule)
                    and bool(requested or catch_species == quality_species(self) or catch_species in self.returned)
-                   and keeps_another(self, snapshot, catch_species, dvs=wild_dvs(mem.read('wEnemyMonDVs', 2))))
+                   and keeps_another(self, snapshot, catch_species, dvs=wild_dvs(enemy.shown_dvs)))
         if (snapshot.in_battle == 1 and catch_species in self.returned and catch_species in {243, 244, 245, 249, 250, 251}
                 and catch_species in snapshot.owned and not (upgrade or partner or shiny or own_rule)):
             # Close the return so neither the plan nor the retry timers bring back a refused legendary.
@@ -105,29 +103,31 @@ class BattlePart:
             # The last free slot is kept for an upgrade. Any other catch takes it only when a release can
             # follow, and a missing entry refused asks the owner for help (boxes_full).
             from ..release import reserve_allows
-            catch = reserve_allows(self, snapshot, catch_species, lambda: wild_dvs(mem.read('wEnemyMonDVs', 2)))
+            catch = reserve_allows(self, snapshot, catch_species, lambda: wild_dvs(enemy.shown_dvs))
             self.boxes_full = not catch and catch_species not in snapshot.owned
         elif catch:
             self.boxes_full = False
         # A shiny that cannot be caught is run from, as Red, Blue and Yellow do, never knocked out.
         # The Bug-Catching Contest uses Park Balls and has its own rules in contest.control.
         self.shiny_missed = (self.shiny_miss_reason(snapshot)
-                             if shiny and not catch and not mem.byte('wStatusFlags2') & 4 else None)
-        weaken = self.capture_move(snapshot, mem) if catch else None
+                             if shiny and not catch and not snapshot.bug_contest else None)
+        weaken = self.capture_move(snapshot) if catch else None
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
-        trapped = bool(mem.byte('wEnemySubStatus5') & 128 or mem.byte('wPlayerWrapCount'))
+        trapped = battle.trapped
         # Scripted trap, red Gyarados, Celebi and Suicune battles forbid escape even without Mean Look.
-        can_escape = not trapped and mem.byte('wBattleType') not in {7, 9, 11, 12}
+        can_escape = not trapped and battle.battle_type not in {7, 9, 11, 12}
         # Core shortcuts pick moves, balls and switches. Any pack or party submenu still open
         # here belongs to no running shortcut, so it is closed.
         if 'SWITCH' in text and 'STATS' in text:
             return Action('b', 8, 32)
-        pocket = mem.byte('wCurPocket')
+        # The screen state costs more than the screen text, so the pocket is read last.
         if ('QUIT' in text or '×' in text
                 or ('CANCEL' in text or '▶' in text or '▷' in text)
-                and (pocket == 3 and any(re.match(r'(?:H[1-7]|\d{2})[ ▶▷]', row[5:]) for row in snapshot.tiles)
-                     or pocket == 2 and any(self.data.item_names.get(item, '').upper() in text
-                                            for item, _ in snapshot.pockets.get('key', ())))
+                and (any(re.match(r'(?:H[1-7]|\d{2})[ ▶▷]', row[5:]) for row in snapshot.tiles)
+                     and reads.ui.pocket == 'tms_hms'
+                     or any(self.data.item_names.get(item, '').upper() in text
+                            for item, _ in snapshot.pockets.get('key', ()))
+                     and reads.ui.pocket == 'key_items')
                 or 'CANCEL' in text and '/' not in text and 'ABLE' not in text):
             return Action('b')
         if any(row.startswith('ぐげござ') for row in snapshot.tiles[:2]):
@@ -137,7 +137,7 @@ class BattlePart:
         if 'no will' in text:
             return Action('b', 8, 48)
         if 'CANCEL' in text and '/' in text and 'TYPE' not in text:
-            active = min(mem.byte('wCurBattleMon'), max(0, len(snapshot.party) - 1))
+            active = min(battle.player_slot, max(0, len(snapshot.party) - 1))
             if snapshot.party and snapshot.party[active].hp:
                 return Action('b')
             target = max((i for i, mon in enumerate(snapshot.party) if mon.hp and not mon.egg),
@@ -147,21 +147,21 @@ class BattlePart:
             action = self.battle_task(Send(target), snapshot, mem)
             if action:
                 return action
-            cursor = mem.byte('wMenuCursorY')
+            cursor = reads.ui.menu_cursor[1]
             return Action('a' if target + 1 == cursor else 'down' if cursor < target + 1 else 'up')
         if 'FIGHT' in text and 'TYPE' not in text:
             action = self.stance_flee(snapshot, mem, catch=catch, shiny=shiny, escape=can_escape)
             if action:
                 return action
-            active = mem.byte('wCurBattleMon')
+            active = battle.player_slot
             switch = None
             # A static legendary only ever calls for the sleeper, and only while it is awake and
             # unguarded: a switch costs a sleep turn that a ball would use better.
             static = self.static_legend(snapshot)
-            sleepable = static and not mem.byte('wEnemyMonStatus') and not mem.byte('wEnemyScreens') & 4
+            sleepable = static and not enemy.status and 'safeguard' not in battle.enemy_screens
             if (catch and not roaming and not trapped and (partner or shiny or snapshot.enemy_species in {245, 249, 250, 251})
                     and weaken is None and (sleepable if static else snapshot.enemy_hp > snapshot.enemy_max_hp // 2)):
-                candidates = [(self.capture_move(snapshot, mem, slot=i), i)
+                candidates = [(self.capture_move(snapshot, slot=i), i)
                               for i, mon in enumerate(snapshot.party)
                               if i != active and not mon.egg and mon.hp > mon.max_hp // 2
                               and (partner or mon.level * 2 >= snapshot.enemy_level)]
@@ -170,7 +170,7 @@ class BattlePart:
                         snapshot.party[row[1]].moves[row[0]], {}).get('effect') == 'EFFECT_SLEEP']
                 switch = next((i for move, i in candidates if move is not None), None)
             if catch and weaken is None and switch is None and not (partner or trapped):
-                odds = self.long_odds(snapshot, mem, catch_species, active, escape=can_escape)
+                odds = self.long_odds(snapshot, catch_species, active, escape=can_escape)
                 if odds == LEAVE:
                     # Nobody can weaken it, so the balls are kept and the species waits for a new
                     # move, member or ball (planning.throws). A refused run fights the battle out.
@@ -183,8 +183,8 @@ class BattlePart:
                 else:
                     switch = odds
             if switch is None and not catch and not trapped and self.collection.get('tower'):
-                switch = self.tower_switch(snapshot, mem, active)
-            fighters = [transformed(mem, mon) if index == active else mon for index, mon in enumerate(snapshot.party)]
+                switch = self.tower_switch(snapshot, active)
+            fighters = [transformed(player, mon) if index == active else mon for index, mon in enumerate(snapshot.party)]
             scores = [max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
                       if mon.hp and not mon.egg else 0 for mon in fighters]
             if (switch is None and not catch and not trapped and scores
@@ -195,7 +195,7 @@ class BattlePart:
             action = switch is not None and self.battle_task(Send(switch), snapshot, mem)
             if action:
                 return action
-            if self.constant(snapshot) != 'BATTLE_TOWER_BATTLE_ROOM' and self.remedy(snapshot, active=mem.byte('wCurBattleMon')):
+            if self.constant(snapshot) != 'BATTLE_TOWER_BATTLE_ROOM' and self.remedy(snapshot, active=battle.player_slot):
                 return Action(None, 0, 24)
             self.learning = False
             if (roaming and not catch and can_escape and snapshot.in_battle == 1
@@ -211,8 +211,8 @@ class BattlePart:
                 action = ball is not None and self.battle_task(Throw(ball), snapshot, mem)
                 if action:
                     return action
-            mon = transformed(mem, snapshot.party[min(active, len(snapshot.party) - 1)]) if snapshot.party else None
-            move = weaken if catch and weaken is not None else self.move_choice(snapshot, mem, mon, opponent, None) if mon else None
+            mon = transformed(player, snapshot.party[min(active, len(snapshot.party) - 1)]) if snapshot.party else None
+            move = weaken if catch and weaken is not None else self.move_choice(snapshot, mon, opponent, None) if mon else None
             if move is None and mon and not any(mon.pp):
                 move = 0  # FIGHT with no PP left is Struggle, which the Core shortcut runs.
             action = move is not None and self.battle_task(Attack(move), snapshot, mem)
@@ -220,21 +220,22 @@ class BattlePart:
                 return action
             # No move has PP (Struggle) or the game refused the shortcut, so FIGHT is pressed and
             # the move list below picks the move. The cartridge remembers this cursor between turns.
-            if mem.byte('wMenuCursorX') > 1:
+            column, row = reads.ui.menu_cursor
+            if column > 1:
                 return Action('left')
-            if mem.byte('wMenuCursorY') > 1:
+            if row > 1:
                 return Action('up')
             return Action('a')
         if any(phrase in text for phrase in ('trying to learn', 'Which move', 'HM moves', 'Forget an')):
             self.learning = True
             if snapshot.party:
                 action = self.battle_task(Learn(self.learn_slot(snapshot.party[min(
-                    mem.byte('wCurPartyMon'), len(snapshot.party) - 1)])), snapshot, mem)
+                    reads.ui.party_slot, len(snapshot.party) - 1)])), snapshot, mem)
                 if action:
                     return action
         if ('TYPE/' in text or 'Disabled!' in text or 'No PP' in text or 'TYPE' in text and '/' in text
                 or self.learning and '▶' in text and 'Which move' in text):
-            slot = min(mem.byte('wCurPartyMon' if self.learning else 'wCurBattleMon'), max(0, len(snapshot.party) - 1))
+            slot = min(reads.ui.party_slot if self.learning else battle.player_slot, max(0, len(snapshot.party) - 1))
             if snapshot.party:
                 mon = snapshot.party[slot]
                 if self.learning:
@@ -244,9 +245,9 @@ class BattlePart:
                         return Action('b')
                     target = forget + 1
                 else:
-                    move = self.move_choice(snapshot, mem, transformed(mem, mon), opponent, weaken)
+                    move = self.move_choice(snapshot, transformed(player, mon), opponent, weaken)
                     target = 1 if move is None else move + 1
-                cursor = mem.byte('wMenuCursorY')
+                cursor = reads.ui.menu_cursor[1]
                 if cursor != target:
                     return Action('down' if cursor < target else 'up', 8, 40)
             return Action('a', 8, 40)
@@ -269,7 +270,7 @@ class BattlePart:
         """Lugia, Ho-Oh and Crystal's Tin Tower Suicune: catch rate 3, met once at a fixed spot."""
         return snapshot.enemy_species in {249, 250} or snapshot.enemy_species == 245 and self.data.game == 'crystal'
 
-    def static_capture_move(self, snapshot, mem, mon):
+    def static_capture_move(self, snapshot, mon):
         """Sleep first, then chip a sleeping legendary to half HP without the risk of a KO.
 
         In Gen II only sleep and freeze raise the catch chance (+10 on a catch rate of 3, against at
@@ -278,8 +279,10 @@ class BattlePart:
         Safeguard is up the balls wait: Disable the Safeguard, else chip or stall until it drops.
         """
         usable = [(index, self.data.moves.get(move, {})) for index, move in enumerate(mon.moves) if mon.pp[index]]
-        status = mem.byte('wEnemyMonStatus')
-        guarded = mem.byte('wEnemyScreens') & 4  # SCREENS_SAFEGUARD
+        battle = self.reads.battle
+        enemy = self.reads.enemy
+        status = enemy.status
+        guarded = 'safeguard' in battle.enemy_screens
         types = self.data.species[snapshot.enemy_species]['types']
         sleeper = not status and self.party_sleeper(snapshot)
         if not status and not guarded:
@@ -290,13 +293,13 @@ class BattlePart:
             if sleeper:
                 return None
         if guarded and sleeper:
-            last = self.data.moves.get(mem.byte('wLastEnemyMove'), {}).get('effect')
-            if last == 'EFFECT_SAFEGUARD' and not mem.byte('wEnemyDisableCount'):
+            last = self.data.moves.get(enemy.last_move, {}).get('effect')
+            if last == 'EFFECT_SAFEGUARD' and enemy.disabled_move is None:
                 disable = next((index for index, entry in usable if entry.get('effect') == 'EFFECT_DISABLE'), None)
                 if disable is not None:
                     return disable
         elif not status and any(self.data.moves.get(move, {}).get('effect') in {'EFFECT_HEAL', 'EFFECT_MORNING_SUN'}
-                                for move in mem.read('wEnemyMonMoves', 4)):
+                                for move in enemy.moves):
             return None  # Recover undoes the chip, so throw.
         # Each sleep turn spent chipping is a throw lost (13/256 asleep), while half HP adds about 2/256
         # per throw, so chip only while plenty of sleep remains (the low bits count the turns left).
@@ -315,7 +318,7 @@ class BattlePart:
             if not hits:
                 continue
             special = entry['type'] >= 20
-            defense = mem.word('wEnemyMonSpclDef' if special else 'wEnemyMonDefense')
+            defense = enemy.stats[5 if special else 2]
             attack = mon.stats[4 if special else 1]
             factor = 1.5 if entry['type'] in self.data.species[mon.species]['types'] else 1
             for kind in set(types):
@@ -377,7 +380,7 @@ class BattlePart:
 
     def battle_task(self, task, snapshot, mem):
         """Start a Core battle shortcut now, or return None when the game refused it recently."""
-        if not self.allowed(task, snapshot) or mem.byte('wBattleType') == 3:
+        if not self.allowed(task, snapshot) or self.reads.battle.battle_type == 3:
             # Battle type 3 is the catching tutorial, which takes no input from the player.
             return None
         self.menu = task
@@ -407,21 +410,23 @@ class BattlePart:
         if snapshot.in_battle != 2:
             return False
         from ..champion_shop import elixir
-        memory = getattr(self, 'memory', None)
-        mem = Memory(memory, self.data) if memory is not None else None
-        if mem is not None and mem.byte('wPlayerSubStatus5') & SUBSTATUS_TRANSFORMED:
-            # A Transformed battler has five PP for each borrowed move, so Struggle is never far off.
-            return False
         standing = [mon for mon in snapshot.party if mon.hp and not mon.egg]
         if not standing or any(not any(mon.pp) or elixir(self.data, snapshot, mon) for mon in standing):
             return False
-        if not any(self.outlasts(snapshot, mem, mon) for mon in standing):
+        # The emulator asks between presses, so the battlers come from live memory, not one decision's reads.
+        memory = getattr(self, 'memory', None)
+        battlers = Battlers(memory, self.data.game) if memory is not None else None
+        if not any(self.outlasts(snapshot, battlers, mon) for mon in standing):
+            return False
+        if battlers.player.transformed:
+            # A Transformed battler has five PP for each borrowed move, so Struggle is never far off.
+            # Only a healer that outlasts the foe gets this far, so the battlers were read for it.
             return False
         return not any(pp and (self.move_score(move, mon, snapshot) > 0
                                or self.data.moves.get(move, {}).get('effect') in BORROWED_MOVES)
                        for mon in standing for move, pp in zip(mon.moves, mon.pp))
 
-    def outlasts(self, snapshot, mem, mon):
+    def outlasts(self, snapshot, battlers, mon):
         """Whether ``mon`` wins back more HP each turn than the foe's best hit takes from it.
 
         Rest heals fully and then sleeps two turns, so it wins back a third of the maximum each turn.
@@ -432,9 +437,10 @@ class BattlePart:
         """
         heals = [(move, self.data.moves[move]['effect']) for move, pp in zip(mon.moves, mon.pp)
                  if pp and self.data.moves.get(move, {}).get('effect') in HEALING_MOVES]
-        if not heals or mem is None:
+        if not heals or battlers is None:
             return False
-        stats = tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef'))
+        foe = battlers.enemy
+        stats = foe.stats
         grass = GRASS in self.data.species.get(snapshot.enemy_species, {}).get('types', ())
 
         def heal(move, effect):
@@ -446,16 +452,16 @@ class BattlePart:
         enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=stats)
         target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
             enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
-        hit = max((self.move_score(move, enemy, target) for move in mem.read('wEnemyMonMoves', 4)), default=0)
+        hit = max((self.move_score(move, enemy, target) for move in foe.moves), default=0)
         return hit < max(heal(move, effect) for move, effect in heals)
 
-    def move_choice(self, snapshot, mem, mon, opponent, weaken):
+    def move_choice(self, snapshot, mon, opponent, weaken):
         """The move slot to use this turn, or None when no move has PP."""
+        disabled = self.reads.player.disabled_move
         options = [(self.move_score(move, mon, opponent), index)
-                   for index, move in enumerate(mon.moves) if move and mon.pp[index]
-                   and not (mem.byte('wPlayerDisableCount') and move == mem.byte('wDisabledMove'))]
+                   for index, move in enumerate(mon.moves) if move and mon.pp[index] and move != disabled]
         if self.collection.get('tower'):
-            reflected = {self.data.moves.get(move, {}).get('effect') for move in mem.read('wEnemyMonMoves', 4)}
+            reflected = {self.data.moves.get(move, {}).get('effect') for move in self.reads.enemy.moves}
             options = [(score * (0.1 if score < snapshot.enemy_hp
                         and ('EFFECT_COUNTER' if self.data.moves[mon.moves[index]]['type'] < 20
                              else 'EFFECT_MIRROR_COAT') in reflected else 1), index)
@@ -468,8 +474,8 @@ class BattlePart:
                 options = [(score * (0.25 if mon.pp[index] <= 5
                                     and self.data.moves[mon.moves[index]]['type'] != 0 else 1), index)
                            for score, index in options]
-        recovery = self.recovery_move(snapshot, mem, mon, options) if self.collection.get('tower') else None
-        poison = self.poison_move(snapshot, mem, mon, options) if self.collection.get('tower') else None
+        recovery = self.recovery_move(snapshot, mon, options) if self.collection.get('tower') else None
+        poison = self.poison_move(snapshot, mon, options) if self.collection.get('tower') else None
         for choice in (recovery, poison, weaken):
             if choice is not None:
                 return choice
@@ -492,7 +498,7 @@ class BattlePart:
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
         return master + regular if roaming else regular + master
 
-    def long_odds(self, snapshot, mem, species, active, *, escape):
+    def long_odds(self, snapshot, species, active, *, escape):
         """What a catch does when its battler cannot weaken the target and the next throw is under
         1 in 10 (planning.throws): the slot of a party member that can weaken it, LEAVE when nobody can
         and the target is untouched, or None to throw.
@@ -504,20 +510,19 @@ class BattlePart:
         """
         from ...planning.throws import GEN2_BALLS, THROW_BAR, gen2_throw
         from ..ledger import ONE_CHANCE
-        if (self.wild_shiny(snapshot) or species in ONE_CHANCE or mem.byte('wStatusFlags2') & 4
-                or mem.byte('wBattleScriptFlags') & SCRIPTED_BATTLE):
+        if self.wild_shiny(snapshot) or species in ONE_CHANCE or snapshot.bug_contest or self.reads.battle.from_script:
             return None
         held = {self.data.item_names.get(item, '').casefold() for item, count in snapshot.pockets['balls'] if count}
         ball = next((label for label in self.ball_labels(snapshot) if label.casefold() in held), None)
         if ball is None:
             return None
         rate, multiplier = self.data.species[species]['catch_rate'], GEN2_BALLS.get(ball, 1)
-        chance = gen2_throw(rate, multiplier, snapshot.enemy_hp, snapshot.enemy_max_hp, mem.byte('wEnemyMonStatus'))
+        enemy = self.reads.enemy
+        chance = gen2_throw(rate, multiplier, snapshot.enemy_hp, snapshot.enemy_max_hp, enemy.status)
         if chance >= THROW_BAR:
             return None
-        foe = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level,
-            stats=tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef')))
-        attacks = [move for move in mem.read('wEnemyMonMoves', 4) if move]
+        foe = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=enemy.stats)
+        attacks = [move for move in enemy.moves if move]
         for slot, mon in enumerate(snapshot.party):
             if slot == active or mon.egg or mon.hp <= mon.max_hp // 2:
                 continue
@@ -527,32 +532,33 @@ class BattlePart:
                                      enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
             if max((self.move_score(move, foe, target) for move in attacks), default=0) >= mon.hp:
                 continue
-            move = self.capture_move(snapshot, mem, slot=slot)
+            move = self.capture_move(snapshot, slot=slot)
             if move is not None and self.data.moves.get(mon.moves[move], {}).get('effect') != 'EFFECT_PARALYZE':
                 return slot
         untouched = chance <= gen2_throw(rate, multiplier, snapshot.enemy_max_hp, snapshot.enemy_max_hp, 0)
         return LEAVE if escape and untouched else None
 
-    def capture_move(self, snapshot, mem, slot=None):
+    def capture_move(self, snapshot, slot=None):
         master = self.data.items['MASTER_BALL']
         if (dict(snapshot.pockets['balls']).get(master) and (self.ball_labels(snapshot)[0] == 'MASTER BALL'
                 or not any(item != master and count for item, count in snapshot.pockets['balls']))):
             return None
         if not snapshot.party:
             return None
-        mon = snapshot.party[min(mem.byte('wCurBattleMon') if slot is None else slot, len(snapshot.party) - 1)]
+        mon = snapshot.party[min(self.reads.battle.player_slot if slot is None else slot, len(snapshot.party) - 1)]
+        enemy = self.reads.enemy
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
-        if roaming and mon.stats[3] // (4 if mon.status & 64 else 1) <= mem.word('wEnemyMonSpeed'):
+        if roaming and mon.stats[3] // (4 if mon.status & 64 else 1) <= enemy.stats[3]:
             return None
         if roaming:
             # Beasts flee after a faster lead moves unless the lead has Mean Looked them or they sleep.
             # Sleep is also the only status that raises the Gen II catch rate, so never paralyze or hit.
             usable = [(index, self.data.moves.get(move, {})) for index, move in enumerate(mon.moves) if mon.pp[index]]
-            if not mem.byte('wPlayerSubStatus5') & 128:
+            if not self.reads.player.holds_foe:
                 trap = next((index for index, entry in usable if entry.get('effect') == 'EFFECT_MEAN_LOOK'), None)
                 if trap is not None:
                     return trap
-            if not mem.byte('wEnemyMonStatus'):
+            if not enemy.status:
                 sleep = [(entry['accuracy'], index) for index, entry in usable if entry.get('effect') == 'EFFECT_SLEEP'
                          and all(self.data.matchups.get((entry['type'], kind), 1)
                                  for kind in self.data.species[snapshot.enemy_species]['types'])]
@@ -560,8 +566,8 @@ class BattlePart:
                     return max(sleep)[1]
             return None
         if self.static_legend(snapshot):
-            return self.static_capture_move(snapshot, mem, mon)
-        if not mem.byte('wEnemyMonStatus'):
+            return self.static_capture_move(snapshot, mon)
+        if not enemy.status:
             for index, move in enumerate(mon.moves):
                 entry = self.data.moves.get(move, {})
                 if (mon.pp[index] and entry.get('effect') in {'EFFECT_SLEEP', 'EFFECT_PARALYZE'}
@@ -576,7 +582,7 @@ class BattlePart:
             if not mon.pp[index] or not entry.get('power') or entry.get('effect') not in {'EFFECT_NORMAL_HIT', 'EFFECT_FALSE_SWIPE'}:
                 continue
             special = entry['type'] >= 20
-            defense = mem.word('wEnemyMonSpclDef' if special else 'wEnemyMonDefense')
+            defense = enemy.stats[5 if special else 2]
             attack = mon.stats[4 if special else 1]
             factor = 1.5 if entry['type'] in self.data.species[mon.species]['types'] else 1
             for kind in set(self.data.species[snapshot.enemy_species]['types']):
@@ -586,10 +592,10 @@ class BattlePart:
                 options.append((damage, index))
         return max(options)[1] if options else None
 
-    def battle_target(self, snapshot, mem):
+    def battle_target(self, snapshot):
+        enemy = self.reads.enemy
         return SimpleNamespace(enemy_species=snapshot.enemy_species, enemy_level=snapshot.enemy_level,
-            enemy_hp=snapshot.enemy_hp, enemy_defense=mem.word('wEnemyMonDefense'),
-            enemy_special_defense=mem.word('wEnemyMonSpclDef'))
+            enemy_hp=snapshot.enemy_hp, enemy_defense=enemy.stats[2], enemy_special_defense=enemy.stats[5])
 
     def level_lead(self, snapshot):
         """Move the highest-level Pokémon to the front when the lead lags well behind it."""
@@ -645,13 +651,13 @@ class BattlePart:
         best = max(healthy, key=lambda i: snapshot.party[i].level, default=None)
         return best if best is not None and snapshot.party[best].level > mon.level else None
 
-    def tower_switch(self, snapshot, mem, active):
+    def tower_switch(self, snapshot, active):
         if active >= len(snapshot.party):
             return None
-        enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level,
-            stats=tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef')))
-        moves = mem.read('wEnemyMonMoves', 4)
-        opponent = self.battle_target(snapshot, mem)
+        foe = self.reads.enemy
+        enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=foe.stats)
+        moves = foe.moves
+        opponent = self.battle_target(snapshot)
         rows = []
         for slot, mon in enumerate(snapshot.party):
             if not mon.hp or mon.egg:
@@ -666,7 +672,7 @@ class BattlePart:
             return None
         healing = any(self.data.moves.get(move, {}).get('effect') in {'EFFECT_HEAL', 'EFFECT_MORNING_SUN',
                       'EFFECT_MOONLIGHT', 'EFFECT_SYNTHESIS', 'EFFECT_REST'} for move in moves)
-        if (healing and not mem.byte('wEnemyMonStatus') and 92 not in snapshot.party[active].moves
+        if (healing and not foe.status and 92 not in snapshot.party[active].moves
                 and not {3, 9}.intersection(self.data.species[snapshot.enemy_species]['types'])
                 and current[2] * 2 < snapshot.enemy_hp):
             poison = next((slot for slot, _, _, received in rows
@@ -690,8 +696,8 @@ class BattlePart:
                 candidates.append((dealt / max(1, snapshot.enemy_hp) - danger, slot))
         return max(candidates)[1] if candidates else None
 
-    def poison_move(self, snapshot, mem, mon, options):
-        if mem.byte('wEnemyMonStatus') or {3, 9}.intersection(self.data.species[snapshot.enemy_species]['types']):
+    def poison_move(self, snapshot, mon, options):
+        if self.reads.enemy.status or {3, 9}.intersection(self.data.species[snapshot.enemy_species]['types']):
             return None
         if max((score for score, _ in options), default=0) * 2 >= snapshot.enemy_hp:
             return None
@@ -699,24 +705,24 @@ class BattlePart:
                      and self.data.moves.get(move, {}).get('effect') == 'EFFECT_TOXIC'
                      and any(index == i for _, index in options)), None)
 
-    def recovery_move(self, snapshot, mem, mon, options):
+    def recovery_move(self, snapshot, mon, options):
+        player, foe = self.reads.player, self.reads.enemy
         slot = next((i for i, move in enumerate(mon.moves) if mon.pp[i]
                      and self.data.moves.get(move, {}).get('effect') == 'EFFECT_HEAL'), None)
-        if slot is None or mem.byte('wPlayerDisableCount') and mem.byte('wDisabledMove') == mon.moves[slot]:
+        if slot is None or player.disabled_move == mon.moves[slot]:
             return None
-        reflected = {self.data.moves.get(move, {}).get('effect') for move in mem.read('wEnemyMonMoves', 4)}
+        reflected = {self.data.moves.get(move, {}).get('effect') for move in foe.moves}
         attacks = [self.data.moves.get(move, {}) for move in mon.moves if self.data.moves.get(move, {}).get('power')]
-        if (mem.byte('wEnemyMonStatus') & 8 and attacks
+        if (foe.status & 8 and attacks
                 and all(('EFFECT_COUNTER' if move['type'] < 20 else 'EFFECT_MIRROR_COAT') in reflected for move in attacks)):
             return slot
-        hp, maximum = mem.word('wBattleMonHP'), mem.word('wBattleMonMaxHP')
+        hp, maximum = player.hp, player.stats[0]
         if not 0 < hp < maximum * 0.55 or max((score for score, _ in options), default=0) >= snapshot.enemy_hp:
             return None
-        enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level,
-            stats=tuple(mem.word('wEnemyMon' + stat) for stat in ('MaxHP', 'Attack', 'Defense', 'Speed', 'SpclAtk', 'SpclDef')))
+        enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=foe.stats)
         target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=hp,
-            enemy_defense=mem.word('wBattleMonDefense'), enemy_special_defense=mem.word('wBattleMonSpclDef'))
-        damage = max((self.move_score(move, enemy, target) for move in mem.read('wEnemyMonMoves', 4)), default=0)
+            enemy_defense=player.stats[2], enemy_special_defense=player.stats[5])
+        damage = max((self.move_score(move, enemy, target) for move in foe.moves), default=0)
         return slot if damage < maximum / 2 else None
 
     def move_score(self, mid, mon, snapshot):

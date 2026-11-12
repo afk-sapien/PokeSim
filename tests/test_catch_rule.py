@@ -12,6 +12,7 @@ from pokesim.policies.strategic import StrategicPolicy
 from pokesim.runtime.participant import Participant
 from pokesim.runtime.supervision import Supervisor
 from pokesim.screen import Screen
+from battle_fakes import fight
 from test_capture_diversity import collection, sid
 from test_level100_priority import individual, postgame
 from test_strategy import menu, mon
@@ -116,14 +117,14 @@ def test_gen2_battle_catch_of_an_owned_species_asks_verdict(refuse, real_data, r
         policy.returned = {157}
     snapshot = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
         in_battle=1, enemy_species=157, enemy_hp=1, enemy_max_hp=60, owned={157}, can_catch=True, badges=65535,
-        money=10000, pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
+        money=10000, pockets={'balls': [(real_data.items['POKE_BALL'], 20)]}, bug_contest=False)
     mem = SimpleNamespace(byte=lambda name: 0, read=lambda name, size: b'\xff' * size)
     throw = ('Throw', real_data.items['POKE_BALL'])
     assert keeps_another(policy, snapshot, 157, dvs=(15,) * 5)
-    assert policy.battle(snapshot, mem).button == throw
+    assert fight(policy, snapshot, mem).button == throw
     refuse()
     assert not keeps_another(policy, snapshot, 157, dvs=(15,) * 5)
-    assert policy.battle(snapshot, mem).button != throw
+    assert fight(policy, snapshot, mem).button != throw
 
 
 def test_gen2_a_missing_entry_waits_when_only_the_upgrade_slot_is_free(real_data):
@@ -142,13 +143,14 @@ def test_gen2_a_missing_entry_waits_when_only_the_upgrade_slot_is_free(real_data
                  (150, 80, 80, 80, 80, 80), 125000, (8,) * 4, (0,) * 5, 1, 70),) * 6
     snapshot = SimpleNamespace(party=party, stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
         in_battle=1, enemy_species=157, enemy_hp=1, enemy_max_hp=60, owned={16}, can_catch=True, badges=65535,
-        money=10000, box_counts=(20,) * 13 + (19,), active_box=13, pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
+        money=10000, box_counts=(20,) * 13 + (19,), active_box=13, pockets={'balls': [(real_data.items['POKE_BALL'], 20)]},
+        bug_contest=False)
     mem = SimpleNamespace(byte=lambda name: 0, read=lambda name, size: b'\xff' * size)
     throw = ('Throw', real_data.items['POKE_BALL'])
     assert room(snapshot) == pcvalue.UPGRADE_RESERVE
-    assert policy.battle(snapshot, mem).button != throw and policy.boxes_full
+    assert fight(policy, snapshot, mem).button != throw and policy.boxes_full
     assert pcvalue.boxes_full(policy.boxes_full, room(snapshot))
     # With a spare to release after it, the missing entry is caught and the request clears.
     spare = pcvalue.Entry((0, 1), (16, 0), 'Pidgey', 5, dvs=(1,) * 5)
     policy.pc_rated = lambda snapshot, extra=(): pcvalue.rate([floor, spare, *extra])
-    assert policy.battle(snapshot, mem).button == throw and not policy.boxes_full
+    assert fight(policy, snapshot, mem).button == throw and not policy.boxes_full

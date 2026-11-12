@@ -22,8 +22,8 @@ def data(request):
     return GameData.load(directory, request.param)
 
 
-def memory(**values):
-    return SimpleNamespace(byte=lambda name: values.get(name, 0))
+def starting(script_running=0, wild_pending=0):
+    return SimpleNamespace(script_running=script_running, wild_pending=wild_pending)
 
 
 class Cartridge:
@@ -45,7 +45,7 @@ def policy_on_route(data, monkeypatch):
         monkeypatch.setattr(part, 'control', lambda *args: None)
     policy = Policy(data, seed=1, starter='cyndaquil')
     policy.naming.step = lambda snapshot, mem: None
-    policy.unloaded = lambda snapshot, mem: False
+    policy.unloaded = lambda snapshot: False
     policy.nav.observe = lambda snapshot, interrupted=False: None
     policy.release_goal = lambda *args: None
     planned = []
@@ -57,7 +57,7 @@ def policy_on_route(data, monkeypatch):
     rows = tuple(' ' * 20 for _ in range(18))
     snapshot = SimpleNamespace(started=True, valid=True, in_battle=0, hall_of_fame_count=1, frame=10,
                                map=data.map_ids['SILVER_CAVE_ROOM_2'], x=7, y=7, party=(), event_flags=bytes(256), money=0, items=(),
-                               tiles=rows, text=ScreenText('\n'.join(rows)))
+                               tiles=rows, text=ScreenText('\n'.join(rows)), script_running=0, wild_pending=0)
     hunt = Goal('collection_hunt', 'Search for a stronger Golduck in Silver Cave Room 2', 'SILVER_CAVE_ROOM_2', 8, 7)
     return policy, snapshot, hunt, planned
 
@@ -66,6 +66,7 @@ def test_the_hunt_goal_carries_through_the_battle_transition(data, monkeypatch):
     policy, snapshot, hunt, planned = policy_on_route(data, monkeypatch)
     policy.goal = hunt
     # The wild battle script is running and has picked its Pokémon, but the battle screen is not up yet.
+    snapshot.script_running, snapshot.wild_pending = 255, 55
     policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data, wScriptRunning=255, wTempWildMonSpecies=55,
                                                                 wMapWidth=20)))
     assert planned == []
@@ -76,6 +77,7 @@ def test_other_scripts_still_replan(data, monkeypatch):
     policy, snapshot, hunt, planned = policy_on_route(data, monkeypatch)
     policy.goal = hunt
     # A script with no wild Pokémon chosen, such as a conversation, is planned as before.
+    snapshot.script_running = 255
     policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data, wScriptRunning=255, wMapWidth=20)))
     assert planned == [10]
     assert policy.goal.key == 'collection_wait'
@@ -84,6 +86,6 @@ def test_other_scripts_still_replan(data, monkeypatch):
 def test_battle_starting_reads_the_script_and_the_chosen_pokemon(data):
     from pokesim.gen2.policy import Policy
     policy = Policy(data, seed=1, starter='cyndaquil')
-    assert policy.battle_starting(memory(wScriptRunning=255, wTempWildMonSpecies=200))
-    assert not policy.battle_starting(memory(wScriptRunning=255))
-    assert not policy.battle_starting(memory(wTempWildMonSpecies=55))
+    assert policy.battle_starting(starting(script_running=255, wild_pending=200))
+    assert not policy.battle_starting(starting(script_running=255))
+    assert not policy.battle_starting(starting(wild_pending=55))

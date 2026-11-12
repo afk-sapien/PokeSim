@@ -32,14 +32,10 @@ class Cartridge:
         return [self.values.get((bank, address), 0) for address in range(window.start, window.stop)]
 
 
-def memory(**values):
-    return SimpleNamespace(byte=lambda name: values.get(name, 0))
-
-
-def snapshot_at(data, constant):
+def snapshot_at(data, constant, map_width=0):
     return SimpleNamespace(started=True, valid=True, in_battle=0, hall_of_fame_count=0, map=data.map_ids[constant],
                            x=7, y=7, party=(), stored=(), items=(), badges=0, owned=frozenset(), step_count=0,
-                           breeding_compatible=False, event_flags=bytes(256))
+                           breeding_compatible=False, event_flags=bytes(256), map_width=map_width)
 
 
 def test_policy_continues_the_save_instead_of_walking_an_unloaded_map(data, monkeypatch):
@@ -54,7 +50,7 @@ def test_policy_continues_the_save_instead_of_walking_an_unloaded_map(data, monk
     action, = policy.step(PolicyContext(snapshot, policy.clock, Cartridge(data)))
     assert policy.mode == 'opening'
     assert action.button in {'start', 'a'}
-    assert not policy.unloaded(snapshot, memory(wMapWidth=8))
+    assert not policy.unloaded(snapshot_at(data, 'OLIVINE_CITY', map_width=8))
 
 
 def test_a_policy_recovery_does_not_make_the_same_tile_look_like_progress(data):
