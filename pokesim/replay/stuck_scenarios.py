@@ -8,8 +8,8 @@ lists it in scenarios/index.toml.
 
 Red, Blue, Yellow, Gold, Silver and Crystal checkpoints all replay, each on the cartridge its manifest
 names. The party and money edits work in all six games, and so does taking a species out of the Pokédex
-(unowned). Red, Blue and Yellow scenarios can also edit the bag (items), hold the first badges (badges)
-and set story events by name (events). Gold, Silver and Crystal scenarios can also run the clock forward
+(unowned). Red, Blue and Yellow scenarios can also edit the bag (items), hold the first badges (badges),
+set story events by name (events) and name the legendaries that have come back (returned). Gold, Silver and Crystal scenarios can also run the clock forward
 (clock), fill every box (boxes) and offer the Battle Tower again (tower), which scenario.json names, as
 pokesim/scenarios.py describes.
 

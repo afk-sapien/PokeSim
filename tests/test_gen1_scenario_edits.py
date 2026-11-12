@@ -69,6 +69,22 @@ def test_a_kanto_marathon_checkpoint_restarts_the_quiet_clock():
     assert watch.observe(snapshot)[1] is False                      # only a race has checkpoints
 
 
+def test_a_scenario_names_the_legendaries_that_came_back(tmp_path, monkeypatch):
+    # The returns sit in the adventure's claims ledger, not in the save. A Red trip back to Zapdos
+    # replayed without them ended at once and never reached the Fuchsia Mart loop it stalled in.
+    import hashlib
+    import json
+    from pokesim import scenarios
+    checkpoint = tmp_path / 'start.state'
+    checkpoint.with_suffix('.json').write_text(json.dumps({'rom_sha1': hashlib.sha1(b'red').hexdigest()}))
+    (tmp_path / 'red.gb').write_bytes(b'red')
+    booted = SimpleNamespace(pb=SimpleNamespace(memory=cartridge()), policy=SimpleNamespace(collection=SimpleNamespace()))
+    monkeypatch.setattr(scenarios, 'HeadlessRun', lambda *args, **kwargs: booted)
+    scenario = Scenario(folder=tmp_path, name='zapdos', checkpoint=checkpoint, edits={'returned': [144, 145]})
+    run, _ = scenarios.open_run(scenario, tmp_path / 'red.gb')
+    assert run.policy.collection.returned_legendaries == {144, 145}
+
+
 def test_a_scenario_can_require_run_attempts(tmp_path):
     (tmp_path / 'scenario.json').write_text('{"until": "owned:77", "min_flees": 2}', encoding='utf-8')
     scenario = Scenario.load(tmp_path)

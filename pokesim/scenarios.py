@@ -581,6 +581,10 @@ def open_run(scenario, rom=None):
             raise
         return run, Gen2Watch(run)
     apply_edits(run.pb.memory, scenario.edits)
+    # The legendaries that came back sit in the adventure's claims ledger, not in the save, so a
+    # scenario names them by Pokédex number (returned) to replay a return trip.
+    if scenario.edits.get('returned'):
+        run.policy.collection.returned_legendaries = set(scenario.edits['returned'])
     return run, Gen1Watch(run)
 
 
