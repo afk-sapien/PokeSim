@@ -373,7 +373,11 @@ class Rematch(Kind):
             # Money stops at 999,999, so at the cap a rematch earns experience only.
             purpose = 'Earn prize money and experience for collecting' if s.money < 999999 else 'Earn experience while nothing else is left'
             return at('collect_rematch', 'Return for a League rematch', purpose, 'INDIGO_PLATEAU_LOBBY', 8, 10)
-        return object_goal('league_lorelei', 'Begin a League rematch',
+        # The title starts with "Challenge", so the boss check guards the walk into Lorelei's room and
+        # the party heals at the Indigo Plateau Center first. Titled "Begin a League rematch", the check
+        # first ran inside the League, where no nurse is in reach, and Red met the Elite Four again and
+        # again with its level 100 fighters out of PP until a battle at Lance never ended.
+        return object_goal('league_lorelei', 'Challenge Lorelei in a League rematch',
                            'Fund the next expeditions' if s.money < 999999 else 'Run the League again', 'LORELEIS_ROOM', 'LORELEI')
 
     def finished(self, view, run):

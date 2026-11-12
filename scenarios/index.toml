@@ -25,3 +25,10 @@ rom_sha1 = "d8b8a3600a465308c9953dfa04f0081c05bdcb94"
 state_sha256 = "1f948866f8bbd52244a76ceb754af50b99f3e856081c4cf1114881a5339059ac"
 frames = [8263650, 8263650]
 expect = "passes"
+
+[[scenario]]
+name = "red-rematch-route2-20261112"
+rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
+state_sha256 = "19a113891be3c5d264d3145e77f1ffd8ae1df6148f626b7c44037f55a0d33786"
+frames = [3233126603, 3233126603]
+expect = "passes"

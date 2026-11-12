@@ -201,6 +201,22 @@ def test_gen1_latches_the_heal_when_a_nurse_is_in_reach():
     assert policy._boss_check(s, SimpleNamespace(key='marsh', title='Answer the quiz'), False) == boss.READY
 
 
+def test_a_league_rematch_heals_at_the_indigo_center_before_lorelei():
+    # Red's rematch party walked from the lobby into Lorelei's room with its level 100 fighters out of
+    # PP, met the Elite Four unready over and over, and a battle at Lance never ended.
+    from pokesim.policies.kinds import Rematch
+    from pokesim.policies.progression import MAPS
+    from pokesim.policies.strategic import StrategicPolicy
+    from test_events import snap
+    policy = StrategicPolicy(7)
+    policy.nav.distance_lookup = lambda pos, frame: (lambda targets: 4)
+    s = snap(party=(gen1_mon(180, (0, 0, 0, 0)),), map=MAPS['INDIGO_PLATEAU_LOBBY'])
+    goal = Rematch().target(SimpleNamespace(s=s), {})
+    assert goal.key == 'league_lorelei' and goal.targets[0][0] == MAPS['LORELEIS_ROOM']
+    assert policy._boss_check(s, goal, False) == boss.HEAL
+    assert policy.heal.before_boss
+
+
 def gen2_policy(data, monkeypatch, center):
     from pokesim.gen2 import ledger
     from pokesim.gen2.policy import Policy
