@@ -202,6 +202,7 @@
     {"key": "return_from_cable", "map": "POKECENTER_2F", "x": 0, "y": 7},
     {"key": "hideout_done", "map": "TEAM_ROCKET_BASE_B2F", "x": 7, "y": 10},
     {"key": "switch_room_exit", "map": "GOLDENROD_UNDERGROUND_SWITCH_ROOM_ENTRANCES", "x": 20, "y": 12, "face": "up"},
+    {"key": "good_rod", "map": "OLIVINE_GOOD_ROD_HOUSE", "object": "GoodRodGuru"},
     {"key": "ice_stairs", "map": "ICE_PATH_B1F", "x": 3, "y": 14},
     {"key": "reset_ice", "map": "ICE_PATH_1F", "x": 37, "y": 4},
     {"key": "reset_gym", "map": "BLACKTHORN_GYM_1F", "x": 7, "y": 7}
