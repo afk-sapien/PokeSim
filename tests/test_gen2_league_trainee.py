@@ -11,7 +11,7 @@ import pytest
 
 from pokesim.gen2 import collection
 from pokesim.gen2.collection import (call_off_league, funding_closed, funding_run, league_key, league_restarted,
-                                     league_verdict, postgame_league)
+                                     league_verdict, postgame_league, trainee_out)
 from pokesim.gen2.standdown import standing_down
 from pokesim.planning.readiness import DEPTH, Boss, Team, Train
 from pokesim.runtime.supervision import Supervisor
@@ -23,12 +23,13 @@ def mon(level, trainer_id=47325, dvs=(5, 14, 15, 14, 9)):
     return SimpleNamespace(level=level, trainer_id=trainer_id, dvs=dvs, egg=False)
 
 
-def gold(trainee=22, inside=False, **state):
+def gold(trainee=22, inside=False, boxed=False, **state):
     state.setdefault('training', {'identity': TRAINEE})
     policy = SimpleNamespace(collection=state, monitor_tables={}, clock=1000, completed={'champion': 1},
                              in_league=lambda snapshot: inside, person=lambda snapshot, key, *args: key)
-    snapshot = SimpleNamespace(party=[mon(100, dvs=(1, 2, 3, 4, 5)), mon(trainee)], hall_of_fame_count=1,
-                               event=lambda name: False)
+    party, stored = [mon(100, dvs=(1, 2, 3, 4, 5)), mon(20, dvs=(14, 1, 15, 15, 6))], []
+    (stored if boxed else party).append(mon(trainee))
+    snapshot = SimpleNamespace(party=party, stored=stored, hall_of_fame_count=1, event=lambda name: False)
     return policy, snapshot
 
 
@@ -66,6 +67,17 @@ def test_the_stand_down_outlasts_a_reload_that_takes_the_loss_back():
     assert funding_closed(policy, snapshot)
     assert funding_run(policy, snapshot, None) is None and 'funding' not in policy.collection
     assert not postgame_league(policy, snapshot, None, None)
+
+
+def test_a_boxed_trainee_stands_down_too():
+    # The Gold save's trainee waited in a box while a level 100 fighter and weak partners went in.
+    policy, snapshot = gold(trainee=25, boxed=True, funding=2)
+    assert league_restarted(policy, snapshot) and call_off_league(policy)
+    assert standing_down(policy, league_key(TRAINEE)) and funding_closed(policy, snapshot)
+    assert funding_run(policy, snapshot, None) is None and 'funding' not in policy.collection
+    # Once it reaches the lineup's lowest level it can join the team, so only the oracle keeps the League shut.
+    snapshot.stored[0].level = 40
+    assert not trainee_out(policy, snapshot)
 
 
 def test_a_trainee_at_the_lineups_lowest_level_goes_back_to_the_league():

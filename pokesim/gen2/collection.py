@@ -489,14 +489,21 @@ def league_key(identity):
 
 
 def league_trainees(policy, snapshot):
-    """The training project's trainee in the party, below the lowest level the League's lineup fields
-    (planning/league.run), with its identity. A list of at most one."""
+    """The training project's trainee, in the party or a box, below the lowest level the League's lineup
+    fields (planning/league.run), with its identity. A list of at most one.
+
+    A boxed trainee counts too. A Gold run left its level 25 Poliwhirl in a box and took a level 100
+    Typhlosion with weak partners to the Elite Four for prize money, where the Typhlosion ran out of
+    attacks. A trainee at the lineup's lowest level joins the team and adds the depth the oracle asks
+    for after a loss.
+    """
     from .training import identity
     want = (getattr(policy, 'collection', {}).get('training') or {}).get('identity')
     if want is None:
         return []
     low = league_run(policy, snapshot)[0].low or 0
-    return [(mon, want) for mon in snapshot.party if not mon.egg and identity(mon) == want and mon.level < low]
+    mon = next((mon for mon in snapshot.party + snapshot.stored if identity(mon) == want), None)
+    return [(mon, want)] if mon is not None and mon.level < low else []
 
 
 def trainee_out(policy, snapshot):
