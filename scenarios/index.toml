@@ -55,3 +55,4 @@ rom_sha1 = "d8b8a3600a465308c9953dfa04f0081c05bdcb94"
 state_sha256 = "1e5920117ad135a81a71662bb76864c8d8ec0dac304bb88541e8f57d8e0fcfea"
 frames = [10977153, 10977153]
 expect = "passes"
+issue = 574
