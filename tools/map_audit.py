@@ -403,11 +403,13 @@ def gen2_snapshot(data, position, state, frame=0):
                     money=0, coins=0, in_battle=0, enemy_species=0, enemy_level=0, enemy_hp=0, enemy_max_hp=0,
                     trainer_class=0, battle_type=0, playtime=(0, 0, 0),
                     hall_of_fame_count=state['hall_of_fame_count'], event_flags=state['event_flags'],
-                    tiles=('',) * 18, objects=(), valid=True, data=data)
+                    tiles=('',) * 18, objects=(), valid=True, data=data,
+                    # Crystal keeps the Farfetch'd's place in memory, here still at its first spot.
+                    farfetchd_position=0 if 'wFarfetchdPosition' in data.symbols else None)
 
 
 class Gen2Memory:
-    """The bytes the Gen II story code reads from memory: the Pokégear cards, and the Farfetch'd at its first spot."""
+    """The bytes the Gen II story code reads from memory: the Pokégear cards."""
     memory = None
 
     def __init__(self, pokegear):

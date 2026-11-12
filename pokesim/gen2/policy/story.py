@@ -126,11 +126,11 @@ class StoryPart:
                 position = next((int(obj['script'].removeprefix('FarfetchdPosition'))
                                  for obj in forest['objects'] if obj['script'].startswith('FarfetchdPosition')
                                  and not snapshot.event(obj['event'])), 1)
-            points = {1: (14, 32, 'up'), 2: (15, 24, 'down'), 3: (20, 25, 'up'),
-                      4: (29, 21, 'down'), 5: (29, 31, 'left'), 6: (24, 36, 'up'),
-                      7: (22, 32, 'up'), 8: (15, 28, 'down'), 9: (11, 35, 'left')}
-            x, y, face = points.get(position, points[1])
-            return Goal(f'farfetchd_{position}', 'Return the lost Farfetch’d', 'ILEX_FOREST', x, y, face)
+            # Where to stand to herd it on toward the charcoal maker from each of its places, in order.
+            row = facts.row(2, self.data.game, 'farfetchd')
+            points = row['points']
+            x, y, face = points[position - 1] if 1 <= position <= len(points) else points[0]
+            return Goal(f'farfetchd_{position}', 'Return the lost Farfetch’d', row['map'], x, y, face)
         if not snapshot.event('EVENT_GOT_HM01_CUT'):
             return step('cut', 'Receive Cut from the charcoal maker')
         self.completed.setdefault('cut', snapshot.frame)
