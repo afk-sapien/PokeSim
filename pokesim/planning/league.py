@@ -132,8 +132,11 @@ def readiness_target(table, snapshot, ace=None, losses=None):
     Gold, Silver and Crystal do before Red. A loss to the next boss that ``losses`` keeps raises the
     target, since the boss is still not won. Only the progress rows read it, so play does not change."""
     row = next_row(table, snapshot)
-    if row is None:
-        return None
+    return None if row is None else row_target(row, ace, losses)
+
+
+def row_target(row, ace=None, losses=None):
+    """The readiness target of the boss ``row``, won or not, raised once after a loss ``losses`` keeps."""
     boss = plain(row, ace)
     if row.aim and not boss.scores:
         boss = replace(boss, scores=(None,))

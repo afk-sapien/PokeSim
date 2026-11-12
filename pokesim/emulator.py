@@ -110,10 +110,9 @@ class Emulator(EmulatorBase):
         # A reset replaces the clock, so the store asks for the current one each time.
         store.clock = lambda: self.play_clock.frames
         self.goal_watch = store.goal_watch = self.policy.goal_watch = progress_events.GoalWatch()
-        from .planning.league import gain_band
-        from .policies.progression import BOSS_TABLE
+        from .policies.progression import gain_band
         self.goal_watch.readiness = lambda snapshot, key, species: gain_band(
-            BOSS_TABLE, snapshot, losses=getattr(self.policy, 'losses', None))
+            snapshot, key, species, losses=getattr(self.policy, 'losses', None))
         self.snapshot: Snapshot | None = None
         self.prev_snapshot: Snapshot | None = None
         # The newest autosave's manifest replaces this, and the policy's state, when start() loads it.

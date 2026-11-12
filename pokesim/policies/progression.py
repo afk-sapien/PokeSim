@@ -9,7 +9,7 @@ from .team import readiness
 from .. import story
 from ..game_data import current_variant
 from ..planning import league
-from ..planning.readiness import LOSS, PARTNER
+from ..planning.readiness import LOSS, PARTNER, band
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set, object_hidden
 
 
@@ -183,6 +183,43 @@ BOSS_TABLE = league.Table(
                      'league_rival', 'league_entrance')),
     league=LEAGUE_ROOMS, challenge='Challenge',
     partner=lambda species: SPECIES.get(species, {}).get("stats", [0])[0])
+
+
+def gain_band(snapshot, key, species, losses=None):
+    """The levels a gain by ``species``, a Pokédex number, counts toward as progress while the goal
+    ``key`` runs (readiness.band), or None.
+
+    Before the Champion it is the next boss's band. After it no boss is left, so the band comes from
+    the goal: a League rematch counts gains toward the League's target, raised once after a loss
+    there, and a goal that evolves a Pokémon counts that Pokémon's gains toward the evolution."""
+    parts = (key or '').split(':')
+    method = parts[1] if len(parts) > 1 else ''
+    if method == 'evolve':
+        level = evolve_level(parts[0], species)
+        if level is not None:
+            return 0, level
+    if method == 'rematch':
+        return band(league.row_target(BOSS_TABLE.league_row, losses=losses), league.top_level(snapshot))
+    return league.gain_band(BOSS_TABLE, snapshot, losses=losses)
+
+
+def evolve_level(target, species):
+    """The level a Pokémon of Pokédex number ``species`` trains to while a goal evolves it into
+    ``target``, the internal species id an evolve goal's key starts with, or None when it does not
+    evolve into ``target``. A level evolution trains to its level. A stone evolution may wait for a
+    move first (move_development.evolution_wait), so it trains up to the last level its learnset teaches."""
+    from .collection import EVOS
+    for sid, rows in EVOS.items():
+        if SPECIES.get(sid, {}).get('dex') != species:
+            continue
+        for row in rows:
+            if str(row['species']) != target:
+                continue
+            if row['method'] == 'level':
+                return int(row['requirement'])
+            if row['method'] == 'item':
+                return max((level for level, _ in SPECIES[sid].get('learnset', ())), default=None)
+    return None
 
 
 def boss_training(s, goal, losses):

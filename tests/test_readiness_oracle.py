@@ -210,3 +210,25 @@ def test_gen1_targets_the_next_gym_in_badge_order_then_the_league():
     assert target(0xff) == BOSS_TABLE.league_row.ace == 65
     # After the Hall of Fame no boss is next, so no level gain counts.
     assert target(0xff, 1) is None
+
+
+def test_gen1_postgame_gains_count_toward_an_evolution_or_a_league_rematch():
+    from pokesim.policies.progression import gain_band
+    party = (SimpleNamespace(level=58, egg=False), SimpleNamespace(level=30, egg=False))
+    champion = SimpleNamespace(badges=0xff, hall_of_fame_count=2, party=party)
+    # Training Doduo (84) to evolve into Dodrio, internal id 116, counts its gains up to level 31.
+    assert gain_band(champion, '116:evolve:0::trainee-84', 84) == (0, 31)
+    # A stone evolution trains for the moves the stone would cost first: Shellder (90) up to level 50.
+    assert gain_band(champion, '139:evolve:0::trainee-90', 90) == (0, 50)
+    # Another member's gains under that goal, or a goal of another kind, count toward no boss.
+    assert gain_band(champion, '116:evolve:0::trainee-84', 6) is None
+    assert gain_band(champion, '120:grass:161:', 84) is None
+    # A rematch counts gains toward the League's target, raised once after a loss there.
+    losses = Losses()
+    assert gain_band(champion, '0:rematch:0:', 6) == (58 - oracle.TEAM_BAND, 65)
+    losses.note('league', 60)
+    assert gain_band(champion, '0:rematch:0:', 6, losses) == (58 - oracle.TEAM_BAND, 65 + oracle.CEILING)
+    # Before the Champion any other goal counts toward the next boss, here the eighth gym.
+    from pokesim.policies.progression import GYMS
+    gyms = SimpleNamespace(badges=0x7f, hall_of_fame_count=0, party=party)
+    assert gain_band(gyms, '120:grass:161:', 6) == (58 - oracle.TEAM_BAND, GYMS[7][5] + oracle.MARGIN)
