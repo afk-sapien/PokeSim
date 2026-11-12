@@ -136,10 +136,13 @@ These have a reason in the code or in the PR that made them, and they stay.
 | Background check | none | rewards and Celebi every 300 frames | Gen II events only |
 | League partner (`partner`) | trains a sturdy second battler before the League | none | in the Gen I rules since the first public source, with no PR on record |
 | Postgame League gate (`rematch`) | none | a full attack's PP for each opponent, and a deeper team after a loss | Crystal runs ran out of attacks at Lance and lost to him every twenty minutes (`league.run`) |
+| Last balls kept (`LAST_BALLS`) | none, the last ball is thrown | 3, while money cannot buy 4 Poké Balls back, except for a species met only once | the Gen II last-ball rule, which moved onto the ledger with the other money rules |
 
-The last two are settings in each generation's boss table (`planning/league.py`). Item 4 kept play the
-same, so both stay as they are for now. They are open choices for the owner: either can change in one line
-of a boss table, and its gate then shows what the change does.
+The League partner and the postgame League gate are settings in each generation's boss table
+(`planning/league.py`). Item 4 kept play the same, so both stay as they are for now. The last balls kept is
+a setting of the spare ball rule in `planning/throws.py`, which both generations' goal pickers ask, so a
+hunt whose catch the battle would refuse is not feasible and waits with the reason. All three are open
+choices for the owner: each can change in one line, and its gate then shows what the change does.
 
 Two more are data, not settings: Gen II judges only the Johto gyms by matchup, and Falkner has a level
 floor. Both are rows in the Gen II boss table (`gen2/readiness.py`).
@@ -158,3 +161,5 @@ and its PR says which way it went.
    not. Item 4 kept it as a setting that stays (above), an open choice for the owner.
 5. Gen I's rematch has no readiness gate, Gen II's postgame League has a stamina and depth gate. Item 4
    kept it as a setting that stays (above), an open choice for the owner.
+6. The last balls: Gen I throws its last ball, Gen II keeps three while money cannot buy the floor back.
+   The spare ball rule kept it as a setting that stays (above), an open choice for the owner.

@@ -4,7 +4,7 @@ from dataclasses import replace
 from functools import partial
 
 from ..planning import values
-from ..planning import arbiter, decide, pin
+from ..planning import arbiter, decide, pin, throws
 from ..planning.arbiter import Candidate, Tier
 from ..planning.cost import FRAMES_PER_BATTLE, FRAMES_PER_TILE
 from ..planning.ledger import FIELD_MOVES
@@ -17,6 +17,9 @@ from .standdown import (DECISION_FRAMES, exhausted, forget, hold_key, hunt_key, 
                         stand_down, standing_down, train_key)
 from .standdown import monitor as standdown_monitor
 from . import kinds
+
+# Why a catch goal waits when the battle would keep its last balls (planning/throws.py).
+NO_SPARE_BALL = decide.Failure(decide.NEEDS, 'needs ' + throws.spare_words(2))
 
 
 def matching_time(value, current):
@@ -794,10 +797,12 @@ class Rungs:
         path = walk(snapshot, mid)
         return MAP_FRAMES * (len(path) if path is not None else FAR_MAPS)
 
-    def offer(self, name, tier, value, work, build, price=None):
+    def offer(self, name, tier, value, work, build, price=None, blocked=None):
         """Ask rung ``name``, whose best tier is ``tier``. ``build`` gives its goal or None. ``price``,
         given the goal, gives its tier, value and frames of work if they differ from ``tier``, ``value``
-        and ``work``, and may add the hunt kind the Collector style reads."""
+        and ``work``, and may add the hunt kind the Collector style reads. ``blocked``, given the goal,
+        gives the Failure that keeps it from starting, or None. A blocked goal is not offered, its build
+        writes nothing, and a pin on it waits with the reason."""
         if self.stopped:
             return
         best = self.best()
@@ -815,17 +820,22 @@ class Rungs:
         self.asked.add(name)
 
         def built():
-            # A price reads what the build wrote, such as the hunt's new target, so it runs in the draft.
+            # A price and a block read what the build wrote, such as the hunt's new target, so they run in
+            # the draft.
             goal = build()
-            return goal, None if goal is None or price is None else price(goal)
-        (goal, priced), writes = draft(self.policy, built)
+            if goal is None:
+                return None, None, None
+            return goal, None if price is None else price(goal), None if blocked is None else blocked(goal)
+        (goal, priced, failure), writes = draft(self.policy, built)
         waiting = getattr(self.policy, 'no_route_waiting', None)
-        if goal is not None and waiting is not None and waiting(goal):
+        if goal is not None and failure is None and waiting is not None and waiting(goal):
             # The walk to this goal found no route lately (policy.no_route), so another rung runs first.
+            failure = decide.NO_ROUTE
+        if failure is not None:
             if self.pinned(f'{name}:{goal.key}'):
-                self.pin_parked = decide.NO_ROUTE
+                self.pin_parked = failure
             if self.survey:
-                self.skipped.append((f'{name}:{goal.key}', goal.label, decide.NO_ROUTE))
+                self.skipped.append((f'{name}:{goal.key}', goal.label, failure))
             return
         if goal is None:
             # A rung that offers nothing but asks for League prize money, as the Game Corner prize
@@ -1070,7 +1080,7 @@ def journey(policy, snapshot, mem, Goal):
     offer('training', PROGRESS, new, EVOLVE_FRAMES, lambda: training(policy, snapshot, mem, Goal))
     offer('legends', PROGRESS, new, LEGEND_FRAMES, lambda: legends(policy, snapshot, Goal))
     offer('hunt', PROGRESS, new, 0, lambda: pokedex_hunt(policy, snapshot, Goal, current_time),
-          price=lambda goal: hunt_price(policy, snapshot))
+          price=lambda goal: hunt_price(policy, snapshot), blocked=lambda goal: hunt_blocked(policy, snapshot))
     # A finished run keeps playing the way Red, Blue and Yellow do: better-DV hunts, training ten levels
     # at a time, a due marathon, shiny searches and League runs, as the postgame's own arbiter picks them.
     offer('postgame', Tier.RACE, values.SMALL, 0, lambda: postgame.journey(policy, snapshot, mem, Goal, current_time),
@@ -1270,6 +1280,17 @@ def hunt_price(policy, snapshot):
               and species not in policy.collection.get('prerequisites', ()) and species not in item_hunts(policy, snapshot))
     return (Tier.PROGRESS, values.SMALL if repeat else values.NEW_ENTRY,
             target_expected(policy, snapshot, target) * DECISION_FRAMES)
+
+
+def hunt_blocked(policy, snapshot):
+    """Why the Pokédex hunt cannot start, or None. A hunt whose catch the battle would refuse to throw at,
+    by the spare ball rule (planning/throws.py), waits for balls or money, so a run whose last balls are
+    kept does other work instead of fleeing every target it finds."""
+    from .ledger import spare_throw
+    target = policy.collection.get('target')
+    if target and not spare_throw(policy.data, snapshot, target['species']):
+        return NO_SPARE_BALL
+    return None
 
 
 def postgame_price(policy, snapshot):
