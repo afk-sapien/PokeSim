@@ -41,6 +41,15 @@ frames = [11029085, 11029085]
 expect = "passes"
 
 [[scenario]]
+name = "red-lorelei-setup-loop-20261112"
+rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
+state_sha256 = "1612ce464f124050e5a2026893c31e819c8d650cd7496f698b3c0e92e3f028f1"
+frames = [3261114063, 3261172938]
+expect = "passes"
+kind = "quiet"
+issue = 568
+
+[[scenario]]
 name = "gold-league-training-20261112"
 rom_sha1 = "d8b8a3600a465308c9953dfa04f0081c05bdcb94"
 state_sha256 = "1e5920117ad135a81a71662bb76864c8d8ec0dac304bb88541e8f57d8e0fcfea"
