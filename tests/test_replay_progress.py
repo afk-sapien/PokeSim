@@ -4,8 +4,8 @@ import sqlite3
 
 import pytest
 
-from pokesim.replay.progress import (Axis, Episode, Flag, connect, ground_truth, load, main, rebuild, replay, score,
-                                     segments, stored_rows)
+from pokesim.replay.progress import (Axis, Episode, Flag, alarms, connect, ground_truth, load, main, rebuild,
+                                     reclassified, replay, score, segments, stored_rows)
 from pokesim.progress_events import HOUR
 
 T0 = 1_700_000_000
@@ -26,9 +26,9 @@ def store(folder, version='red', events=(), receipts=(), progress=()):
     db.execute('CREATE TABLE progress (ts REAL, badges INTEGER, owned INTEGER, league INTEGER, level100 INTEGER, '
                'perfect INTEGER)')
     db.execute('CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT)')
-    for i, (ts, kind, title, body) in enumerate(events, 1):
+    for i, (ts, kind, title, body, *place) in enumerate(events, 1):
         db.execute('INSERT INTO events VALUES (?, ?, ?, ?, ?, NULL, ?, ?)',
-                   (i, ts, kind, title, body, 'Route 1', playtime(int(ts - T0) + 3600)))
+                   (i, ts, kind, title, body, place[0] if place else 'Route 1', playtime(int(ts - T0) + 3600)))
     db.executemany('INSERT INTO capture_receipts VALUES (?, ?, ?)', receipts)
     db.executemany('INSERT INTO progress VALUES (?, ?, ?, ?, ?, ?)', progress)
     db.commit()
@@ -37,11 +37,14 @@ def store(folder, version='red', events=(), receipts=(), progress=()):
 
 
 def shadow(folder, rows):
-    """Add the writers' progress_events rows, (ts, frame, kind, species, net, rewound), to a store."""
+    """Add the writers' progress_events rows, (ts, frame, kind, species, net, rewound), to a store. Rows
+    that also give (goal, identity, score) get a table with those columns, as today's writers keep."""
+    noted = bool(rows) and len(rows[0]) == 9
     db = sqlite3.connect(folder / 'pokesim.sqlite')
     db.execute('CREATE TABLE progress_events (id INTEGER PRIMARY KEY, frame INTEGER, ts REAL, kind TEXT, '
-               'species INTEGER, net INTEGER, rewound INTEGER)')
-    db.executemany('INSERT INTO progress_events (ts, frame, kind, species, net, rewound) VALUES (?, ?, ?, ?, ?, ?)', rows)
+               'species INTEGER, net INTEGER, rewound INTEGER' + (', goal TEXT, identity TEXT, score INTEGER)' if noted else ')'))
+    columns = 'ts, frame, kind, species, net, rewound' + (', goal, identity, score' if noted else '')
+    db.executemany(f'INSERT INTO progress_events ({columns}) VALUES ({", ".join("?" * len(rows[0]))})', rows)
     db.commit()
     db.close()
     return folder
@@ -116,6 +119,52 @@ def test_score_counts_false_alarms_and_time_to_detect():
     assert result['detect_minutes']['median'] == pytest.approx(4000 / 60, abs=0.1)
 
 
+def test_one_quiet_stretch_is_one_alarm():
+    episode = Episode(1000, 100 * HOUR, 8200, 102 * HOUR, ['label'])
+    # A stall alert, the watchdog beside it and the repeat alert six hours on, all after the same last progress.
+    stretch = [Flag(5000, 101 * HOUR, 'stallwatch', 99 * HOUR), Flag(5060, 101 * HOUR + 60, 'watchdog', 99 * HOUR),
+               Flag(27000, 107 * HOUR, 'stallwatch', 99 * HOUR)]
+    raised = alarms(stretch)
+    assert len(raised) == 1 and (raised[0].start, raised[0].end) == (99 * HOUR, 107 * HOUR)
+    result = score([episode], stretch, 0, 100000)
+    assert (result['caught'], result['false_alarms'], result['alarms']) == (1, 0, 1)
+    # Without the stretch they share, the repeat six hours on is a second alarm, and a false one.
+    assert score([episode], [Flag(f.ts, f.frame, f.check) for f in stretch], 0, 100000)['false_alarms'] == 1
+    # A stretch far from every stall is one false alarm.
+    far = [Flag(90000, 200 * HOUR, 'stallwatch', 197 * HOUR), Flag(91000, 206 * HOUR, 'stallwatch', 197 * HOUR)]
+    assert score([episode], far, 0, 100000)['false_alarms'] == 1
+
+
+def test_rebuilt_level_gains_count_inside_the_band(tmp_path):
+    grew = lambda ts, name, level: (ts, 'level', f'{name} grew to level {level}', '')
+    events = [grew(T0, 'CHARMANDER', 22), grew(T0 + 10, 'CHARMANDER', 23), grew(T0 + 20, 'CHARMANDER', 24),
+              (T0 + 30, 'blackout', 'Blacked out', '', 'Pewter Gym'),
+              grew(T0 + 40, 'CHARMANDER', 25), grew(T0 + 50, 'CHARMANDER', 25), grew(T0 + 60, 'PIDGEY', 4),
+              (T0 + 70, 'badge', 'Beat Brock! Got the Boulder Badge', ''), grew(T0 + 80, 'CHARMANDER', 26)]
+    rows = rebuild(load(store(tmp_path / 'adv', events=events)), Axis([], 'wall'))
+    # Brock's target is 23 and a loss to him raises it. A reload's repeat and a Pokémon far under the
+    # party's best are not progress, and after the badge the next boss's band counts.
+    assert [(r.kind, r.net) for r in rows if r.kind in ('level', 'improve')] == [
+        ('improve', 1), ('improve', 1), ('level', 0), ('improve', 1), ('level', 0), ('level', 0), ('improve', 1)]
+
+
+def test_reclassified_rows_use_the_band_and_the_goal(tmp_path):
+    events = [(T0, 'champion', 'Became Champion', ''), (T0 + 25, 'blackout', 'Blacked out', '', "Lance's Room")]
+    rematch = '0:rematch:0:'
+    folder = shadow(store(tmp_path / 'adv', events=events), [
+        (T0 + 10, None, 'level', 6, 0, 0, rematch, 'a', 60),
+        (T0 + 20, None, 'improve', 6, 1, 0, rematch, 'a', 66),
+        (T0 + 30, None, 'level', 6, 0, 0, rematch, 'a', 67),
+        (T0 + 40, None, 'improve', 6, 1, 0, rematch, 'a', 67),
+        (T0 + 50, None, 'badge', None, 1, 0, '', '', None),
+    ])
+    adv = load(folder)
+    rows = reclassified(adv, Axis([], 'wall'))
+    # A rematch counts gains toward the League's target, 65 and 75 after a loss there, and a repeat level never.
+    assert [(r.kind, r.net) for r in rows] == [('improve', 1), ('level', 0), ('improve', 1), ('level', 0), ('badge', 1)]
+    assert [r.kind for r in stored_rows(adv, Axis([], 'wall'))] == ['level', 'improve', 'level', 'improve', 'badge']
+
+
 def test_labels_add_and_clear_stalls(tmp_path):
     adv = load(churning(tmp_path))
     axis = Axis([], 'wall')
@@ -184,6 +233,7 @@ def test_the_replay_reads_stored_rows_when_the_window_has_any(tmp_path):
     assert sources() == {'adv': 'stored', 'plain': 'rebuilt'}
     assert sources('--rows', 'rebuilt')['adv'] == 'rebuilt'
     assert sources('--rows', 'stored') == {'adv': 'stored', 'plain': 'stored'}
+    assert sources('--rows', 'reclassified')['adv'] == 'reclassified'
 
 
 def test_a_blackout_names_the_boss_the_way_the_supervisor_does():
