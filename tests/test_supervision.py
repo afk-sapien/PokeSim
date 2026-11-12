@@ -91,6 +91,20 @@ def test_the_third_league_restart_without_a_new_hall_of_fame_entry_calls_the_run
     assert [supervisor.restarted_league(1) for _ in range(LEAGUE_RESTARTS)] == [False] * (LEAGUE_RESTARTS - 1) + [True]
 
 
+def test_a_league_restart_the_ladder_would_report_calls_the_run_off_first():
+    supervisor = ladder(STALL_RELOADS)
+    assert supervisor.call_off_league(0, lambda: True)
+    assert (supervisor.reloads, supervisor.stalled, supervisor.league) == (0, False, (0, 0))
+    # A first League run has nothing to call off, so the ladder stays where it is and reports.
+    supervisor = ladder(STALL_RELOADS)
+    assert not supervisor.call_off_league(0, lambda: False)
+    assert (supervisor.stalled, supervisor.league) == (True, (0, 1))
+    # Below the report, only the third restart without a new Hall of Fame entry calls the run off.
+    supervisor = Supervisor()
+    called = [supervisor.call_off_league(0, lambda: True) for _ in range(LEAGUE_RESTARTS)]
+    assert called == [False] * (LEAGUE_RESTARTS - 1) + [True]
+
+
 def test_the_counts_survive_a_worker_restart():
     store = Kv()
     first = Supervisor(store)

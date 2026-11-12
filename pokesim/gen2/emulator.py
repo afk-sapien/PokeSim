@@ -25,7 +25,7 @@ from ..runtime.game_loop import GEN2_WAIT, Decider, GameLoop
 from ..runtime.policy import BUTTONS, Action
 from ..runtime.reload import FRAMES_PER_SECOND, reload_target  # noqa: F401
 from ..planning import decide
-from ..runtime.supervision import CANNOT_END, GIVE_UP, HOLD, LEAGUE_RESTARTS, PARK, Supervisor
+from ..runtime.supervision import CANNOT_END, GIVE_UP, HOLD, PARK, Supervisor
 from ..runtime.supervision import report as stuck_report
 from ..stalls import LoopGuard, StallWatch
 from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
@@ -878,9 +878,13 @@ class Emulator(EmulatorBase):
             self._reset_watch()
             return
         all_saves, saves, target, entry = Emulator._reload_saves(self, since_frame, rung.league, why)
-        if rung.report and self.snapshot is not None and self.snapshot.valid and self.snapshot.started:
-            title, body = stuck_report(why, self.snapshot.map_name)
-            self._event(Event('stall', title, body, priority=HIGH), self.snapshot)
+        stuck = self.snapshot
+        # A restart from the League entry save reports after the call-off, so a League run the call-off
+        # frees never asks the owner for help. Any other reload reports first, as in Red, Blue and Yellow.
+        report = rung.report and stuck is not None and stuck.valid and stuck.started
+        if report and entry is None:
+            self._event(Event('stall', *stuck_report(why, stuck.map_name), priority=HIGH), stuck)
+            report = False
         restored = None
         clock = self.play_clock.frames
         from .standdown import carry_over, stalled_objectives
@@ -904,12 +908,17 @@ class Emulator(EmulatorBase):
                     break
                 except (ValueError, OSError, EOFError):
                     log.exception('Cannot reload Gen II checkpoint %s', path.name)
+        called_off = False
         if restored:
             carry_over(self.policy, stalled)
-            if entry is not None and restored == entry and self.supervisor.restarted_league(wins):
+            if entry is not None and restored == entry:
                 from .collection import call_off_league
-                if call_off_league(self.policy):
-                    log.warning('the League attempt restarted %d times, leaving to prepare the team', LEAGUE_RESTARTS)
+                called_off = self.supervisor.call_off_league(wins, lambda: call_off_league(self.policy))
+                if called_off:
+                    log.warning('the League attempt restarted without a new Hall of Fame entry, leaving to prepare the team')
+        if report and not called_off:
+            self._event(Event('stall', *stuck_report(why, stuck.map_name), priority=HIGH), stuck)
+        if restored:
             # The emulator is deterministic, so the same save and choices would replay the same
             # trouble. Idling a moment drawn from the reload stream moves the game's random numbers
             # along, the same way in a replay.
