@@ -2576,19 +2576,103 @@ def test_phone_waits_and_full_phone_lists_stand_down_instead_of_looping(real_dat
                                event=lambda name: True, map=0, objects=())
     policy = _item_policy(real_data, {103: 1})
     registered = _ItemMemory(real_data, wPhoneList=[1, 4, 21])
-    while policy.decisions <= item_sources.WAIT_DECISIONS:
+    while policy.decisions < item_sources.WAIT_DECISIONS:
         assert item_sources.phones(policy, snapshot, registered, Goal).key == 'collection_phone_wait'
         policy.decisions += 500
     assert item_sources.phones(policy, snapshot, registered, Goal) is None
     policy.clock += STAND_DOWN
     assert item_sources.phones(policy, snapshot, registered, Goal).key == 'collection_phone_wait'
-    # A step interrupted by other work counts again from the start when it comes back.
-    policy.decisions += item_sources.WAIT_DECISIONS + item_sources.GAP + 1
-    assert item_sources.phones(policy, snapshot, registered, Goal).key == 'collection_phone_wait'
     full = _ItemMemory(real_data, wPhoneList=list(range(1, 11)))
     fresh = _item_policy(real_data, {103: 1})
     assert item_sources.phones(fresh, snapshot, full, Goal) is None
     assert 'phone:LEAF_STONE' in fresh.monitor_tables['stood_down']
+
+
+def test_a_phone_wait_keeps_its_budget_through_other_work_and_stands_down_for_no_call(real_data):
+    """A Crystal wait by the phone sat in a Pokémon Center for hours: a rematch the caller asked for
+    started its count over, and so did every reload."""
+    if real_data.game != 'crystal':
+        pytest.skip('Phone trainers give stones only in Crystal')
+    from pokesim.gen2 import item_sources
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.standdown import monitor
+    from pokesim.planning import decide
+    snapshot = SimpleNamespace(party=(_item_mon(103, box=None),), stored=(_item_mon(102),), items=(), owned=frozenset({102, 103}),
+                               event=lambda name: True, map=0, objects=())
+    policy = _item_policy(real_data, {103: 1})
+    registered = _ItemMemory(real_data, wPhoneList=[1, 4, 21])
+    rematch = _ItemMemory(real_data, wPhoneList=[1, 4, 21], wDailyRematchFlags=[0, 1 << 4])
+    half = item_sources.WAIT_DECISIONS // 2
+    for _ in range(half // 100):
+        assert item_sources.phones(policy, snapshot, registered, Goal).key == 'collection_phone_wait'
+        policy.decisions += 100
+    # Gina asks for a rematch, and her pickup step runs for a while before the wait comes back.
+    assert item_sources.pickups(policy, snapshot, rematch, Goal).key == 'collection_phone_gift'
+    policy.decisions += 500
+    spent = monitor(policy).spent(item_sources.wait_key('LEAF_STONE'))
+    assert item_sources.phones(policy, snapshot, registered, Goal).key == 'collection_phone_wait'
+    assert monitor(policy).spent(item_sources.wait_key('LEAF_STONE')) == spent + 600
+    while item_sources.phones(policy, snapshot, registered, Goal) is not None:
+        policy.decisions += 100
+        assert policy.decisions <= half + item_sources.WAIT_DECISIONS
+    assert policy.decisions <= item_sources.WAIT_DECISIONS + 1000
+    # The stand-down says why, which the goal catalogue shows while it waits.
+    assert monitor(policy).failure('phone:LEAF_STONE', policy.clock) == decide.NO_CALL.kind
+    assert decide.FAILURES[decide.NO_CALL.kind] is decide.NO_CALL
+    # A stone that comes leaves no wait behind for the next one needed.
+    other = _item_policy(real_data, {103: 1})
+    item_sources.phones(other, snapshot, registered, Goal)
+    other.decisions += 100
+    item_sources.phones(other, snapshot, registered, Goal)
+    assert monitor(other).spent(item_sources.wait_key('LEAF_STONE')) == 101
+    stocked = SimpleNamespace(**{**vars(snapshot), 'items': ((real_data.items['LEAF_STONE'], 1),)})
+    assert item_sources.phones(other, stocked, registered, Goal) is None
+    assert monitor(other).spent(item_sources.wait_key('LEAF_STONE')) == 0
+
+
+def test_a_phone_wait_by_the_pc_is_a_wait_not_a_frozen_screen(real_data):
+    """Standing by the PC for a call looked like a frozen screen: recoveries every 30 seconds, a reload
+    after 30 game minutes that rewound the call timer, and a stall report at two game hours."""
+    from pokesim.gen2.emulator import Emulator
+    from pokesim.gen2.policy import Goal, Policy
+    center = 'VIOLET_POKECENTER_1F'
+    policy = Policy(real_data)
+    policy.goal = Goal('collection_phone_wait', 'Wait by the phone for Alan to find a FIRE STONE', center, 5, 3, 'up')
+    here = SimpleNamespace(map=real_data.map_ids[center], x=5, y=3, in_battle=0, valid=True, started=True)
+    walking = SimpleNamespace(**{**vars(here), 'x': 4})
+    assert policy.waiting(here) and policy.idle(here)
+    assert policy.waiting(walking) and not policy.idle(walking)
+    assert not policy.waiting(SimpleNamespace(**{**vars(here), 'map': real_data.map_ids['VIOLET_CITY']}))
+    reloads, recoveries = [], []
+    policy.recover = recoveries.append
+
+    def guard(goal_key):
+        policy.goal = replace(policy.goal, key=goal_key)
+        emu = SimpleNamespace(paused=False, manual_mode=False, preparation=None, store=SimpleNamespace(get=lambda key: None),
+                              snapshot=here, frame=10 ** 6, last_reload_frame=0, policy=policy, failure_streak=0,
+                              invalid_frame=None, battle_frame=None, stuck_frame=0, screen_frame=0, progress_frame=0,
+                              stall=SimpleNamespace(frame=5), waiting=False)
+        emu._unstick = lambda since, why: reloads.append(why)
+        emu._check_stall = lambda: None
+        Emulator._check_guards(emu)
+        return emu
+    emu = guard('collection_phone_wait')
+    assert not reloads and not recoveries and emu.waiting and emu.stall.frame is None
+    # A headless run, as the replays play, holds the same wait.
+    from pokesim.gen2.adapter import SCREEN_FRAMES, Gen2Adapter
+    adapter = Gen2Adapter.__new__(Gen2Adapter)
+    adapter.screen_key, adapter.screen_frame = None, 0
+    run = SimpleNamespace(policy=policy, frame=0)
+    shown = SimpleNamespace(**{**vars(here), 'tiles': ('',) * 18})
+    for run.frame in range(0, 4 * SCREEN_FRAMES, 24):
+        adapter.after_step(run, shown)
+    assert not recoveries
+    # Any other goal standing that long still reloads as stuck, and a headless run backs out.
+    emu = guard('collection_phone_register')
+    assert reloads == ['stuck'] and not emu.waiting
+    for run.frame in range(4 * SCREEN_FRAMES, 6 * SCREEN_FRAMES, 24):
+        adapter.after_step(run, shown)
+    assert recoveries
 
 
 def test_phone_number_prompt_is_accepted_only_while_registering(real_data):

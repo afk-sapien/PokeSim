@@ -124,7 +124,10 @@ class Gen2Adapter:
 
     def after_step(self, run, snapshot):
         screen = hash((snapshot.tiles, snapshot.map, snapshot.x, snapshot.y, snapshot.in_battle))
-        if screen != self.screen_key:
+        if run.policy.idle(snapshot):
+            # Standing on a wait tile is the plan, as the emulator's guards hold (policy.idle).
+            self.screen_key, self.screen_frame = screen, run.frame
+        elif screen != self.screen_key:
             self.screen_key, self.screen_frame = screen, run.frame
         elif run.frame - self.screen_frame >= SCREEN_FRAMES:
             # The guards back out of a screen that stopped changing, then mix in other buttons.

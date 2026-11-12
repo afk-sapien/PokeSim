@@ -33,24 +33,30 @@ class NavigationPart:
         """
         return bool(snapshot.script_running and snapshot.wild_pending)
 
-    def idle(self, snapshot):
-        """Whether the run stands on its clock-wait tile, the moment between two patrol steps.
+    # Goals that wait on purpose for game time to pass: the clock-wait patrol, and a Crystal phone wait
+    # by a Pokémon Center PC (item_sources.phones), which ends with the call or its own budget.
+    WAIT_GOALS = frozenset(('collection_idle', 'collection_phone_wait'))
 
-        The emulator does not treat this pause as a stuck run, since the clock-wait only ends when enough
-        game time has passed.
+    def idle(self, snapshot):
+        """Whether the run stands on its wait tile: the clock-wait tile between two patrol steps, or the
+        spot by the PC where a phone wait stands.
+
+        The emulator does not treat this pause as a stuck run, since the wait only ends when enough game
+        time has passed. Reloading cannot hurry a call and rewinds the phone's call timer.
         """
         goal = self.goal
         return (self.waiting(snapshot) and not snapshot.in_battle
                 and (goal.x, goal.y) == (snapshot.x, snapshot.y))
 
     def waiting(self, snapshot):
-        """Whether the run is walking the grass on purpose until the cartridge clock opens new work.
+        """Whether the run waits on its goal's map on purpose, walking the grass until the cartridge clock
+        opens new work or walking to the phone wait's spot.
 
-        The patrol earns no new progress, so the emulator does not reload it for lack of progress,
-        but a patrol that stops moving is still caught by the stuck and frozen screen checks.
+        The wait earns no new progress, so the emulator does not reload it for lack of progress, but a
+        wait that stops moving away from its tile is still caught by the stuck and frozen screen checks.
         """
         goal = self.goal
-        return (goal is not None and goal.key == 'collection_idle' and self.menu is None
+        return (goal is not None and goal.key in self.WAIT_GOALS and self.menu is None
                 and self.data.map_ids.get(goal.map_name) == snapshot.map)
 
     def person(self, snapshot, key, label, map_name, script):

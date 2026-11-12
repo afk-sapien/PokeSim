@@ -74,3 +74,11 @@ frames = [3318554452, 3318554452]
 expect = "passes"
 kind = "quiet"
 issue = 577
+
+[[scenario]]
+name = "crystal-violet-phone-wait-20261112"
+rom_sha1 = "f2f52230b536214ef7c9924f483392993e226cfb"
+state_sha256 = "490141d874f41f4c44978cec9cfbf4a043898af604b8cff04c202bdff483ccdb"
+frames = [12070605, 12488265]
+expect = "passes"
+kind = "quiet"
