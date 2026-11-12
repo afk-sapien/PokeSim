@@ -73,3 +73,4 @@ state_sha256 = "12df9c206669d985e03608b4386571c56391a0a50aa9f869ecb9f2e57f2fefa3
 frames = [3318554452, 3318554452]
 expect = "passes"
 kind = "quiet"
+issue = 577
