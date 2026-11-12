@@ -56,3 +56,12 @@ state_sha256 = "1e5920117ad135a81a71662bb76864c8d8ec0dac304bb88541e8f57d8e0fcfea
 frames = [10977153, 10977153]
 expect = "passes"
 issue = 574
+
+[[scenario]]
+name = "red-agatha-poison-20261112"
+rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
+state_sha256 = "d08b6cc0de8b2e80edfa6a0447e5b44c2adf9095bdca6ac546ec35f402cf7bf1"
+frames = [3275301392, 3275371941]
+expect = "passes"
+kind = "quiet"
+issue = 576
