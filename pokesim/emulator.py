@@ -725,11 +725,12 @@ class Emulator(EmulatorBase):
         self.last_reload = time.time()
         self.invalid_frame = self.battle_frame = None
 
-    def _give_up(self, why):
+    def _give_up(self, why, reloads=None):
         """Abandon the collection project that every reload left stuck, so the next goal runs instead.
 
         The project stands down in the director and comes back later, and the reloads start over for
         whatever runs next. A story goal has no project to abandon, so it stays flagged as stalled.
+        ``reloads`` is how many reloads were spent, the ladder's count when None.
         """
         policy, snapshot = getattr(self, 'policy', None), getattr(self, 'snapshot', None)
         collection = getattr(policy, 'collection', None)
@@ -738,7 +739,7 @@ class Emulator(EmulatorBase):
         goal = getattr(policy, 'goal', None)
         label = goal.title if goal is not None else 'the current project'
         capture.keep(self, 'give_up', why)
-        reloads = self.supervisor.reloads
+        reloads = self.supervisor.reloads if reloads is None else reloads
         collection.abandon(f'{why.capitalize()} and {reloads} reloads did not help')
         log.error('%s and %d reloads did not help, giving up on %s for now', why, reloads, label)
         self._handle_events([Event('stall', f'Gave up on “{label}” for now',
@@ -777,7 +778,14 @@ class Emulator(EmulatorBase):
                 log.error('%s and %d reloads did not help, not reloading again', why, rung.reloads)
             Emulator._reset_watch(self)
             return
-        all_saves, saves, target, _ = Emulator._reload_saves(self, since_frame, rung.league, why)
+        all_saves, saves, target, entry = Emulator._reload_saves(self, since_frame, rung.league, why)
+        if entry is not None and self.supervisor.call_off_league(
+                getattr(snapshot, 'hall_of_fame_count', 0), lambda: Emulator._give_up(self, why, rung.reloads - 1)):
+            # The entry save is in Lorelei's room and nobody leaves the League part way, so a restart
+            # would only begin the same attempt again. A live Red run did that twelve times. The run
+            # gives up where it stands, and the battle ends in a black out that sends the team to train.
+            log.warning('%s and the League attempt restarted without a new Hall of Fame entry, calling it off', why)
+            return
         if rung.report and snapshot is not None and snapshot.valid and snapshot.started:
             title, body = stuck_report(why, snapshot.map_name)
             self._handle_events([Event('stall', title, body, priority=HIGH)], snapshot)

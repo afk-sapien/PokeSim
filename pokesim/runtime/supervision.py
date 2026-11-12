@@ -14,7 +14,8 @@ The rungs, in order:
 2. Inside the League, from the second reload on, or at once for a battle that cannot end, restart
    the attempt from the League entry save. A save part way through keeps the PP already spent, so
    going back a little replays the same lost battle. The third restart without a new Hall of Fame
-   entry calls the League run off.
+   entry calls the League run off, and so does a restart on the stall that would report the run, so
+   a run the call-off frees never asks the owner for help.
 3. After twelve reloads, give up on the goal every reload left stuck. When there is nothing to give
    up, or the loop guard sees the run repeating itself, stop reloading and stay flagged as stalled
    until the run makes progress again.
@@ -288,6 +289,25 @@ class Supervisor:
         self.league = (max(wins, seen), 0 if call_off else count)
         self._save()
         return call_off
+
+    def call_off_league(self, wins, call_off):
+        """Count a League attempt restarted from its entry save and call the League run off when it is time.
+        True when it did. One rule for both generations.
+
+        It is time on the third restart without a new Hall of Fame entry (``restarted_league``), or on a
+        restart the ladder would report as stalled. A live Red run was reported at the third reload and
+        gave up by itself at the twelfth, so the call-off acts first and the owner is only asked when it
+        cannot. ``call_off`` calls the generation's run off and says whether there was one to call off.
+        A first League run has none and restarts as before. A run called off starts the ladder again,
+        as a give up does.
+        """
+        due = self.restarted_league(wins) or self.reloads >= STALL_RELOADS
+        if not due or not call_off():
+            return False
+        self.league = (self.league[0], 0)
+        self.reloads, self.exhausted = 0, False
+        self._save()
+        return True
 
     def progressed(self, snapshot, areas, wins):
         """Whether the run beat its own best, which starts the ladder again.
