@@ -463,32 +463,36 @@ def check_centers_gen2(data, regions, snapshot, walked, badge, names):
 def check_flight(data, names, destinations=None):
     """The Fly points the policy may pick from each town and route are the ones the Fly map lists (#124).
 
-    The cartridge picks Kanto's map when the landmark of the player's map is Pallet Town's or later,
-    and Johto's map before that, so no flight crosses between the regions. Every spawn counts as
-    visited. Kanto's map also needs Indigo Plateau visited, which the story does before it reaches
-    Kanto. ``destinations`` replaces the policy's list, for tests.
+    The cartridge picks Kanto's map when the landmark of the player's map is Pallet Town's or later
+    and the Indigo Plateau spawn on Route 23 is visited, and Johto's map otherwise, so no flight
+    crosses between the regions. The check runs with every spawn visited, then with every spawn but
+    Indigo Plateau's, as on Route 26 and 27 before the first League visit. ``destinations``
+    replaces the policy's list, for tests.
     """
     from pokecore.gen2.maps import OUTSIDE
     from pokesim.gen2 import flight
     destinations = destinations or flight.destinations
     pallet = data.maps[data.map_ids['PALLET_TOWN']]['landmark']
+    indigo = next(point['spawn'] for point in data.fly_points if point['map'] == data.map_ids['ROUTE_23'])
 
-    def region(mid):
-        return 'kanto' if data.maps[mid]['landmark'] >= pallet else 'johto'
+    def region(mid, visited=1 << indigo):
+        return 'kanto' if data.maps[mid]['landmark'] >= pallet and visited & 1 << indigo else 'johto'
 
     every = (1 << 8 * 4) - 1
     found = {}
-    for mid, entry in data.maps.items():
-        if entry['environment'] not in OUTSIDE:
-            continue
-        listed = {point['map'] for _, point in destinations(data, mid, every)}
-        shown = {point['map'] for point in data.fly_points if region(point['map']) == region(mid)}
-        for point in sorted(listed - shown):
-            found[('fly', names[mid], names[point], 'crosses regions')] = (
-                f'the Fly map on {names[mid]} shows {region(mid).title()}, not {names[point]}')
-        for point in sorted(shown - listed):
-            found[('fly', names[mid], names[point], 'not listed')] = (
-                f'the Fly map on {names[mid]} shows {names[point]}, which the policy never picks')
+    for visited, when in ((every, ''), (every & ~(1 << indigo), ' before Indigo Plateau')):
+        for mid, entry in data.maps.items():
+            if entry['environment'] not in OUTSIDE:
+                continue
+            listed = {point['map'] for _, point in destinations(data, mid, visited)}
+            shown = {point['map'] for point in data.fly_points
+                     if region(point['map']) == region(mid, visited) and visited & 1 << point['spawn']}
+            for point in sorted(listed - shown):
+                found[('fly', names[mid], names[point], 'crosses regions' + when)] = (
+                    f'the Fly map on {names[mid]} shows {region(mid, visited).title()}{when}, not {names[point]}')
+            for point in sorted(shown - listed):
+                found[('fly', names[mid], names[point], 'not listed' + when)] = (
+                    f'the Fly map on {names[mid]} shows {names[point]}{when}, which the policy never picks')
     return found
 
 

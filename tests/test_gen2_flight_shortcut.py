@@ -132,6 +132,31 @@ def test_from_kanto_a_walled_route_walks_into_johto_before_flying(data):
     assert shortcut(policy, landed, mem, target) is not None
 
 
+def test_route_26_shows_johto_until_indigo_plateau_is_visited(data):
+    """Route 26 and 27 are Kanto's on the town map, but the cartridge keeps Kanto's Fly map shut until the
+    Indigo Plateau Fly point on Route 23 is visited and shows Johto's map in its place. A party that
+    needed a Pokémon Center there before the first League visit flew nowhere and walked back through
+    Tohjo Falls."""
+    from pokesim.gen2.flight import destinations, shortcut
+    from pokesim.gen2.menus import Fly
+    from pokesim.gen2.navigation import Navigator
+
+    ids = data.map_ids
+    johto = [point for point in data.fly_points if data.maps[point['map']]['region'] == 'johto']
+    indigo = next(point for point in data.fly_points if point['map'] == ids['ROUTE_23'])
+    before = sum(1 << point['spawn'] for point in johto)
+    for route in ('ROUTE_26', 'ROUTE_27'):
+        assert [point for _, point in destinations(data, ids[route], before)] == johto
+        assert [point for _, point in destinations(data, ids[route], before | 1 << indigo['spawn'])] == [indigo]
+    assert [point for _, point in destinations(data, ids['NEW_BARK_TOWN'], before)] == johto
+
+    here = Spot(ids['ROUTE_26'], 7, 12, 0xFFFF, (SimpleNamespace(egg=False, moves=(19, 57, 15, 0)),))
+    policy = SimpleNamespace(data=data, nav=Navigator(data), goal=SimpleNamespace(x=5, y=6))
+    mem = SimpleNamespace(read=lambda name, size: before.to_bytes(4, 'little'), memory=None)
+    flight = shortcut(policy, here, mem, ids['CHERRYGROVE_POKECENTER_1F'])
+    assert isinstance(flight, Fly) and flight.destination == ids['CHERRYGROVE_CITY']
+
+
 def test_walking_out_is_left_alone_when_walking_works_or_fly_cannot(data):
     from pokesim.gen2.flight import outside
 
