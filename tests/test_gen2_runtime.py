@@ -2300,7 +2300,8 @@ def test_master_ball_waits_for_the_roaming_beasts(real_data):
 
 
 def test_static_lead_is_the_sleeper_most_likely_to_land_sleep(real_data, monkeypatch):
-    from pokesim.gen2 import teams
+    # The tower module keeps the teams.key it finds when first imported, so it is imported before the patch.
+    from pokesim.gen2 import teams, tower  # noqa: F401
     from pokesim.gen2.quests import static_lead, static_level
     from pokesim.gen2.policy import Policy, Goal
     monkeypatch.setattr(teams, 'key', lambda mon: mon.name)
@@ -2328,7 +2329,8 @@ def test_static_lead_is_the_sleeper_most_likely_to_land_sleep(real_data, monkeyp
 
 
 def test_the_static_sleeper_keeps_the_lead_through_a_box_release(real_data, monkeypatch):
-    from pokesim.gen2 import teams
+    # The tower module keeps the teams.key it finds when first imported, so it is imported before the patch.
+    from pokesim.gen2 import teams, tower  # noqa: F401
     from pokesim.gen2.menus import Lead
     from pokesim.gen2.policy import Goal, Policy
     from pokesim.gen2.quests import static_lead

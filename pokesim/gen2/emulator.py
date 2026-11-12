@@ -18,7 +18,7 @@ from ..progress_events import mon_identity
 from ..experimental.gen2 import identify
 from ..loop_errors import loop_failed
 from ..play_clock import PlayClock
-from ..runtime import capture, trace
+from ..runtime import battle_clock, capture, trace
 from ..runtime.emulator import (BEFORE_LOAD_CHECKPOINT, BEFORE_RESTART_CHECKPOINT,  # noqa: F401
                                 LEAGUE_CHECKPOINT, MANUAL_QUEUE, EmulatorBase)
 from ..runtime.game_loop import GEN2_WAIT, Decider, GameLoop
@@ -33,6 +33,7 @@ from pokecore.emulator_state import validate_runtime
 from .adapter import SCREEN_FRAMES, new_history
 from .data import GameData
 from . import journal
+from .ledger import balls
 from .policy import Policy
 from pokecore.gen2.ram import BADGES, read_snapshot
 from .store_stock import StoreStock
@@ -713,8 +714,10 @@ class Emulator(EmulatorBase):
         A long trainer battle, like Red's six Pokémon against an underlevelled team, can outlast
         BATTLE_TIMEOUT_SECONDS while still knocking out opponents. Only a battle that stops
         bringing out new opponents is hung. Each opponent counts once, so switching cannot
-        keep a stuck battle alive forever.
+        keep a stuck battle alive forever. A ball thrown restarts the clock the timeout counts as
+        well, in every generation (runtime.battle_clock).
         """
+        battle_clock.note_throws(self, snapshot, balls)
         if not snapshot.in_battle:
             self.battle_frame, self.battle_opponents = None, set()
             return
@@ -770,7 +773,7 @@ class Emulator(EmulatorBase):
         self.explored = set()
         self.progress_frame = self.screen_frame = self.stuck_frame = self.last_reload_frame = self.frame
         self.screen_key = self.progress_key = None
-        self.invalid_frame = self.battle_frame = None
+        self.invalid_frame = self.battle_frame = self.throws = None
         self._reward_check_frame = self.frame
         # A reload rewinds the frame counter, so the next guard check must be due from the restored
         # frame. Left at the old frame, the guards slept until the run caught up, a clock wait was
@@ -978,7 +981,7 @@ class Emulator(EmulatorBase):
             self._unstick(self.invalid_frame, 'game state glitched')
         elif self.failure_streak >= 3:
             self._unstick(self.stuck_frame, 'a menu task kept failing')
-        elif self.battle_frame is not None and frame - self.battle_frame > config.BATTLE_TIMEOUT_SECONDS * 60:
+        elif self.battle_frame is not None and frame - battle_clock.timed_from(self) > config.BATTLE_TIMEOUT_SECONDS * 60:
             self._unstick(self.battle_frame, 'battle never ended')
         elif self.battle_frame is not None and self.policy.hopeless_battle(snapshot):
             # Nobody standing can hurt the foe and Struggle is out of reach, so the timeout has nothing to wait for.
