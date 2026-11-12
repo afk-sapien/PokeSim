@@ -1,4 +1,6 @@
-"""The map audit passes on every game, and still catches the map facts behind #254, #241, #268 and #124, and walks through Ilex Forest or over a gate link without the field move."""
+"""The map audit passes on every game, and still catches the map facts behind #254, #241, #268 and #124, and walks through Ilex Forest or over a gate link without the field move.
+
+Check E walks the story steps of all five games. Each step is offered in turn and reachable from the one before."""
 import importlib.util
 import os
 import subprocess
@@ -175,13 +177,48 @@ def gen1_tool(variant='red'):
         pytest.skip(f'{variant.title()} game data is not prepared')
 
 
-def timed_story_check(*args, **kwargs):
+def timed_story_check(*args, check=None, **kwargs):
     import time
     start = time.perf_counter()
-    found = tool.check_story_gen1(*args, **kwargs)
+    found = (check or tool.check_story_gen1)(*args, **kwargs)
     seconds = time.perf_counter() - start
     assert seconds < STORY_SECONDS, f'check E took {seconds:.0f} s'
     return found
+
+
+def test_every_gen2_story_step_is_offered_and_reachable_in_turn(game):
+    name, data, _ = game
+    assert timed_story_check(data, check=tool.check_story_gen2) == {}, name
+
+
+def test_a_gen2_story_row_the_manifest_drops_is_not_offered_in_turn(game):
+    name, data, _ = game
+    rows = story.steps(2, name)
+    keys = [row['key'] for row in rows]
+    skipped = keys.index('officer')
+    after = rows[skipped + 1]
+    found = timed_story_check(data, rows=rows[:skipped] + rows[skipped + 1:], check=tool.check_story_gen2)
+    assert found == {('story', after['key'], tool.where(after), 'not offered'): 'the story offers officer here'}
+
+
+def test_switches_that_open_no_doors_cut_off_the_radio_tower_director(game):
+    # Each underground switch opens and shuts its own set of shutters, so a manifest that forgets
+    # the doors a switch moves leaves the director behind closed shutters.
+    name, data, _ = game
+    rows = [dict(row) for row in story.steps(2, name)]
+    for row in rows:
+        if row['key'].startswith('switch_'):
+            row['done_when'] = {'flags': [flag for flag in row['done_when']['flags'] if 'DOOR' not in flag]}
+    found = timed_story_check(data, rows=rows, check=tool.check_story_gen2)
+    key = ('story', 'card_key', 'GoldenrodUndergroundWarehouseDirectorScript', 'no route')
+    assert found[key] == 'no route from GOLDENROD_UNDERGROUND_SWITCH_ROOM_ENTRANCES (16, 2)'
+
+
+def test_each_starter_row_is_offered_by_a_policy_that_chose_it(game):
+    name, _, _ = game
+    starters = story.rows(2, name, 'starter')
+    assert [row['starter'] for row in starters] == list(tool.GEN2_STARTERS)
+    assert {row['done_when']['party'] for row in starters} == {True}
 
 
 def test_every_gen1_story_step_is_offered_and_reachable_in_turn():

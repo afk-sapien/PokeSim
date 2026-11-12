@@ -20,7 +20,8 @@ of moves that does not join it must take no crossing those moves do not join.
 Check E covers the story manifests in pokesim/story. It walks the rows in play order, holding the
 game the rows before leave. The story code must offer each row in turn, the row's place must be
 reachable from the row before, and after each badge a Pokémon Center must be reachable from every
-town and route the story walked. Gen I runs it with --gen1, for the variant the process loads.
+town and route the story walked. Gold, Silver and Crystal run it with the other checks. Gen I runs it
+with --gen1, for the variant the process loads.
 
 Each finding that is true of the games today is on ALLOWED with the reason it is there. The audit
 fails on a finding that is not on ALLOWED, and on a row of ALLOWED that no longer matches a
@@ -248,7 +249,11 @@ def gen1_goal(row):
 
 def where(row):
     """A short name for a story row, which tells apart the rows one key holds."""
-    return 'gym' if row.get('gym') else row.get('object') or f"{row['x']},{row['y']}"
+    if row.get('gym'):
+        return 'gym'
+    if 'points' in row:
+        return f"{len(row['points'])} points"
+    return row.get('object') or f"{row['x']},{row['y']}"
 
 
 # A route between two story steps may cross much of Kanto, so it may search past the walk limit.
@@ -331,12 +336,207 @@ def check_story_gen1(navigator=None, rows=None):
     return found
 
 
+# The starter check E plays in Gold, Silver and Crystal, and the partner beside it. The partner can learn
+# Surf, Whirlpool and Waterfall, so the story never sends the run to find one that can.
+GEN2_STARTER = 'totodile'
+GEN2_STARTERS = ('cyndaquil', 'totodile', 'chikorita')
+GEN2_PARTNER = 'GYARADOS'
+# A dozen Full Restores, so the Red row is not set aside to win money for potions.
+GEN2_BAG = (('FULL_RESTORE', 12),)
+
+
+def gen2_state(data, done):
+    """The Gold, Silver or Crystal game a player holds once the story rows in ``done`` are done.
+
+    Every row sets its done_when flags and clears its "clear" flags, on top of the flags the start
+    row of gen2.json sets. Badges, Pokégear cards, Hall of Fame entries and field moves add up.
+    """
+    from pokesim import story
+    flags = bytearray(max(data.events.values()) // 8 + 1)
+
+    def mark(names, on):
+        for name in names:
+            index = data.events[name]
+            if on:
+                flags[index // 8] |= 1 << index % 8
+            else:
+                flags[index // 8] &= ~(1 << index % 8)
+
+    mark(story.start(2).get('flags', ()), True)
+    badges = hall_of_fame = pokegear = 0
+    moves, party = [], False
+    for row in done:
+        facts = row['done_when']
+        mark(facts.get('flags', ()), True)
+        mark(facts.get('clear', ()), False)
+        badges |= facts.get('badges', 0)
+        hall_of_fame = max(hall_of_fame, facts.get('hall_of_fame', 0))
+        pokegear |= facts.get('pokegear', 0)
+        moves += facts.get('moves', [])
+        party = party or facts.get('party', False)
+    return dict(event_flags=bytes(flags), badges=badges, hall_of_fame_count=hall_of_fame, pokegear=pokegear,
+                moves=tuple(moves), party=party)
+
+
+def gen2_snapshot(data, position, state, frame=0):
+    """A Gen II snapshot at ``position`` holding ``state``, with the starter and its partner in the party.
+
+    The starter knows the field moves the story taught so far.
+    """
+    from pokecore.gen2.ram import Mon, Snapshot
+
+    def mon(name, moves):
+        species = next(sid for sid, entry in data.species.items() if entry['constant'] == name)
+        return Mon(species, name, 50, 150, 150, 0, 0, moves, (20,) * len(moves), (20,) * len(moves),
+                   (150,) * 6, 125000, (15,) * 4, (0,) * 5, 1, 70, data=data)
+
+    party = ()
+    if state['party']:
+        party = (mon(GEN2_STARTER.upper(), state['moves'] or (10,)), mon(GEN2_PARTNER, (33,)))
+    items = tuple((data.items[name], count) for name, count in GEN2_BAG)
+    pockets = {'items': items, 'balls': (), 'key': (), 'machines': ()}
+    return Snapshot(frame=frame, map=position[0], x=position[1], y=position[2], player_name='GOLD',
+                    rival_name='SILVER', party=party, stored=(), box_counts=(0,) * 14, active_box=0,
+                    owned=frozenset(), seen=frozenset(), badges=state['badges'], items=items, pockets=pockets,
+                    money=0, coins=0, in_battle=0, enemy_species=0, enemy_level=0, enemy_hp=0, enemy_max_hp=0,
+                    trainer_class=0, battle_type=0, playtime=(0, 0, 0),
+                    hall_of_fame_count=state['hall_of_fame_count'], event_flags=state['event_flags'],
+                    tiles=('',) * 18, objects=(), valid=True, data=data)
+
+
+class Gen2Memory:
+    """The bytes the Gen II story code reads from memory: the Pokégear cards, and the Farfetch'd at its first spot."""
+    memory = None
+
+    def __init__(self, pokegear):
+        self.pokegear = pokegear
+
+    def byte(self, name):
+        return self.pokegear if name == 'wPokegearFlags' else 0
+
+
+def gen2_goal(policy, snapshot, row):
+    """The goal a Gen II story row asks for, with an empty title."""
+    from pokesim.gen2.policy.state import Goal
+    if 'object' in row:
+        return policy.person(snapshot, row['key'], '', row['map'], row['object'])
+    if 'points' in row:
+        x, y, face = row['points'][0]
+        return Goal(f"{row['key']}_1", '', row['map'], x, y, face)
+    return Goal(row['key'], '', row['map'], row['x'], row['y'], row.get('face'))
+
+
+def gen2_place(goal):
+    return None if goal is None else (goal.key, goal.map_name, goal.x, goal.y, goal.face)
+
+
+def ground(regions, mid, region, cut, surf):
+    """A tile of ``region`` on map ``mid``, which stands for the region once the labels change."""
+    return min(point for point, label in regions.regions(mid, cut, surf).items() if label == region)
+
+
+def check_centers_gen2(data, regions, snapshot, walked, badge, names):
+    """After a badge, a Pokémon Center is reachable from each town and route the story walked."""
+    from collections import deque
+    from pokesim.gen2.navigation import field_moves
+    moves = field_moves(snapshot)
+    cut, surf = 'cut' in moves, 'surf' in moves
+    found = {}
+    for mid, point in walked.items():
+        seen = {(mid, region) for region in regions.memberships(mid, point, cut, surf, arrive=True)}
+        queue = deque(seen)
+        while queue:
+            node = queue.popleft()
+            if names[node[0]].endswith('POKECENTER_1F'):
+                break
+            for destination, _, _ in regions.edges(node, cut, surf):
+                if destination not in seen:
+                    seen.add(destination)
+                    queue.append(destination)
+        else:
+            found[('center', badge, names[mid])] = f'no Pokémon Center is reachable from {names[mid]} {point}'
+    return found
+
+
+def check_story_gen2(data, rows=None):
+    """Check E for one of Gold, Silver and Crystal.
+
+    Each story row's place must be reachable from the place of the row before, with the game the
+    rows before it leave. The story code must offer each row in turn, at the row's own place. After
+    each badge, a Pokémon Center must be reachable from every town and route the story walked. A
+    row for another starter is checked with a policy that chose it, and the walk goes on without it.
+    ``rows`` replaces the manifest rows, for tests.
+    """
+    from pokesim import story
+    from pokesim.gen2.navigation import field_moves
+    from pokesim.gen2.policy import Policy
+    names = {mid: entry['constant'] for mid, entry in data.maps.items()}
+    rows = story.steps(2, data.game) if rows is None else rows
+    regions = Regions(data)
+    policies = {starter: Policy(data, seed=1, starter=starter) for starter in GEN2_STARTERS}
+    for policy in policies.values():
+        # The story picks approach tiles with the regions of its navigator, so it sees the same doors.
+        policy.nav.regions = regions
+    first = story.start(2)
+    position = (data.map_ids[first['map']], first['x'], first['y'])
+    found, done, walked = {}, [], {}
+    before = None
+    for frame, row in enumerate(rows):
+        if before is None or before[0] != row['key']:
+            # Rows that share a key are choices, such as the three starters, and are checked in one state.
+            state = gen2_state(data, done)
+            before = (row['key'], gen2_snapshot(data, position, state, frame), state)
+        _, snapshot, state = before
+        observe_gen2(data, regions, snapshot)
+        policy = policies[row.get('starter', GEN2_STARTER)]
+        goal, wanted = policy.story(snapshot, Gen2Memory(state['pokegear'])), gen2_goal(policy, snapshot, row)
+        if gen2_place(goal) != gen2_place(wanted):
+            found[('story', row['key'], where(row), 'not offered')] = f'the story offers {goal and goal.key} here'
+        if policy is not policies[GEN2_STARTER]:
+            continue
+        moves = field_moves(snapshot)
+        cut, surf = 'cut' in moves, 'surf' in moves
+        target = data.map_ids[wanted.map_name]
+        start = SimpleNamespace(map=position[0], x=position[1], y=position[2])
+        path = regions.route(start, target, [(wanted.x, wanted.y)], cut=cut, surf=surf)
+        if path is None:
+            found[('story', row['key'], where(row), 'no route')] = f'no route from {names[position[0]]} {position[1:]}'
+        for _, (mid, region), _, _ in path or ():
+            if mid not in walked and data.maps[mid]['environment'] in OUTDOOR_GEN2:
+                walked[mid] = ground(regions, mid, region, cut, surf)
+        position = (target, wanted.x, wanted.y)
+        if 'then' in row:
+            position = (data.map_ids[row['then']['map']], row['then']['x'], row['then']['y'])
+        done.append(row)
+        if 'badges' in row['done_when']:
+            after = gen2_snapshot(data, position, gen2_state(data, done))
+            observe_gen2(data, regions, after)
+            found.update(check_centers_gen2(data, regions, after, walked, row['key'], names))
+    return found
+
+
+def observe_gen2(data, regions, snapshot):
+    """Show ``regions`` the doors and walls the event flags of ``snapshot`` draw, and the objects on ice."""
+    from dataclasses import replace
+    from pokecore.gen2.maps import event_changes, ice_solids
+    away = replace(snapshot, map=-1)
+    for mid, grid in event_changes(data, away).items():
+        regions.observe(mid, grid)
+    for mid in regions.ice_maps:
+        regions.observe_solids(mid, ice_solids(data, away, mid))
+
+
+# The environments of Johto's and Kanto's towns and routes.
+OUTDOOR_GEN2 = frozenset({'TOWN', 'ROUTE'})
+
+
 def audit(data):
     """Every finding for one game, as {finding: detail}."""
     names = {mid: entry['constant'] for mid, entry in data.maps.items()}
     regions, navigator = Regions(data), Navigator(data)
     return {**check_seams(data, regions, navigator, names), **check_warps(data, regions, names),
-            **check_carpets(data, regions, navigator, names), **check_crossings(data, navigator, names)}
+            **check_carpets(data, regions, navigator, names), **check_crossings(data, navigator, names),
+            **check_story_gen2(data)}
 
 
 def problems(game, findings, allow=None):
