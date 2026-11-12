@@ -1,4 +1,5 @@
 """Trace segments on the bundled demo ROM: the chain, verify, redecide and the recorder's attachment."""
+import enum
 import gzip
 import shutil
 
@@ -345,4 +346,72 @@ def test_a_refused_tick_leaves_the_trace_clean(tmp_path):
             game.tick(0)
         game.tick(2)
         recorder.detach()
+    assert verify(path, machine()).code == OK
+
+
+def walked(value):
+    """``value`` as the recorder built header fields when it made one call for every list item."""
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return {'bytes': bytes(value).hex()}
+    if isinstance(value, (list, tuple)):
+        return [walked(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): walked(item) for key, item in value.items()}
+    return value
+
+
+Kind = enum.IntEnum('Kind', 'WALK')
+
+
+def long_game_manifest():
+    """About 2.8 MB of manifest JSON, shaped like a long Gen I game's: almost all flat navigation cells."""
+    visits = [value for cell in range(32051) for value in (cell % 248, cell % 40, cell % 36, cell % 9 + 1)]
+    edges = [value for cell in range(83480)
+             for value in (cell % 248, cell % 40, cell % 36, cell % 4, cell % 247, cell % 39, cell % 35)]
+    return {'frame': 9457754, 'policy_state': {'navigation': {'visit_cells': visits, 'edge_cells': edges},
+                                               'goal': ('walk', 3, None, True, 1.5)},
+            'run_memory': {'party': (b'\x01\x02', {4: 'x', 10: [Kind.WALK, 2]})}}
+
+
+def test_a_long_games_manifest_is_walked_and_encoded_once_at_the_fast_level(tmp_path, monkeypatch):
+    import pokecore.trace as trace
+    manifest = long_game_manifest()
+    walks, encodes = [0], []
+    walk, encode = trace._json_value, trace.encoded
+
+    def counted_walk(value):
+        walks[0] += 1
+        return walk(value)
+
+    def counted_encode(value):
+        text = encode(value)
+        encodes.append(len(text))
+        return text
+
+    monkeypatch.setattr(trace, '_json_value', counted_walk)
+    monkeypatch.setattr(trace, 'encoded', counted_encode)
+    path = tmp_path / 'a.jsonl.gz'
+    with machine() as game:
+        game.tick(LEAD_IN)
+        recorder = Recorder(game)
+        recorder.begin(Segment(path, keep_start=True), manifest=manifest)
+        game.tick(2)
+        recorder.detach()
+    monkeypatch.undo()
+    # An autosave begins a segment on the game thread. The walk used to make a call for each of the
+    # 700,000 cells, the header was encoded twice, and gzip level 9 took over a second on it.
+    assert walks[0] < 50
+    assert sum(size > 1_000_000 for size in encodes) == 1
+    assert path.read_bytes()[8] == 4, 'gzip marks a level 1 stream as the fastest'
+    logged = Trace.read(path)
+    assert encoded(logged.header['manifest']) == encoded(walked(manifest))
+    assert verify(path, machine()).code == OK
+
+
+def test_a_segment_written_at_gzip_level_9_still_reads_and_verifies(tmp_path):
+    path = record(tmp_path)
+    lines = gzip.decompress(path.read_bytes())
+    path.write_bytes(gzip.compress(lines, compresslevel=9))
+    assert path.read_bytes()[8] == 2
+    assert Trace.read(path).records
     assert verify(path, machine()).code == OK
