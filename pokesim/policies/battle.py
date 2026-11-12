@@ -24,6 +24,11 @@ RISKY_CHIPS = ('EXPLODE_EFFECT', 'RECOIL_EFFECT', 'OHKO_EFFECT', 'TWO_TO_FIVE_AT
 HUNT_STOCK = 30
 HM_MOVES = {15, 19, 57, 70, 148}
 FROZEN = 32
+# Poison and burn wear a foe down every turn. Asleep is bits 0 to 2.
+WEARING = 8 | 16
+ASLEEP_OR_FROZEN = 7 | FROZEN
+# The game's attack once every move is out of PP: Normal, so it cannot touch a Ghost.
+STRUGGLE = 165
 HOPELESS = 'Nobody here can act and this foe never attacks, so only an earlier save ends the battle'
 HEALING = {ITEMS["POTION"]: 20, ITEMS["SUPER_POTION"]: 50, ITEMS["HYPER_POTION"]: 200,
            ITEMS["MAX_POTION"]: 999, ITEMS["FULL_RESTORE"]: 999,
@@ -69,6 +74,36 @@ def foe_never_attacks(enemy, mon):
     against a Poison or Fighting partner, and a partner who cannot act is never knocked out."""
     favoured = [MOVES[mid] for mid in enemy.moves if mid in MOVES and effectiveness(MOVES[mid]['type'], mon.types) > 1]
     return bool(favoured) and not any(move['power'] for move in favoured)
+
+
+def hurts(mon, enemy):
+    """Whether ``mon`` can wear ``enemy`` down with what it has PP for: an attack that connects, poison
+    that takes, or Dream Eater behind its own sleep move. A poisoned or burned foe is worn down already.
+    With every move out of PP the game uses Struggle."""
+    if enemy.status & WEARING:
+        return True
+    usable = [mid for mid, pp in zip(mon.moves, mon.pp) if mid in MOVES and pp] or [STRUGGLE]
+    sleeps = any(MOVES[mid]['effect'] == 'SLEEP_EFFECT' for mid in usable)
+    for mid in usable:
+        move = MOVES[mid]
+        if damage(mid, mon, enemy) > 0:
+            return True
+        if move['effect'] == 'DREAM_EATER_EFFECT' and sleeps and effectiveness(move['type'], enemy.types):
+            return True
+        if move['effect'] == 'POISON_EFFECT' and not enemy.status and 3 not in enemy.types:
+            return True
+    return False
+
+
+def lose_attempt(snapshot, enemy, active, slot):
+    """Nobody can end the battle and this foe never knocks the battler out. A partner it does attack
+    loses the attempt instead, and the blackout heals everyone at a Pokémon Center."""
+    targets = [(max((damage(mid, enemy, mon) for mid in enemy.moves if mid), default=0) / mon.hp, i)
+               for i, mon in enumerate(snapshot.party)
+               if i != active and mon.hp > 0 and not foe_never_attacks(enemy, mon)]
+    if targets:
+        return Decision("switch", max(targets)[1], reason="Nobody can act, so let the foe end an attempt that cannot be won")
+    return Decision("fight", slot, reason=HOPELESS)
 
 
 def damage_division_safe(move_id, attacker, defender):
@@ -439,6 +474,24 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
             return Decision("fight", max(weakening)[1], reason="Weaken the target without an expected knockout")
         if required:
             return Decision('item', balls[0][0], reason='Catch the field-move partner without knocking it out')
+    if snapshot.in_battle == 2 and not me.status & FROZEN and not hurts(me, enemy):
+        # Nothing this battler has left can hurt the foe, such as Struggle into Agatha's Ghosts, so items
+        # spent on it only lengthen a battle it cannot win. A partner that can hurt the foe and take its
+        # next hit comes in, below the usual bar of twice that hit. No switch brings back a battler that
+        # cannot hurt the foe, so this one skips the wait between switches.
+        partners = []
+        for i, mon in enumerate(snapshot.party):
+            if i == active or mon.hp <= 0 or mon.status & ASLEEP_OR_FROZEN or not hurts(mon, enemy):
+                continue
+            threat = max((damage(mid, enemy, mon) for mid in enemy.moves if mid), default=mon.max_hp * 0.2)
+            offense = ranked_moves(mon, enemy)
+            if mon.hp > threat:
+                partners.append(((offense[0][0] if offense else 0) / max(1, threat), mon.hp, i))
+        if partners:
+            return Decision("switch", max(partners)[2], reason="Nothing left here can hurt the foe, so bring in a partner who can")
+        if foe_never_attacks(enemy, me):
+            return lose_attempt(snapshot, enemy, active, slot)
+        return Decision("fight", slot, reason="Nothing left here can hurt the foe, so spend no items keeping it in")
     item_index = healing_item(snapshot.items, me, incoming)
     if item_index is not None:
         return Decision("item", item_index, active, "Recover HP or cure status before attacking")
@@ -457,14 +510,7 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
         if snapshot.in_battle == 1:
             return Decision("run", reason="Leave a battle that a frozen Pokémon cannot finish")
         if foe_never_attacks(enemy, me):
-            # Nobody can act and this foe will never knock the battler out. A partner it does attack
-            # loses the attempt instead, and the blackout heals everyone at a Pokémon Center.
-            targets = [(max((damage(mid, enemy, mon) for mid in enemy.moves if mid), default=0) / mon.hp, i)
-                       for i, mon in enumerate(snapshot.party)
-                       if i != active and mon.hp > 0 and not foe_never_attacks(enemy, mon)]
-            if targets:
-                return Decision("switch", max(targets)[1], reason="Nobody can act, so let the foe end an attempt that cannot be won")
-            return Decision("fight", slot, reason=HOPELESS)
+            return lose_attempt(snapshot, enemy, active, slot)
     candidates = []
     unsafe_moves = any(mid and pp and not damage_division_safe(mid, me, enemy)
                        for mid, pp in zip(me.moves, me.pp))
