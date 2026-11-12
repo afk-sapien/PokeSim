@@ -36,6 +36,10 @@ RESERVED = frozenset(("format", "rom_sha256", "state_sha256", "frame", "emulator
                       "pending", "digest_ranges", "check_every", "clock", "previous"))
 KINDS = frozenset(("press", "release", "tick", "write", "decide", "input", "load", "check", "hook"))
 OK, DIVERGED, HARNESS = 0, 1, 2
+# A segment begins at every autosave on the game thread, and its header carries the whole manifest. At
+# level 9 a long Gen I game's header held the game for over a second. Level 1 compresses about 20 times
+# faster and keeps a segment about 15% larger.
+COMPRESS_LEVEL = 1
 # Registration records depend on which observing hooks a commit has, not on what it plays.
 _NOT_COMPARED = frozenset(("hook",))
 
@@ -100,10 +104,16 @@ def _version(name):
         return None
 
 
+_PLAIN = frozenset((str, int, float, bool, type(None)))
+
+
 def _json_value(value):
     if isinstance(value, (bytes, bytearray, memoryview)):
         return {"bytes": bytes(value).hex()}
     if isinstance(value, (list, tuple)):
+        # A list of plain scalars, such as a navigation map's flat cells, is copied without a call per item.
+        if _PLAIN.issuperset(map(type, value)):
+            return list(value)
         return [_json_value(item) for item in value]
     if isinstance(value, dict):
         return {str(key): _json_value(item) for key, item in value.items()}
@@ -141,10 +151,11 @@ class Segment:
         self.keep_start = keep_start
         self._file = None
 
-    def begin(self, header, state):
+    def begin(self, header, state, text=None):
+        """Open the file and write ``header``. ``text`` is the header already encoded, if the caller has it."""
         self.folder.mkdir(parents=True, exist_ok=True)
-        self._file = gzip.open(self.path, "wt", encoding="utf-8")
-        self._file.write(encoded(header) + "\n")
+        self._file = gzip.open(self.path, "wt", encoding="utf-8", compresslevel=COMPRESS_LEVEL)
+        self._file.write((encoded(header) if text is None else text) + "\n")
         if self.keep_start:
             self.keep_state(state)
 
@@ -475,9 +486,14 @@ class Recorder:
         self._start = header["frame"]
         self.frames = 0
         self._since_check = 0
-        self.head = digest(encoded(header))
+        text = encoded(header)
+        self.head = digest(text)
         self.sink = sink
-        sink.begin(header, state)
+        if isinstance(sink, Segment):
+            # The head hash and the file's first line are the same text, so the header is encoded once.
+            sink.begin(header, state, text=text)
+        else:
+            sink.begin(header, state)
         return header
 
     @property
