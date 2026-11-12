@@ -60,6 +60,8 @@ class EmulatorBase:
     last_reload_frame = -10 ** 9
     invalid_frame = None
     battle_frame = None
+    # The latest ball thrown in this wild battle, which restarts the battle timeout (battle_clock).
+    throws = None
 
     # ---------------- lifecycle ----------------
     def stop(self):

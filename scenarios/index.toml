@@ -34,6 +34,13 @@ frames = [3233126603, 3233126603]
 expect = "passes"
 
 [[scenario]]
+name = "silver-lugia-catch-clock-20261112"
+rom_sha1 = "49b163f7e57702bc939d642a18f591de55d92dae"
+state_sha256 = "614e1ea8eaa3b302129d50d8a66bf6c9753ccef414e5d6e19e9cf823f6bc5439"
+frames = [11029085, 11029085]
+expect = "passes"
+
+[[scenario]]
 name = "red-lorelei-setup-loop-20261112"
 rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
 state_sha256 = "1612ce464f124050e5a2026893c31e819c8d650cd7496f698b3c0e92e3f028f1"

@@ -2287,6 +2287,32 @@ def test_static_legendary_awake_brings_in_the_sleeper(real_data):
     assert fight(policy, snapshot, mem).button[0] != 'Send'
 
 
+def test_static_legendary_awake_keeps_out_a_sleeper_that_cannot_land_sleep(real_data, monkeypatch):
+    from pokesim.gen2 import quests
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    policy.needed_move = lambda snapshot: 0
+    policy.remedy = lambda *args, **kwargs: False
+    feraligatr = SimpleNamespace(species=160, level=100, hp=363, max_hp=363, egg=False, status=0,
+        moves=(57, 250, 15, 70), pp=(15, 15, 30, 15), stats=(363, 284, 272, 234, 238, 246))
+    wigglytuff = SimpleNamespace(species=40, level=54, hp=219, max_hp=219, egg=False, status=0,
+        moves=(47, 50, 33, 3), pp=(15, 20, 35, 10), stats=(219, 95, 54, 62, 94, 67))
+    snapshot = SimpleNamespace(party=(feraligatr, wigglytuff), stored=(), text='FIGHT', tiles=(),
+        map=real_data.map_ids['WHIRL_ISLAND_LUGIA_CHAMBER'], in_battle=1, enemy_species=249, enemy_hp=60,
+        enemy_max_hp=141, enemy_level=40, owned=set(), can_catch=True, badges=65535, money=10000,
+        roamers=(), pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
+    memory = {}
+    mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: 120,
+                          read=lambda name, size: memory.get(name, (0,) * size))
+    started(policy)
+    # A sleeper that faints before it can land sleep would only spend a turn and a Pokémon.
+    odds = {'chance': 0.0}
+    monkeypatch.setattr(quests, 'sleep_chance', lambda policy, mon, species, level: odds['chance'])
+    assert fight(policy, snapshot, mem).button[0] != 'Send'
+    odds['chance'] = 0.4
+    assert fight(policy, snapshot, mem).button == ('Send', 1)
+
+
 def test_master_ball_waits_for_the_roaming_beasts(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
@@ -2300,7 +2326,8 @@ def test_master_ball_waits_for_the_roaming_beasts(real_data):
 
 
 def test_static_lead_is_the_sleeper_most_likely_to_land_sleep(real_data, monkeypatch):
-    from pokesim.gen2 import teams
+    # The tower module keeps the teams.key it finds when first imported, so it is imported before the patch.
+    from pokesim.gen2 import teams, tower  # noqa: F401
     from pokesim.gen2.quests import static_lead, static_level
     from pokesim.gen2.policy import Policy, Goal
     monkeypatch.setattr(teams, 'key', lambda mon: mon.name)
@@ -2328,7 +2355,8 @@ def test_static_lead_is_the_sleeper_most_likely_to_land_sleep(real_data, monkeyp
 
 
 def test_the_static_sleeper_keeps_the_lead_through_a_box_release(real_data, monkeypatch):
-    from pokesim.gen2 import teams
+    # The tower module keeps the teams.key it finds when first imported, so it is imported before the patch.
+    from pokesim.gen2 import teams, tower  # noqa: F401
     from pokesim.gen2.menus import Lead
     from pokesim.gen2.policy import Goal, Policy
     from pokesim.gen2.quests import static_lead
