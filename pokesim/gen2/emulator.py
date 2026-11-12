@@ -915,8 +915,10 @@ class Emulator(EmulatorBase):
         if restored:
             carry_over(self.policy, stalled)
             if entry is not None and restored == entry:
-                from .collection import call_off_league
-                called_off = self.supervisor.call_off_league(wins, lambda: call_off_league(self.policy))
+                from .collection import call_off_league, league_restarted
+                # A trainee the run took in stands down from League runs, and the run is called off now.
+                early = league_restarted(self.policy, stuck)
+                called_off = self.supervisor.call_off_league(wins, lambda: call_off_league(self.policy), now=early)
                 if called_off:
                     log.warning('the League attempt restarted without a new Hall of Fame entry, leaving to prepare the team')
         if report and not called_off:

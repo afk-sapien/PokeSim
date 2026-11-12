@@ -240,6 +240,35 @@ def test_story_flags_write_an_event_row_only_for_a_flag_this_run_has_not_seen(tm
         store.close()
 
 
+def test_a_league_win_a_reload_took_back_is_no_event_after_the_worker_starts_again(tmp_path):
+    """A Gold League run restarted from its entry save, and the worker started again before the
+    replay. The Elite Four flags it set again wrote net rows each time. Only a flag never seen counts."""
+    store = watched(tmp_path)
+    try:
+        watch = store.goal_watch
+        watch.observe(store, 'funds_will', 'UPKEEP')
+        watch.story(store, b'\x01\x00')
+        watch.story(store, b'\x07\x00')     # Will and Koga beaten
+        assert len(rows(store, 'event')) == 1
+        # The reload clears the two wins and a new worker reads the store again.
+        watch = store.goal_watch = progress_events.GoalWatch()
+        watch.observe(store, 'funds_will', 'UPKEEP')
+        for flags in (b'\x01\x00', b'\x03\x00', b'\x07\x00'):
+            watch.story(store, flags)
+        assert len(rows(store, 'event')) == 1
+        watch.story(store, b'\x0f\x00')     # Bruno, never beaten before
+        assert [score for *_, score, net in rows(store, 'event')] == [3, 4]
+        # A new game starts with no flags seen, and its rows start empty.
+        store.restart(2, {})
+        assert progress_events.stored_flags(store) == b''
+        watch.restart()
+        watch.story(store, b'\x01\x00')
+        watch.story(store, b'\x03\x00')
+        assert [score for *_, score, net in rows(store, 'event')] == [2]
+    finally:
+        store.close()
+
+
 def test_wild_encounters_count_per_goal_and_game_hour(tmp_path, caplog):
     at = [10]
     store = Store(tmp_path)

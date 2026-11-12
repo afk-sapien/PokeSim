@@ -48,3 +48,11 @@ frames = [3261114063, 3261172938]
 expect = "passes"
 kind = "quiet"
 issue = 568
+
+[[scenario]]
+name = "gold-league-training-20261112"
+rom_sha1 = "d8b8a3600a465308c9953dfa04f0081c05bdcb94"
+state_sha256 = "1e5920117ad135a81a71662bb76864c8d8ec0dac304bb88541e8f57d8e0fcfea"
+frames = [10977153, 10977153]
+expect = "passes"
+issue = 574
