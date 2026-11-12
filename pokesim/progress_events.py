@@ -7,7 +7,7 @@ received copy the worth oracle kept for an improve reason (pcvalue.improvement),
 or a later stage its family lacks, writes an ``improve`` row. So does a level gain toward the next
 boss's readiness target, the first time that Pokémon reaches the level (gained). Any other level
 gain writes a ``level`` row. Each reload writes a ``plan`` row that
-names its reason. ``net`` says
+names its reason, and each lost boss attempt a ``loss`` row that names the boss (loss). ``net`` says
 whether a row counts as progress, from the Kinds table. The rows are written in shadow mode: nothing
 reads them for a decision yet, and a stall, LoopGuard or the watchdog still go by the journal.
 
@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 # Net per kind. An item is net only when it was needed, so its writer says which.
 NET = {'dex': 1, 'improve': 1, 'badge': 1, 'league': 1, 'event': 1, 'area': 1, 'checkpoint': 1,
-       'catch': 0, 'receive': 0, 'release': 0, 'room': 0, 'level': 0, 'goal': 0, 'plan': 0}
+       'catch': 0, 'receive': 0, 'release': 0, 'room': 0, 'level': 0, 'goal': 0, 'plan': 0, 'loss': 0}
 KINDS = frozenset(NET) | {'item'}
 # Journal entries that stand for a Pokémon joining or leaving. Custom gifts skip add_event, so their
 # receipts write the row instead.
@@ -88,13 +88,14 @@ def mon_identity(trainer_id, dvs, dex):
     return identity(trainer_id, packed(dvs), dex) if dvs else None
 
 
-def readiness(watch, snapshot):
-    """The next boss's readiness target from the emulator's hook (GoalWatch.readiness), or None."""
+def readiness(watch, snapshot, species=None):
+    """The levels a gain by ``species`` counts toward as progress under the running goal, as (lowest,
+    highest), from the emulator's hook (GoalWatch.readiness), or None."""
     hook = getattr(watch, 'readiness', None)
     if hook is None or snapshot is None:
         return None
     try:
-        return hook(snapshot)
+        return hook(snapshot, watch.key, species)
     except Exception:
         # A shadow row must never cost the run its journal entry.
         log.exception('Cannot read the readiness target')
@@ -102,17 +103,19 @@ def readiness(watch, snapshot):
 
 
 def gained(db, watch, ev, at, snapshot):
-    """The row for a Pokémon's level gain: ``improve`` the first time it reaches the level and only at
-    or under the next boss's readiness target (planning/readiness.target), else ``level``.
+    """The row for a Pokémon's level gain: ``improve`` the first time it reaches the level and only
+    inside the band the hook gives (planning/readiness.band), else ``level``.
 
-    Every gain writes one row with the level as its score, so the rows keep each Pokémon's highest
-    level and a reload, a trade back or a loop of losses cannot count a level twice. The target
-    moves only when the next boss changes, so such a loop adds at most the levels left to it."""
+    The band runs from near the party's best level up to the next boss's readiness target, which a
+    loss to that boss raises once. Every gain writes one row with the level as its score, so the rows
+    keep each Pokémon's highest level and a reload, a trade back or a loop of losses cannot count a
+    level twice. Such a loop adds at most the levels left to the target, and the loss loop check
+    (stalls.LossLoop) counts the losses themselves."""
     best = best_level(db, ev.species, ev.identity)
     kind = 'level'
     if best is None or ev.score > best:
-        aim = readiness(watch, snapshot)
-        if aim is not None and ev.score <= aim:
+        levels = readiness(watch, snapshot, ev.species)
+        if levels is not None and levels[0] <= ev.score <= levels[1]:
             kind = 'improve'
     record(db, kind, frame=at, goal=watch.key if watch else '', tier=watch.tier if watch else '',
            species=ev.species, identity=ev.identity, score=ev.score)
@@ -127,6 +130,17 @@ def reload(store, why):
     except Exception:
         # A shadow row must never cost the run its reload.
         log.exception('Cannot record the reload row')
+
+
+def loss(store, boss):
+    """A ``loss`` row for a lost boss attempt under the running goal, with ``boss`` naming the boss's
+    losses (planning/league.boss_key) as its identity, for the loss loop check (stalls.LossLoop)."""
+    watch = getattr(store, 'goal_watch', None)
+    try:
+        write(store, 'loss', goal=watch.key if watch else '', tier=watch.tier if watch else '', identity=boss)
+    except Exception:
+        # A shadow row must never cost the run its loss.
+        log.exception('Cannot record the loss row')
 
 
 def encounter(store, species, dvs):

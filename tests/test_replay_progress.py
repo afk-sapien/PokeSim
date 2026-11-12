@@ -186,6 +186,14 @@ def test_the_replay_reads_stored_rows_when_the_window_has_any(tmp_path):
     assert sources('--rows', 'stored') == {'adv': 'stored', 'plain': 'stored'}
 
 
+def test_a_blackout_names_the_boss_the_way_the_supervisor_does():
+    from pokesim.replay.progress import loss_key
+    assert [loss_key(name) for name in ("Lance's Room", "Champion's Room", "Karen's Room")] == ['league'] * 3
+    assert loss_key('Silver Cave Room 3') == 'red'
+    assert loss_key('Pewter Gym') == 'Pewter Gym'
+    assert [loss_key(name) for name in ('Route 1', '', None)] == [None] * 3
+
+
 def test_cli_refuses_report_inside_input(tmp_path):
     churning(tmp_path / 'stores')
     with pytest.raises(SystemExit):

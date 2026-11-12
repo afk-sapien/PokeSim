@@ -25,7 +25,7 @@ from typing import Callable, NamedTuple
 
 from .boss import UNREADY, Gate, healed_event, unready_event
 from .losses import best_level, boss_trainer
-from .readiness import Boss, judge, target, team
+from .readiness import Boss, band, judge, target, team
 
 LEAGUE = 'league'
 
@@ -138,6 +138,17 @@ def readiness_target(table, snapshot, ace=None, losses=None):
     if row.aim and not boss.scores:
         boss = replace(boss, scores=(None,))
     return target(boss, losses is not None and row.key in losses.levels())
+
+
+def top_level(snapshot):
+    """The party's highest level, eggs aside, or 0."""
+    return max((mon.level for mon in getattr(snapshot, 'party', ()) if not getattr(mon, 'egg', False)), default=0)
+
+
+def gain_band(table, snapshot, ace=None, losses=None):
+    """The levels a Pokémon's gain counts toward as progress (readiness.band), or None: from near the
+    party's best level up to the readiness target."""
+    return band(readiness_target(table, snapshot, ace, losses), top_level(snapshot))
 
 
 def boss(table, row, here, score, ace=None):

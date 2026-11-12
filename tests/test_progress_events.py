@@ -449,20 +449,26 @@ def gain(store, level, mon=MON):
 
 def test_a_level_gain_toward_the_readiness_target_is_an_improve_row(tmp_path, caplog):
     store = watched(tmp_path)
-    store.goal_watch.readiness = lambda snapshot: 23
+    asked = []
+    store.goal_watch.key = 'hive'
+    store.goal_watch.readiness = lambda snapshot, key, species: asked.append((key, species)) or (10, 23)
     try:
-        assert gain(store, 12) == ('improve', 42, '', '', 157, MON, 12, 1)
+        assert gain(store, 12) == ('improve', 42, 'hive', '', 157, MON, 12, 1)
+        # The hook hears the running goal and the species, which a postgame goal can set its band by.
+        assert asked == [('hive', 157)]
         # A level counts once for each Pokémon, so a reload that gains it again writes a plain level row.
         assert [gain(store, level)[0] for level in (12, 13)] == ['level', 'improve']
         assert gain(store, 12, progress_events.identity(4321, bytes((0x11, 0x11)), 157))[0] == 'improve'
+        # Under the band a gain is a new member's training, far from the boss team, and no progress.
+        assert gain(store, 9, progress_events.identity(4321, bytes((0x22, 0x22)), 157))[0] == 'level'
         # Past the target, or under the best level the Pokémon already reached, a gain is no progress.
         assert [gain(store, level)[0] for level in (24, 23)] == ['level', 'level']
         # With no next boss, or a hook that fails, the gain still writes its entry and a level row.
-        store.goal_watch.readiness = lambda snapshot: None
+        store.goal_watch.readiness = lambda snapshot, key, species: None
         assert gain(store, 25)[0] == 'level'
-        store.goal_watch.readiness = lambda snapshot: 1 / 0
+        store.goal_watch.readiness = lambda snapshot, key, species: 1 / 0
         assert gain(store, 26)[0] == 'level' and 'Cannot read the readiness target' in caplog.text
-        assert store.db.execute("SELECT COUNT(*) FROM events WHERE type = 'level'").fetchone()[0] == 8
+        assert store.db.execute("SELECT COUNT(*) FROM events WHERE type = 'level'").fetchone()[0] == 9
     finally:
         store.close()
 
@@ -503,7 +509,7 @@ def lance_loop(tmp_path, aim):
     from pokesim.replay.progress import Adventure, Axis, Entry, Row, replay
     from pokesim.stalls import FRAMES_PER_GAME_MINUTE
     store = watched(tmp_path / str(aim))
-    store.goal_watch.readiness = lambda snapshot: aim
+    store.goal_watch.readiness = lambda snapshot, key, species: (0, aim)
     start, entries, found = 1_700_000_000, [], []
     try:
         for i, (played, kind, room, level) in enumerate(LANCE_LOOP, 1):
@@ -531,9 +537,27 @@ def lance_loop(tmp_path, aim):
 def test_a_loop_of_league_losses_is_still_caught_with_level_gains_counted(tmp_path):
     # Every gain is over Lance's Lv 50 ace, the League's target, so none counts and the loop is caught
     # as before: the watchdog an hour after the last new room and StallWatch two game hours after
-    # Lance's room, both before the live StallWatch at 133 minutes.
-    assert lance_loop(tmp_path, 50) == [('watchdog', 93.6), ('stallwatch', 116.6)]
-    # A target over every gain would hide the loop. The rule caps a loop at the levels left to the
-    # target, so with a target of 70 the loop goes quiet after Lv 70 and is caught two game hours on.
-    assert lance_loop(tmp_path, 99) == []
-    assert lance_loop(tmp_path, 70) == [('watchdog', 145.6), ('stallwatch', 155.6)]
+    # Lance's room, both before the live StallWatch at 133 minutes. The sixth blackout in the League
+    # within two game hours is a loss loop, whatever the gains.
+    assert lance_loop(tmp_path, 50) == [('watchdog', 93.6), ('lossloop', 95.9), ('stallwatch', 116.6)]
+    # A target over every gain would hide the loop from the quiet checks, but not from the loss loop.
+    assert lance_loop(tmp_path, 99) == [('lossloop', 95.9)]
+    # With a target of 70 the loop goes quiet after Lv 70 and the quiet checks catch it two game hours on.
+    assert lance_loop(tmp_path, 70) == [('lossloop', 95.9), ('watchdog', 145.6), ('stallwatch', 155.6)]
+
+
+def test_six_losses_to_one_boss_within_two_game_hours_are_a_loss_loop():
+    from pokesim.stalls import FRAMES_PER_GAME_MINUTE, LossLoop
+    minute = FRAMES_PER_GAME_MINUTE
+    loop = LossLoop()
+    # Losses to other bosses, or ones spread over more than two game hours, are no loop.
+    assert [loop.note('league', at * 30 * minute) for at in range(5)] == [None] * 5
+    assert loop.note('red', 121 * minute) is None
+    # Two game hours after the fifth loss, all five have left the window and the count starts at one.
+    for at in range(241, 246):
+        assert loop.note('league', at * minute) is None
+    assert loop.reason is None
+    assert loop.note('league', 246 * minute) == 'Lost to league 6 times in 5 game minutes.'
+    # A loop starts the count for that boss again, and the counts outlive a worker restart.
+    assert loop.state_dict() == {'red': [121 * minute]}
+    assert LossLoop(loop.state_dict()).losses == {'red': [121 * minute]}

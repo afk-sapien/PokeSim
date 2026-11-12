@@ -32,7 +32,7 @@ from pokesim import config, state
 from pokesim.app.watchdog import Limits, Watchdog
 from pokesim.progress_events import HOUR, JOURNAL, NET
 from pokesim.stalls import (FRAMES_PER_GAME_MINUTE, GEN1_HELD_RISE, LOOP_EVENTS, LOOP_LIMIT, PROGRESS_EVENTS,
-                            REAL_PROGRESS, LoopGuard, StallWatch, _RECEIVED, _RELEASED, species_key)
+                            REAL_PROGRESS, LossLoop, LoopGuard, StallWatch, _RECEIVED, _RELEASED, species_key)
 
 GEN2 = frozenset({'gold', 'silver', 'crystal'})
 # Gen I's last achievement, emulator.py: the progress events plus a trade.
@@ -56,6 +56,9 @@ RELOADED = 'Stuck? The adventure had to reload twice'
 GAVE_UP = re.compile(r'^Gave up on ')
 HATCHED = re.compile(r'^(.+?) hatched from its Egg')
 PLAYTIME = re.compile(r'^(\d+):(\d\d):(\d\d)$')
+# The League's rooms in both generations, and Red's room at Mt. Silver, as the journal names them.
+LEAGUE_ROOM = re.compile(r"^(Lorelei|Bruno|Agatha|Lance|Will|Koga|Karen|Champion)'s Room$")
+RED_ROOM = 'Silver Cave Room 3'
 
 Entry = namedtuple('Entry', 'id ts type title body map playtime')
 
@@ -444,21 +447,39 @@ class OldChecks:
         return flags
 
 
-class NewChecks:
-    """The same three checks reading only net rows, and receive and release rows for the loop."""
+def loss_key(map_name):
+    """The boss a blackout on ``map_name`` lost to, as Supervisor.lost names it, or None: 'league' for
+    any League room, 'red' at Mt. Silver and the gym's own name for a gym."""
+    name = map_name or ''
+    if LEAGUE_ROOM.match(name):
+        return 'league'
+    if name == RED_ROOM:
+        return 'red'
+    return name if name.endswith(' Gym') else None
 
-    def __init__(self, status):
+
+class NewChecks:
+    """The same three checks reading only net rows, and receive and release rows for the loop, plus
+    the loss loop check (stalls.LossLoop) on the journal's blackouts in a boss's room."""
+
+    def __init__(self, status, losses):
         self.status = status
         self.stall = StallWatch(config.STALL_ALERT_GAME_MINUTES, config.STALL_ALERT_REAL_MINUTES,
                                 config.STALL_ALERT_REPEAT_HOURS)
         self.watch, self.loop, self.quiet = watchdog(), None, False
+        # The loss loop's counts outlive a worker restart, as the supervisor keeps them in the store.
+        self.losses, self.pending = losses, []
 
     def row(self, row):
         if row.net:
             self.stall.progress(row.frame, row.ts)
 
+    def entry(self, entry, frame):
+        if entry.type == 'blackout' and (boss := loss_key(entry.map)) and self.losses.note(boss, frame):
+            self.pending.append(Flag(entry.ts, frame, 'lossloop'))
+
     def tick(self, ts, frame):
-        flags = []
+        flags, self.pending = self.pending, []
         received, released = Counter(), Counter()
         for kind, key in self.status.cycle:
             (received if kind == 'receive' else released)[key] += 1
@@ -487,7 +508,7 @@ def replay(adventure, axis, rows, start, end, churn_n=10):
               + [(p[0], 2, 'progress', p) for p in adventure.progress]
               + [(r.ts, 3, 'row', r) for r in rows])
     stream.sort(key=lambda item: (item[0], item[1]))
-    journal, status, clock = Journal(), Status(), [0.0]
+    journal, status, clock, losses = Journal(), Status(), [0.0], LossLoop()
     old_flags, new_flags, churn = [], [], []
     position, best_owned = 0, None
     old = new = None
@@ -509,6 +530,8 @@ def replay(adventure, axis, rows, start, end, churn_n=10):
                     status.achievement = item.id
                 if old:
                     old.entry(item, frame)
+                if new:
+                    new.entry(item, frame)
             elif kind == 'receipt':
                 if old:
                     old.receipt(ts, frame)
@@ -537,7 +560,7 @@ def replay(adventure, axis, rows, start, end, churn_n=10):
             continue
         consume(begun - 1e-6)
         old = OldChecks(adventure.gen2, journal, status, clock)
-        new = NewChecks(status)
+        new = NewChecks(status, losses)
         t = max(begun, start - WARMUP)
         while t <= min(ended, end):
             consume(t)
@@ -589,7 +612,7 @@ def model(episodes, flags, start, end):
     result = score(episodes, flags, start, end)
     result['checks'] = {check: {key: value for key, value in score(episodes, [f for f in flags if f.check == check],
                                                                     start, end).items() if key != 'false_alarm_times'}
-                        for check in ('stallwatch', 'loopguard', 'watchdog')}
+                        for check in ('stallwatch', 'loopguard', 'watchdog', 'lossloop')}
     return result
 
 

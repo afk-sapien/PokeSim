@@ -111,6 +111,46 @@ def held_rose(previous, snapshot):
             and held(snapshot) > held(previous))
 
 
+# Losses to one boss within LOSS_GAME_MINUTES that make a loss loop (LossLoop).
+LOSS_LIMIT = 6
+LOSS_GAME_MINUTES = 120
+
+
+class LossLoop:
+    """Notice a run that keeps losing to the same boss, in either generation.
+
+    Silver blacked out in the League eight times in under three hours of play while its ace gained a
+    level or two between losses. Each gain a progress row counts cuts the quiet stretch short.
+    LOSS_LIMIT losses to one boss within LOSS_GAME_MINUTES game minutes are a stall whatever else the
+    run gained. A boss is named by the key its losses are kept under (planning/league.boss_key), so
+    every League room is one boss. The frames are PlayClock frames, which a reload never takes back.
+
+    The limit and the window were picked on the second soak's stores, the same data the progress
+    bar replays. The supervisor keeps one (Supervisor.lost) and ``reason`` holds the last loop it
+    found, but nothing acts on it while the progress model stays in shadow."""
+
+    def __init__(self, saved=None, limit=LOSS_LIMIT, game_minutes=LOSS_GAME_MINUTES):
+        self.limit, self.frames = limit, game_minutes * FRAMES_PER_GAME_MINUTE
+        self.losses = {str(key): [int(at) for at in frames] for key, frames in (saved or {}).items()}
+        self.reason = None
+
+    def note(self, boss, frame):
+        """Count a loss to ``boss`` at PlayClock ``frame``. Returns the reason when it makes a loop,
+        which starts the count for that boss again, else None."""
+        kept = [at for at in self.losses.get(boss, ()) if frame - at <= self.frames] + [frame]
+        if len(kept) < self.limit:
+            self.losses[boss] = kept
+            return None
+        self.losses.pop(boss, None)
+        self.reason = (f'Lost to {boss} {len(kept)} times in '
+                       f'{(frame - kept[0]) // FRAMES_PER_GAME_MINUTE} game minutes.')
+        log.warning('Loss loop, in shadow: %s', self.reason)
+        return self.reason
+
+    def state_dict(self):
+        return {key: list(frames) for key, frames in self.losses.items()}
+
+
 # Events a gift and release loop cannot fake. A received gift, an item and a release are left out.
 REAL_PROGRESS = ('badge', 'catch', 'event_return', 'evolve', 'hatch', 'champion', 'trainer', 'level', 'map')
 # Repeats that count as a loop: the same Pokémon received and released.

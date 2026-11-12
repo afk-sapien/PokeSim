@@ -178,8 +178,9 @@ def test_the_readiness_target_is_the_level_the_matchup_rules_train_to():
     assert oracle.target(oracle.Boss('zephyr', 9, floor=40, scores=(None,)), lost=True) == 40
     # A boss with no ace still has its floor alone.
     assert oracle.target(oracle.Boss('hive', None, floor=14), lost=True) == 14
-    assert oracle.band(50) == (50 - oracle.TEAM_BAND, 50)
-    assert oracle.band(None) is None
+    # Gains count for the members near the best level, up to the target.
+    assert oracle.band(50, 45) == (45 - oracle.TEAM_BAND, 50)
+    assert oracle.band(None, 45) is None
 
 
 def test_a_loss_to_the_next_boss_raises_its_target():

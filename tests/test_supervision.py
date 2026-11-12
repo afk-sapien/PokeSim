@@ -130,7 +130,7 @@ def test_the_counts_live_in_the_adventure_store(tmp_path):
     store = Store(tmp_path / 'adventure')
     supervisor = Supervisor(store)
     supervisor.climb('no progress', never)
-    assert store.get(KEY) == {'reloads': 1, 'exhausted': False, 'league': [0, 0]}
+    assert store.get(KEY) == {'reloads': 1, 'exhausted': False, 'league': [0, 0], 'losses': {}}
     assert Supervisor(store).reloads == 1
 
 

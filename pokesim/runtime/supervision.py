@@ -36,6 +36,7 @@ from dataclasses import dataclass
 
 from ..pcvalue import BOXES_FULL
 from ..planning.monitor import LEGENDARY_RETRY, STOOD_DOWN
+from ..stalls import LossLoop
 
 KEY = 'supervisor-ladder-v1'
 BEST_KEY = 'supervisor-best-v1'
@@ -232,6 +233,10 @@ class Supervisor:
         self.eggs = {str(key): int(value) for key, value in (best.get('eggs') or {}).items()}
         # The ladder's counts as a boss attempt under way began. Kept in memory only, like the clocks it holds with.
         self.held = None
+        # The boss the attempt under way takes on, by the key its losses are kept under, or None.
+        self.boss = None
+        # Recent losses to each boss, which the loss loop check counts. It stays in shadow.
+        self.loss_loop = LossLoop(saved.get('losses'))
 
     @property
     def stalled(self):
@@ -358,19 +363,21 @@ class Supervisor:
 
         A team too weak for the Elite Four lost to Lance for 12 hours, and each run earned experience,
         levels and trainer wins on the way, so the stall alert never fired. A loss to a boss is never
-        progress. ``boss`` says an attempt is under way, ``blackout`` that the party just fainted. The
+        progress. ``boss`` says an attempt is under way, and names the boss when it is the key its
+        losses are kept under (planning/league.boss_key). ``blackout`` says the party just fainted. The
         stall watch and the loop guard hold their own clocks with the ladder's counts.
         """
         if blackout and self.held is not None:
             self.lost(stall, guard)
         elif boss and self.held is None:
             self.held = (self.reloads, self.exhausted)
+            self.boss = boss if isinstance(boss, str) else None
             if stall is not None:
                 stall.attempt()
             if guard is not None:
                 guard.hold(self.store)
         elif not boss and self.held is not None:
-            self.held = None
+            self.held = self.boss = None
             if stall is not None:
                 stall.settle()
             if guard is not None:
@@ -382,14 +389,24 @@ class Supervisor:
         Its progress does not count, so the ladder, the stall clocks and the loop guard go back to where
         they stood as it began. At Chuck's gym in Crystal each reload left an attempt whose experience
         started the ladder again, and the run reloaded six times without a report.
+
+        A loss to a named boss also writes a ``loss`` row and counts toward the loss loop check
+        (stalls.LossLoop), which only logs a loop while the progress model is in shadow.
         """
         if self.held is None:
             return
         reloads, exhausted = self.held
-        self.held = None
+        boss, self.held, self.boss = self.boss, None, None
         if reloads > self.reloads or exhausted and not self.exhausted:
             self.reloads, self.exhausted = max(reloads, self.reloads), exhausted or self.exhausted
             self._save()
+        if boss is not None and self.store is not None:
+            from .. import progress_events
+            progress_events.loss(self.store, boss)
+            at = progress_events.frame(self.store)
+            if at is not None:
+                self.loss_loop.note(boss, at)
+                self._save()
         if stall is not None:
             stall.lost()
         if guard is not None:
@@ -443,4 +460,5 @@ class Supervisor:
 
     def _save(self):
         if self.store is not None:
-            self.store.set(KEY, {'reloads': self.reloads, 'exhausted': self.exhausted, 'league': list(self.league)})
+            self.store.set(KEY, {'reloads': self.reloads, 'exhausted': self.exhausted, 'league': list(self.league),
+                                 'losses': self.loss_loop.state_dict()})

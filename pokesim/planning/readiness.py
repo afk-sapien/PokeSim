@@ -43,8 +43,8 @@ CEILING = 10
 DEPTH_REGROWTH = 10
 # The highest level a Pokémon reaches, which caps the target a loss raises (target).
 LEVEL_CAP = 100
-# A gain counts as progress only for a Pokémon this close under the target, one the boss battle
-# would use (band). Training a new member from a low level is not progress toward the boss.
+# A gain counts as progress only for a Pokémon this close under the party's best level, one the boss
+# battle would use (band). Training a new member from a low level is not progress toward the boss.
 TEAM_BAND = 2 * MARGIN
 # A Pokémon under this share of its HP, or of its strong attacks' PP, is not ready for a boss.
 READY_HP = 0.5
@@ -148,10 +148,13 @@ def target(boss, lost=False):
     return level or None
 
 
-def band(level):
-    """The levels a gain counts toward as progress when the target is ``level``, as (lowest, highest),
-    or None with no target. Only a Pokémon within TEAM_BAND under the target counts."""
-    return None if level is None else (level - TEAM_BAND, level)
+def band(level, best):
+    """The levels a gain counts toward as progress, as (lowest, highest), or None with no target.
+
+    ``level`` is the target and ``best`` the party's highest level. Only a Pokémon the boss battle
+    would use counts, one within TEAM_BAND of the best, so training a new catch from Lv 5 beside a Lv 90
+    ace is not progress toward the boss."""
+    return None if level is None else (best - TEAM_BAND, level)
 
 
 def judge(boss, team, losses=None):
