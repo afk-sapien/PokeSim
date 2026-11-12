@@ -47,6 +47,8 @@ class Store:
         self._read_local = threading.local()
         self._read_cache = {}
         self._read_epoch = None
+        # Whole-table reads reused until the database changes (_kept).
+        self._kept_reads = {}
         self._cache_reads = os.environ.get('POKESIM_EXPERIMENT_READ_CACHE', '1') != '0'
         if read_only:
             database = self.dir / "pokesim.sqlite"
@@ -312,10 +314,28 @@ class Store:
         with self.transaction():
             self.db.execute('DELETE FROM kv WHERE k=?', (domains.RESTART_PENDING,))
 
-    def trade_preferences(self):
-        from .trade.preferences import read
+    def _kept(self, name, read):
+        """``read(self.db)``, reused until this connection writes or another connection commits.
+
+        The epoch is the one observation_reads uses, so a kept value always equals a fresh read. Reads in
+        a transaction always query SQLite. ``read`` must return a value no caller changes. A Gen II PC
+        decision asks for the trade settings and the League marks once per boxed egg, and each read
+        scans a whole table.
+        """
         with self.lock:
-            return read(self.db)
+            if not self._cache_reads or self.db.in_transaction:
+                return read(self.db)
+            epoch = (self.db.execute('PRAGMA data_version').fetchone()[0], self.db.total_changes)
+            kept = self._kept_reads.get(name)
+            if kept is None or kept[0] != epoch:
+                kept = self._kept_reads[name] = (epoch, read(self.db))
+            return kept[1]
+
+    def trade_preferences(self):
+        """The saved trade settings (trade.preferences.read), as new dicts on every call."""
+        from .state import kv
+        from .trade.preferences import PREFIX, parse
+        return parse(self._kept('trade_preferences', lambda db: tuple(map(tuple, kv.starting(db, PREFIX)))))
 
     def trade_partners(self):
         """Trainer ids of linked adventures, whose Pokémon a release may let go like the player's own."""
@@ -338,8 +358,7 @@ class Store:
     def league_marks(self, generation=1):
         """The marks of every League reward delivered so far (rewards.marks)."""
         from . import rewards
-        with self.lock:
-            return rewards.marks(self.db, generation)
+        return self._kept(('league_marks', generation), lambda db: rewards.marks(db, generation))
 
     def release_requests(self):
         """The owner's pending PC releases: trade identity to 'release', or pcvalue.LAST_COPY when the
