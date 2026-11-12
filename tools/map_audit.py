@@ -416,14 +416,12 @@ class Gen2Memory:
 
 
 def gen2_goal(policy, snapshot, row):
-    """The goal a Gen II story row asks for, with an empty title."""
-    from pokesim.gen2.policy.state import Goal
-    if 'object' in row:
-        return policy.person(snapshot, row['key'], '', row['map'], row['object'])
+    """The goal a Gen II story row asks for, with an empty title. A row of points asks for its first."""
     if 'points' in row:
         x, y, face = row['points'][0]
-        return Goal(f"{row['key']}_1", '', row['map'], x, y, face)
-    return Goal(row['key'], '', row['map'], row['x'], row['y'], row.get('face'))
+        row = dict(row, x=x, y=y, face=face)
+        return policy.story_step(snapshot, f"{row['key']}_1", '', row)
+    return policy.story_step(snapshot, row['key'], '', row)
 
 
 def gen2_place(goal):

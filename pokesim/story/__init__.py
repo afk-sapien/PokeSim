@@ -9,6 +9,12 @@ A key may hold several rows, as Giovanni's door has two guards in Red and Blue, 
 the first row whose done_when flags are not all set. A row may override fields for one game, as in
 "yellow": {"y": 0}, and "games" limits a row to the games it names. Red stands for Red and Blue,
 which share their data. "{starter}" and "{fossil}" in a row are filled with the run's choice.
+
+In gen2.json the three "starter" rows name the starter each one picks, and a row with "points" in
+place of a tile lists the spots a moving target can stand at, in the game's own order, as the lost
+Farfetch'd in Ilex Forest. "then" is where the game puts the player once the step is done, when a
+scene moves them on, as the Champion's room hands over to the Hall of Fame. "places" are tiles and
+objects off the story chain, such as the way out of a puzzle room.
 """
 import json
 from functools import lru_cache
