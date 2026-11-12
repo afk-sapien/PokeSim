@@ -26,6 +26,7 @@ from .events import diff
 from .game_data import VARIANT_ENV, current_variant
 from .ram import (PARTY_STRUCT, W_BADGES, W_BAG_ITEMS, W_DEX_OWNED, W_EVENT_FLAGS, W_IS_IN_BATTLE, W_MONEY, W_NUM_BAG_ITEMS,
                   W_PARTY_COUNT, W_PARTY_MONS)
+from .runtime.battle_clock import ThrowClock, gen1_balls
 from .runtime.headless import HeadlessRun
 from .runtime.supervision import Supervisor
 from .stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, held_rose
@@ -405,6 +406,7 @@ class Gen1Watch(PlannerMarks):
 
     def reset(self):
         self.previous, self.pending, self.checkpoint = None, [], None
+        self.throws = ThrowClock()
         self.reset_marks()
 
     def race_checkpoint(self):
@@ -438,8 +440,10 @@ class Gen1Watch(PlannerMarks):
         return [(event.type, event.title) for event in events if event.type in PROGRESS_EVENTS], earned
 
     def battle_clock(self, snapshot, since, frame):
-        """The frame the hung-battle clock counts from, or None outside battle."""
-        return (since or frame) if snapshot.in_battle and snapshot.started else None
+        """The frame the hung-battle clock counts from, or None outside battle. A ball thrown restarts
+        it, as in the application."""
+        self.throws.look(snapshot, frame, gen1_balls)
+        return self.throws.since(since or frame) if snapshot.in_battle and snapshot.started else None
 
     def hopeless(self, snapshot):
         return self.run.policy.hopeless_battle(snapshot)
@@ -463,6 +467,7 @@ class Gen2Watch(PlannerMarks):
 
     def reset(self):
         self.previous, self.opponents, self.checkpoint = None, set(), None
+        self.throws = ThrowClock()
         policy = getattr(self.run, 'policy', None)
         collection = getattr(policy, 'collection', {})
         # A reload restores the policy, so the marks count from what it holds now.
@@ -535,7 +540,10 @@ class Gen2Watch(PlannerMarks):
         return gained, earned or bool(gained)
 
     def battle_clock(self, snapshot, since, frame):
-        """The runtime restarts its hung-battle clock each time a new opposing Pokémon enters."""
+        """The runtime restarts its hung-battle clock each time a new opposing Pokémon enters, and each
+        time a ball is thrown."""
+        from .gen2.ledger import balls
+        self.throws.look(snapshot, frame, balls)
         if not snapshot.in_battle or not snapshot.started:
             self.opponents = set()
             return None
@@ -543,7 +551,7 @@ class Gen2Watch(PlannerMarks):
         if since is None or opponent not in self.opponents:
             since = frame
             self.opponents.add(opponent)
-        return since
+        return self.throws.since(since)
 
     def hopeless(self, snapshot):
         return self.run.policy.hopeless_battle(snapshot)

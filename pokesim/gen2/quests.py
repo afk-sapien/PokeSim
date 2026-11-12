@@ -292,8 +292,46 @@ def static_level(data, species):
     return 40 if species == {'gold': 250, 'silver': 249}.get(data.game) else 70
 
 
+SAFEGUARD_TURNS = 5
+
+
+def sleep_odds(accuracy, hits, guard_share, faster, tries=8):
+    """Chance a sleep move with this ``accuracy`` lands before the sleeper takes ``hits`` hits.
+
+    The sleeper tries once a turn, at most ``tries`` times, and a ``faster`` one moves first each turn.
+    The legendary picks Safeguard on ``guard_share`` of its turns. That turn deals no damage, and sleep
+    cannot land for five turns, the one it was cast in included. Safeguard fails while it is up. Every
+    other turn is a hit. With no Safeguard this is one try a turn until the sleeper faints.
+    """
+    landed, states = 0.0, {(hits, 0, tries): 1.0}
+    # A legendary that picks Safeguard each time it ends could hold a slower sleeper off forever, so the
+    # turns stop at a count the rest of the chance is too small to matter by.
+    for _ in range(64):
+        after = {}
+        for (left, guard, ready), share in states.items():
+            if faster and not guard:
+                landed, share, ready = landed + share * accuracy, share * (1 - accuracy), ready - 1
+            for chance, left_after, guard_after in ((guard_share, left, guard or SAFEGUARD_TURNS),
+                                                     (1 - guard_share, left - 1, guard)):
+                part, ready_after = share * chance, ready
+                if not part or not left_after:
+                    continue
+                if not faster and not guard_after:
+                    landed, part, ready_after = landed + part * accuracy, part * (1 - accuracy), ready - 1
+                state = (left_after, max(0, guard_after - 1), ready_after)
+                after[state] = after.get(state, 0) + part
+        states = {state: share for state, share in after.items() if state[2] > 0}
+        if not states:
+            break
+    return landed
+
+
 def sleep_chance(policy, mon, species, level):
-    """Chance this Pokémon puts the legendary to sleep before it faints, from the legendary's strongest hit."""
+    """Chance this Pokémon puts the legendary to sleep before it faints, from the legendary's strongest hit.
+
+    A wild Pokémon picks its move at random, so Lugia and Ho-Oh, which know Safeguard, cast it on about
+    one turn in four (sleep_odds). Those turns cost the sleeper its tries but deal no damage.
+    """
     from types import SimpleNamespace
     from pokecore.gen2.ram import calculated_stats
     data = policy.data
@@ -308,9 +346,9 @@ def sleep_chance(policy, mon, species, level):
                              enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
     hit = max((policy.move_score(move, enemy, target) for move in moves), default=0)
     turns = -(-mon.stats[0] // max(1, int(hit))) if hit else 8
+    guarded = sum(data.moves.get(move, {}).get('effect') == 'EFFECT_SAFEGUARD' for move in moves)
     # A slower sleeper takes the first hit before it can move.
-    tries = min(8, turns if mon.stats[3] > stats[3] else turns - 1)
-    return 1 - (1 - sleep[0] / 100) ** max(0, tries)
+    return sleep_odds(sleep[0] / 100, turns, guarded / len(moves) if moves else 0, mon.stats[3] > stats[3])
 
 
 def static_lead(policy, snapshot, species, Goal):

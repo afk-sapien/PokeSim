@@ -32,3 +32,10 @@ rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
 state_sha256 = "19a113891be3c5d264d3145e77f1ffd8ae1df6148f626b7c44037f55a0d33786"
 frames = [3233126603, 3233126603]
 expect = "passes"
+
+[[scenario]]
+name = "silver-lugia-catch-clock-20261112"
+rom_sha1 = "49b163f7e57702bc939d642a18f591de55d92dae"
+state_sha256 = "614e1ea8eaa3b302129d50d8a66bf6c9753ccef414e5d6e19e9cf823f6bc5439"
+frames = [11029085, 11029085]
+expect = "passes"

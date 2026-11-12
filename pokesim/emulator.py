@@ -32,7 +32,7 @@ from .policies import make_policy
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
 from .runtime.game_loop import Decider, GameLoop, gen1_options, write_gen1_options
 from .runtime.policy import BUTTONS, Action
-from .runtime import capture, trace
+from .runtime import battle_clock, capture, trace
 from .runtime.emulator import (BEFORE_LOAD_CHECKPOINT, BEFORE_RESTART_CHECKPOINT, CHUNK,  # noqa: F401
                                LEAGUE_CHECKPOINT, MANUAL_QUEUE, SNAPSHOT_EVERY, WATCH_GRACE, EmulatorBase)
 from .runtime.reload import FRAMES_PER_SECOND
@@ -620,6 +620,7 @@ class Emulator(EmulatorBase):
             self.battle_frame = self.frame if self.battle_frame is None else self.battle_frame
         else:
             self.battle_frame = None
+        battle_clock.note_throws(self, snap, battle_clock.gen1_balls)
         if events:
             self._handle_events(events, snap)
             if any(event.type == 'playtime' for event in events):
@@ -723,7 +724,7 @@ class Emulator(EmulatorBase):
         """Restart the guard clocks from the current frame, which a reload has just rewound."""
         self.stuck_frame = self.last_reload_frame = self.frame
         self.last_reload = time.time()
-        self.invalid_frame = self.battle_frame = None
+        self.invalid_frame = self.battle_frame = self.throws = None
 
     def _give_up(self, why, reloads=None):
         """Abandon the collection project that every reload left stuck, so the next goal runs instead.
@@ -855,7 +856,8 @@ class Emulator(EmulatorBase):
                 log.warning('stationary objective abandoned, replanning without a save reload')
             else:
                 self._unstick(self.stuck_frame, "stuck")
-        elif self.battle_frame is not None and frame - self.battle_frame > config.BATTLE_TIMEOUT_SECONDS * FRAMES_PER_SECOND:
+        elif (self.battle_frame is not None
+              and frame - battle_clock.timed_from(self) > config.BATTLE_TIMEOUT_SECONDS * FRAMES_PER_SECOND):
             self._unstick(self.battle_frame, "battle never ended")
         elif self.battle_frame is not None and self.policy.hopeless_battle(self.snapshot):
             # The player has worked out that neither side can finish, so the timeout has nothing to wait for.
