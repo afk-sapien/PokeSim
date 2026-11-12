@@ -117,7 +117,15 @@ def choices(snapshot):
                     else 106 if dojo == 'hitmonlee' else 107)
 
 
-def observe(store, snapshot, memory):
+def observe(store, snapshot, memory, keeps=None):
+    """Open, close and journal each activity's walking return, and say whether the cartridge changed.
+
+    ``keeps(dex)`` says whether the PC would keep one more copy, rated with no DVs as the battle rates
+    one with its own (collection.improves). A returning encounter it would release is skipped until the
+    next walking milestone and journaled once, as Gen II skips one (gen2/returns.py). Snorlax's DVs are
+    rolled in the battle, which catches only a copy the PC keeps. Blue and Yellow walked to Route 12
+    for every return, knocked out the copy they met and found Snorlax back the moment they left.
+    """
     walking = store.get(STEPS) or {}
     if not snapshot.valid or not snapshot.started or not walking.get('available'):
         return [], False
@@ -166,16 +174,18 @@ def observe(store, snapshot, memory):
                     and not (spec.encounter and snapshot.map == spec.room)):
                 acquired = population(snapshot, spec) > clock.get('baseline', 0)
                 if not acquired:
-                    if snapshot.map != spec.room:
+                    if snapshot.map != spec.room and skipped(db, spec, state, events, keeps, now):
+                        # The battle met a copy the PC would release, so the encounter stays spent.
+                        clock['next_at'] = total + every
+                        hold_closed(value, spec, memory)
+                    elif snapshot.map != spec.room:
                         for bit in spec.bits:
                             changed |= write(memory, bit, False)
                     continue
                 clock['next_at'] = total + every
                 return_claims.mark(db, spec.key, ledger.CONSUMED, now, spec.dex)
                 state = ledger.CONSUMED
-                value.setdefault('guards', {})[f'{spec.key}:{spec.room}'] = {
-                    'room': spec.room, 'bits': spec.bits,
-                    'closed': [int(read(memory, bit)) for bit in spec.bits]}
+                hold_closed(value, spec, memory)
                 events.append(Event('event_return', f'Caught the returning {spec.name}' if spec.encounter
                                     else f'Completed {spec.name.lower()}',
                                     'The next opportunity starts after more walking.', priority=3))
@@ -188,6 +198,9 @@ def observe(store, snapshot, memory):
                 fossil, dojo = choices(snapshot)
                 spec = next(a for a in activities(fossil, dojo) if a.key == default.key)
                 if snapshot.map == spec.room:
+                    continue
+                if skipped(db, spec, state, events, keeps, now):
+                    clock['next_at'] = total + every
                     continue
                 clock.update(choice=fossil, dojo=dojo, cycle=clock['cycle'] + 1, baseline=population(snapshot, spec))
                 return_claims.mark(db, spec.key, ledger.DELIVERED, now, spec.dex)
@@ -210,6 +223,24 @@ def observe(store, snapshot, memory):
         if value != saved:
             kv.put(db, KEY, value)
     return events, changed
+
+
+def skipped(db, spec, state, events, keeps, now):
+    """Whether a returning encounter is declined because the PC would release it, journaled once per run of skips."""
+    if keeps is None or not spec.encounter or keeps(spec.dex):
+        return False
+    if state != ledger.DECLINED:
+        return_claims.mark(db, spec.key, ledger.DECLINED, now, spec.dex, return_claims.SKIPPED)
+        events.append(Event('event_skip', f'Skipped the returning {spec.name}',
+                            'The PC would release it as a spare, so it waits for the next walking milestone.',
+                            priority=1))
+    return True
+
+
+def hold_closed(value, spec, memory):
+    """Keep the activity's bits as they are now while it is closed, so an older checkpoint cannot reopen it."""
+    value.setdefault('guards', {})[f'{spec.key}:{spec.room}'] = {
+        'room': spec.room, 'bits': spec.bits, 'closed': [int(read(memory, bit)) for bit in spec.bits]}
 
 
 def population(snapshot, spec):

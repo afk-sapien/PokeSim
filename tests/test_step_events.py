@@ -342,20 +342,109 @@ def snorlax_open(world):
     return beaten, hidden
 
 
-def test_snorlax_battle_is_judged_after_leaving_route_12(world):
+def spare(dex):
+    """The PC would release one more copy of any dex number."""
+    return False
+
+
+def kept(dex):
+    """The PC would keep one more copy of any dex number."""
+    return True
+
+
+@pytest.mark.parametrize('keeps', [None, kept], ids=['unrated', 'pc keeps one'])
+def test_snorlax_battle_is_judged_after_leaving_route_12(world, keeps):
     store, snapshot, memory = world
     beaten, hidden = snorlax_open(world)
     route = replace(snapshot, map=MAPS['ROUTE_12'])
-    events.observe(store, route, memory)
+    events.observe(store, route, memory, keeps)
     # The battle hides Snorlax and sets the beaten flag, and the player has not caught it.
     events.write(memory, beaten, True)
     events.write(memory, hidden, True)
-    assert events.observe(store, route, memory) == ([], False)
+    assert events.observe(store, route, memory, keeps) == ([], False)
     # The road stays clear while the player is still on Route 12.
     assert events.read(memory, hidden) and 'snorlax' in events.available(store)
-    rows, changed = events.observe(store, snapshot, memory)
+    rows, changed = events.observe(store, snapshot, memory, keeps)
     assert changed and not rows and 'snorlax' in events.available(store)
     assert not events.read(memory, beaten) and not events.read(memory, hidden)
+
+
+def titles(rows):
+    return [row.title for row in rows]
+
+
+def test_a_snorlax_the_pc_would_release_waits_for_the_next_milestone(world):
+    # Blue and Yellow walked to Route 12, met a copy the PC would release and knocked it out. Snorlax
+    # was back the moment they left, so the next plan sent them on the same walk.
+    store, snapshot, memory = world
+    beaten, hidden = snorlax_open(world)
+    route = replace(snapshot, map=MAPS['ROUTE_12'])
+    events.observe(store, route, memory, spare)
+    events.write(memory, beaten, True)
+    events.write(memory, hidden, True)
+    assert events.observe(store, route, memory, spare) == ([], False)
+    rows, changed = events.observe(store, snapshot, memory, spare)
+    assert titles(rows) == ['Skipped the returning Snorlax'] and not changed
+    assert 'snorlax' not in events.available(store)
+    assert events.read(memory, beaten) and events.read(memory, hidden)
+    assert store.get(events.KEY)['clocks']['snorlax']['next_at'] == 5200
+    assert events.observe(store, snapshot, memory, spare) == ([], False)
+    # An older checkpoint cannot bring the spent Snorlax back.
+    events.write(memory, beaten, False)
+    events.write(memory, hidden, False)
+    assert events.observe(store, snapshot, memory, spare)[1]
+    assert events.read(memory, beaten) and events.read(memory, hidden)
+    # The next milestone asks the PC again. Still a spare, so no visit and no second journal entry.
+    steps(store, 5200)
+    assert events.observe(store, snapshot, memory, spare) == ([], False)
+    assert 'snorlax' not in events.available(store)
+    assert store.get(events.KEY)['clocks']['snorlax']['next_at'] == 5300
+    # Once the PC would keep one, the milestone after opens the visit.
+    steps(store, 5300)
+    rows, changed = events.observe(store, snapshot, memory, kept)
+    assert titles(rows) == ['Snorlax has returned!'] and changed
+    assert 'snorlax' in events.available(store)
+    assert not events.read(memory, beaten) and not events.read(memory, hidden)
+
+
+def test_a_due_snorlax_the_pc_would_release_is_never_offered(world):
+    store, snapshot, memory = world
+    beaten, hidden = events.snorlax()
+    events.write(memory, beaten, True)
+    events.write(memory, hidden, True)
+    events.observe(store, snapshot, memory, spare)
+    steps(store, 5100)
+    rows, _ = events.observe(store, snapshot, memory, spare)
+    assert 'Skipped the returning Snorlax' in titles(rows) and 'Snorlax has returned!' not in titles(rows)
+    assert 'snorlax' not in events.available(store)
+    assert events.read(memory, beaten) and events.read(memory, hidden)
+    steps(store, 5200)
+    assert 'Skipped the returning Snorlax' not in titles(events.observe(store, snapshot, memory, spare)[0])
+    assert 'snorlax' not in events.available(store)
+
+
+def test_the_pc_rating_leaves_returns_that_are_not_encounters_alone(world):
+    store, snapshot, memory = world
+    spec = next(a for a in events.activities() if a.key == 'eevee')
+    events.write(memory, spec.done[0], True)
+    events.observe(store, snapshot, memory, spare)
+    steps(store, 5100)
+    rows, changed = events.observe(store, snapshot, memory, spare)
+    assert changed and 'eevee' in events.available(store)
+    assert not any(row.title.startswith('Skipped') for row in rows)
+
+
+def test_the_emulator_rates_a_returning_copy_as_the_pc_would_keep_it():
+    from types import SimpleNamespace
+    from pokesim.emulator import Emulator
+    from test_duplicates import snapshot as boxed, stored
+    held = boxed([stored(0, dvs=(0, 8, 8, 8, 8))])
+    assert Emulator._keeps_another(SimpleNamespace(policy=SimpleNamespace()), held) is None
+    policy = SimpleNamespace(catch_rating=lambda s: None)
+    # Bulbasaur is held with common DVs, so a copy rated with none is a spare until the dex misses it.
+    assert Emulator._keeps_another(SimpleNamespace(policy=policy), held)(1) is False
+    missing = replace(held, owned=frozenset())
+    assert Emulator._keeps_another(SimpleNamespace(policy=policy), missing)(1) is True
 
 
 def test_caught_snorlax_closes_the_return_after_leaving_route_12(world):

@@ -384,6 +384,20 @@ class Emulator(EmulatorBase):
                 decline(self.store, number)
             collection.declined_returns = set()
 
+    def _keeps_another(self, snapshot):
+        """Whether the PC would keep one more copy of a dex number, rated with no DVs as the battle
+        rates a wild copy with its own (collection.improves), or None when the policy has no PC."""
+        rating = getattr(self.policy, 'catch_rating', None)
+        if rating is None:
+            return None
+        from .policies.collection import improves
+        from .strategy_data import SPECIES
+
+        def keeps(number):
+            species = next(sid for sid, row in SPECIES.items() if row['dex'] == number)
+            return improves(snapshot, species, (), rating(snapshot))
+        return keeps
+
     def _reset_transient(self, *, clear_observation=False):
         """Discard queued input and recovery timers without erasing durable progress."""
         self.policy.on_restore()
@@ -559,7 +573,8 @@ class Emulator(EmulatorBase):
             return_events, restored_legendary = returns_observe(self.store, snap, self.pb.memory)
             events += return_events
             from . import step_events
-            activity_events, activity_changed = step_events.observe(self.store, snap, self.pb.memory)
+            activity_events, activity_changed = step_events.observe(self.store, snap, self.pb.memory,
+                                                                    self._keeps_another(snap))
             events += activity_events
             restored_legendary |= activity_changed or bool(activity_events)
             if hasattr(self.policy, 'collection'):
