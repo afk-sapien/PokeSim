@@ -18,7 +18,8 @@ walked to forever.
 """
 from collections import Counter
 
-from .standdown import stand_down, standing_down
+from ..planning.decide import NO_CALL
+from .standdown import exhausted, forget, stand_down, standing_down
 
 # item: (trainer, contact id, route, object script, item flag bit, rematch flag bit, beaten event)
 # Contact ids follow constants/phone_constants.asm. The flag bits are the ENGINE_*_HAS_* and
@@ -31,7 +32,9 @@ PHONE_GIFTS = {
 }
 PHONE_SLOTS = 10
 # Decisions spent on one step before it stands down. A wait decision is 24 frames, so 27000 is
-# about three game hours by the phone, plenty for a call that comes every 3 to 20 game minutes.
+# about three game hours by the phone. Any registered trainer may make the call that comes every 20
+# to 30 game minutes, and a trainer who gave a stone before finds another on few of their own calls,
+# so a wait can spend all of it.
 REGISTER_DECISIONS = 6000
 WAIT_DECISIONS = 27000
 PICKUP_DECISIONS = 8000
@@ -45,6 +48,11 @@ _NEEDS = [None, None]
 
 def phone_key(item):
     return f'phone:{item}'
+
+
+def wait_key(item):
+    """The budget of the wait for the call about ``item``, kept in the monitor's tables."""
+    return f'phone_wait:{item}'
 
 
 def item_needs(policy, snapshot):
@@ -109,6 +117,23 @@ def _limited(policy, key, limit):
     return False
 
 
+def _waited(policy, item):
+    """Count the decisions since the wait for ``item``'s call last ran, and say when it spent WAIT_DECISIONS.
+
+    The count sits in the monitor's tables, which a reload keeps, and other work does not start it
+    over. A rematch the caller asks for or a trip to heal leaves the wait as long as it was, and the
+    game time that work took counts too, since calls ring anywhere with service. Time away longer than
+    GAP counts one decision.
+    """
+    marks = policy.collection.setdefault('phone_waits', {})
+    gap = policy.decisions - marks.get(item, policy.decisions - 1)
+    marks[item] = policy.decisions
+    if not exhausted(policy, wait_key(item), WAIT_DECISIONS, gap if 0 < gap <= GAP else 1):
+        return False
+    marks.pop(item, None)
+    return True
+
+
 def pickups(policy, snapshot, mem, Goal):
     """Time-limited collection: a stone a phone trainer holds today, or the Monday night Moon Stone."""
     data = policy.data
@@ -166,7 +191,11 @@ def phones(policy, snapshot, mem, Goal):
     needs = item_needs(policy, snapshot)
     for name, (trainer, contact, route, script, _, _, beaten) in PHONE_GIFTS.items():
         item, key = data.items[name], phone_key(name)
-        if item not in needs or standing_down(policy, key):
+        if item not in needs:
+            # A stone that came, or a need that ended, leaves no wait behind for the next need.
+            forget(policy, wait_key(name))
+            continue
+        if standing_down(policy, key):
             continue
         stone = data.item_names.get(item, name)
         if not _registered(mem, contact):
@@ -179,11 +208,14 @@ def phones(policy, snapshot, mem, Goal):
             verb = 'Get' if snapshot.event(beaten) else 'Beat'
             return policy.person(snapshot, 'collection_phone_register',
                                  f'{verb} {trainer}’s number for a {stone}', route, script)
-        if _limited(policy, 'wait:' + name, WAIT_DECISIONS):
-            stand_down(policy, key)
+        if _waited(policy, name):
+            # The call never came, so the wait stands down by name and comes back later.
+            stand_down(policy, key, failure=NO_CALL.kind)
             continue
-        # Calls never come from the map the caller stands on, in caves without service or on a
-        # doorway, so wait by a Pokémon Center PC.
+        # Calls ring on any idle overworld step, standing still too, but never on the caller's own
+        # map, on a map without service such as a cave or a Pokémon Center's upper floor, or on a
+        # doorway. A Pokémon Center's ground floor has service, so wait there by the PC, a spot
+        # every town has. The emulator takes standing there for the wait it is (policy.idle).
         spot = policy.storage_goal(snapshot)
         return Goal('collection_phone_wait', f'Wait by the phone for {trainer} to find a {stone}',
                     spot.map_name, spot.x, spot.y, spot.face)

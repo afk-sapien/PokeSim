@@ -39,7 +39,9 @@ CLAIM_HELD = Failure('claim_held', 'claim held')   # Its gift claim is held.
 STUCK = Failure('stuck', 'it stopped moving')
 NO_PROGRESS = Failure('no_progress', 'it stopped making progress')
 MENU_FAILED = Failure('menu_failed', 'a menu task for it kept failing')
-FAILURES = {failure.kind: failure for failure in (STOOD_DOWN, NO_ROUTE, CLAIM_HELD, STUCK, NO_PROGRESS, MENU_FAILED)}
+NO_CALL = Failure('no_call', 'the phone call it waited for never came')
+FAILURES = {failure.kind: failure for failure in (STOOD_DOWN, NO_ROUTE, CLAIM_HELD, STUCK, NO_PROGRESS, MENU_FAILED,
+                                                  NO_CALL)}
 # Why the goal catalogue lists a goal its source left out of the draw (planning/catalogue.py). Each
 # Failure of these kinds names what it waits for in its own detail.
 NEEDS = 'needs'       # Something it cannot start without, such as a ball or a rod.
