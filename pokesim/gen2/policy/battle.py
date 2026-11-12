@@ -406,8 +406,11 @@ class BattlePart:
         A healer the foe hits harder each turn than it heals is knocked out in the end too. A level 5
         Hoppip with Splash, Synthesis and Tail Whip, last in line at Chuck, was reloaded back into his
         Poliwrath's battle instead of blacking out and going to train.
+
+        While the trainer sends out the next Pokémon the enemy slot reads species 0, so there is no
+        foe to judge yet. A Silver run asked between two of Koga's Pokémon and the check crashed.
         """
-        if snapshot.in_battle != 2:
+        if snapshot.in_battle != 2 or snapshot.enemy_species not in self.data.species:
             return False
         from ..champion_shop import elixir
         standing = [mon for mon in snapshot.party if mon.hp and not mon.egg]

@@ -165,6 +165,19 @@ def test_a_healer_the_foe_outhits_blacks_out_instead_of_reloading(data, monkeypa
     assert not Policy.hopeless_battle(fake, chuck((fainted, vaporeon())))
 
 
+def test_no_foe_is_judged_while_the_trainer_sends_out_the_next(data, monkeypatch):
+    # A live Silver run asked between two of Koga's Pokémon, while the enemy slot read species 0, and
+    # the healer check stopped the emulator loop with KeyError: 0. With no foe out there is nothing to judge.
+    fake = policy(data)
+    fake.memory = object()
+    fainted = mon(84, 20, 0, (PECK, GROWL, 0, 0), (35, 40, 0, 0))
+    patch_battlers(monkeypatch, battlers(enemy=(SURF, 0, 0, 0)))
+    between = chuck((fainted, vaporeon()))
+    assert Policy.hopeless_battle(fake, between)
+    between.enemy_species = 0
+    assert not Policy.hopeless_battle(fake, between)
+
+
 def test_a_transformed_battler_takes_the_foes_species_moves_and_pp():
     own = ditto()
     assert transformed(battlers().player, own) is own and transformed(None, own) is own
