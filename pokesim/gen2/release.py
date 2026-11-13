@@ -222,6 +222,19 @@ def keeps_another(policy, snapshot, dex, level=5, dvs=None):
     return found.keep
 
 
+def supply_room(policy, snapshot):
+    """Whether one more copy for a linked adventure fits without a kept copy going for it: the boxes
+    keep their reserve, or the PC visit the catch brings releases only spares and the owner's
+    requests. A copy kept for a plan or for trade that went would only be caught again."""
+    from ..pcvalue import catch_visit, releases, requested
+    if not hasattr(snapshot, 'box_counts'):
+        return True
+    rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
+    needed = catch_visit(headroom(snapshot), len(requested(rated)))
+    return not any(row.status == 'kept' and not row.entry.requested
+                   for row in releases(rated, needed, getattr(snapshot, 'active_box', None)))
+
+
 def keeps_hatch(policy, snapshot, dex, dvs=None):
     """Whether the PC would keep what an egg of ``dex`` hatches into (pcvalue.worth): a missing Pokédex
     entry, a copy its family or a plan needs, a shiny or a rarer copy, rated with ``dvs`` once the egg
