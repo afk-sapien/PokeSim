@@ -1,4 +1,4 @@
-# PokeSim 0.7.0
+# PokeSim 0.7.0 release
 
 This release adds accounts and trade offers between people, gives every stored Pokémon a PC
 value, and judges every boss by one readiness rule. A stuck run now climbs one reload ladder in
