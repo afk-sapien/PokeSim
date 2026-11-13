@@ -312,10 +312,36 @@ def test_the_last_wanted_item_stays_and_a_free_slot_keeps_the_unequip_route():
     assert ledger.storage_unit(Policy(), snapshot([BEST, stone], FULL)) is None
     # With a free party slot the stone comes off first instead.
     assert [unit.action for unit in ledger.box_units(Policy(), snapshot([BEST, stone, other], PARTY))] == ['unequip']
-    # A free box slot also means no release is needed to take the item off later.
+    # A full party cannot take it off whatever room the boxes have, so the spare may go with its stone.
     room = snapshot([BEST, stone, other], FULL)
     room.box_counts = (BOX_CAPACITY - 1,) + (BOX_CAPACITY,) * 13
-    assert [unit.action for unit in ledger.box_units(Policy(), room)] == ['unequip']
+    assert [unit.action for unit in ledger.box_units(Policy(), room)] == ['release', 'unequip']
+
+
+def test_a_full_party_lets_a_held_spare_go_before_a_copy_kept_for_trade():
+    # A linked adventure misses Pidgey, so the second Pidgey is kept for trade. The spare Rattata holds
+    # an Everstone a plan wants, and the best Rattata holds another. Six in the party cannot withdraw
+    # the spare to take its stone off, so it goes with the stone while the boxes still have room. The
+    # Pidgey went instead, and the Pokédex hunt caught it again.
+    from pokesim.gen2.release import release_rated
+    from pokesim.planning.ledger import BOX_REFILL
+    policy = Policy()
+    policy.demand = {16: 1}
+    kept = mon(1)
+    stone = mon(3, species=19, held_item=EVERSTONE)
+    other = mon(4, species=19, dvs=(15, 15, 15, 15, 15), held_item=EVERSTONE)
+    # One slot short of the refill mark, so the visit takes only the spare.
+    view = snapshot([BEST, kept, stone, other], FULL)
+    view.box_counts = (BOX_CAPACITY - BOX_REFILL + 1,) + (BOX_CAPACITY,) * 13
+    status = {row.entry.slot: (row.status, row.reason) for row in release_rated(policy, view)}
+    assert status[0, 1] == ('kept', 'For trade') and status[0, 3][0] == 'spare'
+    for direct in (False, True):
+        unit = ledger.storage_unit(policy, view, direct=direct)
+        assert (unit.action, unit.detail) == ('release', stone)
+    # With a party slot free the stone comes off first, and the Pidgey still stays.
+    view.party = list(PARTY)
+    unit = ledger.storage_unit(policy, view)
+    assert (unit.action, unit.detail) == ('unequip', stone)
 
 
 def test_a_spare_in_another_box_costs_a_box_change():
