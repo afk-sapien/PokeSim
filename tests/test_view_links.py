@@ -143,6 +143,8 @@ def test_worker_refuses_every_write_and_save_read_for_a_view_request(tmp_path):
     for method, path in writes(app):
         assert client.request(method, path, json={'action': 'pause'}).status_code == 403, (method, path)
     assert client.get('/api/states').status_code == 403
+    # A view link's changes stop at the library, so this refusal reaches a signed-in watcher.
+    assert client.post('/api/control', json={'action': 'pause'}).json()['detail'] == 'You can only watch this adventure'
     assert emu.mock_calls == []
 
 

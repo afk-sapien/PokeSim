@@ -142,12 +142,12 @@ Ask me first setting and any waiting suggestions are ignored.
 With accounts, you can offer a trade to an adventure someone else owns. Their adventure
 must be shared with you, and its owner must switch on **Open to offers** on its Trading
 page. Make a trade then lists it with the owner's name, and the button reads **Send
-offer**. You can leave the Pokémon you get empty, so the owner picks one.
+offer**. You can leave the Pokémon you get empty, so whoever answers picks one.
 
-The **Offers** tab lists offers for this adventure and offers it sent. Only the owner
-answers an offer, and the sender can cancel it until then. Accepting checks both
-Pokémon again. If one evolved, changed level or left the collection since the offer, the
-owner sees what changed and confirms a second time. An accepted offer queues as a normal
+The **Offers** tab lists offers for this adventure and offers it sent. Its owner, or
+anyone who can manage it, answers an offer, and the sender can cancel it until then.
+Accepting checks both Pokémon again. If one evolved, changed level or left the collection
+since the offer, the person accepting sees what changed and confirms a second time. An accepted offer queues as a normal
 trade. Unanswered offers expire after 24 hours.
 
 Limits keep offers from piling up:

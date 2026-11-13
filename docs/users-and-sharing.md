@@ -38,8 +38,9 @@ Open Settings, then Sharing, and choose one of your adventures.
   what they can do:
   - **Can watch**: they see it live but cannot press buttons, change settings or trade.
   - **Can play**: they can also take control and play by hand.
-  - **Can manage**: they can also pause, save, change speed, load a save state and set
-    trading preferences. Only the owner restarts, exports, deletes or shares it.
+  - **Can manage**: they can also pause, save, change speed, load a save state, set
+    trading preferences, and send and answer trade offers. Only the owner restarts,
+    exports, deletes or shares it.
 - **Make watch link** creates a link anyone can open without an account, such as a friend in
   a chat. Choose how many days it stays open, or 0 for no end. Turn it off at any time.
 
@@ -71,8 +72,8 @@ You build trades by hand only between adventures you own. An admin can set up a 
 between any two adventures.
 
 To trade with someone else, send an offer. Their adventure must be shared with you and
-its owner must switch on **Open to offers** on its Trading page. Only the owner answers
-an offer. See [Trade offers](trading.md#trade-offers).
+its owner must switch on **Open to offers** on its Trading page. Its owner, or anyone who
+can manage it, answers the offer. See [Trade offers](trading.md#trade-offers).
 
 Automatic trading pairs two people's adventures only when both owners switch on **Auto
 trading with other people**. Otherwise it pairs only adventures with the same owner.

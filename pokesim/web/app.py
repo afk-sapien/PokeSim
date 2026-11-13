@@ -262,10 +262,12 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.middleware('http')
     async def viewer_boundary(request, call_next):
-        # The one gate for view links: they only watch, and never read saves.
+        # The one gate for watchers, through a view link or a Can watch share: they only watch,
+        # and never read saves. The library refuses a view link's changes first, so this
+        # message reaches a signed-in watcher.
         viewing = request.headers.get(VIEWER_HEADER) == '1'
         if viewing and not viewer_allows(request.method, request.url.path):
-            return JSONResponse({'detail': 'This is a view-only link'}, status_code=403)
+            return JSONResponse({'detail': 'You can only watch this adventure'}, status_code=403)
         role = request.headers.get(ROLE_HEADER)
         role = 'viewer' if viewing else role if role in ROLES_BELOW_OWNER else 'owner'
         if not role_allows(role, request.method, request.url.path):

@@ -111,12 +111,14 @@
 
   // Trade: a game to trade with, then a Pokémon in each slot, picked in a modal grid.
   const pick = {mine: [], cards: [], mon: null, games: [], game: null, theirs: [], theirCards: [], their: null, limits: null,
-    busy: false, mineBusy: '', viewerOnly: false, asked: null, gamesAsked: null, theirRecords: null, theirReason: '', side: null}
+    busy: false, mineBusy: '', viewerOnly: false, refused: false, asked: null, gamesAsked: null, theirRecords: null, theirReason: '', side: null}
   const note = (selector, text) => { const el = $(selector)
     if (!el) return
     el.textContent = text || ''
     el.hidden = !text }
   const VIEW_ONLY = 'This adventure is view-only, so it cannot trade'
+  // The library refuses a player or a watcher who opens the trade picker. They see who trades instead.
+  const NOT_MANAGER = 'Trades for this adventure are made by the people who manage it.'
   const mineBlocked = mon => mon.row?.blocked || (pick.viewerOnly ? VIEW_ONLY : '')
   const theirsBlocked = mon => mon.row?.blocked || ''
   const gameName = id => pick.games.find(game => game.id === id)?.name || ''
@@ -139,7 +141,7 @@
     const card = side === 'mine' ? mineCard() : theirCard()
     const what = side === 'mine' ? 'to send' : 'to get'
     if (!card) {
-      const off = !owner || (side === 'mine' ? pick.viewerOnly : !pick.game)
+      const off = !owner || pick.refused || (side === 'mine' ? pick.viewerOnly : !pick.game)
       const hint = !owner ? 'Trades are picked from the owner’s page.'
         : side === 'mine' ? (pick.viewerOnly ? 'This adventure is view-only.' : 'From this adventure')
           : pick.game ? `From ${esc(gameName(pick.game))}` : 'Choose a game to trade with first'
@@ -165,6 +167,7 @@
     let next = ''
     let reason = ''
     if (!owner) reason = 'Trades are picked from the owner’s page.'
+    else if (pick.refused) next = NOT_MANAGER
     else if (!pick.game) next = 'Choose a game to trade with.'
     else if (game && !game.available) reason = game.reason
     else if (!pick.mon && !pick.their) next = offering ? 'Choose a Pokémon to send.' : 'Choose a Pokémon to send and one to get.'
@@ -195,8 +198,16 @@
   async function json(response, fallback) {
     let data = {}
     try { data = await response.json() } catch (_) {}
-    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : fallback)
+    if (!response.ok) throw Object.assign(new Error(typeof data.detail === 'string' ? data.detail : fallback), {status: response.status})
     return data
+  }
+  // A 403 for this adventure's own Pokémon or games means this person does not manage it.
+  function refuse() {
+    pick.refused = true
+    note('#pick-note', NOT_MANAGER)
+    note('#pick-game-reason', '')
+    $('#pick-game').disabled = true
+    summary()
   }
   async function loadMine() {
     if (!owner) {
@@ -217,22 +228,25 @@
       pick.mine = data.pokemon || []
       pick.viewerOnly = Boolean(data.viewer_only)
       pick.mineBusy = data.busy || ''
-      if (data.viewer_only) note('#pick-note', 'This adventure is view-only, so it cannot trade.')
+      if (pick.refused) note('#pick-note', NOT_MANAGER)
+      else if (data.viewer_only) note('#pick-note', 'This adventure is view-only, so it cannot trade.')
       else note('#pick-note', data.reason || data.busy || '')
       renderMine()
       const wanted = query.get('mon')
       const first = wanted && pick.mine.find(mon => mon.key === wanted)
-      if (first && !first.blocked && !data.viewer_only) chooseMine(first.key)
+      if (first && !first.blocked && !data.viewer_only && !pick.refused) chooseMine(first.key)
       else summary()
     } catch (error) {
-      $('#pick-mine').innerHTML = `<p class="dex-empty">${esc(error.message)}</p>`
-      note('#pick-note', error.message)
+      const text = error.status === 403 ? NOT_MANAGER : error.message
+      $('#pick-mine').innerHTML = `<p class="dex-empty">${esc(text)}</p>`
+      if (error.status === 403) return refuse()
+      note('#pick-note', text)
       summary()
     }
   }
   // The games to trade with. Once a Pokémon is chosen to send, each game is checked against it.
   async function loadGames() {
-    if (!owner) return
+    if (!owner || pick.refused) return
     const key = pick.mon?.key
     const ask = pick.gamesAsked = {}
     try {
@@ -247,7 +261,8 @@
       note('#pick-game-reason', gameNote(current))
       summary()
     } catch (error) {
-      if (pick.gamesAsked === ask) note('#pick-game-reason', error.message)
+      if (error.status === 403) refuse()
+      else if (pick.gamesAsked === ask) note('#pick-game-reason', error.message)
     }
   }
   function chooseMine(key) {
