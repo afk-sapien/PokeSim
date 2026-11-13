@@ -253,10 +253,10 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
     box first, since every box change saves the game. A spare holding an item no plan wants may go with its item, worth the item's
     price as well. Any held spare may also have its item taken off first, which keeps the item but
     needs a free party slot and a bag entry, so it is chosen only when both are free. A spare holding
-    an item some plan wants goes only that way, unless the party and every box are full so the item
-    can never come off. It then goes with its item while the bag or another Pokémon keeps a copy, so a
-    full box frees a slot as it does in Red, Blue and Yellow. A shiny spare goes after every plain spare,
-    whatever the plain spares hold.
+    an item some plan wants goes only that way, unless the party is full so the holder cannot be
+    withdrawn. It then goes with its item while the bag or another Pokémon keeps a copy, as Red, Blue
+    and Yellow let any spare duplicate go. A shiny spare goes after every plain spare, whatever the
+    plain spares hold.
     """
     from ..planning.ledger import box_wanted
     from ..pcvalue import deadlocked, queue, releases, requested
@@ -271,7 +271,7 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
                                 snapshot.active_box))}
     wanted = wanted_items(data)
     bag = dict(snapshot.pockets.get('items', ()))
-    sealed = len(snapshot.party) >= PARTY_SIZE and headroom(snapshot) == 0
+    party_full = len(snapshot.party) >= PARTY_SIZE
     holders = Counter(row.held_item for row in snapshot.party + snapshot.stored if row.held_item)
     rows, plain, shinies = [], set(), set()
     for rank, row in enumerate(queue(rated)):
@@ -295,10 +295,13 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
         lost = price // 2 if bag.get(mon.held_item) else price
         if mon.held_item not in wanted:
             rows.append(Unit(key, BOX, HELD + base + lost, 'release', detail=mon, order=(1, rank)))
-        elif sealed and (bag.get(mon.held_item) or holders[mon.held_item] > 1):
-            # A full party with every box full can never withdraw the holder to take its item off, so
-            # the spare goes with it, as Red, Blue and Yellow let any spare duplicate go. Another copy of
-            # the item stays in the bag or on another Pokémon, so no plan loses it.
+        elif party_full and (bag.get(mon.held_item) or holders[mon.held_item] > 1):
+            # A full party cannot withdraw the holder to take its item off, so the spare goes with it.
+            # Another copy of the item stays in the bag or on another Pokémon, so no plan loses it. When
+            # this waited for every box to fill as well, a team of six never took the item off, and each
+            # refill released copies kept for trade instead, which the Pokédex hunt caught again. A Gold
+            # run released ten such commons in two visits, past spare Snorlax holding Leftovers, and
+            # caught each again within twenty minutes.
             rows.append(Unit(key, BOX, HELD + base + lost, 'release', detail=mon, order=(1, rank)))
         if standing_down(policy, unequip_key(mon)):
             continue
