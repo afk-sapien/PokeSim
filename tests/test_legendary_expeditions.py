@@ -161,6 +161,26 @@ def test_a_bag_full_of_key_items_sells_a_spare_repel_for_legendary_supplies():
     assert ShoppingController.sale_index(replace(s, items=bag[:17] + bag[18:] + ((ITEMS['ULTRA_BALL'], 5),))) is None
 
 
+def test_a_new_legendary_trip_sets_out_with_the_ultra_balls_it_holds():
+    """A Red run that caught Mewtwo walked out of Cerulean Cave to Cinnabar to buy 1 Ultra Ball for
+    Articuno while it held 19, since each new legendary project shopped for the full kit. Like Gold, Silver
+    and Crystal, a trip now walks to a Mart only below 10 Ultra Balls."""
+    from pokesim.policies.shopping import ShoppingController
+    project = {'method': 'static', 'species': sid(144), 'legendary': True, 'key': 'articuno'}
+    goal = Goal('collect_seafoam_current', 'Slow the current for Articuno', 'Push the boulders into the current')
+
+    def plan(ultras, prepared=False):
+        s = state(map=MAPS['SEAFOAM_ISLANDS_B3F'], money=49928, badges=255,
+                  items=((ITEMS['ULTRA_BALL'], ultras), (ITEMS['MAX_REPEL'], 3), (ITEMS['HYPER_POTION'], 5)))
+        return ShoppingController().plan(s, goal, {**project, 'supplies_prepared': prepared}, requested_goal=goal.key,
+                                         healing=False, in_league=False, has_pokedex=True)
+    assert plan(19).goal.key == plan(10).goal.key == 'collect_seafoam_current'
+    assert plan(9).goal.key == 'restock'
+    # A trip that has shopped goes on until it is down to 4.
+    assert plan(5, prepared=True).goal.key == 'collect_seafoam_current'
+    assert plan(4, prepared=True).goal.key == 'restock'
+
+
 def test_a_mart_without_ultra_balls_does_not_finish_legendary_preparation():
     from pokesim.policies.strategic import StrategicPolicy
     from pokesim.screen import Screen

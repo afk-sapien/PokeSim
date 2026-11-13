@@ -18,6 +18,11 @@ TRADE_LIMIT = 20
 BALL_RESERVE = 10
 # Balls a repeat hunt needs to start, as HUNT_BALLS in policies/collection.py.
 HUNT_START_BALLS = 5
+# Ultra Balls a legendary trip sets out with before it walks to a Mart, as ULTRA_STOCK in gen2/quests.py.
+# Each new project shopped for the full kit of 20 (battle.shopping_item), so a Red run that caught Mewtwo
+# walked out of Cerulean Cave to Cinnabar to buy 1 for Articuno while it held 19. A miss reopens the
+# encounter (ledger.legendary_retreat).
+LEGENDARY_TRIP_ULTRAS = 10
 SAFARI_GOALS = ('surf', 'teeth')
 SAFARI_INTERIOR = {m for m, w in WORLD.items() if w['name'].startswith('SafariZone') and w['name'] != 'SafariZoneGate'}
 # Bag entries the Safari Zone prizes need, HM03 and the Gold Teeth.
@@ -152,8 +157,8 @@ class ShoppingController(Errand):
             return SupplyPlan(goal)
         legendary = legendary_project(project)
         if legendary and not dict(snapshot.items).get(ITEMS['MASTER_BALL']):
-            self.restocking = (not project.get('supplies_prepared')
-                               or dict(snapshot.items).get(ITEMS['ULTRA_BALL'], 0) < 5 or bag_full)
+            ultras = dict(snapshot.items).get(ITEMS['ULTRA_BALL'], 0)
+            self.restocking = ultras < (5 if project.get('supplies_prepared') else LEGENDARY_TRIP_ULTRAS) or bag_full
         if not (self.restocking and not healing and not in_league and goal.key != 'party_box' and has_pokedex):
             return SupplyPlan(goal)
         targets = []
