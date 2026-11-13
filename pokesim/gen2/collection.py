@@ -315,11 +315,14 @@ _TRADE_TARGETS = {}
 
 
 def trade_targets(data):
-    """Species that only evolve over the cable."""
-    if data.game not in _TRADE_TARGETS:
-        _TRADE_TARGETS[data.game] = {int(evo['species']) for row in data.species.values()
-                                     for evo in row.get('evolutions', ()) if evo['method'] == 'trade'}
-    return _TRADE_TARGETS[data.game]
+    """Species that only evolve over the cable. The cache keys on the data itself, not its game name,
+    so a second load of the same game reads its own species. The entry holds the data, so its id is not
+    reused while cached."""
+    key = id(data)
+    if key not in _TRADE_TARGETS:
+        _TRADE_TARGETS[key] = (data, frozenset(int(evo['species']) for row in data.species.values()
+                                               for evo in row.get('evolutions', ()) if evo['method'] == 'trade'))
+    return _TRADE_TARGETS[key][1]
 
 
 def peer_store(policy, snapshot, Goal):

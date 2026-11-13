@@ -328,6 +328,17 @@ def test_a_copy_for_trade_counts_the_room_left_once_the_hunt_boxes_the_trainee(m
     assert supply_room(policy, training)
 
 
+def test_trade_targets_read_each_data_load_not_the_first_one_with_its_game_name():
+    from pokesim.gen2.collection import trade_targets
+    # The test above reads a Crystal stand-in with no evolutions. Keyed by game name, its empty answer
+    # stayed for the real Crystal data, and a later peer-store test failed by test order.
+    bare = SimpleNamespace(game='crystal', species={64: {'name': 'Kadabra'}})
+    full = SimpleNamespace(game='crystal', species={64: {'name': 'Kadabra',
+                                                         'evolutions': [{'method': 'trade', 'species': 65}]}})
+    assert trade_targets(bare) == set()
+    assert trade_targets(full) == {65}
+
+
 def test_a_copy_with_known_dvs_is_kept_only_when_twice_as_rare(monkeypatch):
     from pokesim.gen2.release import keeps_another
     from pokesim.rarity import generic
