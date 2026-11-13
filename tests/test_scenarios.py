@@ -10,8 +10,8 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.ram import PARTY_STRUCT, W_BAG_ITEMS, W_IS_IN_BATTLE, W_MONEY, W_NUM_BAG_ITEMS, W_PARTY_COUNT, W_PARTY_MONS, read_snapshot
-from pokesim.scenarios import (W_BATTLE_MON_HP, W_BATTLE_MON_STATUS, W_PLAYER_MON_NUMBER, Scenario, WorkerDied, apply_edits,
-                               discover, find_rom, gen2_data_root, play, replay_all, rom_candidates)
+from pokesim.scenarios import (MINUTE, W_BATTLE_MON_HP, W_BATTLE_MON_STATUS, W_PLAYER_MON_NUMBER, GoalChurn, Scenario,
+                               WorkerDied, apply_edits, discover, find_rom, gen2_data_root, play, replay_all, rom_candidates)
 from pokesim.scenarios import cartridge as checkpoint_cartridge, gen1_variant
 from pokesim.strategy_data import ITEMS
 
@@ -85,6 +85,47 @@ def test_a_key_from_a_newer_checkout_is_ignored_with_a_warning(tmp_path):
     with pytest.warns(UserWarning, match='from_the_future'):
         scenario = Scenario.load(tmp_path)
     assert scenario.name == 'later' and scenario.seed == 3 and not hasattr(scenario, 'from_the_future')
+
+
+def test_goal_changes_count_per_game_hour_and_in_any_60_game_minutes():
+    # A Gold run boxed a Kakuna and took it out again about 190 times a game hour while its quiet check passed.
+    policy, churn = SimpleNamespace(goal=SimpleNamespace(key='train_pc')), GoalChurn(0)
+    assert churn.look(policy, 0) == 0                                  # the first goal seen is no change
+    for minute in range(1, 91):
+        policy.goal.key = 'peer_store' if minute % 2 else 'train_pc'
+        churn.look(policy, minute * MINUTE)
+    assert churn.look(policy, 90 * MINUTE) == 60                       # minutes 31 to 90
+    assert churn.report(90 * MINUTE) == {'per_hour': [59, 31], 'worst_hour': 60}
+    assert churn.look(policy, 200 * MINUTE) == 0                       # the same goal since is no change
+    assert churn.report(200 * MINUTE) == {'per_hour': [59, 31, 0, 0], 'worst_hour': 60}
+
+
+def test_a_scenario_checks_goal_churn_unless_it_turns_the_check_off(tmp_path):
+    (tmp_path / 'scenario.json').write_text('{}', encoding='utf-8')
+    assert Scenario.load(tmp_path).max_goal_switches_per_hour == 120
+    (tmp_path / 'scenario.json').write_text('{"max_goal_switches_per_hour": null}', encoding='utf-8')
+    assert Scenario.load(tmp_path).max_goal_switches_per_hour is None
+
+
+@pytest.mark.parametrize('seconds, failure', [(15, '121 goal changes in 60 game minutes, more than 120'), (60, None)])
+def test_a_run_that_trades_goals_back_and_forth_fails_its_replay(tmp_path, monkeypatch, seconds, failure):
+    # The Gold Kakuna loop changed goals every 20 game seconds and still achieved something each minute.
+    # A goal change every game minute is busy but healthy.
+    import pokesim.scenarios as scenarios
+    checkpoint = tmp_path / 'start.state'
+    checkpoint.with_suffix('.json').write_text(json.dumps({'generation': 2, 'rom_sha1': 'f' * 40}))
+    snapshot = SimpleNamespace(in_battle=0, enemy_species=0, started=False, map_name='Route 36', party=[])
+    policy = SimpleNamespace(goal=SimpleNamespace(key='train_pc'), flees={}, recoveries=0, details=lambda: {})
+    run = SimpleNamespace(generation=2, frame=0, policy=policy, read=lambda: snapshot, stop=lambda: None)
+
+    def step(snapshot):
+        run.frame += seconds * MINUTE // 60
+        policy.goal.key = 'peer_store' if policy.goal.key == 'train_pc' else 'train_pc'
+    run.step = step
+    watch = SimpleNamespace(observe=lambda snapshot: ([], True), marks=lambda snapshot: [], loop=None,
+                            battle_clock=lambda snapshot, since, frame: None, hopeless=lambda snapshot: False)
+    monkeypatch.setattr(scenarios, 'open_run', lambda scenario, rom: (run, watch))
+    assert play(Scenario(name='pc', folder=tmp_path, checkpoint=checkpoint))['failure'] == failure
 
 
 def _replay(folder):
