@@ -81,8 +81,22 @@ def replay_outcomes(junit):
     return outcomes
 
 
-def judge(gate_code, pytest_code, outcomes, known):
-    """The problems that fail the preflight, the known failures that now pass, and a summary for the status."""
+def with_until(folder, names):
+    """How many of the replayed scenarios name an until, the event they were captured for. The rest pass
+    on any achievement within their quiet window, which can be routine play rather than their purpose."""
+    untils = {}
+    for path in Path(folder).glob('**/scenario.json'):
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        untils[data.get('name', path.parent.name)] = bool(data.get('until'))
+    return sum(untils.get(name, False) for name in names)
+
+
+def judge(gate_code, pytest_code, outcomes, known, untils=None):
+    """The problems that fail the preflight, the known failures that now pass, and a summary for the status.
+    ``untils`` is how many of the replays name an until, which a passing summary states."""
     problems = []
     if gate_code != 0:
         problems.append(f'the ladder gate failed with exit {gate_code}')
@@ -103,6 +117,8 @@ def judge(gate_code, pytest_code, outcomes, known):
     else:
         summary = (f'gate passed, {len(by["passed"])} replays passed, '
                    f'{len(by["failed"])} known failures')
+        if untils is not None:
+            summary += f', {untils} of {len(outcomes)} have an until'
     return problems, fixed, summary[:140]
 
 
@@ -171,10 +187,11 @@ def main(argv=None):
         if not args.no_post:
             post(sha, 'error', 'the preflight stopped before it finished')
         raise
-    problems, fixed, summary = judge(gate_code, pytest_code, outcomes, known)
+    untils = with_until(scenarios_dir(), outcomes)
+    problems, fixed, summary = judge(gate_code, pytest_code, outcomes, known, untils)
     report = {'commit': sha, 'passed': not problems, 'problems': problems, 'gate_exit': gate_code,
               'pytest_exit': pytest_code, 'known_failures': sorted(known), 'now_passing': fixed,
-              'replays': outcomes, 'wall_seconds': round(time.monotonic() - began, 1)}
+              'replays': outcomes, 'with_until': untils, 'wall_seconds': round(time.monotonic() - began, 1)}
     out = data_dir() / 'preflight' / f'{sha}.json'
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
@@ -183,6 +200,8 @@ def main(argv=None):
     for name in fixed:
         print(f'{name} now passes, so set its row in scenarios/index.toml to expect passes' if name in stuck
               else f'{name} now passes, so take it off known-failures.txt once it passes on main')
+    print(f'{untils} of {len(outcomes)} replays have an until, the event they were captured for. The rest pass '
+          'on any achievement within their quiet window.')
     print(f'preflight {"passed" if not problems else "failed"} in {report["wall_seconds"]}s: {summary}. '
           f'Report in {out}')
     if not args.no_post:
