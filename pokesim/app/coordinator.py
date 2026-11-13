@@ -1080,15 +1080,20 @@ class Coordinator:
                     and incoming.get('arrived_dex', incoming.get('dex')) == evolved)
         return allowed(give, take, mine, theirs) and allowed(take, give, theirs, mine)
 
-    def _refresh_collection_demand(self, inventories):
+    def _refresh_collection_demand(self, inventories, left_out=frozenset()):
+        """Tell each linked game which species the others miss and which missing species they offer.
+
+        A game in ``left_out`` is one automatic trading leaves out entirely for now, so it can neither
+        take a Pokémon collected for it nor send one. It is still asked to collect for the others.
+        """
         missing = {aid: set(range(1, inv.get('dex_total', 151) + 1)) - set(inv.get('owned', [])) for aid, inv in inventories}
         for aid, inventory in inventories:
-            totals = Counter(dex for peer, inv in inventories
-                             for dex in missing[peer] if dex <= inventory.get('dex_total', 151))
-            requests = {str(dex): count - int(dex in missing[aid]) for dex, count in totals.items()
-                        if count > int(dex in missing[aid])}
+            requests = {str(dex): count for dex, count in Counter(
+                dex for peer, inv in inventories if peer != aid and peer not in left_out
+                for dex in missing[peer] if dex <= inventory.get('dex_total', 151)).items()}
             # Missing species another linked game offers, so a store purchase can wait for the trade.
-            supply = sorted({dex for peer, inv in inventories if peer != aid for offer in inv.get('offers', [])
+            supply = sorted({dex for peer, inv in inventories if peer != aid and peer not in left_out
+                             for offer in inv.get('offers', [])
                              if self._compatible_pair(inventory, inv, {'time_capsule_compatible': True}, offer)
                              and (dex := self._offer_for(offer, inventory).get('arrived_dex', offer.get('dex')))
                              in missing[aid]})
@@ -1167,7 +1172,6 @@ class Coordinator:
             except (RuntimeError, OSError):
                 continue
         self.trade_blocked = blocked
-        self._refresh_collection_demand(inventories)
         # Auto trading switched off stops only automatic trades. The game still counts towards
         # what the others are asked to collect, and hand-picked trades still reach it.
         settings = {aid: trade_settings.get(self.registry, aid) for aid, _ in inventories}
@@ -1179,6 +1183,11 @@ class Coordinator:
         now = time.monotonic()
         self.ineligible = {side: until for side, until in self.ineligible.items() if until > now}
         reserved = reserved | set(self.ineligible)
+        # A game whose every offer waits, as after its trades kept running out their travel deadline,
+        # cannot take what the others collect for it. Live, a postgame Gold run spent two game hours
+        # catching the same species for a stuck Red that never traded, and each copy left in a trade
+        # with another game instead.
+        self._refresh_collection_demand(inventories, {aid for aid, key in reserved if key == WHOLE_GAME})
         self.refused_pairs = {pair: until for pair, until in self.refused_pairs.items() if until > now}
         pairs |= set(self.refused_pairs)
         waiting = {aid for entry in self._manual_entries() if entry['state'] in MANUAL_WAITING

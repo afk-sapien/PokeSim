@@ -108,6 +108,34 @@ def test_collection_requests_work_for_one_or_multiple_adventures(setup):
     assert setup.peers[left].collection_requests == {}
 
 
+def test_a_game_left_out_of_automatic_trades_asks_nothing_of_the_others(setup):
+    """Live, a postgame Gold run spent two game hours catching the same species for a stuck Red whose
+    trades all ran out their travel deadline, and each copy left in a trade with another game."""
+    c = setup.coordinator
+    left, right = setup.data['left_id'], setup.data['right_id']
+    c._refresh_collection_demand([
+        (left, {'owned': [dex for dex in range(1, 152) if dex != 70], 'offers': [{'trade_key': 'a', 'dex': 69}]}),
+        (right, {'owned': [dex for dex in range(1, 152) if dex != 69], 'offers': [{'trade_key': 'b', 'dex': 70}]})],
+        {right})
+    assert setup.peers[left].collection_requests == {}
+    assert setup.peers[left].collection_payload['supply'] == []
+    # It is still asked to collect for the others.
+    assert setup.peers[right].collection_requests == {'70': 1}
+    assert setup.peers[right].collection_payload['supply'] == [69]
+
+
+def test_a_game_whose_trades_keep_running_out_of_travel_time_drops_out_of_the_demand(setup):
+    c, left, right = setup.coordinator, setup.data['left_id'], setup.data['right_id']
+    for _ in range(2):
+        row = c.propose({**setup.data, 'request_id': identifier()})
+        setup.registry.update_transaction(row['id'], phase='aborted', decision='ABORT',
+                                          error=f'Cable Club preparation exceeded its travel deadline (adventure {left})')
+    assert c.schedule_once() is None
+    # Both games miss everything but Bulbasaur. Only the one that can still trade is collected for.
+    assert setup.peers[right].collection_requests == {}
+    assert setup.peers[left].collection_requests == {str(dex): 1 for dex in range(2, 152)}
+
+
 @pytest.fixture
 def setup(tmp_path):
     registry = Registry(tmp_path)
