@@ -66,6 +66,9 @@ TRAVEL_TIMEOUTS = ('Cable Club preparation exceeded its travel deadline',
 FAILURE_BACKOFF_AFTER = 2
 FAILURE_BACKOFF_SECONDS = 1800
 FAILURE_BACKOFF_MAX = 86400
+# How long a stalled game waits after one of its trades ran out its travel deadline, unless it makes
+# progress first.
+STALLED_TRAVEL_SECONDS = 7200
 # How long automatic trading leaves out a Pokémon whose offer vanished before its exchange began.
 INELIGIBLE_SECONDS = 1800
 # The key failure_backoff gives a game whose every offer waits.
@@ -208,6 +211,30 @@ def stalled(game):
     the flag clears on the first check after the run makes progress again or a restart clears it.
     """
     return bool((game.get('summary') or {}).get('stalled'))
+
+
+def travel_failures(history, now=None):
+    """Adventures whose trade ran out its travel deadline in the last two hours, with no completed
+    trade since.
+
+    A stalled game is left out of automatic trades only after one of these. Red, Blue and Yellow
+    have no waiting state, so a game whose next Pokédex entry needs a trade can show as stalled
+    while it can still travel, and leaving it out on the flag alone would never trade it.
+    """
+    now = time.time() if now is None else now
+    out, traded = set(), set()
+    for row in sorted(history, key=lambda item: item['updated_at'], reverse=True):
+        plan = row['plan']
+        if row['phase'] == 'completed' and row['decision'] == 'COMMIT':
+            traded.update((plan.get('left_id'), plan.get('right_id')))
+            continue
+        error = row.get('error') or ''
+        tagged = FAILED_TAG.search(error)
+        if (row['phase'] == 'aborted' and tagged and tagged.group(1) not in traded
+                and any(text in error for text in TRAVEL_TIMEOUTS)
+                and now - row['updated_at'] < STALLED_TRAVEL_SECONDS):
+            out.add(tagged.group(1))
+    return out
 
 
 class Coordinator:
@@ -481,7 +508,7 @@ class Coordinator:
             # The game is left out of automatic trades until it has room, so it is not retried.
             after = ('It is left out of automatic trades until its PC has room.' if PC_FULL in (latest.get('error') or '')
                      else 'It is left out of automatic trades until its party has room.')
-        elif aid and self._stalled(aid):
+        elif aid and self._stalled(aid) and aid in travel_failures(rows):
             after = 'It looks stuck, so automatic trading leaves it out until it makes progress again.'
         elif any(paused):
             after = ('The same failure repeated, so automatic trading leaves this Pokémon out until '
@@ -1191,10 +1218,11 @@ class Coordinator:
         reserved = self.hand_picked_keys()
         # Automatic trading stops picking a Pokémon whose trades keep failing the same way.
         reserved = reserved | set(failure_backoff(history))
-        # A stalled game cannot travel to the Cable Club, so every Pokémon it offers waits until the
-        # flag clears. Live, a game stuck in a battle that never ended was picked for three trades in
-        # under an hour, and each one ran out its travel deadline. A trade the owner chooses still runs.
-        reserved = reserved | {(game['id'], WHOLE_GAME) for game in games if stalled(game)}
+        # A stalled game whose trade just ran out its travel deadline waits until the flag clears or
+        # two hours pass. Live, a game stuck in a battle that never ended was picked for three trades
+        # in under an hour, and each one ran out its travel deadline. A trade the owner chooses still runs.
+        late = travel_failures(history)
+        reserved = reserved | {(game['id'], WHOLE_GAME) for game in games if stalled(game) and game['id'] in late}
         # And one whose offer vanished before its exchange began. No exchange is recorded for it,
         # so the history above never sees it, and the same pick used to fail every time it scored best.
         now = time.monotonic()
