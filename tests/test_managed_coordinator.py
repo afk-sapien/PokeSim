@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from pokesim.app.coordinator import SUMMARY_SECONDS, Coordinator
+from pokesim.app.coordinator import STALLED_TRAVEL_SECONDS, SUMMARY_SECONDS, Coordinator, travel_failures
 from pokesim.app.registry import Registry, identifier
 from pokesim.interactions.cable_metadata import ADAPTER_ID
 
@@ -487,6 +487,67 @@ def test_scheduler_uses_useful_eligible_offers_and_cooldown(setup):
     assert result['phase'] == 'completed'
     assert c.schedule_once() is None
     assert len(setup.cable_calls) == 1
+
+
+def test_scheduler_leaves_out_a_stalled_game_until_it_makes_progress_again(setup, monkeypatch):
+    """Live, a game stuck in a battle that never ended was picked for three trades in under an
+    hour, and each one ran out its travel deadline. Its partner waited for nothing each time."""
+    import pokesim.app.coordinator as coordinator
+    monkeypatch.setattr(coordinator, 'COOLDOWN_SECONDS', 0)
+    c, left = setup.coordinator, setup.data['left_id']
+    row = c.propose(setup.data)
+    setup.registry.update_transaction(row['id'], phase='aborted', decision='ABORT',
+                                      error=f'Cable Club preparation exceeded its travel deadline (adventure {left})')
+    setup.registry.update(left, summary={'stalled': True})
+    calls = len(setup.cable_calls)
+    assert c.schedule_once() is None
+    assert len(setup.cable_calls) == calls
+    # The stalled game still counts towards what the other is asked to collect.
+    assert all('collection_demand' in peer.calls for peer in setup.peers.values())
+    setup.registry.update(left, summary={'stalled': False})
+    assert c.schedule_once()['phase'] == 'completed'
+
+
+def test_a_stalled_game_that_can_still_travel_keeps_trading(setup):
+    """Red, Blue and Yellow have no waiting state, so a game whose next Pokédex entry needs a
+    trade can show as stalled. Leaving it out on the flag alone would never trade it."""
+    setup.registry.update(setup.data['left_id'], summary={'stalled': True})
+    assert setup.coordinator.schedule_once()['phase'] == 'completed'
+
+
+def test_a_late_trade_leaves_a_stalled_game_out_for_two_hours_at_most():
+    left, right = 'a' * 32, 'b' * 32
+    late = {'plan': {'left_id': left, 'right_id': right}, 'phase': 'aborted', 'decision': 'ABORT',
+            'updated_at': 1000.0, 'error': f'Cable Club preparation exceeded its travel deadline (adventure {left})'}
+    assert travel_failures([late], now=1000.0 + 60) == {left}
+    assert travel_failures([late], now=1000.0 + STALLED_TRAVEL_SECONDS) == set()
+    traded = {'plan': {'left_id': left, 'right_id': right}, 'phase': 'completed', 'decision': 'COMMIT',
+              'updated_at': 1100.0, 'error': None}
+    assert travel_failures([late, traded], now=1200.0) == set()
+    other = {**late, 'error': f'No supported walking route to the Cable Club (adventure {left})'}
+    assert travel_failures([other], now=1060.0) == set()
+
+
+def test_a_trade_the_owner_chose_still_reaches_a_stalled_game(setup, monkeypatch):
+    c = setup.coordinator
+    setup.registry.update(setup.data['left_id'], summary={'stalled': True})
+    monkeypatch.setattr(c, '_kick_manual', lambda: None)    # Only the scheduler drives the queue here.
+    entry = c.enqueue_manual(manual_request(setup))
+    assert c.schedule_once()['id'] == entry['id']
+    assert c.manual_status(entry['id'])['phase'] == 'completed'
+
+
+def test_a_stalled_game_that_ran_out_of_travel_time_is_named_as_stuck(setup):
+    c, left = setup.coordinator, setup.data['left_id']
+    row = c.propose(setup.data)
+    setup.registry.update_transaction(row['id'], phase='aborted', decision='ABORT',
+                                      error=f'Cable Club preparation exceeded its travel deadline (adventure {left})')
+    setup.registry.update(left, summary={'stalled': True})
+    message = c.status()['attention']['message']
+    assert 'First Red (Red) took too long' in message
+    assert 'looks stuck, so automatic trading leaves it out until it makes progress again' in message
+    setup.registry.update(left, summary={'stalled': False})
+    assert 'Automatic trading will try again.' in c.status()['attention']['message']
 
 
 def test_failed_trades_remain_visible_after_idle_poll_and_coordinator_restart(setup):
