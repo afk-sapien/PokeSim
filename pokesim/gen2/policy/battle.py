@@ -88,6 +88,13 @@ class BattlePart:
         upgrade = (snapshot.in_battle == 1 and catch_species in snapshot.owned and not (partner or shiny or own_rule)
                    and bool(requested or catch_species == quality_species(self) or catch_species in self.returned)
                    and keeps_another(self, snapshot, catch_species, dvs=wild_dvs(enemy.shown_dvs)))
+        from ..quests import LEGEND_TRIPS
+        from ..release import LEGENDARY_DEX
+        if upgrade and getattr(self.goal, 'key', None) in LEGEND_TRIPS and catch_species not in LEGENDARY_DEX:
+            # On a trip to a static legendary, a better copy of an owned species is left for later. It could
+            # fill the party or the box, and the storage goal that follows walked back to a PC through more
+            # wild battles before the legendary was met.
+            upgrade = False
         if (snapshot.in_battle == 1 and catch_species in self.returned and catch_species in {243, 244, 245, 249, 250, 251}
                 and catch_species in snapshot.owned and not (upgrade or partner or shiny or own_rule)):
             # Close the return so neither the plan nor the retry timers bring back a refused legendary.
