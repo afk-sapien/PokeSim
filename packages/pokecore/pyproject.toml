@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokecore"
-version = "0.11.0"
+version = "0.12.0"
 description = "Shared read-only decoding and emulator primitives for Pokemon Red, Blue, Yellow, Gold, Silver and Crystal"
 readme = "README.md"
 requires-python = ">=3.11"

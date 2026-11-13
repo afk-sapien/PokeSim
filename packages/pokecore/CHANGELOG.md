@@ -1,12 +1,38 @@
 # Changelog
 
-## Unreleased
+## 0.12.0
 
 ### Added
 
 - `state.read_state(memory, game)` returns one frozen `GameState` with `Player`,
   `MapState`, `Party`, `Mon` and `Bag` for all six games. A field a generation lacks
   is None, and `state.ABSENT` gives the reason.
+- `GameState.boxes` holds every PC box as `Boxes` of `StoredMon`, and
+  `GameState.events` holds the set event flags, numbered as the disassemblies' `EVENT_`
+  constants. `GameState.ui` and `state.read_ui(memory, game)` give a `UiState`: the
+  screen, the menu cursor and list scroll, the text box, the facing and the movement.
+- `pokecore.trace` writes hash-chained traces of an emulator run. `Recorder` records
+  every press, release, tick, write, load, hook and clock call, and the caller adds its
+  decisions. `verify` replays a segment with no policy, and `redecide` runs a policy
+  again and stops at the first record that differs. `pokecore trace verify` checks a
+  segment from the command line. The module needs only the standard library.
+- `Emulator.set_clock_lock_state(lock)` applies a lock read from
+  `clock_lock_state()`, or releases it with None, without moving the clock.
+- `storage.read_box_counts`, `storage.read_box_records` and `storage.box_location`
+  read the Gen I boxes from cartridge RAM, as `BoxRecords`.
+- `repairs.repair_party_nicknames` ends each Gen I party nickname at its first text
+  command byte and returns the slots it changed.
+- `gen2.state.script_running` says whether an overworld script holds the pad, and
+  `gen2.state.trainer_id` reads the trainer ID alone. The Gen II memory map gains
+  `wScriptFlags`.
+- `gen2.SWAPS` and `gen2.CARPETS` are the block swaps and warp carpets, generated
+  from the map scripts of the disassembly.
+- `yellow.open_emulator(rom, yellow=...)` names the variant of a patched ROM, whose
+  checksum no longer identifies it.
+- `shortcuts.gen2ui.list_scroll` and `shortcuts.gen2ui.text_box_top`.
+- `gen1` names more addresses: the menu cursor, the current item and quantity,
+  in-game trades, the options byte, the random bytes, the trainer battle bit and the
+  layout of the boxes in cartridge RAM.
 - `gen1.read_pc_items` reads the PC's stored items. `gen1` also names
   `W_NUM_BOX_ITEMS`, `W_BOX_ITEMS`, `PC_ITEM_CAPACITY`, `W_PLAYTIME_M` and
   `W_PLAYTIME_S`.
@@ -20,6 +46,20 @@
   `BATTLE_STRUCT`, the `BATTLE_TYPE_*` values and two status bits.
 - The Gen II memory map gains `wBattleMon`, `wBattleMonNickname`,
   `wEnemyMonNickname` and `wPlayerSubStatus5`.
+
+### Changed
+
+- `gen2.ram.max_pp` follows the cartridge: each PP Up adds a fifth of the base PP, at
+  most 7. A 40 PP move with one PP Up now has 47 PP, not 48.
+
+### Removed
+
+- `Emulator.start_recording`, `stop_recording`, `replay` and `ReplayDivergence`.
+  Use `pokecore.trace`.
+- `gen2.CHANGES`, `gen2.DOORS` and `gen2.maps.LEAGUE`. Use `gen2.SWAPS` and
+  `gen2.CARPETS`.
+- The Gen II `Mon.to_dict` keys `perfect_dvs`, `potential_power`, `dv_total`,
+  `dv_percent` and `dv_stars`. They were PokeSim ratings, and PokeSim now adds them.
 
 ## 0.11.0
 
