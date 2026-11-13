@@ -266,9 +266,10 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
     rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
     # The journal says once when the PC is full and nothing in it may go (pcvalue.full_notice).
     policy.pc_deadlock = deadlocked(rated, headroom(snapshot))
+    # A kept copy joins the visit only for what the reserve lacks after the spares (pcvalue.refill_takes).
     visit = {row.entry.slot: index for index, row in
              enumerate(releases(rated, max(box_wanted(headroom(snapshot), True), len(requested(rated)), 1),
-                                snapshot.active_box))}
+                                snapshot.active_box, kept=box_wanted(headroom(snapshot), False)))}
     wanted = wanted_items(data)
     bag = dict(snapshot.pockets.get('items', ()))
     party_full = len(snapshot.party) >= PARTY_SIZE
@@ -378,18 +379,19 @@ def release_step(policy, snapshot):
 
     A spare whose item is coming off finishes first. After that the visit ends at the refill mark,
     so it does not start another spare. Starting one each time an unequip ended kept a Crystal visit
-    releasing for 250,000 frames, to 34 free slots.
+    releasing for 250,000 frames, to 34 free slots. Past the reserve it also ends once only kept
+    copies are left (release.refill_takes).
     """
     from ..planning.ledger import box_wanted
     from .menus import ChangeBox
-    from .release import pending
+    from .release import pending, refill_takes
     step = unequip_step(policy, snapshot)
     if step is not None:
         return step
     if not box_wanted(headroom(snapshot), True) and not pending(policy, snapshot):
         return 'wait'
     unit = policy.storage_target(snapshot)
-    if unit is None:
+    if unit is None or not refill_takes(policy, snapshot, unit.detail.box, unit.detail.position):
         return 'wait'
     mon = unit.detail
     if unit.action == 'unequip':
