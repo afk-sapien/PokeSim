@@ -90,7 +90,7 @@ def test_the_copy_takes_only_the_app_folder_and_compose_file_and_no_secret(tmp_p
     done = subprocess.run([sys.executable, '-c', image_trial.EXTRACT, str(backup), str(out), *image_trial.SECRETS],
                           check=True, capture_output=True, text=True)
     assert json.loads(done.stdout) == {'url': 'https://app.example', 'wanted': 2}
-    copied = sorted('./' + str(path.relative_to(out)) for path in out.rglob('*') if path.is_file())
+    copied = sorted('./' + path.relative_to(out).as_posix() for path in out.rglob('*') if path.is_file())
     assert copied == sorted(files)
 
 

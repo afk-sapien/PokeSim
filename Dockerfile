@@ -43,7 +43,7 @@ COPY packages/pokecore/pyproject.toml packages/pokecore/LICENSE packages/pokecor
      /usr/share/pokesim/source/packages/pokecore/
 COPY packages/pokecore/src /usr/share/pokesim/source/packages/pokecore/src
 COPY licenses /usr/share/pokesim/licenses
-ARG VERSION=0.7.0.dev0
+ARG VERSION=0.7.0
 ARG REVISION=unknown
 # The PRAGMA user_version of app.sqlite this build writes. tools/deploy_host.sh passes it.
 ARG SCHEMA=unknown

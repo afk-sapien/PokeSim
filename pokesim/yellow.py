@@ -29,8 +29,8 @@ __all__ = [
 def open_emulator(rom, default=None, yellow=None, **kwargs):
     """pokecore's ``open_emulator``, with ``yellow`` naming the variant of a patched ROM.
 
-    A patched ROM's checksum no longer identifies it. pokecore 0.11.0, which pip installs
-    take, has no ``yellow`` argument, so the choice is made here.
+    A patched ROM's checksum no longer identifies it. pokecore before 0.12.0 had no ``yellow``
+    argument, so the choice is made here. 0.12.0 takes it too, and this wrapper keeps the callers unchanged.
     """
     if yellow is None:
         return _core_open_emulator(rom, default, **kwargs)

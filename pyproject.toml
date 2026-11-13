@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokesim"
-version = "0.7.0.dev0"
+version = "0.7.0"
 description = "One application for autonomous Pokémon Red, Blue, Yellow, Gold, Silver and Crystal adventures with live views and cable trading"
 readme = "README.md"
 license = "MIT"
@@ -12,14 +12,14 @@ license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
 dependencies = [
   # Not on PyPI: GitHub release wheels, so pip, pipx and uv all resolve them from the wheel metadata.
-  # Core 0.11.0 asks for pyboy-rs>=0.1.2,<0.2 and the matching wheel below satisfies it. Both carry markers for
+  # pokecore 0.12.0 asks for pyboy-rs>=0.1.2,<0.2 and the matching wheel below satisfies it. Both carry markers for
   # exactly the platforms that have a pyboy-rs wheel. Core must carry the marker too: its own requirement on
   # pyboy-rs would otherwise send pip to look that name up on PyPI where the platform has no wheel (Windows ARM64,
   # 32-bit ARM, FreeBSD). Neither name is a PyPI project of ours, so no install may ever depend on PyPI for them.
   # pokecore's source is the packages/pokecore workspace member, and uv, CI and the container install it from
   # there (tool.uv.sources below). This URL is the released copy that pip and pipx users get, so
   # tools/release.py check-pins fails when its version differs from the member's.
-  "pokecore[emulator] @ https://github.com/afk-sapien/pokesim-core/releases/download/v0.11.0/pokecore-0.11.0-py3-none-any.whl#sha256=0a083118b5542a4ea1e148ae52133a3126f07a2e10fbb34d706291ce17d85ec2 ; (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and (platform_machine == 'x86_64' or platform_machine == 'arm64')) or (sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64'))",
+  "pokecore[emulator] @ https://github.com/afk-sapien/PokeSim/releases/download/pokecore-v0.12.0/pokecore-0.12.0-py3-none-any.whl#sha256=d46507a9ad1da173d395d473c07ff0c9d586fc91d5fd1f16246f2f82ae195869 ; (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and (platform_machine == 'x86_64' or platform_machine == 'arm64')) or (sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64'))",
   "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=85d000b9d6607f449b6a945bed7923ca3e1adb5bb97dc1606508501eef1da89d ; sys_platform == 'linux' and platform_machine == 'x86_64'",
   "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl#sha256=b332de4bec17fbd4c9f5bca3c399923c98df382344d9394174a2474cd5056759 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
   "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-macosx_10_12_x86_64.whl#sha256=e604f8d4e0bc33e6d37ebc0bf77e85beab5223e68324ff57f175a56d6ff9c9f3 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
