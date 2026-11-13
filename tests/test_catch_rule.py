@@ -127,6 +127,35 @@ def test_gen2_battle_catch_of_an_owned_species_asks_verdict(refuse, real_data, r
     assert fight(policy, snapshot, mem).button != throw
 
 
+@pytest.mark.parametrize('reason', ['requested', 'returned'])
+def test_gen2_a_legendary_trip_leaves_a_better_copy_of_an_owned_species(real_data, reason):
+    # The copy could fill the party or the box, and the storage goal after it walks back to a PC first.
+    from pokesim.gen2.policy import Policy
+    from pokesim.planning.stance import HUNT
+    policy = Policy(real_data)
+    policy.battle_task = lambda task, snapshot, mem: SimpleNamespace(button=task.key())
+    policy.needed_move = lambda snapshot: 0
+    policy.capture_move = lambda *args: None
+    policy.remedy = lambda *args, **kwargs: False
+    if reason == 'requested':
+        policy.collection['prerequisites'] = [157]
+    else:
+        policy.returned = {157, 249}
+    snapshot = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_41'],
+        in_battle=1, enemy_species=157, enemy_hp=1, enemy_max_hp=60, owned={157, 249}, can_catch=True, badges=65535,
+        money=10000, pockets={'balls': [(real_data.items['POKE_BALL'], 20)]}, bug_contest=False)
+    mem = SimpleNamespace(byte=lambda name: 0, read=lambda name, size: b'\xff' * size)
+    throw = ('Throw', real_data.items['POKE_BALL'])
+    assert fight(policy, snapshot, mem).button == throw
+    policy.goal = SimpleNamespace(key='legend_lugia', kind=HUNT)
+    assert fight(policy, snapshot, mem).button != throw
+    if reason == 'returned':
+        # The returned legendary the trip is for is still caught.
+        lugia = SimpleNamespace(**{**vars(snapshot), 'map': real_data.map_ids['WHIRL_ISLAND_LUGIA_CHAMBER'],
+                                   'enemy_species': 249, 'enemy_max_hp': 200, 'roamers': ()})
+        assert fight(policy, lugia, mem).button == throw
+
+
 def test_gen2_a_missing_entry_waits_when_only_the_upgrade_slot_is_free(real_data):
     from pokesim.gen2.policy import Policy
     from pokesim.gen2.release import room

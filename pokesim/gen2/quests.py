@@ -10,6 +10,8 @@ from ..planning.stance import HUNT
 
 # The Burned Tower rock stands down for a while when no party member can smash it.
 RELEASE_ROCK_KEY = 'release_rock'
+# The goals of a trip to a static legendary.
+LEGEND_TRIPS = frozenset({'legend_suicune', 'legend_lugia', 'legend_ho_oh'})
 
 
 def rock_smash_task(policy, snapshot):
