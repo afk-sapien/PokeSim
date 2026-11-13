@@ -1,4 +1,5 @@
 from dataclasses import replace
+import json
 import random
 from types import SimpleNamespace
 
@@ -103,6 +104,59 @@ def test_peer_requests_take_priority_over_routine_repeat_hunts(monkeypatch):
     assert c.project['species'] == sid(69) and c.project['needed_capture']
     # The routine hunt is still offered, and a requested copy is worth a new entry to it.
     assert sorted(option.value for option in captured) == [values.SMALL, values.NEW_ENTRY]
+
+
+def needed_hunt(target):
+    return {'species': target, 'method': 'grass', 'map': MAPS['ROUTE_1'], 'repeat': True,
+            'needed_capture': True, 'dv_hunt': False, 'initial_count': 1, 'catch_goal': 1, 'key': 'needed'}
+
+
+def test_a_needed_copy_hunt_counts_a_search_only_when_it_ends_without_a_catch():
+    target = sid(69)
+    s = state(owned=frozenset({1, 69}), stored_pokemon=((0, target, 5, ''),))
+    c = Collection()
+    c.project = needed_hunt(target)
+    assert c.abandon('No reachable encounter')
+    assert c.capture_searches == {str(target): 1} and c.quality_searches == {}
+    restored = Collection()
+    restored.load(json.loads(json.dumps(c.state_dict())))
+    assert restored.capture_searches == {str(target): 1}
+    # Its budget spent with no catch, the hunt counts a second search.
+    restored.project = needed_hunt(target)
+    restored.remaining = 60
+    restored.observe(s)
+    restored.observe(replace(s, frame=120))
+    assert restored.project is None and restored.capture_searches == {str(target): 2}
+    # A hunt that catches its copy counts none.
+    restored.project = needed_hunt(target)
+    restored.remaining = 36000
+    restored.observe(replace(s, frame=240))
+    restored.observe(replace(s, frame=360, stored_pokemon=s.stored_pokemon * 2))
+    assert restored.project is None and restored.capture_searches == {str(target): 2}
+    assert Collection().capture_searches == {}
+
+
+def test_a_species_with_its_needed_copy_searches_spent_is_not_hunted_for_a_peer(monkeypatch):
+    def hunts(searches):
+        c = Collection()
+        c.completed_champion = True
+        c.set_demand({69: 2})
+        c.capture_searches = {str(sid(69)): searches}
+        monkeypatch.setattr(c, 'sources', lambda: {sid(69): [{'method': 'grass', 'map': MAPS['ROUTE_1'], 'level': 3}]})
+        monkeypatch.setattr(c, 'available', lambda s, source: True)
+        captured = []
+
+        def select(options, projects):
+            captured.extend(projects[option.key] for option in options if projects[option.key]['method'] == 'grass')
+            return None
+        monkeypatch.setattr(c.director, 'select', select)
+        nav = SimpleNamespace(distance_lookup=lambda *args: lambda points: 10, can_surf=True, visits={}, path=[])
+        c.choose(state(map=MAPS['ROUTE_1'], owned=frozenset(range(1, 152)), money=50000),
+                 nav, random.Random(1), Goal('collect_plan', '', ''))
+        return [project for project in captured if project['species'] == sid(69)]
+
+    assert [project['needed_capture'] for project in hunts(2)] == [True]
+    assert hunts(3) == []
 
 
 def test_demand_keeps_needed_copies_without_blocking_all_duplicate_cleanup():
