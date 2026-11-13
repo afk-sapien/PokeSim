@@ -201,6 +201,15 @@ def failure_backoff(history, now=None):
     return out
 
 
+def stalled(game):
+    """Whether the Library shows the adventure as stalled.
+
+    The supervisor copies the worker's progress state into the summary on every health check, so
+    the flag clears on the first check after the run makes progress again or a restart clears it.
+    """
+    return bool((game.get('summary') or {}).get('stalled'))
+
+
 class Coordinator:
     def __init__(self, manager):
         self.manager = manager
@@ -392,6 +401,12 @@ class Coordinator:
                 return blocked[0]
         return None
 
+    def _stalled(self, aid):
+        try:
+            return stalled(self.registry.adventure(aid))
+        except KeyError:
+            return False
+
     def _game_label(self, aid):
         try:
             game = self.registry.adventure(aid)
@@ -466,6 +481,8 @@ class Coordinator:
             # The game is left out of automatic trades until it has room, so it is not retried.
             after = ('It is left out of automatic trades until its PC has room.' if PC_FULL in (latest.get('error') or '')
                      else 'It is left out of automatic trades until its party has room.')
+        elif aid and self._stalled(aid):
+            after = 'It looks stuck, so automatic trading leaves it out until it makes progress again.'
         elif any(paused):
             after = ('The same failure repeated, so automatic trading leaves this Pokémon out until '
                      + time.strftime('%H:%M', time.localtime(max(filter(None, paused)))) + '.')
@@ -1174,6 +1191,10 @@ class Coordinator:
         reserved = self.hand_picked_keys()
         # Automatic trading stops picking a Pokémon whose trades keep failing the same way.
         reserved = reserved | set(failure_backoff(history))
+        # A stalled game cannot travel to the Cable Club, so every Pokémon it offers waits until the
+        # flag clears. Live, a game stuck in a battle that never ended was picked for three trades in
+        # under an hour, and each one ran out its travel deadline. A trade the owner chooses still runs.
+        reserved = reserved | {(game['id'], WHOLE_GAME) for game in games if stalled(game)}
         # And one whose offer vanished before its exchange began. No exchange is recorded for it,
         # so the history above never sees it, and the same pick used to fail every time it scored best.
         now = time.monotonic()

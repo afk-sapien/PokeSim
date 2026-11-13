@@ -489,6 +489,41 @@ def test_scheduler_uses_useful_eligible_offers_and_cooldown(setup):
     assert len(setup.cable_calls) == 1
 
 
+def test_scheduler_leaves_out_a_stalled_game_until_it_makes_progress_again(setup):
+    """Live, a game stuck in a battle that never ended was picked for three trades in under an
+    hour, and each one ran out its travel deadline. Its partner waited for nothing each time."""
+    c, left = setup.coordinator, setup.data['left_id']
+    setup.registry.update(left, summary={'stalled': True})
+    assert c.schedule_once() is None
+    assert setup.cable_calls == []
+    # The stalled game still counts towards what the other is asked to collect.
+    assert all('collection_demand' in peer.calls for peer in setup.peers.values())
+    setup.registry.update(left, summary={'stalled': False})
+    assert c.schedule_once()['phase'] == 'completed'
+
+
+def test_a_trade_the_owner_chose_still_reaches_a_stalled_game(setup, monkeypatch):
+    c = setup.coordinator
+    setup.registry.update(setup.data['left_id'], summary={'stalled': True})
+    monkeypatch.setattr(c, '_kick_manual', lambda: None)    # Only the scheduler drives the queue here.
+    entry = c.enqueue_manual(manual_request(setup))
+    assert c.schedule_once()['id'] == entry['id']
+    assert c.manual_status(entry['id'])['phase'] == 'completed'
+
+
+def test_a_stalled_game_that_ran_out_of_travel_time_is_named_as_stuck(setup):
+    c, left = setup.coordinator, setup.data['left_id']
+    row = c.propose(setup.data)
+    setup.registry.update_transaction(row['id'], phase='aborted', decision='ABORT',
+                                      error=f'Cable Club preparation exceeded its travel deadline (adventure {left})')
+    setup.registry.update(left, summary={'stalled': True})
+    message = c.status()['attention']['message']
+    assert 'First Red (Red) took too long' in message
+    assert 'looks stuck, so automatic trading leaves it out until it makes progress again' in message
+    setup.registry.update(left, summary={'stalled': False})
+    assert 'Automatic trading will try again.' in c.status()['attention']['message']
+
+
 def test_failed_trades_remain_visible_after_idle_poll_and_coordinator_restart(setup):
     c = setup.coordinator
     error = 'No supported walking route to the Cable Club is available yet'
