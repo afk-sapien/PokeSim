@@ -105,6 +105,30 @@ def test_the_day_care_wait_trains_or_collects_instead_of_pacing_goldenrod(data, 
     assert goal.key == key and goal.map_name != 'GOLDENROD_CITY' and not patrols
 
 
+def test_open_work_goes_ahead_of_a_phone_wait_since_the_call_rings_during_it(data, monkeypatch):
+    """A Crystal run stood by the phone for 142 of 240 game minutes while training was open. The wait
+    was priced as a short errand, though a call comes about every 25 game minutes and rings on any walk
+    with phone service."""
+    if data.game != 'crystal':
+        pytest.skip('Phone trainers give stones only in Crystal')
+    from pokesim.gen2 import item_sources
+    from pokesim.gen2.collection import journey
+    from pokesim.gen2.policy import Goal
+    wait = Goal('collection_phone_wait', 'Wait by the phone for Gina to find a LEAF STONE', 'GOLDENROD_POKECENTER_1F', 5, 3, 'up')
+    train = Goal('collection_train', 'Train MON toward level 100', 'SILVER_CAVE_ROOM_1', 9, 31)
+    monkeypatch.setattr(item_sources, 'phones', lambda *args: wait)
+    stub_activities(monkeypatch, **{'training.journey': train})
+    assert journey(expedition(data), snapshot([lead()]), clock(), Goal).key == 'collection_train'
+    # With no other work open the wait still runs, ahead of the patrol.
+    patrols = stub_activities(monkeypatch)
+    assert journey(expedition(data), snapshot([lead()]), clock(), Goal).key == 'collection_phone_wait' and not patrols
+    # Registering the number stays a short errand.
+    register = Goal('collection_phone_register', 'Get Gina’s number for a LEAF STONE', 'ROUTE_34', 10, 10)
+    monkeypatch.setattr(item_sources, 'phones', lambda *args: register)
+    stub_activities(monkeypatch, **{'training.journey': train})
+    assert journey(expedition(data), snapshot([lead()]), clock(), Goal).key == 'collection_phone_register'
+
+
 def test_the_day_care_errands_still_go_ahead_of_other_work(data, monkeypatch):
     from pokesim.gen2.collection import journey
     from pokesim.gen2.policy import Goal

@@ -680,6 +680,10 @@ LEGEND_FRAMES = 6000
 ACTIVITY_FRAMES = 12000
 # A Bug-Catching Contest, twenty minutes of the park.
 CONTEST_FRAMES = 30000
+# A wait by the phone for a stone trainer's call, at 3600 frames a game minute. A call comes about
+# every 25 game minutes, after the 20 minute timer and its retries, and it rings on any walk with
+# service too.
+PHONE_WAIT_FRAMES = 25 * 3600
 # Training toward an evolution, as Gen I prices it (policies/collection.py EXPECTED_FRAMES).
 EVOLVE_FRAMES = 60000
 # A League run of five rooms, about thirty battles.
@@ -1105,7 +1109,10 @@ def journey(policy, snapshot, mem, Goal):
     offer('breed', PROGRESS, new, ACTIVITY_FRAMES, lambda: breed(policy, snapshot, Goal))
     offer('prizes', PROGRESS, new, ACTIVITY_FRAMES, lambda: prizes(policy, snapshot, Goal))
     offer('stones', PROGRESS, new, ERRAND_FRAMES, lambda: stones(policy, snapshot, Goal))
-    offer('phones', PROGRESS, new, ERRAND_FRAMES, lambda: phones(policy, snapshot, mem, Goal))
+    # Registering a number is an errand, but the wait lasts until a call comes. Other open work goes
+    # first, since the call rings during it and pickups collects the stone it brings.
+    offer('phones', PROGRESS, new, ERRAND_FRAMES, lambda: phones(policy, snapshot, mem, Goal),
+          price=lambda goal: (PROGRESS, new, PHONE_WAIT_FRAMES) if goal.key == 'collection_phone_wait' else None)
     offer('store', PROGRESS, new, ERRAND_FRAMES, lambda: store(policy, snapshot, Goal))
     offer('champion_shop', PROGRESS, new, ERRAND_FRAMES, lambda: champion_shop(policy, snapshot, Goal))
     offer('hatching', PROGRESS, new, ERRAND_FRAMES, lambda: hatching(policy, snapshot, Goal))
