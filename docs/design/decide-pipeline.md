@@ -120,6 +120,8 @@ Until a group of sources switches on, the chain that is left runs as one source,
 
 A director is one more source. It holds at most one standing choice, a goal key from the goal list (`pin.grouped` today, the PR 7 catalogue later). It offers that goal in the pinned lane, which `arbiter._lane` already puts after upkeep and before everything else.
 
+[Goal queue](goal-queue.md) proposes an ordered, saved list of choices in place of the one, and the director offers the first that can run in the same lane. Its slice 1 PR rewrites this section as built.
+
 - Its offer passes the same filter. An offer that cannot run is parked, and the reason goes back to the director: a `pin.gave_up` row now, a typed failure after PR 7.
 - It never overrides. Forced moves, holds, UPKEEP and needs still go first, the same as for any source.
 - Its choice enters the trace as an `input` record with source `pin` and the goal key, or none for a cancel (`emulator.py:279`, L283). So a `redecide` play hands the policy the same choice at the same record. No PokeSim play runs `redecide` yet, and the one that does feeds these records.

@@ -174,6 +174,8 @@ The pokesim-ui session gets two lines with this slice: the endpoint and its acce
 
 The director is one more source offering to the decide pipeline. It holds at most one standing choice, a catalogue key.
 
+[Goal queue](goal-queue.md) proposes an ordered, saved list of choices in place of the one, with the first that can run in the pinned lane. Its slice 1 PR rewrites this section as built.
+
 ### Setting a pin
 
 - `pin_goal` and `unpin_goal` keep the auth checks they have today in `/api/control` (`control_allowed`, `web/app.py:93`). The owner sets a pin, and so does someone the owner gave Can manage. A player and a viewer are refused. Nothing new opens.
