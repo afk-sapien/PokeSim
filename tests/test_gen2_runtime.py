@@ -868,6 +868,31 @@ def test_faster_roamer_lead_traps_then_sleeps_and_never_paralyzes(real_data):
     assert reading(policy, mem).capture_move(snapshot) is None
 
 
+def test_catch_never_picks_a_move_the_foe_has_disabled(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    # Bellossom with Absorb, Stun Spore, Sleep Powder and Solarbeam against a wild Psyduck, which knows Disable.
+    def bellossom():
+        return SimpleNamespace(species=182, level=60, hp=200, egg=False, status=0, moves=(71, 78, 79, 76),
+            pp=(20, 28, 15, 10), stats=(200, 120, 120, 70, 130, 130))
+    snapshot = SimpleNamespace(party=(bellossom(), bellossom()), enemy_species=54, enemy_hp=44, enemy_max_hp=44,
+        pockets={'balls': [(real_data.items['POKE_BALL'], 55)]})
+    memory = {}
+    mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: memory.get(name, 0))
+    assert reading(policy, mem).capture_move(snapshot) == 1
+    # With Stun Spore disabled the game only says "Disabled!" and the turn never passes, so sleep it instead.
+    memory['wDisabledMove'], memory['wPlayerDisableCount'] = 78, 3
+    assert reading(policy, mem).capture_move(snapshot) == 2
+    # The member on the bench still has Stun Spore.
+    assert reading(policy, mem).capture_move(snapshot, slot=1) == 1
+    # Absorb drains and Solarbeam charges, so with both status moves barred nothing weakens it.
+    snapshot.party[0].pp = (20, 28, 0, 10)
+    assert reading(policy, mem).capture_move(snapshot) is None
+    # Disable wears off, and Stun Spore is back.
+    memory['wPlayerDisableCount'] = 0
+    assert reading(policy, mem).capture_move(snapshot) == 1
+
+
 def test_roamer_lead_is_the_cheapest_sleeper_that_outspeeds_the_beasts(real_data):
     from pokesim.gen2.quests import roam_lead, roamer_speed
     from pokecore.gen2.ram import calculated_stats, experience_at
