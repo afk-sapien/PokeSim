@@ -47,7 +47,7 @@ other person's data.
 | L5 | Log in with the username in capitals, such as `QA-ADMIN`. | It logs in. Usernames ignore case. |
 | L6 | Signed out, open an adventure's game page by its address. | The login page opens. After logging in you return to that game page. |
 | L7 | Signed out, open `/login?next=https://example.com` and log in. | You stay on this site. |
-| L8 | Do this last. Type five wrong passwords, then the right one. | The page says how long to wait. After the wait the right password works. |
+| L8 | Do this last. Type eight wrong passwords, a few seconds apart, then the right one at once. The first five are free and the wait then doubles from 1 second, so fewer misses leave no wait to see. | The page says "Too many attempts. Try again in N seconds." After the wait the right password works. |
 
 ## 3. Creating users and roles
 
