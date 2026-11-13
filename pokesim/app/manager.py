@@ -1407,7 +1407,8 @@ def create_app(manager, shutdown=lambda: None):
 
     # Trade offers: one adventure asks another, often someone else's, for a trade. Accepting queues a manual trade.
     def open_to_offers(request, aid):
-        """Refuse unless this person manages the adventure or its owner takes offers for it."""
+        """Refuse unless this person manages the adventure, or it is shared with them and its owner
+        takes offers for it. Open to offers never shows an adventure to someone it is not shared with."""
         actor = request.state.actor
         try:
             row = manager.registry.adventure(validate_id(aid))
@@ -1415,11 +1416,11 @@ def create_app(manager, shutdown=lambda: None):
             raise HTTPException(404, 'Adventure not found') from None
         if actor.admin or can(actor, 'adventure.manage', row):
             return row
+        if not can(actor, 'adventure.watch', row):
+            raise HTTPException(404, 'Adventure not found')
         if not row['archived'] and trade_settings.get(manager.registry, row['id'])['open_to_offers']:
             return row
-        if can(actor, 'adventure.watch', row):
-            raise HTTPException(403, 'This adventure does not take trade offers')
-        raise HTTPException(404, 'Adventure not found')
+        raise HTTPException(403, 'This adventure does not take trade offers')
 
     def offer_targets(request, from_id, from_key):
         actor = request.state.actor
@@ -1427,7 +1428,7 @@ def create_app(manager, shutdown=lambda: None):
         games = [row for row in manager.registry.adventures() if not row['archived']]
         visible = None if actor.admin else {
             row['id'] for row in games if can(actor, 'adventure.manage', row)
-            or trade_settings.get(manager.registry, row['id'])['open_to_offers']}
+            or (can(actor, 'adventure.watch', row) and trade_settings.get(manager.registry, row['id'])['open_to_offers'])}
         result = manager.offers.targets(from_id, from_key, **({} if visible is None else {'visible': visible}))
         rows = {row['id']: row for row in games}
         names = {}

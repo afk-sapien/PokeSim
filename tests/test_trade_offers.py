@@ -329,3 +329,19 @@ def test_routes_need_open_to_offers_for_someone_elses_adventure(library, people)
     # Offers sent from an adventure need its manager, and its offers list stays private.
     assert bob.get(f'/api/v1/interactions/trade-offers?adventure_id={people.red}').status_code == 404
     assert bob.get(f'/api/v1/interactions/trade-offers/targets?from_id={people.red}').status_code == 404
+
+
+def test_open_to_offers_shows_nothing_to_someone_it_is_not_shared_with(library, people):  # noqa: F811
+    bob = library.login('bob')
+    settings = f'/api/v1/interactions/auto-settings?adventure_id={people.blue}'
+    assert bob.put(settings, json={'open_to_offers': True}).json()['open_to_offers'] is True
+    alice = library.login('alice')
+    offers = '/api/v1/interactions/trade-offers'
+    assert alice.get(f'{offers}/pokemon?adventure_id={people.blue}').status_code == 404
+    assert alice.get(f'{offers}/limits?from_id={people.red}&from_key=0&to_id={people.blue}').status_code == 404
+    assert alice.post(offers, json={'from_id': people.red, 'from_key': '0', 'to_id': people.blue}).status_code == 404
+    assert alice.get(f'{offers}/targets?from_id={people.red}').json()['adventures'] == []
+    # Sharing it, even to watch, is what lets her see it and offer.
+    library.manager.auth.grant(people.blue, people.alice['id'], 'viewer', people.bob['id'])
+    assert alice.get(f'{offers}/pokemon?adventure_id={people.blue}').status_code == 200
+    assert [row['id'] for row in alice.get(f'{offers}/targets?from_id={people.red}').json()['adventures']] == [people.blue]
