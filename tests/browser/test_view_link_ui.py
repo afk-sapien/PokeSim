@@ -29,7 +29,7 @@ def test_view_link_sits_in_the_rail(page, game, width):
     key = page.locator('.rail #copy-view-link')
     expect(key).to_be_visible()
     expect(key).to_have_attribute('aria-label', 'Copy view link')
-    expect(key).to_have_attribute('title', re.compile('Copy a link'))
+    expect(key).to_have_attribute('title', re.compile('Copy a view link. People who may watch'))
     # The rail status stays quiet while the page is connected, and the key says what it is in words.
     expect(page.locator('#connection')).to_be_hidden()
     expect(key.locator('.rail-key-text')).to_have_text('View link')

@@ -525,6 +525,29 @@ def test_a_view_only_adventure_cannot_fill_the_send_slot(page, game):
     expect(page.locator('#pick-confirm')).to_be_disabled()
 
 
+@pytest.mark.parametrize('open_to_offers', [False, True])
+def test_a_player_sees_who_trades_for_this_adventure(page, game, open_to_offers, expected_errors):
+    # The library refuses the picker to anyone who does not manage the adventure. Its own Pokémon
+    # read as any other adventure's, so they come back only when it is open to offers.
+    expected_errors(*refused('/api/v1/interactions/trade-offers/targets', 403))
+    library = Library(page, game[0])
+    if not open_to_offers:
+        expected_errors(*refused('/api/v1/interactions/trade-offers/pokemon', 403))
+        page.unroute(re.compile(r'/api/v1/interactions/trade-offers/pokemon(\?|$)'))
+        page.route(re.compile(r'/api/v1/interactions/trade-offers/pokemon(\?|$)'),
+                   lambda route: library.json(route, {'detail': 'This adventure does not take trade offers'}, 403))
+    page.unroute(re.compile(r'/api/v1/interactions/trade-offers/targets(\?|$)'))
+    page.route(re.compile(r'/api/v1/interactions/trade-offers/targets(\?|$)'),
+               lambda route: library.json(route, {'detail': 'You cannot trade for this adventure'}, 403))
+    library.open()
+    expect(page.locator('#pick-note')).to_have_text('Trades for this adventure are made by the people who manage it.')
+    expect(page.locator('#pick-game-reason')).to_be_hidden()
+    expect(page.locator('#pick-game')).to_be_disabled()
+    expect(page.locator('#slot-send .slot-empty')).to_be_disabled()
+    expect(page.locator('#pick-confirm')).to_be_disabled()
+    expect(page.locator('#panel-make')).not_to_contain_text('does not take trade offers')
+
+
 @pytest.mark.parametrize('late', ['answer', 'error'])
 def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late, expected_errors):
     if late == 'error':

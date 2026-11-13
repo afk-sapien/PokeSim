@@ -608,7 +608,7 @@ if ($('#copy-view-link')) $('#copy-view-link').onclick = async (event) => {
       if (note) note.textContent = ''
     }, 1800)
   } catch (_) {
-    window.prompt('Copy this view link. It shows this adventure without any controls.', link)
+    window.prompt(`${button.title}.`, link)
   }
 }
 if ($('#randomizer-code')) $('#randomizer-code').onclick = async (event) => {
