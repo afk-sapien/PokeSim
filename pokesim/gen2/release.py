@@ -195,6 +195,17 @@ def may_release(policy, snapshot, box, position):
     return any(row.entry.slot == (box, position) and may_go(row) for row in rated)
 
 
+def refill_takes(policy, snapshot, box, position):
+    """Whether the release visit under way lets the boxed Pokémon at ``box``, ``position`` go now
+    (pcvalue.refill_takes). With every spare gone, a Crystal visit released six copies kept for linked
+    adventures to reach the refill mark, and its Pokédex hunt caught them again with the room it freed.
+    The caught copies filled the boxes back to the reserve, so the next visit did the same."""
+    from ..pcvalue import refill_takes as takes
+    rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
+    row = next((row for row in rated if row.entry.slot == (box, position)), None)
+    return row is None or takes(row, headroom(snapshot))
+
+
 def keeps_another(policy, snapshot, dex, level=5, dvs=None):
     """Whether the PC would keep one more copy of ``dex`` (pcvalue.worth), with ``dvs`` when known.
 

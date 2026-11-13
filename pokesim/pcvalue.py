@@ -511,13 +511,24 @@ def requested(rated):
     return [row for row in queue(rated) if row.entry.requested]
 
 
-def releases(rated, needed, active_box=None):
+def refill_takes(row, headroom):
+    """Whether a PC visit with ``headroom`` free box slots lets ``row`` go next. A visit frees slots up
+    to the refill mark, but a copy kept for a plan, its family or a linked adventure goes only while the
+    boxes are below their reserve. Past it the visit takes spares and the owner's requests alone, since
+    a kept copy let go only for the refill is caught again once the room is there."""
+    from .planning.ledger import box_wanted
+    return bool(row.entry.requested) or row.status != 'kept' or bool(box_wanted(headroom, False))
+
+
+def releases(rated, needed, active_box=None, kept=None):
     """The ``needed`` lowest-value releases, ordered for one PC visit.
 
     The lowest score goes first, of any species and in any box, since a release cannot be undone and
     a box change only costs frames. Only copies with the same score choose by box: the open box first,
     then the box holding the most of them. The visit takes the owner's requests first, then
-    the open box, then the box holding the most of the chosen ones.
+    the open box, then the box holding the most of the chosen ones. With ``kept`` set, copies kept for
+    a plan, its family or a linked adventure fill only what is left of ``kept`` after the spares and
+    requests (refill_takes).
     """
     candidates = list(filter(may_go, rated))
     tier = lambda row: (not row.entry.requested, ORDER.get(row.status, 0), row.score)  # noqa: E731
@@ -525,6 +536,10 @@ def releases(rated, needed, active_box=None):
     order = lambda row: (tier(row), row.entry.slot[0] != active_box, -per_tier[tier(row), row.entry.slot[0]],  # noqa: E731
                          _rank(row), row.entry.slot)
     chosen = sorted(candidates, key=order)[:max(needed, 0)]
+    if kept is not None:
+        free = [row for row in chosen if row.entry.requested or row.status != 'kept']
+        held = [row for row in chosen if not row.entry.requested and row.status == 'kept']
+        chosen = free + held[:max(kept - len(free), 0)]
     per_box = Counter(row.entry.slot[0] for row in chosen)
     # Owner requests stay in front, so one never waits past a visit behind spares from another box.
     return sorted(chosen, key=lambda row: (not row.entry.requested, row.entry.slot[0] != active_box,

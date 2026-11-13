@@ -94,7 +94,7 @@ class StoragePart:
         slots up to the refill mark.
         """
         from ...planning.ledger import box_wanted
-        from ..release import headroom, pending
+        from ..release import headroom, pending, refill_takes
         # A spare whose item is coming off keeps the visit going until it is gone, even past the refill
         # mark, and an owner's release request starts a visit of its own.
         unequipping = bool(self.collection.get('unequip')) or pending(self, snapshot)
@@ -105,7 +105,11 @@ class StoragePart:
                 or snapshot.map == self.data.map_ids['POKECENTER_2F'] or self.collection.get('time_capsule_restore')
                 or self.collection.get('tower') or snapshot.bug_contest):
             return None
-        if self.storage_target(snapshot) is None and not unequipping:
+        target = self.storage_target(snapshot)
+        if target is None and not unequipping:
+            return None
+        # Past the reserve the visit ends once only kept copies are left (release.refill_takes).
+        if releasing and not unequipping and not refill_takes(self, snapshot, target.detail.box, target.detail.position):
             return None
         goal = self.storage_goal(snapshot)
         if goal.key != 'storage':

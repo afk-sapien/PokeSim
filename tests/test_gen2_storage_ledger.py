@@ -72,7 +72,8 @@ def worth(policy, view, position):
     from pokesim.planning.ledger import box_wanted
     rated = release_rated(policy, view)
     needed = max(box_wanted(ledger.headroom(view), True), len(requested(rated)), 1)
-    visit = [row.entry.slot[1] for row in releases(rated, needed, view.active_box)]
+    visit = [row.entry.slot[1] for row in releases(rated, needed, view.active_box,
+                                                   kept=box_wanted(ledger.headroom(view), False))]
     return visit.index(position) if position in visit else len(visit) + score(policy, view, position)
 
 
@@ -216,6 +217,42 @@ def test_a_release_visit_ends_at_the_refill_mark():
     policy.menu = None
     assert ledger.release_step(policy, roomy) == 'wait'
     assert policy.menu is None and 'unequip' not in policy.collection
+
+
+def test_a_refill_past_the_reserve_lets_no_kept_copy_go():
+    from pokesim.planning.ledger import BOX_RESERVE
+    policy = Policy()
+    policy.storage_target = lambda view: ledger.storage_unit(policy, view)
+    # A linked adventure misses Pidgey, so the second copy is kept for trade, and no spare is left.
+    # With the reserve free the visit ends rather than let it go for the refill mark.
+    policy.demand = {16: 1}
+    kept = mon(1)
+    view = snapshot([BEST, kept], PARTY)
+    view.box_counts = (BOX_CAPACITY - BOX_RESERVE,) + (BOX_CAPACITY,) * 13
+    assert ledger.release_step(policy, view) == 'wait' and policy.menu is None
+    # One slot short of the reserve, it goes.
+    view.box_counts = (BOX_CAPACITY - BOX_RESERVE + 1,) + (BOX_CAPACITY,) * 13
+    assert ledger.release_step(policy, view) == 'a' and policy.menu == Release(0, 1, ledger.member(kept))
+    # A spare still goes up to the refill mark.
+    policy.demand, policy.menu = {}, None
+    view.box_counts = (BOX_CAPACITY - BOX_RESERVE,) + (BOX_CAPACITY,) * 13
+    assert ledger.release_step(policy, view) == 'a' and policy.menu == Release(0, 1, ledger.member(kept))
+
+
+def test_a_visit_takes_a_spare_in_another_box_before_a_copy_kept_in_the_open_one():
+    from pokesim.gen2.release import release_rated
+    from pokesim.planning.ledger import BOX_RESERVE
+    policy = Policy()
+    policy.storage_target = lambda view: ledger.storage_unit(policy, view)
+    # A linked adventure misses Pidgey, so the copy after the best is kept for trade and the other is spare.
+    # The spare alone brings the boxes back to the reserve, so the visit changes box for it.
+    policy.demand = {16: 1}
+    kept, spare = mon(1, dvs=(3, 3, 3, 3, 3)), mon(0, box=1)
+    assert {row.entry.slot: row.status for row in release_rated(policy, snapshot([BEST, kept, spare], PARTY))
+            if row.entry.slot and row.entry.slot != (0, 0)} == {(0, 1): 'kept', (1, 0): 'spare'}
+    view = snapshot([BEST, kept, spare], PARTY)
+    view.box_counts = (BOX_CAPACITY - BOX_RESERVE + 1,) + (BOX_CAPACITY,) * 13
+    assert ledger.release_step(policy, view) == 'a' and policy.menu == ChangeBox(1)
 
 
 def test_taking_an_item_closes_the_pc_text_left_by_the_withdrawal():
