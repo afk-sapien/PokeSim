@@ -800,7 +800,7 @@ class Rungs:
     def offer(self, name, tier, value, work, build, price=None, blocked=None):
         """Ask rung ``name``, whose best tier is ``tier``. ``build`` gives its goal or None. ``price``,
         given the goal, gives its tier, value and frames of work if they differ from ``tier``, ``value``
-        and ``work``, and may add the hunt kind the Collector style reads. ``blocked``, given the goal,
+        and ``work``. ``blocked``, given the goal,
         gives the Failure that keeps it from starting, or None. A blocked goal is not offered, its build
         writes nothing, and a pin on it waits with the reason."""
         if self.stopped:
@@ -844,13 +844,11 @@ class Rungs:
             write(self.policy, writes)
             self.stopped = funding is None and self.policy.collection.get('funding') is not None
             return
-        kind = arbiter.NOT_HUNT
         if priced is not None:
-            tier, value, work, *rest = priced
-            kind = rest[0] if rest else kind
+            tier, value, work = priced
         interrupt = INTERRUPT_FRAMES if self.running is not None and name != self.running else 0.0
         candidate = Candidate(f'{name}:{goal.key}', tier, value, work + self.travel(goal),
-                              passive=goal.key in PASSIVE, interrupt_frames=interrupt, hunt=kind, goal=name)
+                              passive=goal.key in PASSIVE, interrupt_frames=interrupt, goal=name)
         self.candidates.append(candidate)
         self.labels[candidate.key] = goal.label
         if candidate.passive:
@@ -1294,13 +1292,13 @@ def hunt_blocked(policy, snapshot):
 
 
 def postgame_price(policy, snapshot):
-    """The postgame activity's own tier, value, frames and hunt kind, or a filler League run's."""
+    """The postgame activity's own tier, value and frames, or a filler League run's."""
     from . import postgame
     activity = postgame.state(policy).get('activity')
     if not activity:
         return Tier.FILLER, values.SMALL, LEAGUE_FRAMES
     candidate = postgame.candidate(policy, snapshot, activity)
-    return candidate.tier, candidate.value, candidate.expected_frames * DECISION_FRAMES, candidate.hunt
+    return candidate.tier, candidate.value, candidate.expected_frames * DECISION_FRAMES
 
 
 def pokedex_hunt(policy, snapshot, Goal, current_time):

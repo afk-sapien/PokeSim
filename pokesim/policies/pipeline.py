@@ -119,12 +119,10 @@ class Ballot:
 
     def errand_candidate(self, key, kind, frames=ERRAND_FRAMES):
         """An errand that serves the pick. It takes the pick's tier and value, at least a small one, so it
-        goes before the longer pick. It pays an errand's frames again to cut into another errand. It ranks
-        as the pick does under every play style."""
+        goes before the longer pick. It pays an errand's frames again to cut into another errand."""
         held = self.pick
         return Candidate(key, held.tier, max(held.value, values.SMALL), frames,
-                         interrupt_frames=ERRAND_FRAMES if self.errand else 0.0, hunt=held.hunt, plan=held.plan,
-                         goal=kind)
+                         interrupt_frames=ERRAND_FRAMES if self.errand else 0.0, goal=kind)
 
     def wins(self, candidate):
         """Whether ``candidate`` would replace the pick, for a site that must know before it offers. A goal

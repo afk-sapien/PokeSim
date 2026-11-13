@@ -124,8 +124,8 @@ def latest(offers):
     return tuple(kept.values())
 
 
-def _ranked(offers, pinned, style):
-    order = arbiter.rank([offer.candidate for offer in offers], pinned, style)
+def _ranked(offers, pinned):
+    order = arbiter.rank([offer.candidate for offer in offers], pinned)
     return [next(offer for offer in offers if offer.candidate is candidate) for candidate in order]
 
 
@@ -142,8 +142,8 @@ def serve(best, enablers):
         pick, serving = enablers[need], best
 
 
-def decide(offers, pinned=None, style=None):
-    """The Decision for ``offers``. ``pinned`` and ``style`` are as for ``arbiter.rank``."""
+def decide(offers, pinned=None):
+    """The Decision for ``offers``. ``pinned`` is as for ``arbiter.rank``."""
     offers = latest(offers)
     parked = tuple(offer for offer in offers if offer.parked)
     live = [offer for offer in offers if not offer.parked]
@@ -162,7 +162,7 @@ def decide(offers, pinned=None, style=None):
         pool, rule = [offer for offer in goals if offer is hold or offer.kind == hold.kind], HOLD
     else:
         pool, rule = goals, RANK
-    ranked = _ranked(pool, pinned, style)
+    ranked = _ranked(pool, pinned)
     best = ranked[0] if ranked else None
     if best is None:
         # With no goal to serve, the latest enabler still meets its need.

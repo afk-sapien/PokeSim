@@ -387,7 +387,7 @@ def test_play_settings_save_running_or_stopped_and_push_live(client, monkeypatch
     assert manager.registry.adventure(row['id'])['settings'].get('nicknames', True) is True
 
 
-def test_the_play_style_route_takes_only_known_styles(client, monkeypatch):
+def test_a_stored_play_style_is_dropped_and_the_route_takes_only_nicknames(client, monkeypatch):
     client, manager = client
     headers = login(client, manager)
     pushed = []
@@ -395,24 +395,24 @@ def test_the_play_style_route_takes_only_known_styles(client, monkeypatch):
     manager.registry.add_rom('fixture-rom', 'sha1', 'red')
     row = client.post('/api/v1/adventures', headers=headers,
                       json={'name': 'Story run', 'rom_id': 'fixture-rom', 'play_style': 'story'}).json()
-    assert row['settings']['play_style'] == 'story'
+    assert 'play_style' not in row['settings']
+    # An adventure saved by a release with play styles loads as every other adventure does.
+    stored = manager.registry.update(row['id'], settings={**row['settings'], 'play_style': 'collector'})
+    assert stored['settings'] == row['settings']
+    assert 'play_style' not in manager.registry.adventure(row['id'])['settings']
+    assert 'play_style' not in client.get(f"/api/v1/adventures/{row['id']}", headers=headers).json()['settings']
+    assert manager.validate_adventure_settings({'play_style': 'story', 'speed': 2})['speed'] == 2
     route = f"/api/v1/adventures/{row['id']}/play"
-    for bad in ({'play_style': 'fast'}, {'play_style': 1}, {'play_style': None}, {'play_style': True},
-                {'play_style': 'Collector'}):
+    for bad in ({'play_style': 'story'}, {'play_style': 'balanced'}, {'nicknames': False, 'play_style': 'story'}):
         response = client.patch(route, headers=headers, json=bad)
-        assert response.status_code == 409 and 'balanced, story, collector' in response.text
+        assert response.status_code == 409 and 'Change only these play settings: nicknames' in response.text
     assert pushed == []
-    manager.registry.transition(row['id'], 'running', 'test setup')
-    collector = client.patch(route, headers=headers, json={'play_style': 'collector'})
-    assert collector.status_code == 200 and collector.json()['settings']['play_style'] == 'collector'
-    both = client.patch(route, headers=headers, json={'nicknames': False, 'play_style': 'story'})
-    assert both.json()['settings']['play_style'] == 'story' and both.json()['settings']['nicknames'] is False
-    # Balanced is stored as absent, so older releases still open the adventure.
-    balanced = client.patch(route, headers=headers, json={'play_style': 'balanced'})
-    assert balanced.status_code == 200 and 'play_style' not in balanced.json()['settings']
-    assert pushed == [row['id']] * 3
-    assert client.patch(f"/api/v1/adventures/{row['id']}", headers=headers,
-                        json={'settings': {'play_style': 'story'}}).status_code == 409
+    names = client.patch(route, headers=headers, json={'nicknames': False})
+    assert names.status_code == 200 and names.json()['settings'] == {**row['settings'], 'nicknames': False}
+    assert pushed == [row['id']]
+    general = client.patch(f"/api/v1/adventures/{row['id']}", headers=headers,
+                           json={'settings': {'play_style': 'story'}})
+    assert general.status_code == 200 and 'play_style' not in general.json()['settings']
 
 
 def test_create_saves_normalized_intro_names_and_rejects_later_edits(client):

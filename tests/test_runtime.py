@@ -35,6 +35,12 @@ def test_settings_validate_types_paths_and_remain_immutable(settings):
     assert SimulationSettings.from_dict(parsed.to_dict()) == parsed
 
 
+@pytest.mark.parametrize('style', ['story', 'collector', 'balanced'])
+def test_a_stored_play_style_starts_the_worker_as_if_absent(settings, style):
+    parsed = SimulationSettings.from_dict({**settings, 'play_style': style})
+    assert parsed == SimulationSettings.from_dict(settings) and 'play_style' not in parsed.to_dict()
+
+
 def test_bootstrap_is_strict_and_does_not_expose_token_in_repr(settings):
     token = 'private-secret' * 4
     value = {'protocol': 1, 'adventure_id': 'red-1', 'generation': 'generation-1',

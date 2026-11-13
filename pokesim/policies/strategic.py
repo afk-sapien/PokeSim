@@ -128,10 +128,10 @@ def goal_candidate(goal, collection, kind=None, inner=None):
     if kind == 'collection':
         inner = inner or collection.candidate()
         if inner:
-            return Candidate(key, inner.tier, inner.value, inner.expected_frames, hunt=inner.hunt, goal=kind)
+            return Candidate(key, inner.tier, inner.value, inner.expected_frames, goal=kind)
         return Candidate(key, Tier.PROGRESS, values.SMALL, EXPECTED_FRAMES['other'], goal=kind)
     if kind == 'plan':
-        return Candidate(key, Tier.FILLER, 0.0, ERRAND_FRAMES, plan=True, goal=kind)
+        return Candidate(key, Tier.FILLER, 0.0, ERRAND_FRAMES, goal=kind)
     if kind in ERRANDS:
         return Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal=kind)
     tier = Tier.PROGRESS if collection.completed_champion else Tier.STORY
@@ -1574,7 +1574,6 @@ class StrategicPolicy(Policy):
         gain, _, _, _, before = upgrade
         interrupt = TEACH_FRAMES if self.collection.project else 0.0
         return Candidate('teach_battle', choice.pick.tier, values.move_gain(before, before + gain), TEACH_FRAMES,
-                         hunt=choice.pick.hunt, plan=choice.pick.plan,
                          interrupt_frames=interrupt, goal='moves')
 
     def _hm_option(self, s):

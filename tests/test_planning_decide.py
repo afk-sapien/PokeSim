@@ -161,7 +161,7 @@ def test_a_ballot_runs_the_latest_enabler_its_goal_needs_and_only_that_one_write
 def test_a_goal_whose_step_is_won_by_another_writes_nothing():
     wrote = []
     story = Goal('misty', 'Beat Misty', 'Badge')
-    choice = Ballot(story, Candidate('misty', Tier.FILLER, 0.0, 1000, plan=True, goal='plan'), source='plan')
+    choice = Ballot(story, Candidate('misty', Tier.FILLER, 0.0, 1000, goal='plan'), source='plan')
     choice.offer(Goal('collect_catch', 'Catch', 'Catch'),
                  Candidate('grass:1', Tier.PROGRESS, 1.0, 10 ** 6, goal='collection'),
                  site='collection', commit=lambda: wrote.append('project'))
@@ -265,10 +265,9 @@ def test_a_gen2_errand_takes_the_tier_of_the_goal_it_serves():
     assert (ballot.running.candidate.tier, ballot.running.kind) == (Tier.STORY, 'heal')
     hunt = Goal('collection_hunt', 'Hunt', 'Hunt')
     ballot = gen2_pipeline.Ballot()
-    ballot.offer(hunt, 'rung', Candidate('hunt:collection_hunt', Tier.FILLER, 0.0, 3000, hunt='postgame', goal='hunt'))
+    ballot.offer(hunt, 'rung', Candidate('hunt:collection_hunt', Tier.FILLER, 0.0, 3000, goal='hunt'))
     ballot.errand(heal, 'heal')
     assert ballot.running.candidate.tier == Tier.FILLER and ballot.running.candidate.value == values.SMALL
-    assert ballot.running.candidate.hunt == 'postgame'
 
 
 def test_a_gen2_ballot_picks_what_the_chain_picked():

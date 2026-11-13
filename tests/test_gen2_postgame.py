@@ -296,25 +296,16 @@ def test_the_arbiter_ranks_the_postgame_by_tier_then_value_per_decision(data, mo
     assert postgame.choose(policy, state, clock(), 'day') == {'kind': 'league'}
 
 
-def test_the_collector_style_puts_a_better_copy_hunt_ahead_of_training(data, monkeypatch):
-    from pokesim import config
+def test_training_goes_ahead_of_a_better_copy_hunt_and_a_shiny_search(data, monkeypatch):
     from pokesim.gen2 import postgame
-    from pokesim.planning.arbiter import HUNT_NOW, HUNT_POSTGAME, NOT_HUNT
     policy = expedition(data)
     trainee = mon(19, position=1, level=50, dvs=PERFECT)
     state = snapshot([lead()], [mon(16), trainee])
     hunt = {'kind': 'quality', 'species': 16, 'row': row(5), 'expected': postgame.search_expected(30)}
     train = {'kind': 'train', 'identity': postgame.ident(trainee), 'species': 19, 'level_goal': 60}
     search = {'kind': 'shiny', 'row': row(7, None), 'shinies': 0}
-    assert postgame.candidate(policy, state, hunt).hunt == HUNT_POSTGAME
-    assert postgame.candidate(policy, state, search).hunt == NOT_HUNT
-    before = SimpleNamespace(**{**vars(policy), 'completed': {}})
-    assert postgame.candidate(before, state, hunt).hunt == HUNT_NOW
-    for style, expected in (('balanced', train), ('story', train), ('collector', hunt)):
-        monkeypatch.setattr(config, 'PLAY_STYLE', style)
-        offer(monkeypatch, hunt, train, search)
-        assert postgame.choose(policy, state, clock(), 'day') is expected
-    # The shiny search is not a collection hunt, so training still beats it.
+    offer(monkeypatch, hunt, train, search)
+    assert postgame.choose(policy, state, clock(), 'day') is train
     offer(monkeypatch, train=train, shiny=search)
     assert postgame.choose(policy, state, clock(), 'day') is train
 
