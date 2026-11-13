@@ -7,7 +7,7 @@ found in the retail ROMs by those routines' bytes.
 Red and Blue share every address below. Starter sites are the bytes that hold a
 starter's species in Oak's or Elm's scripts. The first site of each starter is the one
 that decides which Pokemon the player receives. The others repeat the same species for
-the rival's pick, the picture, the cry or the name.
+the rival's pick, the picture, the cry, the name, or a table keyed by the rival's starter.
 """
 from __future__ import annotations
 
@@ -58,8 +58,12 @@ _RED_BLUE = dict(
     tm_moves=rom_offset(0x04, 0x7773), tm_count=55,
     wild=(('wild', rom_offset(0x03, 0x4EEB)),),
     trainers=rom_offset(0x0E, 0x5D3B), trainer_classes=47, trainers_end=rom_offset(0x0E, 0x652E),
-    # Charmander, Squirtle, Bulbasaur: the ball's own species, then the rival's pick at the ball to its left.
-    starters=((0x1D10E, 0x1D126), (0x1D11F, 0x1D104), (0x1D130, 0x1D115)),
+    # Charmander, Squirtle, Bulbasaur: the ball's own species, the rival's pick at the ball to its left,
+    # then the species keys of Route 22's two rival party tables. Route 22 scans those tables for the
+    # rival's starter with no end check, so a starter missing from them runs the scan off the table.
+    starters=((0x1D10E, 0x1D126, rom_offset(0x14, 0x4FB3), rom_offset(0x14, 0x50DD)),
+              (0x1D11F, 0x1D104, rom_offset(0x14, 0x4FAF), rom_offset(0x14, 0x50D9)),
+              (0x1D130, 0x1D115, rom_offset(0x14, 0x4FB1), rom_offset(0x14, 0x50DB))),
     old_rod=rom_offset(0x03, 0x6253), good_rod=rom_offset(0x03, 0x627F), super_rod=rom_offset(0x03, 0x6919),
 )
 
