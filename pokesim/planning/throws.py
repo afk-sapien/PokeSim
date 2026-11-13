@@ -23,10 +23,11 @@ GEN1_BALLS = {'POKE_BALL': (256, 12), 'GREAT_BALL': (201, 8), 'ULTRA_BALL': (151
 
 def spare_throw(generation, balls, once=False, restock=lambda: False):
     """Whether an ordinary catch may throw one of ``balls``, the one rule for the battle and for the goal
-    picker. A species met only once (``once``) always may. Any other needs more balls than its
-    generation keeps, or ``restock()`` true when money past the reservations buys the floor back. A
-    catch goal whose throw is not spare is not feasible, and says why with ``spare_words``."""
-    return once or balls > LAST_BALLS[generation] or restock()
+    picker. A species met only once (``once``) may throw the last ball, but still needs one in the bag
+    or ``restock()``. Any other needs more balls than its generation keeps, or ``restock()`` true when
+    money past the reservations buys the floor back. A catch goal whose throw is not spare is not
+    feasible, and says why with ``spare_words``."""
+    return (once and balls > 0) or balls > LAST_BALLS[generation] or restock()
 
 
 def spare_words(generation):

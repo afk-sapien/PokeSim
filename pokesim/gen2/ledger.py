@@ -468,8 +468,10 @@ MEDICINE = {'POTION': (boss.RESTORE, 20), 'SUPER_POTION': (boss.RESTORE, 50), 'H
 # The goals of the League rooms, which buy the League kit (boss.kit) before the first.
 LEAGUE_GOALS = frozenset({'league_will', 'league_koga', 'league_bruno', 'league_karen', 'league_lance'})
 # An ordinary catch keeps the last few balls while money cannot buy the floor back (planning/throws.py).
-# Species met only once, such as Sudowoodo, Snorlax, the red Gyarados and the legendaries, always get a throw.
-ONE_CHANCE = frozenset({130, 143, 185, 243, 244, 245, 249, 250, 251})
+# Species met only once, such as Sudowoodo, Snorlax and the legendaries, always get a throw. Gyarados is
+# not one: a run fishes or meets wild ones again, and the red one at the Lake of Rage is shiny and starts
+# from a map script, which the battle already throws at whatever the ball count.
+ONE_CHANCE = frozenset({143, 185, 243, 244, 245, 249, 250, 251})
 # One sale tier is worth this much more per money freed than the tier before it.
 TIER = 10 ** 7
 
@@ -593,7 +595,8 @@ def supplies(policy, snapshot):
 
 def spare_throw(data, snapshot, species):
     """Whether an ordinary catch may throw a ball, by the rule in planning/throws.py: a one-time
-    encounter, more than the last few balls, or money past the reservations to buy the floor back."""
+    encounter with a ball in the bag, more than the last few balls, or money past the reservations to
+    buy the floor back."""
     def restock():
         books = money_books(data, snapshot, sales=False)
         return books.reserve('throw', Need(money=price(data, 'POKE_BALL') * BALL_FLOOR)).ok

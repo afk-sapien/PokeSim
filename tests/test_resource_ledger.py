@@ -189,12 +189,21 @@ def test_gen2_last_balls_wait_for_money_unless_the_encounter_comes_once():
     assert ledger.spare_throw(policy.data, snapshot, 16)
     policy, snapshot = money_policy(balls=[('POKE_BALL', 4)])
     assert ledger.spare_throw(policy.data, snapshot, 16)
+    # With no ball and no money a one-time encounter has nothing to throw, so its hunt waits instead of
+    # fleeing every one it finds.
+    policy, snapshot = money_policy(money=1199)
+    assert not ledger.spare_throw(policy.data, snapshot, 243)
+    snapshot.money = 1200
+    assert ledger.spare_throw(policy.data, snapshot, 243)
 
 
 def test_one_spare_ball_rule_keeps_three_balls_in_gen2_and_none_in_gen1():
     from pokesim.planning import throws
     assert not throws.spare_throw(2, 3) and throws.spare_throw(2, 4)
     assert throws.spare_throw(2, 3, once=True) and throws.spare_throw(2, 0, restock=lambda: True)
+    # A species met once may take the last ball, but an empty bag with no money to restock has none to throw.
+    assert throws.spare_throw(2, 1, once=True) and not throws.spare_throw(2, 0, once=True)
+    assert throws.spare_throw(2, 0, once=True, restock=lambda: True)
     # Red, Blue and Yellow throw the last ball, so the rule is the plain "needs a Poké Ball" there.
     assert throws.spare_throw(1, 1) and not throws.spare_throw(1, 0)
     assert throws.spare_words(1) == 'a Poké Ball'
@@ -207,14 +216,21 @@ def test_gen2_a_hunt_whose_catch_keeps_the_last_balls_is_not_feasible():
     policy.collection = {'target': {'species': 177}}
     assert collection.hunt_blocked(policy, snapshot) is collection.NO_SPARE_BALL
     assert str(collection.NO_SPARE_BALL) == 'needs more than 3 Poké Balls or the money to buy more'
-    # A species met only once still gets the hunt, and so does a run with money for the floor.
-    policy.collection = {'target': {'species': 130}}
+    # A species met only once still gets the hunt, and so does a run with money for the floor. A wild
+    # Gyarados is met again, so its hunt keeps the last balls like any other.
+    policy.collection = {'target': {'species': 143}}
     assert collection.hunt_blocked(policy, snapshot) is None
+    policy.collection = {'target': {'species': 130}}
+    assert collection.hunt_blocked(policy, snapshot) is collection.NO_SPARE_BALL
     policy.collection = {'target': {'species': 177}}
     snapshot.money = 1200
     assert collection.hunt_blocked(policy, snapshot) is None
     policy.collection = {'target': None}
     assert collection.hunt_blocked(policy, snapshot) is None
+    # With no ball at all, even a species met once waits for the money to buy some.
+    policy, snapshot = money_policy(money=1199)
+    policy.collection = {'target': {'species': 243}}
+    assert collection.hunt_blocked(policy, snapshot) is collection.NO_SPARE_BALL
 
 
 def test_gen2_league_funding_covers_the_day_care_fees_or_a_ball_floor(monkeypatch):
