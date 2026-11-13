@@ -52,6 +52,8 @@ class Policy(Protocol):
     def pin(self): ...
 ```
 
+[Goal queue](goal-queue.md) proposes `set_queue(entries)` and `queue_state()` in place of the five pin methods, and a load that no longer clears the choice. Its slice 1 PR changes this protocol as built.
+
 Gen II's `step` takes the same `PolicyContext` (snapshot, clock, memory, stack pointer) and returns a list.
 `hopeless_battle` is a method of the snapshot in both.
 
