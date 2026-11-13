@@ -138,7 +138,7 @@ def test_a_refused_lugia_return_closes_until_the_next_milestone(world, monkeypat
                            event=lambda name: name in flags, roamers=(), map=data.map_ids['NEW_BARK_TOWN'],
                            party=[], stored=[], pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
     planner = SimpleNamespace(data=data, collection={}, returned={249},
-                              person=lambda snapshot, key, *args: SimpleNamespace(key=key))
+                              person=lambda snapshot, key, label, map_name, script: Goal(key, label, map_name, 0, 0))
     assert legends(planner, plan, Goal).key == 'legend_lugia'
     planner.returned = ready
     assert legends(planner, plan, Goal) is None
@@ -470,16 +470,33 @@ def test_returns_wait_for_safe_moments_and_respect_disabled_settings(world, monk
 def test_policy_returns_to_catch_returned_legendaries(data):
     from pokesim.gen2.policy import Goal
     from pokesim.gen2.quests import legends
+    from pokesim.planning.stance import CATCH, FLEE, HUNT, Encounter, stance
     flags = {'EVENT_GOT_MASTER_BALL_FROM_ELM', 'EVENT_RELEASED_THE_BEASTS', 'EVENT_FOUGHT_HO_OH', 'EVENT_FOUGHT_SUICUNE'}
     wing = data.items['RAINBOW_WING' if data.game == 'silver' else 'SILVER_WING']
     policy = SimpleNamespace(data=data, collection={}, returned=set(),
-                             person=lambda snapshot, key, *args: SimpleNamespace(key=key))
+                             person=lambda snapshot, key, label, map_name, script: Goal(key, label, map_name, 0, 0))
     snapshot = SimpleNamespace(owned={243, 244, 245, 249, 250, 251}, can_catch=True, items=((wing, 1),),
                                event=lambda name: name in flags, roamers=(), map=data.map_ids['NEW_BARK_TOWN'],
                                party=[], stored=[], pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
     assert legends(policy, snapshot, Goal) is None
     policy.returned = {249}
-    assert legends(policy, snapshot, Goal).key == 'legend_lugia'
+    goal = legends(policy, snapshot, Goal)
+    # The trip is a hunt, so it runs from the other wild battles on its way. As a story goal it fought
+    # each one, ran its lead's strong attacks out on Route 41 and turned back to heal, again and again.
+    assert goal.key == 'legend_lugia' and goal.kind == HUNT
+    assert stance(goal.kind, Encounter(wild=True), ledger=None) is FLEE
+    assert stance(goal.kind, Encounter(wild=True, wanted=True), ledger=None) is CATCH
+    rainbow = data.items['RAINBOW_WING']
+    flags -= {'EVENT_FOUGHT_HO_OH'}
+    policy.returned, snapshot.items = {250}, ((wing, 1), (rainbow, 1))
+    goal = legends(policy, snapshot, Goal)
+    assert goal.key == 'legend_ho_oh' and goal.kind == HUNT
+    if data.game == 'crystal':
+        flags -= {'EVENT_FOUGHT_SUICUNE'}
+        flags |= {'EVENT_KOJI_ALLOWS_YOU_PASSAGE_TO_TIN_TOWER'}
+        policy.returned = {245}
+        goal = legends(policy, snapshot, Goal)
+        assert goal.key == 'legend_suicune' and goal.kind == HUNT
 
 
 def test_returned_statics_make_room_and_need_a_ball_before_the_trip(data):
