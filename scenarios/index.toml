@@ -90,3 +90,11 @@ rom_sha1 = "d8b8a3600a465308c9953dfa04f0081c05bdcb94"
 state_sha256 = "06efe8de56a816685b1219d26fae62339ebbfded380b50535279688cfc620ecc"
 frames = [34181131, 34181131]
 expect = "passes"
+
+[[scenario]]
+name = "gold-gyarados-empty-bag-20261112"
+rom_sha1 = "d8b8a3600a465308c9953dfa04f0081c05bdcb94"
+state_sha256 = "ca00271272be1c6440744996e316ad31e40fec78987642771ce55482f46f4842"
+frames = [12687938, 12687938]
+expect = "passes"
+kind = "quiet"
