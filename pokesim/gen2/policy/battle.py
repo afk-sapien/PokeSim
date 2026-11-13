@@ -280,15 +280,16 @@ class BattlePart:
         """Lugia, Ho-Oh and Crystal's Tin Tower Suicune: catch rate 3, met once at a fixed spot."""
         return snapshot.enemy_species in {249, 250} or snapshot.enemy_species == 245 and self.data.game == 'crystal'
 
-    def static_capture_move(self, snapshot, mon):
+    def static_capture_move(self, snapshot, mon, pp):
         """Sleep first, then chip a sleeping legendary to half HP without the risk of a KO.
 
         In Gen II only sleep and freeze raise the catch chance (+10 on a catch rate of 3, against at
         most +3 for low HP), and paralysis would block sleep, so it is never used. Lugia and Ho-Oh
         open with Safeguard and cast it again as it ends, and an awake one Recovers any chip, so while
         Safeguard is up the balls wait: Disable the Safeguard, else chip or stall until it drops.
+        ``pp`` is the PP of ``mon``'s moves with a disabled move counted as spent.
         """
-        usable = [(index, self.data.moves.get(move, {})) for index, move in enumerate(mon.moves) if mon.pp[index]]
+        usable = [(index, self.data.moves.get(move, {})) for index, move in enumerate(mon.moves) if pp[index]]
         battle = self.reads.battle
         enemy = self.reads.enemy
         status = enemy.status
@@ -558,7 +559,13 @@ class BattlePart:
             return None
         if not snapshot.party:
             return None
-        mon = snapshot.party[min(self.reads.battle.player_slot if slot is None else slot, len(snapshot.party) - 1)]
+        active = self.reads.battle.player_slot
+        mon = snapshot.party[min(active if slot is None else slot, len(snapshot.party) - 1)]
+        # A move the foe has disabled is refused with "Disabled!" and the turn never passes, so the battler
+        # in now treats it as out of PP. A Psyduck on Route 35 disabled Stun Spore and a catch picked it
+        # again for good. A member on the bench is not disabled.
+        disabled = self.reads.player.disabled_move if slot is None or slot == active else None
+        pp = tuple(0 if move == disabled else count for move, count in zip(mon.moves, mon.pp))
         enemy = self.reads.enemy
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
         if roaming and mon.stats[3] // (4 if mon.status & 64 else 1) <= enemy.stats[3]:
@@ -566,7 +573,7 @@ class BattlePart:
         if roaming:
             # Beasts flee after a faster lead moves unless the lead has Mean Looked them or they sleep.
             # Sleep is also the only status that raises the Gen II catch rate, so never paralyze or hit.
-            usable = [(index, self.data.moves.get(move, {})) for index, move in enumerate(mon.moves) if mon.pp[index]]
+            usable = [(index, self.data.moves.get(move, {})) for index, move in enumerate(mon.moves) if pp[index]]
             if not self.reads.player.holds_foe:
                 trap = next((index for index, entry in usable if entry.get('effect') == 'EFFECT_MEAN_LOOK'), None)
                 if trap is not None:
@@ -579,11 +586,11 @@ class BattlePart:
                     return max(sleep)[1]
             return None
         if self.static_legend(snapshot):
-            return self.static_capture_move(snapshot, mon)
+            return self.static_capture_move(snapshot, mon, pp)
         if not enemy.status:
             for index, move in enumerate(mon.moves):
                 entry = self.data.moves.get(move, {})
-                if (mon.pp[index] and entry.get('effect') in {'EFFECT_SLEEP', 'EFFECT_PARALYZE'}
+                if (pp[index] and entry.get('effect') in {'EFFECT_SLEEP', 'EFFECT_PARALYZE'}
                         and all(self.data.matchups.get((entry['type'], kind), 1)
                                 for kind in self.data.species[snapshot.enemy_species]['types'])):
                     return index
@@ -592,7 +599,7 @@ class BattlePart:
         options = []
         for index, move in enumerate(mon.moves):
             entry = self.data.moves.get(move, {})
-            if not mon.pp[index] or not entry.get('power') or entry.get('effect') not in {'EFFECT_NORMAL_HIT', 'EFFECT_FALSE_SWIPE'}:
+            if not pp[index] or not entry.get('power') or entry.get('effect') not in {'EFFECT_NORMAL_HIT', 'EFFECT_FALSE_SWIPE'}:
                 continue
             special = entry['type'] >= 20
             defense = enemy.stats[5 if special else 2]
