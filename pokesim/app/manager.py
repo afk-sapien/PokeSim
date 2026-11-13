@@ -40,7 +40,7 @@ from ..web.security import LEASE_HEADER, ROLE_HEADER, VIEWER_HEADER, protect_res
 from .assets import Assets
 from .auth import AuthStore, SetupCode
 from . import loops, policy, trade_settings
-from .errors import Conflict, NotFound, Refused
+from .errors import Conflict, NotFound, NotReady, Refused
 from .policy import Actor, can
 from .registry import LIBRARY_OWNER, Registry, identifier, validate_id
 from .supervisor import AdventureRunning, Supervisor
@@ -340,7 +340,19 @@ class Manager:
                                 continue
                             self.registry.update(adventure['id'], desired_state='running')
                     stall_truth.lifecycle(self.root / 'adventures' / adventure['id'], 'start', 'boot')
-                    self.supervisor.start(adventure['id'])
+                    try:
+                        self.supervisor.start(adventure['id'])
+                    except NotReady as error:
+                        if self.closing:
+                            raise
+                        # A host still busy after a power cut can keep a worker from getting ready in
+                        # time. The failed start stopped that worker and let go of it, so one more
+                        # start is safe. Any other error fails the adventure at once.
+                        log.warning('Adventure %s was not ready in time at startup, so it starts once more: %s',
+                                    adventure['id'], error)
+                        stall_truth.lifecycle(self.root / 'adventures' / adventure['id'], 'start', 'boot',
+                                              why='its first start was not ready in time')
+                        self.supervisor.start(adventure['id'])
                 except Exception as error:
                     self.registry.transition(adventure['id'], 'failed', f'it did not start with PokeSim: {error}',
                                              error=str(error))

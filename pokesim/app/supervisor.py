@@ -21,7 +21,7 @@ import psutil
 from .. import stall_truth
 from ..downloads import DataDownloadError
 from . import lifecycle
-from .errors import Conflict, Refused
+from .errors import Conflict, NotReady, Refused
 from .loops import Loop
 from .registry import digest, identifier
 from .resources import ObservedSpeed, ProcessUsage, recent_activity
@@ -102,8 +102,8 @@ class Child:
                 last = next((line for line in reversed(tuple(self.logs)) if line.strip()), '')
                 cause = last if len(last) <= 200 else last[:197] + '...'
                 alive = 'still running' if self.process.poll() is None else f'exited with {self.process.returncode}'
-                raise Refused(f'Worker was not ready after {timeout} seconds ({alive}). '
-                                   f'Last output: {cause or "none"}. Full log: {self.log_path}') from None
+                raise NotReady(f'Worker was not ready after {timeout} seconds ({alive}). '
+                               f'Last output: {cause or "none"}. Full log: {self.log_path}') from None
             if (message.get('event') != 'ready' or message.get('protocol') != 1
                     or message.get('adventure_id') != self.bootstrap['adventure_id']
                     or message.get('generation') != self.generation
