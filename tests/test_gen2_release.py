@@ -265,6 +265,37 @@ def test_a_return_the_pc_would_release_is_not_kept(monkeypatch):
     assert not keeps_another(policy, snapshot([mon(185, dvs=(3,) * 5)]), 185)
 
 
+def test_a_copy_for_trade_is_hunted_only_while_no_kept_copy_would_go_for_it(monkeypatch):
+    from pokesim.gen2.collection import hunt_wanted, wanted
+    from pokesim.gen2.release import supply_room
+    monkeypatch.setattr('pokecore.gen2.breeding.breeding_stock', lambda data, species: set())
+    names = {16: 'Pidgey', 19: 'Rattata', 79: 'Slowpoke'}
+    policy = SimpleNamespace(data=SimpleNamespace(species={dex: {'name': name} for dex, name in names.items()},
+                                                  game='crystal'),
+                             demand={16: 1, 79: 1}, collection={}, trade_preferences=lambda: {})
+    pidgeys = [mon(16, position=0), mon(16, position=1)]
+    rattatas = [mon(19, position=2 + index) for index in range(12)]
+
+    def view(stored, boxes=None):
+        held = snapshot([mon(79, position=19), *stored], boxes=boxes)
+        return SimpleNamespace(**vars(held), owned=frozenset(names))
+
+    # A linked adventure misses Pidgey and Slowpoke, so the second Pidgey is kept for trade. With the
+    # boxes full, the visit a catch brings frees eleven slots, and with one spare it takes that Pidgey
+    # too, whose own hunt would open next. So the second Slowpoke is not hunted, though still wanted.
+    full = view([*pidgeys, *rattatas[:2]])
+    assert not supply_room(policy, full)
+    hunted = hunt_wanted(policy, full)
+    assert wanted(policy, full, 79) and not hunted(79)
+    # A missing entry is hunted all the same.
+    assert hunted(80)
+    # With eleven spares to go first, or room left in the boxes, the copy for trade is hunted.
+    spares_first = view([*pidgeys, *rattatas])
+    assert supply_room(policy, spares_first) and hunt_wanted(policy, spares_first)(79)
+    roomy = view([*pidgeys, *rattatas[:2]], boxes=(10,) * 14)
+    assert supply_room(policy, roomy) and hunt_wanted(policy, roomy)(79)
+
+
 def test_a_copy_with_known_dvs_is_kept_only_when_twice_as_rare(monkeypatch):
     from pokesim.gen2.release import keeps_another
     from pokesim.rarity import generic

@@ -353,12 +353,43 @@ def peer_store_arrive(policy, snapshot):
 
 
 def wanted(policy, snapshot, species):
-    held = held_counts(snapshot)[species]
+    return own_wanted(policy, snapshot, species) or peer_wanted(policy, snapshot, species)
+
+
+def own_wanted(policy, snapshot, species):
+    """Whether this adventure wants a copy of ``species`` for itself: a missing entry, a plan's
+    missing prerequisite, a missing Unown letter or a carrier of a trade item."""
     return (species not in snapshot.owned
-            or species in policy.collection.get('prerequisites', ()) and not held
-            or held < policy.demand.get(species, 0) + 1 and bool(policy.demand.get(species))
+            or species in policy.collection.get('prerequisites', ()) and not held_counts(snapshot)[species]
             or species == UNOWN and bool(unown_missing(policy, snapshot))
             or species in item_hunts(policy, snapshot))
+
+
+def peer_wanted(policy, snapshot, species):
+    """Whether the PC holds fewer copies of ``species`` than its own one and one more for each linked
+    adventure that misses it."""
+    demand = policy.demand.get(species, 0)
+    return bool(demand) and held_counts(snapshot)[species] < demand + 1
+
+
+def hunt_wanted(policy, snapshot):
+    """``wanted`` for the Pokédex hunt, as a function of the species. A copy only linked adventures ask
+    for is hunted while one more fits without a kept copy going for it (release.supply_room). Once
+    copies kept for trade filled the boxes, each such catch released another kept copy, and that
+    copy's own hunt opened next. A Crystal run caught and released Slowpoke, Weedle and Goldeen twice
+    each that way in under an hour. The PC is rated once, and only when such a copy comes up."""
+    from .release import supply_room
+    room = []
+
+    def hunted(species):
+        if own_wanted(policy, snapshot, species):
+            return True
+        if not peer_wanted(policy, snapshot, species):
+            return False
+        if not room:
+            room.append(supply_room(policy, snapshot))
+        return room[0]
+    return hunted
 
 
 def throw_signature(snapshot):
@@ -1307,7 +1338,8 @@ def pokedex_hunt(policy, snapshot, Goal, current_time):
     target = state.get('target')
     # With every box full and nothing to release, a hunt could never keep a catch.
     room = not policy.no_room(snapshot)
-    if (target and (not wanted(policy, snapshot, target['species']) or not matching_time(target['time'], current_time)
+    hunted = hunt_wanted(policy, snapshot)
+    if (target and (not hunted(target['species']) or not matching_time(target['time'], current_time)
                    or not room or standing_down(policy, hunt_key(target['species']))
                    or deferred(policy, snapshot, target['species']))):
         if not wanted(policy, snapshot, target['species']):
@@ -1318,7 +1350,7 @@ def pokedex_hunt(policy, snapshot, Goal, current_time):
         groups = {}
         items = dict(snapshot.items)
         for row in data.encounters if room else ():
-            if (not wanted(policy, snapshot, row['species']) or not matching_time(row['time'], current_time)
+            if (not hunted(row['species']) or not matching_time(row['time'], current_time)
                     or standing_down(policy, hunt_key(row['species'])) or not usable(policy, snapshot, row, items)
                     or deferred(policy, snapshot, row['species'])):
                 continue
