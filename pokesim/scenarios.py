@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, fields
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import random
@@ -114,6 +115,50 @@ def apply_edits(mem, edits):
     if edits.get('money') is not None:
         for index, byte in enumerate(_bcd(min(edits['money'], 999999), 3)):
             mem[W_MONEY + index] = byte
+
+
+def returned_activities(rows):
+    """The walking events (step_events.activities) behind returned_events rows, with the dojo gift and
+    the fossil the rows name."""
+    from .step_events import FOSSILS, activities
+    dojo = rows.get('dojo', {}).get('dex', 106)
+    item = rows.get('fossil', {}).get('item')
+    fossil = next((name for name, (_, held) in FOSSILS.items() if held == item), 'helix')
+    return {spec.key: spec for spec in activities(fossil, dojo) if spec.key in rows}
+
+
+def gen1_returned_events(wanted):
+    """The returned walking events a live Red, Blue or Yellow run reads from its claims ledger
+    (step_events.available), from a scenario's {activity: choice}. The dojo's choice is the Pokédex
+    number of the gift the visit offers, the fossil's is helix, dome or amber, and the rest take true."""
+    from .step_events import FOSSILS, activities
+    dojo, fossil = wanted.get('dojo'), wanted.get('fossil')
+    specs = {spec.key: spec for spec in activities(fossil if fossil in FOSSILS else 'helix',
+                                                   dojo if dojo in (106, 107) else 106)}
+    wrong = sorted(key for key, value in wanted.items()
+                   if key not in specs or key == 'dojo' and (type(value) is not int or value not in (106, 107))
+                   or key == 'fossil' and value not in FOSSILS or key not in ('dojo', 'fossil') and value is not True)
+    if wrong:
+        raise ValueError(f'Unknown or malformed returned_events: {", ".join(wrong)}')
+    return {key: {'dex': specs[key].dex, 'room': specs[key].room, 'item': specs[key].item} for key in wanted}
+
+
+def gen1_demand(wanted):
+    """The copies other adventures ask for (Collection.set_demand), from a scenario's {Pokédex number: count}."""
+    demand = {}
+    for key, count in wanted.items():
+        if not str(key).isdigit() or not 1 <= int(key) <= 151 or type(count) is not int or count < 1:
+            raise ValueError(f'Malformed peer_demand entry {key!r}: {count!r}')
+        demand[int(key)] = count
+    return demand
+
+
+def held_dex(snapshot, dexes):
+    """How many Pokémon with these Pokédex numbers a Red, Blue or Yellow run holds in its party and boxes."""
+    from .strategy_data import SPECIES
+    stored = snapshot.stored_pokemon
+    boxed = [sid for _, sid, _, _ in stored] if stored else [sid for sid, _ in snapshot.boxed_pokemon]
+    return sum(SPECIES.get(sid, {}).get('dex') in dexes for sid in [mon.species for mon in snapshot.party] + boxed)
 
 
 # Gen II edits. Addresses come from the cartridge's symbol file and the layout from Core.
@@ -273,9 +318,11 @@ class Scenario:
     battle_timeout_game_minutes: int = 30
     max_reloads: int = 2
     # An event type that must happen, such as badge or champion. Both generations also mark a new
-    # Pokédex entry (owned) and a stand-down (stand_down), and Gen II a timed hunt (timed_hunt), a
-    # ladder pick (rung) and a static legendary battle (legend). Add a colon and a detail to name one,
-    # as in owned:61, timed_hunt:191, legend:249 or stand_down:tower:room.
+    # Pokédex entry (owned) and a stand-down (stand_down). Gen II marks a timed hunt (timed_hunt), a
+    # ladder pick (rung) and a static legendary battle (legend). Red, Blue and Yellow mark a returned
+    # walking event completed (event_return) and one more copy of a species another adventure asked
+    # for (demand). Add a colon and a detail to name one, as in owned:61, timed_hunt:191, legend:249,
+    # event_return:dojo, demand:26 or stand_down:tower:room.
     until: str | None = None
     # Game minutes to keep playing after ``until``, in which ``then`` must happen if it is set.
     after_game_minutes: int = 0
@@ -412,6 +459,7 @@ class Gen1Watch(PlannerMarks):
     def reset(self):
         self.previous, self.pending, self.checkpoint = None, [], None
         self.throws = ThrowClock()
+        self.counts, self.rising = None, {}
         self.reset_marks()
 
     def race_checkpoint(self):
@@ -424,8 +472,43 @@ class Gen1Watch(PlannerMarks):
         return director.monitor.stood_down() if director is not None else {}
 
     def marks(self, snapshot=None):
-        """What the planner just did, as (kind, detail, title): a Pokédex entry or a stand-down."""
-        return self.shared_marks(snapshot)
+        """What the planner just did, as (kind, detail, title): a returned walking event completed, one
+        more copy another adventure asked for, a Pokédex entry or a stand-down."""
+        return self.store_marks(snapshot) + self.shared_marks(snapshot)
+
+    def store_marks(self, snapshot):
+        """A returned walking event completed (event_return) and one more copy of a species another
+        adventure asked for (demand). A live run journals the first from its claims ledger and hands
+        the second over through the coordinator, and a replay has neither, so the watch marks them.
+
+        An event counts as step_events.observe counts it, once a done flag is set and the run holds
+        more than at the first look. The dojo counts only the gift the return offers, so taking the
+        other one is no mark. A count counts once it holds on two looks in a row.
+        """
+        collection = getattr(self.run.policy, 'collection', None)
+        rows = getattr(collection, 'returned_events', None) or {}
+        demand = collection.demand() if hasattr(collection, 'demand') else {}
+        if snapshot is None or not snapshot.valid or not snapshot.started or not rows and not demand:
+            return []
+        from .step_events import population, read
+        counts, waiting = {}, set()
+        for key, spec in returned_activities(rows).items():
+            counts['event_return', key] = population(snapshot, spec) if spec.item else held_dex(snapshot, (spec.dex,))
+            if not any(read(self.run.pb.memory, bit) for bit in spec.done):
+                waiting.add(('event_return', key))
+        for dex in demand:
+            counts['demand', str(dex)] = held_dex(snapshot, (dex,))
+        if self.counts is None:
+            self.counts = {}
+        for key, count in counts.items():
+            self.counts.setdefault(key, count)
+        rising = {key: count for key, count in counts.items() if count > self.counts[key] and key not in waiting}
+        found = sorted(key for key, count in rising.items() if self.rising.get(key) == count)
+        self.rising = rising
+        for key in found:
+            self.counts[key] = rising[key]
+        return [(kind, detail, f'Completed the returned {detail} event' if kind == 'event_return'
+                 else f'One more of Pokédex {detail} for another adventure') for kind, detail in found]
 
     def observe(self, snapshot):
         events = [event for event in self.pending if event.still(snapshot)]
@@ -589,6 +672,9 @@ def open_run(scenario, rom=None):
     partners = frozenset(value for value in scenario.trade_partners if valid_partner(value))
     if generation == 2:
         check_gen2_edits(scenario.edits)
+    else:
+        events = gen1_returned_events(scenario.edits.get('returned_events') or {})
+        demand = gen1_demand(scenario.edits.get('peer_demand') or {})
     run = HeadlessRun(path, scenario.checkpoint, scenario.seed, rng=random.Random(scenario.seed),
                       data_root=gen2_data_root() if generation == 2 else None)
     run.policy.trade_partners = lambda: partners
@@ -600,10 +686,19 @@ def open_run(scenario, rom=None):
             raise
         return run, Gen2Watch(run)
     apply_edits(run.pb.memory, scenario.edits)
-    # The legendaries that came back sit in the adventure's claims ledger, not in the save, so a
-    # scenario names them by Pokédex number (returned) to replay a return trip.
+    collection = run.policy.collection
+    # The legendaries and walking events that came back sit in the adventure's claims ledger, not in
+    # the save, so a scenario names them (returned, returned_events) to replay a return trip. A reload
+    # keeps both, as Collection.load leaves them alone.
     if scenario.edits.get('returned'):
-        run.policy.collection.returned_legendaries = set(scenario.edits['returned'])
+        collection.returned_legendaries = set(scenario.edits['returned'])
+    if events:
+        collection.returned_events = events
+    if demand:
+        # The coordinator sends another adventure's request again while it stands, so a scenario's
+        # demand (peer_demand) holds for the whole replay.
+        collection.set_demand(demand)
+        collection.demand_until = math.inf
     return run, Gen1Watch(run)
 
 

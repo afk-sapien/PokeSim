@@ -49,6 +49,19 @@ def test_only_failures_outside_the_baseline_fail_it():
     assert problems == ['1 new replay failures: silver-c'] and summary == problems[0]
 
 
+def test_a_passing_summary_says_how_many_replays_have_an_until(tmp_path):
+    # 62 replays passing read as more than it was, since most pass on any achievement in their window.
+    for name, until in (('red-a', 'badge'), ('gold-b', None), ('silver-c', '')):
+        (tmp_path / 'nested' / name).mkdir(parents=True)
+        (tmp_path / 'nested' / name / 'scenario.json').write_text(json.dumps({'name': name, 'until': until}))
+    (tmp_path / 'broken').mkdir()
+    (tmp_path / 'broken' / 'scenario.json').write_text('{')
+    outcomes = {'red-a': 'passed', 'gold-b': 'passed', 'silver-c': 'passed', 'blue-d': 'passed'}
+    assert preflight.with_until(tmp_path, outcomes) == 1
+    _, _, summary = preflight.judge(0, 0, outcomes, set(), 1)
+    assert summary == 'gate passed, 4 replays passed, 0 known failures, 1 of 4 have an until'
+
+
 def test_a_known_failure_that_passes_is_named_and_does_not_fail_it():
     problems, fixed, _ = preflight.judge(0, 0, {'red-a': 'passed'}, {'red-a'})
     assert problems == [] and fixed == ['red-a']
@@ -111,8 +124,8 @@ def test_a_passing_run_posts_pending_then_success(fake_run):
     code, posted, report = fake_run(junit=junit)
     assert code == 0
     assert posted == [('pending', 'playing the ladder gate and the private replays'),
-                      ('success', 'gate passed, 3 replays passed, 1 known failures')]
-    assert report['passed'] and report['replays']['gold-b'] == 'failed'
+                      ('success', 'gate passed, 3 replays passed, 1 known failures, 0 of 4 have an until')]
+    assert report['passed'] and report['replays']['gold-b'] == 'failed' and report['with_until'] == 0
 
 
 def test_an_index_row_that_expects_stuck_is_a_known_failure(fake_run, monkeypatch, capsys):
