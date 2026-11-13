@@ -1,13 +1,12 @@
-# Release status: 0.6.2 prepared for publication
+# Release status: 0.7.0 prepared for publication
 
-PokeSim 0.6.2 is a patch on 0.6.1 that publishes the image for linux/arm64
-([#269](https://github.com/afk-sapien/PokeSim/issues/269)), adds app store templates
-([#273](https://github.com/afk-sapien/PokeSim/issues/273)), and fixes the Rocket Hideout, healing
-and errand loops found by the stage ladder gate. pokecore moves to 0.11.0 and PyBoy RS stays at
-0.1.4. See the [release notes](docs/release-notes.md). The publication workflow must verify
-the exact tagged commit, build the packages and both container images, and verify the uploaded
-assets before making the release public. The publication receipt is recorded after that succeeds.
-PokeSim 0.6.1 was published on October 30, 2026 ([notes](docs/release-0.6.1.md)).
+PokeSim 0.7.0 adds accounts, trade offers between people and PC values, judges every boss by one
+readiness rule and climbs one reload ladder for a stuck run in all six games. pokecore moves to
+0.12.0, released from this repository, and PyBoy RS to 0.1.5. See the
+[release notes](docs/release-notes.md). The publication workflow must verify the exact tagged
+commit, build the packages and both container images, and verify the uploaded assets before
+making the release public. The publication receipt is recorded after that succeeds.
+PokeSim 0.6.2 was published on October 31, 2026 ([notes](docs/release-0.6.2.md)).
 
 0.5.0 moves every adventure to the Rust emulator (PyBoy RS 0.1.2 through Core 0.7.0) and adds
 Gold, Silver and Crystal. See the [0.5.0 release notes](docs/release-0.5.0.md). Core and PyBoy RS
@@ -20,14 +19,6 @@ through Red in Gold, Silver and Crystal, 100-encounter postgame checks with a mi
 all three native Gen II cable pairings and all six Red/Blue Time Capsule pairings. Each fresh
 campaign uses Cyndaquil and seed 1. These checks close the fresh-campaign and private cable
 evidence gaps for that configuration, without claiming every starter, seed or platform.
-
-## Before the next PokeSim release
-
-The next PokeSim release needs pokecore 0.11.1 or later published first. The
-[state layer slices](docs/design/pokecore-state-layer.md) make PokeSim import pokecore names that
-pokecore 0.11.0 does not have, starting with `pokecore.storage.read_box_counts`. Cut the release from
-`packages/pokecore` and pin it as [Publishing](docs/publishing.md#pokecore-releases) describes. Pull request
-checks install the workspace pokecore, so only the release workflow proves PokeSim against a published one.
 
 ## Known limits, deliberately not addressed here
 

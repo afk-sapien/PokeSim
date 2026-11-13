@@ -1,42 +1,48 @@
-# PokeSim 0.6.2 patch release
+# PokeSim 0.7.0
 
-This patch brings the image to ARM servers and home server app stores, and fixes several
-places where adventures walked back and forth instead of moving on.
+This release adds accounts and trade offers between people, gives every stored Pokémon a PC
+value, and judges every boss by one readiness rule. A stuck run now climbs one reload ladder in
+all six games, and the live page streams its screen.
 
-- **ARM64 image ([#269](https://github.com/afk-sapien/PokeSim/issues/269)).** The container
-  image now runs natively on linux/arm64 as well as linux/amd64, such as a Raspberry Pi 4 or 5,
-  an ARM NAS or an Apple silicon Mac. The same tag serves both, so `docker compose pull`
-  picks the right one.
-- **App store templates ([#273](https://github.com/afk-sapien/PokeSim/issues/273)).**
-  `deploy/stores/` has drafts for Unraid Community Applications, CasaOS, Umbrel and TrueNAS
-  community apps. None has been submitted to its store yet.
-- **A shorter start.** The README now opens with a three command quickstart, the ROM note and
-  what the app needs to run. Every pinned version moves with one release command, so the
-  quickstart always installs this release.
-- **Rocket Hideout ([#263](https://github.com/afk-sapien/PokeSim/issues/263),
-  [#267](https://github.com/afk-sapien/PokeSim/issues/267)).** Red, Blue and Yellow no longer
-  try the B1F door to the elevator before its Rocket is beaten, and take the lift to B2F on
-  the way out while the door is shut.
-- **Healing and errands ([#254](https://github.com/afk-sapien/PokeSim/issues/254),
-  [#258](https://github.com/afk-sapien/PokeSim/issues/258),
-  [#261](https://github.com/afk-sapien/PokeSim/issues/261),
-  [#265](https://github.com/afk-sapien/PokeSim/issues/265)).** A trip to a Pokémon Center or a
-  shop stays the goal through battles, dialogue, warps and menus in all six games. Gold, Silver
-  and Crystal no longer pick Blackthorn's center through Ice Path.
-- **Safari Zone and dungeons ([#256](https://github.com/afk-sapien/PokeSim/issues/256)).** Red,
-  Blue and Yellow keep bag room for the Safari prizes and dungeon story items instead of
-  walking out to sell.
+- **Accounts.** With `AUTH=accounts` everyone logs in with a password, an OpenID Connect
+  provider or a trusted proxy header. Admins invite people with one-time links, and owners share
+  an adventure or make an expiring watch link. A Library with `AUTH` unset stays open. See
+  [Users and sharing](users-and-sharing.md) and [Authentication](authentication.md).
+- **Trade offers.** An owner switches on Open to offers, and people the adventure is shared
+  with send offers from Make a trade. Only the owner accepts or declines, and unanswered offers
+  expire after 24 hours. See [Trade offers](trading.md#trade-offers).
+- **PC values.** Every stored Pokémon has a value, shown in its PC popup, and the PC releases
+  the cheapest first. Catches, gifts, returns and trade arrivals are kept only when the PC would
+  keep them, and trades are rated by the same rules.
+- **Boss readiness.** One rule judges every boss in all six games. A team trains until its best
+  fighter reaches the level a loss set, then until it matches up with the boss's ace. A party
+  that is not ready heals before a boss battle and before a League rematch.
+- **Reload ladder.** A stuck run reloads an earlier save, reports "Stuck?" at the third reload
+  in a row and gives up on the stuck goal at the twelfth. Only a new best counts as progress,
+  and the bot's waits hold through a reload.
+- **Live stream.** The live page takes frames over one `/stream` request at the game's 15 fps,
+  which cut the serving CPU per viewer from about 6.1% to 1.7% of a core.
 
-See the [changelog](../CHANGELOG.md#062) for every change.
+See the [changelog](../CHANGELOG.md#070) for every change.
 
 ## Upgrading
 
-Back up the complete library. Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.6.2`
+Back up the complete library. Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.7.0`
 and run `docker compose pull` followed by `docker compose up -d --wait`.
 Keep the existing data mount and project name. Python users can follow the
-[installation guide](desktop.md). pokecore moves to 0.11.0 and PyBoy RS stays at 0.1.4.
-Saves and checkpoints from 0.6.1 load unchanged, and rolling back to 0.6.1 is safe.
+[installation guide](desktop.md). pokecore moves to 0.12.0 and PyBoy RS to 0.1.5.
 
-See the [0.6.1 release notes](release-0.6.1.md) for the 0.6.1 update, the
+- The first start moves the Library database to schema 2 and keeps a copy of the old one as
+  `app.sqlite.pre-schema-2-<time>`. 0.6.x cannot open the upgraded database, so rolling back
+  means restoring that copy or a backup from before the upgrade. See
+  [Update and roll back](operations.md#update-and-roll-back).
+- Gold, Silver and Crystal save their policy as version 2. Rolling back resets its memory, such
+  as goals under way and collection plans, but not the game.
+- `AUTOSAVE_SECONDS` now counts game seconds, with a default of 300.
+- Each adventure keeps a trace under `states/trace/`, about 7 MB each and pruned with the
+  autosaves. `TRACE=0` turns it off.
+- To use accounts, set `AUTH=accounts` in `.env` as `.env.example` shows.
+
+See the [0.6.2 release notes](release-0.6.2.md) for the 0.6.2 update, the
 [0.5.0 release notes](release-0.5.0.md) for its known limitations, and
 [release status](../RELEASE_STATUS.md) for remaining limits.
