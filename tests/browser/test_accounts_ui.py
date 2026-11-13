@@ -9,7 +9,7 @@ OLD = 'first fixture password'
 NEW = 'second fixture password'
 
 
-def library(tmp_path, monkeypatch):
+def library(tmp_path, monkeypatch, before_accounts=lambda manager: None):
     for name in ('AUTH', 'OIDC_ISSUER', 'AUTH_PROXY_HEADER', 'DISABLE_PASSWORD_LOGIN'):
         monkeypatch.delenv(name, raising=False)
     holder = {}
@@ -17,6 +17,7 @@ def library(tmp_path, monkeypatch):
     def factory(url):
         manager = Manager(tmp_path / 'library', url, auth='accounts')
         monkeypatch.setattr(manager, 'start', lambda: None)
+        before_accounts(manager)
         admin = manager.auth.create_user('admin', OLD, role='admin')
         manager.bind_library_owner(admin['id'])
         holder['manager'] = manager
@@ -93,6 +94,28 @@ def test_share_an_adventure_with_a_role(page, tmp_path, monkeypatch):
         expect(page.locator('#share-watchers')).to_contain_text('bob can manage.')
         aid = manager.registry.adventures()[0]['id']
         assert manager.auth.grants_for(bob['id']) == {aid: 'manager'}
+
+
+def test_the_old_view_link_replacement_ends_when_the_days_field_says(page, tmp_path, monkeypatch):
+    import time
+    from playwright.sync_api import expect
+
+    def old_adventure(manager):
+        manager.registry.add_rom('fixture', 'sha1', 'red')
+        manager.registry.create('Old Red', 'fixture', {}, identifier())
+    factory, holder = library(tmp_path, monkeypatch, before_accounts=old_adventure)
+    with serve(factory) as url:
+        log_in(page, url, 'admin', OLD)
+        page.locator('#share-adventure').select_option(label='Old Red')
+        expect(page.locator('#share-legacy-note')).to_contain_text('stopped working when accounts turned on')
+        page.get_by_label('Link open for days, 0 for no end').fill('3')
+        page.get_by_role('button', name='Make a link', exact=True).click()
+        expect(page.locator('#share-links')).to_contain_text('open until')
+        expect(page.locator('#share-links')).not_to_contain_text('no end date')
+        expect(page.locator('#share-legacy')).to_be_hidden()
+        manager = holder['manager']
+        [share] = manager.auth.shares(manager.registry.adventures()[0]['id'])
+        assert 3 * 86400 - 60 < share['expires'] - time.time() <= 3 * 86400
 
 
 def test_settings_still_draw_when_the_session_arrives_before_accounts_js(page, tmp_path, monkeypatch):

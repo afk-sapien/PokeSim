@@ -187,7 +187,7 @@
     // The /view/ link of an adventure from before accounts stopped working when they turned on.
     $('#share-legacy').hidden = !sharing.legacy
     if (sharing.legacy) {
-      $('#share-legacy-note').textContent = `The old view link ${sharing.legacy.path} stopped working when accounts turned on. Make a watch link to share in its place.`
+      $('#share-legacy-note').textContent = `The old view link ${sharing.legacy.path} stopped working when accounts turned on. Make a link to share in its place. It stays open for the days set below.`
     }
   }
   async function addWatcher() {
@@ -198,23 +198,19 @@
       await showSharing()
     })
   }
-  async function makeLegacyLink() {
-    await attempt('#share-result', async () => {
-      const made = await send('POST', `/api/v1/adventures/${$('#share-adventure').value}/shares`, {legacy: true})
-      await showSharing()
-      $('#share-url').value = made.url
-      $('#share-made').hidden = false
-    })
-  }
-  async function makeLink() {
+  // Both link buttons use the days field, so the old link's replacement ends when that says.
+  async function makeShareLink(body) {
     await attempt('#share-result', async () => {
       const days = Number($('#share-days').value)
-      const made = await send('POST', `/api/v1/adventures/${$('#share-adventure').value}/shares`, days ? {seconds: days * 86400} : {})
+      const made = await send('POST', `/api/v1/adventures/${$('#share-adventure').value}/shares`,
+        days ? {...body, seconds: days * 86400} : body)
       await showSharing()
       $('#share-url').value = made.url
       $('#share-made').hidden = false
     })
   }
+  function makeLegacyLink() { return makeShareLink({legacy: true}) }
+  function makeLink() { return makeShareLink({}) }
   // Giving an adventure away takes two clicks: the first asks, the second gives it.
   function resetTransfer() {
     const key = $('#transfer-start')
