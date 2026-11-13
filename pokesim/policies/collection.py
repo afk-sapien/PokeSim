@@ -392,6 +392,7 @@ NO_PARTNER = decide.Failure(decide.NOT_NOW, 'no Pokémon to trade for it yet')
 TOO_STRONG = decide.Failure(decide.NOT_NOW, 'the wild Pokémon there are too strong for the party')
 DEFERRED = decide.Failure(decide.NOT_NOW, 'it waits for a new move, party member or ball to catch it')
 SEARCHED = decide.Failure(decide.NOT_NOW, 'its searches for a better copy are spent')
+NEEDED_SEARCHED = decide.Failure(decide.NOT_NOW, 'its searches for a copy another adventure needs are spent')
 TRAINS_FIRST = decide.Failure(decide.NOT_NOW, 'a Pokémon in the party trains first')
 
 
@@ -572,6 +573,8 @@ class Collection:
         self.last_repeat = {}
         self.last_hunt = {}
         self.quality_searches = {}
+        # Hunts for a copy another adventure needs that ended without a catch, by species.
+        self.capture_searches = {}
         # Species left for a new move, member or ball, by throw_signature (planning.throws).
         self.deferred_catches = {}
         self.peer_demand = {}
@@ -630,7 +633,7 @@ class Collection:
         return target
 
     def state_dict(self):
-        return {**{k:getattr(self,k) for k in ('project','remaining','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','deferred_catches','next_marathon','marathon_records','activity_events','paused')},
+        return {**{k:getattr(self,k) for k in ('project','remaining','eevee_choice','dojo_choice','history','completed_champion','league_appearances','project_maps','project_flags','last_repeat','last_hunt','quality_searches','capture_searches','deferred_catches','next_marathon','marathon_records','activity_events','paused')},
                 'director': self.director.state_dict()}
 
     def defer(self, s, species):
@@ -832,11 +835,18 @@ class Collection:
         self.director.monitor.start(key, budget=budget)
         self.director.monitor.observe(key, delta, events)
 
-    def record_quality_search(self):
+    def record_quality_search(self, caught=False):
+        """Count the ending hunt against its species' searches: a DV hunt always, and a hunt for a
+        copy another adventure needs when it ends without ``caught``."""
         project = self.project or {}
-        if project.get('dv_hunt') and project.get('species'):
-            key = str(project['species'])
+        if not project.get('species'):
+            return
+        key = str(project['species'])
+        if project.get('dv_hunt'):
             self.quality_searches[key] = min(SEARCH_BUDGET, self.quality_searches.get(key, 0) + 1)
+        elif (project.get('repeat') and project.get('needed_capture') and project.get('method') in REPEATABLE
+              and not caught):
+            self.capture_searches[key] = min(SEARCH_BUDGET, self.capture_searches.get(key, 0) + 1)
 
     @staticmethod
     def support_trip(project, s, support, delta):
@@ -966,7 +976,7 @@ class Collection:
             if finished or (self.remaining <= 0 and (project['method'] != 'train' or not s.in_battle)):
                 # A project done or out of budget starts its next turn with the whole budget.
                 self.director.monitor.set_spent(budget_key(project), 0)
-                self.record_quality_search()
+                self.record_quality_search(caught=bool(finished))
                 self.finish_marathon(bool(finished))
                 if finished and project.get('repeat'):
                     self.last_repeat[str(project.get('species'))] = self.clock
@@ -1351,6 +1361,13 @@ class Collection:
                         # moved from one Safari Zone area to the next with no catch, and Blue stopped
                         # making progress.
                         skip(project, SEARCHED)
+                        continue
+                    if not project['dv_hunt'] and self.capture_searches.get(str(sid), 0) >= SEARCH_BUDGET:
+                        # The catch rule (repeat_target) takes only a copy the PC visit would not trade
+                        # for a rarer spare, so with the boxes nearly full a hunt for a copy another
+                        # adventure needs met its species again and again with no catch. Each place
+                        # kept its own budget, and the hunt moved between places with no end.
+                        skip(project, NEEDED_SEARCHED)
                         continue
                 if offered is not None:
                     project.update(parent=source['give'], box=offered.get('box'),
