@@ -546,3 +546,28 @@ def test_gen2_preparation_hands_an_unloaded_map_to_the_policy(monkeypatch):
     prep = preparation.Preparation(emu, {'started_frame': 0, 'protect': [], 'wished': []})
     snapshot = SimpleNamespace(map=0, started=True, in_battle=False)
     assert prep.advance(snapshot) is pressed
+
+
+def test_gen2_preparation_closes_a_start_menu_the_policy_left_open(monkeypatch):
+    """A live Silver trade began while the policy had the start menu open to Fly.
+
+    The menu runs as a script, so preparation pressed A and opened the party screen, then B closed it
+    back to the start menu. The two repeated until the preparation deadline ran out.
+    """
+    from pokesim.gen2 import preparation
+    monkeypatch.setattr(preparation, 'Memory', lambda memory, data: SimpleNamespace(byte=lambda name: 1))
+    monkeypatch.setattr(preparation, 'update_world', lambda regions, snapshot: None)
+    regions = SimpleNamespace(observe=lambda mid, grid: None)
+    nav = SimpleNamespace(regions=regions, collision=lambda snapshot, memory: None, observe=lambda snapshot: None)
+    policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False,
+                             step=lambda ctx: pytest.fail('the policy is not asked during preparation'))
+    emu = SimpleNamespace(policy=policy, data=SimpleNamespace(maps={1: {}}), pb=SimpleNamespace(memory=None), frame=10,
+                          play_clock=SimpleNamespace(frames=10))
+    prep = preparation.Preparation(emu, {'started_frame': 0, 'protect': [], 'wished': []})
+    rows = ['          ┌────────┐', '          │        │', '          │ POKéDEX│', '          │        │',
+            '          │▶POKéMON│', '          │        │', '          │ PACK   │', '          │        │',
+            '          │ SILVER │', '          │        │', '          │ SAVE   │', '          │        │',
+            '          │ OPTION │', '          │        │', '          │ EXIT   │', '          │        │',
+            '          └────────┘', ' ' * 20]
+    snapshot = SimpleNamespace(map=1, started=True, in_battle=False, tiles=rows, text='\n'.join(rows), party=())
+    assert prep.advance(snapshot).button == 'b'
