@@ -5,6 +5,11 @@ a switch to a party member that can hit it and leave it standing. Once the party
 further, the balls go whatever the odds. A target nobody can weaken at all is left for later, until
 the party or the ball pocket changes. A shiny, a legendary, a roamer and a one-time encounter always
 get throws, and so does a Gold, Silver or Crystal battle a map script started.
+
+A hunt asks the same question before it travels, of a wild Pokémon built from its encounter level
+(``wild_foe``), and leaves a target the battle would only run from. The foe gets the DVs most in the
+party's favour and every member counts at full health, so a hunt is skipped only when no wild copy
+could be weakened by the team a Pokémon Center would send out.
 """
 
 THROW_BAR = 0.1
@@ -34,6 +39,24 @@ def spare_words(generation):
     """What a catch goal with no spare throw needs, in the words of the goal catalogue's why_not."""
     last = LAST_BALLS[generation]
     return f'more than {last} Poké Balls or the money to buy more' if last else 'a Poké Ball'
+
+
+def wild_moves(learnset, level, first=()):
+    """The moves a wild Pokémon knows at ``level``: its first moves, then each move it learns by that
+    level, the oldest forgotten past four, as both generations fill a wild moveset."""
+    moves = [move for move in first if move]
+    for learned, move in learnset:
+        if learned <= level and move not in moves:
+            moves.append(move)
+    return moves[-4:]
+
+
+def wild_foe(stats, level, hp_index=0):
+    """A wild Pokémon's HP and other stats at ``level`` from its base ``stats``, with the DVs most in the
+    party's favour: the best for its HP and defences, so a gentle hit fits under its HP, and the worst
+    for its attacks, so a member that would outlast it is not ruled out."""
+    hp = (stats[hp_index] + 15) * 2 * level // 100 + level + 10
+    return hp, [(base + 15) * 2 * level // 100 + 5 for base in stats], [base * 2 * level // 100 + 5 for base in stats]
 
 
 def gen1_throw(rate, ball, hp, max_hp, status):

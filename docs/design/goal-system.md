@@ -257,6 +257,8 @@ This switch happens in two steps (section 13). First the rows are written in sha
 
 Until the switch, the stall clock in all six games moves on the supervisor's high-water rule (`Supervisor.progressed`). Red, Blue and Yellow also move it on a rise in Pokémon held, so a long hunt is not a stall while the hunt rate is in shadow. That rise is one setting, `stalls.GEN1_HELD_RISE`, read by `stalls.held_rose` and the replay's `OldChecks.receipt`. The switch deletes all three, because a held rise is churn and the healthy hunt rate takes its place. Gold, Silver and Crystal never count it.
 
+A catch of a copy another adventure needs (a peer copy) moves no stall clock today, so a Gold hunt on Route 36 that caught seven peer copies, evolved two, trained two and bred one in 102 game minutes looked quiet. The overhaul should count that work as progress.
+
 ### The Kanto Marathon case
 
 Each marathon checkpoint writes a `checkpoint` row with `tier=RACE` and `net=1`. Gen I queues it through `activity_events` (`policies/collection.py:585`). Gen II queues it through `take_events` (`gen2/marathon.py:132`). A run that is racing now shows a fresh `net` row every checkpoint, so the watchdog sees it move.

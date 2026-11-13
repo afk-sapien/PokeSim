@@ -1339,9 +1339,20 @@ def pokedex_hunt(policy, snapshot, Goal, current_time):
     # With every box full and nothing to release, a hunt could never keep a catch.
     room = not policy.no_room(snapshot)
     hunted = hunt_wanted(policy, snapshot)
+    leaves = {}
+
+    def hopeless(species, level):
+        # A catch the battle would only run from, judged before travelling (planning.throws). A Lv 40
+        # Kingler on a super rod took 17 minutes of fishing for one battle that left it at once.
+        if level is None:
+            return False
+        if (species, level) not in leaves:
+            leaves[species, level] = policy.leaves_wild(snapshot, species, level)
+        return leaves[species, level]
+
     if (target and (not hunted(target['species']) or not matching_time(target['time'], current_time)
                    or not room or standing_down(policy, hunt_key(target['species']))
-                   or deferred(policy, snapshot, target['species']))):
+                   or deferred(policy, snapshot, target['species']) or hopeless(target['species'], target.get('level')))):
         if not wanted(policy, snapshot, target['species']):
             # Caught, or its item found: the search is done, so its spent decisions go too.
             forget(policy, hunt_key(target['species']))
@@ -1352,7 +1363,7 @@ def pokedex_hunt(policy, snapshot, Goal, current_time):
         for row in data.encounters if room else ():
             if (not hunted(row['species']) or not matching_time(row['time'], current_time)
                     or standing_down(policy, hunt_key(row['species'])) or not usable(policy, snapshot, row, items)
-                    or deferred(policy, snapshot, row['species'])):
+                    or deferred(policy, snapshot, row['species']) or hopeless(row['species'], row.get('level'))):
                 continue
             method = row['method']
             key = (row['map'], method, row['species'], row['time'] == 'rare trees')
