@@ -15,6 +15,7 @@ YELLOW = current_variant() == 'yellow'
 # Yellow's Pikachu refuses the Thunder Stone, and the game treats every Pikachu
 # the player caught as its partner, so Raichu only arrives through a link trade.
 REFUSES_EVOLUTION = {25} if YELLOW else set()
+from .battle import leaves_wild
 from .navigation import DIRS
 from .director import AdventureDirector, category, new_entry
 from ..planning import values
@@ -1282,6 +1283,14 @@ class Collection:
             labels[key] = goal.title
             candidates.append({**project,'key':key})
         sources = self.sources()
+        leaves = {}
+
+        def hopeless(sid, source):
+            key = (sid, source['level'], source['map'] == MAPS['POWER_PLANT'])
+            if key not in leaves:
+                leaves[key] = leaves_wild(s.party, s.items, sid, source['level'], source['map'])
+            return leaves[key]
+
         held_individuals = [asdict(mon) for mon in s.party] + s.storage_entries()
         # A quality hunt is valued by the species' best copy as the PC rates it (investment.rarity).
         best_tails = {}
@@ -1332,7 +1341,9 @@ class Collection:
                 if mode == 'grass' and source.get('level',100) > max(p.level for p in s.party)+3:
                     skip(dict(source, species=sid), TOO_STRONG)
                     continue
-                if mode in ('grass', 'surf', 'fish') and self.deferred(s, sid):
+                # A catch the battle would only run from waits too, judged before the trip
+                # (planning.throws), as Gold, Silver and Crystal do.
+                if mode in ('grass', 'surf', 'fish') and (self.deferred(s, sid) or hopeless(sid, source)):
                     skip(dict(source, species=sid), DEFERRED)
                     continue
                 search_key = (sid,source['map'],mode,source.get('rod'))

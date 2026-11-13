@@ -67,6 +67,25 @@ def test_a_long_shot_nobody_can_weaken_runs_and_waits_for_a_new_move_member_or_b
     assert not any(collection.deferred(changed, enemy.species) for changed in (taught, joined, stocked))
 
 
+def test_a_hunt_skips_a_catch_the_battle_would_only_leave():
+    # Gold, Silver and Crystal hunted a target four times over that every battle left at once. Red,
+    # Blue and Yellow ask the same question before the trip.
+    from pokesim.policies.battle import leaves_wild
+    poke, great = ((ITEMS['POKE_BALL'], 10),), ((ITEMS['GREAT_BALL'], 10),)
+    assert leaves_wild((LEAD,), poke, sid(114), 22)
+    assert not leaves_wild((LEAD,), great, sid(114), 22)
+    assert not leaves_wild((LEAD, HELPER), poke, sid(114), 22)
+    assert not leaves_wild((HELPER, LEAD), poke, sid(114), 22)
+    # A Pidgey that one Constrict knocks out weakens nothing.
+    assert leaves_wild((LEAD, mon(**{**HELPER.__dict__, 'hp': 2, 'max_hp': 2})), poke, sid(114), 22)
+    # The battle always throws at Snorlax and at the Power Plant's Electrodes, and with no ball there
+    # is nothing to judge.
+    assert not leaves_wild((LEAD,), poke, sid(143), 30)
+    assert leaves_wild((LEAD,), poke, sid(101), 40, MAPS['ROUTE_10'])
+    assert not leaves_wild((LEAD,), poke, sid(101), 40, MAPS['POWER_PLANT'])
+    assert not leaves_wild((LEAD,), (), sid(114), 22)
+
+
 @pytest.mark.parametrize('case', ['weakened', 'great ball', 'trapped', 'snorlax', 'power plant', 'legendary',
                                   'shiny'])
 def test_these_long_shots_get_throws(case):

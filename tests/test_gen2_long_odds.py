@@ -9,7 +9,7 @@ from battle_fakes import fight
 from pokesim.gen2.data import GameData
 from pokesim.planning.throws import THROW_BAR, gen2_throw
 
-TANGELA, CHANSEY, SNORLAX, ELECTRODE = 114, 113, 143, 101
+TANGELA, CHANSEY, SNORLAX, ELECTRODE, KINGLER = 114, 113, 143, 101, 99
 
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
@@ -112,3 +112,29 @@ def test_a_deferred_species_is_not_hunted(real_data):
     assert deferred(policy, snapshot, TANGELA)
     # A new member changes what can weaken it, so the species is wanted again.
     assert not deferred(policy, SimpleNamespace(party=(LEAD, HELPER), pockets=snapshot.pockets), TANGELA)
+
+
+# A Meganium whose only attack, Razor Leaf, could knock out a wild Tangela or Kingler.
+STRONG = member(154, 57, (75, 0, 0, 0), (191, 110, 110, 100, 100, 100), 191)
+
+
+def healed(real_data, party, ball='POKE_BALL'):
+    from pokesim.gen2.policy import Policy
+    return Policy(real_data), SimpleNamespace(party=party, pockets={'balls': [(real_data.items[ball], 20)]})
+
+
+def test_a_hunt_skips_a_catch_the_battle_would_only_leave(real_data):
+    # A Lv 40 Kingler on a super rod took 17 minutes of fishing on Route 36 for one battle that left it
+    # at once, and Tangela was hunted four times over for the same answer.
+    policy, snapshot = healed(real_data, (STRONG,))
+    assert policy.leaves_wild(snapshot, KINGLER, 40) and policy.leaves_wild(snapshot, TANGELA, 23)
+    # A Great Ball lifts a Kingler throw over 1 in 10, so the hunt goes for it once one is held.
+    assert not policy.leaves_wild(healed(real_data, (STRONG,), 'GREAT_BALL')[1], KINGLER, 40)
+    # So does a member that can weaken the target and outlast its hits, or a one-time encounter.
+    assert not policy.leaves_wild(healed(real_data, (STRONG, HELPER))[1], TANGELA, 23)
+    assert not policy.leaves_wild(snapshot, SNORLAX, 30)
+    # A Pidgey that Kingler's Crabhammer knocks out weakens nothing.
+    assert policy.leaves_wild(healed(real_data, (STRONG, HELPER))[1], KINGLER, 40)
+    # With no ball there is nothing to judge, and a lead with a gentle hit weakens the target itself.
+    assert not policy.leaves_wild(SimpleNamespace(party=(STRONG,), pockets={'balls': []}), KINGLER, 40)
+    assert not policy.leaves_wild(healed(real_data, (HELPER, STRONG))[1], TANGELA, 23)

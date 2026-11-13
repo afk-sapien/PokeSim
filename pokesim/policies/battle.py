@@ -19,6 +19,8 @@ TRANSFORMED = 1 << BIT_TRANSFORMED
 BALLS = (ITEMS["POKE_BALL"], ITEMS["GREAT_BALL"], ITEMS["ULTRA_BALL"])
 # Attacks a catch never weakens with: they cost the user, knock out at once, or hit too often to judge.
 RISKY_CHIPS = ('EXPLODE_EFFECT', 'RECOIL_EFFECT', 'OHKO_EFFECT', 'TWO_TO_FIVE_ATTACKS_EFFECT')
+# The Pokédex numbers a catch always throws at: Snorlax and the four legends, each met only once.
+ONE_TIME = (143, 144, 145, 146, 150)
 # Balls a hunt stocks while the purse stays above funds_needed. Postgame hunts on three Red saves threw
 # about five Ultra Balls a catch, so the collecting 15 sent them to a mart after every catch.
 HUNT_STOCK = 30
@@ -214,6 +216,46 @@ def long_odds(rate, ball, enemy):
     """Whether one throw of ``ball`` catches ``enemy`` as it stands less than one time in ten."""
     name = ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL')[BALLS.index(ball)]
     return gen1_throw(rate, name, enemy.hp, enemy.max_hp, enemy.status) < THROW_BAR
+
+
+def calming(mid, enemy):
+    """Whether move ``mid`` puts ``enemy`` to sleep or paralyzes it, which helps a catch."""
+    move = MOVES.get(mid, {})
+    return move.get('effect') in ('SLEEP_EFFECT', 'PARALYZE_EFFECT') and bool(effectiveness(move['type'], enemy.types))
+
+
+def gentle_hit(mid, mon, enemy):
+    """Whether ``mon`` can weaken a catch with move ``mid``: a safe attack that leaves ``enemy``
+    standing with a margin for critical damage."""
+    return (bool(mid) and MOVES.get(mid, {}).get('effect') not in RISKY_CHIPS and damage_division_safe(mid, mon, enemy)
+            and 0 < damage(mid, mon, enemy) * 2.5 < enemy.hp)
+
+
+def leaves_wild(party, items, species, level, map_id=None):
+    """Whether a catch of a wild ``species`` met at ``level`` on ``map_id`` would only run, judged
+    before the trip: choose_battle would leave it as the battle opens, with the balls in ``items`` and
+    the party healed (planning.throws). The lead weakens with sleep, paralysis or a gentle hit, and a
+    partner on the bench must also outlast the foe's strongest hit."""
+    from ..planning.throws import wild_foe, wild_moves
+    known = SPECIES.get(species)
+    if not known or not party or known.get('dex') in ONE_TIME or known.get('dex') in (100, 101) and map_id == MAPS['POWER_PLANT']:
+        return False
+    held = [item for item in BALLS if dict(items).get(item)]
+    if not held:
+        return False
+    hp, high, low = wild_foe(known['stats'], level)
+    moves = tuple(wild_moves(known['learnset'], level, known.get('initial_moves', ())))
+    foe = PartyMon(species, hp, hp, level, '', types=tuple(known['types']), moves=moves, attack=high[1],
+                   defense=high[2], speed=low[3], special=high[4])
+    if not long_odds(known['catch_rate'], held[-1], foe):
+        return False
+    attacker = replace(foe, attack=low[1], defense=low[2], special=low[4])
+    for slot, mon in enumerate(party):
+        if slot and mon.max_hp <= max((damage(mid, attacker, mon) for mid in moves), default=0):
+            continue
+        if any(calming(mid, foe) or gentle_hit(mid, mon, foe) for mid in mon.moves if mid):
+            return False
+    return True
 
 
 def ranked_moves(me, enemy, used_status=()):
@@ -443,20 +485,18 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
         healing = healing_item(snapshot.items,me,incoming)
         if me.hp <= incoming * 1.5 and healing is not None:
             return Decision('item',healing,active,'Keep the catcher healthy while preserving the wild Pokémon')
+        # What choose_battle tries here, leaves_wild predicts before a hunt travels.
         status_moves = [(MOVES[mid]['accuracy'],i) for i,(mid,pp) in enumerate(zip(me.moves,me.pp))
-                        if pp and MOVES.get(mid,{}).get('effect') in ('SLEEP_EFFECT','PARALYZE_EFFECT')
-                        and effectiveness(MOVES[mid]['type'],enemy.types)]
+                        if pp and calming(mid, enemy)]
         if not enemy.status and status_moves and (me.hp > incoming or me.speed > enemy.speed):
             return Decision('fight',max(status_moves)[1],reason='Use sleep or paralysis to help the catch')
         if can_switch and not enemy.status and not status_moves:
             catchers = [(p.hp,i) for i,p in enumerate(snapshot.party) if i!=active and p.hp>p.max_hp*0.7 and not p.status
-                        and any(pp and MOVES.get(mid,{}).get('effect') in ('SLEEP_EFFECT','PARALYZE_EFFECT')
-                                and effectiveness(MOVES[mid]['type'],enemy.types) for mid,pp in zip(p.moves,p.pp))
+                        and any(pp and calming(mid, enemy) for mid,pp in zip(p.moves,p.pp))
                         and p.hp > max((damage(mid,enemy,p) for mid in enemy.moves),default=0)]
             if catchers:
                 return Decision('switch',max(catchers)[1],reason='Bring in a healthy catcher with sleep or paralysis')
-        weakening = [(score,i) for score,i in moves if MOVES[me.moves[i]]['effect'] not in RISKY_CHIPS
-                     and 0 < damage(me.moves[i],me,enemy) * 2.5 < enemy.hp]
+        weakening = [(score,i) for score,i in moves if gentle_hit(me.moves[i], me, enemy)]
         if not legendary and not shiny and enemy.hp > enemy.max_hp*0.4 and weakening and not enemy.status:
             return Decision('fight',max(weakening)[1],reason='Use a gentle attack with a margin for critical damage')
         one_time = known.get('dex') == 143 or known.get('dex') in (100, 101) and snapshot.map == MAPS['POWER_PLANT']
@@ -465,9 +505,7 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
             # Under 1 in 10 a throw and the battler cannot weaken it (planning.throws).
             chippers = [(p.hp, i) for i, p in enumerate(snapshot.party) if i != active and p.hp > p.max_hp * 0.5
                         and not p.status and p.hp > max((damage(mid, enemy, p) for mid in enemy.moves), default=0)
-                        and any(mid and pp and MOVES.get(mid, {}).get('effect') not in RISKY_CHIPS
-                                and damage_division_safe(mid, p, enemy)
-                                and 0 < damage(mid, p, enemy) * 2.5 < enemy.hp for mid, pp in zip(p.moves, p.pp))]
+                        and any(pp and gentle_hit(mid, p, enemy) for mid, pp in zip(p.moves, p.pp))]
             if can_switch and chippers:
                 return Decision('switch', max(chippers)[1],
                                 reason='Bring in a partner that can weaken the target without a knockout')

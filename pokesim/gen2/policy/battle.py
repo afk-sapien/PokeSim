@@ -23,6 +23,11 @@ HEALING_MOVES = frozenset({'EFFECT_HEAL', 'EFFECT_MORNING_SUN', 'EFFECT_SYNTHESI
                            'EFFECT_LEECH_SEED'})
 # What long_odds answers when a catch should run and wait for a new move, member or ball.
 LEAVE = 'leave'
+# The balls an ordinary wild catch throws, best first. The Master Ball is kept for legends and shinies.
+REGULAR_BALLS = ('ULTRA BALL', 'GREAT BALL', 'POKé BALL', 'LURE BALL', 'FAST BALL',
+                 'HEAVY BALL', 'LEVEL BALL', 'LOVE BALL', 'FRIEND BALL', 'MOON BALL')
+# The status byte of a paralyzed Pokémon.
+PARALYZED = 64
 
 
 def transformed(player, mon):
@@ -507,10 +512,8 @@ class BattlePart:
             # A shiny may have the Master Ball once every other ball is spent, as it may never be seen
             # again, but not while a legend still to catch needs it.
             master = ('MASTER BALL',)
-        regular = ('ULTRA BALL', 'GREAT BALL', 'POKé BALL', 'LURE BALL', 'FAST BALL',
-                   'HEAVY BALL', 'LEVEL BALL', 'LOVE BALL', 'FRIEND BALL', 'MOON BALL')
         roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
-        return master + regular if roaming else regular + master
+        return master + REGULAR_BALLS if roaming else REGULAR_BALLS + master
 
     def long_odds(self, snapshot, species, active, *, escape):
         """What a catch does when its battler cannot weaken the target and the next throw is under
@@ -587,14 +590,22 @@ class BattlePart:
             return None
         if self.static_legend(snapshot):
             return self.static_capture_move(snapshot, mon, pp)
-        if not enemy.status:
+        foe = SimpleNamespace(species=snapshot.enemy_species, hp=snapshot.enemy_hp, max_hp=snapshot.enemy_max_hp,
+                              status=enemy.status, stats=enemy.stats)
+        return self.weakening_move(mon, pp, foe)
+
+    def weakening_move(self, mon, pp, foe):
+        """The slot of the move ``mon`` weakens an ordinary wild ``foe`` with, or None: a sleep or paralysis
+        move that can land while the foe has no status, else its strongest plain hit that leaves the foe
+        standing with a margin for a critical hit, while the foe has over half its HP."""
+        types = self.data.species[foe.species]['types']
+        if not foe.status:
             for index, move in enumerate(mon.moves):
                 entry = self.data.moves.get(move, {})
                 if (pp[index] and entry.get('effect') in {'EFFECT_SLEEP', 'EFFECT_PARALYZE'}
-                        and all(self.data.matchups.get((entry['type'], kind), 1)
-                                for kind in self.data.species[snapshot.enemy_species]['types'])):
+                        and all(self.data.matchups.get((entry['type'], kind), 1) for kind in types)):
                     return index
-        if snapshot.enemy_hp <= snapshot.enemy_max_hp // 2:
+        if foe.hp <= foe.max_hp // 2:
             return None
         options = []
         for index, move in enumerate(mon.moves):
@@ -602,15 +613,52 @@ class BattlePart:
             if not pp[index] or not entry.get('power') or entry.get('effect') not in {'EFFECT_NORMAL_HIT', 'EFFECT_FALSE_SWIPE'}:
                 continue
             special = entry['type'] >= 20
-            defense = enemy.stats[5 if special else 2]
+            defense = foe.stats[5 if special else 2]
             attack = mon.stats[4 if special else 1]
             factor = 1.5 if entry['type'] in self.data.species[mon.species]['types'] else 1
-            for kind in set(self.data.species[snapshot.enemy_species]['types']):
+            for kind in set(types):
                 factor *= self.data.matchups.get((entry['type'], kind), 1)
             damage = (((2 * mon.level // 5 + 2) * entry['power'] * attack / max(1, defense)) / 50 + 2) * factor
-            if entry.get('effect') == 'EFFECT_FALSE_SWIPE' or 0 < damage * 2.5 < snapshot.enemy_hp:
+            if entry.get('effect') == 'EFFECT_FALSE_SWIPE' or 0 < damage * 2.5 < foe.hp:
                 options.append((damage, index))
         return max(options)[1] if options else None
+
+    def leaves_wild(self, snapshot, species, level):
+        """Whether a catch of a wild ``species`` met at ``level`` would only run, judged before the trip:
+        long_odds would answer LEAVE as the battle opens, with the balls held now and the party healed
+        (planning.throws). The lead weakens with its own move as the battle does, so its paralysis
+        is followed by its plain hits, and the bench must also outlast the foe's strongest hit."""
+        from ...planning.throws import GEN2_BALLS, THROW_BAR, gen2_throw, wild_foe, wild_moves
+        from ..ledger import ONE_CHANCE
+        known = self.data.species.get(species)
+        if known is None or species in ONE_CHANCE:
+            return False
+        held = {self.data.item_names.get(item, '').casefold() for item, count in snapshot.pockets['balls'] if count}
+        ball = next((label for label in REGULAR_BALLS if label.casefold() in held), None)
+        if ball is None:
+            return False
+        hp, high, low = wild_foe(known['stats'], level)
+        if gen2_throw(known['catch_rate'], GEN2_BALLS.get(ball, 1), hp, hp, 0) >= THROW_BAR:
+            return False
+        foe = SimpleNamespace(species=species, hp=hp, max_hp=hp, status=0, stats=[hp, *high[1:]])
+        attacker = SimpleNamespace(species=species, level=level, stats=[hp, *low[1:]])
+        attacks = wild_moves(known['learnset'], level)
+        team = [mon for mon in snapshot.party if not mon.egg]
+        for slot, mon in enumerate(team):
+            pp = tuple(1 if move else 0 for move in mon.moves)
+            move = self.weakening_move(mon, pp, foe)
+            if slot == 0:
+                if (move is not None and self.data.moves.get(mon.moves[move], {}).get('effect') != 'EFFECT_PARALYZE'
+                        or self.weakening_move(mon, pp, SimpleNamespace(**{**vars(foe), 'status': PARALYZED})) is not None):
+                    return False
+                continue
+            target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.max_hp,
+                                     enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
+            if max((self.move_score(move, attacker, target) for move in attacks), default=0) >= mon.max_hp:
+                continue
+            if move is not None and self.data.moves.get(mon.moves[move], {}).get('effect') != 'EFFECT_PARALYZE':
+                return False
+        return True
 
     def battle_target(self, snapshot):
         enemy = self.reads.enemy
