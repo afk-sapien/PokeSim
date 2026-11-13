@@ -110,10 +110,26 @@ def test_the_patched_cartridge_lives_only_in_memory(monkeypatch):
     assert randomized.status() == {'code': 'PSR1-RED-S-1234', 'wild': False, 'starters': True, 'trainers': False}
 
 
+def test_route_22_rival_battle_finds_the_randomized_starter(monkeypatch):
+    # This share code froze Route 22's rival battle: the scan for the rival's starter ran past both party
+    # tables and loaded a party that does not exist. Charmander's slot picks trainer 6 or 12, Squirtle's
+    # 4 or 10 and Bulbasaur's 5 or 11, as in the clean game.
+    rom = red_rom()
+    monkeypatch.setenv(randomized.ENV, 'PSR1-RED-WST-4242')
+    patched = randomized.rom_stream(rom).getvalue()
+    starters = randomized.current(rom).effective.starters
+    for table, trainers in ((0x50FAF, [6, 4, 5]), (0x510D9, [12, 10, 11])):
+        keys = list(patched[table:table + 6:2])
+        assert set(starters) <= set(keys)
+        assert [patched[table + 2 * keys.index(species) + 1] for species in starters] == trainers
+
+
 # Recorded with pokecore 0.9.5 for the share code of a stored adventure. Core 0.10.0 changed the digest of
 # GameData.canonical(), which now holds the fishing tables. PokeSim stores and compares no canonical()
 # digest, only the share code, so an older adventure must still boot the same cartridge and plan with the
-# same wild and trainer tables.
+# same wild and trainer tables. The cartridge has since changed in one place: the starters are also written
+# into Route 22's rival party tables, and save states hold no cartridge bytes.
+ROUTE_22_STARTER_SITES = (0x50FAF, 0x50FB1, 0x50FB3, 0x510D9, 0x510DB, 0x510DD)
 BEFORE_0_10 = {'canonical': '6f1325b59eeeacb2ec8ddef1009f509d0a811e9787c8990e0c76bab38eff3fe1',
                'patched': '4b6ecb0584d0fbe86295b3ab38686ca5629a500ba53152af2a6efe403b8ce8b9',
                'encounters': '351710c52a26c8792b9aefc6bb51f389dc086c1cfb0ec8b173bae11b7d1b0df8',
@@ -130,7 +146,12 @@ def test_an_older_share_code_replays_the_same_run(monkeypatch):
     def digest(table):
         return hashlib.sha256(json.dumps(table, sort_keys=True).encode()).hexdigest()
 
-    assert hashlib.sha256(run.rom).hexdigest() == BEFORE_0_10['patched']
+    clean = rom.read_bytes()
+    recorded = bytearray(run.rom)
+    for site in ROUTE_22_STARTER_SITES:
+        recorded[site] = clean[site]
+    recorded[0x14E:0x150] = ((sum(recorded) - recorded[0x14E] - recorded[0x14F]) & 0xFFFF).to_bytes(2, 'big')
+    assert hashlib.sha256(recorded).hexdigest() == BEFORE_0_10['patched']
     assert digest(run.effective.encounters) == BEFORE_0_10['encounters']
     assert digest(run.effective.trainers) == BEFORE_0_10['trainers']
     # Only the canonical digest moved, and nothing in PokeSim keeps one.

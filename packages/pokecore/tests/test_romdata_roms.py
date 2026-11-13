@@ -15,6 +15,7 @@ import pytest
 
 from pokecore import randomizer, romdata
 from pokecore.cartridges import read_header
+from pokecore.rom import rom_offset
 
 DIGESTS = {
     'red': '7933d07df8b7f52219e174d27c9a40986284808b922dc3bee6ee52d7c6e6930b',
@@ -139,6 +140,36 @@ def test_patched_cartridge_reads_back_as_the_effective_data(version):
     assert header.header_checksum_ok and header.global_checksum_ok
     assert romdata.load(patched, version=version).canonical() == romdata.effective_data(rom, overrides).canonical()
     assert romdata.patch_rom(patched, version=version) == patched
+
+
+# Route 22's rival battle picks the rival's party with pret's Route22GetRivalTrainerNoByStarterScript,
+# which scans a (starter, trainer number) table for wRivalStarter with no end check. Its two tables
+# and the trainer numbers they hold for the three starters.
+ROUTE_22_SCAN = rom_offset(0x14, 0x4ED6)
+ROUTE_22_TABLES = {rom_offset(0x14, 0x4FAF): (4, 5, 6), rom_offset(0x14, 0x50D9): (10, 11, 12)}
+
+
+def _route_22_trainer(rom, table, rival_starter):
+    """The trainer number Route 22's scan picks for ``rival_starter``, or None if the scan leaves the table."""
+    for entry in range(0, 6, 2):
+        if rom[table + entry] == rival_starter:
+            return rom[table + entry + 1]
+    return None
+
+
+@pytest.mark.parametrize('version', ['blue', 'red'])
+def test_route_22_finds_every_randomized_starter(version):
+    rom = _rom(version)
+    # ld a, [wRivalStarter] / ld b, a / ld a, [hli] / cp b / jr z / inc hl
+    assert rom[ROUTE_22_SCAN:ROUTE_22_SCAN + 9] == bytes.fromhex('FA15D7472AB8280323')
+    data = romdata.load(rom)
+    clean = {table: [_route_22_trainer(rom, table, species) for species in data.starters] for table in ROUTE_22_TABLES}
+    starters = random.Random(version).sample([species for species in sorted(data.species)
+                                              if species not in data.starters], len(data.starters))
+    patched = romdata.patch_rom(rom, {'starters': starters})
+    for table, trainers in clean.items():
+        assert sorted(trainers) == list(ROUTE_22_TABLES[table])
+        assert [_route_22_trainer(patched, table, species) for species in starters] == trainers
 
 
 @pytest.mark.parametrize('version', sorted(DIGESTS))
