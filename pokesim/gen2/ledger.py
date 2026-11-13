@@ -593,7 +593,8 @@ def supplies(policy, snapshot):
 
 def spare_throw(data, snapshot, species):
     """Whether an ordinary catch may throw a ball, by the rule in planning/throws.py: a one-time
-    encounter, more than the last few balls, or money past the reservations to buy the floor back."""
+    encounter with a ball in the bag, more than the last few balls, or money past the reservations to
+    buy the floor back."""
     def restock():
         books = money_books(data, snapshot, sales=False)
         return books.reserve('throw', Need(money=price(data, 'POKE_BALL') * BALL_FLOOR)).ok
