@@ -205,6 +205,11 @@ class Preparation:
             return Action('b', 8, 32)
         if 'CHANGE BOX' in snapshot.text or 'Choose a' in snapshot.text or 'CANCEL' in snapshot.text:
             return Action('b', 8, 32)
+        # A start menu the policy opened, say to Fly, runs as a script. Pressing A on it opened the
+        # party screen, B closed that back to the start menu, and a live Silver trade looped there
+        # until its deadline.
+        if 'PACK' in snapshot.text and 'SAVE' in snapshot.text:
+            return Action('b', 8, 32)
         if '┌' in snapshot.tiles[12] or mem.byte('wScriptRunning'):
             return Action('a', 8, 32)
         if any(member.status for member in snapshot.party if not member.egg):
