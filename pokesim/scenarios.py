@@ -117,7 +117,7 @@ def apply_edits(mem, edits):
 
 
 # Gen II edits. Addresses come from the cartridge's symbol file and the layout from Core.
-GEN2_EDITS = ('party', 'money', 'unowned', 'clock', 'boxes', 'tower')
+GEN2_EDITS = ('party', 'money', 'unowned', 'clock', 'boxes', 'tower', 'returned')
 GEN2_PARTY = {'moves': 2, 'pp': 23, 'status': 32, 'hp': 34, 'max_hp': 36}
 # A box is its count, a species list of 20 and a terminator, then the structs, trainer names and nicknames.
 BOX_SPECIES, BOX_STRUCTS = 1, 22
@@ -254,6 +254,11 @@ def apply_gen2_edits(run, edits, reload=False):
         gen2_fill_boxes(run, *edits['boxes']['fill'])
     if edits.get('tower'):
         gen2_tower(run, edits['tower'].get('rested', False), edits['tower'].get('first', False))
+    # A legendary that came back is in the adventure's claims ledger, not in the save, and a replay has
+    # no ledger. Without it the dex shows the legendary as owned and the trip back is never offered.
+    # A reload goes back to before any catch, so the edit is repeated.
+    if edits.get('returned'):
+        run.policy.returned = {int(dex) for dex in edits['returned']}
 
 
 @dataclass
@@ -268,9 +273,9 @@ class Scenario:
     battle_timeout_game_minutes: int = 30
     max_reloads: int = 2
     # An event type that must happen, such as badge or champion. Both generations also mark a new
-    # Pokédex entry (owned) and a stand-down (stand_down), and Gen II a timed hunt (timed_hunt) and a
-    # ladder pick (rung). Add a colon and a detail to name one, as in owned:61, timed_hunt:191 or
-    # stand_down:tower:room.
+    # Pokédex entry (owned) and a stand-down (stand_down), and Gen II a timed hunt (timed_hunt), a
+    # ladder pick (rung) and a static legendary battle (legend). Add a colon and a detail to name one,
+    # as in owned:61, timed_hunt:191, legend:249 or stand_down:tower:room.
     until: str | None = None
     # Game minutes to keep playing after ``until``, in which ``then`` must happen if it is set.
     after_game_minutes: int = 0
@@ -473,6 +478,7 @@ class Gen2Watch(PlannerMarks):
         # A reload restores the policy, so the marks count from what it holds now.
         self.rung, self.timed = getattr(policy, 'ladder_rung', None), None
         self.collection = collection
+        self.fought = None
         self.reset_marks()
 
     def stand_downs(self):
@@ -480,14 +486,14 @@ class Gen2Watch(PlannerMarks):
         return (getattr(policy, 'monitor_tables', None) or {}).get('stood_down') or {}
 
     def marks(self, snapshot=None):
-        """What the planner just did, as (kind, detail, title): a ladder pick, a timed hunt, a Pokédex
-        entry or a stand-down.
+        """What the planner just did, as (kind, detail, title): a ladder pick, a timed hunt, a static
+        legendary battle, a Pokédex entry or a stand-down.
 
         These are not progress. A scenario can wait for one, and the same goal standing down more than
         three times in a row is a retry loop, which ``loop`` names.
         """
         policy = self.run.policy
-        found = []
+        found = self.legend_marks(snapshot)
         rung = getattr(policy, 'ladder_rung', None)
         if rung != self.rung and rung is not None:
             found.append(('rung', rung, f'The ladder picked {rung}'))
@@ -499,6 +505,19 @@ class Gen2Watch(PlannerMarks):
             found.append(('timed_hunt', str(timed[0]), f'Hunting {name} in the {timed[1]}'))
         self.timed = timed
         return found + self.shared_marks(snapshot)
+
+    def legend_marks(self, snapshot):
+        """Lugia, Ho-Oh or Crystal's Suicune met in its room: the script sets the fought flag as the
+        battle starts. A returned legendary is already in the Pokédex, so no owned mark shows the trip."""
+        if snapshot is None or not snapshot.valid or not snapshot.started:
+            return []
+        from .gen2.returns import STATICS
+        events = self.run.data.events
+        fought = {dex for dex, (_, (flag, _)) in STATICS.items() if flag in events and snapshot.event(flag)}
+        found = [] if self.fought is None else [
+            ('legend', str(dex), f'Met {self.run.data.species[dex]["name"]}') for dex in sorted(fought - self.fought)]
+        self.fought = fought
+        return found
 
     def observe(self, snapshot):
         if not snapshot.valid or not snapshot.started:

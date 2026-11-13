@@ -175,6 +175,36 @@ def test_the_tower_room_stand_down_is_not_a_level_cap():
     assert tower.resting_caps(policy) == {50}
 
 
+def test_the_returned_edit_names_the_legendaries_that_came_back_again_after_a_reload():
+    # The claims ledger a replay lacks held them, so the dex alone made the trip back look done.
+    run = crystal_run()
+    run.policy.returned = set()
+    apply_gen2_edits(run, {'returned': [249]})
+    assert run.policy.returned == {249}
+    run.policy.returned = set()                                    # the catch took it off
+    apply_gen2_edits(run, {'returned': [249]}, reload=True)
+    assert run.policy.returned == {249}
+
+
+def test_the_watch_marks_a_static_legendary_met_in_its_room():
+    run = crystal_run()
+    run.data.events = {'EVENT_FOUGHT_LUGIA': 1, 'EVENT_FOUGHT_HO_OH': 2}   # Gold and Silver have no Suicune flag
+    run.data.species[249] = {'name': 'Lugia'}
+    flags = {'EVENT_FOUGHT_HO_OH'}
+    snapshot = SimpleNamespace(valid=True, started=True, owned={249, 250}, event=lambda flag: flag in flags)
+    watch = Gen2Watch(run)
+    assert watch.marks(snapshot) == []                              # fought before the checkpoint
+    flags.add('EVENT_FOUGHT_LUGIA')
+    assert watch.marks(snapshot) == [('legend', '249', 'Met Lugia')]
+    assert watch.marks(snapshot) == []
+    flags.discard('EVENT_FOUGHT_LUGIA')                             # a reload goes back to before the battle
+    watch.reset()
+    assert watch.marks(snapshot) == []
+    flags.add('EVENT_FOUGHT_LUGIA')
+    assert watch.marks(snapshot) == [('legend', '249', 'Met Lugia')]
+    assert matches('legend:249', 'legend', '249') and not matches('legend:250', 'legend', '249')
+
+
 def test_gen2_scenarios_refuse_an_edit_they_do_not_have():
     with pytest.raises(ValueError, match='items'):
         apply_gen2_edits(crystal_run(), {'items': {'POTION': 0}})
@@ -220,7 +250,7 @@ class Run:
         self.frame, self.script = 0, script
         self.policy = SimpleNamespace(collection={}, monitor_tables={'stood_down': {}}, ladder_rung=None, recoveries=0,
                                       details=lambda: {'reason': 'test'})
-        self.data = SimpleNamespace(species={})
+        self.data = SimpleNamespace(species={}, events={})
         self.history = {}
 
     def read(self):
