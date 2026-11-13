@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.1
+
+### Fixed
+
+- `romdata.layouts` lists the species keys of Route 22's two rival party tables among the
+  Red and Blue starter sites, so a patch that randomizes the starters rewrites them too.
+  Route 22 scans those tables for the rival's starter with no end check, and a starter
+  missing from them ran the scan off the table and froze the battle.
+
 ## 0.12.0
 
 ### Added
