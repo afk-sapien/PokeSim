@@ -22,3 +22,7 @@ class Conflict(ValueError):
 
 class Refused(RuntimeError):
     """PokeSim cannot do this now, for example while it shuts down or while a worker is stopped."""
+
+
+class NotReady(Refused):
+    """A worker did not report ready before its start timed out. A slow host can cause this alone."""

@@ -3,6 +3,7 @@ import threading
 
 import pytest
 
+from pokesim.app.errors import NotReady, Refused
 from pokesim.app.registry import Registry, identifier
 from pokesim.app.supervisor import Supervisor
 
@@ -334,12 +335,70 @@ def test_readiness_timeout_names_the_last_cause_and_the_log_not_forty_lines(tmp_
     bootstrap = {'token': 't', 'generation': 1, 'adventure_id': 'a', 'settings': {'data_dir': str(tmp_path)}}
     child = Child(bootstrap, command=[sys.executable, '-c', script])
     child.ready = TimesOutOnceTheCauseIsLogged(maxsize=1)
-    with pytest.raises(RuntimeError) as caught:
+    with pytest.raises(NotReady) as caught:
         child.start(timeout=1.5)
     message = str(caught.value)
+    assert message.startswith('Worker was not ready after 1.5 seconds')
     assert 'ROM header checksum is wrong' in message
     assert str(tmp_path / 'logs' / 'worker.log') in message
     assert 'noise 10' not in message and ' | ' not in message and len(message) < 400
+
+
+def booted(tmp_path, monkeypatch, failures):
+    """Run the app's startup over one adventure that should run. Its worker starts raise `failures` in turn."""
+    from pokesim.app.manager import Manager
+    children = []
+
+    class BootChild(FakeChild):
+        def start(self):
+            children.append(self)
+            if failures:
+                # A real Child stops its own process before a failed start raises.
+                self.stop()
+                raise failures.pop(0)
+            super().start()
+
+    manager = Manager(tmp_path, child_factory=BootChild)
+    manager.registry.add_rom('rom', 'sha1', 'red')
+    aid = manager.registry.create('Red', 'rom', {'starter': 'random'}, identifier())['id']
+    manager.registry.request_lifecycle(aid, 'start', identifier())
+    (tmp_path / 'fixture.gb').write_bytes(b'fake')
+    monkeypatch.setattr(manager.assets, 'rom_path', lambda rid: tmp_path / 'fixture.gb')
+    monkeypatch.setattr(manager.assets, 'prepare', lambda report: tmp_path)
+    monkeypatch.setattr(manager.assets, 'install_portraits', lambda raw: 0)
+    # Only the startup loop over the adventures is under test, so the background loops stay off.
+    for owner, name in ((manager.watchdog, 'install'), (manager.watchdog, 'run'),
+                        (manager.supervisor, 'run_monitor'), (manager.coordinator, 'start_scheduler')):
+        monkeypatch.setattr(owner, name, lambda: None)
+    try:
+        manager.start()
+        return manager.registry.adventure(aid), children, manager.supervisor.children.get(aid)
+    finally:
+        manager.close()
+
+
+def not_ready():
+    return NotReady('Worker was not ready after 45 seconds (still running). Last output: none.')
+
+
+def test_a_startup_start_that_was_not_ready_in_time_starts_once_more(tmp_path, monkeypatch):
+    row, children, running = booted(tmp_path, monkeypatch, [not_ready()])
+    assert row['state'] == 'running' and row['error'] is None
+    assert len(children) == 2 and running is children[1]
+    assert children[0].stops == 1 and children[1].starts == 1
+
+
+def test_a_startup_start_not_ready_twice_fails_the_adventure(tmp_path, monkeypatch):
+    row, children, running = booted(tmp_path, monkeypatch, [not_ready(), not_ready()])
+    assert row['state'] == 'failed' and 'not ready after 45 seconds' in row['error']
+    assert len(children) == 2 and running is None
+    assert all(child.stops == 1 for child in children)
+
+
+def test_a_startup_start_that_fails_another_way_is_not_tried_again(tmp_path, monkeypatch):
+    row, children, running = booted(tmp_path, monkeypatch, [Refused('Worker exited before becoming ready')])
+    assert row['state'] == 'failed' and row['error'] == 'Worker exited before becoming ready'
+    assert len(children) == 1 and running is None
 
 
 def test_a_worker_that_fails_to_start_reports_why_instead_of_a_bare_exit(tmp_path):
