@@ -216,9 +216,12 @@ def test_gen2_a_hunt_whose_catch_keeps_the_last_balls_is_not_feasible():
     policy.collection = {'target': {'species': 177}}
     assert collection.hunt_blocked(policy, snapshot) is collection.NO_SPARE_BALL
     assert str(collection.NO_SPARE_BALL) == 'needs more than 3 Poké Balls or the money to buy more'
-    # A species met only once still gets the hunt, and so does a run with money for the floor.
-    policy.collection = {'target': {'species': 130}}
+    # A species met only once still gets the hunt, and so does a run with money for the floor. A wild
+    # Gyarados is met again, so its hunt keeps the last balls like any other.
+    policy.collection = {'target': {'species': 143}}
     assert collection.hunt_blocked(policy, snapshot) is None
+    policy.collection = {'target': {'species': 130}}
+    assert collection.hunt_blocked(policy, snapshot) is collection.NO_SPARE_BALL
     policy.collection = {'target': {'species': 177}}
     snapshot.money = 1200
     assert collection.hunt_blocked(policy, snapshot) is None
