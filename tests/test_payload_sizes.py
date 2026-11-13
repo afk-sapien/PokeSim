@@ -109,8 +109,8 @@ def test_live_view_trims_the_plan_to_what_the_live_page_draws(tmp_path, monkeypa
 def test_live_page_asks_for_the_live_view_and_reads_only_its_plan_fields():
     text = (STATIC / 'app.js').read_text()
     assert "'/api/state?view=live'" in text
-    read = set(re.findall(r'\bstrategy\??\.([a-z_]+)', text + (STATIC / 'next-activity.js').read_text()))
-    assert {'objective', 'pin', 'collection'} <= read
+    read = set(re.findall(r'\bstrategy\??\.([a-z_]+)', text))
+    assert {'objective', 'collection'} <= read
     assert read <= set(web.LIVE_PLAN_FIELDS) | {'collection'}, read - set(web.LIVE_PLAN_FIELDS)
     assert set(re.findall(r'\bcollection\??\.([a-z_]+)', text)) == {'version'}
 

@@ -122,17 +122,7 @@ A previously silent save may need the next music change before all channels play
 | `/api/pokedex/status` | JSON: Pokédex, party, boxes and collection plan in full. `?view=pc` leaves out the plan, and with `&values=0` also the PC values, which wait on the game; `?view=dex` keeps only who holds each species |
 | `/api/events` | JSON event list (`limit`, `all`, `types`, `min_priority`, `before`) |
 | `/api/progress` | JSON history of badges, Pokédex owned and seen, League wins, level 100 species and perfect finds, one row per change |
-| `/api/goals` | JSON: the best 30 goals the planner can start now, best first, as `key`, `label` and `tier`, with the active `pin` and a `reason` when the list is empty. Each goal is listed once under its best ranked way to do it. `?q=` lists the goals whose label holds that text. A view link cannot read it |
-| `/api/control` | POST an `action` and optional `value`. Actions: `pause`, `resume`, `take_control`, `save`, `restart`, `speed`, `load_state`, `press`, `pin_goal`, `unpin_goal` |
-
-`pin_goal` takes a `key` from `/api/goals` as its `value` and sets it as the next
-activity. The planner runs that goal once, after any upkeep such as healing, and then
-goes back to its own order. Nothing is queued behind it. A key that is not on the list
-now is refused with 409 and the reason, and nothing changes. The pin clears when the goal
-ends, on `unpin_goal`, when a save loads and when the game restarts. A stuck run drops it
-and writes "Gave up on" the goal to the journal. `/api/state` shows it as `strategy.pin`.
-Red, Blue and Yellow offer goals once the Champion is beaten. Gold, Silver and Crystal
-offer them once Red is beaten.
+| `/api/control` | POST an `action` and optional `value`. Actions: `pause`, `resume`, `take_control`, `save`, `restart`, `speed`, `load_state`, `press` |
 
 ## Notifications
 
@@ -332,18 +322,6 @@ gifts placed in a box keep their species names too. Player and rival naming is n
 The switch applies at once, including while the adventure runs. The same happens when the
 saved Library nickname pool leaves no names, for example after unchecking every built-in
 word and name. A Library that never saved a pool uses the built-in names.
-
-Each adventure also has a Play style, Balanced by default. Balanced plays as before. Story
-first ranks filler side projects, such as an optional TM purchase, below the planned story
-and Pokédex goals, so they wait until nothing else is left. Optional upgrades such as
-training already wait for new entries in every style. Collector ranks collection hunts,
-better DV copies and repeat catches, with new Pokédex entries, so they compete on value per
-frame instead of waiting behind training and races. Collection hunts begin once the Champion
-is beaten. A hunt offered earlier would rank with new entries only for a species catchable
-now, and a story goal would win a tie. Story and upkeep
-goals, such as healing, never move in any style. The style applies at once, including while
-the adventure runs, through the same `PATCH /api/v1/adventures/{aid}/play` route as the
-Nicknames switch.
 
 New strategic adventures also choose a random starter. The choice is saved before the
 Pokémon is received, so restoring a checkpoint does not reroll it. `STARTER` selects a

@@ -117,7 +117,7 @@ So an endless hunt cannot starve the rest. It runs only while it is first among 
 
 ## 5. Goals with targets (slice 2)
 
-Today the page already sends a target. `web/static/next-activity.js:215-221` adds `target {species, stop}` for a goal that lists species and stop rules. No listing sends those fields yet, and the `Control` model (`web/app.py:202-204`) has only `action` and `value`, so the server drops the target without a word.
+The Next activity picker, taken off the page before 0.7.0, sent a target. Its `web/static/next-activity.js` added `target {species, stop}` for a goal that lists species and stop rules (git history before the 0.7.0 release). No listing sends those fields yet, and the `Control` model (`web/app.py:202-204`) has only `action` and `value`, so the server drops the target without a word.
 
 Slice 2 builds the part of goal system PR 8 the queue needs:
 

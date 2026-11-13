@@ -100,25 +100,15 @@ def test_a_higher_tier_wins_and_a_lower_rung_is_not_asked():
     assert picked(rungs) == 'rod' and not asked
 
 
-def test_the_collector_style_asks_a_hunt_rung_below_the_pick_and_ranks_it_with_progress(monkeypatch):
-    from pokesim import config
-    from pokesim.planning.arbiter import HUNT_POSTGAME
-    hunt = (Tier.FILLER, values.NEW_ENTRY, 1, HUNT_POSTGAME)
-    for style, expected in (('balanced', 'train'), ('story', 'train'), ('collector', 'postgame')):
-        monkeypatch.setattr(config, 'PLAY_STYLE', style)
+def test_a_hunt_rung_below_the_pick_is_not_asked():
+    hunt = (Tier.FILLER, values.NEW_ENTRY, 1)
+    for first, tier in (('train', Tier.UPGRADE), ('story', Tier.STORY)):
         owner = policy()
         rungs = ladder(owner)
-        asked = []
-        rungs.offer('train', Tier.UPGRADE, values.SMALL, 10 ** 6, lambda: goal('train', 'FAR'))
-        rungs.offer('postgame', Tier.FILLER, values.SMALL, 1, lambda: asked.append(style) or goal('quality'),
+        rungs.offer(first, tier, values.SMALL, 10 ** 6, lambda: goal(first, 'FAR'))
+        rungs.offer('postgame', Tier.FILLER, values.SMALL, 1, lambda: pytest.fail('asked'),
                     price=lambda found: hunt)
-        assert picked(rungs) == expected and bool(asked) == (style == 'collector')
-    # Under Collector a rung of a lower tier is still not asked once the pick is a story goal.
-    owner = policy()
-    rungs = ladder(owner)
-    rungs.offer('story', Tier.STORY, values.NEW_ENTRY, 10 ** 6, lambda: goal('story', 'FAR'))
-    rungs.offer('postgame', Tier.FILLER, values.SMALL, 1, lambda: pytest.fail('asked'), price=lambda found: hunt)
-    assert picked(rungs) == 'story'
+        assert picked(rungs) == first
 
 
 def test_a_rung_that_offers_nothing_keeps_its_stand_down():

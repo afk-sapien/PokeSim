@@ -171,6 +171,8 @@ class Registry:
         item = dict(row)
         for key in ('settings', 'summary', 'provenance'):
             item[key] = json.loads(item[key])
+        from ..runtime.settings import without_retired
+        item['settings'] = without_retired(item['settings'])
         item['archived'] = bool(item['archived'])
         item['url'] = f"/games/{item['id']}/"
         return item

@@ -115,7 +115,7 @@ class Ballot:
         if running is None:
             return Candidate(key, Tier.UPKEEP, values.SMALL, frames, goal=kind)
         held = running.candidate
-        return Candidate(key, held.tier, max(held.value, values.SMALL), frames, hunt=held.hunt, goal=kind)
+        return Candidate(key, held.tier, max(held.value, values.SMALL), frames, goal=kind)
 
     def errand(self, goal, site, commit=None):
         """Offer ``goal``, a short errand from ``site``, and return the goal that runs now."""

@@ -19,7 +19,7 @@ from .navigation import DIRS
 from .director import AdventureDirector, category, new_entry
 from ..planning import values
 from ..planning import arbiter, catalogue, decide, pin, throws
-from ..planning.arbiter import NOT_HUNT, Candidate, Tier, hunt
+from ..planning.arbiter import Candidate, Tier
 from ..planning import cost
 from ..planning.cost import FRAMES_PER_TILE
 from ..planning.shadow import Shadow
@@ -169,7 +169,7 @@ def training_frames(project):
     return max(0, needed) * FRAMES_PER_EXPERIENCE
 
 
-def candidate(project, travel, tails, short, owned, wild=None, champion=False):
+def candidate(project, travel, tails, short, owned, wild=None):
     """The arbiter's candidate for a project.
 
     Values come from planning/values.py. Expected frames are the walk to the project at the shared
@@ -178,12 +178,9 @@ def candidate(project, travel, tails, short, owned, wild=None, champion=False):
     quality hunt is worth each catch's expected drop in the species' best DV tail, once per catch. A
     hunt for another copy of a registered species sits in HUNT_TIER, below training for a credit.
     A due marathon sits in Tier.RACE, after new entries and before training. It is only offered once due.
-    A hunt is marked for the Collector style. ``champion`` says whether the Champion is beaten, and a
-    project with a walk to it is catchable now, since the collection offers only sources open now.
     """
     method, sid = project['method'], project.get('species')
     tier = Tier.PROGRESS
-    kind = NOT_HUNT
     if method == 'rematch':
         tier = Tier.UPKEEP if short else Tier.FILLER
         value = values.rematch(short)
@@ -204,11 +201,8 @@ def candidate(project, travel, tails, short, owned, wild=None, champion=False):
         value = values.NEW_ENTRY
     elif project.get('dv_hunt') and tails.get(sid) is not None:
         tier, value = HUNT_TIER, values.quality_catch(tails[sid] / 100) * project.get('catch_goal', 1)
-        kind = hunt(champion, travel is not None)
     else:
         tier, value = (HUNT_TIER if project.get('repeat') else Tier.UPGRADE), values.SMALL
-        if project.get('repeat'):
-            kind = hunt(champion, travel is not None)
     if method == 'train':
         frames = training_frames(project)
     elif method == 'marathon':
@@ -216,7 +210,7 @@ def candidate(project, travel, tails, short, owned, wild=None, champion=False):
     else:
         frames = kind_frames(project, wild)
     frames += (travel or 0) * FRAMES_PER_TILE
-    return Candidate(project.get('key', method), tier, value, frames, hunt=kind, goal=shadow_kind(project))
+    return Candidate(project.get('key', method), tier, value, frames, goal=shadow_kind(project))
 
 
 def boxed_trainee(project):
@@ -1498,8 +1492,7 @@ class Collection:
             add({'method': 'return_fossil', 'map': fossil['room'], 'item': fossil['item'],
                  'event_return': 'fossil'})
         projects = {project['key']: project for project in candidates}
-        priced = [candidate(project, travel.get(project['key']), best_tails, short, s.owned, self.wild,
-                            champion=self.completed_champion)
+        priced = [candidate(project, travel.get(project['key']), best_tails, short, s.owned, self.wild)
                   for project in candidates]
         options = party_first(priced, projects)
         if skipped is not None:

@@ -7,25 +7,26 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from ..planning.arbiter import PLAY_STYLES
-
 
 # Per-adventure play settings and their defaults. They change while the adventure runs
 # through PATCH /api/v1/adventures/{aid}/play, and a default is stored as absent.
-PLAY_SETTINGS = {'nicknames': True, 'play_style': 'balanced'}
-# The values a play setting may take, for those that are not a switch.
-PLAY_CHOICES = {'play_style': PLAY_STYLES}
+PLAY_SETTINGS = {'nicknames': True}
+# Settings an earlier release stored that this one no longer has. An adventure that still holds one
+# opens and plays as if it were absent.
+RETIRED_SETTINGS = frozenset({'play_style'})
+
+
+def without_retired(values):
+    """``values`` without the settings in RETIRED_SETTINGS."""
+    return {name: value for name, value in values.items() if name not in RETIRED_SETTINGS}
 
 
 def validate_play_settings(values):
-    """Check a play settings change. A switch must be a boolean and a choice one of its values."""
+    """Check a play settings change. Each value must have its default's type."""
     if not isinstance(values, dict) or not values or set(values) - set(PLAY_SETTINGS):
         raise ValueError(f'Change only these play settings: {", ".join(PLAY_SETTINGS)}')
     for name, value in values.items():
-        if name in PLAY_CHOICES:
-            if not isinstance(value, str) or value not in PLAY_CHOICES[name]:
-                raise ValueError(f'{name} must be one of {", ".join(PLAY_CHOICES[name])}')
-        elif type(value) is not type(PLAY_SETTINGS[name]):
+        if type(value) is not type(PLAY_SETTINGS[name]):
             raise ValueError(f'{name} must be a boolean')
     return values
 
@@ -43,7 +44,6 @@ class SimulationSettings:
     game_data_dir: str
     public_url: str = 'http://127.0.0.1:8000'
     nicknames: bool = True
-    play_style: str = 'balanced'
     nickname_prefixes: tuple[str, ...] = ()
     nickname_suffixes: tuple[str, ...] = ()
     nickname_names: tuple[str, ...] = ()
@@ -116,7 +116,7 @@ class SimulationSettings:
         if self.seed is not None and type(self.seed) is not int:
             raise ValueError('seed must be an integer or null')
         for name, choices in {'fossil_preference': {'auto', 'helix', 'dome', 'amber'},
-                              'dojo_preference': {'auto', 'hitmonlee', 'hitmonchan'}, **PLAY_CHOICES}.items():
+                              'dojo_preference': {'auto', 'hitmonlee', 'hitmonchan'}}.items():
             if not isinstance(getattr(self, name), str) or getattr(self, name) not in choices:
                 raise ValueError(f'Unknown {name}')
         ranges = {
@@ -155,6 +155,7 @@ class SimulationSettings:
     def from_dict(cls, values):
         if not isinstance(values, dict):
             raise ValueError('settings must be an object')
+        values = without_retired(values)
         unknown = set(values) - {field.name for field in fields(cls)}
         if unknown:
             raise ValueError(f'Unknown settings: {", ".join(sorted(unknown))}')
