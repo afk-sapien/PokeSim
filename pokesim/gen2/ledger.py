@@ -255,7 +255,8 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
     needs a free party slot and a bag entry, so it is chosen only when both are free. A spare holding
     an item some plan wants goes only that way, unless the party and every box are full so the item
     can never come off. It then goes with its item while the bag or another Pokémon keeps a copy, so a
-    full box frees a slot as it does in Red, Blue and Yellow.
+    full box frees a slot as it does in Red, Blue and Yellow. A shiny spare goes after every plain spare,
+    whatever the plain spares hold.
     """
     from ..planning.ledger import box_wanted
     from ..pcvalue import deadlocked, queue, releases, requested
@@ -272,7 +273,7 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
     bag = dict(snapshot.pockets.get('items', ()))
     sealed = len(snapshot.party) >= PARTY_SIZE and headroom(snapshot) == 0
     holders = Counter(row.held_item for row in snapshot.party + snapshot.stored if row.held_item)
-    rows = []
+    rows, plain, shinies = [], set(), set()
     for rank, row in enumerate(queue(rated)):
         mon = row.entry.record
         if not allowed(mon):
@@ -285,6 +286,8 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
         else:
             worth = len(visit) + row.score + (KEPT if row.status == 'kept' else 0)
         base = PLAIN + worth + moved(snapshot, mon)
+        if row.status == 'spare' and not row.entry.requested:
+            (shinies if any(label == 'Shiny' for label, _ in row.parts) else plain).add(key)
         if not mon.held_item:
             rows.append(Unit(key, BOX, base, 'release', detail=mon, order=(0, rank)))
             continue
@@ -302,7 +305,14 @@ def box_units(policy, snapshot, allowed=lambda mon: True):
         need = needs(data, snapshot, mon.held_item)
         rows.append(Unit(key, BOX, HELD + base, 'unequip', needs=Need(pocket_slots=need.pocket_slots, party_slots=1),
                          detail=mon, order=(1, rank)))
-    return rows
+    # A shiny goes only once every plain spare is gone (pcvalue.WEIGHTS). A held item adds its price to
+    # a plain spare, which put a shiny with no item ahead of it, so the shiny spares move past the
+    # dearest plain spare and keep their own order.
+    dearest = max((unit.value for unit in rows if unit.key in plain), default=None)
+    cheapest = min((unit.value for unit in rows if unit.key in shinies), default=None)
+    if dearest is None or cheapest is None or cheapest > dearest:
+        return rows
+    return [replace(unit, value=unit.value + dearest - cheapest + 1) if unit.key in shinies else unit for unit in rows]
 
 
 def unequip_key(mon):

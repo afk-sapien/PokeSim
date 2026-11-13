@@ -283,6 +283,29 @@ def test_a_full_party_and_full_boxes_let_a_wanted_item_go_while_a_copy_stays():
     assert ledger.storage_unit(Policy(), snapshot([BEST, plain, stone, other], FULL)).detail == plain
 
 
+PEARL = 110
+
+
+def test_a_shiny_spare_goes_after_a_plain_spare_holding_a_dear_item():
+    # The plain spare's Pearl costs more than the shiny's score, and a full party cannot take it off.
+    # A shiny with no item still goes only once every plain spare is gone (pcvalue.WEIGHTS).
+    from pokesim.gen2.release import release_rated
+    policy = Policy()
+    policy.data.item_attributes[PEARL] = {'price': 1400, 'pocket': 'ITEM'}
+    shiny, other = mon(1, dvs=(0, 14, 10, 10, 10)), mon(4, dvs=(0, 6, 10, 10, 10))
+    pearl = mon(2, held_item=PEARL)
+    stored = [BEST, shiny, pearl, mon(3, dvs=(8, 15, 10, 10, 10)), other]
+    # With room left the visit takes one spare. With every box full it takes all three.
+    for view in (roomy(snapshot(stored, FULL)), snapshot(stored, FULL)):
+        status = {row.entry.slot: row.status for row in release_rated(policy, view)}
+        assert status[0, 1] == status[0, 4] == 'spare'
+        units = ledger.box_units(policy, view)
+        dearest = max(unit.value for unit in units if unit.detail is pearl)
+        assert all(unit.value > dearest for unit in units if unit.detail in (shiny, other))
+        unit = ledger.storage_unit(policy, view)
+        assert (unit.action, unit.detail) == ('release', pearl)
+
+
 def test_the_last_wanted_item_stays_and_a_free_slot_keeps_the_unequip_route():
     stone, other = mon(3, held_item=EVERSTONE), mon(4, species=19, held_item=EVERSTONE)
     # The only Everstone never leaves.
