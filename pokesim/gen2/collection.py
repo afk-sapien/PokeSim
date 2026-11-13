@@ -286,13 +286,14 @@ PEER_STORE = 'peer_store'
 PEER_STORE_OPS = 8
 
 
-def peer_store_slots(policy, snapshot):
+def peer_store_slots(policy, snapshot, *, trainee=True):
     """Party slots holding a Pokémon to box so a peer can be offered it, best choice first.
 
     Gen II offers only boxed Pokémon, so a stone evolution made for a peer, or a trade-evolved or
     peer-requested arrival, can sit in the party for good and never reach the peer. The lead, the
     trainee, the Exp. Share holder, plan partners and the only holder of a field move stay (see
     hatch_spares). A trained, shiny or perfect partner stays too, since it would not be offered.
+    With ``trainee`` False the trainee counts as it would once a hunt is picked over its training.
     """
     from ..milestones import is_perfect
     from ..shiny import is_shiny
@@ -301,7 +302,7 @@ def peer_store_slots(policy, snapshot):
     if not demand and not any(not mon.egg and mon.species in trade_targets(policy.data) for mon in snapshot.party[1:]):
         return []
     result = []
-    for slot in hatch_spares(policy, snapshot):
+    for slot in hatch_spares(policy, snapshot, trainee=trainee):
         mon = snapshot.party[slot]
         record = {'dvs': list(mon.dvs)}
         if ((demand.get(mon.species) or mon.species in trade_targets(policy.data))

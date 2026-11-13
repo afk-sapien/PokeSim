@@ -296,6 +296,38 @@ def test_a_copy_for_trade_is_hunted_only_while_no_kept_copy_would_go_for_it(monk
     assert supply_room(policy, roomy) and hunt_wanted(policy, roomy)(79)
 
 
+def test_a_copy_for_trade_counts_the_room_left_once_the_hunt_boxes_the_trainee(monkeypatch):
+    from pokesim.gen2.collection import peer_store_slots
+    from pokesim.gen2.release import supply_room
+    monkeypatch.setattr('pokecore.gen2.breeding.breeding_stock', lambda data, species: set())
+    names = {6: 'Charizard', 14: 'Kakuna', 16: 'Pidgey', 19: 'Rattata', 79: 'Slowpoke'}
+    policy = SimpleNamespace(data=SimpleNamespace(species={dex: {'name': name} for dex, name in names.items()},
+                                                  items={'EXP_SHARE': 57}, game='crystal'),
+                             demand={14: 1, 16: 1, 79: 1}, trade_preferences=lambda: {},
+                             collection={'training': {'identity': [7726, [11, 13, 14, 3, 11]]}})
+    lead = mon(6, box=None, level=100, moves=(19, 53))
+    kakuna = dict(trainer_id=7726, dvs=(11, 13, 14, 3, 11), level=9, moves=(40, 81))
+    stored = [mon(79, position=19), mon(16, position=0), mon(16, position=1), mon(19, position=2), mon(19, position=3)]
+
+    def view(party, boxed, free):
+        held = snapshot(stored + boxed, party, boxes=(20,) * 13 + (20 - free,))
+        return SimpleNamespace(**vars(held), owned=frozenset(names))
+
+    # A Gold run withdrew a Kakuna, which a linked adventure asks for, to train it. The slot it left
+    # was the one the visit reserve wanted, so a copy for trade was hunted. The picked hunt dropped the
+    # training and boxed the Kakuna for the peer, and the slot was gone again. Counted after that
+    # boxing, the room is the same with the Kakuna out or in.
+    training = view([lead, mon(14, box=None, **kakuna)], [], free=6)
+    assert peer_store_slots(policy, training) == [] and peer_store_slots(policy, training, trainee=False) == [1]
+    assert not supply_room(policy, training)
+    assert not supply_room(policy, view([lead], [mon(14, position=4, **kakuna)], free=5))
+    # One more free slot is room either way.
+    assert supply_room(policy, view([lead, mon(14, box=None, **kakuna)], [], free=7))
+    # A trainee no peer asks for stays in the party, so it takes no box slot.
+    policy.demand = {16: 1, 79: 1}
+    assert supply_room(policy, training)
+
+
 def test_a_copy_with_known_dvs_is_kept_only_when_twice_as_rare(monkeypatch):
     from pokesim.gen2.release import keeps_another
     from pokesim.rarity import generic

@@ -225,12 +225,19 @@ def keeps_another(policy, snapshot, dex, level=5, dvs=None):
 def supply_room(policy, snapshot):
     """Whether one more copy for a linked adventure fits without a kept copy going for it: the boxes
     keep their reserve, or the PC visit the catch brings releases only spares and the owner's
-    requests. A copy kept for a plan or for trade that went would only be caught again."""
+    requests. A copy kept for a plan or for trade that went would only be caught again.
+
+    The room is counted once the hunt's own trip has boxed what peer_store boxes, its trainee included,
+    since a picked hunt drops the training. Counted before, a Gold run withdrew a Kakuna to train, which
+    freed the slot the hunt needed, so the hunt was picked, boxed the Kakuna and lost the slot again.
+    Training and the hunt took turns every minute for nearly three hours."""
     from ..pcvalue import catch_visit, releases, requested
+    from .collection import peer_store_slots
     if not hasattr(snapshot, 'box_counts'):
         return True
     rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
-    needed = catch_visit(headroom(snapshot), len(requested(rated)))
+    boxed = len(peer_store_slots(policy, snapshot, trainee=False)) if len(getattr(snapshot, 'party', ())) > 1 else 0
+    needed = catch_visit(headroom(snapshot) - boxed, len(requested(rated)))
     return not any(row.status == 'kept' and not row.entry.requested
                    for row in releases(rated, needed, getattr(snapshot, 'active_box', None)))
 
