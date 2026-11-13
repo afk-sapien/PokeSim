@@ -1,8 +1,11 @@
 """Postgame gifts and legendary encounters driven by cartridge quest flags."""
+from dataclasses import replace
+
 from .menus import ChangeBox, FieldMove, ShowPartner, Storage, Teach
 from .standdown import stand_down, standing_down
 from . import kinds
 from ..planning.ledger import FIELD_MOVES
+from ..planning.stance import HUNT
 
 
 # The Burned Tower rock stands down for a while when no party member can smash it.
@@ -112,10 +115,11 @@ def legends(policy, snapshot, Goal):
                 if not snapshot.event(f'EVENT_BEAT_SAGE_{trainer}'):
                     return policy.person(snapshot, 'sage_' + trainer.lower(), 'Pass the Wise Trio’s test',
                                          'WISE_TRIOS_ROOM', 'TrainerSage' + trainer.title())
-        return static_lead(policy, snapshot, 245, Goal) or Goal('legend_suicune', 'Meet Suicune at the Tin Tower', 'TIN_TOWER_1F', 9, 12)
+        return static_lead(policy, snapshot, 245, Goal) or Goal('legend_suicune', 'Meet Suicune at the Tin Tower',
+                                                                 'TIN_TOWER_1F', 9, 12, kind=HUNT)
     if 249 not in owned and not snapshot.event('EVENT_FOUGHT_LUGIA') and ball_ready(policy, snapshot):
         return (static_lead(policy, snapshot, 249, Goal)
-                or policy.person(snapshot, 'legend_lugia', 'Seek Lugia in the Whirl Islands', 'WHIRL_ISLAND_LUGIA_CHAMBER', 'Lugia'))
+                or hunt(policy.person(snapshot, 'legend_lugia', 'Seek Lugia in the Whirl Islands', 'WHIRL_ISLAND_LUGIA_CHAMBER', 'Lugia')))
     if (data.game == 'crystal' and 250 not in snapshot.owned
             and {243, 244, 245} <= snapshot.owned and data.items['RAINBOW_WING'] not in items):
         return policy.person(snapshot, 'rainbow_wing', 'Return to the Tin Tower with the three beasts',
@@ -123,8 +127,18 @@ def legends(policy, snapshot, Goal):
     if (250 not in owned and data.items['RAINBOW_WING'] in items and not snapshot.event('EVENT_FOUGHT_HO_OH')
             and ball_ready(policy, snapshot)):
         return (static_lead(policy, snapshot, 250, Goal)
-                or policy.person(snapshot, 'legend_ho_oh', 'Seek Ho-Oh above the Tin Tower', 'TIN_TOWER_ROOF', 'TinTowerHoOh'))
+                or hunt(policy.person(snapshot, 'legend_ho_oh', 'Seek Ho-Oh above the Tin Tower', 'TIN_TOWER_ROOF', 'TinTowerHoOh')))
     return roamers(policy, snapshot, Goal)
+
+
+def hunt(goal):
+    """A trip to a static legendary as a hunt, which runs from every other wild battle on the way.
+
+    As a story goal it fought each one with the sleeper lead, so the lead's strong attacks ran out
+    on Route 41 or in the Whirl Islands and the trip turned back to a Pokémon Center before it met
+    the legendary, again and again. Gen I's legendary expeditions are hunts for the same reason.
+    """
+    return None if goal is None else replace(goal, kind=HUNT)
 
 
 # Where a roaming beast may go next from each route (pret data/wild/roammon_maps.asm, the same in all three games).
