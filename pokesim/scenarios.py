@@ -9,6 +9,7 @@ Checkpoints are private game data, so scenario folders live outside the checkout
 """
 from __future__ import annotations
 
+from collections import Counter, deque
 from dataclasses import dataclass, field, fields
 import hashlib
 import json
@@ -335,6 +336,11 @@ class Scenario:
     # Run attempts the battle stance must make (planner design S5), so a hunt shows it ran from
     # the battles it could not catch from. A run that meets fewer such battles owes one run for each.
     min_flees: int = 0
+    # Goal changes the run may make in any 60 game minutes. A run that trades one goal for another and
+    # back, as a Gold run boxed a Kakuna and took it out again every minute, churns while it passes the
+    # quiet check. That loop made 160 to 195 changes a game hour, and no replay that passed made more
+    # than 84 in any 60 game minutes, so 120 fails the loop and keeps the margin. None leaves it unchecked.
+    max_goal_switches_per_hour: int | None = 120
 
     @classmethod
     def load(cls, folder):
@@ -702,6 +708,35 @@ def open_run(scenario, rom=None):
     return run, Gen1Watch(run)
 
 
+HOUR = 60 * MINUTE
+
+
+class GoalChurn:
+    """How often the running goal changes: per game hour of the run, and the most in any 60 game minutes."""
+
+    def __init__(self, start):
+        self.start, self.key, self.seen = start, None, False
+        self.recent, self.hours, self.worst = deque(), Counter(), 0
+
+    def look(self, policy, frame):
+        """Note the policy's goal at ``frame`` and return the changes in the last 60 game minutes. The
+        first goal seen is no change."""
+        key = getattr(getattr(policy, 'goal', None), 'key', None)
+        if key != self.key:
+            if self.seen:
+                self.recent.append(frame)
+                self.hours[(frame - self.start) // HOUR] += 1
+            self.key, self.seen = key, True
+        while self.recent and self.recent[0] <= frame - HOUR:
+            self.recent.popleft()
+        self.worst = max(self.worst, len(self.recent))
+        return len(self.recent)
+
+    def report(self, frame):
+        hours = -(-(frame - self.start) // HOUR)
+        return {'per_hour': [self.hours[hour] for hour in range(hours)], 'worst_hour': self.worst}
+
+
 def matches(wanted, kind, detail):
     """Whether an event or mark is the ``until`` or ``then`` a scenario names: a kind, or kind:detail."""
     if not wanted:
@@ -749,6 +784,7 @@ def play(scenario, rom=None, progress=None):
         name, _, value = (scenario.until or '').partition(':')
         target = int(value) if name == 'owned' and value.isdigit() else None
         others, foe, inherited = 0, None, True
+        churn, churn_limit = GoalChurn(start), scenario.max_goal_switches_per_hour
         while run.frame < end:
             snapshot = read()
             if snapshot.in_battle == 1:
@@ -778,6 +814,10 @@ def play(scenario, rom=None, progress=None):
                 end = run.frame + scenario.after_game_minutes * MINUTE
             if getattr(watch, 'loop', None):
                 failure = f'a retry loop: {watch.loop}'
+                break
+            switches = churn.look(run.policy, run.frame)
+            if churn_limit is not None and switches > churn_limit:
+                failure = f'{switches} goal changes in 60 game minutes, more than {churn_limit}'
                 break
             battle_frame = watch.battle_clock(snapshot, battle_frame, run.frame)
             worst = max(worst, run.frame - progress_frame)
@@ -827,6 +867,7 @@ def play(scenario, rom=None, progress=None):
         return {'name': scenario.name, 'generation': run.generation, 'passed': failure is None, 'failure': failure,
                 'pipeline': pipeline,
                 'game_minutes': (run.frame - start) // MINUTE, 'worst_quiet_minutes': worst // MINUTE,
+                'goal_changes': churn.report(run.frame),
                 'reached_frame': reached_frame, 'followed_frame': followed_frame, 'reloads': reloads, 'policy_recoveries': run.policy.recoveries, 'achieved': achieved[-12:],
                 'achievements': len(achieved), 'final_map': final.map_name, 'flees': flees,
                 'final_party': [[mon.name, mon.level, mon.hp, mon.status] for mon in final.party],

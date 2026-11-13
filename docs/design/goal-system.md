@@ -277,6 +277,8 @@ A goal is stalled when no `net` row lands in the window, unless the active goal 
 
 Liveness is a separate check (section 6). A hung worker writes no rows and reports no rate, so it would look the same as a stall. The liveness check tells them apart.
 
+Churn rate separates a loop from quiet work. A loop that traded one goal for another and back made 160 to 195 goal changes a game hour, and no replay that passed on main made more than 84 in any 60 game minutes, so a preflight replay fails past 120. The live stall detector does not read it.
+
 ## 5. The worth oracle
 
 One call in `pcvalue.py` decides worth for every producer.
