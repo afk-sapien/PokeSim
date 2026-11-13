@@ -253,17 +253,19 @@ def carried(policy, snapshot, mon):
             and _hatches(policy, snapshot, mon))
 
 
-def hatch_spares(policy, snapshot):
+def hatch_spares(policy, snapshot, *, trainee=True):
     """Party slots a hatching trip may send to the PC to carry an egg, best choice first.
 
     The lead, the eggs, the only holder of a field move, the breeding parents, the trainees, the Exp.
     Share holder and the legendary sleeper stay, or the next errand would fetch them straight back. An
     activity team is left out, because its errands run ahead of this one and a finished activity can
-    leave its last team on record.
+    leave its last team on record. With ``trainee`` False the training project's trainee may go too, as
+    it may once another rung's goal is picked over the training (collection.draft drops its writes).
     """
     from .release import _keys, _pair, plan_partners
     state, party = policy.collection, snapshot.party
-    partners = {key for key in plan_partners(state) if not isinstance(key, str)}
+    partners = {key for key in plan_partners(state if trainee else {**state, 'training': None})
+                if not isinstance(key, str)}
     partners.update(pair for pair in map(_pair, (state.get('share_holder'), state.get('roam_lead'))) if pair)
     share = policy.data.items.get('EXP_SHARE')
     slots = [i for i, mon in enumerate(party) if i and not mon.egg and not sole_field_move(party, i)
