@@ -67,6 +67,7 @@ def gen2_gift(game, boxes):
     storage = Goal('storage', 'PC', 'CHERRYGROVE_POKECENTER_1F', 9, 2, 'up')
     people = []
     run = SimpleNamespace(storage_goal=lambda snap: storage, data=SimpleNamespace(game=game), people=people,
+                          monitor_tables={}, clock=0,
                           person=lambda snap, key, *rest: people.append(key) or Goal(key, key, 'X', 0, 0))
     view = SimpleNamespace(party=[SimpleNamespace(egg=False)] * 6, box_counts=boxes, active_box=0,
                            event=lambda flag: flag == 'EVENT_GOT_MASTER_BALL_FROM_ELM')

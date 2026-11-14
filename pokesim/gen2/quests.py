@@ -2,14 +2,20 @@
 from dataclasses import replace
 
 from .menus import ChangeBox, FieldMove, ShowPartner, Storage, Teach
-from .standdown import stand_down, standing_down
+from .standdown import exhausted, stand_down, standing_down
 from . import kinds
+from ..planning.decide import NO_GIFT
 from ..planning.ledger import FIELD_MOVES
 from ..planning.stance import HUNT
 
 
 # The Burned Tower rock stands down for a while when no party member can smash it.
 RELEASE_ROCK_KEY = 'release_rock'
+# Tries at a gift before it stands down. The policy reads a text box before it walks, so a try is one
+# press of A at the gift's spot. A giver who is there answers the first press and gives the gift. A
+# giver who is not there never answers, and one who turns the run away, as for a full Items pocket,
+# costs a try each time.
+GIFT_PRESSES = 24
 # The goals of a trip to a static legendary.
 LEGEND_TRIPS = frozenset({'legend_suicune', 'legend_lugia', 'legend_ho_oh'})
 
@@ -44,24 +50,64 @@ def room_for_gift(policy, snapshot, Goal):
     return Goal('collection_gift_room', 'Make room for a new partner', goal.map_name, goal.x, goal.y, goal.face)
 
 
+# The goals besides the gift_ ones that take a gift at their spot. A full Items pocket turns each of
+# these away and leaves its flag unset. The trade items share one key, so each gift counts by its map too.
+ITEM_GIFTS = frozenset({'collection_trade_item', 'collection_stone', 'collection_stone_show'})
+
+
+def gift_goal(key):
+    return key.startswith('gift_') or key in ITEM_GIFTS
+
+
+def gift_key(key, map_name):
+    return f'gift:{key}:{map_name}'
+
+
+def pressed(policy, key, map_name):
+    """Count a try at the gift ``key`` on ``map_name``, and set the gift aside once ``GIFT_PRESSES`` tries
+    did not get it.
+
+    A giver who is not where the run talks from never answers, so without this the gift was chosen
+    again after every recovery, for hours.
+    """
+    name = gift_key(key, map_name)
+    if exhausted(policy, name, GIFT_PRESSES):
+        stand_down(policy, name, failure=NO_GIFT.kind)
+
+
+def answering(policy, key, map_name):
+    """Whether the gift ``key`` on ``map_name`` is not set aside after too many tries."""
+    return not standing_down(policy, gift_key(key, map_name))
+
+
+def open_gift(policy, snapshot, key, flag, map_name):
+    """Whether the gift ``key`` is still to get and is not set aside."""
+    return not snapshot.event(flag) and answering(policy, key, map_name)
+
+
 def gifts(policy, snapshot, Goal):
     data = policy.data
-    if not snapshot.event('EVENT_GOT_MASTER_BALL_FROM_ELM'):
+    if open_gift(policy, snapshot, 'gift_master_ball', 'EVENT_GOT_MASTER_BALL_FROM_ELM', 'ELMS_LAB'):
         return policy.person(snapshot, 'gift_master_ball', 'Receive Elm’s Master Ball', 'ELMS_LAB', 'ProfElmScript')
     if no_room(snapshot):
         return None
-    if not snapshot.event('EVENT_GOT_EEVEE'):
+    if open_gift(policy, snapshot, 'gift_eevee', 'EVENT_GOT_EEVEE', 'BILLS_FAMILYS_HOUSE'):
         if snapshot.event('EVENT_MET_BILL'):
             return Goal('meet_bill', 'Meet Bill in Ecruteak', 'ECRUTEAK_POKECENTER_1F', 4, 5)
         return room_for_gift(policy, snapshot, Goal) or policy.person(snapshot, 'gift_eevee', 'Receive Eevee from Bill',
             'BILLS_FAMILYS_HOUSE', 'BillScript')
-    if data.game == 'crystal' and not snapshot.event('EVENT_GOT_ODD_EGG'):
+    if data.game == 'crystal' and open_gift(policy, snapshot, 'gift_odd_egg', 'EVENT_GOT_ODD_EGG', 'DAY_CARE'):
+        if snapshot.egg_ready:
+            # While a bred egg waits, the Day Care man stands outside on Route 34 and his spot inside is
+            # empty. A Crystal run pressed A at that spot for hours. Taking the egg brings him back in.
+            return room_for_gift(policy, snapshot, Goal) or policy.person(snapshot, 'collection_breed_egg',
+                'Receive the Day Care egg before the Odd Egg', 'ROUTE_34', 'DayCareManScript_Outside')
         return room_for_gift(policy, snapshot, Goal) or policy.person(snapshot, 'gift_odd_egg', 'Receive the Day Care’s Odd Egg',
             'DAY_CARE', 'DayCareManScript_Inside')
-    if data.game == 'crystal' and not snapshot.event('EVENT_GOT_DRATINI'):
+    if data.game == 'crystal' and open_gift(policy, snapshot, 'gift_dratini', 'EVENT_GOT_DRATINI', 'DRAGON_SHRINE'):
         return room_for_gift(policy, snapshot, Goal) or policy.person(snapshot, 'gift_dratini', 'Receive the Dragon Master’s Dratini',
             'DRAGON_SHRINE', 'DragonShrineElder1Script')
-    if not snapshot.event('EVENT_GOT_TYROGUE_FROM_KIYO'):
+    if open_gift(policy, snapshot, 'gift_tyrogue', 'EVENT_GOT_TYROGUE_FROM_KIYO', 'MOUNT_MORTAR_B1F'):
         return room_for_gift(policy, snapshot, Goal) or policy.person(snapshot, 'gift_tyrogue', 'Meet Kiyo in Mt. Mortar',
             'MOUNT_MORTAR_B1F', 'MountMortarB1FKiyoScript')
     return None
@@ -86,7 +132,7 @@ def legends(policy, snapshot, Goal):
             return None
         goal = policy.storage_goal(snapshot)
         return Goal('collection_box', 'Make room for the legendary encounter', goal.map_name, goal.x, goal.y, goal.face)
-    if not snapshot.event('EVENT_GOT_MASTER_BALL_FROM_ELM'):
+    if open_gift(policy, snapshot, 'gift_master_ball', 'EVENT_GOT_MASTER_BALL_FROM_ELM', 'ELMS_LAB'):
         return policy.person(snapshot, 'gift_master_ball', 'Receive Elm’s Master Ball', 'ELMS_LAB', 'ProfElmScript')
     if (data.game != 'crystal' and not snapshot.event('EVENT_RELEASED_THE_BEASTS')
             and not standing_down(policy, RELEASE_ROCK_KEY)):
@@ -496,6 +542,7 @@ def arrive(policy, snapshot):
         slot = next((i for i, mon in enumerate(snapshot.party) if mon.species == species and not mon.egg), None)
         if slot is None:
             return 'b'
+        pressed(policy, policy.goal.key, policy.goal.map_name)
         policy.menu = ShowPartner(slot, flag)
         return 'a'
     if policy.goal.key == 'collection_stone_pc':
@@ -526,9 +573,11 @@ def arrive(policy, snapshot):
 
 
 def stones(policy, snapshot, Goal):
-    if not snapshot.event('EVENT_TOHJO_FALLS_MOON_STONE'):
+    if not snapshot.event('EVENT_TOHJO_FALLS_MOON_STONE') and answering(policy, 'collection_stone', 'TOHJO_FALLS'):
         return policy.person(snapshot, 'collection_stone', 'Collect the Moon Stone in Tohjo Falls',
                              'TOHJO_FALLS', 'TohjoFallsMoonStone')
+    if not answering(policy, 'collection_stone_show', 'BILLS_HOUSE'):
+        return None
     requirements = [(108, 'EVERSTONE'), (43, 'LEAF_STONE'), (120, 'WATER_STONE'),
                     (37 if policy.data.game == 'silver' else 58, 'FIRE_STONE'), (172, 'THUNDERSTONE')]
     for species, item in requirements:
@@ -583,6 +632,6 @@ def trade_items(policy, snapshot, Goal):
         ('EVENT_MOUNT_MORTAR_2F_INSIDE_DRAGON_SCALE', 'MOUNT_MORTAR_2F_INSIDE', 'MountMortar2FInsideDragonScale',
          'Collect the Dragon Scale in Mt. Mortar'),
     ]:
-        if not snapshot.event(event):
+        if not snapshot.event(event) and answering(policy, 'collection_trade_item', area):
             return policy.person(snapshot, 'collection_trade_item', label, area, script)
     return None
