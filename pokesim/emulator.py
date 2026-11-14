@@ -900,8 +900,9 @@ class Emulator(EmulatorBase):
         for ev in events:
             if ev.type == 'release' and note and ev.title == f"Said goodbye to a spare {SPECIES_NAMES.get(note[0], f'#{note[0]}')}":
                 ev.body += f' PC value: {note[1]}.'
-        blocked = bool(getattr(policy, 'pc_deadlock', False)) and storage_headroom(snap) <= 0
-        if policy is not None and full_notice(self.store, blocked):
+        free = storage_headroom(snap)
+        blocked = bool(getattr(policy, 'pc_deadlock', False)) and free <= 0
+        if policy is not None and full_notice(self.store, blocked, free):
             details = policy.details() if hasattr(policy, 'details') else {}
             waiting = [(details.get('objective') or {}).get('title')]
             text = full_alert(getattr(snap, 'box_counts', ()), waiting)

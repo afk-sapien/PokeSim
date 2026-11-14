@@ -68,7 +68,7 @@ def test_valuable_copies_go_last_and_eggs_keep_and_partners_stay():
     from pokesim.trade.preferences import identity
     best = strong(16)
     shiny = mon(16, position=1, dvs=(1, 10, 10, 10, 10))
-    trained = mon(16, position=2, stat_exp=(30000,) * 5)
+    trained = mon(16, position=2, dvs=even(2), stat_exp=(30000,) * 5)
     egg = mon(16, position=3, egg=True)
     partner = mon(16, position=4, trainer_id=777, dvs=(5, 5, 5, 5, 5))
     locked = mon(16, position=5, trainer_id=888, dvs=(6, 6, 6, 6, 6))
@@ -77,8 +77,9 @@ def test_valuable_copies_go_last_and_eggs_keep_and_partners_stay():
     preferences = {identity({'trainer_id': 888, 'dvs': (6, 6, 6, 6, 6), 'dex': 16}): {'state': 'locked'}}
     order = spares(snapshot([best, shiny, trained, egg, partner, locked, plain]), preferences=preferences,
                    partners=plan_partners(collection))
-    # The shiny is the best copy and the perfect one the rarest, and a trained copy stays like a partner.
-    assert order == [plain]
+    # The shiny is the best copy and the perfect one the rarest. The trained copy is no more trained
+    # than the perfect one, so it goes, but its training puts it after the plain spare despite its DVs.
+    assert order == [plain, trained]
 
 
 def test_perfect_and_rare_dv_copies_go_after_plain_ones():
@@ -104,7 +105,8 @@ def test_the_last_copy_and_party_members_are_never_offered():
 @pytest.mark.parametrize('species', [144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251])
 def test_a_trained_lv_100_copy_stays_and_a_duplicate_legendary_still_goes(species):
     copies = [mon(species, position=index, dvs=even(2 * index + 2), level=50) for index in range(2)]
-    veteran = [strong(16, position=2), mon(16, position=3, level=100, stat_exp=(30000,) * 5)]
+    # The most trained Pidgey, so its training keeps it beside the trained best copy.
+    veteran = [strong(16, position=2), mon(16, position=3, level=100, stat_exp=(40000,) * 5)]
     assert spares(snapshot([*copies, *veteran])) == [copies[0]]
 
 
