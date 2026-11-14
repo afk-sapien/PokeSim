@@ -112,7 +112,7 @@
   "crystal/red": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0,
+   "waste": 2.2,
    "story": [
     "red"
    ]
