@@ -111,6 +111,11 @@ class BattlePart:
         from ..ledger import spare_throw
         if catch and not partner and not shiny and not spare_throw(self.data, snapshot, snapshot.enemy_species):
             catch = False
+        from ..collection import box_switch
+        if catch and upgrade and catch_species not in LEGENDARY_DEX and box_switch(self, snapshot) is not None:
+            # The active box's last slot is kept for a shiny or a missing entry until the PC visit that
+            # switches boxes (collection.holds). A better copy waits for the next box, a legendary does not.
+            catch = False
         if catch and not upgrade:
             # The last free slot is kept for an upgrade. Any other catch takes it only when a release can
             # follow, and a missing entry refused asks the owner for help (boxes_full).
