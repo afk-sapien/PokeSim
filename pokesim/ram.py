@@ -201,8 +201,24 @@ class Snapshot:
 
     @property
     def next_free_box(self) -> int | None:
-        return next((i for i, count in enumerate(self.box_counts)
-                     if i != self.active_box and 0 <= count < BOX_CAPACITY), None)
+        """The box other than the active one with the most free slots, the first of a tie, or None."""
+        free = [(BOX_CAPACITY - count, -i) for i, count in enumerate(self.box_counts)
+                if i != self.active_box and 0 <= count < BOX_CAPACITY]
+        return -max(free)[1] if free else None
+
+    @property
+    def switch_box(self) -> int | None:
+        """The box to switch to before the active box runs out, or None.
+
+        With six in the party a catch goes to the active box only, whatever room the other boxes have, so
+        a shiny met once that box is full is run from (can_catch). Once the active box is down to its last
+        slot the run switches to next_free_box, and only when it has two free slots or more, so the next
+        catch does not send it straight back to a PC (gen2/release.switch_box).
+        """
+        if len(self.party) < 6 or BOX_CAPACITY - len(self.boxed_pokemon) > 1:
+            return None
+        box = self.next_free_box
+        return box if box is not None and BOX_CAPACITY - self.box_counts[box] >= 2 else None
 
     @property
     def started(self) -> bool:

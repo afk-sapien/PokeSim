@@ -607,11 +607,13 @@ class StrategicPolicy(Policy):
                                           'Let a spare duplicate go so there is room for new catches',
                                           CENTERS, 'up', True), choice.errand_candidate('party_release', 'party'),
                                      site='release', commit=partial(self._commit_release, release))
-        elif (s.box_full and not withdrawing_partner and s.next_free_box is not None and s.map not in league_rooms
-              and not self._room_parked('party_box')):
+        elif ((s.box_full and s.next_free_box is not None or s.switch_box is not None) and not withdrawing_partner
+              and s.map not in league_rooms and not self._room_parked('party_box')):
+            # A full party switches boxes before the active one runs out too (Snapshot.switch_box).
             self.goal = choice.offer(Goal('party_box', 'Make room for new catches',
-                                          f'Box {s.active_box + 1} is full. Visit a PC and switch to Box '
-                                          f'{s.next_free_box + 1}', CENTERS, 'up', True),
+                                          f'Box {s.active_box + 1} is '
+                                          f'{"full" if s.box_full else "down to its last slot"}. Visit a PC and '
+                                          f'switch to Box {s.next_free_box + 1}', CENTERS, 'up', True),
                                      choice.errand_candidate('party_box', 'party'), site='box',
                                      commit=self._end_swap)
         if kind == 'overworld' and not s.in_battle:

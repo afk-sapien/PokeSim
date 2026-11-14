@@ -164,6 +164,11 @@ def test_full_source_box_allows_withdrawal_instead_of_switching_away():
 
     s = replace(s, frame=s.frame + 100, party=s.party + (mon(species=124, level=8),),
                 boxed_pokemon=s.boxed_pokemon[1:], box_counts=(19,) + (0,) * 11)
+    p.step(PolicyContext(s, 0, memory))
+    # The withdrawal fills the party and leaves the box one slot, so the run switches boxes before it leaves.
+    assert p.goal.key == 'party_box' and p.goal.reason.endswith('switch to Box 2')
+
+    s = replace(s, frame=s.frame + 100, active_box=1, boxed_pokemon=())
     action = p.step(PolicyContext(s, 0, memory))[0]
     assert p.goal.key == 'collect_train'
     assert action.button == 'b'
