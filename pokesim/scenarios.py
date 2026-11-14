@@ -548,16 +548,17 @@ class Gen1Watch(PlannerMarks):
 
 class Gen2Watch(PlannerMarks):
     """Achievements as the Gen II runtime counts them: a new best for badges, story events, the
-    Pokédex, areas, experience or League wins restarts its stall watch. So do a hatch, a better copy
-    caught and a catch for a linked adventure (stalls.collected), and a Johto Marathon checkpoint,
-    since a race runs longer than the scenario's quiet window and earns nothing else."""
+    Pokédex, areas, experience or League wins restarts its stall watch. So do an egg cycle walked, a
+    hatch, a better copy caught and a catch for a linked adventure (stalls.collected), and a Johto
+    Marathon checkpoint, since a race runs longer than the scenario's quiet window and earns nothing
+    else."""
 
     def __init__(self, run):
         self.run = run
         history = run.history
         self.maps, self.owned = set(history.get('maps', ())), set(history.get('owned', ()))
         self.badges, self.league = history.get('badges', 0), history.get('league', 0)
-        self.flags, self.experience = 0, {}
+        self.flags, self.experience, self.eggs = 0, {}, {}
         self.reset()
 
     def reset(self):
@@ -633,6 +634,12 @@ class Gen2Watch(PlannerMarks):
             if mon.experience > self.experience.get(key, mon.experience):
                 earned = True
             self.experience[key] = max(mon.experience, self.experience.get(key, 0))
+            if getattr(mon, 'egg', False):
+                # An egg one cycle nearer hatching, as Supervisor.progressed counts it. A reload back to a
+                # fuller egg replays cycles that already counted.
+                if mon.friendship < self.eggs.get(key, mon.friendship):
+                    earned = True
+                self.eggs[key] = min(mon.friendship, self.eggs.get(key, mon.friendship))
         previous = {(mon.trainer_id, tuple(mon.dvs or ())): mon for mon in (self.previous.party if self.previous else ())}
         for mon in snapshot.party:
             old = previous.get((mon.trainer_id, tuple(mon.dvs or ())))

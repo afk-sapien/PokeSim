@@ -133,3 +133,26 @@ def test_the_replay_judge_counts_a_hatch_a_better_copy_and_a_catch_for_a_linked_
     policy.demand = {PIKACHU: 4}
     wanted = mon(PIKACHU, COMMON, trainer=4)
     assert watch.observe(gen2_look([TEAM, hatched, rare, churn], [*held, wanted])) == ([], True)
+
+
+def test_the_replay_judge_counts_each_egg_cycle_once(monkeypatch):
+    from pokesim.scenarios import Gen2Watch
+    monkeypatch.setattr('pokesim.gen2.postgame.tail', lambda data, mon: rarity(mon))
+    data = SimpleNamespace(species={PIKACHU: {'name': 'Pikachu'}, VAPOREON: {'name': 'Vaporeon'}})
+    run = SimpleNamespace(data=data, history={'maps': [1], 'owned': [PIKACHU, VAPOREON], 'badges': 0xFFFF,
+                                              'league': 3}, policy=SimpleNamespace(collection={}, demand={}))
+    watch = Gen2Watch(run)
+    held = [mon(PIKACHU, COMMON)]
+
+    def walked(cycles):
+        return gen2_look([TEAM, SimpleNamespace(**{**vars(mon(PIKACHU, FAIR, egg=True)), 'friendship': cycles})],
+                         held)
+
+    assert watch.observe(walked(20)) == ([], False)
+    assert watch.observe(walked(20)) == ([], False)
+    assert watch.observe(walked(19)) == ([], True)
+    # A reload back to a fuller egg replays a cycle that already counted.
+    watch.reset()
+    assert watch.observe(walked(20)) == ([], False)
+    assert watch.observe(walked(19)) == ([], False)
+    assert watch.observe(walked(18)) == ([], True)
