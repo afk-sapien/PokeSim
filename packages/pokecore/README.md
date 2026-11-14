@@ -13,21 +13,21 @@ extra adds the pyboy-rs emulator and Pillow.
 Python 3.11 or newer. Core and pyboy-rs are released on GitHub, not PyPI. Pin
 each file by its URL and the sha256 from the release's `SHA256SUMS.txt`, so pip
 refuses a changed file. First pyboy-rs (pick your platform's wheel from the
-[v0.1.5 release](https://github.com/afk-sapien/pyboy-rs/releases/tag/v0.1.5)):
+[v0.1.6 release](https://github.com/afk-sapien/pyboy-rs/releases/tag/v0.1.6)):
 
 ```bash
-base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5
+base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.6
 curl -fsSLO "$base/SHA256SUMS.txt"
-wheel=pyboy_rs-0.1.5-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+wheel=pyboy_rs-0.1.6-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 sha=$(grep " $wheel\$" SHA256SUMS.txt | cut -d' ' -f1)
 pip install "pyboy-rs @ $base/$wheel#sha256=$sha"
 ```
 
 Then Core, with the hash from the
-[release's](https://github.com/afk-sapien/PokeSim/releases/tag/pokecore-v0.12.1) `SHA256SUMS.txt`:
+[release's](https://github.com/afk-sapien/PokeSim/releases/tag/pokecore-v0.12.2) `SHA256SUMS.txt`:
 
 ```bash
-pip install "pokecore[emulator] @ https://github.com/afk-sapien/PokeSim/releases/download/pokecore-v0.12.1/pokecore-0.12.1-py3-none-any.whl#sha256=<sha256>"
+pip install "pokecore[emulator] @ https://github.com/afk-sapien/PokeSim/releases/download/pokecore-v0.12.2/pokecore-0.12.2-py3-none-any.whl#sha256=<sha256>"
 ```
 
 ## Example

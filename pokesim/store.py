@@ -64,6 +64,8 @@ class Store:
             # An older file is read in today's shape, which the copy gains here and the file never does.
             schema.migrate(self.db)
             self.db.row_factory = sqlite3.Row
+            # A stopped adventure last run by a release before these rows existed has none on disk yet.
+            self._fill_missing()
             return
         for d in (self.dir, self.shots, self.states):
             d.mkdir(parents=True, exist_ok=True)
@@ -79,6 +81,9 @@ class Store:
         # Finish it before anything restores, so the new game starts and the old one never resumes.
         if self.db.execute('SELECT 1 FROM kv WHERE k=?', (domains.RESTART_PENDING,)).fetchone():
             self._finish_restart()
+        self._fill_missing()
+
+    def _fill_missing(self):
         # The tables come from the schema version. These fill what an older journal never stored,
         # and each is safe to run on every start.
         with self.db:

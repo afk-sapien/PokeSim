@@ -12,7 +12,7 @@ license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
 dependencies = [
   # Not on PyPI: GitHub release wheels, so pip, pipx and uv all resolve them from the wheel metadata.
-  # pokecore 0.12.0 asks for pyboy-rs>=0.1.2,<0.2 and the matching wheel below satisfies it. Both carry markers for
+  # pokecore 0.12.2 asks for pyboy-rs>=0.1.6,<0.2 and the matching wheel below satisfies it. Both carry markers for
   # exactly the platforms that have a pyboy-rs wheel. Core must carry the marker too: its own requirement on
   # pyboy-rs would otherwise send pip to look that name up on PyPI where the platform has no wheel (Windows ARM64,
   # 32-bit ARM, FreeBSD). Neither name is a PyPI project of ours, so no install may ever depend on PyPI for them.
@@ -20,11 +20,11 @@ dependencies = [
   # there (tool.uv.sources below). This URL is the released copy that pip and pipx users get, so
   # tools/release.py check-pins fails when its version differs from the member's.
   "pokecore[emulator] @ https://github.com/afk-sapien/PokeSim/releases/download/pokecore-v0.12.1/pokecore-0.12.1-py3-none-any.whl#sha256=dea14a010b99670b36e473f4a8ac618b62043259cfd60f4e78981237cf4715e3 ; (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and (platform_machine == 'x86_64' or platform_machine == 'arm64')) or (sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64'))",
-  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=85d000b9d6607f449b6a945bed7923ca3e1adb5bb97dc1606508501eef1da89d ; sys_platform == 'linux' and platform_machine == 'x86_64'",
-  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl#sha256=b332de4bec17fbd4c9f5bca3c399923c98df382344d9394174a2474cd5056759 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
-  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-macosx_10_12_x86_64.whl#sha256=e604f8d4e0bc33e6d37ebc0bf77e85beab5223e68324ff57f175a56d6ff9c9f3 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-macosx_11_0_arm64.whl#sha256=2ff240cc2156ca201c6dca0ad2c2829c2deb4b4a3428553e6bd0e23c91f6f172 ; sys_platform == 'darwin' and platform_machine == 'arm64'",
-  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.5/pyboy_rs-0.1.5-cp311-abi3-win_amd64.whl#sha256=2517a5e44acc30f380e0070a8492a4d3241063b0a72638f87a84bd5651b3d9f7 ; sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
+  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.6/pyboy_rs-0.1.6-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=afe162d1c66898647406e68a8d1a8a8911b8a476b7eedc7ebf0d9809b7dbed64 ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.6/pyboy_rs-0.1.6-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl#sha256=e83da8baa00329772a5399a4fd842eae6da8331bc52bed3fc102c2d3165ee753 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
+  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.6/pyboy_rs-0.1.6-cp311-abi3-macosx_10_12_x86_64.whl#sha256=cf0f0200964e954d6eba10a31898e5d21d6a41e3da64d97d3dcb0d606e89afc7 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.6/pyboy_rs-0.1.6-cp311-abi3-macosx_11_0_arm64.whl#sha256=c310e5b33c1a004e2558e32da7e853c701bb911945b149fe220dc3f8a9acea36 ; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.6/pyboy_rs-0.1.6-cp311-abi3-win_amd64.whl#sha256=9351dc5d3c554a3de01659d3363943212d39989d9ab7df0fa9f19cf8d6ab81e0 ; sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
   "fastapi>=0.110",
   "uvicorn[standard]>=0.53.0",
   "pillow>=10",

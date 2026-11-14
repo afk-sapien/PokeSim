@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.2
+
+### Changed
+
+- The `emulator` extra needs pyboy-rs 0.1.6 or newer. Its states keep their clocks below
+  the cap that 0.1.5 refused on load, and a state an older build saved past that cap
+  loads with all its progress kept. States below the cap load as before.
+
 ## 0.12.1
 
 ### Fixed
