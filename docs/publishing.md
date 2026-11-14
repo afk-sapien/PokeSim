@@ -18,10 +18,10 @@ file cannot ship. Commit and merge the reviewed changes to `main`. Push a new `v
 create a draft release and start the publishing workflow:
 
 ```sh
-git tag v0.7.0
-git push origin v0.7.0
-gh release create v0.7.0 --verify-tag --draft --title "PokeSim 0.7.0" --notes-file docs/release-notes.md
-gh workflow run release.yml --ref main -f tag=v0.7.0
+git tag v0.7.1
+git push origin v0.7.1
+gh release create v0.7.1 --verify-tag --draft --title "PokeSim 0.7.1" --notes-file docs/release-notes.md
+gh workflow run release.yml --ref main -f tag=v0.7.1
 ```
 
 Use the actual next version when following these examples. A tag push alone does
@@ -39,7 +39,7 @@ there and adds one for each user-visible pull request merged since the last tag 
 
 ```sh
 gh pr list --state merged --base main --limit 300 --json number,title,body,mergedAt \
-  --search "merged:>$(git log -1 --format=%cI v0.7.0)"
+  --search "merged:>$(git log -1 --format=%cI v0.7.1)"
 ```
 
 An entry says what changed for a player, a host or a contributor, and why, in the voice of
@@ -84,7 +84,7 @@ exposes draft releases to identities with push access. All other jobs retain rea
 To rehearse the whole workflow without publishing, start it with the dry run input:
 
 ```sh
-gh workflow run release.yml --ref main -f tag=v0.7.0 -f dry_run=true
+gh workflow run release.yml --ref main -f tag=v0.7.1 -f dry_run=true
 ```
 
 A dry run validates the tag, runs the gate, and runs the full build and image checks. The
@@ -224,7 +224,7 @@ A fresh build is not byte-identical, so a rerun after the image was pushed must
 publish the earlier run's tested images:
 
 ```sh
-gh workflow run release.yml --ref main -f tag=v0.7.0 -f images_from_run=<run id>
+gh workflow run release.yml --ref main -f tag=v0.7.1 -f images_from_run=<run id>
 ```
 
 The publish job checks that those images were built from the tag's revision. Its
