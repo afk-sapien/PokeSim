@@ -1,17 +1,17 @@
-# PokeSim 0.7.2 release
+# PokeSim 0.7.3 release
 
-Long-running adventures resume again. An adventure that played long enough at high speed could
-stop resuming after a restart, and its saves now load with nothing lost. This closes the known
-issue from 0.7.1.
+Postgame adventures keep collecting. A full PC can release again, a shiny met with a full party
+finds a box slot, a Crystal run breeding at the Day Care gets its Odd Egg, and a finished Gold,
+Silver or Crystal run that is still catching and hatching no longer raises the stall alert.
 
-See the [changelog](../CHANGELOG.md#072) for every change.
+See the [changelog](../CHANGELOG.md#073) for every change.
 
 ## Upgrading
 
-Back up the complete library. Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.7.2`
+Back up the complete library. Set `POKESIM_IMAGE=ghcr.io/afk-sapien/pokesim:0.7.3`
 and run `docker compose pull` followed by `docker compose up -d --wait`.
 Keep the existing data mount and project name. Python users can follow the
-[installation guide](desktop.md). pokecore moves to 0.12.2 and PyBoy RS to 0.1.6.
+[installation guide](desktop.md). pokecore stays at 0.12.2 and PyBoy RS at 0.1.6.
 
-0.7.2 does not change the Library database or the save format, so adventures continue from
+0.7.3 does not change the Library database or the save format, so adventures continue from
 their saves.
