@@ -456,6 +456,10 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     useful = useful and allowed_capture
     collection_target = (collect_missing or legendary) and missing_species and allowed_capture
     repeat_target = enemy.species == repeat_species and not missing_species
+    if getattr(snapshot, 'switch_box', None) is not None and not (missing_species or required or shiny or legendary):
+        # The active box's last slot is kept for a shiny or a missing entry until the PC visit that
+        # switches boxes (Snapshot.switch_box). A better copy waits for the next box, a legendary does not.
+        useful = repeat_target = False
     collection_target |= repeat_target or shiny
     if ((collection_target and not repeat_target or useful and (missing_species or required))
             and reserve is not None and not reserve()):

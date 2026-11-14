@@ -29,6 +29,32 @@ def room(snapshot):
     return headroom(snapshot) + max(6 - len(getattr(snapshot, 'party', ())), 0)
 
 
+def roomiest_box(snapshot):
+    """The box other than the active one with the most free slots, the first of a tie, or None when
+    every other box is full."""
+    active = getattr(snapshot, 'active_box', None)
+    free = [(BOX_CAPACITY - count, -box) for box, count in enumerate(snapshot.box_counts)
+            if box != active and count < BOX_CAPACITY]
+    return -max(free)[1] if free else None
+
+
+def switch_box(snapshot):
+    """The box to switch to before the active box runs out, or None.
+
+    With six in the party a catch goes to the active box only, whatever room the other boxes have, so a
+    shiny met once that box is full is run from (can_catch). Once the active box is down to its last slot
+    the run switches to the roomiest other box, and only to one with two free slots or more, so the next
+    catch does not send it straight back to a PC.
+    """
+    counts, active = getattr(snapshot, 'box_counts', None), getattr(snapshot, 'active_box', None)
+    if not counts or active is None or len(getattr(snapshot, 'party', ())) < 6:
+        return None
+    if active < len(counts) and BOX_CAPACITY - counts[active] > 1:
+        return None
+    box = roomiest_box(snapshot)
+    return box if box is not None and BOX_CAPACITY - counts[box] >= 2 else None
+
+
 def _letter(mon):
     attack, defense, speed, special = mon.dvs[-4:]
     first, second = attack << 4 | defense, speed << 4 | special
