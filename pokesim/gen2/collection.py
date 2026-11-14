@@ -935,11 +935,21 @@ class Rungs:
             pin_events(policy).append(pin.gave_up(current.label, pin.UNAVAILABLE))
 
 
+def box_switch(policy, snapshot):
+    """The box the collection switches to before the active box runs out (release.switch_box), or None.
+    Only the postgame collection makes the early switch, and never in the League."""
+    if 'red' not in getattr(policy, 'completed', {}) or policy.in_league(snapshot):
+        return None
+    from .release import switch_box
+    return switch_box(snapshot)
+
+
 def holds(policy, snapshot, mem, Goal):
     """The goal of an activity under way, or of a failed precondition, which no rung cuts into.
 
     A started contest, Tower challenge, League funding run or postgame League run finishes first, since
-    leaving it loses what it has done. With no ball pocket that can catch, every catch waits for a box.
+    leaving it loses what it has done. With no ball pocket that can catch, every catch waits for a box,
+    and a full party switches boxes before the active one runs out (box_switch).
     """
     state = policy.collection
     from .contest import journey as contest
@@ -952,7 +962,7 @@ def holds(policy, snapshot, mem, Goal):
         goal = tower(policy, snapshot, Goal)
         if goal:
             return goal
-    if not snapshot.can_catch and not policy.in_league(snapshot):
+    if (not snapshot.can_catch or box_switch(policy, snapshot) is not None) and not policy.in_league(snapshot):
         if any(count < 20 for count in snapshot.box_counts):
             goal = policy.storage_goal(snapshot)
             return Goal('collection_box', 'Make room for new catches', goal.map_name, goal.x, goal.y, goal.face)
@@ -1628,7 +1638,9 @@ def arrive(policy, snapshot):
         from .ledger import release_step
         return release_step(policy, snapshot)
     if key == 'collection_box':
-        box = next((i for i, count in enumerate(snapshot.box_counts) if count < 20), None)
+        # The roomiest other box, so one more catch does not fill it again (release.switch_box).
+        from .release import roomiest_box
+        box = roomiest_box(snapshot)
         if box is not None:
             policy.menu = ChangeBox(box)
             return 'a'
