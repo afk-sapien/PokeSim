@@ -255,7 +255,7 @@ class Run:
 
     def read(self):
         return SimpleNamespace(valid=True, started=True, map=1, map_name='Olivine City', party=(), owned=frozenset(),
-                               badges=0, hall_of_fame_count=0, event_flags=b'', in_battle=0)
+                               badges=0, hall_of_fame_count=0, event_flags=b'', in_battle=0, stored=())
 
     def waiting(self, snapshot):
         return True
