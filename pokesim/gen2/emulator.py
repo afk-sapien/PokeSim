@@ -662,7 +662,8 @@ class Emulator(EmulatorBase):
         from ..pcvalue import full_alert, full_notice
         from .release import headroom
         # The ledger sets the flag only when it looks for room, so a box with room again clears it here.
-        if full_notice(self.store, bool(getattr(self.policy, 'pc_deadlock', False)) and headroom(snapshot) <= 0):
+        free = headroom(snapshot)
+        if full_notice(self.store, bool(getattr(self.policy, 'pc_deadlock', False)) and free <= 0, free):
             goal = getattr(self.policy, 'goal', None)
             text = full_alert(getattr(snapshot, 'box_counts', ()), [getattr(goal, 'label', None)])
             self._event(Event('pc_full', 'PC full', f'{text} Release or unlock one from the PC tab.',

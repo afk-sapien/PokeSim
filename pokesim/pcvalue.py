@@ -6,9 +6,10 @@ trade, and where it came from. Where it came from is only one input. It never ke
 itself. Level is not in it, since any copy can be trained.
 
 When room is needed, the lowest-value Pokémon goes first, so among plain spares the most common DVs
-go first. A few never go: Keep-locked Pokémon, eggs, party members, trained copies, the best and the
-rarest copy of each species (each Unown letter), so the Pokédex never loses an entry, and the copies
-a running plan relies on. Each species keeps those, or the copies a plan or its evolution family
+go first. A few never go: Keep-locked Pokémon, eggs, party members, the most trained copy of each
+species and every trained shiny or event Pokémon, the best and the rarest copy of each species (each
+Unown letter), so the Pokédex never loses an entry, and the copies a running plan relies on. Another
+trained copy of a species goes after every spare. Each species keeps those, or the copies a plan or its evolution family
 needs. An open DV hunt keeps only its best candidate. The rest are spares, released lowest score first, and only when room is needed. Copies
 the demand needs come after every spare. So the PC can only fill with nothing to release when every
 slot is locked. A copy kept for a linked adventure that lacks the species is marked For trade, and a
@@ -48,8 +49,8 @@ WEIGHTS = {
 # Breeding stock and offered trade partners hold a plan role for at most this many copies of a
 # species, so a breeding plan cannot pin a whole box.
 ROLE_COPIES = 2
-# Stat experience summed over the five stats that counts as fully trained. A trained copy is never
-# released automatically.
+# Stat experience summed over the five stats that counts as fully trained. The most trained copy of a
+# species is never released automatically, and another trained copy goes only after every spare.
 TRAINED_STAT_EXP = 100000
 # A new copy of a species already held is kept only when it is at least this many times rarer than
 # the rarest copy held.
@@ -218,6 +219,17 @@ def family_need(held, inputs=Inputs()):
     return need
 
 
+def trained(entry):
+    """Whether a Pokémon has TRAINED_STAT_EXP or more stat experience."""
+    return sum(entry.stat_exp) >= TRAINED_STAT_EXP
+
+
+def held_for_good(entry):
+    """Whether a trained copy keeps its Trained floor beside a more trained one: a shiny, or a
+    legendary or one-time event Pokémon."""
+    return entry.origin == 'legendary' or (len(entry.dvs) == 5 and is_shiny({'dvs': list(entry.dvs)}))
+
+
 def _rate(entries, inputs):
     groups = defaultdict(list)
     for entry in entries:
@@ -239,6 +251,9 @@ def _rate(entries, inputs):
         # The rarest copy stays too when another part, such as a gift's, puts a commoner copy first.
         known = [row for row in rated if row.rarity is not None]
         rarest = min(known, key=lambda row: row.rarity) if known else None
+        # The species' one Trained floor: its most trained copy, the higher ranked on a tie.
+        most_trained = max((row for row in rated if trained(row.entry)), default=None,
+                           key=lambda row: (sum(row.entry.stat_exp), row.entry.experience))
         planned = inputs.demand.get(group[0], 0)
         kin = 0 if group[1] else family[group[0]]
         # The adventure's own copy, or the copies its family needs, plus one for each linked adventure
@@ -261,9 +276,13 @@ def _rate(entries, inputs):
                 row.status, row.reason = 'floor', 'Plan role'
             elif row is rarest and (rated[0].rarity is None or row.rarity < rated[0].rarity):
                 row.status, row.reason = 'floor', 'Rarest copy'
-            elif sum(row.entry.stat_exp) >= TRAINED_STAT_EXP:
-                # Training is hours of play a new catch cannot make up, so only an owner's request takes it.
-                row.status, row.reason = 'floor', 'Trained'
+            elif trained(row.entry):
+                # Training is hours of play a new catch cannot make up, so only an owner's request takes
+                # the most trained copy of a species, or a trained shiny or event Pokémon. Each other
+                # trained copy goes after every spare. A Red PC once held 21 trained Kabutops, each a
+                # floor, and with all 240 slots locked it caught nothing for a day.
+                floor = row is most_trained or held_for_good(row.entry)
+                row.status, row.reason = 'floor' if floor else 'kept', 'Trained'
             elif index < need or row.entry in roles:
                 row.status = 'kept'
                 if row.entry not in roles:
@@ -310,7 +329,7 @@ def locked(row):
     or the best candidate of an open hunt. A hatch is not locked by hatching. Family demand and the
     plan's needs keep it, as any other copy."""
     entry = row.entry
-    return bool(entry.locked or entry.role or sum(entry.stat_exp) >= TRAINED_STAT_EXP or row.reason == HUNT_BEST)
+    return bool(entry.locked or entry.role or trained(entry) or row.reason == HUNT_BEST)
 
 
 def gives(row):
@@ -590,13 +609,19 @@ def plain_name(name):
     return ''.join(char for char in text if char.isalnum()).casefold()
 
 
-def full_notice(store, blocked):
+def full_notice(store, blocked, free):
     """Whether to journal DEADLOCK now: once when the PC fills with nothing that may go, and again only
-    after room has come back. The mark is kept in the store, so a restart does not repeat it."""
+    after room has come back, ``free`` being the free box slots. The mark is kept in the store, so a
+    restart does not repeat it. Only a free slot clears it. A policy restored from a save starts with
+    its flag clear until it next looks for room, and a Red that won the League every minute with a
+    full PC journaled the notice once for each win."""
     logged = bool(store.get('pc_deadlock_logged'))
-    if blocked != logged:
-        store.set('pc_deadlock_logged', blocked)
-    return blocked and not logged
+    if blocked and not logged:
+        store.set('pc_deadlock_logged', True)
+        return True
+    if logged and free > 0:
+        store.set('pc_deadlock_logged', False)
+    return False
 
 
 def deadlocked(rated, free):
