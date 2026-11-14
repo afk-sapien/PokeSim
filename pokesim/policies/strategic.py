@@ -910,7 +910,11 @@ class StrategicPolicy(Policy):
         if heal is not None and not in_league and not ball_at_hand(s, choice.goal, self.nav):
             choice.offer(heal, choice.errand_candidate('heal', 'heal'), site='heal')
         swap = choice.errand_candidate('party_upgrade', 'party')
-        if (not s.box_full and not self.heal.latched and not choice.owns_party and choice.wins(swap)
+        # A box change waiting for this PC visit goes first, the early switch (Snapshot.switch_box) as much
+        # as a full box. A swap that cut into the early switch let a restock in, the walk to the Mart took
+        # the run out of the Center, and outside the switch won again, so the two traded places at the door.
+        if (not s.box_full and s.switch_box is None and not self.heal.latched and not choice.owns_party
+                and choice.wins(swap)
                 and 'Pokecenter' in WORLD.get(s.map, {}).get('name', '') and WORLD[s.map]['width'] == 14):
             weakest = reserve_to_deposit(s)
             if weakest is not None:
