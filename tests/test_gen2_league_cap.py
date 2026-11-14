@@ -59,6 +59,7 @@ def test_a_league_win_is_progress_for_a_finished_run():
     from pokesim.runtime.supervision import Supervisor
     from pokesim.stalls import StallWatch
     emu = Emulator.__new__(Emulator)
+    emu.previous = emu.policy = None
     emu.play_clock, emu.history = SimpleNamespace(frames=1000), {'maps': [1, 2, 3], 'league': 200}
     snapshot = SimpleNamespace(badges=0xFFFF, event_flags=b'\xff', owned=set(range(1, 252)), party=())
     emu.supervisor = Supervisor()

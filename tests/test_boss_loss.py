@@ -25,7 +25,7 @@ def blackout_emu(stall):
                              goal=None)
     return SimpleNamespace(stall=stall, loop_guard=None, store=None, policy=policy, data=SimpleNamespace(map_ids={}),
                            history={'maps': set(), 'league': 0}, play_clock=SimpleNamespace(frames=0),
-                           supervisor=Supervisor())
+                           supervisor=Supervisor(), previous=None)
 
 
 def test_repeated_gen2_league_blackouts_trip_the_stall_while_experience_keeps_rising():
