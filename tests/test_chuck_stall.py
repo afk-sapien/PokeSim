@@ -59,7 +59,7 @@ def observe(emu, where, minutes=10):
     party = (SimpleNamespace(species=TYPHLOSION, trainer_id=1, dvs=(9, 9), experience=emu.experience, egg=False),)
     snapshot = SimpleNamespace(valid=True, started=True, map=where, map_name=str(where), all_fainted=False,
                                in_battle=2 if where == GYM else 0, hall_of_fame_count=0, badges=0x1F,
-                               event_flags=b'\x07', owned={1, 2, 3}, party=party)
+                               event_flags=b'\x07', owned={1, 2, 3}, party=party, stored=())
     Emulator._watch_boss(emu, emu.previous, snapshot)
     Emulator._note_progress(emu, snapshot, 0.0)
     emu.snapshot = emu.previous = snapshot

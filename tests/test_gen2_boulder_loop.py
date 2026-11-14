@@ -71,7 +71,7 @@ def emulator(streak, frame=1000):
     from test_supervision import ladder
     events = []
     emu = SimpleNamespace(supervisor=ladder(streak), play_clock=SimpleNamespace(frames=frame), history={'maps': []},
-                          stall=SimpleNamespace(progress=lambda frame, now: None))
+                          stall=SimpleNamespace(progress=lambda frame, now: None), previous=None, policy=None)
     emu._note_progress = lambda snapshot, now: Emulator._note_progress(emu, snapshot, now)
     return emu, events
 

@@ -252,7 +252,8 @@ def gen2_snapshot(**fields):
     mon = SimpleNamespace(trainer_id=1, dvs=(1, 2, 3, 4), species=134, level=fields.pop('level', 60),
                           experience=fields.pop('experience', 1000), egg=False, nick='VAPOREON')
     values = dict(valid=True, started=True, map=1, map_name='Lance\'s Room', owned=frozenset({134}), badges=0xFFFF,
-                  hall_of_fame_count=3, event_flags=b'\x01', party=(mon,), in_battle=2, enemy_species=130, enemy_level=50)
+                  hall_of_fame_count=3, event_flags=b'\x01', party=(mon,), stored=(), in_battle=2, enemy_species=130,
+                  enemy_level=50)
     return SimpleNamespace(**{**values, **fields})
 
 

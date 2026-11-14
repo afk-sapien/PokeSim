@@ -31,7 +31,7 @@ from .ram import (PARTY_STRUCT, W_BADGES, W_BAG_ITEMS, W_DEX_OWNED, W_EVENT_FLAG
 from .runtime.battle_clock import ThrowClock, gen1_balls
 from .runtime.headless import HeadlessRun
 from .runtime.supervision import Supervisor
-from .stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, held_rose
+from .stalls import FRAMES_PER_GAME_MINUTE as MINUTE, PROGRESS_EVENTS, collected, held_rose
 from .strategy_data import EVENTS, ITEMS
 from .trade.partners import valid as valid_partner
 from .yellow import YELLOW_SHA1
@@ -548,8 +548,9 @@ class Gen1Watch(PlannerMarks):
 
 class Gen2Watch(PlannerMarks):
     """Achievements as the Gen II runtime counts them: a new best for badges, story events, the
-    Pokédex, areas, experience or League wins restarts its stall watch. So does a Johto Marathon
-    checkpoint, since a race runs longer than the scenario's quiet window and earns nothing else."""
+    Pokédex, areas, experience or League wins restarts its stall watch. So do a hatch, a better copy
+    caught and a catch for a linked adventure (stalls.collected), and a Johto Marathon checkpoint,
+    since a race runs longer than the scenario's quiet window and earns nothing else."""
 
     def __init__(self, run):
         self.run = run
@@ -638,6 +639,9 @@ class Gen2Watch(PlannerMarks):
             if old and mon.level > old.level and not mon.egg:
                 gained.append(('level', f'{mon.nick} grew to level {mon.level}'))
         policy = getattr(self.run, 'policy', None)
+        from .gen2.postgame import tail
+        if collected(self.previous, snapshot, lambda mon: tail(data, mon), getattr(policy, 'demand', None) or {}):
+            earned = True
         if policy is not None:
             from .gen2 import marathon
             reached = marathon.checkpoint(policy)

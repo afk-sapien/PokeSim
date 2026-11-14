@@ -27,7 +27,7 @@ from ..runtime.reload import FRAMES_PER_SECOND, reload_target  # noqa: F401
 from ..planning import decide
 from ..runtime.supervision import CANNOT_END, GIVE_UP, HOLD, PARK, Supervisor
 from ..runtime.supervision import report as stuck_report
-from ..stalls import LoopGuard, StallWatch
+from ..stalls import LoopGuard, StallWatch, collected
 from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import validate_runtime
 from .adapter import SCREEN_FRAMES, new_history
@@ -755,8 +755,13 @@ class Emulator(EmulatorBase):
         self.supervisor.watch_boss(boss, blackout, stall, getattr(self, 'loop_guard', None))
 
     def _note_progress(self, snapshot, now):
-        """Restart the stall clocks on a new high (Supervisor.progressed), which also starts the ladder again."""
-        if self.supervisor.progressed(snapshot, len(self.history['maps']), self.history.get('league', 0)):
+        """Restart the stall clocks on a new high (Supervisor.progressed), which also starts the ladder
+        again. A hatch, a better copy caught and a catch for a linked adventure restart the stall clock
+        and leave the ladder alone (stalls.collected), as a held rise does in Red, Blue and Yellow."""
+        from .postgame import tail
+        gained = self.supervisor.progressed(snapshot, len(self.history['maps']), self.history.get('league', 0))
+        if gained or collected(self.previous, snapshot, lambda mon: tail(self.data, mon),
+                               getattr(self.policy, 'demand', None) or {}):
             self.stall.progress(self.play_clock.frames, now)
 
     def _watch_progress(self, snapshot):

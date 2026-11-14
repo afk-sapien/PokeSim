@@ -111,6 +111,54 @@ def held_rose(previous, snapshot):
             and held(snapshot) > held(previous))
 
 
+def collected(previous, snapshot, rarity, demand):
+    """True when a Gold, Silver or Crystal run hatched an egg, caught a better copy or caught a copy
+    for a linked adventure since the ``previous`` snapshot.
+
+    A finished run with every entry and a level 100 team spends its play on these, and none is a new
+    best (Supervisor.progressed), so the stall alert fired every hour between League wins while the
+    run caught, hatched and traded. Other catches are churn and count nothing, as GEN1_HELD_RISE
+    counts no catch in these games.
+
+    A better copy is better as the PC counts it (pcvalue.verdict): at least RARITY_STEP times rarer
+    than the rarest copy of its species held before. A species with no copy held before has no copy to
+    beat, and a new Pokédex entry is a new best. ``rarity`` gives a Pokémon's rarity. A copy for a
+    linked adventure is one more of a species in ``demand`` while the PC held fewer than its own
+    one and one for each adventure that misses it (collection.peer_wanted). A copy counts only by
+    a trainer and DVs not held before, so a box read twice in one look adds nothing.
+    """
+    if previous is None or not (previous.valid and previous.started and snapshot.valid and snapshot.started):
+        return False
+    from collections import Counter
+    from .pcvalue import RARITY_STEP
+
+    def key(mon):
+        return mon.trainer_id, tuple(mon.dvs or ())
+
+    # The egg keeps its species, trainer and DVs when it hatches.
+    hatched = {key(mon) for mon in previous.party if mon.egg} & {key(mon) for mon in snapshot.party if not mon.egg}
+    before = [mon for mon in (*previous.party, *previous.stored) if not mon.egg] if hatched else None
+    if hatched and hatched - {key(mon) for mon in before}:
+        return True
+    # A catch adds a Pokémon, so most looks end here.
+    if len(snapshot.party) + len(snapshot.stored) <= len(previous.party) + len(previous.stored):
+        return False
+    before = before or [mon for mon in (*previous.party, *previous.stored) if not mon.egg]
+    known = {(mon.species, key(mon)) for mon in before}
+    new = [mon for mon in (*snapshot.party, *snapshot.stored)
+           if not mon.egg and (mon.species, key(mon)) not in known]
+    if not new:
+        return False
+    species = {mon.species for mon in new}
+    counts, best = Counter(), {}
+    for mon in before:
+        counts[mon.species] += 1
+        if mon.species in species:
+            best[mon.species] = min(rarity(mon), best.get(mon.species, 1.0))
+    return any(demand.get(mon.species) and counts[mon.species] < demand[mon.species] + 1
+               or mon.species in best and rarity(mon) * RARITY_STEP <= best[mon.species] for mon in new)
+
+
 # Losses to one boss within LOSS_GAME_MINUTES that make a loss loop (LossLoop).
 LOSS_LIMIT = 6
 LOSS_GAME_MINUTES = 120
