@@ -555,5 +555,9 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
             if self.goal.face and self.interaction != self.goal.key:
                 self.interaction = self.goal.key
                 return Action(self.goal.face, 8, 8)
+            from ..quests import gift_goal, pressed
+            if gift_goal(self.goal.key):
+                # Each press here is a try at the gift, so a gift that never comes is set aside.
+                pressed(self, self.goal.key, self.goal.map_name)
             return Action('a', 8, 36)
         return Action(None, 0, 24)

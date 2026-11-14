@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2
+
+- Resume an adventure whose emulator clock passed 2^48 cycles. PyBoy RS 0.1.5 refused such a save on load as an invalid emulator state, so a run that played long enough at high speed kept writing autosaves it could not load and stopped resuming after a restart. PyBoy RS 0.1.6 moves every absolute clock back by a multiple of 2^40 at the end of any frame past 2^47 cycles, and loads an older save past 2^48 with all progress kept. A Red save moved an hour of play past the cap now opens with the same party, badges, money, Pokédex, place and play clock, plays in step with the original for 36000 frames and saves below the cap. Saves at or below 2^48 load byte for byte as before. pokecore 0.12.2 asks for PyBoy RS 0.1.6.
+- Open the pages of a stopped adventure last run by 0.4. A stopped adventure's pages open its store read-only, and that path skipped the step that fills rows an older release never stored, so the pages failed with a TypeError until the adventure was started. Both paths now fill the missing rows, and the read-only open leaves the file on disk unchanged.
+- For contributors, `tests/test_save_compat.py` resumes the saves of stopped adventures written by 0.4.16, 0.5.3, 0.6.2 and 0.7.0 in Red and by 0.5.3, 0.6.2 and 0.7.0 in Crystal, plus a Red save moved past the clock cap. The saves come from private cartridges, so these cases run in the local full suite and skip in CI.
+
 ## 0.7.1
 
 - Release only spares and the owner's requests on a Gold, Silver or Crystal PC visit that starts past the box reserve. A Crystal run with a full Pokédex and 112 species wanted by linked adventures caught 196 and released 193 in about seven hours, and the app asked for help. A kept copy now goes only while the boxes are below the reserve, and a spare in any box goes before it.

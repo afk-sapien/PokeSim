@@ -1,13 +1,12 @@
-# Release status: 0.7.1 prepared for publication
+# Release status: 0.7.2 prepared for publication
 
-PokeSim 0.7.1 is a patch on 0.7.0 that stops Gold, Silver and Crystal catch and release loops,
-sends legendary trips straight to the legendary, leaves a stuck game out of automatic trades and
-fixes the Route 22 rival battle in randomized Red and Blue. pokecore moves to 0.12.1 and PyBoy RS
-stays at 0.1.5. See the [release notes](docs/release-notes.md). The publication workflow must
-verify the exact tagged commit, build the packages and both container images, and verify the
-uploaded assets before making the release public. The publication receipt is recorded after
-that succeeds. PokeSim 0.7.0 was published on November 13, 2026
-([notes](docs/release-0.7.0.md)).
+PokeSim 0.7.2 is a patch on 0.7.1 that lets long-running adventures resume again, with nothing
+lost. PyBoy RS moves to 0.1.6, which loads a save whose emulator clock passed the limit 0.1.5
+refused, and pokecore moves to 0.12.2. See the [release notes](docs/release-notes.md). The
+publication workflow must verify the exact tagged commit, build the packages and both container
+images, and verify the uploaded assets before making the release public. The publication
+receipt is recorded after that succeeds. PokeSim 0.7.1 was published on November 14, 2026
+([notes](docs/release-0.7.1.md)).
 
 0.5.0 moves every adventure to the Rust emulator (PyBoy RS 0.1.2 through Core 0.7.0) and adds
 Gold, Silver and Crystal. See the [0.5.0 release notes](docs/release-0.5.0.md). Core and PyBoy RS
