@@ -146,6 +146,31 @@ def test_gen1_a_full_party_switches_to_the_roomiest_box_before_the_last_slot_fil
     assert replace(s, party=s.party[:5]).switch_box is None
 
 
+def test_gen1_a_reserve_swap_waits_for_the_box_switch_in_the_center(monkeypatch):
+    # A swap that cut into the switch let a restock walk the run out of the Center, and outside the switch
+    # won again, so the two goals traded places at the door until the replay's goal churn cap.
+    from pokesim.policies import strategic
+    from pokesim.policies.progression import Goal as Gen1Goal
+    from pokesim.strategy_data import MAPS
+    from test_strategy import fake_mem
+    monkeypatch.setattr(strategic, 'reserve_to_deposit', lambda s: 0)
+    monkeypatch.setattr(strategic, 'potential', lambda species, party: 500 if species == 17 else 0)
+    party = (mon(level=20, hp=100, max_hp=100),) * 6
+    s = gen1_last_slot(party=party, boxed_pokemon=((17, 20),) + ((165, 3),) * 18,
+                       map=MAPS['LAVENDER_POKECENTER'], x=13, y=4)
+    assert s.switch_box == 10 and not s.box_full
+    p = StrategicPolicy(7)
+    p.goal = Gen1Goal('party_box', 'Make room for new catches', 'Box 1 is down to its last slot')
+    p._overworld(s, fake_mem({}))
+    assert p.goal.key == 'party_box' and p.pc.species is None
+    # Once the switch is made the swap is offered again.
+    switched = replace(s, boxed_pokemon=((17, 20),), box_counts=GEN1_BOXES[:10] + (1, 20), active_box=10)
+    assert switched.switch_box is None
+    q = StrategicPolicy(7)
+    q._overworld(switched, fake_mem({}))
+    assert q.goal.key == 'party_upgrade' and q.pc.species == 17
+
+
 def test_gen1_a_better_copy_waits_for_the_box_switch_and_a_shiny_does_not():
     me = mon(level=100, hp=300, max_hp=300, moves=(33,), pp=(35,))
     enemy = mon(species=0x54, level=30, hp=3, max_hp=40, moves=(33,), pp=(35,))
