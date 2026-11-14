@@ -7,10 +7,11 @@ import zipfile
 
 import pytest
 
+from pokesim import activity_ledger
 from pokesim.app import legacy_import
 from pokesim.app.backup import file_checksum, restore_backup
 from pokesim.app.errors import Conflict
-from pokesim.state import schema
+from pokesim.state import kv, schema
 from pokesim.store import Store
 
 NAMES = {re.search(r'CREATE TABLE IF NOT EXISTS (\w+)', statement).group(1) for statement in schema.TABLES}
@@ -88,6 +89,18 @@ def test_a_read_only_store_reads_an_old_file_in_todays_shape_without_changing_it
         assert NAMES <= tables(store.db)
     assert path.read_bytes() == before
     assert read_version(path) == 0
+
+
+def test_a_read_only_store_fills_the_rows_an_old_file_never_stored(tmp_path):
+    # A stopped adventure last run by 0.4.x has no activity ledger row, and booting the cartridge for
+    # its pages updates that row, so the copy gains it as a writable open would.
+    path = legacy(tmp_path / 'pokesim.sqlite')
+    (tmp_path / 'shots').mkdir()
+    (tmp_path / 'states').mkdir()
+    before = path.read_bytes()
+    with closing(Store(tmp_path, read_only=True)) as store:
+        assert kv.get(store.db, activity_ledger.KEY) == {'started_at': None, 'available': False}
+    assert path.read_bytes() == before
 
 
 def test_a_failed_migration_leaves_the_database_at_its_old_version(tmp_path, monkeypatch):
