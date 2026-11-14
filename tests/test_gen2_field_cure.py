@@ -89,6 +89,37 @@ def test_a_mart_adds_cures_to_a_bag_without_any(data, monkeypatch):
     assert cures(mart, [('POTION', 3)], entries=19) == []
 
 
+def test_a_cure_leaves_free_the_entry_a_champion_plan_needs(data, monkeypatch):
+    # A Champion with 18 items-pocket entries walking to buy a Max Elixir bought an Antidote at a mart on
+    # the way. The Elixir then had no room under champion_shop.POCKET_ROOM, so the plan and its walk
+    # were dropped.
+    from pokesim.gen2 import champion_shop, ledger
+    policy = policy_with_center(data, monkeypatch)
+    mart = next(entry['constant'] for entry in data.maps.values()
+                if any(data.items['ANTIDOTE'] in shop['items'] for shop in entry['shops']))
+    elixir, tm = data.items['MAX_ELIXER'], min(champion_shop.limited_tms(data))
+    skip = {data.items[name] for name, _ in ledger.CURES} | {elixir}
+    plain = tuple((item, 1) for item in sorted(data.item_attributes)
+                  if item not in skip and data.item_attributes[item].get('pocket') == 'ITEM')
+
+    def cures(entries, plan=None):
+        at = snapshot(data, mart, [])
+        at = replace(at, items=at.pockets['balls'] + plain[:entries],
+                     pockets={**at.pockets, 'items': plain[:entries]})
+        policy.collection.pop(champion_shop.PLAN, None)
+        if plan:
+            policy.collection[champion_shop.PLAN] = plan
+        return [row for row in ledger.supplies(policy, at) if row[0] == 'cures']
+    row = [('cures', ('ANTIDOTE', 'FULL_HEAL'), 2)]
+    plan = {'item': elixir, 'target': 0, 'quantity': 1, 'bought': None}
+    assert cures(18) == row
+    assert cures(18, plan) == []
+    # Room for both, a plan already bought, and a TM, which goes in its own pocket, keep the cure.
+    assert cures(17, plan) == row
+    assert cures(18, dict(plan, bought=True)) == row
+    assert cures(18, dict(plan, item=tm)) == row
+
+
 def test_a_mart_counter_with_no_clerk_adds_no_cures(data, monkeypatch):
     # Mahogany Mart's second counter sells Antidotes, and its clerk is away until the hideout is cleared.
     # A Silver run walking through to the hideout went on a restock trip to Ecruteak for cures alone.

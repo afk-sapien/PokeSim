@@ -274,6 +274,16 @@ def room(data, snapshot, item):
     return len(snapshot.pockets.get('balls' if pocket == 'BALL' else 'items', ())) < POCKET_ROOM.get(pocket, 19)
 
 
+def wants_item_entry(data, snapshot, plan):
+    """Whether a held plan still needs a new items-pocket entry: its item is not bought, not in the bag
+    and not a TM, and it goes in the items pocket."""
+    if not plan or plan.get('bought'):
+        return False
+    item = plan['item']
+    return (item not in limited_tms(data) and data.item_attributes.get(item, {}).get('pocket') == 'ITEM'
+            and not dict(snapshot.items).get(item))
+
+
 def best_supply(data, snapshot, offers):
     if not champion(snapshot):
         return None

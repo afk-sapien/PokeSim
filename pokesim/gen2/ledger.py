@@ -15,6 +15,7 @@ import math
 
 from ..planning import boss, throws
 from ..planning.ledger import BOX, HP, MONEY, PARTY, PP, PRICELESS, Ledger, Need, Resources, Shortfall, Unit
+from . import champion_shop
 from .champion_shop import SUPPLIES
 from .menus import Release
 from .release import headroom
@@ -215,9 +216,17 @@ def cure_wanted(policy, snapshot):
 
     The clerk must be on the map. The Mahogany Mart counter that sells Antidotes stays empty until the
     hideout below it is cleared, and a Silver run walking through to the hideout set off for Ecruteak.
+
+    A held Champion shop plan keeps the entry its item needs (champion_shop.room). A Champion with 18
+    entries walking to buy a Max Elixir bought an Antidote at a mart on the way, the Elixir no longer
+    fit, and the plan and its walk were dropped.
     """
     data = policy.data
-    if len(snapshot.pockets.get('items', ())) >= POCKET_SLOTS['items']:
+    entries = len(snapshot.pockets.get('items', ()))
+    if entries >= POCKET_SLOTS['items']:
+        return False
+    if (entries + 1 >= champion_shop.POCKET_ROOM['ITEM']
+            and champion_shop.wants_item_entry(data, snapshot, policy.collection.get(champion_shop.PLAN))):
         return False
     inventory = dict(snapshot.items)
     if any(inventory.get(data.items[name], 0) for name, _ in CURES):
