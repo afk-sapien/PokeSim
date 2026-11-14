@@ -1402,7 +1402,7 @@ def test_trade_item_quests_use_versioned_cartridge_objects(real_data):
     def person(snapshot, key, label, area, script):
         assert any(obj['script'] == script for obj in real_data.maps[real_data.map_ids[area]]['objects'])
         return area
-    policy = SimpleNamespace(person=person, data=real_data)
+    policy = SimpleNamespace(person=person, data=real_data, monitor_tables={}, clock=0)
     snapshot = SimpleNamespace(map=real_data.map_ids['NEW_BARK_TOWN'], event=lambda name: name in finished)
     for flag, area in [('EVENT_GOT_UP_GRADE', 'SILPH_CO_1F'),
                        ('EVENT_GOT_KINGS_ROCK_IN_SLOWPOKE_WELL', 'SLOWPOKE_WELL_B2F'),
@@ -1745,7 +1745,7 @@ def test_slowpoke_well_boulder_uses_the_reachable_side(real_data):
     events = {'EVENT_GOT_UP_GRADE'}
     reachable = set()
     nav = SimpleNamespace(objects={}, local=lambda snapshot, points, *args, **kwargs: [] if points[0] in reachable else None)
-    policy = SimpleNamespace(data=real_data, nav=nav, memory=None, person=lambda *args: 'visit')
+    policy = SimpleNamespace(data=real_data, nav=nav, memory=None, person=lambda *args: 'visit', monitor_tables={}, clock=0)
     snapshot = SimpleNamespace(map=well, objects=((index, 3, 2),), event=lambda name: name in events)
     goal = trade_items(policy, snapshot, Goal)
     assert goal.face == 'left' and goal.x == 4

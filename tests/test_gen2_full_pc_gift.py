@@ -20,6 +20,7 @@ def policy():
     storage = Goal('storage', 'PC', 'CHERRYGROVE_POKECENTER_1F', 9, 2, 'up')
     people = []
     return SimpleNamespace(storage_goal=lambda snap: storage, data=SimpleNamespace(game='silver'), people=people,
+                           monitor_tables={}, clock=0,
                            person=lambda snap, key, *rest: people.append(key) or Goal(key, key, 'X', 0, 0))
 
 
