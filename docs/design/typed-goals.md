@@ -87,6 +87,7 @@ class Failure:
 | `no_progress` | Gen II's no-progress guard fired while it ran | new | the journal, the catalogue |
 | `menu_failed` | a menu task for it kept failing | new | the journal, the catalogue |
 | `no_call` | a Crystal phone wait spent its budget and the call never came | new | the catalogue |
+| `no_gift` | a Gen II gift spent its tries at its spot without the gift, as when the giver stands elsewhere | new | the catalogue |
 | `lost` | it lost a boss battle (`planning/losses.py`) | no, the boss rule waits | the catalogue |
 | `needs` | a condition it needs is unmet, with the need named | no | the catalogue |
 | `not_now` | a rule of its source keeps it out, such as a party too weak for the grass | no | the catalogue |
