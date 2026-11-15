@@ -25,6 +25,11 @@ import time
 EMULATOR_THREADS = frozenset(('emulator', 'gen2-emulator'))
 
 
+def listen(emu, sequence):
+    """Read the audio feed as the page does, so the run has a live listener. Returns the new cursor."""
+    return emu.audio_packet(sequence)[1]
+
+
 def capture(source, output, rom, game_data):
     from pokesim.state import schema
     output.mkdir(parents=True, mode=0o700, exist_ok=False)
@@ -185,7 +190,7 @@ def run(args):
             if args.mode != 'headless':
                 emu.watch()
             if args.mode == 'audio':
-                _, audio_sequence, _, _ = emu.audio_packet(audio_sequence)
+                audio_sequence = listen(emu, audio_sequence)
             if time.monotonic() > deadline:
                 emu.stop()
                 raise TimeoutError('Simulation exceeded five minutes')
