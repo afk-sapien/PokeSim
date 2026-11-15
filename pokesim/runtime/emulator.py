@@ -15,7 +15,7 @@ import queue
 import threading
 import time
 
-from .. import config
+from .. import audio, config
 from ..planning import pin
 from . import trace
 from .manifest import checkpoint_manifest
@@ -159,7 +159,11 @@ class EmulatorBase:
     def _tick(self, n: int):
         """Advance frames, rendering only for an observation or a waiting viewer."""
         while n > 0 and not self.stopping:
-            audible = self.audio.active()
+            listening = self.audio.active()
+            # Above the audio limit the page mutes and the server sends no sound, so sampling it
+            # would only slow the game. Unlimited speed counts as above the limit.
+            speed = 1 if self.manual_mode else self.speed
+            audible = listening and 0 < speed <= audio.MAX_SPEED
             self._sync_audio(audible)
             k = min(1 if audible else CHUNK, n)
             observing = (self.frame + k) // SNAPSHOT_EVERY != self.frame // SNAPSHOT_EVERY
@@ -169,6 +173,10 @@ class EmulatorBase:
             self.pb.tick(k, render=observing or publishing, sound=audible)
             if audible:
                 self.audio.publish(self.pb.sound.raw_buffer[:self.pb.sound.raw_buffer_head])
+            elif listening:
+                # Count the frames with no sound, so the page still sees the pace and says why
+                # the sound is off.
+                self.audio.publish(b'', k)
             self.frame += k
             self.executed_frames += k
             self.play_clock.advance(k)

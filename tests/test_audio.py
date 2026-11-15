@@ -268,14 +268,15 @@ def test_a_catch_up_burst_keeps_the_reported_speed_and_its_audio(tmp_path, monke
     assert emu.speed == speed
 
 
-@pytest.mark.parametrize('speed', [0.5, 1, 4, 16, 0])
-def test_ticks_sample_every_frame_only_for_a_listener(speed):
+@pytest.mark.parametrize('speed,manual', [(0.5, False), (1, False), (4, False), (MAX_SPEED, False),
+                                          (16, True), (0, True)])
+def test_ticks_sample_every_frame_only_for_a_listener(speed, manual):
     from test_frame_publishing import emulator
     emu = emulator()
     emu._sync_audio = Mock()
     emu.pb.sound.raw_buffer = b'ab'
     emu.pb.sound.raw_buffer_head = 2
-    emu.speed = speed
+    emu.speed, emu.manual_mode = speed, manual
     emu._tick(12)
     assert emu.pb.tick.call_count == 3
     assert all(not call.kwargs['sound'] for call in emu.pb.tick.call_args_list)
@@ -290,6 +291,25 @@ def test_ticks_sample_every_frame_only_for_a_listener(speed):
     emu._tick(12)
     assert emu.pb.tick.call_count == 3
     assert all(not call.kwargs['sound'] for call in emu.pb.tick.call_args_list)
+
+
+@pytest.mark.parametrize('speed', [4.6, 16, 0])
+def test_a_listener_above_the_audio_limit_samples_no_sound(monkeypatch, speed):
+    from test_frame_publishing import emulator
+    clock = [10.0]
+    monkeypatch.setattr('pokesim.audio.time.monotonic', lambda: clock[0])
+    emu = emulator()
+    emu.speed, emu.paused = speed, False
+    # Unlimited runs as fast as the host allows, 8x here.
+    emu.pb.tick.side_effect = lambda k, **_: clock.__setitem__(0, clock[0] + k / 60 / 8)
+    after = emu.audio_packet(-1)[1]
+    emu._tick(120)
+    assert emu.pb.tick.call_count == 30
+    assert not any(call.kwargs['sound'] for call in emu.pb.tick.call_args_list)
+    state, sequence, pcm, pace, _ = emu.audio_packet(after)
+    # The frames still count, so the page sees a pace above the limit and says the sound is off.
+    assert (state, sequence - after, pcm) == ('playing', 120, b'')
+    assert pace == (speed or pytest.approx(8))
 
 
 def test_real_rom_sound_switch_preserves_save_and_queued_buttons(tmp_path):
