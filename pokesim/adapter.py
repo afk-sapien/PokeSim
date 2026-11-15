@@ -39,7 +39,7 @@ class Gen1Adapter:
         run.game = self.version
         # A randomized run (RANDOMIZER set) plays the patched cartridge, as the managed worker does.
         run.pb = open_emulator(rom_stream(rom), default=CoreEmulator, yellow=self.yellow, window='null',
-                               sound_emulated=False)
+                               sound_emulated=False, snapshot=True)
         # Before fair DVs register their hook, so the trace knows it.
         run.tracer = runtime_trace.for_run(trace, 1, run.pb, run.seed)
         run.pb.set_emulation_speed(0)

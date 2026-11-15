@@ -11,13 +11,15 @@ so a snapshot emulator keeps a lazy copy instead:
 - the unbanked view of ``0xC000-0xDFFF`` (what the CPU currently sees, which is all Gen I
   needs) is copied with one ``read_bytes`` call, and plain ``memory[address]``,
   ``memory[start:stop]`` and ``memory.read_bytes`` inside it are served from that copy.
+- a value decoded from memory, such as a game's snapshot, can be kept beside the copy with
+  ``snapshot_memo`` and is dropped with it.
 
 The copy is never stale. Every public emulator method except the short read-only list in
 READ_ONLY bumps a mutation counter before and after it runs, and so does every memory write.
-A copy taken under an older counter is discarded. Ticks, writes, state loads, checkpoint
-restores, clock changes and inputs therefore all invalidate it. While a mutating call is
-running, for example inside a hook callback during a tick, reads always go to the live machine.
-Reads from a closed machine raise exactly as live reads do.
+A copy or kept value taken under an older counter is discarded. Ticks, writes, state loads,
+checkpoint restores, clock changes and inputs therefore all invalidate it. While a mutating call
+is running, for example inside a hook callback during a tick, reads always go to the live machine
+and nothing is kept. Reads from a closed machine raise exactly as live reads do.
 
 Ported from PokeSim's pokesim/gen2/snapshot.py.
 """
@@ -63,6 +65,9 @@ def snapshot_memory_class(base):
         def __init__(self, owner):
             super().__init__(owner)
             self._banks = (None, {})
+            # The unbanked view and the counter it was copied under, for the one-byte fast path.
+            self._view = (None, b'')
+            self._memo = (None, {})
 
         def __setitem__(self, key, value):
             owner = self._owner
@@ -125,9 +130,42 @@ def snapshot_memory_class(base):
                 return None
             live = super().read_bytes
             block = self._block((VIEW, None), lambda: bytes(live(VIEW_START, VIEW_STOP)))
-            return None if block is None else block[start - VIEW_START:stop - VIEW_START]
+            if block is None:
+                return None
+            # _block returns a block only for the current counter.
+            self._view = (self._owner._generation, block)
+            return block[start - VIEW_START:stop - VIEW_START]
+
+        def snapshot_memo(self, key, compute):
+            """``compute()``, kept under ``key`` until the machine next changes.
+
+            The value is computed again after any tick, write, load or other mutating call. It
+            is not kept while a mutating call runs, or when ``compute`` itself changes the
+            machine. ``compute`` must depend only on this machine's memory, and the caller must
+            not change the value it returns.
+            """
+            owner = self._owner
+            if owner._busy:
+                return compute()
+            generation = owner._generation
+            captured, memo = self._memo
+            if captured != generation:
+                memo = {}
+                self._memo = (generation, memo)
+            elif key in memo:
+                return memo[key]
+            value = compute()
+            if owner._generation == generation and not owner._busy:
+                memo[key] = value
+            return value
 
         def __getitem__(self, key):
+            # One byte of a view already copied under the current counter, which is most reads.
+            owner = self._owner
+            if type(key) is int and not owner._busy:
+                generation, view = self._view
+                if generation == owner._generation and VIEW_START <= key < VIEW_STOP:
+                    return view[key - VIEW_START]
             selected = _view_range(key)
             if selected is not None:
                 start, stop, single = selected

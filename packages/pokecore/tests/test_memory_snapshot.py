@@ -151,6 +151,97 @@ def test_unbanked_reads_come_from_one_snapshot_and_follow_the_machine(machine):
     assert memory[0xD200] == plain[0xD200]
 
 
+def test_one_byte_reads_follow_ticks_writes_and_loads(machine):
+    memory = machine.memory
+    plain = Memory(machine)
+    state = machine.save()
+    # Copies the view, so the reads below take the one-byte path.
+    memory.read_bytes(0xC000, 0xE000)
+    before = memory[0xC000]
+    assert memory[0xC000] == before == plain[0xC000]
+    machine.tick()
+    assert memory[0xC000] == plain[0xC000] != before
+    memory[0xD200] = memory[0xD200] ^ 0x5A
+    assert memory[0xD200] == plain[0xD200]
+    machine.load(state)
+    assert memory[0xC000] == plain[0xC000] == before
+
+
+def test_kept_values_are_dropped_whenever_the_machine_changes(machine):
+    memory = machine.memory
+    computed = []
+
+    def value():
+        computed.append(memory[0xC000])
+        return len(computed)
+    state = machine.save()
+    checkpoint = machine.checkpoint()
+    assert memory.snapshot_memo('k', value) == memory.snapshot_memo('k', value) == 1
+    machine.screenshot()
+    assert memory.snapshot_memo('k', value) == 1
+    assert memory.snapshot_memo('other', value) == 2
+    changes = (machine.tick, lambda: memory.__setitem__(0xD300, 1), lambda: machine.load(state),
+               lambda: machine.restore_checkpoint(checkpoint))
+    for change in changes:
+        count = len(computed)
+        change()
+        assert memory.snapshot_memo('k', value) == memory.snapshot_memo('k', value) == count + 1
+
+
+def test_kept_values_are_not_kept_while_the_machine_runs_or_changes(machine):
+    memory = machine.memory
+    seen = []
+
+    def hook(context):
+        seen.append((memory.snapshot_memo('k', lambda: memory[0xC000]), Memory(machine)[0xC000]))
+
+    machine.hook_register(0, 0x0153, hook, None)
+    machine.tick()
+    machine.hook_deregister(0, 0x0153)
+    assert seen and all(kept == current for kept, current in seen)
+    assert len({current for _, current in seen}) > 1
+    calls = []
+
+    def writing():
+        calls.append(1)
+        memory[0xD300] = len(calls)
+        return len(calls)
+    assert memory.snapshot_memo('w', writing) == 1
+    assert memory.snapshot_memo('w', writing) == 2
+
+
+def test_the_snapshot_yellow_emulator_keeps_the_red_layout():
+    pytest.importorskip('pyboy_rs')
+    from pokecore.emulator import Emulator
+    from pokecore.yellow import RedLayoutMemory, open_emulator
+    ram = random.Random(4).randbytes(32768)
+    red = open_emulator(io.BytesIO(cartridge()), yellow=False, snapshot=True, ram_file=io.BytesIO(ram),
+                        sound_emulated=False)
+    red.stop(save=False)
+    assert type(red) is snapshot_emulator(Emulator)
+    pb = open_emulator(io.BytesIO(cartridge()), yellow=True, snapshot=True, ram_file=io.BytesIO(ram),
+                       sound_emulated=False)
+    try:
+        pb.tick(120)
+        memory = pb.memory
+        assert isinstance(memory, RedLayoutMemory) and memory.raw is pb.raw_memory
+        assert hasattr(pb.raw_memory, 'snapshot_window')
+        live = RedLayoutMemory(Memory(pb))
+        assert memory.read_bytes(0xC000, 0xE000) == live.read_bytes(0xC000, 0xE000)
+        assert [memory[a] for a in range(0xCF00, 0xD200)] == [live[a] for a in range(0xCF00, 0xD200)]
+        assert memory.snapshot_window(2, 0xA100, 64) == bytes(live[2, 0xA100:0xA140])
+        assert memory.snapshot_window(1, 0xD000, 4) is None
+        kept = memory.snapshot_memo('k', lambda: memory[0xD163])
+        assert memory.snapshot_memo('k', lambda: -1) == kept == live[0xD163]
+        memory[0xD163] = kept ^ 1
+        assert memory.snapshot_memo('k', lambda: memory[0xD163]) == kept ^ 1 == live[0xD163]
+        before = memory[0xC000]
+        pb.tick()
+        assert memory[0xC000] == live[0xC000] != before
+    finally:
+        pb.stop(save=False)
+
+
 def test_memory_bytes_uses_the_snapshot_window(machine):
     memory = machine.memory
     assert memory_bytes(memory, 2, 0xA100, 300) == live(machine, 2, 0xA100, 300)

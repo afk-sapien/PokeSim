@@ -94,6 +94,15 @@ def wild_shiny(mem):
     return mem[address] & 0x2f == 0x2a and mem[address + 1] == 0xaa
 
 
+def _boxed_pokemon(mem):
+    """(species, level) of each Pokémon in the active box, from one read of its records."""
+    count = min(mem[0xDA80], 20)
+    if not count:
+        return ()
+    records = bytes(mem[0xDA96:0xDA96 + count * 33])
+    return tuple((records[i * 33], records[i * 33 + 3]) for i in range(count))
+
+
 def _read_fields_python(mem, move_data=None):
     """mem: anything supporting mem[addr] and mem[a:b] over the GB address space (pyboy.memory)."""
     party = core_gen1.read_party(mem, move_data=move_data)
@@ -125,7 +134,7 @@ def _read_fields_python(mem, move_data=None):
         playtime=(mem[W_PLAYTIME_H], mem[W_PLAYTIME_H + 2], mem[W_PLAYTIME_H + 3]),
         textbox=mem[W_TILEMAP + 12 * 20] == TILE_BOX_TL,
         start_menu=mem[W_TILEMAP + 10] == TILE_BOX_TL and not in_battle,
-        boxed_pokemon=tuple((mem[0xDA96 + i * 33], mem[0xDA99 + i * 33]) for i in range(min(mem[0xDA80], 20))),
+        boxed_pokemon=_boxed_pokemon(mem),
         active_box=mem[W_CURRENT_BOX] & 0x7F,
         hall_of_fame_count=mem[0xD5A2],
         coins=bcd(bytes(mem[0xD5A4:0xD5A6])),

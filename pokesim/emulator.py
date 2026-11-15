@@ -191,8 +191,10 @@ class Emulator(EmulatorBase):
             import io
             options['ram_file'] = io.BytesIO(bytes(32768))
         from .randomized import rom_stream
+        # A snapshot emulator copies work RAM once per step, so the many reads between steps
+        # cost no native calls, and ram.read_snapshot decodes once per step.
         pb = open_emulator(rom_stream(self.rom), default=CoreEmulator, window="null", sound_emulated=sound,
-                           yellow=self.rom_sha1 == YELLOW_SHA1, **options)
+                           yellow=self.rom_sha1 == YELLOW_SHA1, snapshot=True, **options)
         if tracer is not None:
             # Before the trackers register their hooks, so the trace knows every hook.
             tracer.attach(pb)
