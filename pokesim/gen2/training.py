@@ -17,13 +17,23 @@ def identity(mon):
     return [mon.trainer_id, list(mon.dvs)]
 
 
+_WILD_LEVELS = [None, {}]
+
+
 def wild_levels(data):
-    """The top wild level of each map whose cartridge wild table has walking encounters (grass or cave floor)."""
-    top = {}
-    for row in data.encounters:
-        if row['method'] == 'grass':
-            top[row['map']] = max(top.get(row['map'], 0), row['level'])
-    return top
+    """The top wild level of each map whose cartridge wild table has walking encounters (grass or cave floor).
+
+    Callers only read it. It is kept until ``data.encounters`` is replaced, as loading a cartridge's own
+    table does, since the rows are never changed in place.
+    """
+    encounters = data.encounters
+    if _WILD_LEVELS[0] is not encounters:
+        top = {}
+        for row in encounters:
+            if row['method'] == 'grass':
+                top[row['map']] = max(top.get(row['map'], 0), row['level'])
+        _WILD_LEVELS[:] = [encounters, top]
+    return _WILD_LEVELS[1]
 
 
 def walk_points(policy, snapshot, mid):

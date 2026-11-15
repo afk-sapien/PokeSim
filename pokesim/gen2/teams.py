@@ -7,17 +7,22 @@ instead of pressing B at the PC forever.
 """
 from collections import Counter
 
-from ..trade.preferences import signature as identity
+from pokecore.identity import pokemon_identity
+
 from .menus import ChangeBox, Release, Storage
 from .standdown import exhausted, forget, pc_key, stand_down, standing_down, team_key
-from .views import mon_view
 
 # Consecutive PC visits with nothing left to do before an assembly stands down. The monitor keeps the count.
 BLOCKED_LIMIT = 8
 
 
 def key(mon):
-    return identity(mon_view(mon, egg_view=True))
+    """The trainer and DV signature of ``mon``, the one ``signature`` gives for its egg view.
+
+    It reads the two fields straight from the Pokémon. Building the whole rated view of every party
+    and boxed Pokémon only to read them back took about a twentieth of a Gold run.
+    """
+    return pokemon_identity(mon.trainer_id, mon.dvs)
 
 
 def assembled(snapshot, wanted):
