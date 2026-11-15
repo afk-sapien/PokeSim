@@ -21,6 +21,9 @@ import tempfile
 import threading
 import time
 
+# The emulator thread of each generation, the only thread the timers count.
+EMULATOR_THREADS = frozenset(('emulator', 'gen2-emulator'))
+
 
 def capture(source, output, rom, game_data):
     from pokesim.state import schema
@@ -75,8 +78,15 @@ def run(args):
             'game_data_dir': str(fixture / 'game-data'), 'speed': 0,
             'ntfy_url': '', 'ntfy_token': '', 'seed': 12345})
         settings.install()
-        from pokesim.emulator import Emulator
-        from pokesim.policies.strategic import StrategicPolicy
+        from pokesim.cartridges import identify
+        cartridge = identify((fixture / 'rom.gb').read_bytes())
+        # The timers wrap the classes the runtime runs, which differ by generation.
+        if cartridge is not None and cartridge.generation == 2:
+            from pokesim.gen2.emulator import Emulator
+            from pokesim.gen2.policy import Policy as StrategicPolicy
+        else:
+            from pokesim.emulator import Emulator
+            from pokesim.policies.strategic import StrategicPolicy
         from pokecore.emulator import Emulator as CoreEmulator
         timings = defaultdict(lambda: {'calls': 0, 'wall': 0.0, 'cpu': 0.0,
                                        'exclusive_wall': 0.0, 'exclusive_cpu': 0.0})
@@ -87,7 +97,7 @@ def run(args):
 
             @functools.wraps(original)
             def measured(*pos, **kwargs):
-                if threading.current_thread().name != 'emulator':
+                if threading.current_thread().name not in EMULATOR_THREADS:
                     return original(*pos, **kwargs)
                 entry = [time.perf_counter(), time.thread_time(), 0.0, 0.0]
                 stack.append(entry)
@@ -141,8 +151,10 @@ def run(args):
 
         def bounded_tick(emu, count):
             original_tick(emu, min(count, args.frames - emu.executed_frames))
-            if emu.executed_frames >= args.frames:
+            if emu.executed_frames >= args.frames and not emu.stopping:
                 emu.stopping = True
+                # The Gen II loop ends only on a stop command, so the budget queues one as stop() does.
+                emu.commands.put(('stop', None))
 
         def profiled_run(emu):
             start_wall, start_cpu = time.perf_counter(), time.thread_time()
