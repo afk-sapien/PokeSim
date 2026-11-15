@@ -28,9 +28,9 @@ class AudioFeed:
     def active(self):
         return time.monotonic() < self.until
 
-    def publish(self, pcm):
+    def publish(self, pcm, frames=1):
         with self.lock:
-            self.sequence += 1
+            self.sequence += frames
             now = time.monotonic()
             self.frames.append((self.sequence, now, bytes(pcm)))
             while self.frames and self.frames[0][1] < now - BUFFER_SECONDS:
