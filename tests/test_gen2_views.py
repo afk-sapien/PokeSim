@@ -52,6 +52,24 @@ def test_mon_view_rates_an_egg_shown_the_way_the_game_does():
     assert {key: shown[key] for key in RATING} == {key: plain[key] for key in RATING}
 
 
+def test_a_team_key_is_the_signature_of_the_egg_view_and_changes_with_trainer_or_dvs():
+    # The key reads trainer and DVs straight from the Pokémon instead of building its rated view.
+    from pokesim.gen2.teams import key
+    from pokesim.trade.preferences import signature
+    data, keys = tables(), set()
+    for species, attack_defense, speed_special, trainer, options in (
+            (25, 0xFF, 0xFF, 4321, {}), (25, 0xFE, 0xFF, 4321, {}), (25, 0xFF, 0xFF, 4320, {}),
+            (215, 0x12, 0x34, 4321, {'egg': True}), (201, 0xAA, 0xAA, 0, {'box': 3, 'position': 7})):
+        raw = bytearray(48)
+        raw[0], raw[31] = species, 50
+        raw[6:8] = trainer.to_bytes(2, 'big')
+        raw[21], raw[22] = attack_defense, speed_special
+        decoded = decode_mon(bytes(raw), NAME, data, **options)
+        assert key(decoded) == signature(mon_view(decoded, egg_view=True))
+        keys.add(key(decoded))
+    assert len(keys) == 5                    # one changed DV or a changed trainer is another key
+
+
 class Snapshot:
     """The parts of a pokecore Gen II snapshot that ``state_view`` reads."""
 
