@@ -103,7 +103,11 @@ def box_location(box, active):
 
 
 def _byte(memory, bank, address):
-    return memory[address] if bank is None else memory[bank, address]
+    if bank is None:
+        return memory[address]
+    window = getattr(memory, 'snapshot_window', None)
+    block = None if window is None else window(bank, address, 1)
+    return memory[bank, address] if block is None else block[0]
 
 
 def read_box_counts(memory, *, version=None) -> tuple[int, ...]:

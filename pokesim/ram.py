@@ -362,7 +362,19 @@ def _read_storage(mem, counts=None):
 
 
 def read_snapshot(mem, frame: int) -> Snapshot:
-    """Decode through Core while retaining application-specific storage filtering."""
+    """Decode through Core while retaining application-specific storage filtering.
+
+    Snapshot emulator memory (pokecore.memory_snapshot) keeps the decoded snapshot until the
+    machine next changes, so asking again for the same frame between two steps decodes once.
+    Any tick, load or write decodes again. The snapshot is frozen, so sharing it is safe.
+    """
+    memo = getattr(mem, 'snapshot_memo', None)
+    if memo is None:
+        return _decode_snapshot(mem, frame)
+    return memo(('gen1 snapshot', frame), lambda: _decode_snapshot(mem, frame))
+
+
+def _decode_snapshot(mem, frame: int) -> Snapshot:
     from .strategy_data import MOVES as MOVE_DATA
     from pokecore.snapshot import read_fields
     decoded = read_fields(mem, move_data=MOVE_DATA)

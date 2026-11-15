@@ -159,6 +159,21 @@ class RedLayoutMemory:
     def __iter__(self):
         raise TypeError('Read an explicit memory range')
 
+    def snapshot_window(self, bank, address, size):
+        """A cartridge RAM block from the raw memory's snapshot, or None (see memory_snapshot).
+
+        Cartridge RAM keeps the same addresses in both layouts, so only that range is served.
+        """
+        window = getattr(self.raw, 'snapshot_window', None)
+        if window is None or not 0xA000 <= address <= address + size <= 0xC000:
+            return None
+        return window(bank, address, size)
+
+    def snapshot_memo(self, key, compute):
+        """The raw memory's ``snapshot_memo`` for a value decoded through this view, or ``compute()``."""
+        memo = getattr(self.raw, 'snapshot_memo', None)
+        return compute() if memo is None else memo(('red layout', key), compute)
+
 
 # PokeSim's name for the same view.
 YellowMemory = RedLayoutMemory
@@ -264,10 +279,11 @@ def is_yellow(rom) -> bool:
     return hashlib.sha1(raw).hexdigest() == YELLOW_SHA1
 
 
-def _yellow_emulator_class():
-    from .emulator import Emulator
+def _yellow_emulator_class(base=None):
+    if base is None:
+        from .emulator import Emulator as base
 
-    class YellowEmulator(Emulator):
+    class YellowEmulator(base):
         """A Core emulator whose ``memory`` uses Red addresses on a Yellow cartridge.
 
         ``raw_memory`` keeps the untranslated Yellow addresses.
@@ -295,19 +311,34 @@ def _yellow_emulator():
     return cls
 
 
+def snapshot_yellow_emulator():
+    """``YellowEmulator`` on a snapshot emulator: its ``raw_memory`` serves reads from a per-step copy."""
+    cls = globals().get('SnapshotYellowEmulator')
+    if cls is None:
+        from .emulator import Emulator
+        from .memory_snapshot import snapshot_emulator
+        cls = _yellow_emulator_class(snapshot_emulator(Emulator))
+        cls.__qualname__ = cls.__name__ = 'SnapshotYellowEmulator'
+        globals()['SnapshotYellowEmulator'] = cls
+    return cls
+
+
 def __getattr__(name):
     if name == 'YellowEmulator':
         return _yellow_emulator()
+    if name == 'SnapshotYellowEmulator':
+        return snapshot_yellow_emulator()
     raise AttributeError(name)
 
 
-def open_emulator(rom, default=None, yellow=None, **kwargs):
+def open_emulator(rom, default=None, yellow=None, *, snapshot=False, **kwargs):
     """Construct the Core emulator that matches the cartridge.
 
     ``rom`` is a path or a binary stream. Yellow gets ``YellowEmulator``. Other
     cartridges use ``default``, which is the Core ``Emulator`` unless named.
     ``yellow`` names the variant for a patched ROM, whose checksum no longer
-    identifies it.
+    identifies it. ``snapshot`` serves memory reads between steps from a
+    per-step copy (see memory_snapshot).
     """
     import io
     from pathlib import Path
@@ -317,7 +348,10 @@ def open_emulator(rom, default=None, yellow=None, **kwargs):
     else:
         raw = Path(rom).read_bytes()
     if is_yellow(raw) if yellow is None else yellow:
-        return _yellow_emulator()(rom, **kwargs)
+        return (snapshot_yellow_emulator() if snapshot else _yellow_emulator())(rom, **kwargs)
     if default is None:
         from .emulator import Emulator as default
+    if snapshot:
+        from .memory_snapshot import snapshot_emulator
+        default = snapshot_emulator(default)
     return default(rom, **kwargs)

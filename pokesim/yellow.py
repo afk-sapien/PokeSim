@@ -26,16 +26,23 @@ __all__ = [
 ]
 
 
-def open_emulator(rom, default=None, yellow=None, **kwargs):
+def open_emulator(rom, default=None, yellow=None, *, snapshot=False, **kwargs):
     """pokecore's ``open_emulator``, with ``yellow`` naming the variant of a patched ROM.
 
     A patched ROM's checksum no longer identifies it. pokecore before 0.12.0 had no ``yellow``
     argument, so the choice is made here. 0.12.0 takes it too, and this wrapper keeps the callers unchanged.
+    ``snapshot`` serves memory reads between steps from a per-step copy (pokecore.memory_snapshot).
     """
     if yellow is None:
-        return _core_open_emulator(rom, default, **kwargs)
+        return _core_open_emulator(rom, default, snapshot=snapshot, **kwargs)
     if yellow:
+        if snapshot:
+            from pokecore.yellow import snapshot_yellow_emulator
+            return snapshot_yellow_emulator()(rom, **kwargs)
         return YellowEmulator(rom, **kwargs)
     if default is None:
         from pokecore.emulator import Emulator as default
+    if snapshot:
+        from pokecore.memory_snapshot import snapshot_emulator
+        default = snapshot_emulator(default)
     return default(rom, **kwargs)
