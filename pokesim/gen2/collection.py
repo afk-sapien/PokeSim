@@ -1,5 +1,9 @@
 """Persistent postgame expeditions using version and time specific encounters."""
+import io
+import pickle
+import re
 from collections import Counter
+from copy import deepcopy
 from dataclasses import replace
 from functools import partial
 
@@ -7,6 +11,7 @@ from ..planning import values
 from ..planning import arbiter, decide, pin, throws
 from ..planning.arbiter import Candidate, Tier
 from ..planning.cost import FRAMES_PER_BATTLE, FRAMES_PER_TILE
+from ..planning.goals import GoalSpec, Rules
 from ..planning.ledger import FIELD_MOVES
 from ..planning.stance import HUNT
 from .menus import ChangeBox, FieldMove, Storage, Teach, Use
@@ -711,7 +716,6 @@ def _slots(policy):
 
 
 def _save(policy):
-    from copy import deepcopy
     slots = _slots(policy)
     # A menu task can hold the emulator, so it is kept by reference. A rung replaces it, never edits it.
     menu = slots.pop('menu')
@@ -751,15 +755,72 @@ def _restore(policy, saved):
             _set(policy, slot, value)
 
 
+# The deepcopy hooks that give the object itself: a goal's spec never changes and one rules object
+# serves every goal of its kind (planning/goals.py).
+_KEPT_BY_DEEPCOPY = frozenset((GoalSpec.__deepcopy__, Rules.__deepcopy__))
+# A pickled float is the opcode G and its eight bytes, big end first. A NaN or an infinity has every
+# exponent bit set, so its first byte is 7f or ff and the top half of its second is f.
+_NOT_FINITE = re.compile(rb'G[\x7f\xff][\xf0-\xff]')
+
+
+def _kept(identity):
+    """Stands in a fingerprint for an object ``deepcopy`` keeps. It is never unpickled."""
+    raise TypeError('a draft fingerprint is never unpickled')
+
+
+class _Fingerprint(pickle.Pickler):
+    def reducer_override(self, obj):
+        # This checks the hook ``deepcopy`` checks, in its order: a class is copied as itself first.
+        if isinstance(obj, type):
+            return NotImplemented
+        hook = getattr(obj, '__deepcopy__', None)
+        if hook is None:
+            return NotImplemented
+        if getattr(hook, '__func__', None) in _KEPT_BY_DEEPCOPY:
+            return _kept, (id(obj),)
+        raise pickle.PicklingError(f'{type(obj).__name__} has its own deepcopy')
+
+
+def _fingerprint(slots):
+    """Bytes equal for two states only when ``deepcopy`` gives the same copy of each, or None.
+
+    Equal pickles have the same types, values, order and sharing, and ``deepcopy`` reads the same
+    reductions pickle writes, at the same protocol. An object ``deepcopy`` keeps, as a goal's spec and
+    rules, goes in as its id, so two states match only when they hold that very object. The held copy
+    holds it too, so its id cannot pass to another object. Any other deepcopy hook could copy what pickle
+    does not see, and a NaN is not equal to a copy of itself, so a state with either has no fingerprint.
+    """
+    stream = io.BytesIO()
+    try:
+        _Fingerprint(stream, 4).dump(slots)
+    except Exception:
+        return None
+    fingerprint = stream.getvalue()
+    return None if _NOT_FINITE.search(fingerprint) else fingerprint
+
+
 def draft(policy, build):
     """Run ``build`` and take its writes back. Returns what ``build`` gave and its writes, each slot's new
     value or _MISSING for a slot it removed, which ``write`` lands.
 
     A build hands the objects it wrote over to its writes and the policy gets copies of the old ones, so a
     menu task or goal that holds an object the build wrote still holds the one ``write`` lands.
+
+    Most builds write nothing, so the copy of the old state is held for the next draft, which takes it
+    while the state's fingerprint is the same. That spares a deep copy per rung. A draft that puts copied
+    objects back hands them to the policy, and a build that fails leaves the copy unchecked, so either
+    drops it.
     """
-    from copy import deepcopy
-    before = _save(policy)
+    slots = _slots(policy)
+    # A menu task can hold the emulator, so it is kept by reference. A rung replaces it, never edits it.
+    menu = slots.pop('menu')
+    fingerprint = _fingerprint(slots)
+    held, policy.draft_copy = getattr(policy, 'draft_copy', None), None
+    if fingerprint is not None and held is not None and held[0] == fingerprint:
+        copied = held[1]
+    else:
+        copied = deepcopy(slots)
+    before = {**copied, 'menu': menu}
     result = build()
     now = _slots(policy)
     writes = {}
@@ -770,6 +831,8 @@ def draft(policy, build):
             writes[slot] = deepcopy(value) if slot == 'completed' else value
     for slot in writes:
         _set(policy, slot, before.get(slot, _MISSING))
+    if not writes and fingerprint is not None:
+        policy.draft_copy = fingerprint, copied
     return result, writes
 
 
