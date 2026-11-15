@@ -1181,7 +1181,8 @@ def test_time_capsule_team_restoration_takes_priority_over_story(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, seed=1, starter='cyndaquil')
     from pokesim.gen2.teams import key
-    original = SimpleNamespace(box=0, position=0, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [1, 2, 3, 4]})
+    original = SimpleNamespace(box=0, position=0, trainer_id=1, dvs=[1, 2, 3, 4],
+                               to_dict=lambda **_: {'trainer_id': 1, 'dvs': [1, 2, 3, 4]})
     policy.collection['time_capsule_restore'] = [key(original)]
     from pokesim.gen2.policy import Goal
     policy.storage_goal = lambda _: Goal('pc', 'PC', 'NEW_BARK_TOWN', 1, 1, 'up')
@@ -1767,7 +1768,7 @@ def test_tower_strength_preparation_preserves_the_active_menu(real_data):
     policy = Policy(real_data)
     policy.memory = None
     mon = SimpleNamespace(species=99, level=50, moves=(23, 57, 182, 250), stats=(138, 160, 120, 90, 60, 65),
-                           held_item=0, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [0] * 5})
+                           held_item=0, trainer_id=1, dvs=[0] * 5, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [0] * 5})
     policy.collection['tower'] = {'team': [tower.key(mon)], 'original': [], 'cap': 50,
                                   'entered': False, 'returning': False, 'trained': True, 'preparation_center': True}
     snapshot = SimpleNamespace(map=real_data.map_ids['OLIVINE_POKECENTER_1F'], party=(mon,),
@@ -1858,9 +1859,9 @@ def test_tower_teaches_psychic_to_the_stronger_special_attacker(real_data):
     policy = Policy(real_data)
     policy.memory = None
     lugia = SimpleNamespace(species=249, level=70, moves=(105, 56, 240, 129), stats=(245, 151, 195, 170, 133, 235),
-        held_item=0, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [1] * 5})
+        held_item=0, trainer_id=1, dvs=[1] * 5, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [1] * 5})
     espeon = SimpleNamespace(species=196, level=70, moves=(33, 98, 44, 36), stats=(220, 125, 123, 208, 220, 179),
-        held_item=0, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [2] * 5})
+        held_item=0, trainer_id=1, dvs=[2] * 5, to_dict=lambda **_: {'trainer_id': 1, 'dvs': [2] * 5})
     policy.collection['tower'] = {'team': [tower.key(lugia), tower.key(espeon)], 'original': [], 'cap': 70,
         'entered': False, 'returning': False, 'trained': True, 'preparation_center': True}
     snapshot = SimpleNamespace(map=real_data.map_ids['OLIVINE_POKECENTER_1F'], party=(lugia, espeon),
