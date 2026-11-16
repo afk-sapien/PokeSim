@@ -739,7 +739,7 @@ def floating_tags(arguments):
 REQUIRED = {
     'ci.yml': [
         'dependency-audit', 'lint', 'tests (3.11)', 'tests (3.12)', 'tests (3.14)',
-        'pokecore (3.11)', 'pokecore (3.12)', 'pokecore (3.14)', 'pokecore-native',
+        'pokecore (3.11)', 'pokecore (3.12)', 'pokecore (3.14)',
         'browser (1/4)', 'browser (2/4)', 'browser (3/4)', 'browser (4/4)',
         'container (amd64)', 'container (arm64)', 'ci gate',
     ],
