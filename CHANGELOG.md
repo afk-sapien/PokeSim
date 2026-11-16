@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.4
+
+- Play Red, Blue and Yellow faster. Each step now decodes the game's memory once and reads work RAM from one copy taken after the frame, instead of decoding again for each question and asking the emulator for every byte. A Red run plays about 23% more frames a second. Every Gen I replay makes the same decisions on the same frames as before.
+- Play Gold, Silver and Crystal faster. The collection planner reuses its copy of the planner state while that state is unchanged, instead of copying it for every draft, which made a Gold run about 13% faster. The team key now reads only the trainer ID and DVs it needs instead of rating each Pokémon in full, and the top wild level of each map is kept until the wild table changes, which made a Gold run about 10% faster. Every Gen II replay makes the same decisions on the same frames as before.
+- Move to PyBoy RS 0.1.7, whose emulator runs Red about 17% and Gold about 10% faster. Its save states and audio match 0.1.6, so adventures continue from their saves. pokecore 0.12.3 asks for PyBoy RS 0.1.7.
+- Play faster at Max speed with Sound on. Above 4.5x the page is muted and no sound is sent, but the app still made sound for every frame and threw it away. It now makes none above that speed, as with Sound off.
+- Keep a run's progress rows when the Library database is busy. A hosted Red, Blue or Yellow run failed a play pass with "database is locked" while a trade pass held a read and the disk was slow. The run now logs one warning and plays on, and the goal and encounter rows it could not write wait for the next pass. Any other database error still fails the pass.
+- For contributors, `profile-simulation` times and stops a Gen II run and runs in audio mode again, and the unpublished native Gen I decoder is gone, so pokecore has one snapshot decoder.
+
 ## 0.7.3
 
 - Switch a full party's PC box before the active box runs out, so a shiny or a missing entry has a slot. With six in the party a catch goes to the active box only. A postgame Gold run met a shiny Oddish with four free slots across its boxes and ran from it as "no storage space", because the switch waited until the active box was full and then went to the first box with any room. The switch now goes to the roomiest other box, and with the active box down to its last slot the run switches early when another box has two free slots or more. Until then a better copy of an owned species is not thrown at, so the last slot stays free. A shiny, a missing entry, a required catch and a legendary are still thrown at. Red, Blue and Yellow get the same rule. Gold, Silver and Crystal switch early only in the postgame collection.
