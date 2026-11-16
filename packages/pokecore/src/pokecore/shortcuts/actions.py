@@ -6,8 +6,8 @@ Party slots, move slots and box positions are zero based.
 """
 from __future__ import annotations
 
-from ..gen1 import (BIT_STRENGTH_ACTIVE, W_BADGES, W_CUR_MAP, W_CURRENT_BOX, W_STATUS_FLAGS1, W_WALK_BIKE_SURF_STATE,
-                    W_WHICH_POKEMON)
+from ..gen1 import (BIT_STRENGTH_ACTIVE, W_BADGES, W_CUR_MAP, W_CURRENT_BOX, W_MAP_PAL_OFFSET, W_STATUS_FLAGS1,
+                    W_WALK_BIKE_SURF_STATE, W_WHICH_POKEMON)
 from ..gen1_ui import read_battler, read_screen
 from . import gen2ui
 from .items import (GEN1_FIELD_MOVES, GEN1_HM_MOVES, GEN2_FIELD_MOVES, GEN2_HM_MOVES, gen2_pocket, generation,
@@ -21,7 +21,6 @@ GEN2_BICYCLE, GEN2_ITEMFINDER = 0x07, 0x37
 GEN2_POCKET_NUMBER = {'items': 0, 'balls': 1, 'key': 2, 'tms_hms': 3}
 # wPlayerState values while surfing (Gen 2).
 GEN2_SURFING = (4, 8)
-W_MAP_PAL_OFFSET = 0xD35D
 W_PLAYER_SELECTED_MOVE = 0xCCDC
 W_PLAYER_MON_NUMBER = 0xCC2F
 W_ITEM_QUANTITY = 0xCF96

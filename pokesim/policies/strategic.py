@@ -17,8 +17,8 @@ from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
 from .move_development import hm_upgrade, move_name
-from .progression import (BOSS_TABLE, GAME_STARTERS, STARTERS, YELLOW, Goal, boss_training, healing_goal, journey,
-                          milestones, power, story_goal)
+from .progression import (BOSS_TABLE, FLASH, GAME_STARTERS, STARTERS, YELLOW, Goal, boss_training, flash_learner,
+                          healing_goal, journey, milestones, power, story_goal)
 from ..planning.losses import Losses, ace_slot
 from . import training
 from .menus import select, tap
@@ -301,6 +301,8 @@ class StrategicPolicy(Policy):
         self.assessment_token = None
         self.menu_context = None
         self.supply_attempts = set()
+        # The dark map Flash was last offered in, so it is offered once per map entered. Never saved.
+        self.flash_map = None
         # The HM teach last scored, and the party and HMs it was scored for.
         self.hm_token = None
         self.hm_option = None
@@ -944,6 +946,9 @@ class StrategicPolicy(Policy):
             actions = cure is not None and self._use_item(s, cure, target, "Cure a status in the field")
             if actions:
                 return actions
+        actions = self._flash(s)
+        if actions:
+            return actions
         # A bag this full cannot take a new kind of item, Poké Balls included, so spend the vitamins and
         # Rare Candies that fill it, whether or not a collection project is under way.
         if len(s.items) >= 18:
@@ -1148,6 +1153,13 @@ class StrategicPolicy(Policy):
                 if action:
                     return action
             self.reason = "Explore for a partner that can learn the required field move"
+            return self._recover(s)
+        if goal.key == 'teach_flash':
+            target = flash_learner(s.party)
+            action = target is not None and self._use_item(s, ITEMS['HM05'], target)
+            if action:
+                return action
+            self.reason = 'Teach Flash once the HM can be used'
             return self._recover(s)
         if (WORLD.get(s.map, {}).get('name', '').endswith('Gym') or in_league) and not goal.key.startswith(('heal', 'restock', 'collect_', 'train_', 'catch_', 'party_', 'teach_')):
             target = self.readiness.get('lead', 0)
@@ -1779,6 +1791,23 @@ class StrategicPolicy(Policy):
                 if failure:
                     self.reason = failure
         return self._start_shortcut(s, FieldMove(move, target), ('field', move, pos, direction), purpose, done)
+
+    def _flash(self, s):
+        """Light a dark Rock Tunnel with Flash so viewers can see it, once per map entered.
+
+        The light carries to the next floor and goes out outdoors, so one use lights the cave. A refusal
+        never holds up the walk, and a party without Flash or the Boulder Badge walks it dark.
+        """
+        if not s.dark:
+            self.flash_map = None
+            return None
+        if self.flash_map == s.map or not s.badges & 1:
+            return None
+        slot = next((i for i, mon in enumerate(s.party) if FLASH in mon.moves), None)
+        if slot is None:
+            return None
+        self.flash_map = s.map
+        return self._field(s, 'FLASH', slot, 'Use Flash to light the cave')
 
     def _avoid(self, s, direction, reason):
         self.nav.blocked[((s.map, s.x, s.y), direction)] = s.frame + 1200

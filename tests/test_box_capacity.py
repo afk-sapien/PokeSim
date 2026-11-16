@@ -419,13 +419,17 @@ def test_a_release_confirmation_is_still_refused_outside_a_release():
     assert p._dispatch(full_box(), Screen(memory), 'yes_no', memory)[0].button == 'down'
 
 
-def test_a_party_with_nothing_to_deposit_does_not_fetch_a_stored_partner():
-    # A strong lead and five sole holders of a field move: no reserve may leave, so the PC trip
-    # would only open and close the menu. Storage has room, which used to make the trip look possible.
+def test_a_party_with_nothing_to_deposit_does_not_fetch_a_stored_partner(monkeypatch):
+    # A strong lead, four sole holders of a field move and Yellow's starter Pikachu: no reserve may
+    # leave, so the PC trip would only open and close the menu. Storage has room, which used to make
+    # the trip look possible.
+    from pokesim.policies import team
     from pokesim.policies.team import reserve_to_deposit
+    monkeypatch.setattr(team, 'STAYS_IN_PARTY', {0x54})
     p, s = collection_with_full_box(party_size=6)
     lead = mon(level=100, hp=100, max_hp=100, defense=100)
-    keepers = tuple(mon(moves=(hm, 33, 0, 0), pp=(15, 35, 0, 0)) for hm in (15, 19, 57, 70, 148))
+    keepers = tuple(mon(moves=(hm, 33, 0, 0), pp=(15, 35, 0, 0)) for hm in (15, 19, 57, 70)) + (
+        mon(species=0x54, moves=(84, 33, 0, 0), pp=(30, 35, 0, 0)),)
     s = replace(s, party=(lead,) + keepers, box_counts=(20,) + (0,) * 11)
     assert s.next_free_box is not None and reserve_to_deposit(s) is None
     assert p.collection.goal(s) is None
@@ -444,15 +448,17 @@ def test_a_party_with_nothing_to_deposit_does_not_fetch_a_stored_partner():
     assert p.collection.goal(replace(s, party=(lead,) + keepers[:4] + (mon(),))).key == 'party_collection'
 
 
-def test_a_party_member_trains_when_its_stronger_copy_cannot_leave_the_box():
+def test_a_party_member_trains_when_its_stronger_copy_cannot_leave_the_box(monkeypatch):
     # Yellow's Slowbro stalled at 48: a better-DV Slowbro sat in a box, and the full party had no one
     # to deposit for it, so neither copy was ever offered training and the planner went idle.
+    from pokesim.policies import team
     from pokesim.ram import StoredMon
+    monkeypatch.setattr(team, 'STAYS_IN_PARTY', {0x54})   # The Pikachu below is Yellow's starter.
     p, s = collection_with_full_box(party_size=6)
     p.collection.completed_champion = True
     lead = mon(level=100, hp=100, max_hp=100, defense=100, trainer_id=1, dvs=(9,) * 5)
     keepers = [mon(moves=(hm, 33, 0, 0), pp=(15, 35, 0, 0), level=100, trainer_id=1, dvs=(9,) * 5,
-                   species=species) for hm, species in zip((15, 19, 57, 70, 148), (0x85, 0x31, 0x23, 0x76, 0x54))]
+                   species=species) for hm, species in zip((15, 19, 57, 70, 84), (0x85, 0x31, 0x23, 0x76, 0x54))]
     keepers[0] = replace(keepers[0], species=0x08, level=48, dvs=(5,) * 5)
     stronger = StoredMon(1, 0, 0x08, 30, 'BOX', (33, 0, 0, 0), 0, (15,) * 5, (0,) * 5, 1)
     s = replace(s, party=(lead, *keepers), box_counts=(20, 1) + (0,) * 10,

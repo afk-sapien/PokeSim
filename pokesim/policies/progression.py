@@ -9,6 +9,7 @@ from .team import readiness
 from .. import story
 from ..game_data import current_variant
 from ..planning import league
+from ..planning.losses import ace_slot
 from ..planning.readiness import LOSS, PARTNER, band
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set, object_hidden
 
@@ -300,6 +301,45 @@ def partner_habitats(move, level):
     return tuple(targets)
 
 
+FLASH = 148
+# Oak's aide in the Route 2 gate gives HM05 to a player who owns this many species (hOaksAideRequirement).
+AIDE_REQUIREMENT = 10
+# The road into Rock Tunnel from the north. A run standing here never walks back for the HM.
+ROCK_TUNNEL_ROAD = frozenset(MAPS[name] for name in ('ROUTE_10', 'ROCK_TUNNEL_POKECENTER', 'ROCK_TUNNEL_1F', 'ROCK_TUNNEL_B1F'))
+
+
+def flash_learner(party):
+    """The party slot to teach Flash, or None when only the ace can learn it.
+
+    An HM move cannot be forgotten in Gen I, so Flash on the ace would hold one of its four battle
+    slots for the rest of the game. Of the others, the highest level learns it.
+    """
+    ace = ace_slot(party, power)
+    return max((i for i, mon in enumerate(party) if i != ace and FLASH in SPECIES.get(mon.species, {}).get('hms', [])
+                and (0 in mon.moves or replacement_slot(mon, FLASH) is not None)),
+               key=lambda i: party[i].level, default=None)
+
+
+def flash_goal(s):
+    """HM05 from Oak's aide and its teaching, on the way to Rock Tunnel, or None to walk the cave dark.
+
+    Rock Tunnel is Kanto's only dark cave, and before the Rainbow Badge it is the only road to Lavender.
+    So a run that has entered Lavender never walks back for the HM, and neither does one already on the
+    road into the tunnel. Below the aide's ten species, or with no partner but the ace able to learn
+    Flash, the run walks the cave dark as before rather than make the trip for nothing.
+    """
+    if (s.towns_visited >> MAPS['LAVENDER_TOWN'] & 1 or s.map in ROCK_TUNNEL_ROAD
+            or any(FLASH in mon.moves for mon in s.party) or flash_learner(s.party) is None):
+        return None
+    if not any(item == ITEMS['HM05'] and qty for item, qty in s.items):
+        if event_set(s.event_flags, 'EVENT_GOT_HM05') or len(s.owned) < AIDE_REQUIREMENT:
+            return None
+        return step('flash', 'Visit Oak’s aide on Route 2', 'Show ten owned species to receive Flash for the dark Rock Tunnel',
+                    'Take Diglett’s Cave from Route 11 to Route 2 and talk to the aide in the gate. Answer yes.')
+    reason = 'Teach HM05 to a partner, never the best fighter, to light Rock Tunnel'
+    return Goal('teach_flash', 'Teach Flash to a partner', reason, ((s.map, s.x, s.y),), help=reason)
+
+
 def campaign_goal(s, fossil="HELIX_FOSSIL"):
     done = lambda name: event_set(s.event_flags, name)
     has = lambda name: any(item == ITEMS[name] and qty for item, qty in s.items)
@@ -330,6 +370,9 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
             return teaching_goal("teach_cut", "Teach Cut to a partner", "Teach HM01 to a compatible partner to open routes blocked by trees.", s)
         return gym_goal(s, 4)
     if not s.badges & 8:
+        flash = flash_goal(s)
+        if flash is not None:
+            return flash
         return replace(gym_goal(s, 8), help="Reach Lavender through Rock Tunnel, then go west through the Route 8 underground path to Celadon. Use Cut at Erika’s gym. " + GYM_HELP["rainbow"])
     if not s.badges & 16:
         if not (has("POKE_FLUTE") or done("EVENT_GOT_POKE_FLUTE")):

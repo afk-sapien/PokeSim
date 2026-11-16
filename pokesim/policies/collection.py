@@ -1718,7 +1718,7 @@ class Collection:
         candidates = [i for i, mon in enumerate(s.party)
                       if i != strongest and mon.species != project['give'] and not stays_in_party(s, mon)
                       and choices.get(identity(asdict(mon)), {}).get('state') not in ('locked', 'offered')
-                      and not any(move in (15, 19, 57, 70, 148)
+                      and not any(move in (15, 19, 57, 70)
                                   and not any(move in other.moves for j, other in enumerate(s.party) if j != i)
                                   for move in mon.moves)]
         return min(candidates, key=lambda i: s.party[i].level * 10 + potential(s.party[i].species)) if candidates else None
@@ -1745,7 +1745,7 @@ class Collection:
             index = mon.get('party_index')
             if mon['level'] >= max((p.level for p in s.party), default=0):
                 continue
-            if any(move in (15, 19, 57, 70, 148)
+            if any(move in (15, 19, 57, 70)
                    and not any(move in p.moves for i, p in enumerate(s.party) if i != index)
                    for move in mon.get('moves', ())):
                 continue

@@ -249,7 +249,7 @@ def _release_target(s, stock, reserved, partners, gifts, preferences, demand, re
 def reserve_to_deposit(s, *, prefer_completed=False):
     strongest = max(range(len(s.party)), key=lambda i: s.party[i].level, default=None)
     candidates = [i for i, p in enumerate(s.party) if i != strongest and not stays_in_party(s, p)
-                  and not any(move in (15, 19, 57, 70, 148)
+                  and not any(move in (15, 19, 57, 70)
                               and not any(move in other.moves for j, other in enumerate(s.party) if j != i)
                               for move in p.moves)]
     return min(candidates, key=lambda i: (not (prefer_completed and s.party[i].level >= 100),

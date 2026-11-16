@@ -225,8 +225,10 @@ def gen1_state(rows, done):
                 index = toggles.index([MAPS[name], number])
                 hidden[index // 8] &= ~(1 << index % 8)
     mon = PartyMon(0x99, 20, 20, 50, 'PARTNER', moves=tuple(moves[:4]) or (33,))
+    # An Abra behind the ace, which can learn Flash, so the story walks to Oak's aide for HM05.
+    abra = PartyMon(0x94, 20, 20, 10, 'ABRA', moves=(100,))
     return dict(badges=badges, event_flags=bytes(flags), items=tuple((item, 1) for item in items),
-                party=(mon,) if party else (), saffron_open=saffron, hidden_objects=bytes(hidden))
+                party=(mon, abra) if party else (), saffron_open=saffron, hidden_objects=bytes(hidden))
 
 
 # The run's choices that fill "{starter}" and "{fossil}" in a story row.
@@ -262,9 +264,13 @@ def where(row):
 STORY_LIMIT = 400000
 
 
+# The species check E's Gen I player owns: ten, as Oak's aide on Route 2 asks before giving HM05.
+GEN1_OWNED = frozenset(range(1, 11))
+
+
 def gen1_snapshot(position, state):
     from pokesim.ram import Snapshot
-    return Snapshot(frame=0, map=position[0], x=position[1], y=position[2], owned=frozenset(), seen=frozenset(),
+    return Snapshot(frame=0, map=position[0], x=position[1], y=position[2], owned=GEN1_OWNED, seen=GEN1_OWNED,
                     money=0, in_battle=0, battle_type=0, enemy_species=0, enemy_level=0, opponent=0,
                     player_name='RED', rival_name='BLUE', playtime=(0, 0, 0), textbox=False, start_menu=False, **state)
 
