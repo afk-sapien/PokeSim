@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.12.3
+
+### Added
+
+- A snapshot emulator's memory keeps a value decoded from its per-step copy with
+  `snapshot_memo(key, compute)`, so a second read of a snapshot in the same step decodes
+  nothing. A one-byte read between steps comes from the copy without a native call. Any
+  tick, write, load, checkpoint restore, clock change or input drops the copy and every
+  kept value, and nothing is kept while a hook runs inside a tick.
+- `yellow.snapshot_yellow_emulator()` and `yellow.open_emulator(rom, snapshot=True)` give
+  Yellow the same per-step copy, with the Red layout view.
+
+### Changed
+
+- The `emulator` extra needs pyboy-rs 0.1.7 or newer. Its save states and audio match
+  0.1.6.
+- `storage.read_box_counts` reads its one banked byte from a snapshot emulator's copy of
+  cartridge RAM, as the block reads already did.
+
+### Removed
+
+- `snapshot.decoder_backend()` and the `POKESIM_CORE_DECODER` setting. The native decoder
+  they chose was never published, so every install already used the Python decoder.
+
 ## 0.12.2
 
 ### Changed
