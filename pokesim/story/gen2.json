@@ -15,6 +15,7 @@
     {"key": "deliver_egg", "map": "ELMS_LAB", "x": 5, "y": 3, "face": "up",
      "done_when": {"flags": ["EVENT_GAVE_MYSTERY_EGG_TO_ELM"]}},
     {"key": "zephyr", "map": "VIOLET_GYM", "x": 5, "y": 2, "face": "up", "done_when": {"badges": 1}},
+    {"key": "flash", "map": "SPROUT_TOWER_3F", "object": "SageLiScript", "done_when": {"flags": ["EVENT_GOT_HM05_FLASH"]}},
     {"key": "togepi", "map": "VIOLET_POKECENTER_1F", "x": 4, "y": 4, "face": "up",
      "done_when": {"flags": ["EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE"]}},
     {"key": "kurt", "map": "KURTS_HOUSE", "x": 3, "y": 3, "face": "up",

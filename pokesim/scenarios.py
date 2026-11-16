@@ -163,7 +163,7 @@ def held_dex(snapshot, dexes):
 
 
 # Gen II edits. Addresses come from the cartridge's symbol file and the layout from Core.
-GEN2_EDITS = ('party', 'money', 'unowned', 'clock', 'boxes', 'tower', 'returned')
+GEN2_EDITS = ('party', 'money', 'unowned', 'clock', 'boxes', 'tower', 'returned', 'events', 'machines')
 GEN2_PARTY = {'moves': 2, 'pp': 23, 'status': 32, 'hp': 34, 'max_hp': 36}
 # A box is its count, a species list of 20 and a terminator, then the structs, trainer names and nicknames.
 BOX_SPECIES, BOX_STRUCTS = 1, 22
@@ -275,6 +275,22 @@ def gen2_tower(run, rested=False, first=False):
         policy.collection.pop('tower_result', None)
 
 
+def gen2_events(run, names):
+    """Set story events by name, as :func:`edit_story` does in Gen I."""
+    from pokecore.gen2.resets import write_flag
+    for name in names:
+        write_flag(run.pb.memory, run.data, name, True)
+
+
+def gen2_machines(run, counts):
+    """Set TM and HM quantities by name, such as {"HM05": 1}. The pocket holds TM01 to TM50, then HM01 to HM07."""
+    for name, count in counts.items():
+        kind, number = name[:2], int(name[2:])
+        if kind not in ('TM', 'HM') or not 1 <= number <= (50 if kind == 'TM' else 7):
+            raise ValueError(f'{name} is not a Gen II TM or HM')
+        _gen2_write(run.pb.memory, run.data.symbols, 'wTMsHMs', [count], number - 1 + (50 if kind == 'HM' else 0))
+
+
 def check_gen2_edits(edits):
     """Refuse an edit Gold, Silver and Crystal do not have, such as the Red, Blue and Yellow bag."""
     unknown = sorted(set(edits) - set(GEN2_EDITS))
@@ -300,6 +316,10 @@ def apply_gen2_edits(run, edits, reload=False):
         gen2_fill_boxes(run, *edits['boxes']['fill'])
     if edits.get('tower'):
         gen2_tower(run, edits['tower'].get('rested', False), edits['tower'].get('first', False))
+    if edits.get('events'):
+        gen2_events(run, edits['events'])
+    if edits.get('machines'):
+        gen2_machines(run, edits['machines'])
     # A legendary that came back is in the adventure's claims ledger, not in the save, and a replay has
     # no ledger. Without it the dex shows the legendary as owned and the trip back is never offered.
     # A reload goes back to before any catch, so the edit is repeated.
@@ -570,6 +590,7 @@ class Gen2Watch(PlannerMarks):
         self.rung, self.timed = getattr(policy, 'ladder_rung', None), None
         self.collection = collection
         self.fought = None
+        self.lit = None
         self.reset_marks()
 
     def stand_downs(self):
@@ -584,7 +605,7 @@ class Gen2Watch(PlannerMarks):
         three times in a row is a retry loop, which ``loop`` names.
         """
         policy = self.run.policy
-        found = self.legend_marks(snapshot)
+        found = self.legend_marks(snapshot) + self.flash_marks(snapshot)
         rung = getattr(policy, 'ladder_rung', None)
         if rung != self.rung and rung is not None:
             found.append(('rung', rung, f'The ladder picked {rung}'))
@@ -608,6 +629,17 @@ class Gen2Watch(PlannerMarks):
         found = [] if self.fought is None else [
             ('legend', str(dex), f'Met {self.run.data.species[dex]["name"]}') for dex in sorted(fought - self.fought)]
         self.fought = fought
+        return found
+
+    def flash_marks(self, snapshot):
+        """Flash lighting a dark cave (flash), a PALETTE_DARK map whose snapshot turns ``flash`` on.
+        A cave already lit at the first look is no mark."""
+        if not getattr(self.run.data, 'maps', None) or snapshot is None or not snapshot.valid or not snapshot.started:
+            return []
+        from .gen2.flash import dark
+        lit = dark(self.run.data, snapshot.map) and snapshot.flash
+        found = [('flash', snapshot.map_name, f'Lit {snapshot.map_name} with Flash')] if lit and self.lit is False else []
+        self.lit = lit
         return found
 
     def observe(self, snapshot):

@@ -6,6 +6,7 @@ from collections import Counter, deque
 import random
 
 from ...planning.ledger import FIELD_MOVES
+from ..flash import FLASH, task as flash_task
 from ...planning.losses import ace_slot
 from ...planning.shadow import Shadow
 from ...runtime import policy as protocol
@@ -115,6 +116,8 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
         # The next activity a manager set (planning/pin.py). Never saved.
         self.pin = None
         self.resetting_puzzle = None
+        # The dark map Flash was last offered on (gen2/flash.py). Never saved.
+        self.flash_map = None
         self.unreachable_waits = 0
         # The arbiter's and the decide pipeline's picks beside the chain's, for the log and the replay
         # audit. Never saved.
@@ -391,13 +394,17 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
             self.menu = lead
             return Action(None, 0, 24)
         for event, move in ([] if self.collection.get('tower') or self.collection.get('contest') or self.collection.get('time_capsule_restore') else [('EVENT_GOT_HM01_CUT', 15), ('EVENT_GOT_HM02_FLY', 19), ('EVENT_GOT_HM03_SURF', 57),
-                            ('EVENT_GOT_HM04_STRENGTH', 70), ('EVENT_GOT_HM06_WHIRLPOOL', 250), ('EVENT_GOT_HM07_WATERFALL', 127)]):
+                            ('EVENT_GOT_HM04_STRENGTH', 70), ('EVENT_GOT_HM06_WHIRLPOOL', 250), ('EVENT_GOT_HM07_WATERFALL', 127),
+                            ('EVENT_GOT_HM05_FLASH', FLASH)]):
             if snapshot.event(event) and not any(move in mon.moves for mon in snapshot.party):
                 protected = FIELD_MOVES
                 ace = ace_slot(snapshot.party, self.move_power)
+                # Flash only lights a cave and is never forgotten once known, so it never takes one of the
+                # ace's battle slots. A later member that can learn it gets it instead.
                 slot = min((i for i, mon in enumerate(snapshot.party)
                             if not mon.egg and move in self.data.species[mon.species]['machines']
-                            and not all(known in protected for known in mon.moves)),
+                            and not all(known in protected for known in mon.moves)
+                            and not (move == FLASH and i == ace)),
                            key=lambda i: (i == ace, len(protected.intersection(snapshot.party[i].moves)), i), default=None)
                 if slot is not None:
                     teach = Teach(move, slot)
@@ -417,7 +424,8 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
                             self.partner_move = move
                         self.goal = ballot.errand(partner, 'partner', commit=commit)
                     break
-                if 'ice_path' in self.completed:
+                if 'ice_path' in self.completed and move != FLASH:
+                    # A dark cave is walkable without Flash, so no field move is deleted to make room for it.
                     candidates = [i for i, mon in enumerate(snapshot.party) if not mon.egg
                                   and move in self.data.species[mon.species]['machines']]
                     if candidates:
@@ -426,6 +434,10 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
                         if goal is not None:
                             self.goal = ballot.errand(goal, 'delete_hm')
                         break
+        flash = flash_task(self, snapshot)
+        if flash is not None:
+            self.menu = flash
+            return Action(None, 0, 24)
         lead = snapshot.party[0] if snapshot.party else None
         iron_tail = Teach(231, 0)
         if (lead and not lead.egg and snapshot.badges & 128 and self.data.items['TM23'] in dict(snapshot.items)

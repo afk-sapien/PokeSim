@@ -20,7 +20,7 @@ SYMBOLS = {'wPartyCount': 1, 'wPartySpecies': 7, 'wPartyMons': 288, 'wPartyMonNi
            'wGameTimeHours': 2, 'wGameTimeMinutes': 1, 'wGameTimeSeconds': 1, 'wHallOfFameCount': 1,
            'wStepCount': 1, 'wHappinessStepCount': 1, 'wEnemyMonDVs': 2, 'wEnemyBackupDVs': 2, 'wEnemySubStatus5': 1,
            'wStatusFlags2': 1, 'wScriptRunning': 1, 'wTempWildMonSpecies': 1, 'wMapMusic': 1, 'wBikeFlags': 1,
-           'wMapWidth': 1}
+           'wMapWidth': 1, 'wStatusFlags': 1}
 
 
 def synthetic_data():
@@ -335,13 +335,13 @@ def test_the_snapshot_carries_world_facts_outside_its_equality():
     data, memory = synthetic_data(), BankedMemory()
     first = read_snapshot(memory, data, cache=False)
     assert (first.bug_contest, first.script_running, first.wild_pending, first.map_music) == (False, False, 0, 0)
-    assert (first.strength, first.map_width, first.farfetchd_position) == (False, 0, None)
+    assert (first.strength, first.flash, first.map_width, first.farfetchd_position) == (False, False, 0, None)
     for name, value in (('wStatusFlags2', 4), ('wScriptRunning', 1), ('wTempWildMonSpecies', 201),
-                        ('wMapMusic', 0x40), ('wBikeFlags', 1), ('wMapWidth', 20)):
+                        ('wMapMusic', 0x40), ('wBikeFlags', 1), ('wMapWidth', 20), ('wStatusFlags', 4)):
         put(memory, data, name, value)
     second = read_snapshot(memory, data, cache=False)
     assert (second.bug_contest, second.script_running, second.wild_pending, second.map_music) == (True, True, 201, 64)
-    assert (second.strength, second.map_width) == (True, 20)
+    assert (second.strength, second.flash, second.map_width) == (True, True, 20)
     # Snapshots of the same game state stay equal while these change.
     assert first == second
     crystal = copy.copy(data)

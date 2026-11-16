@@ -13,20 +13,23 @@ KEY = 'interaction_preparation'
 FULL = 'Every PC box is full and no spare duplicate can be safely released to make room for this trade'
 # Field moves the game withdraws a partner for from the PC, cheapest to lose first: Whirlpool, Surf, Waterfall.
 RECOVERABLE = (250, 57, 127)
+# Field moves a party member is kept for. Flash only lights a dark cave, which is walkable without it, so
+# its only holder may go to the PC like any reserve.
+KEPT = FIELD_MOVES - {148}
 
 
 def only(party, index):
-    """The field moves no other party member knows."""
+    """The kept field moves no other party member knows."""
     others = {move for other, mate in enumerate(party) if other != index for move in getattr(mate, 'moves', ())}
-    return FIELD_MOVES.intersection(getattr(party[index], 'moves', ())) - others
+    return KEPT.intersection(getattr(party[index], 'moves', ())) - others
 
 
 def reserves(party):
-    """Party slots an automatic trade may deposit, never the lead or the party's only user of a field move.
+    """Party slots an automatic trade may deposit, never the lead or the party's only user of a kept field move.
 
     A party of sole field-move users had no one to deposit, so every boxed offer into it failed. When no
     one else may go, a holder of only Whirlpool, Surf or Waterfall may wait in the PC, because the game
-    withdraws a partner for those moves. Cut, Strength, Fly and Flash holders always stay.
+    withdraws a partner for those moves. Cut, Strength and Fly holders always stay.
     """
     found = [index for index in range(1, len(party)) if not only(party, index)]
     return found or [index for index in range(1, len(party)) if only(party, index) <= set(RECOVERABLE)]

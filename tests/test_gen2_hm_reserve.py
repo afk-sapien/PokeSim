@@ -41,10 +41,19 @@ def test_a_reserve_whose_field_moves_another_member_knows_can_be_deposited():
     assert reserves(hm_party(member(173, SURF, 34, 205))) == [5]
 
 
-def test_a_party_of_only_field_move_users_stores_its_whirlpool_and_waterfall_holder():
-    # The game withdraws a Whirlpool or Waterfall partner from the PC when it next needs one.
+def test_a_sole_flash_holder_is_an_ordinary_reserve():
+    # A dark cave is walkable without Flash, so its only holder may wait in the PC like any reserve.
     party = hm_party(member(173, FLASH, 34, 205))
-    assert reserves(party) == [4]
+    assert reserves(party) == [5]
+    assert cost(party, 5) == 0
+    assert not trading.crowded(SimpleNamespace(party=party))
+
+
+def test_a_party_of_only_field_move_users_stores_its_recoverable_holders():
+    # The game withdraws a Surf, Whirlpool or Waterfall partner from the PC when it next needs one.
+    party = (member(22, 51, 35, 230), member(84, 65, FLY, 156), member(51, CUT, 35, 33),
+             member(173, STRENGTH, 34, 205), member(56, SURF, 34, 205), member(56, WHIRLPOOL, WATERFALL, 156))
+    assert reserves(party) == [4, 5]
     assert not trading.crowded(SimpleNamespace(party=party))
 
 
@@ -54,23 +63,23 @@ def test_a_party_of_only_field_move_users_stores_its_whirlpool_and_waterfall_hol
     (WHIRLPOOL, WATERFALL, 4),
 ])
 def test_a_sole_whirlpool_holder_goes_before_surf_and_surf_before_waterfall(fourth, fifth, stored):
-    party = (member(22, 51, 35, 230), member(84, 65, FLY, 156), member(51, CUT, 35, STRENGTH),
-             member(173, FLASH, 34, 205), member(56, fourth, 34, 205), member(56, fifth, 34, 205))
+    party = (member(22, 51, 35, 230), member(84, 65, FLY, 156), member(51, CUT, 35, 33),
+             member(173, STRENGTH, 34, 205), member(56, fourth, 34, 205), member(56, fifth, 34, 205))
     assert reserves(party) == [4, 5]
     assert min(reserves(party), key=lambda i: cost(party, i)) == stored
 
 
-def test_a_holder_of_cut_strength_fly_or_flash_stays_even_with_a_recoverable_move():
+def test_a_holder_of_cut_strength_or_fly_stays_even_with_a_recoverable_move():
     party = (member(22, 51, 35, 230), member(84, 65, FLY, 156), member(51, CUT, 35, 33),
-             member(173, SURF, 34, STRENGTH), member(56, FLASH, WATERFALL, 156), member(56, WHIRLPOOL, 34, 205))
-    assert reserves(party) == [5]
-    assert reserves(party[:5]) == []
+             member(173, SURF, 34, 205), member(56, STRENGTH, WATERFALL, 156), member(56, WHIRLPOOL, 34, 205))
+    assert reserves(party) == [3, 5]
+    assert reserves(party[:3] + party[4:5]) == []
 
 
 def test_a_party_with_no_reserve_offers_no_boxed_pokemon(tmp_path, monkeypatch):
     from pokesim.store import Store
     # No full party of sole holders is left without a reserve, since five slots after the lead outnumber
-    # the four moves that always stay. The guard is checked on its own.
+    # the three moves that always stay. The guard is checked on its own.
     monkeypatch.setattr(trading, 'reserves', lambda party: [])
     snapshot = SimpleNamespace(party=hm_party(member(173, FLASH, 34, 205)), stored=(), items=(), box_counts=(5,) * 14)
     assert trading.crowded(snapshot)

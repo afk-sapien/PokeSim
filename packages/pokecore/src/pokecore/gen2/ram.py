@@ -276,7 +276,8 @@ class Snapshot:
     # World facts the policy reads each tick. They stay out of equality, so two snapshots of the
     # same game state still compare equal while the music or a script flag changes. bug_contest is
     # wStatusFlags2 bit 2, script_running is wScriptRunning, wild_pending is the species a script
-    # set up in wTempWildMonSpecies, strength is wBikeFlags bit 0, and map_width is 0 while a map
+    # set up in wTempWildMonSpecies, strength is wBikeFlags bit 0, flash is wStatusFlags bit 2 (Flash
+    # lights a dark cave, and it stays lit on the next cave floor), and map_width is 0 while a map
     # has not loaded. farfetchd_position is Crystal's Ilex Forest Farfetch'd, None in Gold and Silver.
     bug_contest: bool = field(default=False, compare=False)
     script_running: bool = field(default=False, compare=False)
@@ -284,6 +285,7 @@ class Snapshot:
     map_music: int = field(default=0, compare=False)
     farfetchd_position: int | None = field(default=None, compare=False)
     strength: bool = field(default=False, compare=False)
+    flash: bool = field(default=False, compare=False)
     map_width: int | None = field(default=None, compare=False)
 
     @property
@@ -481,4 +483,5 @@ def read_snapshot(memory, data, frame=0, *, cache=True):
                     map_music=mem.byte('wMapMusic'),
                     farfetchd_position=(mem.byte('wFarfetchdPosition') if 'wFarfetchdPosition' in data.symbols
                                         else None),
-                    strength=bool(mem.byte('wBikeFlags') & 1), map_width=mem.byte('wMapWidth'))
+                    strength=bool(mem.byte('wBikeFlags') & 1), flash=bool(mem.byte('wStatusFlags') & 4),
+                    map_width=mem.byte('wMapWidth'))

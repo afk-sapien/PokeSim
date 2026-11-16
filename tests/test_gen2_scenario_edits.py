@@ -205,6 +205,37 @@ def test_the_watch_marks_a_static_legendary_met_in_its_room():
     assert matches('legend:249', 'legend', '249') and not matches('legend:250', 'legend', '249')
 
 
+def test_the_events_and_machines_edits_hand_over_an_hm():
+    run = crystal_run()
+    run.data.events = {'EVENT_GOT_HM05_FLASH': 11}
+    poke(run.pb.memory, 'wEventFlags', [0x01], 1)
+    apply_gen2_edits(run, {'events': ['EVENT_GOT_HM05_FLASH'], 'machines': {'HM05': 1, 'TM01': 2}})
+    bank, address = SYMBOLS['wEventFlags']
+    assert run.pb.memory[bank, address + 1] == 0x09                 # the flag joins the bits already set
+    bank, address = SYMBOLS['wTMsHMs']
+    assert run.pb.memory[bank, address + 54] == 1 and run.pb.memory[bank, address] == 2
+    with pytest.raises(ValueError, match='HM08'):
+        apply_gen2_edits(run, {'machines': {'HM08': 1}})
+
+
+def test_the_watch_marks_flash_lighting_a_dark_cave():
+    run = crystal_run()
+    run.data.events = {}
+    run.data.maps = {1: {'palette': 'PALETTE_AUTO'}, 2: {'palette': 'PALETTE_DARK'}}
+    snapshot = SimpleNamespace(valid=True, started=True, map=1, map_name='Route 10', owned=set(), flash=False,
+                               event=lambda flag: False)
+    watch = Gen2Watch(run)
+    assert watch.marks(snapshot) == []
+    snapshot.map, snapshot.map_name = 2, 'Rock Tunnel 1F'
+    assert watch.marks(snapshot) == []                              # dark until Flash
+    snapshot.flash = True
+    assert watch.marks(snapshot) == [('flash', 'Rock Tunnel 1F', 'Lit Rock Tunnel 1F with Flash')]
+    assert watch.marks(snapshot) == []
+    watch.reset()
+    assert watch.marks(snapshot) == []                              # lit before the first look
+    assert matches('flash', 'flash', 'Rock Tunnel 1F')
+
+
 def test_gen2_scenarios_refuse_an_edit_they_do_not_have():
     with pytest.raises(ValueError, match='items'):
         apply_gen2_edits(crystal_run(), {'items': {'POTION': 0}})
