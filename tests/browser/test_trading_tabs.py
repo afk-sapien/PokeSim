@@ -505,7 +505,7 @@ def test_a_late_answer_for_an_earlier_pokemon_does_not_replace_the_current_one(p
     library.held['party-0'] = None
     library.open()
     choose(page, 'mine', 'party-0')
-    page.wait_for_function('document.querySelector("#slot-send").textContent.includes("Meganium")')
+    page.wait_for_function('() => document.querySelector("#slot-send").textContent.includes("Meganium")')
     choose(page, 'mine', 'box-1')
     expect(option(page, BLUE)).to_contain_text(REASON)
     route, body = library.held['party-0']
@@ -558,7 +558,7 @@ def test_a_late_limits_answer_does_not_replace_the_newer_list(page, game, late, 
     library.open()
     choose(page, 'mine', 'box-1')
     page.locator('#pick-game').select_option(RED)
-    page.wait_for_function('document.querySelector("#pick-theirs").textContent.includes("Reading")')
+    page.wait_for_function('() => document.querySelector("#pick-theirs").textContent.includes("Reading")')
     # Pick again, so the first answer now belongs to an earlier pick.
     choose(page, 'mine', 'box-1')
     expect(page.locator('#pick-theirs')).to_contain_text('Pidgey')

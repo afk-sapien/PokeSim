@@ -135,7 +135,7 @@ def test_settings_still_draw_when_the_session_arrives_before_accounts_js(page, t
         held = []
         page.route(lambda address: '/static/accounts.js' in address, lambda route: held.append(route))
         log_in(page, url, 'admin', OLD)
-        page.wait_for_function('window.sessionSent === true')
+        page.wait_for_function('() => window.sessionSent === true')
         assert len(held) == 1
         held[0].continue_()
         expect(page.locator('#sharing-panel')).to_be_visible()
