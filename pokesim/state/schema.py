@@ -21,6 +21,8 @@ import time
 from ..app.errors import Conflict
 
 NEWER = 'This adventure was saved by a newer PokeSim version'
+# SQLite's primary codes for a database another connection held past the busy timeout.
+BUSY = (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
 
 TABLES = (
     """CREATE TABLE IF NOT EXISTS events (
@@ -220,6 +222,16 @@ def migrate(db, path=None):
             db.rollback()
             raise
     return db
+
+
+def busy(error):
+    """Whether an error is the database held by another connection past the busy timeout.
+
+    A Gen I worker's encounter commit waited out the timeout while the host's disk was slow. The error
+    failed that pass of the emulator loop, and the pass skipped its journal entries. The failed
+    transaction rolls back, so the next try can write the same rows once.
+    """
+    return isinstance(error, sqlite3.OperationalError) and (getattr(error, 'sqlite_errorcode', 0) & 0xFF) in BUSY
 
 
 def connect(path, *, read_only=False, timeout=5.0, **options):

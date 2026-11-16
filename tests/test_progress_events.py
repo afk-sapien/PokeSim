@@ -1,10 +1,13 @@
 """Shadow-mode progress rows in both generations (docs/design/goal-system.md, section 4)."""
+import sqlite3
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
 
 from pokesim import progress_events
 from pokesim.events import Event
+from pokesim.state import schema
 from pokesim.store import Store
 from test_behavior_parity import PAIRS, gen1_catches, gen1_checkpoint, gen2_catches, gen2_checkpoint
 from test_behavior_parity import gen2_data as gen2_data  # noqa: F401 (a fixture)
@@ -297,6 +300,78 @@ def test_wild_encounters_count_per_goal_and_game_hour(tmp_path, caplog):
         assert watch.pending == []
     finally:
         store.close()
+
+
+@contextmanager
+def held(store):
+    """Another connection in the middle of a read, as a trade pass reads an adventure, so the store's next
+    commit waits out its busy timeout and fails with "database is locked" as it did on a slow host."""
+    store.db.execute('PRAGMA busy_timeout=20')
+    reader = sqlite3.connect(store.dir / 'pokesim.sqlite', timeout=0.02)
+    try:
+        reader.execute('BEGIN')
+        reader.execute('SELECT count(*) FROM progress_events').fetchone()
+        yield
+    finally:
+        reader.rollback()
+        reader.close()
+        store.db.execute('PRAGMA busy_timeout=5000')
+
+
+def test_a_busy_database_keeps_the_shadow_rows_for_the_next_decision(tmp_path, caplog):
+    store = watched(tmp_path)
+    watch = store.goal_watch
+    try:
+        watch.observe(store, 'race', 'RACE')
+        watch.story(store, b'\x01\x00')
+        for _ in range(3):
+            progress_events.encounter(store, 16, b'\x10\x00')
+        with held(store), caplog.at_level('WARNING', logger='pokesim.progress_events'):
+            watch.observe(store, 'hunt:16', hunt=(16, None))
+            watch.story(store, b'\x03\x00')
+        # Nothing was written and nothing failed the pass.
+        assert counts(store) == [] and rows(store, 'goal', 'event') == []
+        assert not [record for record in caplog.records if record.levelname == 'ERROR']
+        assert any('3 encounters wait' in record.getMessage() for record in caplog.records)
+        assert len(watch.pending) == 3 and (watch.key, watch.hunt, watch.flags) == ('race', None, b'\x01\x00')
+        # The failed transactions rolled back, so the next decision writes each row once.
+        watch.observe(store, 'hunt:16', hunt=(16, None))
+        watch.story(store, b'\x03\x00')
+        watch.observe(store, 'hunt:16', hunt=(16, None))
+        assert counts(store) == [('race', 0, 3, 0, 0)] and watch.pending == []
+        assert [(kind, goal, score) for kind, _, goal, _, _, _, score, _ in rows(store, 'goal', 'event')] == [
+            ('goal', 'race', None), ('event', 'hunt:16', 2)]
+    finally:
+        store.close()
+
+
+def test_a_busy_database_costs_the_queued_rows_but_never_the_journal_entries(tmp_path):
+    store = watched(tmp_path)
+    entry = {'type': 'activity', 'title': 'The Kanto Marathon is on!'}
+    try:
+        with held(store):
+            assert progress_events.drain(store, [progress_events.queued('checkpoint', goal='race', tier='RACE', score=1),
+                                                 entry]) == [entry]
+        assert rows(store, 'checkpoint') == []
+    finally:
+        store.close()
+
+
+def test_a_database_error_that_is_not_busy_still_fails_the_pass():
+    class Broken:
+        @contextmanager
+        def transaction(self):
+            raise sqlite3.OperationalError('disk I/O error')
+            yield
+
+    watch = progress_events.GoalWatch()
+    watch.pending = [('hunt:16', 0, None, 16, b'\x00\x00')]
+    with pytest.raises(sqlite3.OperationalError):
+        watch.flush(Broken())
+    with pytest.raises(sqlite3.OperationalError):
+        progress_events.drain(Broken(), [progress_events.queued('checkpoint', goal='race', tier='RACE', score=1)])
+    # Only SQLite's own busy codes count, not an error that only reads like one.
+    assert not schema.busy(sqlite3.OperationalError('database is locked'))
 
 
 def test_the_gen1_wild_battle_hook_counts_every_wild_encounter(tmp_path):
