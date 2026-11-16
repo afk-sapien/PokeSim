@@ -26,8 +26,8 @@ from pokecore.gen1 import W_BATTLE_MON_HP, W_BATTLE_MON_PP, W_BATTLE_MON_STATUS,
 from .checkpoints import read_manifest
 from .events import diff
 from .game_data import VARIANT_ENV, current_variant
-from .ram import (PARTY_STRUCT, W_BADGES, W_BAG_ITEMS, W_DEX_OWNED, W_EVENT_FLAGS, W_IS_IN_BATTLE, W_MONEY, W_NUM_BAG_ITEMS,
-                  W_PARTY_COUNT, W_PARTY_MONS)
+from .ram import (PARTY_STRUCT, W_BADGES, W_BAG_ITEMS, W_DEX_OWNED, W_DEX_SEEN, W_EVENT_FLAGS, W_IS_IN_BATTLE, W_MONEY,
+                  W_NUM_BAG_ITEMS, W_PARTY_COUNT, W_PARTY_MONS)
 from .runtime.battle_clock import ThrowClock, gen1_balls
 from .runtime.headless import HeadlessRun
 from .runtime.supervision import Supervisor
@@ -45,12 +45,22 @@ def _bcd(value, size):
     return [int(digits[i]) << 4 | int(digits[i + 1]) for i in range(0, size * 2, 2)]
 
 
-def edit_party(mem, slot, status=None, hp=None, pp=None, moves=None):
+def edit_party(mem, slot, status=None, hp=None, pp=None, moves=None, species=None):
     """Change one partner. hp below 1 is a share of full health, pp is one number or four. moves are
-    up to four move numbers, each with its full PP, for a partner the save never taught them to."""
+    up to four move numbers, each with its full PP, for a partner the save never taught them to.
+    species is an internal species number for a partner the save never caught. Its types and Pokédex
+    entry follow, and its stats and nickname stay."""
     base = W_PARTY_MONS + slot * PARTY_STRUCT
     # The active battler is copied out of the party when it enters, so an edit during battle goes to both.
     active = mem[W_IS_IN_BATTLE] in (1, 2) and mem[W_PLAYER_MON_NUMBER] == slot
+    if species is not None:
+        from .strategy_data import SPECIES
+        # The species list after the party count names each partner too.
+        mem[base] = mem[W_PARTY_COUNT + 1 + slot] = species
+        mem[base + 5:base + 7] = bytes(SPECIES[species]['types'])
+        dex = SPECIES[species]['dex']
+        for pokedex in (W_DEX_OWNED, W_DEX_SEEN):
+            mem[pokedex + (dex - 1) // 8] |= 1 << (dex - 1) % 8
     if moves is not None:
         from .strategy_data import MOVES
         known = (list(moves) + [0] * 4)[:4]
@@ -116,7 +126,8 @@ def apply_edits(mem, edits):
     for change in edits.get('party', ()):
         slots = range(min(mem[W_PARTY_COUNT], 6)) if change['slot'] == 'all' else [change['slot']]
         for slot in slots:
-            edit_party(mem, slot, change.get('status'), change.get('hp'), change.get('pp'), change.get('moves'))
+            edit_party(mem, slot, change.get('status'), change.get('hp'), change.get('pp'), change.get('moves'),
+                       change.get('species'))
     if edits.get('items'):
         edit_bag(mem, edits['items'])
     if edits.get('money') is not None:

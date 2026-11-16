@@ -49,6 +49,11 @@ def test_party_edits_reach_the_snapshot_the_policy_reads():
     apply_edits(mem, {'party': [{'slot': 1, 'moves': [84, 148]}]})
     partner = read_snapshot(mem, 1).party[1]
     assert (partner.moves, partner.pp) == ((84, 148, 0, 0), (30, 20, 0, 0))
+    # A partner can be a species the save never caught, with its types and owned Pokédex entry.
+    apply_edits(mem, {'party': [{'slot': 1, 'species': 0x04}]})
+    snapshot = read_snapshot(mem, 2)
+    assert snapshot.party[1].species == 0x04 and mem[W_PARTY_COUNT + 2] == 0x04 and 35 in snapshot.owned
+    assert snapshot.party[1].types == (0, 0) and snapshot.party[1].moves == (84, 148, 0, 0)
 
 
 def test_an_edit_during_battle_also_changes_the_active_battler():
