@@ -52,7 +52,7 @@ from .game_data import load
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
 from pokecore.storage import decode_box, read_box_counts as read_box_counts, read_box_records
-from pokecore.gen1 import BIT_TRANSFORMED, W_ENEMY_BATTLE_STATUS3
+from pokecore.gen1 import BIT_TRANSFORMED, W_ENEMY_BATTLE_STATUS3, W_MAP_PAL_OFFSET, W_TOWN_VISITED
 from pokecore import repairs
 
 # Yellow's opening scene, where Oak catches Pikachu before the player has a party.
@@ -176,6 +176,10 @@ class Snapshot:
     pikachu_happiness: int = 0
     # The player's trainer ID, which marks the Pokémon this player caught.
     player_id: int | None = None
+    # A dark map not yet lit with Flash, from the map palette offset. Only Rock Tunnel is dark.
+    dark: bool = False
+    # The towns and cities entered so far, one bit per map ID (wTownVisitedFlag).
+    towns_visited: int = 0
 
     def storage_entries(self):
         """Expose individual data while preserving legacy compact storage snapshots."""
@@ -385,6 +389,8 @@ def _decode_snapshot(mem, frame: int) -> Snapshot:
     if isinstance(mem, YellowMemory):
         decoded['pikachu_happiness'] = mem.raw[PIKACHU_HAPPINESS]
     decoded['player_id'] = mem[W_PLAYER_ID] << 8 | mem[W_PLAYER_ID + 1]
+    decoded['dark'] = bool(mem[W_MAP_PAL_OFFSET])
+    decoded['towns_visited'] = mem[W_TOWN_VISITED] | mem[W_TOWN_VISITED + 1] << 8
     if decoded['in_battle'] and mem[W_ENEMY_STATUS3] & TRANSFORMED:
         # A transformed Ditto reads as the player's species, and species2 keeps the one that was met.
         decoded['enemy_species'] = mem[W_ENEMY_SPECIES2]

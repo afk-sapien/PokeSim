@@ -105,3 +105,10 @@ rom_sha1 = "f2f52230b536214ef7c9924f483392993e226cfb"
 state_sha256 = "37063dfea82b9430e06cbd733235964fd89aa4c020c862ed318550c3c525b9c6"
 frames = [3458283, 3458283]
 expect = "passes"
+
+[[scenario]]
+name = "red-rock-tunnel-flash-20261116"
+rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
+state_sha256 = "6bc57933853928c8bba94c151514b0d602357afbac10111905e056adb60fd4e2"
+frames = [917744, 917744]
+expect = "passes"

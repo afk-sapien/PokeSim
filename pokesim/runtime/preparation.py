@@ -25,7 +25,8 @@ ACTIVE = {'travelling', 'storage', 'rendezvous'}
 CENTER = 89
 RENDEZVOUS = (CENTER, 11, 3)
 PC = (CENTER, 13, 4)
-FIELD_MOVES = (15, 19, 57, 70, 148)
+# The field moves a sole holder keeps the party for. Flash is not one: a dark cave is walkable without it.
+FIELD_MOVES = (15, 19, 57, 70)
 # Field moves the game brings back from the PC, cheapest to lose first: Cut, Strength, Surf.
 RECOVERABLE = (15, 70, 57)
 
@@ -519,7 +520,7 @@ class Preparation:
         if not safe and not self.state.get('manual'):
             # A party of the strongest battler, Yellow's Pikachu and sole field-move holders had no one
             # to store, so every trade into it failed. The game withdraws a Cut, Strength or Surf partner
-            # from the PC when it needs one, so a holder of only those may wait there. Fly and Flash stay.
+            # from the PC when it needs one, so a holder of only those may wait there. Fly stays.
             safe = [i for i in free if only[i] <= set(RECOVERABLE)]
             rank = {i: max(RECOVERABLE.index(move) for move in only[i]) for i in safe}
         if not safe and self.state.get('manual'):

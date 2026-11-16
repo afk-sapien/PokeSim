@@ -25,6 +25,8 @@
     {"key": "cut", "map": "SS_ANNE_CAPTAINS_ROOM", "object": "CAPTAIN",
      "done_when": {"flags": ["EVENT_GOT_HM01"], "items": ["HM01"], "moves": [15]}},
     {"key": "thunder", "gym": true, "done_when": {"badges": 4}},
+    {"key": "flash", "map": "ROUTE_2_GATE", "object": "OAKS_AIDE",
+     "done_when": {"flags": ["EVENT_GOT_HM05"], "items": ["HM05"], "moves": [148]}},
     {"key": "rainbow", "gym": true, "done_when": {"badges": 8}},
     {"key": "poster_guard", "map": "GAME_CORNER", "object": "ROCKET",
      "done_when": {"hidden": [["GAME_CORNER", 10]]}},

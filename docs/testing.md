@@ -176,7 +176,8 @@ uv run --locked python -m pokesim.replay capture league-entry.state --name leagu
 ```
 
 `--party` takes a slot or `all` with `status`, `hp` (a number, or a share such as `0.25`) and
-`pp`. `--item NAME=0` removes an item and `--money` sets the wallet. Edits are applied each time
+`pp`. In a Red, Blue or Yellow `scenario.json`, a party edit can also set `moves`, up to four move
+numbers with full PP. `--item NAME=0` removes an item and `--money` sets the wallet. Edits are applied each time
 the scenario loads, so the copied save stays as it was. When a battle runs past its timeout, or
 the player reports that it cannot end, the runner reloads the scenario as the application
 reloads an autosave. The second reload goes to the unedited `--fallback` save, as the

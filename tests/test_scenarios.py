@@ -45,6 +45,10 @@ def test_party_edits_reach_the_snapshot_the_policy_reads():
     assert mem[W_PARTY_MONS + PARTY_STRUCT + 29] == 0x40           # the PP Up survives an empty move
     apply_edits(mem, {'party': [{'slot': 'all', 'status': 'asleep', 'hp': 999}]})
     assert [(mon.status, mon.hp) for mon in read_snapshot(mem, 0).party] == [(3, 200), (3, 200)]
+    # A partner can be given moves the save never taught it, each with its full PP.
+    apply_edits(mem, {'party': [{'slot': 1, 'moves': [84, 148]}]})
+    partner = read_snapshot(mem, 1).party[1]
+    assert (partner.moves, partner.pp) == ((84, 148, 0, 0), (30, 20, 0, 0))
 
 
 def test_an_edit_during_battle_also_changes_the_active_battler():

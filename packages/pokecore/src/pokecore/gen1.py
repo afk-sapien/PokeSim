@@ -65,11 +65,18 @@ W_RIVAL_STARTER = 0xD715
 
 W_PLAYER_STARTER = 0xD717
 
+# wTownVisitedFlag: one bit per town or city map ID, set on entering it.
+W_TOWN_VISITED = 0xD70B
+
 # wOptions: bits 0 to 2 the text delay (1 fast, 3 medium, 5 slow), bit 6 the set battle style,
 # bit 7 battle animations off.
 W_OPTIONS = 0xD355
 
 W_BADGES = 0xD356
+
+# wMapPalOffset: 6 in a dark Rock Tunnel, set on walking in from outside, and 0 once Flash lights it
+# or the player walks back out.
+W_MAP_PAL_OFFSET = 0xD35D
 
 W_CUR_MAP = 0xD35E
 

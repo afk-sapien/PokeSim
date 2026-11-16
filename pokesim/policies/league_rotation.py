@@ -5,7 +5,8 @@ from dataclasses import asdict
 from ..investment import current_power
 from ..strategy_data import MOVES
 
-FIELD_MOVES = {15, 19, 57, 70, 148}
+# A sole holder of these stays in the party. Flash is not one: a dark cave is walkable without it.
+FIELD_MOVES = {15, 19, 57, 70}
 
 
 def deposit_target(snapshot, preferences, appearances):

@@ -36,10 +36,14 @@ def test_a_rematch_that_only_walks_is_still_given_up_after_two_minutes():
     assert 'No encounter' in c.history[-1]
 
 
-def test_a_gift_is_not_offered_when_no_party_member_may_be_deposited():
-    # The strongest battler plus one sole holder of each field move: nothing can go to the PC.
+def test_a_gift_is_not_offered_when_no_party_member_may_be_deposited(monkeypatch):
+    # The strongest battler, one sole holder of each field move and Yellow's starter Pikachu:
+    # nothing can go to the PC.
+    from pokesim.policies import team
+    monkeypatch.setattr(team, 'STAYS_IN_PARTY', {sid(25)})
     party = (mon(level=100, moves=(52, 0, 0, 0)),) + tuple(
-        mon(level=55, moves=(move, 0, 0, 0)) for move in (15, 19, 57, 70, 148))
+        mon(level=55, moves=(move, 0, 0, 0)) for move in (15, 19, 57, 70)) + (
+        mon(level=55, species=sid(25), moves=(84, 0, 0, 0)),)
     s = state(party=party, map=MAPS['CERULEAN_CITY'], box_counts=(19,) + (20,) * 11)
     assert reserve_to_deposit(s) is None
     c = Collection()

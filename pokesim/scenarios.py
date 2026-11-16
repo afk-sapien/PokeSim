@@ -45,11 +45,17 @@ def _bcd(value, size):
     return [int(digits[i]) << 4 | int(digits[i + 1]) for i in range(0, size * 2, 2)]
 
 
-def edit_party(mem, slot, status=None, hp=None, pp=None):
-    """Change one partner. hp below 1 is a share of full health, pp is one number or four."""
+def edit_party(mem, slot, status=None, hp=None, pp=None, moves=None):
+    """Change one partner. hp below 1 is a share of full health, pp is one number or four. moves are
+    up to four move numbers, each with its full PP, for a partner the save never taught them to."""
     base = W_PARTY_MONS + slot * PARTY_STRUCT
     # The active battler is copied out of the party when it enters, so an edit during battle goes to both.
     active = mem[W_IS_IN_BATTLE] in (1, 2) and mem[W_PLAYER_MON_NUMBER] == slot
+    if moves is not None:
+        from .strategy_data import MOVES
+        known = (list(moves) + [0] * 4)[:4]
+        mem[base + 8:base + 12] = bytes(known)
+        mem[base + 29:base + 33] = bytes(MOVES[move]['pp'] if move else 0 for move in known)
     if status is not None:
         value = STATUS[status] if isinstance(status, str) else status
         mem[base + 4] = value
@@ -110,7 +116,7 @@ def apply_edits(mem, edits):
     for change in edits.get('party', ()):
         slots = range(min(mem[W_PARTY_COUNT], 6)) if change['slot'] == 'all' else [change['slot']]
         for slot in slots:
-            edit_party(mem, slot, change.get('status'), change.get('hp'), change.get('pp'))
+            edit_party(mem, slot, change.get('status'), change.get('hp'), change.get('pp'), change.get('moves'))
     if edits.get('items'):
         edit_bag(mem, edits['items'])
     if edits.get('money') is not None:
@@ -486,6 +492,8 @@ class Gen1Watch(PlannerMarks):
         self.previous, self.pending, self.checkpoint = None, [], None
         self.throws = ThrowClock()
         self.counts, self.rising = None, {}
+        # The map at the last look and whether it was dark, for the flash mark.
+        self.dark = None
         self.reset_marks()
 
     def race_checkpoint(self):
@@ -499,8 +507,19 @@ class Gen1Watch(PlannerMarks):
 
     def marks(self, snapshot=None):
         """What the planner just did, as (kind, detail, title): a returned walking event completed, one
-        more copy another adventure asked for, a Pokédex entry or a stand-down."""
-        return self.store_marks(snapshot) + self.shared_marks(snapshot)
+        more copy another adventure asked for, Flash lighting a cave, a Pokédex entry or a stand-down."""
+        return self.store_marks(snapshot) + self.flash_marks(snapshot) + self.shared_marks(snapshot)
+
+    def flash_marks(self, snapshot):
+        """Flash lighting Rock Tunnel (flash): the snapshot's ``dark`` turns off on the map it was on at
+        the last look. Walking out clears it too, but on another map, so that is no mark."""
+        if snapshot is None or not snapshot.valid or not snapshot.started:
+            return []
+        dark = (getattr(snapshot, 'map', None), getattr(snapshot, 'dark', False))
+        found = ([('flash', snapshot.map_name, f'Lit {snapshot.map_name} with Flash')]
+                 if self.dark == (dark[0], True) and not dark[1] else [])
+        self.dark = dark
+        return found
 
     def store_marks(self, snapshot):
         """A returned walking event completed (event_return) and one more copy of a species another
