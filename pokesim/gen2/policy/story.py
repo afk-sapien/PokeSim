@@ -103,6 +103,12 @@ class StoryPart:
         if not snapshot.badges & 1:
             return step('zephyr', 'Challenge Falkner')
         self.completed.setdefault('zephyr', snapshot.frame)
+        # Flash lights the dark caves for viewers. It is taken only while the road is still in Violet City,
+        # so a game already past it never walks back for it.
+        if snapshot.event('EVENT_GOT_HM05_FLASH'):
+            self.completed.setdefault('flash', snapshot.frame)
+        elif not snapshot.event('EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE'):
+            return step('flash', 'Receive Flash from Elder Li')
         if not snapshot.event('EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE'):
             from ..quests import room_for_gift
             room = room_for_gift(self, snapshot, Goal)

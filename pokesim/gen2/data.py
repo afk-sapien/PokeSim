@@ -16,7 +16,7 @@ from ..display_names import place_name, title_name
 from ..downloads import retrying
 from ..experimental.gen2 import PROFILES
 
-SCHEMA = 6
+SCHEMA = 7
 SOURCES = {
     'gold': ('pokegold', '62388c7204e5d13aa05b4231e220b6760584d1b5'),
     'silver': ('pokegold', '62388c7204e5d13aa05b4231e220b6760584d1b5'),
@@ -155,6 +155,8 @@ def world(source):
         entry['environment'] = row[2].strip()
         entry['landmark'] = landmarks[row[3].strip()]
         entry['region'] = 'kanto' if entry['landmark'] >= landmarks['KANTO_LANDMARK'] else 'johto'
+        # PALETTE_DARK marks a cave that stays dark until Flash lights it.
+        entry['palette'] = row[6].strip()
         entry['fishing_group'] = row[7].strip()
         coll_label = 'Tileset' + ''.join(word.title() for word in tileset.removeprefix('TILESET_').split('_'))
         coll = []

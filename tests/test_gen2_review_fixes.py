@@ -282,6 +282,22 @@ def test_a_refused_hm_lesson_is_not_asked_for_again_at_once(teaching_policy, rea
     assert policy.menu is None
 
 
+def test_flash_never_takes_a_battle_slot_from_the_ace(teaching_policy, real_data):
+    from pokesim.gen2.menus import Teach
+    policy = teaching_policy
+    ace = SimpleNamespace(species=152, egg=False, level=12, moves=(33, 45, 75, 115))
+    togepi = SimpleNamespace(species=175, egg=False, level=5, moves=(45, 204, 0, 0))
+    assert all(148 in real_data.species[mon.species]['machines'] for mon in (ace, togepi))
+    snapshot = teaching_snapshot(real_data, ace, events={'EVENT_GOT_HM05_FLASH'}, badges=1)
+    # The ace is the only member that can learn Flash, so no one learns it yet.
+    with pytest.raises(Onward):
+        policy.step(PolicyContext(snapshot, policy.clock, ZEROS))
+    assert policy.menu is None
+    snapshot.party = (ace, togepi)
+    policy.step(PolicyContext(snapshot, policy.clock, ZEROS))
+    assert policy.menu == Teach(148, 1)
+
+
 def test_a_refused_iron_tail_lesson_is_not_asked_for_again_at_once(teaching_policy, real_data):
     from pokesim.gen2.menus import Teach
     policy = teaching_policy
