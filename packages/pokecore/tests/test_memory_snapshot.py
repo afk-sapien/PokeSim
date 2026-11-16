@@ -248,9 +248,8 @@ def test_memory_bytes_uses_the_snapshot_window(machine):
     assert memory_bytes(memory, None, 0xC100, 300) == bytes(Memory(machine)[0xC100:0xC100 + 300])
 
 
-def test_gen1_fields_are_identical_through_the_snapshot(machine, monkeypatch):
+def test_gen1_fields_are_identical_through_the_snapshot(machine):
     from pokecore.snapshot import read_fields
-    monkeypatch.setenv('POKESIM_CORE_DECODER', 'python')
     assert read_fields(machine.memory) == read_fields(Memory(machine))
 
 

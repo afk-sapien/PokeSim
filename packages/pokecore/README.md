@@ -97,7 +97,7 @@ budgets and recovery.
 - [API contracts](docs/api.md): every public name and its guarantees
 - [Menu shortcuts](docs/shortcuts.md): the full shortcut catalog and results
 - [Gold, Silver and Crystal](docs/gen2.md): Gen 2 readers and snapshots
-- [Emulator interface](docs/emulator.md): saves, checkpoints, snapshots, native decoder
+- [Emulator interface](docs/emulator.md): saves, checkpoints, snapshots
 - [Real-time clock](docs/rtc.md): clock files, locking and checkpoints
 - [Execution procedures](EXECUTION.rst) and
   [action and compatibility procedures](COMPATIBILITY.rst)

@@ -86,7 +86,7 @@ jobs:
       - name: Run the pokecore suite without silent skips
         working-directory: packages/pokecore
         run: |
-          uv run pytest -rs -q -p no:cacheprovider --ignore=tests/test_snapshot_native.py --ignore=tests/test_real_roms.py | tee "$RUNNER_TEMP/pokecore.log"
+          uv run pytest -rs -q -p no:cacheprovider --ignore=tests/test_real_roms.py | tee "$RUNNER_TEMP/pokecore.log"
           if grep -Eq '[0-9]+ skipped' "$RUNNER_TEMP/pokecore.log"; then echo "Unexpected skips"; exit 1; fi
   package:
     needs: [validate, test]

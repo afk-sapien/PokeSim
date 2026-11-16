@@ -25,7 +25,7 @@ def test_pokedex_panel_fits_and_scales_portraits(page, game, width):
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(url + '/pokedex')
     expect(page.locator('.dex-card')).to_have_count(151)
-    page.wait_for_function("document.querySelector('.dex-card[data-dex=\"1\"] .plate img').style.width !== ''")
+    page.wait_for_function("() => document.querySelector('.dex-card[data-dex=\"1\"] .plate img').style.width !== ''")
     # A padded pack is scaled as the 56px picture inside it, by a whole number.
     scale = page.evaluate("(() => { const i = document.querySelector('.dex-card[data-dex=\"1\"] .plate img'); return parseFloat(i.style.width) / i.naturalWidth })()")
     assert scale == 2

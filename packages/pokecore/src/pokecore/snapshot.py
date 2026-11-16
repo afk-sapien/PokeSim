@@ -1,11 +1,8 @@
-"""Read-only WRAM snapshot fields with an optional Rust decoder.
+"""Read-only WRAM snapshot fields.
 
 Storage banks remain a separate read. No policy, scoring, or validity filtering
-belongs here. The Python decoder remains the differential-test reference.
+belongs here.
 """
-from functools import lru_cache
-import os
-
 from . import gen1 as core_gen1
 from .gen1 import (
     W_TILEMAP,
@@ -35,53 +32,6 @@ from .gen1 import (
 )
 
 
-@lru_cache(maxsize=3)
-def _native(mode):
-    if mode not in {'auto', 'python', 'rust'}:
-        raise ValueError('POKESIM_CORE_DECODER must be auto, python, or rust')
-    if mode == 'python':
-        return None
-    try:
-        import pokesim_core_native
-    except ModuleNotFoundError as error:
-        if mode == 'rust' or error.name != 'pokesim_core_native':
-            raise
-        return None
-    if pokesim_core_native.DECODER_API != 1:
-        raise RuntimeError('Unsupported native decoder API')
-    return pokesim_core_native
-
-
-def decoder_backend():
-    return 'rust' if _native(os.environ.get('POKESIM_CORE_DECODER', 'auto')) else 'python'
-
-
-def read_fields(memory, move_data=None):
-    """Return fresh snapshot fields with identical Python and Rust field shapes.
-
-    Calls must run on the owning emulator thread between execution steps.
-    Reads never advance execution or mutate memory. No snapshot is cached.
-    """
-    native = _native(os.environ.get('POKESIM_CORE_DECODER', 'auto'))
-    if native is None:
-        return _read_fields_python(memory, move_data)
-    read = getattr(memory, 'read_bytes', None)
-    if callable(read):
-        raw = read(0xc000, 0xe000)
-    else:
-        raw = bytes(memory[0xc000:0xe000])
-    if len(raw) != 8192:
-        raise ValueError('Expected exactly 8192 WRAM bytes')
-    move_data = move_data or {}
-    maximum = tuple(move_data.get(raw[base + i], {}).get('pp', 0)
-                    + min(7, move_data.get(raw[base + i], {}).get('pp', 0) // 5)
-                    * (raw[base + 21 + i] >> 6)
-                    for index in range(min(raw[0x1163], 6))
-                    for base in (0x116b + index * 44,)
-                    for i in range(8, 12))
-    return native.decode_snapshot(raw, maximum)
-
-
 def wild_shiny(mem):
     """Shiny DVs of the wild individual, keeping its original DVs through Transform."""
     # wCapturedMonSpecies is set before the capture dialogue and storage update, and
@@ -103,8 +53,14 @@ def _boxed_pokemon(mem):
     return tuple((records[i * 33], records[i * 33 + 3]) for i in range(count))
 
 
-def _read_fields_python(mem, move_data=None):
-    """mem: anything supporting mem[addr] and mem[a:b] over the GB address space (pyboy.memory)."""
+def read_fields(memory, move_data=None):
+    """Return fresh snapshot fields from memory, anything supporting memory[addr] and
+    memory[a:b] over the GB address space (pyboy.memory).
+
+    Calls must run on the owning emulator thread between execution steps.
+    Reads never advance execution or mutate memory. No snapshot is cached.
+    """
+    mem = memory
     party = core_gen1.read_party(mem, move_data=move_data)
     items = core_gen1.read_bag(mem)
     in_battle = mem[W_IS_IN_BATTLE]

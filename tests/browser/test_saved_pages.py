@@ -8,7 +8,7 @@ REFERENCE = re.compile(r'/api/pokedex(\?|$)')
 
 
 def saved(page, name):
-    page.wait_for_function(f"PokeSim.recall('{name}').then(Boolean)")
+    page.wait_for_function(f"() => PokeSim.recall('{name}').then(Boolean)")
 
 
 def hold(page, pattern):
@@ -24,7 +24,7 @@ def test_first_visit_shows_placeholder_cards_until_the_pc_arrives(page, game):
     page.goto(url + '/pc?box=party')
     expect(page.locator('#pc-grid .skeleton-card')).to_have_count(20)
     expect(page.locator('#pc-grid')).to_have_attribute('aria-busy', 'true')
-    page.wait_for_function('document.querySelector("#pc-grid .skeleton-card")')
+    page.wait_for_function('() => document.querySelector("#pc-grid .skeleton-card")')
     assert held
     for route in held:
         route.continue_()
