@@ -203,7 +203,7 @@ def managed(page, url):
 def settle(page):
     # Live pages poll and stream, so the network never goes quiet. Wait for fonts and pictures instead.
     page.evaluate('() => document.fonts.ready')
-    page.wait_for_function('[...document.images].every(image => image.complete || image.loading === "lazy")')
+    page.wait_for_function('() => [...document.images].every(image => image.complete || image.loading === "lazy")')
     page.wait_for_timeout(300)
     page.evaluate('''() => document.getAnimations().forEach(animation => {
       try { animation.finish() } catch (_) { animation.cancel() } })''')
