@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokesim"
-version = "0.7.3"
+version = "0.7.4"
 description = "One application for autonomous Pokémon Red, Blue, Yellow, Gold, Silver and Crystal adventures with live views and cable trading"
 readme = "README.md"
 license = "MIT"
@@ -19,7 +19,7 @@ dependencies = [
   # pokecore's source is the packages/pokecore workspace member, and uv, CI and the container install it from
   # there (tool.uv.sources below). This URL is the released copy that pip and pipx users get, so
   # tools/release.py check-pins fails when its version differs from the member's.
-  "pokecore[emulator] @ https://github.com/afk-sapien/PokeSim/releases/download/pokecore-v0.12.2/pokecore-0.12.2-py3-none-any.whl#sha256=f804c0a05a411fb843b10de8b63408c408be1b4069825dc02fee1eeed9dd40cb ; (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and (platform_machine == 'x86_64' or platform_machine == 'arm64')) or (sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64'))",
+  "pokecore[emulator] @ https://github.com/afk-sapien/PokeSim/releases/download/pokecore-v0.12.3/pokecore-0.12.3-py3-none-any.whl#sha256=c064f6e564d22efa38e38b75a6de552f40d2f21cb9afb03c1d19666f47531668 ; (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and (platform_machine == 'x86_64' or platform_machine == 'arm64')) or (sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64'))",
   "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.7/pyboy_rs-0.1.7-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=9c781e7bf5b09c8e7818c8a09b5c48d08b791c18a2871e81c306c456564019dd ; sys_platform == 'linux' and platform_machine == 'x86_64'",
   "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.7/pyboy_rs-0.1.7-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl#sha256=bd485b88179252cbe33152e0cc5e787c99f3652e08f0a05dd2e988d9dc2a9b68 ; sys_platform == 'linux' and platform_machine == 'aarch64'",
   "pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.7/pyboy_rs-0.1.7-cp311-abi3-macosx_10_12_x86_64.whl#sha256=93408f3bca231f36a9dca0ef6279d03e0bb87694acb4d33e3162a711d53e1ec6 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
