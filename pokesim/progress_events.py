@@ -14,11 +14,15 @@ reads them for a decision yet, and a stall, LoopGuard or the watchdog still go b
 ``encounter_counts`` keeps one row per goal per game hour. The cartridge's wild battle hook counts
 each encounter in memory and the next decision writes them, judged by the hunt's target and rule.
 Both tables come from the schema version (pokesim.state).
+
+On a slow host another connection can hold the database past the busy timeout. The writers a play
+pass calls (drain and GoalWatch) then log one warning instead of failing the pass (busy).
 """
 import logging
 import time
 
 from .state.journal import add_encounters, add_progress, best_level
+from .state.schema import busy
 
 log = logging.getLogger(__name__)
 
@@ -172,14 +176,22 @@ def queued(kind, **fields):
 
 
 def drain(store, rows):
-    """Write the queued rows and return the journal entries left."""
+    """Write the queued rows and return the journal entries left.
+
+    A busy database costs the queued rows, never the journal entries that came with them.
+    """
     rows = list(rows)
     progress = [row for row in rows if isinstance(row, dict) and 'progress' in row]
     if progress:
-        with store.transaction() as db:
-            for row in progress:
-                fields = dict(row)
-                record(db, fields.pop('progress'), frame=frame(store), **fields)
+        try:
+            with store.transaction() as db:
+                for row in progress:
+                    fields = dict(row)
+                    record(db, fields.pop('progress'), frame=frame(store), **fields)
+        except Exception as error:
+            if not busy(error):
+                raise
+            log.warning('%d progress rows not written, the database was busy: %s', len(progress), error)
     return [row for row in rows if not (isinstance(row, dict) and 'progress' in row)]
 
 
@@ -224,17 +236,30 @@ class GoalWatch:
             del self.expected[next(iter(self.expected))]
 
     def observe(self, store, key, tier='', hunt=None):
-        """Called at each decision: write the encounters so far, then take the goal now running."""
+        """Called at each decision: write the encounters so far, then take the goal now running.
+
+        While the database is busy the old goal and its hunt stay running, so the next decision writes
+        its row.
+        """
         self.flush(store)
-        self.hunt = hunt
         if key == self.key:
+            self.hunt = hunt
             return
         if self.key:
-            write(store, 'goal', goal=self.key, tier=self.tier)
-        self.key, self.tier = key, tier
+            try:
+                write(store, 'goal', goal=self.key, tier=self.tier)
+            except Exception as error:
+                if not busy(error):
+                    raise
+                log.warning('The goal row for %s waits for the next decision, the database was busy: %s', self.key, error)
+                return
+        self.key, self.tier, self.hunt = key, tier, hunt
 
     def flush(self, store):
-        """Add the pending encounters to ``encounter_counts``, one row per goal per game hour."""
+        """Add the pending encounters to ``encounter_counts``, one row per goal per game hour.
+
+        While the database is busy they stay pending for the next decision.
+        """
         if not self.pending:
             return
         counts = {}
@@ -244,10 +269,16 @@ class GoalWatch:
             if hunt and hunt[0] in (None, species):
                 row[1] += 1
                 row[2] += met(hunt[1], dvs)
-        self.pending = []
-        with store.transaction() as db:
-            for (goal, hour), row in counts.items():
-                add_encounters(db, goal, hour, *row)
+        pending, self.pending = self.pending, []
+        try:
+            with store.transaction() as db:
+                for (goal, hour), row in counts.items():
+                    add_encounters(db, goal, hour, *row)
+        except Exception as error:
+            if not busy(error):
+                raise
+            self.pending = pending + self.pending
+            log.warning('%d encounters wait for the next decision, the database was busy: %s', len(pending), error)
 
     def story(self, store, flags):
         """Write an ``event`` row when story flags are set that this run has not seen set before.
@@ -257,21 +288,29 @@ class GoalWatch:
         on the store, so a worker that starts again after a reload does too: a Gold League run that
         restarted from its entry save beat Will, Koga and Bruno again after each worker start, and each
         win wrote a net row though the reload had taken it back. The score is the count of flags seen.
+        While the database is busy no flag is taken as seen, so the next pass tries them again.
         """
         flags = bytes(flags)
         if not flags:
             return
-        if not self.flags:
-            kept = stored_flags(store)
-            self.flags = union(kept, flags) if kept else flags
-            if self.flags != kept:
+        before = self.flags
+        try:
+            if not self.flags:
+                kept = stored_flags(store)
+                self.flags = union(kept, flags) if kept else flags
+                if self.flags != kept:
+                    save_flags(store, self.flags)
+                return
+            seen = self.flags.ljust(len(flags), b'\0')
+            if any(now & ~old for old, now in zip(seen, flags)):
+                self.flags = union(seen, flags)
                 save_flags(store, self.flags)
-            return
-        seen = self.flags.ljust(len(flags), b'\0')
-        if any(now & ~old for old, now in zip(seen, flags)):
-            self.flags = union(seen, flags)
-            save_flags(store, self.flags)
-            write(store, 'event', goal=self.key, tier=self.tier, score=sum(byte.bit_count() for byte in self.flags))
+                write(store, 'event', goal=self.key, tier=self.tier, score=sum(byte.bit_count() for byte in self.flags))
+        except Exception as error:
+            if not busy(error):
+                raise
+            self.flags = before
+            log.warning('The story flags wait for the next pass, the database was busy: %s', error)
 
     def restart(self):
         """A new game: no encounters, flags or kept copies of the old one carry over. The restart's
