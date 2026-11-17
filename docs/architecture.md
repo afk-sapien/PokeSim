@@ -7,7 +7,7 @@ This page answers what runs, in what order, how often and in which file. Designs
 ## Processes
 
 1. The manager serves the Adventure Library (`app/manager.py:2099`, uvicorn at `:2154`) and proxies each adventure's pages through `/games/{aid}/{path}` (`:1690`).
-2. Its `Supervisor` (`app/supervisor.py:316`) starts one worker process per running adventure. The command is `python -m pokesim.runtime.worker`, or `--worker` in a frozen build (`:77-78`). It is started with `Popen` (`:87`) and gets a bootstrap JSON on stdin (`:96`).
+2. Its `Supervisor` (`app/supervisor.py:211`, `start` at `:316`) starts one worker process per running adventure, each held by a `Child` (`:65`). The child's command is `python -m pokesim.runtime.worker`, or `--worker` in a frozen build (`:77-78`). The child starts it with `Popen` (`:87`) and writes a bootstrap JSON to its stdin (`:96`).
 3. The worker (`runtime/worker.py:274`, `serve` at `:80`) builds a `SimulationRuntime` (`:104`), starts it (`:109`), creates the web app (`:115`) and prints its ready line (`:234-236`).
 4. `SimulationRuntime` builds the generation's emulator: the Gen II import is at `runtime/simulation.py:73`, the Gen I import at `:78`, the call at `:91`. Legacy single-game mode builds it at `runtime/legacy.py:37`.
 5. The emulator plays on one thread, `emulator` for Gen I (`emulator.py:174`) and `gen2-emulator` for Gen II (`gen2/emulator.py:235`).
@@ -29,9 +29,10 @@ A host owns a PyBoy instance, a policy and a frame counter, and runs the loop be
 
 ## The loop
 
-`GameLoop` (`runtime/game_loop.py:89`) and `Decider` (`:74`) are shared by all three hosts.
+`GameLoop` (`runtime/game_loop.py:89`) and `Decider` (`:74`) are shared by all three hosts. The policy benchmark (`benchmark.py:84`) and the Gen II scenario runner (`replay/play_gen2.py:194`) also build a `GameLoop` of their own.
 
 - `Decider.ask` (`runtime/game_loop.py:82-86`) writes the Gen I options byte when it has a writer (`:83-84`), builds a `PolicyContext` (`:85`) and calls `policy.step`. An empty answer becomes one 12 frame wait (`:86`, `IDLE_FRAMES` at `:22`). A Gen II host passes no writer (`runtime/adapter.py:35-38`, `gen2/emulator.py:1092-1093`).
+- The options byte is also kept outside the decider. Gen I enforces it on every observation of a started game (`emulator.py:537`). Gen II writes it in `_observe` once after each state load, reload or new game, outside manual control (`gen2/emulator.py:578-587`).
 - `PolicyContext` carries the snapshot, the PlayClock frames, the memory and the stack pointer (`runtime/policy.py:43-48`).
 - An `Action` is a button, a hold (8 frames by default) and a gap (`runtime/policy.py:21-32`). It lasts hold plus gap, or hold plus the generation's wait when it names no gap (`:30-32`). The wait is 2 frames in Gen I and 16 in Gen II (`runtime/game_loop.py:24-25`).
 - `GameLoop.decide` (`runtime/game_loop.py:104-113`) replaces the pending actions with the new answer (`:108`) and then writes a trace record (`:109-112`).
@@ -44,10 +45,11 @@ A host owns a PyBoy instance, a policy and a frame counter, and runs the loop be
 `Emulator._run`, `emulator.py:1121`.
 
 1. Build the loop with the options writer (`:1124-1125`) and make sure a trace segment is open (`:1132-1133`).
-2. Run queued commands (`:1134-1137`) and handle a new input epoch (`:1140-1144`).
-3. A manual press, or a one frame wait in manual control, becomes the pending action. A pause sleeps and starts the next pass (`:1145-1155`).
-4. Decide only when no action is pending (`:1156-1160`). One Gen I decision covers every action it returned, the sum of their holds and gaps.
+2. Run queued commands (`:1134-1137`). A new input epoch clears the pending actions (`:1140-1141`) and drops queued manual presses (`:1143-1144`).
+3. A manual press replaces the pending actions (`:1145-1146`). Manual control with no press plays a one frame wait (`:1147-1149`). A pause sleeps and starts the next pass (`:1150-1155`).
+4. Decide only when no action is pending (`:1156-1160`). Preparation, when set, goes through the decider in place of the policy (`:1159-1160`). One Gen I decision covers every action it returned, the sum of their holds and gaps.
 5. Record activity events (`:1161-1169`), play one action (`:1178`), then, with isolated RAM, handle TM purchases and reward delivery (`:1183-1192`).
+6. An error in a pass goes to `loop_failed` (`:1195-1197`), which stops the run when a fatal error is set or the same pass failed ten times in a row (`loop_errors.py:7-12`). On exit the run makes a final autosave unless a fatal error is set (`emulator.py:1198-1200`).
 
 ### One pass of the Gen II run loop
 
@@ -55,10 +57,11 @@ A host owns a PyBoy instance, a policy and a frame counter, and runs the loop be
 
 1. Build the loop with a 16 frame wait, and autosave only while the policy is not backing out (`:1092-1093`). Make sure a trace segment is open (`:1100-1102`).
 2. Run queued commands (`:1103-1110`). A trade hold sleeps and skips the pass (`:1111-1114`). Rewards and the Celebi check run every 300 frames (`:1115-1120`).
-3. Preparation, manual control and pause skip the decision (`:1121-1132`).
+3. Preparation skips the decider and sets the pending action itself (`:1121-1122`). Manual control and pause also skip the decision (`:1123-1132`).
 4. Decide (`:1133-1138`), then play one action (`:1139`).
+5. An error goes to `loop_failed` (`:1141-1143`). On exit the run flushes its step log and makes a final autosave unless a fatal error is set (`:1144-1148`).
 
-The Gen II policy returns exactly one action (`gen2/policy/__init__.py:257`), so one Gen II decision covers one action: its hold plus gap, 16 frames by default.
+The Gen II policy returns exactly one action (`gen2/policy/__init__.py:257`), so one Gen II decision covers one action: its hold plus its gap, or plus the 16 frame wait. Most are short, but a straight walk is one `Hold` across several tiles, held up to 16 frames a tile plus 32 and released early when its stop check says so (`gen2/policy/navigation.py:249`, `Hold` at `runtime/policy.py:36-40`).
 
 ### HeadlessRun
 
@@ -76,7 +79,7 @@ Callers: `scenarios.py:757`, `replay/rung.py:107`, `replay/find_stalls.py:60`, `
 | Autosave | Every 300 seconds of game time. | `config.py:40`, `runtime/game_loop.py:102`, `:120-121` |
 | Gen II rewards | Every 300 frames. | `gen2/emulator.py:1115-1120` |
 
-Observation reads the snapshot and writes the journal: Gen I `_observe` (`emulator.py:499`) calls `_observe_snapshot` (`:533`), and Gen II has `_observe` (`gen2/emulator.py:571`). The Gen I guards skip manual control, pause and preparation (`emulator.py:1116-1119`). The Gen II guards also skip a trade hold (`gen2/emulator.py:966`).
+Observation reads the snapshot and writes the journal: Gen I `_observe` (`emulator.py:499`) calls `_observe_snapshot` (`:533`), and Gen II has `_observe` (`gen2/emulator.py:571`). The Gen I guards skip manual control, pause and preparation (`emulator.py:1116-1119`). The Gen II guards also skip a trade hold (`gen2/emulator.py:966`). Both stand down for 3600 frames after a reload (Gen I `RELOAD_QUIET_FRAMES`, `emulator.py:53`, checked at `:841`, and `gen2/emulator.py:974`). The Gen II guards also stand down while the policy is idle, waiting for the cartridge clock (`gen2/emulator.py:976-982`).
 
 ## Policy
 
@@ -97,6 +100,8 @@ Gen II step order, in `gen2/policy/__init__.py`: rescue (`:277-280`), the Ruins 
 
 ### What survives between decisions
 
+This table lists the plan-like state, not every field.
+
 | State | Gen I | Gen II |
 | --- | --- | --- |
 | Goal | `goal` (`policies/strategic.py:174`), set from the pick (`:580`) | `goal` (`gen2/policy/__init__.py:52`) |
@@ -104,8 +109,10 @@ Gen II step order, in `gen2/policy/__init__.py`: rescue (`:277-280`), the Ruins 
 | Menu | menu context, cleared on restore (`policies/strategic.py:302`) | `menu` (`gen2/policy/__init__.py:60`) |
 | Shortcut | `ShortcutRunner` (`policies/strategic.py:210`), cancelled on restore (`:252`) | blocked shortcuts (`gen2/policy/__init__.py:83`) |
 | Walk path | a path deque (`policies/navigation.py:257`), reused while the target is unchanged (`:761-766`), cleared on restore (`:417`) | none |
+| Rescue presses | none | `rescue` (`gen2/policy/__init__.py:96`), filled on a recovery (`:204-208`), played first in a step (`:277-280`) |
+| Navigator memory | `visits`, `blocked` and `failures` beside the walk path (`policies/navigation.py:251-254`) | `blocked`, `visits`, `explored`, `exploring`, `failed_edges` and `searches` (`gen2/navigation.py:97-103`) |
 
-Gen II stores no walk path. `toward` (`gen2/navigation.py:377-405`) routes again on every call and keeps only the region failures (`:381`). Its BFS search caches progress per start (`gen2/routes.py:13-19`). A Gen I restore clears the trip, menu and shortcut in `on_restore` (`policies/strategic.py:245-325`).
+Gen II stores no walk path. `toward` (`gen2/navigation.py:377-405`) routes again on every call and drops the expired region failures (`:381`). Its BFS search caches progress per start (`gen2/routes.py:13-19`). A Gen I restore resets about 60 fields in `on_restore`, the trip, menu and shortcut among them (`policies/strategic.py:245-324`).
 
 ## Planning
 
@@ -126,7 +133,7 @@ There is no goal queue. The manager's pin holds one goal.
 
 ## Supervision
 
-`runtime/supervision.py` is one ladder for both generations (`:1-21`): rung 0 parks the goal, rung 1 reloads and the third reload in a row reports, rung 2 restarts a League attempt from its entry save, and rung 3, after twelve reloads, gives up on the stuck goal or holds when there is nothing to give up. The limits are at `:47-56`. `Supervisor` is at `:215` and the climb at `:264-282`. The counts live in the adventure store under `KEY` (`:41`), so a worker restart keeps them (`:3-5`).
+`runtime/supervision.py` is one ladder for both generations (`:1-21`): rung 0 parks the goal, rung 1 reloads and the third reload in a row reports, rung 2 restarts a League attempt from its entry save, and rung 3, after twelve reloads, gives up on the stuck goal or holds when there is nothing to give up. The limits are at `:47-56`. `Supervisor` is at `:215` and `climb` at `:257`. The counts live in the adventure store under `KEY` (`:41`), so a worker restart keeps them (`:3-5`).
 
 What starts a climb:
 
