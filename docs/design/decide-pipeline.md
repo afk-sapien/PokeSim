@@ -1,6 +1,6 @@
 # Decide pipeline
 
-Status: accepted on 2026-11-11. All six slices, 1, 2, 3, 4a, 4b and 5, are built. Every line number was read from main at `2d02e6c2`. This is phase 2 item 4 of the architecture plan of 2026-11-09, the new PR before [Goal system v2](goal-system.md) PR 7. Shadow mode reuses `planning/shadow.py`, and the trace is the one in [Replayable bugs](replayable-bugs.md).
+Status: accepted on 2026-11-11. All six slices, 1, 2, 3, 4a, 4b and 5, are built (#528, #531, #533, #534, #537, #538), and #557 offers each Gen II collection rung as its own source. Section 1 "Today's chain" describes main before the build. Every line number was read from main at `2d02e6c2`. This is phase 2 item 4 of the architecture plan of 2026-11-09, the new PR before [Goal system v2](goal-system.md) PR 7. Shadow mode reuses `planning/shadow.py`, and the trace is the one in [Replayable bugs](replayable-bugs.md).
 
 Today each generation rebuilds its goal on every decision through an ordered chain. A source low in the chain wins because it comes later in the file, not because it is worth more, and nothing records that two sources fought. This note replaces both chains with one pipeline. Every source offers, one filter decides what can run, and the arbiter ranks everything that is left in one call.
 

@@ -2,8 +2,8 @@
 
 Design snapshot from September 2026, retained to explain the implemented
 Library. Branch names, proposed work, and release gates below describe that
-time. Use [architecture](architecture.md), [release status](../RELEASE_STATUS.md),
-and the [roadmap](roadmap.md) for current guidance.
+time. Use [architecture](../architecture.md), [release status](../../RELEASE_STATUS.md),
+and the [roadmap](roadmap-0.5.md) for current guidance.
 
 ---
 

@@ -1,5 +1,7 @@
 # One bot, two adapters
 
+Status: built on 2026-11-11 by #552 (this plan), #554 (one Policy protocol and one decider) and #555 (one runtime loop with a `GameAdapter` per generation). Only `HeadlessRun` uses the adapter today. The application's two `Emulator` classes run the loop without it, see [Architecture](../architecture.md#known-duplication).
+
 Phase 3 of the architecture plan. Red, Blue and Yellow (Gen I) and Gold, Silver and Crystal (Gen II) play
 through one policy shape and one runtime loop. What truly differs between the games sits in a small
 `GameAdapter` per generation, and every difference that stays is named there as a setting. Gen I is the

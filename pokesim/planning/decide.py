@@ -4,9 +4,10 @@ Each source offers goals as candidates. ``decide`` keeps the latest offer of eac
 that cannot run, and picks by fixed rules in order: a move the game forces, a goal under way, the
 arbiter's rank, and then the enabler of the best goal's first unmet need.
 
-Until a group of sources switches on, the pipeline only runs beside the old chain in shadow mode. Nothing
-here writes state, draws a random number or steps the emulator. An offer's ``commit`` holds the writes
-that run only when it is picked, and shadow mode never runs one.
+Every overworld goal of both generations is picked here, through each generation's ``Ballot``
+(policies/pipeline.py and gen2/pipeline.py). Nothing here writes state, draws a random number or steps
+the emulator. An offer's ``commit`` holds the writes that run only when it is picked, and a shadow
+record never runs one.
 """
 from __future__ import annotations
 

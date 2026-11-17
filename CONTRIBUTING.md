@@ -5,7 +5,7 @@ For questions, see [getting help](SUPPORT.md).
 
 Original code is MIT licensed. Keep changes focused and describe the problem, resulting
 behavior, and validation in each pull request. Start with the
-[documentation index](docs/README.md) and [module boundaries](docs/architecture.md).
+[documentation index](docs/README.md) and the [runtime map](docs/architecture.md).
 
 ## Development setup
 
@@ -27,7 +27,8 @@ and native worker checks.
 ## Checks before a pull request
 
 ```sh
-uv run --locked pytest --ignore=tests/test_rom.py -q
+uvx ruff==0.16.9 check pokesim tests tools conftest.py packages/pokecore
+uv run --locked pytest tests/test_FILE_YOU_TOUCHED.py -q
 uv run --locked python tools/check_web.py
 uv run --locked python tools/check_docs.py
 uv build
@@ -43,7 +44,8 @@ source archive and the image.
 file. `check_docs.py` checks local Markdown link destinations. CI runs the same checks.
 `main` and `feature/` branches take changes only through a pull request whose `ci gate`
 and `install gate` checks passed.
-Run focused tests while editing, then the full suite for changes to shared behavior.
+Before a pull request, run locally only lint and the tests for the files you touched. The full
+suite runs in CI only, so do not repeat it locally.
 See [the validation guide](docs/testing.md) for real Chromium tests, copied-save
 comparisons, and embedded build identity.
 
@@ -72,10 +74,21 @@ checkpoints for policy scenarios.
 
 | Path | Responsibility |
 | --- | --- |
-| `pokesim/` | Emulator, persistence, game data, and desktop entry points |
-| `pokesim/policies/` | Gameplay decisions and project planning |
+| `pokesim/` | Gen I emulator, persistence, game data, and desktop entry points |
+| `pokesim/app/` | The Adventure Library manager and its worker supervisor |
+| `pokesim/runtime/` | Simulation lifecycles, workers, the shared game loop, policy protocol, headless runs, supervision and trace |
+| `pokesim/policies/` | Gen I gameplay decisions and project planning |
+| `pokesim/planning/` | Planner systems shared by both generations, including the decide pipeline |
+| `pokesim/gen2/` | Gold, Silver and Crystal data, observation and gameplay |
+| `pokesim/state/` | The one owner of each adventure's database |
+| `pokesim/replay/` | Replay, capture, diverge, bisect and profiling commands |
+| `pokesim/story/`, `pokesim/mapfacts/` | Story places and map facts read from the disassemblies |
+| `pokesim/interactions/` | The Cable Club driver and link worker |
+| `pokesim/data_tools/` | Local game-data generation |
+| `pokesim/experimental/` | Opt-in experiments outside the supported runtimes |
 | `pokesim/web/` | HTTP routes, presentation helpers, and browser assets |
 | `pokesim/trade/`, `pokesim/broker/` | Checkpoint exchanges, coordination, and inventory matching |
+| `packages/pokecore/` | Shared game decoding, a uv workspace member with its own tests |
 | `tests/` | Python scenarios and Node browser tests |
 | [`tools/`](tools/README.md) | Data preparation, validation, release, and operations commands |
 | `deploy/`, `compose*.yaml` | Server deployment examples |
@@ -98,7 +111,7 @@ Generated data must retain its upstream revision and generator command. See the
 
 Update the owning guide when behavior changes, and describe user-visible changes in the
 pull request. The release pull request writes [CHANGELOG.md](CHANGELOG.md) from those
-descriptions, so other pull requests leave it alone. Keep future work in the roadmap and deployment details
+descriptions, so other pull requests leave it alone. Keep future work in a design under `docs/design/` and deployment details
 in validation receipts. Review `docs/release-notes.md` for the exact tag before publishing.
 
 For publishing triggers, GHCR setup, and recovery after a failed release run, see
