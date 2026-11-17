@@ -3187,6 +3187,22 @@ def test_a_goal_whose_hp_or_pp_is_spent_runs_before_it_reaches_its_destination(r
     assert fight(policy, snapshot, mem).button == ('Attack', 0)
 
 
+def test_a_spent_party_fights_the_transmitter_electrode_it_talked_to(real_data):
+    """The state a Gold run stalled in: Team Rocket Base B2F, the story goal on the third Electrode, the
+    party under the heal line. It ran from each Electrode and talked to it again for 300 game minutes,
+    since a run leaves the Electrode in place and the game keeps the player in the room."""
+    from pokesim.gen2.policy import Goal
+    policy, snapshot, mem, bytes_ = _stance_battle(real_data)
+    snapshot.map, snapshot.enemy_species, snapshot.owned = real_data.map_ids['TEAM_ROCKET_BASE_B2F'], 101, {101}
+    snapshot.party = (SimpleNamespace(**{**vars(_shiny_lead()), 'hp': 40}),)
+    policy.goal = Goal('electrode_3', 'Stop the radio transmitter', 'TEAM_ROCKET_BASE_B2F', 5, 13)
+    bytes_['wBattleScriptFlags'] = 0x80
+    assert fight(policy, snapshot, mem).button == ('Attack', 0)
+    # A plain wild battle on a spent walk still runs.
+    bytes_.clear()
+    assert fight(policy, snapshot, mem).button == ('Flee',)
+
+
 def test_a_hunt_runs_twice_then_fights_a_battle_it_cannot_escape(real_data):
     """Two failed run attempts in one battle and it is fought out. The next battle runs again."""
     from pokesim.gen2.policy import Goal

@@ -47,6 +47,17 @@ def test_the_walk_budget_is_spent_when_hp_or_pp_runs_out(hp, pp, spent):
     assert stance(TRAIN, PLAIN, books(hp, pp)) is FIGHT
 
 
+@pytest.mark.parametrize('kind', [STORY, TRAVEL, TRAIN, HUNT])
+def test_a_battle_a_map_script_started_is_fought_whatever_the_budget(kind):
+    """A Gold run fled each transmitter room Electrode with its budget spent and talked to it again
+    for 300 game minutes. The game keeps the player in that room, so no heal could come first."""
+    scripted = Encounter(wild=True, scripted=True)
+    assert stance(kind, scripted, books(0, 0)) is FIGHT
+    assert stance(kind, Encounter(wild=True, scripted=True, shiny=True), books(0, 0)) is FIGHT
+    # One the run wants is still caught.
+    assert stance(kind, Encounter(wild=True, scripted=True, wanted=True), books(0, 0)) is CATCH
+
+
 def test_resources_are_read_only_when_the_budget_decides():
     reads = []
     ledger = Ledger(lambda snapshot, kinds: Resources({HP: 0, PP: 0}))
