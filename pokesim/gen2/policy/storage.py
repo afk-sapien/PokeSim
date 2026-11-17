@@ -71,12 +71,14 @@ class StoragePart:
         from ...pcvalue import queue
         from ..release import _keys, release_rated
         from pokecore.identity import same
+        from ...trade.preferences import base
         preferences = dict(self.trade_preferences())
         if protect:
-            # A key from an older release names its Pokémon by trainer and DVs only.
+            # A key from an older release names its Pokémon by trainer and DVs only. A twin key keeps
+            # every twin, since the release rating knows them by family key.
             for mon in snapshot.stored:
                 own = _keys(mon)[0]
-                if any(same(own, key) for key in protect):
+                if any(same(own, base(key)) for key in protect):
                     preferences[own] = {'state': 'locked'}
         return next((row.entry.record for row in queue(release_rated(self, snapshot, wished, preferences))
                      if self.allowed(Release(row.entry.record.box, row.entry.record.position), snapshot)), None)

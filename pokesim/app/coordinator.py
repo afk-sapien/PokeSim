@@ -27,8 +27,8 @@ from ..state import schema
 from .errors import Conflict, NotFound, Refused
 from .loops import Loop
 from .registry import digest, identifier, validate_id
-from pokecore.identity import find, legacy
-from ..trade.preferences import FIRST
+from pokecore.identity import legacy
+from ..trade.preferences import FIRST, find
 from ..trade.worth import gain
 
 log = logging.getLogger(__name__)

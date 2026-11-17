@@ -8,6 +8,8 @@ from pathlib import Path
 
 from pokecore.identity import same
 from ..interactions.cable import checked, sha256
+from ..trade.preferences import base, sendable
+from .views import mon_view
 from ..interactions.link_worker import _write
 from .cable import CableSide
 from .cable_driver import CableDriver
@@ -37,14 +39,20 @@ def run_session(plan, output_dir, progress=None, cancelled=None):
             checked(side.spec.party_slot < len(before[index]), 'Negotiated party slot no longer exists')
             selected = before[index][side.spec.party_slot]
             checked(not snapshots[index].party[side.spec.party_slot].egg, 'Eggs cannot be offered by this coordinator')
-            checked(side.spec.selected_key is None or same(individual_key(selected), side.spec.selected_key),
+            checked(side.spec.selected_key is None or same(individual_key(selected), base(side.spec.selected_key)),
                     'Negotiated individual no longer occupies selected slot')
             snapshot = snapshots[index]
             checked(snapshot.started and not snapshot.in_battle
                     and snapshot.map == side.data.map_ids['POKECENTER_2F']
                     and (snapshot.x, snapshot.y) == (3, 4), 'The trainer is not at the prepared Cable Club position')
-            checked(sum(individual_key(row) == individual_key(selected) for row in before[index]) == 1,
-                    'The selected individual is ambiguous in the prepared party')
+            if side.spec.selected_key is None:
+                checked(sum(individual_key(row) == individual_key(selected) for row in before[index]) == 1,
+                        'The selected individual is ambiguous in the prepared party')
+            else:
+                # Twins are told apart by nickname, and interchangeable twins may go either way.
+                rows = [mon_view(mon, egg_view=True) for mon in snapshot.party + snapshot.stored]
+                checked(sendable(rows, side.spec.party_slot, side.spec.selected_key),
+                        'The selected individual is ambiguous in the prepared party')
             side.attach(index + 1)
         def preview(value):
             for index, side in enumerate(sides):

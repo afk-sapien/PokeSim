@@ -105,15 +105,16 @@ def run_session(plan: CableSessionPlan, output_dir, progress=None, cancelled=Non
         for index, side in enumerate(sides):
             checked(side.spec.party_slot < len(before[index]), 'Negotiated party slot no longer exists')
             selected = before[index][side.spec.party_slot]
-            checked(side.spec.selected_key is None or same(individual_key(selected), side.spec.selected_key),
+            from pokesim.trade.preferences import base, sendable
+            checked(side.spec.selected_key is None or same(individual_key(selected), base(side.spec.selected_key)),
                     'Negotiated individual no longer occupies selected slot')
             if side.spec.selected_key is not None:
-                from dataclasses import asdict as record_dict
                 from pokesim.ram import read_snapshot
-                from pokesim.trade.preferences import identity
-                snapshot = read_snapshot(side.pb.memory, 0)
-                entries = [record_dict(mon) for mon in snapshot.party] + list(snapshot.storage_entries())
-                checked(sum(same(identity(mon), side.spec.selected_key) for mon in entries) == 1,
+                from pokesim.web.pokedex import live_status
+                # The rows the collection lists, so twins are told apart and matched as it does.
+                listed = live_status(read_snapshot(side.pb.memory, 0).to_dict())
+                rows = list(listed['party']) + list((listed.get('storage') or {}).get('pokemon') or ())
+                checked(sendable(rows, side.spec.party_slot, side.spec.selected_key),
                         'Negotiated individual identity is ambiguous')
             side.attach(1 if (index == 0) == plan.external_left else 2)
         driver = CableDriver(sides, plan, progress, cancelled)

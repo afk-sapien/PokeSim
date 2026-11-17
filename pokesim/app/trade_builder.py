@@ -10,7 +10,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 from .. import config
-from pokecore.identity import find
+from ..trade.preferences import find
 from .coordinator import BUSY_NOTE, LINKABLE
 from .assets import portrait_url
 from .errors import Conflict

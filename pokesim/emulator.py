@@ -927,7 +927,9 @@ class Emulator(EmulatorBase):
     def request_release(self, box, position, key, confirm=''):
         """Store the owner's Release for the boxed Pokémon at (box, position), or raise ValueError."""
         from .pcvalue import pc_request
-        from .trade.preferences import identity
+        from .trade.preferences import base, identity
+        # Release requests stay on the family key the PC rows carry, also for a twin.
+        key = base(key)
 
         def request():
             snap = self.snapshot

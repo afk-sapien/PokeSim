@@ -17,7 +17,7 @@ from ..ram import read_snapshot
 from ..screen import Screen
 from ..shortcuts import ShortcutRunner, gen1_ui
 from pokecore.identity import dex_of, is_legacy, legacy, same
-from ..trade.preferences import identity
+from ..trade.preferences import KEEP, TWIN, answers, apply, base, identity, merged
 from ..web.pokedex import live_status
 
 KEY = 'interaction_preparation'
@@ -44,22 +44,36 @@ def sealed(snapshot, preferences, partners=frozenset(), sp=None):
         return False
     from ..policies.strategic import StrategicPolicy
     policy = StrategicPolicy()
-    policy.trade_preferences = lambda: preferences
+    policy.trade_preferences = lambda: merged(preferences)
     policy.trade_partners = lambda: partners
     policy.sp = sp
     return policy._release_target(snapshot) is None
 
 
-def selection(snapshot, preferences, key):
-    payload = live_status(snapshot.to_dict())
+def answering(snapshot, preferences, key):
+    """Every party and box slot a trade key names, party first, as (location, index, listed row)."""
+    payload = apply(live_status(snapshot.to_dict()), preferences)
     party = payload['party']
     stored = (payload.get('storage') or {}).get('pokemon', [])
-    matches = [('party', i, mon) for i, mon in enumerate(party) if same(identity(mon), key)]
+    matches = [('party', i, mon) for i, mon in enumerate(party) if answers(mon, key)]
     matches += [('box', mon['position'] - 1, {**mon, 'box': mon['box'] - 1})
-                for mon in stored if same(identity(mon), key)]
-    if len(matches) != 1:
+                for mon in stored if answers(mon, key)]
+    return matches
+
+
+def selection(snapshot, preferences, key, copies=None):
+    """The slot of the Pokémon a trade key names, a party copy first.
+
+    Interchangeable twins share a twin key, so any of them may go. ``copies`` is how many answered when
+    the preparation began. A PC transfer in flight shows a Pokémon twice or not at all for a few frames,
+    and the count keeps such a frame from passing for a set of twins.
+    """
+    matches = answering(snapshot, preferences, key)
+    twins = isinstance(key, str) and TWIN in key
+    if (not matches or len(matches) > 1 and (not twins or any(row['trade_ambiguous'] for _, _, row in matches))
+            or copies is not None and len(matches) != copies):
         raise ValueError('The selected Pokémon cannot be identified uniquely')
-    if (preferences.get(identity(matches[0][2])) or preferences.get(key) or {}).get('state') in {'locked', 'withdrawn'}:
+    if matches[0][2]['trade_locked']:
         raise ValueError('The selected Pokémon is protected or withdrawn')
     return matches[0]
 
@@ -83,16 +97,19 @@ def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False, prote
     if not isinstance(trade_key, str) or len(legacy(trade_key)) != 24:
         raise ValueError('Choose an identifiable Pokémon')
     # A manual trade is the owner's own choice, so trade preferences and party protection do not apply.
-    location, position, chosen = selection(snapshot, {} if manual else emu.store.trade_preferences(), trade_key)
+    preferences = {} if manual else emu.store.trade_preferences()
+    location, position, chosen = selection(snapshot, preferences, trade_key)
+    copies = len(answering(snapshot, preferences, trade_key))
     if location == 'box' and (chosen['box'], position) in guarded(snapshot, stack_pointer(emu.pb)):
         raise ValueError('The PC list cannot reach this Pokémon. A nickname in its box '
                          'stops the list from drawing, so it cannot be withdrawn')
     if location != 'box' and not manual:
+        # Also when an interchangeable twin of the boxed spare is in the party.
         raise ValueError('Choose a boxed spare. Active party members are protected')
     if type(max_frames) is not int or not 60 <= max_frames <= 216000:
         raise ValueError('Invalid preparation frame budget')
     state = {'id': transaction_id, 'trade_key': trade_key, 'phase': 'travelling',
-             'started_at': time.time(),
+             'started_at': time.time(), 'copies': copies,
              'elapsed_frames': 0, 'max_frames': max_frames, 'party_slot': None, 'selected_key': trade_key,
              # Hand-picked Pokémon and wished species the PC must keep if it has to release one to make room.
              'protect': sorted(set(protect)), 'wished': sorted(set(wished))}
@@ -124,16 +141,18 @@ def begin_restore(emu, prepared):
     if not snapshot.valid:
         return None
     before = set(prepared.get('party_keys') or ())
-    received = [key for key in (identity(mon) for mon in live_status(snapshot.to_dict())['party'])
-                if key and key not in before]
     preferences = emu.store.trade_preferences()
-    if len(received) != 1 or preferences.get(received[0], {}).get('state') == 'locked':
+    # party_keys are family keys. A received twin of a party member is not told apart, so nothing is restored.
+    received = [mon for mon in apply(live_status(snapshot.to_dict()), preferences)['party']
+                if mon['trade_key'] and base(mon['trade_key']) not in before]
+    if len(received) != 1 or received[0]['trade_locked']:
         return None
     try:
         selection(snapshot, preferences, holder)
     except ValueError:
         return None
-    state = {'id': prepared['id'], 'trade_key': holder, 'selected_key': holder, 'received_key': received[0],
+    state = {'id': prepared['id'], 'trade_key': holder, 'selected_key': holder,
+             'received_key': received[0]['trade_key'], 'copies': len(answering(snapshot, preferences, holder)),
              'restore': True, 'phase': 'storage' if snapshot.map in CENTERS else 'travelling', 'started_at': time.time(),
              'elapsed_frames': 0, 'max_frames': 108000, 'party_slot': None, 'protect': [], 'wished': []}
     emu.store.set(KEY, state)
@@ -182,7 +201,7 @@ class Preparation:
         self.nav = Navigator()
         from ..policies.travel import TravelPolicy
         self.traveller = TravelPolicy(tuple(center['pc'] for center in CENTERS.values()))
-        self.traveller.trade_preferences = emu.store.trade_preferences
+        self.traveller.trade_preferences = lambda: merged(emu.store.trade_preferences())
         self.last_frame = emu.frame
         self.persist_frame = emu.frame
         self.last_progress = emu.frame
@@ -311,7 +330,7 @@ class Preparation:
             return [Action(None, 0, 12)]
         self.invalid_since = None
         if self.state.get('waiting_for'):
-            location, _, _ = selection(snap, self._preferences(), self.state['trade_key'])
+            location, _, _ = selection(snap, self._preferences(), self.state['trade_key'], self.state.get('copies'))
             if location != 'box' and not self.state.get('manual'):
                 raise ValueError('The selected boxed spare moved before Cable Club preparation began')
             if not overworld_ready(snap, kind):
@@ -333,7 +352,7 @@ class Preparation:
                 if actions:
                     return actions
         try:
-            location, index, mon = selection(snap, self._preferences(), self.state['trade_key'])
+            location, index, mon = selection(snap, self._preferences(), self.state['trade_key'], self.state.get('copies'))
         except ValueError as error:
             # Cartridge PC transfers update party and box records on different frames.
             # Let an in-flight operation settle without sending another menu input.
@@ -437,7 +456,8 @@ class Preparation:
         """Deposit the reserve or withdraw the offered partner with a Core shortcut."""
         operation = self.operation
         machine = (DepositPokemon(self._storage_reserve(snap)) if operation == 'deposit'
-                   else WithdrawPokemon(selection(snap, self._preferences(), self.state['trade_key'])[1]))
+                   else WithdrawPokemon(selection(snap, self._preferences(), self.state['trade_key'],
+                                                  self.state.get('copies'))[1]))
 
         def done(result, finished):
             if not result.completed:
@@ -481,9 +501,12 @@ class Preparation:
         return list(self.storage_cleanup._dispatch(snap, screen, kind, ctx.mem))
 
     def _storage_preferences(self):
-        preferences = dict(self.emu.store.trade_preferences())
+        # The release policy knows Pokémon by family key, so a twin key keeps every twin of the partner.
+        preferences = merged(self.emu.store.trade_preferences())
         key = self.state['trade_key']
         preferences[key] = {'state': 'offered'}
+        if (preferences.get(base(key)) or {}).get('state') != KEEP:
+            preferences[base(key)] = {'state': 'offered'}
         protect = self.state.get('protect') or ()
         wished = set(self.state.get('wished') or ())
         snapshot = getattr(self.emu, 'snapshot', None)
@@ -491,7 +514,8 @@ class Preparation:
             # A preparation begun by an older release names its Pokémon by trainer and DVs only.
             for mon in [asdict(mon) for mon in snapshot.party] + snapshot.storage_entries():
                 own = identity(mon)
-                if own and (same(own, key) or any(same(own, other) for other in protect) or dex_of(mon) in wished):
+                if own and (same(own, base(key)) or any(same(own, base(other)) for other in protect)
+                            or dex_of(mon) in wished):
                     preferences[own] = {'state': 'offered'}
         return preferences
 
@@ -503,15 +527,16 @@ class Preparation:
         return False
 
     def _storage_reserve(self, snap):
-        party = live_status(snap.to_dict())['party']
-        keys = [identity(mon) for mon in party]
-        preferences = self._preferences()
+        # Keys and settings as the collection lists them, so a twin's own setting stays with it.
+        party = apply(live_status(snap.to_dict()), self._preferences())['party']
+        keys = [mon['trade_key'] for mon in party]
+        states = [mon['trade_preference'] for mon in party]
         protected = {'locked', 'offered', 'withdrawn'}
         strongest = max(range(len(snap.party)), key=lambda i: snap.party[i].level)
         free = [i for i, mon in enumerate(snap.party)
                 if i != strongest and keys[i] and keys.count(keys[i]) == 1
                 and not stays_in_party(snap, mon)
-                and preferences.get(keys[i], {}).get('state') not in protected]
+                and states[i] not in protected]
         only = {i: {move for move in snap.party[i].moves if move in FIELD_MOVES
                     and not any(move in other.moves for j, other in enumerate(snap.party) if j != i)}
                 for i in free}
@@ -529,9 +554,10 @@ class Preparation:
         if self.state.get('restore'):
             # Only the received Pokémon goes back to the PC. It never belonged to the party it joins.
             safe = [i for i in range(len(snap.party)) if keys[i] and keys.count(keys[i]) == 1
-                    and preferences.get(keys[i], {}).get('state') != 'locked']
+                    and states[i] != KEEP]
         if self.deposit_key is not None:
-            slots = [i for i in safe if keys[i] == self.deposit_key]
+            # A deposit in flight can show the reserve in its box too, which lists it as a twin for a frame.
+            slots = [i for i in safe if answers(party[i], self.deposit_key)]
             if len(slots) != 1:
                 raise ValueError('The reserve needed for this trade moved or became protected')
             return slots[0]

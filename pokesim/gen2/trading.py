@@ -10,12 +10,12 @@ from pokecore.gen2.clock import boot
 from .. import config
 from ..app.registry import digest, validate_id
 from ..checkpoints import CheckpointStore
-from pokecore.identity import find, same
+from pokecore.identity import same
 from ..shiny import shiny_bytes
 from ..runtime import trace
 from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows, merge_partners
 from ..trade.partners import received
-from ..trade.preferences import apply, name as setting_name
+from ..trade.preferences import answers, apply, base, find, name as setting_name
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin, reserves
 from pokecore.gen2.ram import Memory, read_snapshot
@@ -123,8 +123,11 @@ def offers(emu, payload):
     from ..trade.worth import given
     gives = given(emu.policy.pc_rated(snapshot)) if hasattr(emu.policy, 'pc_rated') else None
     result = []
+    # A boxed twin that shares its key with a party copy is not offered: a trade of that key picks
+    # the party copy first, and party members stay home.
+    party_keys = {mon.get('trade_key') for mon in party} - {None}
     for mon in stored:
-        if _kept(mon, stock):
+        if _kept(mon, stock) or mon.get('trade_key') in party_keys:
             continue
         if (gives is not None and (mon['box'], mon['position']) not in gives and held[mon['species']] > 1
                 and mon.get('trade_preference') != 'offered'):
@@ -283,9 +286,11 @@ class Participant(BaseParticipant):
         path = directory / 'source.state'
         CheckpointStore.atomic_write(path, raw)
         row = party(self.emu.pb, self.emu.data)[prepared['party_slot']]
-        if not same(individual_key(row), selected):
-            raise ValueError('Prepared party member does not match the selected individual')
         snapshot = read_snapshot(self.emu.pb.memory, self.emu.data, self.emu.frame)
+        # The struct bytes give the family key. The nickname tells a twin apart.
+        if (not same(individual_key(row), base(selected)) or prepared['party_slot'] >= len(snapshot.party)
+                or not answers(mon_view(snapshot.party[prepared['party_slot']], egg_view=True), selected)):
+            raise ValueError('Prepared party member does not match the selected individual')
         if snapshot.map != self.emu.data.map_ids['POKECENTER_2F'] or snapshot.in_battle:
             raise ValueError('Prepared adventure is not in a Pokémon Center')
         if prepared.get('original_party'):

@@ -22,7 +22,7 @@ from . import trade_settings
 from .assets import portrait_url
 from .errors import Conflict, NotFound
 from .registry import identifier, validate_id
-from pokecore.identity import find
+from ..trade.preferences import find
 
 KEY = 'trade_requests'
 MAX_PENDING = 3

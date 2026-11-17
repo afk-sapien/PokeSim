@@ -153,8 +153,11 @@ def normalise(instance: str, url: str, payload: dict, protected=(), demand=None,
     boxes = placed(stored)
     investment_slots = {(mon['box'], mon['position']) for mon in boxes
                         if mon['species'] not in off_limits and automatic_trade_protected(mon, party + boxes)}
+    # A boxed twin that shares its key with a party copy is not offered: a trade of that key picks
+    # the party copy first, and party members stay home.
+    party_keys = {mon.get('trade_key') for mon in party} - {None}
     available = [mon for mon in boxes if not is_perfect(mon) and not is_shiny(mon) and mon.get('trade_preference') not in ('withdrawn', 'locked')
-                 and not mon.get('trade_ambiguous')
+                 and not mon.get('trade_ambiguous') and mon.get('trade_key') not in party_keys
                  and (mon.get('trade_preference') == 'offered'
                       or (mon['box'], mon['position']) not in investment_slots)]
     available_slots = {(mon['box'], mon['position']) for mon in available}
