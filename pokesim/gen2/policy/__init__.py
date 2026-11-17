@@ -131,8 +131,9 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
         # The source and goal key of the last decision's pick, which tells the stuck guard whether the
         # goal that stopped is the collection's and can be set aside. Never saved.
         self.picked = None
-        # The last draft's copy of the collection state with its fingerprint, which the next draft takes
-        # while the state is unchanged (gen2/collection.py draft). Never saved.
+        # The last draft's copy of the collection state with its fingerprint, its decision's token and the
+        # slots it equals, which the next draft takes while the state is unchanged (gen2/collection.py
+        # draft). Never saved.
         self.draft_copy = None
 
     def state_dict(self):
