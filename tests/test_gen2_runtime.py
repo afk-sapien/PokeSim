@@ -777,6 +777,27 @@ def test_restock_prefers_ultra_balls_while_a_legendary_is_uncaught(real_data, ow
     assert policy.shop.purchase == (real_data.items[expected[1]], 20)
 
 
+def test_ultra_ball_top_up_waits_for_the_legendary_floor_outside_legendary_work(real_data):
+    from pokesim.gen2.ledger import BALL_STOCK, supplies
+    from pokesim.gen2.policy import Policy, Goal
+    from pokesim.gen2.quests import ULTRA_STOCK
+    policy = Policy(real_data)
+    ultra = real_data.items['ULTRA_BALL']
+    # Lugia and Ho-Oh are still to catch, and the story is the work: a top-up is not worth a trip.
+    snapshot = SimpleNamespace(map=real_data.map_ids['ROUTE_10_SOUTH'], items=(), party=(), owned=set(),
+        pockets={'balls': [(ultra, 17)], 'items': ()}, money=4511, can_catch=True, badges=0x3cff,
+        hall_of_fame_count=1, event=lambda name: False)
+    policy.goal = Goal('power_plant', 'Investigate the Power Plant theft', 'POWER_PLANT', 1, 1)
+    assert 'ultras' not in [row[0] for row in supplies(policy, snapshot)]
+    # Under the floor the legendary trip waits for, the stock is filled.
+    snapshot.pockets, snapshot.money = {'balls': [(ultra, ULTRA_STOCK - 1)], 'items': ()}, 20000
+    assert ('ultras', ('ULTRA_BALL',), BALL_STOCK - ULTRA_STOCK + 1) in supplies(policy, snapshot)
+    # With a legendary as the goal, the stock is filled before it.
+    snapshot.pockets = {'balls': [(ultra, 17)], 'items': ()}
+    policy.goal = Goal('snorlax', 'Wake Snorlax', 'ROUTE_11', 1, 1)
+    assert ('ultras', ('ULTRA_BALL',), 3) in supplies(policy, snapshot)
+
+
 def test_capture_weakening_rejects_a_lethal_lead_move(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, starter='chikorita')
