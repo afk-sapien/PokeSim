@@ -140,7 +140,9 @@ def journal(root, transaction):
             record(db, 'legacy:' + transaction, moved['sent'].get('species'), moved['received'].get('species'))
             if fresh:
                 for side in result.get('proposal', {}).values():
-                    if isinstance(side, dict) and side.get('instance') == name and side.get('trade_key'):
+                    # A twin key can still name the copies that stayed, so its setting stays for them.
+                    if (isinstance(side, dict) and side.get('instance') == name and side.get('trade_key')
+                            and preferences.TWIN not in side['trade_key']):
                         kv.delete(db, preferences.PREFIX + side['trade_key'])
                 kv.put(db, 'trade_barrier', transaction)
                 add_entry(db, int(time.time()), 'trade', title, body, 1, 4, 'Trade exchange')

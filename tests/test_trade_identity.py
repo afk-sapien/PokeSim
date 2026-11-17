@@ -62,11 +62,44 @@ def test_key_survives_evolution_in_both_generations_and_the_time_capsule():
 def test_true_twins_stay_blocked_with_a_plain_reason():
     listed = rows(collection(gen1(RATTATA), gen1(RATTATA, level=9), gen1(PIDGEY)))
     assert [mon['trade_ambiguous'] for mon in listed] == [True, True, False]
-    assert preferences.blocked(listed[0]) == (
-        "Another Rattata from the same trainer has identical stats, so the game can't tell them apart")
-    evolved = rows(collection(gen1(PIKACHU), gen1(RAICHU)))
-    assert preferences.blocked(evolved[0]) == ("Raichu is from the same trainer, has identical stats and the "
-                                               "same evolution family, so the game can't tell them apart")
+    assert preferences.blocked(listed[0]) == ("Another Rattata from the same trainer has identical stats and "
+                                              "no nickname, so the game can't tell them apart")
+    evolved = rows(collection(gen1(PIKACHU), gen1(RAICHU, level=30)))
+    assert preferences.blocked(evolved[0]) == ("Raichu is from the same trainer, has identical stats, the same "
+                                               "evolution family and no nickname, so the game can't tell them apart")
+    named = rows(collection(gen1(RATTATA, nick='RATS'), gen1(RATTATA, nick='RATS', level=9)))
+    assert preferences.blocked(named[0]) == ("Another Rattata from the same trainer has identical stats and "
+                                             "the same nickname, so the game can't tell them apart")
+
+
+def test_nicknames_tell_twins_apart():
+    listed = rows(collection(gen1(RATTATA, nick='RATS'), gen1(RATTATA, level=9), gen1(RATTATA, nick='FANG')))
+    keys = [mon['trade_key'] for mon in listed]
+    assert len(set(keys)) == 3
+    assert {preferences.base(key) for key in keys} == {preferences.identity(listed[0])}
+    assert not any(mon['trade_ambiguous'] for mon in listed)
+    # A nickname that only spells the species name is no nickname.
+    plain = rows(collection(gen1(RATTATA, nick='RATTATA'), gen1(RATTATA, level=9)))
+    assert [mon['trade_ambiguous'] for mon in plain] == [True, True]
+    # A lone Pokémon keeps its family key, as 0.7.4 stored it.
+    alone = rows(collection(gen1(RATTATA, nick='RATS')))
+    assert alone[0]['trade_key'] == preferences.identity(alone[0])
+
+
+def test_interchangeable_twins_share_a_key_and_can_be_picked():
+    listed = rows(collection(gen1(RATTATA, level=9), gen1(RATTATA, level=9), gen1(PIDGEY)))
+    assert listed[0]['trade_key'] == listed[1]['trade_key']
+    assert not any(mon['trade_ambiguous'] for mon in listed)
+    assert preferences.find(listed, listed[0]['trade_key']) is listed[0]
+    assert preferences.interchangeable(listed, listed[0]['trade_key']) == listed[:2]
+    assert preferences.sendable(listed, 0, listed[0]['trade_key'])
+    differing = rows(collection(gen1(RATTATA, level=9), gen1(RATTATA, level=10)))
+    assert preferences.find(differing, differing[0]['trade_key']) is None
+    assert not preferences.sendable(differing, 0, differing[0]['trade_key'])
+    # The party Pokémon must answer to the key the trade agreed on.
+    named = rows(collection(gen1(RATTATA, nick='RATS'), gen1(RATTATA, nick='FANG')))
+    assert not preferences.sendable(named, 0, named[1]['trade_key'])
+    assert preferences.sendable(named, 0, named[0]['trade_key'])
 
 
 def test_unreadable_pokemon_are_blocked():

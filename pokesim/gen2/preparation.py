@@ -1,6 +1,5 @@
 """Prepare a boxed Gen II offer with ordinary travel and PC controls."""
-from pokecore.identity import same
-from ..trade.preferences import identity
+from ..trade.preferences import TWIN, answers, apply
 from .teams import key as team_key
 from ..planning.ledger import FIELD_MOVES
 from ..runtime.policy import Action, PolicyContext, stack_pointer
@@ -40,15 +39,31 @@ def cost(party, index):
     return max((RECOVERABLE.index(move) + 1 for move in only(party, index)), default=0)
 
 
-def selected(snapshot, preferences, key):
-    matches = [('party', index, mon) for index, mon in enumerate(snapshot.party)
-               if same(identity(mon_view(mon, egg_view=True)), key)]
-    matches += [('box', mon.position, mon) for mon in snapshot.stored if same(identity(mon_view(mon, egg_view=True)), key)]
-    if len(matches) != 1 or matches[0][2].egg:
+def answering(snapshot, preferences, key):
+    """Every party and box Pokémon a trade key names, party first, as (location, slot, mon, listed row)."""
+    payload = apply({'party': [mon_view(mon, egg_view=True) for mon in snapshot.party],
+                     'storage': {'pokemon': [mon_view(mon, egg_view=True) for mon in snapshot.stored]}}, preferences)
+    matches = [('party', index, mon, row) for index, (mon, row) in enumerate(zip(snapshot.party, payload['party']))
+               if answers(row, key)]
+    matches += [('box', mon.position, mon, row) for mon, row in zip(snapshot.stored, payload['storage']['pokemon'])
+                if answers(row, key)]
+    return matches
+
+
+def selected(snapshot, preferences, key, copies=None):
+    """The slot of the Pokémon a trade key names, a party copy first, as (location, slot, mon).
+
+    Interchangeable twins share a twin key, so any of them may go. ``copies`` is how many answered when
+    the preparation began, so a copy that left or arrived on the way fails it.
+    """
+    matches = answering(snapshot, preferences, key)
+    twins = isinstance(key, str) and TWIN in key
+    if (not matches or len(matches) > 1 and (not twins or any(row['trade_ambiguous'] for *_, row in matches))
+            or copies is not None and len(matches) != copies or matches[0][2].egg):
         raise ValueError('The selected individual is missing or ambiguous')
-    if (preferences.get(identity(mon_view(matches[0][2], egg_view=True))) or preferences.get(key) or {}).get('state') in {'locked', 'withdrawn'}:
+    if matches[0][3]['trade_locked']:
         raise ValueError('The selected Pokémon is protected or withdrawn')
-    return matches[0]
+    return matches[0][:3]
 
 
 def begin(emu, key, tid, *, time_capsule=False, manual=False, session=False, protect=(), wished=()):
@@ -87,6 +102,9 @@ def begin(emu, key, tid, *, time_capsule=False, manual=False, session=False, pro
     # Hand-picked Pokémon and wished species the PC must keep if it has to release one to make room.
     state['protect'] = sorted({key, *protect} - {None})
     state['wished'] = sorted(set(wished))
+    if key is not None:
+        # A copy of a set of twins that leaves or arrives on the way fails the preparation.
+        state['copies'] = len(answering(snapshot, preferences, key))
     if time_capsule:
         state['original_party'] = [team_key(mon) for mon in snapshot.party]
     emu.store.set(KEY, state)
@@ -227,7 +245,8 @@ class Preparation:
         if state.get('session'):
             location, slot, mon, incompatible, needs_storage = 'party', 0, None, None, False
         else:
-            location, slot, mon = selected(snapshot, {} if state.get('manual') else emu.store.trade_preferences(), state['trade_key'])
+            location, slot, mon = selected(snapshot, {} if state.get('manual') else emu.store.trade_preferences(),
+                                           state['trade_key'], state.get('copies'))
             from .timecapsule import compatible
             incompatible = next((i for i, member in enumerate(snapshot.party) if not compatible(member, data)), None)
             needs_storage = location != 'party' or state.get('time_capsule') and incompatible is not None

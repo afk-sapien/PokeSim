@@ -13,8 +13,9 @@ import time
 from fastapi import HTTPException, Request
 
 from ..checkpoints import CheckpointStore
-from pokecore.identity import find, legacy, same
+from pokecore.identity import legacy, same
 from ..app.registry import digest, validate_id
+from ..trade.preferences import answers, base, find
 from ..state import journal, kv, ledgers
 from . import trace
 
@@ -510,11 +511,13 @@ class Participant:
         slot = prepared['party_slot']
         row = rows[slot]
         chosen = {**individual_data(row['struct']), 'species': row['struct'][0]}
-        if not same(identity(chosen), selected):
-            raise ValueError('Prepared party member does not match the selected individual')
         from pokecore.centers import safe_center
         from ..ram import read_snapshot
         snapshot = read_snapshot(self.emu.pb.memory, self.emu.frame)
+        # The struct bytes give the family key. The nickname tells a twin apart.
+        if (not same(identity(chosen), base(selected)) or slot >= len(snapshot.party)
+                or not answers(asdict(snapshot.party[slot]), selected)):
+            raise ValueError('Prepared party member does not match the selected individual')
         if not safe_center(snapshot, snapshot.map, self.emu.pb.memory):
             raise ValueError('Prepared adventure is not in a supported Center')
         record.update(phase='prepared', source_name=source.name, source_metadata=metadata,
@@ -545,7 +548,7 @@ class Participant:
         result = data['result']
         if (result['adventure_id'] != self.bootstrap.adventure_id
                 or result['source']['checkpoint_sha256'] != record['source']['checkpoint_sha256']
-                or not same(result['selected_key'], record['selected_key'])):
+                or not same(result['selected_key'], base(record['selected_key']))):
             raise ValueError('Cable result does not match the held adventure')
         hold = self.store.get('trade_hold')
         if not hold or hold['id'] != record['id']:

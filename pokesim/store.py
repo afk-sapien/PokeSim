@@ -401,7 +401,9 @@ class Store:
         from .runtime.supervision import Tables
         policy.losses = Losses(self)
         policy.monitor_tables = Tables(self)
-        policy.trade_preferences = self.trade_preferences
+        from .trade.preferences import merged
+        # Policies look settings up by family key, so a twin's own setting is folded into it.
+        policy.trade_preferences = lambda: merged(self.trade_preferences())
         policy.trade_partners = self.trade_partners
         policy.league_marks = lambda: self.league_marks(generation)
         policy.release_requests = self.release_requests
@@ -426,18 +428,26 @@ class Store:
         self._trade_keys_retry_at = now + TRADE_KEY_RETRY_SECONDS
 
     def set_trade_preference(self, key, value):
+        self.set_trade_preferences({key: value})
+
+    def set_trade_preferences(self, changes):
+        """Write several trade settings at once, {key: setting, or None to remove it}."""
         from pokecore.identity import legacy
         from .trade.preferences import LEGACY, PREFIX, sync_legacy
-        # One setting per Pokémon and no lock order: Can trade, Prefer to trade or Never trade.
-        value = {**value, 'state': LEGACY.get(value['state'], value['state'])}
         with self.transaction():
             hold = self.db.execute("SELECT v FROM kv WHERE k='trade_hold'").fetchone()
             if hold and json.loads(hold[0]):
                 raise ValueError('An exchange is in progress. Try again when it finishes.')
-            self.db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)',
-                            (PREFIX + key, json.dumps(value)))
-            if key != legacy(key):
-                sync_legacy(self.db, legacy(key))
+            for key, value in changes.items():
+                if value is None:
+                    self.db.execute('DELETE FROM kv WHERE k=?', (PREFIX + key,))
+                    continue
+                # One setting per Pokémon and no lock order: Can trade, Prefer to trade or Never trade.
+                value = {**value, 'state': LEGACY.get(value['state'], value['state'])}
+                self.db.execute('INSERT OR REPLACE INTO kv(k,v) VALUES (?,?)',
+                                (PREFIX + key, json.dumps(value)))
+            for old in {legacy(key) for key in changes if key != legacy(key)}:
+                sync_legacy(self.db, old)
 
     # --- save states ---
     def autosave_path(self) -> Path:

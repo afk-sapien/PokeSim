@@ -151,6 +151,8 @@ def party_record(mon: dict, slot: int) -> dict:
             "type_names": species_types(mon["species"]),
             "moves": mon.get("moves", ()), "dvs": mon.get("dvs", ()),
             "stat_exp": mon.get("stat_exp", ()),
+            # Boxed rows carry their PP Ups too, so a party twin compares with a boxed one.
+            "max_pp": mon.get("max_pp", ()),
             **({'trainer_id': mon['trainer_id']} if mon.get('trainer_id') is not None else {}),
             "experience": (mon.get("experience") or {}).get("total", 0),
             "experience_progress": mon.get("experience"), "move_details": mon.get("move_details", []),

@@ -481,7 +481,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             def mark(mon):
                 value = values.get((mon.get('box', 0) - 1, mon.get('position', 0) - 1))
                 return {**mon, **({'pc_value': value} if value else {}),
-                        **({'release_requested': True} if mon.get('trade_key') in requests else {})}
+                        **({'release_requested': True}
+                           if preferences.base(mon.get('trade_key')) in requests else {})}
             storage = {**storage, 'pokemon': [mark(mon) for mon in storage.get('pokemon') or []]}
         return {**payload, 'storage': storage, 'pc_favor': store.pc_favor(),
                 'pc_deadlock': DEADLOCK if deadlock else None}
@@ -538,7 +539,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         if view_only():
             raise HTTPException(403, 'This instance is view-only')
         if choice.cancel:
-            store.set_release_request(choice.key, '')
+            store.set_release_request(preferences.base(choice.key), '')
             return {'ok': True, 'request': None}
         try:
             value = emu.request_release(choice.box - 1, choice.position - 1, choice.key, choice.confirm)

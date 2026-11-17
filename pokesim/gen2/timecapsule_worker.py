@@ -17,6 +17,19 @@ from .data import GameData
 from pokecore.gen2.ram import Memory, read_snapshot
 from .timecapsule import ADAPTER_ID, MixedDriver, TimeCapsuleSide, compatible, unlocked
 from .timecapsule_conversion import convert
+from ..trade.preferences import base, sendable
+
+
+def listed(side, modern):
+    """The party, then the boxed Pokémon, as the collection page lists them for this side."""
+    if modern:
+        from .views import mon_view
+        snapshot = read_snapshot(side.pb.memory, side.data)
+        return [mon_view(mon, egg_view=True) for mon in snapshot.party + snapshot.stored]
+    from ..ram import read_snapshot as classic_snapshot
+    from ..web.pokedex import live_status
+    status = live_status(classic_snapshot(side.pb.memory, 0).to_dict())
+    return list(status['party']) + list((status.get('storage') or {}).get('pokemon') or ())
 
 
 def run_session(plan, output_dir, progress=None, cancelled=None):
@@ -48,9 +61,14 @@ def run_session(plan, output_dir, progress=None, cancelled=None):
             checked(side.spec.party_slot < len(before[i]), 'Negotiated party slot no longer exists')
             key = gen2.individual_key if i == second else gen1.individual_key
             selected = key(before[i][side.spec.party_slot])
-            checked(side.spec.selected_key is None or same(selected, side.spec.selected_key),
+            checked(side.spec.selected_key is None or same(selected, base(side.spec.selected_key)),
                     'Negotiated individual no longer occupies the selected slot')
-            checked(sum(key(row) == selected for row in before[i]) == 1, 'The selected individual is ambiguous')
+            if side.spec.selected_key is None:
+                checked(sum(key(row) == selected for row in before[i]) == 1, 'The selected individual is ambiguous')
+            else:
+                # The rows the collection lists, so twins are told apart and matched as it does.
+                checked(sendable(listed(side, i == second), side.spec.party_slot, side.spec.selected_key),
+                        'The selected individual is ambiguous')
         driver = CableDriver([classic], plan, cancelled=cancelled)
         driver.enter()
         classic.attach(1)

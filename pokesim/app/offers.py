@@ -18,7 +18,7 @@ import logging
 import threading
 import time
 
-from pokecore.identity import find
+from ..trade.preferences import find
 
 from . import inbox
 from .errors import Conflict
