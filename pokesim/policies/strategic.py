@@ -45,9 +45,9 @@ from .team import (held_identities, potential, readiness, release_note, requeste
 from ..pcvalue import VisitTeam
 from ..screen import Screen, W_PLAYER_MON_NUMBER
 from ..ram import W_TILEMAP
-from pokecore.gen1 import (BIT_SPINNING, BIT_STRENGTH_ACTIVE, BIT_TRAINER_BATTLE, W_FACING, W_MOVE_NUM,
-                           W_MOVEMENT_FLAGS, W_STATUS_FLAGS1, W_STATUS_FLAGS7, W_WALK_BIKE_SURF_STATE,
-                           W_WALK_COUNTER, W_WHICH_POKEMON)
+from pokecore.gen1 import (BIT_SPINNING, BIT_STRENGTH_ACTIVE, BIT_TRAINER_BATTLE, JOY_DPAD, W_FACING,
+                           W_JOY_IGNORE, W_MOVE_NUM, W_MOVEMENT_FLAGS, W_STATUS_FLAGS1, W_STATUS_FLAGS7,
+                           W_WALK_BIKE_SURF_STATE, W_WALK_COUNTER, W_WHICH_POKEMON)
 from ..strategy_data import ITEMS, MAPS, MOVES, SPECIES, WORLD, event_set
 from ..pc_list import guarded
 from ..shortcuts import ShortcutRunner, gen1_ui
@@ -658,8 +658,10 @@ class StrategicPolicy(Policy):
         walking = bool(mem[W_WALK_COUNTER]) and not s.in_battle
         # A trainer who spots the player holds them still until the battle starts. A step tried then did not
         # meet a wall. Counted as failed steps, they blocked every side of the player while a Route 25 trainer
-        # walked up, and the walk to Bill found no route.
-        held = bool(mem[W_STATUS_FLAGS7] & TRAINER_ENGAGING)
+        # walked up, and the walk to Bill found no route. A scene that ignores the D-pad holds them the same
+        # way. In Yellow, Pikachu walks up to Bill on each entry to his house while the player stands still for
+        # about 500 frames, and the steps tried then blocked all four sides of the door.
+        held = bool(mem[W_STATUS_FLAGS7] & TRAINER_ENGAGING) or bool(mem[W_JOY_IGNORE] & JOY_DPAD)
         self.nav.observe(pos, frame, walking, interrupted=kind != "overworld" or bool(s.in_battle) or held)
         if walking and kind == "overworld":
             return wait()

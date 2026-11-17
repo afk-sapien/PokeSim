@@ -158,6 +158,9 @@ BIT_SPINNING = 7    # riding the arrow tiles in the Rocket Hideout and Viridian 
 # player engages them.
 W_STATUS_FLAGS7 = 0xD733
 BIT_TRAINER_BATTLE = 3
+# wJoyIgnore: the buttons a scene tells the game to ignore. JOY_DPAD is its four D-pad bits.
+W_JOY_IGNORE = 0xCD6B
+JOY_DPAD = 0xF0
 # wCompletedInGameTradeFlags: 2 bytes, one bit per in-game trade, set once that trade is done.
 W_COMPLETED_IN_GAME_TRADE_FLAGS = 0xD737
 # hRandomAdd and hRandomSub: the two bytes the random number routine updates.

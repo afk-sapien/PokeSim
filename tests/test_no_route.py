@@ -129,6 +129,35 @@ def test_a_gen1_step_tried_while_a_trainer_engages_is_not_a_failed_step():
     assert tried(True) == (None, False)
 
 
+def test_a_gen1_step_tried_while_a_scene_ignores_the_d_pad_is_not_a_failed_step():
+    """A fresh Yellow game walked into Bill's House while Pikachu walked up to Bill. The game ignored the D-pad
+    for about 500 frames, every side of the door was blocked, and the walk to Bill found no route on each
+    entry for about 40 game minutes."""
+    from dataclasses import replace
+
+    from pokesim.runtime.policy import PolicyContext
+    from pokesim.policies.strategic import StrategicPolicy
+    from test_events import snap
+
+    def tried(ignored):
+        policy = StrategicPolicy(42)
+        memory = bytearray(65536)
+        # wJoyIgnore holds the buttons a scene tells the game to ignore.
+        memory[0xCD6B] = ignored
+        where = snap(frame=1000)
+        policy.observed_map = where.map
+        here = (where.map, where.x, where.y)
+        for frame in (1000, 1040):
+            policy.nav.issued(here, 'up', frame)
+            policy.step(PolicyContext(replace(where, frame=frame + 30), 0, memory))
+        return policy.nav.failures.get((here, 'up')), (here, 'up') in policy.nav.blocked
+
+    # Every button ignored, as in the Yellow scene, holds the player. Only A and B ignored does not.
+    assert tried(0) == (2, True)
+    assert tried(0xFF) == (None, False)
+    assert tried(0x03) == (2, True)
+
+
 def test_the_champion_ceremony_is_the_game_s_walk_and_keeps_the_won_rematch():
     """Blue's League rematches each ended with no route to the Hall of Fame and stood down, longer each time,
     until nothing left could make progress. The game walks the new Champion there, so the step presses on
