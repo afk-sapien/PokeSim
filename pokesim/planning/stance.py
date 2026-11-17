@@ -10,6 +10,13 @@ Two rules hold for every goal. A Pokémon the run wants and can catch is caught,
 cannot catch is run from rather than knocked out. A battle that forbids running is fought, and so is
 one where running already failed ``FLEE_TRIES`` times, rather than burn more turns and HP.
 
+A wild battle a map script started is fought too, whatever the goal and its budget. The goal walked
+into it on purpose by talking to the Pokémon, and running can leave the Pokémon in place for the goal
+to talk to again. The Electrodes in Gold, Silver and Crystal's transmitter room stay after a run, and
+the game keeps the player in that room until all three are beaten, so no heal can come first. A Gold
+run fled each one and talked to it again for 300 game minutes. Every other script battle the run
+meets ends the encounter either way, so fighting it loses nothing a run would keep.
+
 The stance keeps no game knowledge. Each generation's adapter reads the encounter from its battle
 memory and gives the goal's kind. Gold, Silver and Crystal use it, and so do Red, Blue and Yellow.
 """
@@ -49,13 +56,14 @@ class Encounter:
 
     ``wanted`` is a Pokémon the run wants and can catch now. ``shiny`` is a wild shiny it cannot
     catch. ``escape`` is False when the battle forbids running, and ``tries`` counts the failed
-    run attempts in this battle so far.
+    run attempts in this battle so far. ``scripted`` is a wild battle a map script started.
     """
     wild: bool
     wanted: bool = False
     shiny: bool = False
     escape: bool = True
     tries: int = 0
+    scripted: bool = False
 
 
 def budget_spent(ledger, goal, resources=None):
@@ -74,7 +82,7 @@ def stance(kind, encounter, ledger, goal=None, resources=None):
         return FIGHT
     if encounter.wanted:
         return CATCH
-    if not encounter.escape or encounter.tries >= FLEE_TRIES:
+    if not encounter.escape or encounter.scripted or encounter.tries >= FLEE_TRIES:
         return FIGHT
     if encounter.shiny or kind in FLEEING:
         return FLEE

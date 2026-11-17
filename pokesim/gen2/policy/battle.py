@@ -373,8 +373,8 @@ class BattlePart:
     def stance_flee(self, snapshot, mem, *, catch, shiny, escape):
         """Start running from this battle when the goal's stance says to flee, else None.
 
-        The stance (planning/stance.py) decides from the goal's kind and the party's HP and PP. A
-        failed run brings the FIGHT menu back, which counts one failed try. After ``FLEE_TRIES`` of
+        The stance (planning/stance.py) decides from the goal's kind and the party's HP and PP, and
+        fights a battle a map script started (``loadwildmon``). A failed run brings the FIGHT menu back, which counts one failed try. After ``FLEE_TRIES`` of
         them the battle is fought out.
         """
         if self.fleeing:
@@ -386,7 +386,7 @@ class BattlePart:
         # owns it, so the stance sees no wild battle there.
         wild = snapshot.in_battle == 1 and (not shiny or catch or bool(self.shiny_missed))
         encounter = Encounter(wild=wild, wanted=catch, shiny=bool(self.shiny_missed), escape=escape,
-                              tries=self.flee_tries)
+                              tries=self.flee_tries, scripted=bool(self.reads and self.reads.battle.from_script))
         kind = getattr(self.goal, 'kind', STORY)
         from ..ledger import battle_ledger
         books = battle_ledger(self.data)
