@@ -799,7 +799,12 @@ def _fingerprint(slots):
     return None if _NOT_FINITE.search(fingerprint) else fingerprint
 
 
-def draft(policy, build):
+def _unchanged(slots, kept):
+    """Whether every slot holds the very object ``kept`` holds for it, and no slot came or went."""
+    return len(slots) == len(kept) and all(kept.get(slot, _MISSING) is value for slot, value in slots.items())
+
+
+def draft(policy, build, token=None):
     """Run ``build`` and take its writes back. Returns what ``build`` gave and its writes, each slot's new
     value or _MISSING for a slot it removed, which ``write`` lands.
 
@@ -810,16 +815,24 @@ def draft(policy, build):
     while the state's fingerprint is the same. That spares a deep copy per rung. A draft that puts copied
     objects back hands them to the policy, and a build that fails leaves the copy unchecked, so either
     drops it.
+
+    The rungs of one decision pass one ``token``. A build that wrote nothing left every slot equal to the
+    copy, so the next draft with the same token takes the copy without a fingerprint while each slot still
+    holds the same object. A table the monitor makes between two rungs is a new slot, which fails that
+    check. So one decision takes one fingerprint until a rung writes, not one per rung.
     """
     slots = _slots(policy)
     # A menu task can hold the emulator, so it is kept by reference. A rung replaces it, never edits it.
     menu = slots.pop('menu')
-    fingerprint = _fingerprint(slots)
     held, policy.draft_copy = getattr(policy, 'draft_copy', None), None
-    if fingerprint is not None and held is not None and held[0] == fingerprint:
-        copied = held[1]
+    if token is not None and held is not None and held[2] is token and _unchanged(slots, held[3]):
+        fingerprint, copied = held[0], held[1]
     else:
-        copied = deepcopy(slots)
+        fingerprint = _fingerprint(slots)
+        if fingerprint is not None and held is not None and held[0] == fingerprint:
+            copied = held[1]
+        else:
+            copied = deepcopy(slots)
     before = {**copied, 'menu': menu}
     result = build()
     now = _slots(policy)
@@ -832,7 +845,8 @@ def draft(policy, build):
     for slot in writes:
         _set(policy, slot, before.get(slot, _MISSING))
     if not writes and fingerprint is not None:
-        policy.draft_copy = fingerprint, copied
+        del now['menu']
+        policy.draft_copy = fingerprint, copied, token, now
     return result, writes
 
 
@@ -873,6 +887,8 @@ class Rungs:
         self.asked, self.labels = set(), {}
         # In a survey, the goals a rung left out for now, each (key, title, Failure), for the catalogue.
         self.skipped = []
+        # Marks this decision's drafts, so a rung after one that wrote nothing takes its copy (draft).
+        self.token = object()
 
     def pinned(self, key):
         """Whether the candidate ``key`` is the pinned goal. A pin on a rung that stood down names the
@@ -928,7 +944,7 @@ class Rungs:
             if goal is None:
                 return None, None, None
             return goal, None if price is None else price(goal), None if blocked is None else blocked(goal)
-        (goal, priced, failure), writes = draft(self.policy, built)
+        (goal, priced, failure), writes = draft(self.policy, built, self.token)
         waiting = getattr(self.policy, 'no_route_waiting', None)
         if goal is not None and failure is None and waiting is not None and waiting(goal):
             # The walk to this goal found no route lately (policy.no_route), so another rung runs first.
