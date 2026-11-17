@@ -23,16 +23,31 @@ IDLE_FRAMES = 12
 # The frames each generation waits after a press whose action names no gap of its own.
 GEN1_WAIT = 2
 GEN2_WAIT = 16
+# How often a held press with a stop is asked whether to end, in frames.
+HOLD_CHECK = 4
 
 
 def play(pb, action, tick, wait=GEN1_WAIT):
     """Press, hold, release and wait out one action. ``tick`` advances the emulator and the host's
     frame count, and ``wait`` is the gap of an action that names none. The button comes up even when a
-    tick fails, so a crash never leaves it held."""
+    tick fails, so a crash never leaves it held.
+
+    An action with a ``stop`` (runtime/policy.py ``Hold``) is held in steps of ``HOLD_CHECK`` frames
+    and released at the first step after which ``stop(frames held)`` is true."""
     if action.button:
         pb.button_press(action.button)
     try:
-        tick(action.hold)
+        stop = getattr(action, 'stop', None)
+        if stop is None:
+            tick(action.hold)
+        else:
+            held = 0
+            while held < action.hold:
+                frames = min(HOLD_CHECK, action.hold - held)
+                tick(frames)
+                held += frames
+                if stop(held):
+                    break
     finally:
         if action.button:
             pb.button_release(action.button)

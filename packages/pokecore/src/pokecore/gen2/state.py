@@ -8,6 +8,7 @@ memory, or a synthetic fixture). Reads never write memory or change banks.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import NamedTuple
 
 from .memory_map import symbols
 from .ram import BADGES, Memory, dex_flags, individual
@@ -232,6 +233,53 @@ def script_running(memory, version):
     The script engine sets bit 2 of ``wScriptFlags`` while a script runs, in all three games.
     """
     return bool(memory_reader(memory, version).byte('wScriptFlags') & 0b100)
+
+
+class Walking(NamedTuple):
+    """The few bytes a held direction is checked against, from :func:`walking`."""
+    map: int
+    x: int
+    y: int
+    battle: int
+    script: bool
+    hp: tuple
+    people: frozenset
+
+
+# The current HP's place in a party structure, big-endian.
+PARTY_HP = 34
+# Object structures after the player's, each OBJECT_SIZE bytes, with the tile an object stands on or is
+# stepping to at OBJECT_MAP_X and OBJECT_MAP_Y and the tile it is stepping from just after them. A person
+# has its map object's index at OBJECT_INDEX. An effect the game spawns for a moment has NO_INDEX there.
+OBJECT_SLOTS, OBJECT_SIZE, OBJECT_INDEX, OBJECT_FLAGS, OBJECT_MAP_X, NO_INDEX = 12, 40, 1, 4, 16, 0xFF
+
+
+def walking(memory, version):
+    """The map, coordinates, battle mode, script state, party HP and people, cheap enough to read every few
+    frames.
+
+    ``map`` is ``group * 256 + number``, as :func:`read_player` gives it. ``script`` is true while a
+    script holds the pad (bit 2 of ``wScriptFlags``, as :func:`script_running` reads it) or while
+    ``wScriptRunning`` is set, as it is when a wild battle begins. ``hp`` is each party Pokémon's
+    current HP in party order, eggs included. ``people`` holds every map tile a loaded, visible map
+    object stands on, steps to or steps from, in the player's coordinates. An effect the game spawns
+    beside the player for a moment has no map object and is left out.
+    """
+    mem = memory_reader(memory, version)
+    count = min(mem.byte('wPartyCount'), PARTY_CAPACITY)
+    mons = mem.read('wPartyMons', PARTY_STRUCT * count)
+    hp = tuple(int.from_bytes(mons[i * PARTY_STRUCT + PARTY_HP:i * PARTY_STRUCT + PARTY_HP + 2], 'big')
+               for i in range(count))
+    script = bool(mem.byte('wScriptFlags') & 0b100 or mem.byte('wScriptRunning'))
+    structs = mem.read('wObjectStructs', OBJECT_SIZE * OBJECT_SLOTS, OBJECT_SIZE)
+    people = set()
+    for start in range(0, len(structs), OBJECT_SIZE):
+        raw = structs[start:start + OBJECT_SIZE]
+        if raw[0] and raw[OBJECT_INDEX] != NO_INDEX and not raw[OBJECT_FLAGS] & 1:
+            people.add((raw[OBJECT_MAP_X] - 4, raw[OBJECT_MAP_X + 1] - 4))
+            people.add((raw[OBJECT_MAP_X + 2] - 4, raw[OBJECT_MAP_X + 3] - 4))
+    return Walking(mem.byte('wMapGroup') * 256 + mem.byte('wMapNumber'), mem.byte('wXCoord'), mem.byte('wYCoord'),
+                   mem.byte('wBattleMode'), script, hp, frozenset(people))
 
 
 def trainer_id(memory, version):

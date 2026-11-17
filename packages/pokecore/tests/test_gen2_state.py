@@ -151,6 +151,39 @@ def test_items_player_dex_clock_daycare(version):
     assert state.read_roamers(memory, version) == ({'species': 243, 'level': 40, 'map': 10 * 256 + 2, 'hp': 150},)
 
 
+@pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
+def test_walking(version):
+    memory = BankedMemory(version)
+    memory.put('wPartyCount', [2])
+    memory.put('wPartyMons', struct(155, 5) + struct(16, 3))
+    memory.put('wPartyMons', (7).to_bytes(2, 'big'), offset=48 + 34)
+    memory.put('wMapGroup', [24])
+    memory.put('wMapNumber', [3])
+    memory.put('wXCoord', [9])
+    memory.put('wYCoord', [28])
+    assert state.walking(memory, version) == state.Walking(24 * 256 + 3, 9, 28, 0, False, (20, 7), frozenset())
+    # Slot 1 steps from (11, 30) to (12, 30). Slot 2 is invisible, slot 3 is an effect the game spawned
+    # with no map object, and the player's own slot 0 is not a person.
+    person = bytearray(40)
+    person[0], person[1], person[16:20] = 5, 2, bytes([16, 34, 15, 34])
+    hidden = bytearray(person)
+    hidden[4] = 1
+    effect = bytearray(40)
+    effect[0], effect[1], effect[4], effect[16:20] = 0xFF, 0xFF, 0x8E, bytes([14, 33, 14, 33])
+    memory.put('wObjectStructs', bytes([1] + [0] * 15 + [13, 32, 13, 32]))
+    memory.put('wObjectStructs', person, offset=40)
+    memory.put('wObjectStructs', hidden, offset=80)
+    memory.put('wObjectStructs', effect, offset=120)
+    assert state.walking(memory, version).people == {(12, 30), (11, 30)}
+    memory.put('wScriptRunning', [9])
+    assert state.walking(memory, version).script
+    memory.put('wScriptRunning', [0])
+    memory.put('wScriptFlags', [0b100])
+    memory.put('wBattleMode', [1])
+    now = state.walking(memory, version)
+    assert now.script and now.battle == 1
+
+
 def test_pokerus_states():
     assert state.pokerus(0) == {'strain': 0, 'days': 0, 'infected': False, 'cured': False}
     assert state.pokerus(0x30)['cured']

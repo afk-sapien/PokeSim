@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ...runtime.policy import Action
-from ..navigation import DIRS
+from ...runtime.policy import Action, Hold
+from ..navigation import DIRS, HeldWalk
 from .reads import Reads
 from .state import STUCK_WAITS, Goal
 
@@ -243,4 +243,45 @@ class NavigationPart:
             return Action(path[0], 8, 16)
         self.interaction = None
         self.nav.issued(snapshot, path[0])
+        tiles = self.held_tiles(snapshot, memory, path, reads)
+        if tiles:
+            stop = HeldWalk(self.nav, memory, self.data.game, snapshot.frame, path[0], tiles)
+            return Hold(path[0], 16 * tiles + 32, 16, stop=stop)
         return Action(path[0], 16, 16)
+
+    # A straight run of at least HELD_MIN tiles is walked with one held press, at most HELD_TILES long.
+    HELD_MIN, HELD_TILES = 3, 8
+    # Floor and both grasses, the only tiles a held press walks onto.
+    PLAIN = frozenset((0x00, 0x14, 0x18))
+
+    def held_tiles(self, snapshot, memory, path, reads):
+        """How many of the path's first tiles one held press walks, or 0 where each tile is its own press.
+
+        Only an on-foot walk outdoors or in a cave holds, and never on a puzzle or ice map. Each tile held
+        onto is floor or grass with no warp, person or known wall, and so is the tile past it in bounds
+        with no warp, person or ledge, so a press that comes up a tile late still lands somewhere plain.
+        """
+        from ..errands import puzzle_maps
+        entry = self.data.maps[snapshot.map]
+        run = 0
+        while run < min(len(path), self.HELD_TILES) and path[run] == path[0]:
+            run += 1
+        if (run < self.HELD_MIN or entry.get('environment') in ('INDOOR', 'GATE')
+                or snapshot.map in puzzle_maps(self.data) or reads.ui.movement_state != 0):
+            return 0
+        dx, dy = DIRS[path[0]]
+        width, height = entry['width'], entry['height']
+        grid = self.nav.collision(snapshot, memory)
+        warps = {(warp['x'], warp['y']) for warp in entry['warps']}
+        people = {(x, y) for _, x, y in snapshot.objects}
+        tiles = 0
+        for k in range(1, run + 1):
+            x, y = snapshot.x + dx * k, snapshot.y + dy * k
+            past = (x + dx, y + dy)
+            if (not (0 <= x < width and 0 <= y < height and 0 <= past[0] < width and 0 <= past[1] < height)
+                    or grid[y * width + x] not in self.PLAIN or (x, y) in warps or (x, y) in people
+                    or (snapshot.map, x, y) in self.nav.blocked or past in warps or past in people
+                    or 0xA0 <= grid[past[1] * width + past[0]] <= 0xAF):
+                break
+            tiles = k
+        return tiles if tiles >= self.HELD_MIN else 0
