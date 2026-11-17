@@ -27,15 +27,17 @@ errors the policy raised.
 state is mostly out of reach of the game's Save menu, so its cartridge save is built from the WRAM it
 holds, the way pokecore's own ladder test does, and pokecore.save_summary names the stage.
 
-``gate`` plays 108000 frames (30 game minutes) from every rung under ROOT with the replay audit, ten
-rungs at once at niceness 10, and takes the load gate's heavy lock first. A randomized ladder plays on
-its own share code. Goals are reseeded as in ``python -m pokesim.replay audit run --reseed-goals``, so two code versions
-meet the same rolls. A run ends at its first stall, nothing achieved for 20 game minutes, one battle
-running 20 game minutes or a retry loop, and keeps a bundle. The gate compares each rung's stall, errors,
-story milestones and wasted share with the tracked tools/ladder/gate-baseline.json. It exits 1 on a
-stall the baseline lacks, more errors, fewer story milestones, or a wasted share more than two points
-higher. A rung that earns more story milestones passes while its wasted share is at most ten points
-higher, and the gate lists it under past_baseline, since its baseline then wants a reviewed rewrite.
+``gate`` plays 108000 frames (30 game minutes) from every rung under ROOT with the replay audit, once on
+each of the goal seeds 7, 8 and 9, ten runs at once at niceness 10, and takes the load gate's heavy lock
+first. A randomized ladder plays on its own share code. Goals are reseeded as in
+``python -m pokesim.replay audit run --reseed-goals``, so two code versions meet the same rolls on each seed.
+A run ends at its first stall, nothing achieved for 20 game minutes, one battle running 20 game minutes
+or a retry loop, and keeps a bundle. The gate judges each rung on its three runs together and compares
+how many stalled and the mean errors, story milestones and wasted share with the tracked
+tools/ladder/gate-baseline.json. It exits 1 on more stalls than the baseline, more errors, fewer story
+milestones, or a wasted share more than two points higher. A rung that earns more story milestones
+passes while its wasted share is at most ten points higher, and the gate lists it under past_baseline,
+since its baseline then wants a reviewed rewrite.
 The story milestones are the ones the policy keeps in story order, ``progression.milestones`` in Red,
 Blue and Yellow and the checkpoints the Gold, Silver and Crystal story notes as it passes them. The gate
 counts the ones a rung earned in its window. ``--write-baseline`` stores the run there, for a pull
@@ -65,8 +67,9 @@ sys.path.insert(0, str(ROOT))
 
 # Policy modules load after ``prepare``, once the cartridge has set the Gen I variant and the randomizer.
 # The gate's rung runner and its comparison live in pokesim.replay.rung, which the replay bisect shares.
-from pokesim.replay.rung import (GATE_FRAMES, GATE_QUIET, GATE_TIMEOUT, GATE_WASTE_POINTS, PIPELINE_BAR, _bundle,
-                                 _cartridges, agreement, compare, gate_rung, past_baseline, prepare, share)
+from pokesim.replay.rung import (GATE_FRAMES, GATE_QUIET, GATE_SEEDS, GATE_TIMEOUT, GATE_WASTE_POINTS, PIPELINE_BAR,
+                                 _bundle, _cartridges, agreement, compare, gate_rung, mean_result, past_baseline,
+                                 prepare, share)
 
 GEN1_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'post_game')
 GEN2_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'champion_first',
@@ -445,13 +448,16 @@ def _gate_line(result, base):
     if result.get('failed'):
         return f'{name:<30} failed: {result["failed"]}'
     change = f'{result["waste"] - base["waste"]:+5.1f}' if base else '  new'
-    stall = f', stall: {result["stall"]["reason"]}' if result['stall'] else ''
+    seeds = len(result.get('seeds', ()))
+    stall = (f', stall: {result["stall"]["reason"]}' + (f' ({result["stalls"]} of {seeds} seeds)' if seeds else '')
+             if result['stall'] else '')
     story = f', earned {", ".join(result["story"])}' if result.get('story') else ''
+    story += f' ({result["milestones"]:g} a seed)' if story and seeds else ''
     pipeline = result.get('pipeline')
     agrees = (f', pipeline agrees {share(pipeline["agreed"], pipeline["decisions"]):.1f}% of '
               f'{pipeline["decisions"]} decisions, {share(pipeline["frames_agreed"], pipeline["frames"]):.1f}% '
               'of frames' if pipeline else '')
-    return f'{name:<30} {result["waste"]:5.1f}% wasted ({change}), {result["errors"]} errors{story}{stall}{agrees}'
+    return f'{name:<30} {result["waste"]:5.1f}% wasted ({change}), {result["errors"]:g} errors{story}{stall}{agrees}'
 
 
 def attempt(folder, commit):
@@ -476,10 +482,14 @@ def gate(args):
     stored = json.loads(baseline_path.read_text(encoding='utf-8')) if baseline_path.exists() else None
     if stored is not None and stored['frames'] != args.frames and not args.write_baseline:
         raise SystemExit(f'{baseline_path} was taken at {stored["frames"]} frames a rung, not {args.frames}')
+    # A baseline from before the gate played several seeds was taken on seed 7 alone.
+    if stored is not None and stored.get('seeds', [7]) != list(args.seeds) and not args.write_baseline:
+        raise SystemExit(f'{baseline_path} was taken on seeds {", ".join(map(str, stored.get("seeds", [7])))}, '
+                         f'not {", ".join(map(str, args.seeds))}')
     baseline = (stored or {}).get('rungs', {})
-    jobs = [(ladder, rung) for ladder in sorted(path.parent for path in args.root.glob('*/ladder.json'))
+    jobs = [(ladder, rung, seed) for ladder in sorted(path.parent for path in args.root.glob('*/ladder.json'))
             for rung in rungs_for(*_ladder_kind(ladder)) if (ladder / rung / 'start.state').exists()
-            and (not args.ladder or ladder.name in args.ladder)]
+            and (not args.ladder or ladder.name in args.ladder) for seed in args.seeds]
     if not jobs:
         raise SystemExit(f'no rungs under {args.root}')
     out = args.out or args.root / 'gate' / time.strftime('%Y%m%d-%H%M%S')
@@ -488,12 +498,12 @@ def gate(args):
     began = time.monotonic()
 
     def play(job):
-        ladder, rung = job
-        folder = out / ladder.name / rung
+        ladder, rung, seed = job
+        folder = out / ladder.name / rung / f'seed-{seed}'
         folder.mkdir(parents=True, exist_ok=True)
         command = ['nice', '-n', str(args.nice), sys.executable, str(Path(__file__).resolve()), 'gate-rung',
                    str(ladder), rung, str(folder), str(args.roms), '--frames', str(args.frames), '--quiet',
-                   str(args.quiet), '--battle-minutes', str(args.battle_minutes)]
+                   str(args.quiet), '--battle-minutes', str(args.battle_minutes), '--seed', str(seed)]
         if args.data_root:
             command += ['--data-root', str(args.data_root)]
         with open(folder / 'log.txt', 'w', encoding='utf-8') as log:
@@ -504,19 +514,24 @@ def gate(args):
                 code = f'no result in {GATE_TIMEOUT} seconds'
         summary = folder / 'summary.json'
         if code == 0 and summary.exists():
-            result = json.loads(summary.read_text(encoding='utf-8'))
-        else:
-            result = {'ladder': ladder.name, 'rung': rung, 'failed': f'exit {code}, see {folder / "log.txt"}'}
-        print(_gate_line(result, baseline.get(f'{ladder.name}/{rung}')), flush=True)
-        return result
+            return dict(json.loads(summary.read_text(encoding='utf-8')), seed=seed)
+        return {'ladder': ladder.name, 'rung': rung, 'seed': seed, 'failed': f'exit {code}, see {folder / "log.txt"}'}
 
+    # The jobs keep each rung's seeds together, so a rung's line prints once its last seed is in.
+    results, runs = [], []
     with ThreadPoolExecutor(args.jobs) as pool:
-        results = list(pool.map(play, jobs))
+        for run in pool.map(play, jobs):
+            runs.append(run)
+            if len(runs) == len(args.seeds):
+                result = mean_result(runs)
+                print(_gate_line(result, baseline.get(f'{result["ladder"]}/{result["rung"]}')), flush=True)
+                results.append(result)
+                runs = []
     problems = compare(results, baseline, args.waste_points)
     further = past_baseline(results, baseline)
     commit = _commit()
     report = {'commit': commit, 'attempt': attempt(args.root / 'gate', commit), 'frames': args.frames,
-              'wall_seconds': round(time.monotonic() - began, 1),
+              'seeds': list(args.seeds), 'wall_seconds': round(time.monotonic() - began, 1),
               'baseline': str(baseline_path) if stored else None, 'problems': problems,
               'past_baseline': further, 'results': results}
     out.mkdir(parents=True, exist_ok=True)
@@ -536,11 +551,13 @@ def gate(args):
             print(f'not writing a baseline: {len(failed)} rungs failed')
             return 1
         rungs = {f'{result["ladder"]}/{result["rung"]}': {
-            'stall': result['stall'] and result['stall']['reason'], 'errors': result['errors'],
-            'waste': result['waste'], 'story': result.get('story', [])} for result in results}
+            'stall': result['stall'] and result['stall']['reason'], 'stalls': result['stalls'],
+            'errors': result['errors'], 'waste': result['waste'], 'milestones': result['milestones'],
+            'story': result['story']} for result in results}
         baseline_path.write_text(json.dumps({'commit': report['commit'], 'attempt': report['attempt'],
-                                             'taken': time.strftime('%Y-%m-%d'), 'frames': args.frames, 'rungs': rungs},
-                                            indent=1) + '\n', encoding='utf-8')
+                                             'taken': time.strftime('%Y-%m-%d'), 'frames': args.frames,
+                                             'seeds': list(args.seeds), 'rungs': rungs}, indent=1) + '\n',
+                                 encoding='utf-8')
         print(f'wrote {baseline_path}')
         return 0
     if stored is None:
@@ -600,6 +617,8 @@ def main(argv=None):
     gating.add_argument('--battle-minutes', type=int, default=GATE_QUIET, help='game minutes one battle may run')
     gating.add_argument('--waste-points', type=float, default=GATE_WASTE_POINTS,
                         help='how many points a rung\'s wasted share may grow before the gate fails')
+    gating.add_argument('--seeds', type=lambda text: tuple(int(seed) for seed in text.split(',')), default=GATE_SEEDS,
+                        help='the goal seeds each rung plays on, comma separated, by default 7,8,9')
     gating.add_argument('--baseline', type=Path, help='the baseline file, by default tools/ladder/gate-baseline.json')
     gating.add_argument('--write-baseline', action='store_true', help='store this run as the baseline')
     gating.add_argument('--out', type=Path, help='where the runs and stall bundles go, by default ROOT/gate/<time>')
@@ -613,6 +632,7 @@ def main(argv=None):
     one.add_argument('--frames', type=int, default=GATE_FRAMES)
     one.add_argument('--quiet', type=int, default=GATE_QUIET)
     one.add_argument('--battle-minutes', type=int, default=GATE_QUIET)
+    one.add_argument('--seed', type=int, default=7)
     one.add_argument('--data-root', type=Path)
     one.set_defaults(action=gate_rung)
     args = parser.parse_args(argv)
