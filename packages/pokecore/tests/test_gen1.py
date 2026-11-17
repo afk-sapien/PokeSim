@@ -139,6 +139,7 @@ def test_named_addresses_match_pret_pokered():
     assert (gen1.BIT_HAS_LIGHT_SCREEN_UP, gen1.BIT_HAS_REFLECT_UP) == (1, 2)
     assert (gen1.W_STATUS_FLAGS1, gen1.W_MOVEMENT_FLAGS) == (0xD728, 0xD736)
     assert (gen1.W_STATUS_FLAGS7, 1 << gen1.BIT_TRAINER_BATTLE) == (0xD733, 0x08)
+    assert (gen1.W_JOY_IGNORE, gen1.JOY_DPAD) == (0xCD6B, 0xF0)
     assert gen1.W_CAPTURED_MON_SPECIES == 0xD11C
     assert gen1.W_SPRITE_STATE_DATA2 + gen1.SPRITE_STRUCT + gen1.SPRITE_MAP_Y == 0xC214
     assert gen1.FACINGS[4] == 'up'
