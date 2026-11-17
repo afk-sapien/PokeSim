@@ -18,9 +18,6 @@ SOURCES = ('Dockerfile', 'compose*.yaml', 'pyproject.toml', 'MANIFEST.in', 'inst
            '.github/**/*', 'deploy/**/*', 'docs/**/*.md', 'tools/*', 'pokesim/**/*.py')
 HISTORY = ('CHANGELOG.md', 'docs/history/', 'docs/validation/')
 RECORDS = {
-    'tools/cable_club_spike.py': 'The cable experiment at commit 705ec4d, which the multi-adventure plan cites',
-    'tools/prepare_cable_fixtures.py': 'The cable experiment branch copy. The fixture builder is now tools/verify_cartridge.py cable-fixtures',
-    'tools/gen1_wild.py': 'Removed by step 5 of the planner systems note, #203',
     'tools/link_spike.py': 'Removed after commit 7053c654. docs/link-spike.md keeps what it measured',
     'tools/temp-wheels': 'Exists only in the TEMP pin commit that docs/publishing.md describes',
     # The release workflows still run these for a tag cut before tools/release.py existed.
