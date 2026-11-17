@@ -574,7 +574,7 @@ def ball_names(snapshot):
 
 def supplies(policy, snapshot):
     """What the shop restocks, most needed first: (goal, item names by preference, units)."""
-    from .quests import static_wanted
+    from .quests import ULTRA_STOCK, static_wanted
     data = policy.data
     collection = policy.collection
     unique = policy.goal is not None and policy.goal.key in {'sudowoodo', 'snorlax', 'collection_lapras'}
@@ -587,7 +587,11 @@ def supplies(policy, snapshot):
         or static_wanted(policy, snapshot))
     rows = []
     ultras = dict(snapshot.pockets['balls']).get(data.items['ULTRA_BALL'], 0)
-    if (legendary and ultras < BALL_STOCK
+    # The stock is filled to BALL_STOCK, but a trip only starts below the floor the legendary trip
+    # itself waits for (quests.ball_ready), unless a legendary is the work now. A Crystal run with 17
+    # Ultra Balls and a static legendary still to catch left Route 10 for Saffron Mart over prize money
+    # for three more, and so never walked Rock Tunnel to the Power Plant.
+    if (legendary and ultras < (BALL_STOCK if stocking else ULTRA_STOCK)
             and snapshot.money - held_money(data, snapshot) >= price(data, 'ULTRA_BALL') * min(5, BALL_STOCK - ultras)):
         rows.append(('ultras', ('ULTRA_BALL',), BALL_STOCK - ultras))
     # Any ball still beats none when no Ultra Ball counter can be reached.

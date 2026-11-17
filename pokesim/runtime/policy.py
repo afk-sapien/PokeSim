@@ -6,7 +6,8 @@ This module imports no game data, so a Gen II worker never loads Gen I code thro
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Protocol
 
 BUTTONS = ("up", "down", "left", "right", "a", "b", "start", "select")
@@ -29,6 +30,14 @@ class Action:
     def frames(self, wait):
         """The frames the action takes when the generation waits ``wait`` after a press."""
         return self.hold + (wait if self.gap is None else self.gap)
+
+
+@dataclass(frozen=True)
+class Hold(Action):
+    """An action whose press may end early. ``hold`` is the longest the button stays down: the host
+    asks ``stop`` with the frames held so far every few frames and releases as soon as it says so,
+    then waits the gap. ``frames`` gives the longest the action can take."""
+    stop: Callable[[int], bool] | None = field(default=None, compare=False)
 
 
 @dataclass
