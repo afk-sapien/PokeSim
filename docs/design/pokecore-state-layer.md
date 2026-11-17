@@ -1,6 +1,6 @@
 # pokecore state layer
 
-Status: proposed on 2026-11-10. It was read from main at `63cb1717`. It is phase 4 item 1 of the architecture plan of 2026-11-09, together with the plan's section "code in the wrong place" (boundary report findings F2, F4, F6 and F7).
+Status: proposed on 2026-11-10 and built. The raw read guard and the state slices landed on 2026-11-10 (#468, #471, #473, #476, #483, #485, #499), and the Gen II policy reads through pokecore since #562 (2026-11-11). The slice 12 consumer moves went to phase 3. It was read from main at `63cb1717`, before the build. It is phase 4 item 1 of the architecture plan of 2026-11-09, together with the plan's section "code in the wrong place" (boundary report findings F2, F4, F6 and F7).
 
 ## 1. Goal
 

@@ -1,6 +1,6 @@
 # Replayable bugs
 
-Status: approved on 2026-11-10 with the rulings in section 7. Nothing here is built yet. It was read from main at `63c8427e`. It is phase 1 of the architecture plan of 2026-11-09. It fits [Goal system v2](goal-system.md): game time is PlayClock frames, and v2 PR 6 later builds one supervision ladder on the frame clocks this note puts in place.
+Status: approved on 2026-11-10 with the rulings in section 7, and built the same day by #423, #429, #434, #437 and #448. #527 (2026-11-11) made two play-gen2 runs of one seed end in the same state. Its "Today" describes main at `63c8427e`, where it was read. It is phase 1 of the architecture plan of 2026-11-09. It fits [Goal system v2](goal-system.md): game time is PlayClock frames, and v2 PR 6 later builds one supervision ladder on the frame clocks this note puts in place.
 
 A bug is replayable when the same start checkpoint, the same seed and the same outside inputs give the same action log, frame for frame. That must hold in a test and in production, for Gen I and Gen II. Today it holds in neither production loop. A stall cannot be run again, so each bug costs hours of fresh play. 57 stall PRs shipped a test and only 1 shipped a scenario. The live soak found 10 problems when it compared a build with the same build.
 

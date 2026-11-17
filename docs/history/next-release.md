@@ -14,7 +14,7 @@ track encounters, defeats, catches, gifts, trades in and out, purchases, consuma
 uses, and current holdings. Verified completed cable trade records are backfilled,
 using the received species after trade evolution. NPC exchanges count from the
 update. Failed and canceled trades are excluded. Verified historical catches carry forward. Other counters begin with
-the update, without estimating older activity. Reusable item use is not counted. See [Adventure statistics](adventure-statistics.md).
+the update, without estimating older activity. Reusable item use is not counted. See [Adventure statistics](../adventure-statistics.md).
 
 Item labels include TM/HM move names. An optional PokéAPI item artwork pack adds
 icons beside all 125 entries, including discs colored by the move's type. The
@@ -40,7 +40,7 @@ Limited TMs are protected from selling. Purchases and their item
 statistics share recoverable checkpoint ownership. An isolated replay
 of a Red backup verified that a Tackle-only Starmie learned Surf through the cartridge
 menus, retained its identity and stats, and returned to the overworld. See
-[Pokémon stats](pokemon-stats.md) for the scoring assumptions and limits.
+[Pokémon stats](../pokemon-stats.md) for the scoring assumptions and limits.
 
 The Champion counter also replenishes Moon Stones, PP Ups, Elixirs, and Max
 Elixirs. Separate capped million-step offers sell one Master Ball and five Rare
@@ -79,7 +79,7 @@ Adventure Settings offers the background colors of the 12 GBC startup choices as
 
 Authentic GBC coloring uses separate background and sprite palettes. That is deferred because the current renderer's public DMG API exposes one whole-screen palette, and existing DMG checkpoints cannot simply be loaded as CGB checkpoints. The labels describe this implementation as GBC-inspired. Color data is cross-checked against [SameBoy's startup palette table](https://github.com/LIJI32/SameBoy/blob/master/BootROMs/cgb_boot.asm).
 
-Manual trade initiation, accounts and OIDC, other generations, Yellow, and ROM hacks remained deferred in 0.4.18. Generation II and Yellow arrive in 0.5.0, see the [0.5.0 release notes](release-0.5.0.md).
+Manual trade initiation, accounts and OIDC, other generations, Yellow, and ROM hacks remained deferred in 0.4.18. Generation II and Yellow arrive in 0.5.0, see the [0.5.0 release notes](../release-0.5.0.md).
 
 ## Live audio buffering
 

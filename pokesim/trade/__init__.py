@@ -1,4 +1,4 @@
-"""Save-level trading between two pokesim runs (docs/multi-game.md, execution backend A)."""
+"""Save-level trading between two pokesim runs (docs/history/multi-game.md, execution backend A)."""
 __all__ = ["TradeError", "perform"]
 
 

@@ -1,6 +1,6 @@
 # Adventure state store
 
-Status: approved by the lead on 2026-11-10, with the rulings in section 8. Nothing here is built yet. It was read from main at `d37693fa`. It is phase 4 item 2 of the architecture plan of 2026-11-09, budgeted at 16 to 20 agent-hours. It shares files with phase 1, [Replayable bugs](replayable-bugs.md). Section 6 lists them and says how each slice stays out of phase 1's way.
+Status: approved by the lead on 2026-11-10, with the rulings in section 8, and built the same day by #427, #430, #433, #442 and #455. It was read from main at `d37693fa`, before the build. It is phase 4 item 2 of the architecture plan of 2026-11-09, budgeted at 16 to 20 agent-hours. It shares files with phase 1, [Replayable bugs](replayable-bugs.md). Section 6 lists them and says how each slice stays out of phase 1's way.
 
 An adventure's state is its checkpoints plus `pokesim.sqlite`. This note gives that database three things it lacks.
 

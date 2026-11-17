@@ -2,8 +2,8 @@
 
 September 2026 implementation and qualification record. References to a
 development branch, an observation run in progress, and remaining release gates
-are historical. See [architecture](architecture.md) for current boundaries and
-[release status](../RELEASE_STATUS.md) for published validation.
+are historical. See [architecture](../architecture.md) for current boundaries and
+[release status](../../RELEASE_STATUS.md) for published validation.
 
 ---
 
@@ -37,7 +37,7 @@ The original Trade Center has no ordinary exit warp. The reset sequence follows 
 
 Cable failures have no record-swap fallback. Before commitment, both prepared sources remain authoritative. After commitment, recovery applies the recorded outputs without running the trade again. Unrelated adventures keep playing. Current link frames are available through the participating games' existing screen routes.
 
-See [cable qualification](cable-production.md) for the original experiment, transport bounds, and private test matrix.
+See [cable qualification](../cable-production.md) for the original experiment, transport bounds, and private test matrix.
 
 ## Durable state and operations
 

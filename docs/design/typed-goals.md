@@ -1,6 +1,6 @@
 # Typed goals
 
-Status: accepted on 2026-11-11. Every line number was read from main at `153a4c53` (#538). This is phase 2 item 5 of the architecture plan of 2026-11-09, and PR 7 of [Goal system v2](goal-system.md) section 13. It builds on the [Decide pipeline](decide-pipeline.md), whose section 7 lists what it hands over, and on the trace in [Replayable bugs](replayable-bugs.md).
+Status: accepted on 2026-11-11 and built the same day by #543, #546, #548, #551 and #560. Its "Today" describes main before the build. Every line number was read from main at `153a4c53` (#538). This is phase 2 item 5 of the architecture plan of 2026-11-09, and PR 7 of [Goal system v2](goal-system.md) section 13. It builds on the [Decide pipeline](decide-pipeline.md), whose section 7 lists what it hands over, and on the trace in [Replayable bugs](replayable-bugs.md).
 
 Today a Gen I goal the planner works on is a project, one dict that mixes what the goal is with what it has done so far. Its kind is a string that about a hundred checks read, 83 of them in `policies/collection.py`. Gen II has no project. Its hunt target, training project and postgame activity are three more dicts with their own switches. When a goal gets stuck, Gen II reloads a save, though the trouble is usually that one goal and not the whole game. A manager can pin a goal only from the best few the planner offers now, and nothing outside the planner can see what else it could do or why it will not.
 

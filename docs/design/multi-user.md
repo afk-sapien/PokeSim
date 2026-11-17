@@ -1,6 +1,6 @@
 # Multi-user PokeSim
 
-Status: proposal for review, no code yet. Read from main at `47c28d2`, revised after security, code fit, multiplayer and trading, and self-hosted product reviews. Tracks [#45](https://github.com/afk-sapien/PokeSim/issues/45).
+Status: built. It merged to main with accounts off on 2026-11-09 (#397), and accounts stay off unless a Library already uses them (#396). Its "Today" describes main at `47c28d2`, where it was read, revised after security, code fit, multiplayer and trading, and self-hosted product reviews. Tracks [#45](https://github.com/afk-sapien/PokeSim/issues/45).
 
 Today one Library has one person. Anyone who reaches the manager gets every adventure, ROM, save and backup, and [Authentication and view links](../authentication.md) asks people to put a login proxy in front. This document adds accounts, roles, sharing, a control lease and trade offers between people, built into the manager.
 

@@ -1,6 +1,6 @@
 # Link spike — intercepting a ROM routine from Python
 
-Milestone 4 of `docs/multi-game.md`. One question:
+Milestone 4 of `docs/history/multi-game.md`. One question:
 
 > Can we intercept a Game Boy ROM routine from Python with PyBoy's supported APIs, supply a
 > return value, and make the routine return early without executing its body?
@@ -246,7 +246,7 @@ Useful addresses, all bank 0:
 | risk | severity | note |
 |---|---|---|
 | Link establishment cannot be intercepted as cleanly | high | `Serial`'s body is an interrupt handler, not a `call`ed routine, so `force_return` does not apply to it. Likeliest fix: intercept `Serial_TryEstablishingExternallyClockedConnection` and write `hSerialConnectionStatus` directly rather than emulating the handshake. Needs its own spike. |
-| Cable Club policy work | high | Unchanged from `docs/multi-game.md`: both runs must walk into a Pokémon Center, talk to the attendant, sit down and work the trade menus in sync. This is the real cost of backend B and this spike does nothing to reduce it. |
+| Cable Club policy work | high | Unchanged from `docs/history/multi-game.md`: both runs must walk into a Pokémon Center, talk to the attendant, sit down and work the trade menus in sync. This is the real cost of backend B and this spike does nothing to reduce it. |
 | Timing divergence from skipped cycles | low | Established as the cause of the only divergence seen. Irrelevant for serial, where the skipped cycles are a busy-wait. |
 | Frame-granular `tick()` | low | Handled by the stall/park path. Costs emulated CPU, not correctness. |
 | Hooked address is data, not code | low | PyBoy's own warning: the `0xDB` byte is readable. Not a concern for `219a`, which nothing reads. |

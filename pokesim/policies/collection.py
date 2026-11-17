@@ -53,7 +53,7 @@ FRAMES_PER_EXPERIENCE = 5
 # The tier of a hunt for another copy of a registered species, a quality or a plain repeat, so a family
 # still short of its level 100 credit trains first. At the approved weights a quality catch earns about
 # ten times what a training step earns per frame, and Red's training share fell from 57% to 2% while its
-# hunts walked to marts and PCs. The trade-off is set out in docs/design/planner-systems.md.
+# hunts walked to marts and PCs. The trade-off is set out in docs/history/planner-systems.md.
 HUNT_TIER = Tier.FILLER
 # Fewest uses a trainee's attacking moves must hold between heals. A Red Chansey whose only attack was
 # Double Slap, 10 uses, trained for 600000 frames and walked to the Pokémon Center a hundred times.
