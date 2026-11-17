@@ -104,7 +104,16 @@ def test_the_watch_marks_flash_lighting_the_map_it_was_dark_on():
     assert look(MAPS['ROUTE_10'], False) == []
 
 
-def test_a_sole_flash_holder_is_an_ordinary_reserve():
+def test_a_sole_flash_holder_stays_until_lavender_and_is_an_ordinary_reserve_after():
     party = (mon(level=60),) + tuple(mon(level=30, moves=(move, 33, 0, 0)) for move in (15, 19, 57, 70)) + (
         mon(level=35, moves=(FLASH, 33, 0, 0)),)
-    assert reserve_to_deposit(snap(party=party)) == 5
+    assert reserve_to_deposit(snap(party=party)) is None
+    assert reserve_to_deposit(snap(party=party, towns_visited=1 << MAPS['LAVENDER_TOWN'])) == 5
+
+
+def test_the_pokemon_center_swap_keeps_the_flash_user_before_rock_tunnel():
+    """A Clefairy taught Flash was swapped for a stronger boxed Diglett at a Pokémon Center, so the
+    run walked Rock Tunnel dark. The weakest reserve without a field move goes instead."""
+    party = (mon(level=31), mon(level=18), mon(level=11), mon(species=CLEFAIRY, level=11, moves=(FLASH, 1, 0, 0)))
+    assert reserve_to_deposit(snap(party=party)) == 2
+    assert reserve_to_deposit(snap(party=party[:1] + party[3:])) is None

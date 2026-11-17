@@ -34,6 +34,7 @@ OPPONENTS = gen1_opponents(OPPONENTS, SPECIES)
 # so it never becomes a deposit candidate there.
 STAYS_IN_PARTY = ({sid for sid, data in SPECIES.items() if data.get('name') == 'PIKACHU'}
                   if current_variant() == 'yellow' else set())
+FLASH = 148
 
 
 def stays_in_party(s, mon):
@@ -246,10 +247,23 @@ def _release_target(s, stock, reserved, partners, gifts, preferences, demand, re
              deadlocked(every, storage_headroom(s))))
 
 
+def dark_cave_ahead(s):
+    """Whether Rock Tunnel, Kanto's only dark cave and the road to Lavender Town, is still ahead.
+
+    A snapshot without the towns entered (a Gen II one) has no Rock Tunnel to light.
+    """
+    visited = getattr(s, 'towns_visited', None)
+    return visited is not None and not visited >> MAPS['LAVENDER_TOWN'] & 1
+
+
 def reserve_to_deposit(s, *, prefer_completed=False):
     strongest = max(range(len(s.party)), key=lambda i: s.party[i].level, default=None)
+    # The party's only Flash user stays until the run reaches Lavender Town. A Clefairy taught Flash
+    # on Route 2 was swapped at a Pokémon Center for a stronger Diglett before Rock Tunnel, and the
+    # run walked the cave dark after making the trip for the HM.
+    kept = (15, 19, 57, 70) + ((FLASH,) if dark_cave_ahead(s) else ())
     candidates = [i for i, p in enumerate(s.party) if i != strongest and not stays_in_party(s, p)
-                  and not any(move in (15, 19, 57, 70)
+                  and not any(move in kept
                               and not any(move in other.moves for j, other in enumerate(s.party) if j != i)
                               for move in p.moves)]
     return min(candidates, key=lambda i: (not (prefer_completed and s.party[i].level >= 100),
