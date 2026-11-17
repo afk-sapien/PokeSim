@@ -159,6 +159,18 @@ def test_a_gen1_stall_reload_in_a_rival_battle_counts_against_the_goal_under_way
     assert other.losses.levels() == {}
 
 
+def test_a_gen1_loss_to_the_rival_in_oaks_lab_is_no_loss():
+    # The game lets the player lose the first rival fight and the story carries on, so the parcel
+    # goal does not wait on a win the game never asks for.
+    policy = StrategicPolicy(1)
+    policy.goal = SimpleNamespace(key='parcel', title='Collect Oak’s parcel')
+    policy.note_boss_loss(snap(map=MAPS['OAKS_LAB'], badges=0, in_battle=2, opponent=200 + 25, enemy_level=5,
+                               party=(mon(level=5, hp=0),)))
+    assert policy.losses.levels() == {}
+    s = snap(map=MAPS['VIRIDIAN_CITY'], badges=0, party=(mon(level=5),))
+    assert boss_training(s, policy.goal, policy.losses) is None
+
+
 def test_a_gen1_loss_right_after_a_reload_into_the_battle_counts_by_the_room():
     # A reload into the battle leaves no boss goal yet, so the gym names the boss.
     policy = StrategicPolicy(1)

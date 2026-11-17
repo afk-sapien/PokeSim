@@ -882,7 +882,14 @@ class StrategicPolicy(Policy):
 
         A loss is a black out or a battle that cannot end in the boss's gym, or anywhere in the League.
         A reload into a battle leaves no boss goal yet, so then the room alone names the boss. A loss
-        to the rival or Giovanni elsewhere counts against the goal under way, which waits on the win."""
+        to the rival or Giovanni elsewhere counts against the goal under way, which waits on the win.
+
+        The first rival fight in Oak's Lab is no loss. The game lets the player lose it, with no black
+        out, and the story carries on. A fresh Red that lost it was told to train for Brock beyond the
+        old man, who blocks the road north until the parcel is delivered, and stood in Viridian City
+        for four game hours."""
+        if s.map == MAPS['OAKS_LAB']:
+            return
         league.note_loss(BOSS_TABLE, self.losses, getattr(self.goal, 'key', None), s.map, s, power)
 
     def _boss_check(self, s, goal, in_league):
