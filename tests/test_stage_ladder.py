@@ -314,7 +314,8 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
         if 'gate-rung' in command:
             ladder, rung, out = Path(command[command.index('gate-rung') + 1]), *command[command.index('gate-rung') + 2:][:2]
             waste = 30.0 if rung == 'badges_4' else 10.0
-            Path(out, 'summary.json').write_text(json.dumps(_result(rung, waste, ladder=ladder.name)), encoding='utf-8')
+            summary = dict(_result(rung, waste, ladder=ladder.name), frames=stage_ladder.GATE_FRAMES)
+            Path(out, 'summary.json').write_text(json.dumps(summary), encoding='utf-8')
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(stage_ladder.subprocess, 'run', fake)
@@ -328,11 +329,15 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
     assert env[stage_ladder.GATE_HELD] == '1'
     monkeypatch.setenv(stage_ladder.GATE_HELD, '1')
     assert main(args + ['--write-baseline']) == 0
-    assert len(calls) == 3 and all(command[:3] == ['nice', '-n', '10'] for command, _ in calls)
+    # Three rungs on three seeds each.
+    assert len(calls) == 9 and all(command[:3] == ['nice', '-n', '10'] for command, _ in calls)
+    assert sorted(command[command.index('--seed') + 1] for command, _ in calls) == ['7'] * 3 + ['8'] * 3 + ['9'] * 3
     assert all('POKESIM_GEN1_VARIANT' not in env for _, env in calls)
     stored = json.loads((root / 'gate-baseline.json').read_text(encoding='utf-8'))
-    assert stored['frames'] == stage_ladder.GATE_FRAMES and set(stored['rungs']) == \
+    assert stored['frames'] == stage_ladder.GATE_FRAMES and stored['seeds'] == [7, 8, 9] and set(stored['rungs']) == \
         {'red/new_game', 'red/badges_2', 'red-randomized/badges_4'}
+    assert stored['rungs']['red/new_game'] == {'stall': None, 'stalls': 0, 'errors': 0, 'waste': 10.0,
+                                               'milestones': 0, 'story': []}
     assert main(args) == 0
     stored['rungs']['red-randomized/badges_4']['waste'] = 20.0
     (root / 'gate-baseline.json').write_text(json.dumps(stored), encoding='utf-8')
@@ -341,6 +346,53 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
     assert 'red-randomized/badges_4: 30.0% wasted, 20.0% before' in capsys.readouterr().out
     with pytest.raises(SystemExit, match='108000'):
         main(args + ['--frames', '36000'])
+    with pytest.raises(SystemExit, match='taken on seeds 7, 8, 9, not 7'):
+        main(args + ['--seeds', '7'])
+    # A baseline from before the gate played several seeds stands for seed 7 alone.
+    del stored['seeds']
+    (root / 'gate-baseline.json').write_text(json.dumps(stored), encoding='utf-8')
+    with pytest.raises(SystemExit, match='taken on seeds 7, not 7, 8, 9'):
+        main(args)
+
+
+def _run(seed, waste, story=(), stall=None, errors=0):
+    return dict(_result('badges_6', waste=waste, errors=errors, stall=stall, story=story), seed=seed, frames=108000,
+                pipeline={'decisions': 4, 'agreed': 3, 'frames': 100, 'frames_agreed': 90})
+
+
+def test_a_rung_on_three_seeds_keeps_the_mean_and_counts_its_stalls():
+    result = stage_ladder.mean_result([_run(7, 10.0, ['fog', 'storm']), _run(8, 13.0, ['storm'], stall='quiet'),
+                                       _run(9, 11.0, ['fog', 'storm', 'mineral'], errors=1)])
+    assert {key: result[key] for key in ('seeds', 'frames', 'errors', 'stalls', 'waste', 'milestones', 'story')} == {
+        'seeds': [7, 8, 9], 'frames': 324000, 'errors': 0.33, 'stalls': 1, 'waste': 11.33, 'milestones': 2,
+        'story': ['fog', 'storm', 'mineral']}
+    assert result['stall']['reason'] == 'quiet' and [run['seed'] for run in result['runs']] == [7, 8, 9]
+    assert result['pipeline'] == {'decisions': 12, 'agreed': 9, 'frames': 300, 'frames_agreed': 270}
+    failed = stage_ladder.mean_result([_run(7, 10.0), {'ladder': 'gold', 'rung': 'badges_6', 'seed': 8,
+                                                       'failed': 'exit 1'}, _run(9, 10.0)])
+    assert failed == {'ladder': 'gold', 'rung': 'badges_6', 'seeds': [7, 8, 9], 'failed': 'seed 8: exit 1'}
+
+
+def test_a_rung_on_three_seeds_fails_on_more_stalls_fewer_milestones_or_a_higher_mean_waste():
+    baseline = {'gold/badges_6': {'stall': 'quiet', 'stalls': 1, 'errors': 0.33, 'waste': 10.0, 'milestones': 2.67,
+                                  'story': ['fog', 'storm', 'mineral']}}
+    level = [_run(7, 9.0, ['fog', 'storm', 'mineral'], stall='quiet'), _run(8, 12.0, ['fog', 'storm', 'mineral']),
+             _run(9, 14.0, ['fog', 'storm'], errors=1)]
+    assert stage_ladder.compare([stage_ladder.mean_result(level)], baseline) == []
+    worse = [_run(7, 9.0, ['fog', 'storm', 'mineral'], stall='quiet'), _run(8, 12.0, ['fog', 'storm'], stall='quiet'),
+             _run(9, 16.0, ['fog', 'storm'], errors=1)]
+    assert stage_ladder.compare([stage_ladder.mean_result(worse)], baseline) == [
+        'gold/badges_6: a new stall, quiet, 2 of 3 seeds, 1 before',
+        'gold/badges_6: 2.33 story milestones a seed, 2.67 before']
+    wasteful = [_run(seed, 12.5, ['fog', 'storm', 'mineral']) for seed in (7, 8)] + [_run(9, 12.5, ['fog', 'storm'])]
+    assert stage_ladder.compare([stage_ladder.mean_result(wasteful)], baseline) == [
+        'gold/badges_6: 12.5% wasted, 10.0% before']
+    further = [_run(seed, 15.0, ['fog', 'storm', 'mineral']) for seed in (7, 8)] + [_run(9, 15.0, ['fog', 'storm', 'rising'])]
+    result = stage_ladder.mean_result(further)
+    assert stage_ladder.compare([result], baseline) == []
+    assert stage_ladder.past_baseline([result], baseline) == [
+        "gold/badges_6: 3 story milestones a seed past the baseline's 2.67, newly earned rising, at 15.0% wasted, "
+        '10.0% before. Rewrite its baseline in a reviewed change.']
 
 
 def test_the_tracked_baseline_is_the_default_and_names_every_rung_once():
@@ -348,13 +400,15 @@ def test_the_tracked_baseline_is_the_default_and_names_every_rung_once():
     assert stage_ladder.GATE_BASELINE == stage_ladder.ROOT / 'tools' / 'ladder' / 'gate-baseline.json'
     stored = json.loads(stage_ladder.GATE_BASELINE.read_text(encoding='utf-8'))
     assert stored['frames'] == stage_ladder.GATE_FRAMES and stored['commit'] and stored['taken']
+    assert stored['seeds'] == list(stage_ladder.GATE_SEEDS)
     rungs = {'1': stage_ladder.GEN1_RUNGS, '2': stage_ladder.GEN2_RUNGS}
     for name, rung in stored['rungs'].items():
         ladder, stage = name.split('/')
         allowed = stage_ladder.RANDOMIZED_RUNGS if ladder.endswith('-randomized') else \
             rungs['2' if ladder.split('-')[0] in ('gold', 'silver', 'crystal') else '1']
         assert stage in allowed, name
-        assert set(rung) - {'story'} == {'stall', 'errors', 'waste'} and 0 <= rung['waste'] <= 100, name
+        assert set(rung) == {'stall', 'stalls', 'errors', 'waste', 'milestones', 'story'}, name
+        assert 0 <= rung['waste'] <= 100 and 0 <= rung['stalls'] <= len(stored['seeds']), name
         assert all(isinstance(key, str) for key in rung.get('story', [])), name
 
 

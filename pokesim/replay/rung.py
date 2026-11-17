@@ -28,11 +28,14 @@ TRAINING = frozenset({'collection_train', 'collect_train'})
 # The reason a Red, Blue or Yellow hunt gives for its trip, and the hunt kind it stands for.
 GEN1_PURPOSES = {'a partner another adventure needs': 'partner', 'more chances to find high DV partners': 'quality',
                  'another partner for the collection': 'repeat', 'a missing Pokédex entry': 'completion'}
-# The gate plays 30 game minutes from every rung. It fails on a new stall, more errors, or fewer story
-# milestones than the baseline earned. At the baseline's count of milestones, a wasted share up by more
-# than two points fails. A rung that earns more passes up to ten points, since a run that gets further
-# also meets more of the game, and the gate names it for a reviewed baseline rewrite. Its stall watch is
-# shorter than the snapshot's to fit the batch.
+# The gate plays 30 game minutes from every rung on each of three goal seeds and judges the rung on the
+# three runs together: how many stalled, and the mean errors, story milestones and wasted share. One seed
+# alone moved the wasted share by several points on a change that did not touch that rung. It fails on
+# more stalls, more errors, or fewer story milestones than the baseline earned. At the baseline's count
+# of milestones, a wasted share up by more than two points fails. A rung that earns more passes up to ten
+# points, since a run that gets further also meets more of the game, and the gate names it for a
+# reviewed baseline rewrite. Its stall watch is shorter than the snapshot's to fit the batch.
+GATE_SEEDS = (7, 8, 9)
 GATE_FRAMES = 108000
 GATE_QUIET = 20
 GATE_WASTE_POINTS = 2.0
@@ -505,10 +508,10 @@ def gate_rung(args):
     data_root = args.data_root or (gen2_data_root() if info['generation'] == 2 else None)
     watch = GateWatch(args.out, state, args.quiet, args.battle_minutes)
     audit = argparse.Namespace(rom=rom, state=state, frames=args.frames, out=args.out / 'run.json', data_root=data_root,
-                               seed=7, reseed_goals=True, lead_in=0, randomizer=code, fair_wild_dvs=None)
+                               seed=args.seed, reseed_goals=True, lead_in=0, randomizer=code, fair_wild_dvs=None)
     result = run_one(audit, watch)
-    summary = {'ladder': args.ladder.name, 'rung': args.rung, 'randomizer': code, 'frames': result['frames'],
-               'errors': result['errors'], 'stall': watch.stall,
+    summary = {'ladder': args.ladder.name, 'rung': args.rung, 'seed': args.seed, 'randomizer': code,
+               'frames': result['frames'], 'errors': result['errors'], 'stall': watch.stall,
                'waste': round(100 * sum(result['wasted'].values()) / max(result['frames'], 1), 2),
                'story': result['story']}
     if result.get('pipeline') is not None:
@@ -517,33 +520,81 @@ def gate_rung(args):
     return 0
 
 
+def mean_result(runs):
+    """One rung's gate result from its runs on several seeds: the mean errors, story milestones and wasted
+    share, how many runs stalled and the first stall, and every milestone a run earned, in the order the
+    runs earned them. A failed run fails the rung."""
+    first = runs[0]
+    failed = [run for run in runs if run.get('failed')]
+    if failed:
+        return {'ladder': first['ladder'], 'rung': first['rung'], 'seeds': [run['seed'] for run in runs],
+                'failed': ', '.join(f'seed {run["seed"]}: {run["failed"]}' for run in failed)}
+    stalled = [run['stall'] for run in runs if run['stall']]
+    story = []
+    for run in runs:
+        story += [key for key in run.get('story', []) if key not in story]
+    result = {'ladder': first['ladder'], 'rung': first['rung'], 'randomizer': first.get('randomizer', ''),
+              'seeds': [run['seed'] for run in runs], 'frames': sum(run['frames'] for run in runs),
+              'errors': _mean(run['errors'] for run in runs), 'stall': stalled[0] if stalled else None,
+              'stalls': len(stalled), 'waste': _mean(run['waste'] for run in runs),
+              'milestones': _mean(len(run.get('story', [])) for run in runs), 'story': story,
+              'runs': [{key: run.get(key) for key in ('seed', 'errors', 'stall', 'waste', 'story')} for run in runs]}
+    pipelines = [run['pipeline'] for run in runs if run.get('pipeline')]
+    if len(pipelines) == len(runs):
+        result['pipeline'] = {field: sum(pipeline[field] for pipeline in pipelines)
+                              for field in ('decisions', 'agreed', 'frames', 'frames_agreed')}
+    return result
+
+
+def _mean(values):
+    values = list(values)
+    return round(sum(values) / len(values), 2)
+
+
+def stalls(result):
+    """How many of a result's runs stalled. A single run, or a baseline taken on one seed, counts its own stall."""
+    return result.get('stalls', 1 if result.get('stall') else 0)
+
+
+def milestones(result):
+    """A result's story milestones a run, or None when it has no count."""
+    if 'milestones' in result:
+        return result['milestones']
+    return None if result.get('story') is None else len(result['story'])
+
+
 def reach(result, base):
     """1 when ``result`` earned more story milestones than the baseline, -1 fewer, 0 as many. A baseline
     or result without the count is level. The count ranks them, not the names, so two runs that earn
     the same number of Kanto badges in a different order are level."""
-    earned, before = result.get('story'), base.get('story')
+    earned, before = milestones(result), milestones(base)
     if earned is None or before is None:
         return 0
-    return (len(earned) > len(before)) - (len(earned) < len(before))
+    return (earned > before) - (earned < before)
 
 
 def compare(results, baseline, points=GATE_WASTE_POINTS, further=GATE_FURTHER_POINTS):
-    """What a gate run did worse than the baseline: a run that failed, a stall on a rung that had none, more
+    """What a gate run did worse than the baseline: a run that failed, more stalls than the baseline had, more
     errors, fewer story milestones, or a wasted share up by more than ``points``. A rung that earned more
-    milestones may rise by ``further``. A rung the baseline lacks is only reported."""
+    milestones may rise by ``further``. A rung played on several seeds is judged on its runs together
+    (``mean_result``). A rung the baseline lacks is only reported."""
     problems = []
     for result in results:
         name = f'{result["ladder"]}/{result["rung"]}'
         base = baseline.get(name)
+        seeds = len(result.get('seeds', ()))
         if result.get('failed'):
             problems.append(f'{name}: the run failed, {result["failed"]}')
         elif base is not None:
-            if result['stall'] and not base['stall']:
-                problems.append(f'{name}: a new stall, {result["stall"]["reason"]}')
+            if stalls(result) > stalls(base):
+                count = f', {stalls(result)} of {seeds} seeds, {stalls(base)} before' if seeds else ''
+                problems.append(f'{name}: a new stall, {result["stall"]["reason"]}{count}')
             if result['errors'] > base['errors']:
-                problems.append(f'{name}: {result["errors"]} errors, {base["errors"]} before')
+                problems.append(f'{name}: {result["errors"]:g} errors, {base["errors"]:g} before')
             ahead = reach(result, base)
-            if ahead < 0:
+            if ahead < 0 and seeds:
+                problems.append(f'{name}: {milestones(result):g} story milestones a seed, {milestones(base):g} before')
+            elif ahead < 0:
                 missed = next((key for key in base['story'] if key not in result['story']), base['story'][-1])
                 problems.append(f'{name}: stopped before {missed}, which the baseline reached')
             elif result['waste'] - base['waste'] > (further if ahead else points):
@@ -585,7 +636,12 @@ def past_baseline(results, baseline, further=GATE_FURTHER_POINTS):
         if (base is None or result.get('failed') or reach(result, base) <= 0
                 or compare([result], baseline, further=further)):
             continue
-        earned = ', '.join(key for key in result['story'] if key not in base['story'])
-        found.append(f'{name}: earned {earned} past the baseline, at {result["waste"]:.1f}% wasted, '
+        new = ', '.join(key for key in result['story'] if key not in base['story'])
+        if 'seeds' in result:
+            gain = (f'{milestones(result):g} story milestones a seed past the baseline\'s {milestones(base):g}'
+                    + (f', newly earned {new}' if new else ''))
+        else:
+            gain = f'earned {new} past the baseline'
+        found.append(f'{name}: {gain}, at {result["waste"]:.1f}% wasted, '
                      f'{base["waste"]:.1f}% before. Rewrite its baseline in a reviewed change.')
     return found
