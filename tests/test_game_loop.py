@@ -4,9 +4,9 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim import config
-from pokesim.runtime.game_loop import (GEN1_WAIT, GEN2_WAIT, GUARD_FRAMES, IDLE_FRAMES, Decider, GameLoop,
-                                       gen1_options, play, write_gen1_options)
-from pokesim.runtime.policy import Action
+from pokesim.runtime.game_loop import (GEN1_WAIT, GEN2_WAIT, GUARD_FRAMES, HOLD_CHECK, IDLE_FRAMES, Decider,
+                                       GameLoop, gen1_options, play, write_gen1_options)
+from pokesim.runtime.policy import Action, Hold
 
 
 def act(button, hold, gap):
@@ -55,6 +55,26 @@ def test_a_step_writes_options_then_presses_holds_releases_and_waits_out_each_ac
     assert host.pb.log == [('options',), ('press', 'a'), ('tick', 2), ('release', 'a'), ('tick', 3),
                            ('tick', 0), ('tick', 4)]
     assert host.frame == 9
+
+
+def test_a_held_press_comes_up_at_the_first_check_its_stop_allows():
+    host = Host()
+    asked = []
+
+    def stop(held):
+        asked.append(held)
+        return held >= 10
+
+    play(host.pb, Hold('up', 40, 16, stop=stop), host.tick, GEN2_WAIT)
+    assert asked == [HOLD_CHECK, 2 * HOLD_CHECK, 3 * HOLD_CHECK]
+    assert host.pb.log == [('press', 'up'), ('tick', 4), ('tick', 4), ('tick', 4), ('release', 'up'), ('tick', 16)]
+
+
+def test_a_held_press_whose_stop_never_says_so_lasts_its_whole_hold():
+    host = Host()
+    play(host.pb, Hold('up', 10, 16, stop=lambda held: False), host.tick, GEN2_WAIT)
+    assert host.pb.log == [('press', 'up'), ('tick', 4), ('tick', 4), ('tick', 2), ('release', 'up'), ('tick', 16)]
+    assert host.frame == Hold('up', 10, 16).frames(GEN2_WAIT)
 
 
 def test_a_failing_tick_still_releases_the_button():

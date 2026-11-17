@@ -6,7 +6,79 @@ from pokecore.gen2.maps import (DIRS, OPPOSITE, WALLS, blocked_side, decode_bloc
                                     passable, travel_collision)
 
 from pokecore.gen2.ram import Memory, Snapshot
+from pokecore.gen2.state import walking
 from .routes import CARPETS, Regions, Search, walk_crossings, walk_links
+
+
+class HeldWalk:
+    """The stop of one held direction: ``tiles`` steps along ``button``, or fewer where the one-tile walk
+    would have decided again. play asks it every few frames (runtime/game_loop.py).
+
+    A step commits about a frame after the coordinates show the step before it, so the press comes up at
+    the check after the one that first saw the next to last tile, a few frames inside the window that
+    lands the last one. It comes up at once on a map change, a battle, any party HP lost (poison, a faint),
+    a place off the planned line, a script that holds the pad once the first step is taken (a turn in
+    place sets wScriptRunning for a few frames), and a person on the line ahead, such as one that loads
+    as the screen scrolls or walks into the way, so the next decision routes around them. After ``STUCK``
+    frames with no new tile it comes up too, and the tile it stopped on is where the next decision looks
+    for a wall, as a one-tile press there would.
+
+    Each tile passed on the way is a visit, as a decision on it would have counted. The tile the hold ends
+    on is counted by the next decision. ``moved`` and ``reason`` say how it went.
+    """
+
+    STUCK = 48
+
+    def __init__(self, nav, memory, game, frame, button, tiles):
+        self.nav, self.memory, self.game, self.frame = nav, memory, game, frame
+        self.button, self.tiles = button, tiles
+        self.start = walking(memory, game)
+        self.moved = self.seen = 0
+        self.ending = False
+        self.reason = None
+
+    def visit(self, k):
+        dx, dy = DIRS[self.button]
+        point = (self.start.map, self.start.x + dx * k, self.start.y + dy * k)
+        self.nav.visits[point] = self.nav.visits.get(point, 0) + 1
+
+    def end(self, reason):
+        self.reason = reason
+        return True
+
+    def __call__(self, held):
+        now, start = walking(self.memory, self.game), self.start
+        if now.map != start.map:
+            return self.end('map')
+        if now.battle:
+            return self.end('battle')
+        if len(now.hp) != len(start.hp) or any(hp < before for hp, before in zip(now.hp, start.hp)):
+            return self.end('hp')
+        if self.moved and now.script:
+            return self.end('script')
+        dx, dy = DIRS[self.button]
+        moved = abs(now.x - start.x) + abs(now.y - start.y)
+        if (now.x, now.y) != (start.x + dx * moved, start.y + dy * moved) or moved > self.tiles:
+            return self.end('off line')
+        if moved > self.moved:
+            for k in range(max(self.moved, 1), moved):
+                self.visit(k)
+            self.moved, self.seen = moved, held
+        elif not self.ending and held - self.seen > self.STUCK:
+            if self.moved:
+                self.nav.previous = ((start.map, now.x, now.y), self.button, self.frame + self.seen)
+            return self.end('stuck')
+        if any((start.x + dx * k, start.y + dy * k) in now.people for k in range(moved + 1, self.tiles + 2)):
+            return self.end('person')
+        if self.ending:
+            if self.moved < self.tiles:
+                # The press comes up on the way into the last tile, so this one was passed.
+                self.visit(self.moved)
+            return self.end('done')
+        if self.moved >= self.tiles:
+            return self.end('done')
+        self.ending = self.moved == self.tiles - 1
+        return False
 
 
 def field_moves(snapshot):
