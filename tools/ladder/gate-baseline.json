@@ -126,7 +126,7 @@
   "gold/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 5.71,
+   "waste": 8.42,
    "story": [
     "starter",
     "mystery_egg",
@@ -186,7 +186,7 @@
   "gold/red": {
    "stall": null,
    "errors": 0,
-   "waste": 0.0,
+   "waste": 9.68,
    "story": [
     "red"
    ]
@@ -200,7 +200,7 @@
   "gold-randomized/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.24,
+   "waste": 10.91,
    "story": [
     "starter",
     "mystery_egg",
@@ -302,7 +302,7 @@
   "silver/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 0.27,
+   "waste": 12.75,
    "story": [
     "starter",
     "mystery_egg",
@@ -313,7 +313,9 @@
    "stall": null,
    "errors": 0,
    "waste": 0.0,
-   "story": []
+   "story": [
+    "cut"
+   ]
   },
   "silver/badges_4": {
    "stall": null,
