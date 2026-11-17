@@ -1,13 +1,20 @@
 {
- "commit": "28991087",
+ "commit": "bd887dd1",
  "attempt": 1,
- "taken": "2026-11-10",
+ "taken": "2026-11-17",
  "frames": 108000,
+ "seeds": [
+  7,
+  8,
+  9
+ ],
  "rungs": {
   "blue/new_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 4.23,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 2.41,
+   "milestones": 3.0,
    "story": [
     "starter",
     "parcel",
@@ -16,44 +23,58 @@
   },
   "blue/badges_2": {
    "stall": null,
-   "errors": 0,
-   "waste": 7.48,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 6.32,
+   "milestones": 0.0,
    "story": []
   },
   "blue/badges_4": {
    "stall": null,
-   "errors": 0,
-   "waste": 20.2,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 8.2,
+   "milestones": 0.0,
    "story": []
   },
   "blue/badges_6": {
    "stall": null,
-   "errors": 0,
-   "waste": 13.77,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 8.68,
+   "milestones": 0.0,
    "story": []
   },
   "blue/badges_8": {
    "stall": null,
-   "errors": 0,
-   "waste": 0.06,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 0.51,
+   "milestones": 0.0,
    "story": []
   },
   "blue/league_first": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "blue/post_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 4.0,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 3.62,
+   "milestones": 0.0,
    "story": []
   },
   "crystal/new_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 3.93,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 1.55,
+   "milestones": 3.0,
    "story": [
     "starter",
     "mystery_egg",
@@ -62,38 +83,52 @@
   },
   "crystal/badges_2": {
    "stall": null,
-   "errors": 0,
-   "waste": 0.0,
-   "story": []
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 0.77,
+   "milestones": 0.67,
+   "story": [
+    "cut"
+   ]
   },
   "crystal/badges_4": {
    "stall": null,
-   "errors": 0,
-   "waste": 0.0,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 4.29,
+   "milestones": 0.0,
    "story": []
   },
   "crystal/badges_6": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "crystal/badges_8": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "crystal/league_first": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "crystal/champion_first": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 1.05,
+   "milestones": 2.0,
    "story": [
     "kanto",
     "surge"
@@ -101,8 +136,10 @@
   },
   "crystal/kanto_entry": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 3.0,
    "story": [
     "surge",
     "sabrina",
@@ -111,22 +148,28 @@
   },
   "crystal/red": {
    "stall": null,
-   "errors": 0,
-   "waste": 2.2,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 0.66,
+   "milestones": 1.0,
    "story": [
     "red"
    ]
   },
   "crystal/post_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 0.0,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 2.48,
+   "milestones": 0.0,
    "story": []
   },
   "gold/new_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 8.42,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 2.97,
+   "milestones": 3.0,
    "story": [
     "starter",
     "mystery_egg",
@@ -135,48 +178,65 @@
   },
   "gold/badges_2": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
-   "story": []
+   "milestones": 0.67,
+   "story": [
+    "cut"
+   ]
   },
   "gold/badges_4": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "gold/badges_6": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "gold/badges_8": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "gold/league_first": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "gold/champion_first": {
    "stall": null,
-   "errors": 0,
-   "waste": 6.49,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 6.14,
+   "milestones": 3.33,
    "story": [
     "kanto",
     "surge",
-    "sabrina"
+    "sabrina",
+    "erika"
    ]
   },
   "gold/kanto_entry": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 3.0,
    "story": [
     "surge",
     "sabrina",
@@ -185,22 +245,28 @@
   },
   "gold/red": {
    "stall": null,
-   "errors": 0,
-   "waste": 9.68,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 5.73,
+   "milestones": 0.67,
    "story": [
     "red"
    ]
   },
   "gold/post_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 0.0,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 0.7,
+   "milestones": 0.0,
    "story": []
   },
   "gold-randomized/new_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 10.91,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 3.8,
+   "milestones": 3.0,
    "story": [
     "starter",
     "mystery_egg",
@@ -209,26 +275,34 @@
   },
   "gold-randomized/badges_4": {
    "stall": null,
-   "errors": 0,
-   "waste": 0.0,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 1.5,
+   "milestones": 0.0,
    "story": []
   },
   "gold-randomized/badges_8": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "gold-randomized/league_first": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "red/new_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 4.23,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 2.41,
+   "milestones": 3.0,
    "story": [
     "starter",
     "parcel",
@@ -237,44 +311,58 @@
   },
   "red/badges_2": {
    "stall": null,
-   "errors": 0,
-   "waste": 3.53,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 4.41,
+   "milestones": 0.0,
    "story": []
   },
   "red/badges_4": {
    "stall": null,
-   "errors": 0,
-   "waste": 9.26,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 13.36,
+   "milestones": 0.0,
    "story": []
   },
   "red/badges_6": {
    "stall": null,
-   "errors": 0,
-   "waste": 4.37,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 4.87,
+   "milestones": 0.0,
    "story": []
   },
   "red/badges_8": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.06,
+   "milestones": 0.0,
    "story": []
   },
   "red/league_first": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "red/post_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 3.58,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 2.92,
+   "milestones": 0.0,
    "story": []
   },
   "red-randomized/new_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 1.26,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 1.25,
+   "milestones": 3.0,
    "story": [
     "starter",
     "parcel",
@@ -283,26 +371,34 @@
   },
   "red-randomized/badges_4": {
    "stall": null,
-   "errors": 0,
-   "waste": 9.36,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 12.32,
+   "milestones": 0.0,
    "story": []
   },
   "red-randomized/badges_8": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.06,
+   "milestones": 0.0,
    "story": []
   },
   "red-randomized/league_first": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "silver/new_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 12.75,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 7.31,
+   "milestones": 3.0,
    "story": [
     "starter",
     "mystery_egg",
@@ -311,40 +407,52 @@
   },
   "silver/badges_2": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.67,
    "story": [
     "cut"
    ]
   },
   "silver/badges_4": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "silver/badges_6": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "silver/badges_8": {
    "stall": null,
-   "errors": 0,
-   "waste": 0.0,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 0.07,
+   "milestones": 0.0,
    "story": []
   },
   "silver/league_first": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "silver/champion_first": {
    "stall": null,
-   "errors": 0,
-   "waste": 6.43,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 6.09,
+   "milestones": 3.0,
    "story": [
     "kanto",
     "surge",
@@ -353,8 +461,10 @@
   },
   "silver/kanto_entry": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 3.0,
    "story": [
     "surge",
     "sabrina",
@@ -363,20 +473,26 @@
   },
   "silver/red": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "silver/post_game": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "yellow/new_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 1.06,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 1.26,
+   "milestones": 3.0,
    "story": [
     "starter",
     "parcel",
@@ -385,38 +501,50 @@
   },
   "yellow/badges_2": {
    "stall": null,
-   "errors": 0,
-   "waste": 2.59,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 4.75,
+   "milestones": 0.0,
    "story": []
   },
   "yellow/badges_4": {
    "stall": null,
-   "errors": 0,
-   "waste": 12.12,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 12.45,
+   "milestones": 0.0,
    "story": []
   },
   "yellow/badges_6": {
    "stall": null,
-   "errors": 0,
-   "waste": 18.96,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 14.51,
+   "milestones": 0.0,
    "story": []
   },
   "yellow/badges_8": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.06,
+   "milestones": 0.0,
    "story": []
   },
   "yellow/league_first": {
    "stall": null,
-   "errors": 0,
+   "stalls": 0,
+   "errors": 0.0,
    "waste": 0.0,
+   "milestones": 0.0,
    "story": []
   },
   "yellow/post_game": {
    "stall": null,
-   "errors": 0,
-   "waste": 1.81,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 1.76,
+   "milestones": 0.0,
    "story": []
   }
  }

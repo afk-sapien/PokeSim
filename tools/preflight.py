@@ -3,7 +3,7 @@
 CI cannot run them, since the ladder gate and the private stuck-scenario replays need the cartridges and
 private saves on this machine. Push the branch first, then from its clean checkout run
   uv run --locked --extra dev python tools/preflight.py <cartridge folder> [--no-post]
-It plays `tools/stage_ladder.py gate` (about 3 minutes) and then every replay under the heavy load gate
+It plays `tools/stage_ladder.py gate` (about 10 minutes) and then every replay under the heavy load gate
 (about 7 minutes), and posts the `preflight` commit status on HEAD. A replay named in the scenarios folder's
 known-failures.txt, or in a scenarios/index.toml row that expects stuck, that fails is the known baseline.
 A gate failure, or any other failed, raised or skipped

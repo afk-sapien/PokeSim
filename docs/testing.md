@@ -206,6 +206,12 @@ and `ROM_PATH` set to that share code and cartridge.
 `stage_ladder.py gate` writes a `gate-report.json` that records its attempt, the number of gate
 runs for that commit so far, so a pass on the fifth try reads as one.
 
+The gate plays every rung on goal seeds 7, 8 and 9, each in its own process, and judges the rung on
+the three runs: how many stalled, and the mean errors, story milestones and wasted share. One seed
+alone can move a rung's wasted share by several points on a change that does not touch the rung.
+The baseline names the seeds it was taken on, and a gate on other seeds stops until `--write-baseline`
+rewrites it.
+
 The gate compares with the tracked `tools/ladder/gate-baseline.json`, so a branch compares with the
 baseline of the main it was branched from or last merged. `--write-baseline` rewrites that file, and
 the pull request that carries it names the behaviour change it accepts. A rung that gets worse goes on
