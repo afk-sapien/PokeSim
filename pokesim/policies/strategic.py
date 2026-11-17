@@ -62,6 +62,9 @@ TEACH_FRAMES = 1250
 HM_TEACH_ITEMS = frozenset((ITEMS['HM03'], ITEMS['HM04']))
 
 TRAINER_ENGAGING = 1 << BIT_TRAINER_BATTLE
+# wJoyIgnore, the buttons a scene tells the game to ignore, and its four D-pad bits.
+W_JOY_IGNORE = 0xCD6B
+DPAD = 0xF0
 W_REPEL_STEPS = W_MOVE_NUM - 5  # wRepelRemainingSteps precedes the four-byte wMoves array
 HM_ITEM_MOVES = {ITEMS[f'HM0{number}']: move for number, move in zip(range(1, 6), (15, 19, 57, 70, 148))}
 
@@ -658,8 +661,10 @@ class StrategicPolicy(Policy):
         walking = bool(mem[W_WALK_COUNTER]) and not s.in_battle
         # A trainer who spots the player holds them still until the battle starts. A step tried then did not
         # meet a wall. Counted as failed steps, they blocked every side of the player while a Route 25 trainer
-        # walked up, and the walk to Bill found no route.
-        held = bool(mem[W_STATUS_FLAGS7] & TRAINER_ENGAGING)
+        # walked up, and the walk to Bill found no route. A scene that ignores the D-pad holds them the same
+        # way. In Yellow, Pikachu walks up to Bill on each entry to his house while the player stands still for
+        # about 500 frames, and the steps tried then blocked all four sides of the door.
+        held = bool(mem[W_STATUS_FLAGS7] & TRAINER_ENGAGING) or bool(mem[W_JOY_IGNORE] & DPAD)
         self.nav.observe(pos, frame, walking, interrupted=kind != "overworld" or bool(s.in_battle) or held)
         if walking and kind == "overworld":
             return wait()
