@@ -7,7 +7,7 @@
   "blue/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 1.11,
+   "waste": 4.23,
    "story": [
     "starter",
     "parcel",
@@ -29,7 +29,7 @@
   "blue/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 9.21,
+   "waste": 13.77,
    "story": []
   },
   "blue/badges_8": {
@@ -228,7 +228,7 @@
   "red/new_game": {
    "stall": null,
    "errors": 0,
-   "waste": 1.11,
+   "waste": 4.23,
    "story": [
     "starter",
     "parcel",
@@ -250,7 +250,7 @@
   "red/badges_6": {
    "stall": null,
    "errors": 0,
-   "waste": 5.29,
+   "waste": 4.37,
    "story": []
   },
   "red/badges_8": {
