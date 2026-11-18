@@ -6,6 +6,7 @@ sets that bit before the trade animation, so a set bit means the trade has happe
 """
 from dataclasses import dataclass
 
+from .facts import facts
 from .menus import ChangeBox, Storage, choose, tracked
 from pokecore.gen2.ram import Memory
 from pokecore.gen2.state import npc_trade_qualifies as qualifies
@@ -40,34 +41,23 @@ def worth_trading(policy, snapshot, trade):
     return spare >= 2 or spare >= 1 and trade.request not in policy.collection.get('prerequisites', ())
 
 
-_WILD = [None, frozenset()]
-_REQUESTS = [None, frozenset()]
-
-
 def wild(data, species):
-    encounters = data.encounters
-    if _WILD[0] is not encounters:
-        _WILD[:] = [encounters, frozenset(row['species'] for row in encounters)]
-    return species in _WILD[1]
+    return any(row['species'] == species for row in data.encounters)
 
 
 def requests(policy, snapshot, memory):
     """Requested species worth catching because the trade would register a new species or a returned one.
 
-    Runs every step, so the set is kept until the trade flags, the dex or a held copy changes.
+    Runs every step, so the set is kept in the facts until the wild table, the trade flags, the dex, a
+    held copy or the returned species change. Callers only read it.
     """
     if memory is None or 'wTradeFlags' not in policy.data.symbols:
-        return set()
+        return frozenset()
     value = flags(memory, policy.data)
     returned = frozenset(getattr(policy, 'returned', ()))
-    key = (policy.data, policy.data.encounters, value, snapshot.owned, snapshot.party, snapshot.stored, returned)
-    cached = _REQUESTS[0]
-    if (cached is not None and cached[0] is key[0] and cached[1] is key[1]
-            and cached[2:] == key[2:]):
-        return set(_REQUESTS[1])
-    found = _requests(policy, snapshot, value, returned)
-    _REQUESTS[:] = [key, frozenset(found)]
-    return found
+    inputs = (policy.data.encounters, value, snapshot.owned, snapshot.party, snapshot.stored, returned)
+    return facts(policy).answer('trade requests', inputs,
+                                lambda: frozenset(_requests(policy, snapshot, value, returned)))
 
 
 def _requests(policy, snapshot, value, returned=frozenset()):

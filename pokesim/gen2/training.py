@@ -18,23 +18,21 @@ def identity(mon):
     return [mon.trainer_id, list(mon.dvs)]
 
 
-_WILD_LEVELS = [None, {}]
-
-
-def wild_levels(data):
+def wild_levels(policy):
     """The top wild level of each map whose cartridge wild table has walking encounters (grass or cave floor).
 
-    Callers only read it. It is kept until ``data.encounters`` is replaced, as loading a cartridge's own
-    table does, since the rows are never changed in place.
+    Callers only read it. It is kept in the facts until ``data.encounters`` is replaced, as loading a
+    cartridge's own table does, since the rows are never changed in place.
     """
-    encounters = data.encounters
-    if _WILD_LEVELS[0] is not encounters:
-        top = {}
-        for row in encounters:
-            if row['method'] == 'grass':
-                top[row['map']] = max(top.get(row['map'], 0), row['level'])
-        _WILD_LEVELS[:] = [encounters, top]
-    return _WILD_LEVELS[1]
+    return facts(policy).answer('wild levels', (policy.data.encounters,), _wild_levels, policy.data.encounters)
+
+
+def _wild_levels(encounters):
+    top = {}
+    for row in encounters:
+        if row['method'] == 'grass':
+            top[row['map']] = max(top.get(row['map'], 0), row['level'])
+    return top
 
 
 def walk_points(policy, snapshot, mid):
@@ -45,7 +43,7 @@ def walk_points(policy, snapshot, mid):
     left corner, found no route and stood in Mr. Pokémon's House for hours.
     """
     from .collection import encounter_points
-    if mid not in wild_levels(policy.data):
+    if mid not in wild_levels(policy):
         return []
     points = encounter_points(policy, snapshot, mid, 'grass')
     if not points:
@@ -78,8 +76,8 @@ def site(policy, snapshot, project, mon):
     if mon.level >= 100:
         return None
     data = policy.data
-    top = wild_levels(data)
-    usable = lambda mid: mid in top and not standing_down(policy, site_key(mid))
+    top = wild_levels(policy)
+    usable =lambda mid: mid in top and not standing_down(policy, site_key(mid))
     first = data.map_ids[project.get('map') or SITE]
     # On the map itself, the walk waits there while its collision loads (walk_goal).
     if usable(first) and (snapshot.map == first or walk_points(policy, snapshot, first)):
@@ -171,9 +169,9 @@ def wrong_time(evo, current_time):
             or evo['requirements'][0] == 'TR_MORNDAY' and current_time == 'night')
 
 
-def projects(data, snapshot, current_time, demand=None):
+def projects(policy, snapshot, current_time, demand=None):
     from .collection import prerequisites
-    needed = prerequisites(data, snapshot)
+    data, needed = policy.data, prerequisites(policy, snapshot)
     demand = demand or {}
     inventory = dict(snapshot.items)
     rows = []
@@ -221,15 +219,15 @@ def kept_projects(policy, snapshot, current_time):
 
     It reads the party, the boxes, the bag, the Pokédex, the time of day, the demand and the prerequisites.
     The prerequisites go in as their answer, since they also read the Day Care, whose Pokémon gain
-    experience as the player walks. The snapshot's regions are frozen, and the demand and the
-    prerequisites go in as copies, so nothing in the key is edited in place.
+    experience as the player walks. The snapshot's regions and the prerequisites are frozen, and the
+    demand goes in as a copy, so nothing in the key is edited in place.
     """
     from .collection import prerequisites
     demand = getattr(policy, 'demand', None) or {}
     inputs = (snapshot.party, snapshot.stored, snapshot.items, snapshot.owned, current_time,
-              tuple(sorted(demand.items())), frozenset(prerequisites(policy.data, snapshot)))
+              tuple(sorted(demand.items())), prerequisites(policy, snapshot))
     return list(facts(policy).answer('training projects', inputs,
-                                     lambda: projects(policy.data, snapshot, current_time, demand)))
+                                     lambda: projects(policy, snapshot, current_time, demand)))
 
 
 def journey(policy, snapshot, mem, Goal, *, terminal=False):
@@ -260,7 +258,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     from .collection import prerequisites
     demand = getattr(policy, 'demand', {})
     if (project and not project.get('terminal') and project['target'] in snapshot.owned
-            and project['target'] not in prerequisites(data, snapshot)
+            and project['target'] not in prerequisites(policy, snapshot)
             and not requested(data, snapshot, demand, project['target'], item=bool(project.get('item')))):
         state['training'] = project = None
     if project and standing_down(policy, train_key(project['identity'])):

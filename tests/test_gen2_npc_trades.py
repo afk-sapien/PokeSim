@@ -89,6 +89,26 @@ def test_completed_reports_each_new_flag_once(monkeypatch):
     assert history == [1, 2]
 
 
+def test_trade_requests_answer_again_when_a_flag_the_dex_a_copy_or_a_return_changes(monkeypatch):
+    value = {'flags': 0}
+    monkeypatch.setattr(npc_trades, 'flags', lambda memory, data: value['flags'])
+    data = SimpleNamespace(symbols={'wTradeFlags': [0, 0]}, game='gold', encounters=[{'species': 69}])
+    policy = SimpleNamespace(data=data)
+    snapshot = SimpleNamespace(owned=frozenset(range(1, 252)) - {95}, party=(), stored=())
+    # Kyle's Onix is the one trade missing from the dex, and Bellsprout is wild.
+    first = npc_trades.requests(policy, snapshot, b'')
+    assert first == {69}
+    assert npc_trades.requests(policy, snapshot, b'') is first
+    value['flags'] = 0b10
+    assert not npc_trades.requests(policy, snapshot, b'')
+    value['flags'], snapshot.owned = 0, frozenset(range(1, 252))
+    assert not npc_trades.requests(policy, snapshot, b'')
+    policy.returned = {95}
+    assert npc_trades.requests(policy, snapshot, b'') == {69}
+    snapshot.party = (mon(69),)
+    assert not npc_trades.requests(policy, snapshot, b'')
+
+
 class Mem:
     def __init__(self, flags=0, cursor=1):
         self.values = {'wTradeFlags': flags, 'wMenuCursorY': cursor}
