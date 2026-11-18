@@ -1745,13 +1745,13 @@ def test_cable_verification_allows_only_native_walking_friendship(steps, cycle, 
 
 
 def test_training_waits_for_transient_collision_map(real_data, monkeypatch):
-    from pokesim.gen2 import collection, training
+    from pokesim.gen2 import collection, kinds, training
     from pokesim.gen2.policy import Goal, Policy
     policy = Policy(real_data)
     mon = SimpleNamespace(species=101, level=20, trainer_id=1, dvs=(0,) * 5,
                            held_item=real_data.items['EXP_SHARE'], box=None)
-    policy.collection['training'] = {'identity': [1, [0] * 5], 'target': 101, 'species': 101,
-                                     'terminal': True, 'level_goal': 30, 'item': None}
+    policy.collection['training'] = kinds.project({'identity': [1, [0] * 5], 'target': 101, 'species': 101,
+                                                   'terminal': True, 'level_goal': 30, 'item': None})
     snapshot = SimpleNamespace(party=(mon,), stored=(), items=(), map=real_data.map_ids['SILVER_CAVE_ROOM_1'], x=11, y=32)
     monkeypatch.setattr(collection, 'encounter_points', lambda *args: [])
     goal = training.journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal)

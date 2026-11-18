@@ -197,6 +197,9 @@ def journey(policy, snapshot, Goal):
         state = policy.collection['tower'] = {'team': [key(mon) for mon in team],
             'original': [key(mon) for mon in snapshot.party], 'cap': cap, 'entered': False, 'returning': False,
             'previous_training': policy.collection.get('training')}
+    else:
+        # A build never edits a value the state held before it, so the challenge writes its own copy.
+        state = policy.collection['tower'] = dict(state)
     mem = Memory(policy.memory, policy.data)
     name = policy.data.maps[snapshot.map]['constant']
     if name in {'BATTLE_TOWER_BATTLE_ROOM', 'BATTLE_TOWER_HALLWAY', 'BATTLE_TOWER_ELEVATOR'}:

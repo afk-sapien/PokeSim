@@ -107,15 +107,14 @@ def _limited(policy, key, limit):
 
     A step that other work interrupted for a while starts its count again when it comes back.
     """
-    state = policy.collection.setdefault('item_sources', {})
+    state = policy.collection.get('item_sources') or {}
     start, last = state.get(key) or (policy.decisions, policy.decisions)
     if policy.decisions - last > GAP:
         start = policy.decisions
     if policy.decisions - start > limit:
-        state.pop(key, None)
+        policy.collection['item_sources'] = {name: row for name, row in state.items() if name != key}
         return True
-    state.clear()
-    state[key] = [start, policy.decisions]
+    policy.collection['item_sources'] = {key: [start, policy.decisions]}
     return False
 
 
@@ -127,12 +126,13 @@ def _waited(policy, item):
     game time that work took counts too, since calls ring anywhere with service. Time away longer than
     GAP counts one decision.
     """
-    marks = policy.collection.setdefault('phone_waits', {})
+    marks = policy.collection.get('phone_waits') or {}
     gap = policy.decisions - marks.get(item, policy.decisions - 1)
-    marks[item] = policy.decisions
+    marks = policy.collection['phone_waits'] = {**marks, item: policy.decisions}
     if not exhausted(policy, wait_key(item), WAIT_DECISIONS, gap if 0 < gap <= GAP else 1):
         return False
-    marks.pop(item, None)
+    # The new marks are this build's own, so dropping one edits nothing the state held.
+    del marks[item]
     return True
 
 

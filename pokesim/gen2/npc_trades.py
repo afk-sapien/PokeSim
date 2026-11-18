@@ -92,10 +92,11 @@ def record(policy, snapshot, memory):
     value = flags(memory, policy.data)
     log = policy.collection.setdefault('npc_trades', [])
     known = {row['index'] for row in log}
-    for trade in trades(policy.data.game):
-        if value >> trade.index & 1 and trade.index not in known:
-            log.append({'index': trade.index, 'npc': trade.npc, 'request': trade.request, 'give': trade.give,
-                        'decision': policy.decisions})
+    new = [{'index': trade.index, 'npc': trade.npc, 'request': trade.request, 'give': trade.give,
+            'decision': policy.decisions}
+           for trade in trades(policy.data.game) if value >> trade.index & 1 and trade.index not in known]
+    if new:
+        policy.collection['npc_trades'] = log + new
     return value
 
 

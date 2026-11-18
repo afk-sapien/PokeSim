@@ -232,6 +232,7 @@ def walk_anywhere(monkeypatch):
 
 
 def test_without_exp_share_a_levelling_plan_trains_the_partner_in_the_lead(data, monkeypatch):
+    from pokesim.gen2 import kinds
     from pokesim.gen2.breeding import hatching
     from pokesim.gen2.policy import Goal
     from pokesim.gen2.training import identity, journey
@@ -244,8 +245,8 @@ def test_without_exp_share_a_levelling_plan_trains_the_partner_in_the_lead(data,
                              storage_goal=lambda snapshot: storage,
                              release_target=lambda snapshot: None, no_room=lambda snapshot: False)
     # A roamer lead plan set this levelling project after the cartridge's only Exp. Share was traded away.
-    policy.collection['training'] = {'identity': identity(trainee), 'target': 94, 'item': None, 'species': 94,
-                                     'terminal': True, 'level_goal': 37}
+    policy.collection['training'] = kinds.project({'identity': identity(trainee), 'target': 94, 'item': None,
+                                                   'species': 94, 'terminal': True, 'level_goal': 37})
     assert journey(policy, state, clock(), Goal, terminal=True).key == 'collection_train_pc'
     # Once it joins, the boxed eggs come out too, and the walk trains it in front.
     # The Togepi line is still unregistered, so its eggs are worth the trip.
@@ -268,13 +269,15 @@ def test_without_exp_share_the_terminal_walk_still_trains_someone(data, monkeypa
     assert policy.collection['training']['terminal']
 
 
-def shareless_policy(data, party, project):
+def shareless_policy(data, party, project, **fields):
+    from pokesim.gen2 import kinds
     from pokesim.gen2.policy import Policy
     from pokesim.gen2.training import identity
     policy = Policy.__new__(Policy)
     policy.data, policy.goal, policy.monitor_tables = data, None, {}
-    policy.collection = {'training': {'identity': identity(project), 'target': project.species, 'item': None,
-                                      'species': project.species, 'terminal': True}}
+    policy.collection = {'training': kinds.project({'identity': identity(project), 'target': project.species,
+                                                    'item': None, 'species': project.species, 'terminal': True,
+                                                    **fields})}
     return policy, snapshot(party)
 
 
@@ -365,8 +368,7 @@ def test_a_trainee_holding_an_item_the_full_bag_cannot_take_back_trains_in_the_l
     from pokesim.gen2.training import journey, trainee_slot
     walk_anywhere(monkeypatch)
     trainee = mon(90, box=None, position=1, level=30, held_item=data.items['PEARL'])
-    policy, state = shareless_policy(data, [lead(), trainee], trainee)
-    policy.collection['training']['level_goal'] = 50
+    policy, state = shareless_policy(data, [lead(), trainee], trainee, level_goal=50)
     policy.demand, policy.decisions, policy.no_room = {}, 1000, lambda snapshot: False
     policy.storage_goal = pc_goal
     state.map = data.map_ids['GOLDENROD_POKECENTER_1F']
@@ -391,8 +393,7 @@ def test_a_trainee_holding_an_item_the_full_bag_cannot_take_back_trains_in_the_l
     holder = mon(157, box=None, position=0, dvs=(1,) * 5, moves=(57, 15, 53, 0), level=100, trainer_id=1,
                  held_item=data.items['EXP_SHARE'])
     bare = mon(90, box=None, position=1, level=30)
-    policy, state = shareless_policy(data, [holder, bare], bare)
-    policy.collection['training']['level_goal'] = 50
+    policy, state = shareless_policy(data, [holder, bare], bare, level_goal=50)
     policy.demand, policy.decisions, policy.no_room = {}, 1000, lambda snapshot: False
     policy.storage_goal = pc_goal
     state.map = data.map_ids['GOLDENROD_POKECENTER_1F']

@@ -18,6 +18,8 @@ still always caught. An ongoing battle finishes before switching activities.
 Collection work always comes first: the plan is rebuilt every step and only reaches this module when
 no Pokédex, trade, breeding or clock-gated work is left.
 """
+from copy import copy
+
 from pokecore.gen2.ram import calculated_stats, experience_at
 
 from ..investment import GOOD_TAIL, MIN_UPGRADE, SEARCH_BUDGET
@@ -39,14 +41,33 @@ HUNT_FIRST_BELOW = 80
 
 
 def state(policy):
-    data = policy.collection.setdefault('postgame', {'activity': None, 'searches': {}, 'shiny_maps': []})
+    data = policy.collection.get('postgame')
+    if data is None or 'finished' not in data:
+        data = policy.collection['postgame'] = migrate(data or {'activity': None, 'searches': {}, 'shiny_maps': []})
+    return data
+
+
+def migrate(data):
+    """A new record of ``data`` in today's shape, which leaves ``data`` as it was."""
     # Activities finished, which a marathon waits on. Older saves only kept the recent ones, so they
     # count those. The rotation's recent list and shiny break are gone with the rotation.
-    data.setdefault('finished', len(data.get('recent', ())))
+    data = {**data, 'finished': len(data.get('recent', ()))}
     data.pop('recent', None)
     data.pop('shiny_break', None)
     data.setdefault('searches', {})
     data.setdefault('shiny_maps', [])
+    return data
+
+
+def own(policy):
+    """The record as the build's own copy, which it may write.
+
+    A build replaces what it changes and never edits a value the state held before it, so the build takes
+    this copy of the record and its activity once, as it starts, and the activities replace the tables and
+    lists inside them. Taking it again mid-build would leave the step's record stale.
+    """
+    data = state(policy)
+    data = policy.collection['postgame'] = {**data, 'activity': copy(data['activity'])}
     return data
 
 
@@ -200,6 +221,7 @@ def finish(policy):
 
 
 def journey(policy, snapshot, mem, Goal, current_time):
+    own(policy)
     # A finished activity hands over to the next one in the same step, so the run never idles between them.
     for _ in range(3):
         goal = step(policy, snapshot, mem, Goal, current_time)

@@ -157,7 +157,7 @@ class Quality(Activity):
         better = False
         for mon in pg.held(snapshot):
             if mon.species == species and repr(pg.ident(mon)) not in new:
-                activity['seen'].append(pg.ident(mon))
+                activity['seen'] = [*activity['seen'], pg.ident(mon)]
                 activity['caught'] += 1
                 # Better as the PC counts it: at least RARITY_STEP times rarer (pcvalue.worth).
                 better = better or pg.tail(policy.data, mon) * RARITY_STEP <= start
@@ -172,8 +172,8 @@ class Quality(Activity):
     def finish(self, policy, data, activity):
         super().finish(policy, data, activity)
         species = str(activity['species'])
-        data['searches'][species] = data['searches'].get(species, 0) + 1
-        data.setdefault('effort', {})[species] = list(pg.effort(policy, activity['species'], activity))
+        data['searches'] = {**data['searches'], species: data['searches'].get(species, 0) + 1}
+        data['effort'] = {**data.get('effort', {}), species: list(pg.effort(policy, activity['species'], activity))}
         forget(policy, hunt_key(activity['species']))
 
     def label(self, policy, activity):
