@@ -3,9 +3,11 @@
 ``pokesim/emulator.py`` (Gen I) and ``pokesim/gen2/emulator.py`` (Gen II) subclass ``EmulatorBase``. The
 base runs the command queue, the control lease, manual presses, the step with its pacing and frame
 publishing, the named checkpoints, the trade and reward barriers, and the choice of save a reload goes
-back to. Each generation keeps what reads its own cartridge: boot, load, observation, the journal, the
-guards, when an autosave is allowed, the run loop and the status page. Where the two differ in one step,
-the base calls a hook below that the generation fills. docs/design/one-bot.md, item 2.
+back to. It also writes each journal entry, reports a stall, a dropped pin and a shiny that cannot be
+caught, and serves the PC values and release requests. Each generation keeps what reads its own
+cartridge: boot, load, observation, what goes in the journal, the guards, when an autosave is allowed,
+the run loop and the status page. Where the two differ in one step, the base calls a hook below that the
+generation fills. docs/design/one-bot.md, item 2.
 """
 from __future__ import annotations
 
@@ -16,8 +18,9 @@ import threading
 import time
 
 from .. import audio, config
+from ..events import HIGH, LOW, Event
 from ..planning import pin
-from . import trace
+from . import capture, trace
 from .manifest import checkpoint_manifest
 from .policy import BUTTONS, Action
 from .reload import reload_target
@@ -62,6 +65,10 @@ class EmulatorBase:
     battle_frame = None
     # The latest ball thrown in this wild battle, which restarts the battle timeout (battle_clock).
     throws = None
+    # Red, Blue and Yellow push an entry with its emoji tags. Gold, Silver and Crystal never have.
+    PUSH_TAGS = True
+    # The sentence a stall entry ends with.
+    STALL_NOTE = ''
 
     # ---------------- lifecycle ----------------
     def stop(self):
@@ -117,6 +124,47 @@ class EmulatorBase:
     def unpin_goal(self):
         trace.note(self, 'pin', {'key': None})
         self.policy.unpin_goal()
+
+    def _drop_pin(self, reason):
+        """Drop the manager's pin before a recovery, and journal it here since a reload loses any note."""
+        drop = getattr(getattr(self, 'policy', None), 'drop_pin', None)
+        label = drop() if drop else None
+        if label is not None and getattr(self, 'snapshot', None) is not None:
+            self._event(Event(**pin.gave_up(label, reason)), self.snapshot)
+
+    def _headroom(self, snapshot) -> int:
+        """The free storage space a PC value weighs a release against."""
+
+    def _identity(self, mon):
+        """The key a release request names a boxed Pokémon by."""
+
+    def pc_values(self):
+        """Each boxed Pokémon's PC value by (box, position), and whether nothing may go (pcvalue.annotate)."""
+        from ..pcvalue import annotate, deadlocked
+
+        def view():
+            snapshot = self.snapshot
+            if snapshot is None or not hasattr(self.policy, 'pc_rated'):
+                return {}, False
+            rated = self.policy.pc_rated(snapshot)
+            return annotate(rated, snapshot.active_box), deadlocked(rated, self._headroom(snapshot))
+        return self.call(view, timeout=5)
+
+    def request_release(self, box, position, key, confirm=''):
+        """Store the owner's Release for the boxed Pokémon at (box, position), or raise ValueError."""
+        from ..pcvalue import pc_request
+        from ..trade.preferences import base
+        # Release requests stay on the family key the PC rows carry, also for a twin.
+        key = base(key)
+
+        def request():
+            snapshot = self.snapshot
+            if snapshot is None or not hasattr(self.policy, 'pc_rated'):
+                raise ValueError('Wait for the adventure to be ready before releasing.')
+            value = pc_request(self.policy.pc_rated(snapshot), (box, position), key, self._identity, confirm)
+            self.store.set_release_request(key, value)
+            return value
+        return self.call(request)
 
     def press(self, button: str):
         if button in BUTTONS:
@@ -281,6 +329,81 @@ class EmulatorBase:
             else:
                 entry = None
         return all_saves, saves, target, entry
+
+    # ---------------- the journal ----------------
+    def _event(self, event, snapshot):
+        """Journal one event: the generation takes its screenshot and passes it to ``_journal``."""
+
+    def _note_achievement(self, event, eid):
+        """Keep the entry as the latest achievement when this generation counts its kind as one."""
+
+    def _journal(self, event, snapshot, shot, state=None, push=True) -> int:
+        """Write one journal entry with its screenshot, and its save state when given, then push it
+        unless ``push`` is False. Returns the entry's id."""
+        eid = self.store.add_event(event, snapshot, shot, state)
+        if state:
+            # Rewinding needs the cartridge identity and the Gen II clock lock in the manifest. The save is
+            # compressed like the one add_event wrote, about 13 KB instead of 200 KB.
+            self.store.write_checkpoint(state, self._manifest(), name=f'event-{eid}.state', compress=True)
+        self._note_achievement(event, eid)
+        if push:
+            self._push(eid, event, shot)
+        return eid
+
+    def _push(self, eid, event, shot):
+        if event.notable and self.ntfy and self.ntfy.wants(event):
+            self.ntfy.send(event.title, event.body, tags=event.tags if self.PUSH_TAGS else '', priority=event.priority,
+                           image=shot, click=f'{config.PUBLIC_URL}/events/{eid}', event_type=event.type)
+
+    def _shiny_reason(self, snapshot):
+        """Why the wild shiny in this battle cannot be caught, or None when it can."""
+
+    def _species_name(self, species):
+        """The species' name, or None when the game data has none."""
+
+    def _report_missed_shiny(self, snapshot):
+        """Say once per battle why a wild shiny cannot be caught. The policy runs from it as usual.
+
+        Balls cannot be bought and storage cannot be freed in battle, so pausing would only look like a
+        stall. The supply and storage reserves are what keep a shiny catchable.
+        """
+        if not snapshot.enemy_shiny or snapshot.in_battle != 1:
+            self._shiny_reported = False
+            return False
+        why = self._shiny_reason(snapshot)
+        if not why or getattr(self, '_shiny_reported', False):
+            return bool(why)
+        self._shiny_reported = True
+        species = self._species_name(snapshot.enemy_species) or 'Pokémon'
+        self._event(Event('shiny_missed', f'Shiny {species} could not be caught: {why}',
+                          f'A shiny {species} appeared with {why}, so the adventure ran from it. '
+                          'The supply and storage reserves should prevent this.', priority=LOW, tags='star'), snapshot)
+        return True
+
+    # ---------------- guards ----------------
+    def _check_stall(self, now=None):
+        """Report a run that is healthy and moving but has achieved nothing for hours of game time."""
+        snapshot = self.snapshot
+        if snapshot is None or not snapshot.valid or not snapshot.started:
+            return
+        now = time.time() if now is None else now
+        stall, frames = getattr(self, 'stall', None), self.play_clock.frames
+        quiet = stall.check(frames, now) if stall else None
+        if stall and stall.capture_due(frames):
+            # Kept as soon as game time says it is a stall. The alert waits for real time as well.
+            capture.keep(self, 'quiet', f'no progress for {stall.game_minutes(frames)} game minutes', now)
+        if quiet is None:
+            return
+        details = self.policy.details() if hasattr(self.policy, 'details') else {}
+        # Red, Blue and Yellow name the objective by its title, Gold, Silver and Crystal by its label.
+        objective = details.get('objective') or {}
+        objective = objective.get('title') or objective.get('label') or 'no objective'
+        hours = quiet[0] / 60
+        log.warning('no progress for %.1f game hours at %s: %s', hours, snapshot.map_name, objective)
+        self._event(Event('stall', f'Stuck? {hours:.0f} game hours without progress',
+                          f'Objective: {objective}. On {snapshot.map_name} after {quiet[1]} real minutes '
+                          f'and {details.get("recoveries", 0)} recoveries.{self.STALL_NOTE}',
+                          priority=HIGH, tags='warning'), snapshot)
 
     # ---------------- commands ----------------
     def held_back(self, name):

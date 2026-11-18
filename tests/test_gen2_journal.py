@@ -132,8 +132,9 @@ def test_timeline_entries_keep_no_save_and_are_not_pushed_or_progress():
     from pokesim.gen2.emulator import Emulator
     store = Recorder()
     ntfy = SimpleNamespace(wants=lambda event: True, send=lambda *a, **k: store.pushed.append(a[0]))
-    emu = SimpleNamespace(store=store, ntfy=ntfy, last_achievement=None, _shot_png=lambda: b'png',
-                          _state_bytes=lambda: b'state', _manifest=lambda: {})
+    emu = Emulator.__new__(Emulator)
+    vars(emu).update(store=store, ntfy=ntfy, last_achievement=None, _shot_png=lambda: b'png',
+                     _state_bytes=lambda: b'state', _manifest=lambda: {})
     Emulator._event(emu, Event('badge', 'Earned the Zephyr Badge', priority=5), snap())
     Emulator._event(emu, Event('faint', 'Chikorita fainted', priority=1, notable=False), snap())
     assert store.rows == [('badge', b'state'), ('faint', None)]

@@ -111,7 +111,7 @@ def test_a_save_inside_a_battle_is_never_the_one_kept(tmp_path):
 
 def test_a_reported_stall_leaves_a_bundle_and_the_setting_turns_it_off(tmp_path, monkeypatch):
     seen = []
-    playing = game(tmp_path, _handle_events=lambda events, snap: seen.extend(events))
+    playing = game(tmp_path, STALL_NOTE=Emulator.STALL_NOTE, _event=lambda event, snapshot: seen.append(event))
     Emulator._autosave(playing)
     playing.stall.progress(0, 0)
     playing.play_clock.frames = 130 * MINUTE

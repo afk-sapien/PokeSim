@@ -39,7 +39,7 @@ GEN2 = Settings(generation=2, wait=GEN2_WAIT, options_each_decision=False, clock
 
 
 class GameAdapter(Protocol):
-    """One generation's part of a run. ``run`` is the host: a headless run or the application's emulator."""
+    """One generation's part of a run. ``run`` is the host, today only ``HeadlessRun``. The emulators do not use it yet."""
 
     generation: int
     settings: Settings

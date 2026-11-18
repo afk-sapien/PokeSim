@@ -35,6 +35,7 @@ from .data import GameData
 from . import journal
 from .ledger import balls
 from .policy import Policy
+from .release import headroom
 from pokecore.gen2.ram import BADGES, read_snapshot
 from .store_stock import StoreStock
 from .views import mon_view, state_view
@@ -151,6 +152,7 @@ def progress_key(tiles, maps, snapshot):
 
 class Emulator(EmulatorBase):
     generation = 2
+    PUSH_TAGS = False
 
     def __init__(self, store, ntfy=None, *, isolated_ram=True):
         self.store, self.ntfy = store, ntfy
@@ -368,15 +370,6 @@ class Emulator(EmulatorBase):
             log.warning('Clearing a trade hold with no live exchange')
             self.store.set('trade_hold', None)
 
-    def _drop_pin(self, reason):
-        """Drop the manager's pin before a recovery, and journal it here since a reload loses any note."""
-        from ..events import Event as Entry
-        from ..planning.pin import gave_up
-        drop = getattr(getattr(self, 'policy', None), 'drop_pin', None)
-        label = drop() if drop else None
-        if label is not None and getattr(self, 'snapshot', None) is not None:
-            self._event(Entry(**gave_up(label, reason)), self.snapshot)
-
     def _report_pin(self, snapshot):
         """Write a pin the planner dropped to the journal."""
         from ..events import Event as Entry
@@ -534,36 +527,17 @@ class Emulator(EmulatorBase):
     def _event(self, event, snapshot):
         shot = self._shot_png()
         # Timeline-only entries such as faints and first sightings keep a picture but no save, as in Red, Blue and Yellow.
-        state = self._state_bytes() if event.notable else None
-        eid = self.store.add_event(event, snapshot, shot, state)
-        if state:
-            # Rewinding needs the cartridge identity and clock lock in the manifest. The save is
-            # compressed like the one add_event wrote, about 13 KB instead of 200 KB.
-            self.store.write_checkpoint(state, self._manifest(), name=f'event-{eid}.state', compress=True)
+        self._journal(event, snapshot, shot, self._state_bytes() if event.notable else None)
+
+    def _note_achievement(self, event, eid):
         if event.type not in journal.NOT_PROGRESS:
             self.last_achievement = self.store.event(eid)
-        if event.notable and self.ntfy and self.ntfy.wants(event):
-            self.ntfy.send(event.title, event.body, priority=event.priority, image=shot,
-                           event_type=event.type, click=f'{config.PUBLIC_URL}/events/{eid}')
 
-    def _report_missed_shiny(self, snapshot):
-        """Say once per battle why a wild shiny was run from, with the Red, Blue and Yellow notice.
+    def _shiny_reason(self, snapshot):
+        return getattr(self.policy, 'shiny_missed', None)
 
-        Balls cannot be bought and storage cannot be freed in battle, so the policy runs instead
-        of knocking it out. The supply and storage reserves are what keep a shiny catchable.
-        """
-        if not snapshot.enemy_shiny or snapshot.in_battle != 1:
-            self._shiny_reported = False
-            return False
-        why = getattr(self.policy, 'shiny_missed', None)
-        if not why or getattr(self, '_shiny_reported', False):
-            return bool(why)
-        self._shiny_reported = True
-        species = self.data.species.get(snapshot.enemy_species, {}).get('name') or 'Pokémon'
-        self._event(Event('shiny_missed', f'Shiny {species} could not be caught: {why}',
-                          f'A shiny {species} appeared with {why}, so the adventure ran from it. '
-                          'The supply and storage reserves should prevent this.', priority=LOW), snapshot)
-        return True
+    def _species_name(self, species):
+        return self.data.species.get(species, {}).get('name')
 
     def _read(self, observe=False):
         return count_league(self.history, self.data, read_snapshot(self.pb.memory, self.data, self.frame), observe=observe)
@@ -1011,26 +985,6 @@ class Emulator(EmulatorBase):
             log.warning('the screen has not changed for %d frames, recovery level %d', SCREEN_FRAMES, level)
         self._check_stall()
 
-    def _check_stall(self):
-        """Report a run that keeps playing without achieving anything for hours of game time."""
-        snapshot = self.snapshot
-        if snapshot is None or not snapshot.valid or not snapshot.started:
-            return
-        now, frames = time.time(), self.play_clock.frames
-        quiet = self.stall.check(frames, now)
-        if self.stall.capture_due(frames):
-            # Kept as soon as game time says it is a stall. The alert waits for real time as well.
-            capture.keep(self, 'quiet', f'no progress for {self.stall.game_minutes(frames)} game minutes', now)
-        if quiet is None:
-            return
-        details = self.policy.details()
-        objective = (details.get('objective') or {}).get('label') or 'no objective'
-        hours = quiet[0] / 60
-        log.warning('no progress for %.1f game hours at %s: %s', hours, snapshot.map_name, objective)
-        self._event(Event('stall', f'Stuck? {hours:.0f} game hours without progress',
-                          f'Objective: {objective}. On {snapshot.map_name} after {quiet[1]} real minutes '
-                          f'and {self.policy.recoveries} recoveries.', priority=HIGH), snapshot)
-
     def _take_control(self, name):
         self.policy.menu = None
         self.policy.on_restore()
@@ -1192,34 +1146,12 @@ class Emulator(EmulatorBase):
                     if not row.entry.egg and journal._member(row.entry.record) == member), None)
         return row.describe() if row else ''
 
-    def pc_values(self):
-        """Each boxed Pokémon's PC value by (box, position), and whether nothing may go (pcvalue.annotate)."""
-        from ..pcvalue import annotate, deadlocked
-        from .release import headroom
+    _headroom = staticmethod(headroom)
 
-        def view():
-            if self.snapshot is None:
-                return {}, False
-            rated = self.policy.pc_rated(self.snapshot)
-            return annotate(rated, self.snapshot.active_box), deadlocked(rated, headroom(self.snapshot))
-        return self.call(view, timeout=5)
-
-    def request_release(self, box, position, key, confirm=''):
-        """Store the owner's Release for the boxed Pokémon at (box, position), or raise ValueError."""
-        from ..pcvalue import pc_request
-        from ..trade.preferences import base
+    @staticmethod
+    def _identity(mon):
         from .release import _keys
-        # Release requests stay on the family key the PC rows carry, also for a twin.
-        key = base(key)
-
-        def request():
-            if self.snapshot is None:
-                raise ValueError('Wait for the adventure to be ready before releasing.')
-            value = pc_request(self.policy.pc_rated(self.snapshot), (box, position), key,
-                               lambda mon: _keys(mon)[0], confirm)
-            self.store.set_release_request(key, value)
-            return value
-        return self.call(request)
+        return _keys(mon)[0]
 
     def set_trade_preference(self, key, state):
         from ..trade.preferences import update

@@ -166,7 +166,8 @@ def test_a_new_loop_keeps_one_bundle_in_either_generation(tmp_path):
 def gen2(tmp_path, seen, **extra):
     playing = game(tmp_path, steps=SimpleNamespace(flush=lambda force=False: None),
                    statistics=SimpleNamespace(flush=lambda snapshot: None), history={}, screen_frame=0,
-                   battle_frame=None, _event=lambda event, snapshot: seen.append(event), **extra)
+                   battle_frame=None, STALL_NOTE=Gen2Emulator.STALL_NOTE, _event=lambda event, snapshot: seen.append(event),
+                   **extra)
     playing.policy.recoveries, playing.policy.monitor_tables = 0, Tables()
     return playing
 

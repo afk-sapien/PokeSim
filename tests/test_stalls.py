@@ -57,7 +57,7 @@ def test_emulator_reports_a_stall_as_a_notable_event_with_the_objective():
         stall=StallWatch(game_minutes=120, real_minutes=0), play_clock=SimpleNamespace(frames=130 * MINUTE),
         snapshot=SimpleNamespace(valid=True, started=True, map_name='Safari Zone Gate'),
         policy=SimpleNamespace(details=lambda: {'objective': {'title': 'Find the secret house'}, 'recoveries': 9}),
-        _handle_events=lambda events, snap: seen.extend(events))
+        STALL_NOTE=Emulator.STALL_NOTE, _event=lambda event, snapshot: seen.append(event))
     game.stall.progress(0, 0)
     Emulator._check_stall(game, 600)
     Emulator._check_stall(game, 660)

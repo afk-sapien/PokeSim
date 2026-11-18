@@ -106,8 +106,8 @@ def test_shiny_capture_priority_and_no_pause_without_supplies():
     bare = replace(snapshot, items=())
     assert choose_battle(bare, me, enemy, 0, capture_species=1).kind == 'run'
     emu = _emulator()
-    assert not emu._report_uncatchable_shiny(snapshot)
-    assert emu._report_uncatchable_shiny(bare)
+    assert not emu._report_missed_shiny(snapshot)
+    assert emu._report_missed_shiny(bare)
     assert not emu.paused
     emu._autosave.assert_not_called()
 
@@ -133,15 +133,15 @@ def test_uncatchable_shiny_is_reported_once_per_battle_with_the_reason():
     assert not shiny.can_catch
     emu = _emulator()
     for _ in range(3):
-        assert emu._report_uncatchable_shiny(shiny)
+        assert emu._report_missed_shiny(shiny)
     event, = emu._handle_events.call_args[0][0]
     emu._handle_events.assert_called_once()
     assert (event.type, event.priority) == ('shiny_missed', LOW)
     assert event.title == 'Shiny Pikachu could not be caught: no storage space'
     assert not emu.paused
     # Battle over, then a new shiny without balls is a new report.
-    assert not emu._report_uncatchable_shiny(replace(shiny, in_battle=0, enemy_shiny=False))
-    assert emu._report_uncatchable_shiny(replace(shiny, party=(me,), boxed_pokemon=(), items=()))
+    assert not emu._report_missed_shiny(replace(shiny, in_battle=0, enemy_shiny=False))
+    assert emu._report_missed_shiny(replace(shiny, party=(me,), boxed_pokemon=(), items=()))
     assert emu._handle_events.call_args[0][0][0].title == 'Shiny Pikachu could not be caught: no balls'
     assert emu._handle_events.call_count == 2
 
@@ -187,7 +187,7 @@ def test_transform_uses_original_dvs_for_capture_and_report(original, copied, ex
              enemy_shiny=shiny, items=((ITEMS['ULTRA_BALL'], 10),))
     assert choose_battle(s, me, enemy, 0).kind == ('item' if expected else 'fight')
     emu = _emulator()
-    assert emu._report_uncatchable_shiny(replace(s, items=())) is expected
+    assert emu._report_missed_shiny(replace(s, items=())) is expected
     assert not emu.paused
     # A successful catch also sets TRANSFORMED while restoring the original DVs.
     # It must finish its dialogue even when it fills the last available slot.

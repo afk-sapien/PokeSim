@@ -10,7 +10,7 @@ This page answers what runs, in what order, how often and in which file. Designs
 2. Its `Supervisor` (`app/supervisor.py:211`, `start` at `:316`) starts one worker process per running adventure, each held by a `Child` (`:65`). The child's command is `python -m pokesim.runtime.worker`, or `--worker` in a frozen build (`:77-78`). The child starts it with `Popen` (`:87`) and writes a bootstrap JSON to its stdin (`:96`).
 3. The worker (`runtime/worker.py:274`, `serve` at `:80`) builds a `SimulationRuntime` (`:104`), starts it (`:109`), creates the web app (`:115`) and prints its ready line (`:234-236`).
 4. `SimulationRuntime` builds the generation's emulator: the Gen II import is at `runtime/simulation.py:73`, the Gen I import at `:78`, the call at `:91`. Legacy single-game mode builds it at `runtime/legacy.py:37`.
-5. The emulator plays on one thread, `emulator` for Gen I (`emulator.py:174`) and `gen2-emulator` for Gen II (`gen2/emulator.py:235`).
+5. The emulator plays on one thread, `emulator` for Gen I (`emulator.py:176`) and `gen2-emulator` for Gen II (`gen2/emulator.py:237`).
 
 The manager starts the monitor (`app/manager.py:359`). Every 3 seconds (`app/supervisor.py:36-38`) one pass (`monitor_once`, `:708`) checks each worker (`check`, `:798`). It calls the worker's `GET /healthz` and `GET /api/summary` (`:820-821`) and stores a changed summary in the registry (`:853`). The worker serves `/api/state` (`web/app.py:592-593`) and `/api/summary` (`:609-610`).
 
@@ -20,9 +20,9 @@ A host owns a PyBoy instance, a policy and a frame counter, and runs the loop be
 
 | Host | Where | Runs |
 | --- | --- | --- |
-| `EmulatorBase` | `runtime/emulator.py:45` | Base of both app emulators. Owns the tick (`:159-190`) and the commands queue (`:82-83`). |
-| Gen I `Emulator` | `emulator.py:75` | Red, Blue and Yellow in the application. |
-| Gen II `Emulator` | `gen2/emulator.py:152` | Gold, Silver and Crystal in the application. |
+| `EmulatorBase` | `runtime/emulator.py:48` | Base of both app emulators. Owns the tick (`:207-238`) and the commands queue (`:89-90`). |
+| Gen I `Emulator` | `emulator.py:76` | Red, Blue and Yellow in the application. |
+| Gen II `Emulator` | `gen2/emulator.py:153` | Gold, Silver and Crystal in the application. |
 | `HeadlessRun` | `runtime/headless.py:27` | Scenarios, replays and tools, both generations. |
 
 `GameAdapter` (`runtime/adapter.py:41`) holds what differs between the generations, with one `Settings` each (`:35-38`). Only `HeadlessRun` uses it today: `adapter_for` (`:93-100`) has one caller, `runtime/headless.py:40`. The two application emulators do not.
@@ -31,8 +31,8 @@ A host owns a PyBoy instance, a policy and a frame counter, and runs the loop be
 
 `GameLoop` (`runtime/game_loop.py:89`) and `Decider` (`:74`) are shared by all three hosts. The policy benchmark (`benchmark.py:84`) and the Gen II scenario runner (`replay/play_gen2.py:194`) also build a `GameLoop` of their own.
 
-- `Decider.ask` (`runtime/game_loop.py:82-86`) writes the Gen I options byte when it has a writer (`:83-84`), builds a `PolicyContext` (`:85`) and calls `policy.step`. An empty answer becomes one 12 frame wait (`:86`, `IDLE_FRAMES` at `:22`). A Gen II host passes no writer (`runtime/adapter.py:35-38`, `gen2/emulator.py:1092-1093`).
-- The options byte is also kept outside the decider. Gen I enforces it on every observation of a started game (`emulator.py:537`). Gen II writes it in `_observe` once after each state load, reload or new game, outside manual control (`gen2/emulator.py:578-587`).
+- `Decider.ask` (`runtime/game_loop.py:82-86`) writes the Gen I options byte when it has a writer (`:83-84`), builds a `PolicyContext` (`:85`) and calls `policy.step`. An empty answer becomes one 12 frame wait (`:86`, `IDLE_FRAMES` at `:22`). A Gen II host passes no writer (`runtime/adapter.py:35-38`, `gen2/emulator.py:1046-1047`).
+- The options byte is also kept outside the decider. Gen I enforces it on every observation of a started game (`emulator.py:516`). Gen II writes it in `_observe` once after each state load, reload or new game, outside manual control (`gen2/emulator.py:552-561`).
 - `PolicyContext` carries the snapshot, the PlayClock frames, the memory and the stack pointer (`runtime/policy.py:43-48`).
 - An `Action` is a button, a hold (8 frames by default) and a gap (`runtime/policy.py:21-32`). It lasts hold plus gap, or hold plus the generation's wait when it names no gap (`:30-32`). The wait is 2 frames in Gen I and 16 in Gen II (`runtime/game_loop.py:24-25`).
 - `GameLoop.decide` (`runtime/game_loop.py:104-113`) replaces the pending actions with the new answer (`:108`) and then writes a trace record (`:109-112`).
@@ -42,24 +42,24 @@ A host owns a PyBoy instance, a policy and a frame counter, and runs the loop be
 
 ### One pass of the Gen I run loop
 
-`Emulator._run`, `emulator.py:1121`.
+`Emulator._run`, `emulator.py:1054`.
 
-1. Build the loop with the options writer (`:1124-1125`) and make sure a trace segment is open (`:1132-1133`).
-2. Run queued commands (`:1134-1137`). A new input epoch clears the pending actions (`:1140-1141`) and drops queued manual presses (`:1143-1144`).
-3. A manual press replaces the pending actions (`:1145-1146`). Manual control with no press plays a one frame wait (`:1147-1149`). A pause sleeps and starts the next pass (`:1150-1155`).
-4. Decide only when no action is pending (`:1156-1160`). Preparation, when set, goes through the decider in place of the policy (`:1159-1160`). One Gen I decision covers every action it returned, the sum of their holds and gaps.
-5. Record activity events (`:1161-1169`), play one action (`:1178`), then, with isolated RAM, handle TM purchases and reward delivery (`:1183-1192`).
-6. An error in a pass goes to `loop_failed` (`:1195-1197`), which stops the run when a fatal error is set or the same pass failed ten times in a row (`loop_errors.py:7-12`). On exit the run makes a final autosave unless a fatal error is set (`emulator.py:1198-1200`).
+1. Build the loop with the options writer (`:1057-1058`) and make sure a trace segment is open (`:1065-1066`).
+2. Run queued commands (`:1067-1070`). A new input epoch clears the pending actions (`:1073-1074`) and drops queued manual presses (`:1076-1077`).
+3. A manual press replaces the pending actions (`:1078-1079`). Manual control with no press plays a one frame wait (`:1080-1082`). A pause sleeps and starts the next pass (`:1083-1088`).
+4. Decide only when no action is pending (`:1089-1093`). Preparation, when set, goes through the decider in place of the policy (`:1092-1093`). One Gen I decision covers every action it returned, the sum of their holds and gaps.
+5. Record activity events (`:1094-1102`), play one action (`:1111`), then, with isolated RAM, handle TM purchases and reward delivery (`:1116-1125`).
+6. An error in a pass goes to `loop_failed` (`:1128-1130`), which stops the run when a fatal error is set or the same pass failed ten times in a row (`loop_errors.py:7-12`). On exit the run makes a final autosave unless a fatal error is set (`emulator.py:1131-1133`).
 
 ### One pass of the Gen II run loop
 
-`Emulator._run`, `gen2/emulator.py:1089`.
+`Emulator._run`, `gen2/emulator.py:1043`.
 
-1. Build the loop with a 16 frame wait, and autosave only while the policy is not backing out (`:1092-1093`). Make sure a trace segment is open (`:1100-1102`).
-2. Run queued commands (`:1103-1110`). A trade hold sleeps and skips the pass (`:1111-1114`). Rewards and the Celebi check run every 300 frames (`:1115-1120`).
-3. Preparation skips the decider and sets the pending action itself (`:1121-1122`). Manual control and pause also skip the decision (`:1123-1132`).
-4. Decide (`:1133-1138`), then play one action (`:1139`).
-5. An error goes to `loop_failed` (`:1141-1143`). On exit the run flushes its step log and makes a final autosave unless a fatal error is set (`:1144-1148`).
+1. Build the loop with a 16 frame wait, and autosave only while the policy is not backing out (`:1046-1047`). Make sure a trace segment is open (`:1054-1056`).
+2. Run queued commands (`:1057-1064`). A trade hold sleeps and skips the pass (`:1065-1068`). Rewards and the Celebi check run every 300 frames (`:1069-1074`).
+3. Preparation skips the decider and sets the pending action itself (`:1075-1076`). Manual control and pause also skip the decision (`:1077-1086`).
+4. Decide (`:1087-1092`), then play one action (`:1093`).
+5. An error goes to `loop_failed` (`:1095-1097`). On exit the run flushes its step log and makes a final autosave unless a fatal error is set (`:1098-1102`).
 
 The Gen II policy returns exactly one action (`gen2/policy/__init__.py:257`), so one Gen II decision covers one action: its hold plus its gap, or plus the 16 frame wait. Most are short, but a straight walk is one `Hold` across several tiles, held up to 16 frames a tile plus 32 and released early when its stop check says so (`gen2/policy/navigation.py:249`, `Hold` at `runtime/policy.py:36-40`).
 
@@ -73,13 +73,13 @@ Callers: `scenarios.py:757`, `replay/rung.py:107`, `replay/find_stalls.py:60`, `
 
 | What | How often | Where |
 | --- | --- | --- |
-| Decide | Gen I: when no action is pending. Gen II: every pass the steps above do not skip. | `emulator.py:1156-1160`, `gen2/emulator.py:1133-1138` |
-| Observe | When a tick crosses a multiple of 30 frames. Ticks move 4 frames at a time, 1 while sound plays. | `runtime/emulator.py:37-38`, `:168-169`, `:187-188` |
+| Decide | Gen I: when no action is pending. Gen II: every pass the steps above do not skip. | `emulator.py:1089-1093`, `gen2/emulator.py:1087-1092` |
+| Observe | When a tick crosses a multiple of 30 frames. Ticks move 4 frames at a time, 1 while sound plays. | `runtime/emulator.py:40-41`, `:216-217`, `:235-236` |
 | Guards | At least 60 frames apart, checked after an action ends, and again after a reload moves the frame back. | `runtime/game_loop.py:20`, `:122-126` |
 | Autosave | Every 300 seconds of game time. | `config.py:40`, `runtime/game_loop.py:102`, `:120-121` |
-| Gen II rewards | Every 300 frames. | `gen2/emulator.py:1115-1120` |
+| Gen II rewards | Every 300 frames. | `gen2/emulator.py:1069-1074` |
 
-Observation reads the snapshot and writes the journal: Gen I `_observe` (`emulator.py:499`) calls `_observe_snapshot` (`:533`), and Gen II has `_observe` (`gen2/emulator.py:571`). The Gen I guards skip manual control, pause and preparation (`emulator.py:1116-1119`). The Gen II guards also skip a trade hold (`gen2/emulator.py:966`). Both stand down for 3600 frames after a reload (Gen I `RELOAD_QUIET_FRAMES`, `emulator.py:53`, checked at `:841`, and `gen2/emulator.py:974`). The Gen II guards also stand down while the policy is idle, waiting for the cartridge clock (`gen2/emulator.py:976-982`).
+Observation reads the snapshot and writes the journal: Gen I `_observe` (`emulator.py:478`) calls `_observe_snapshot` (`:512`), and Gen II has `_observe` (`gen2/emulator.py:545`). The Gen I guards skip manual control, pause and preparation (`emulator.py:1049-1052`). The Gen II guards also skip a trade hold (`gen2/emulator.py:940`). Both stand down for 3600 frames after a reload (Gen I `RELOAD_QUIET_FRAMES`, `emulator.py:54`, checked at `:818`, and `gen2/emulator.py:948`). The Gen II guards also stand down while the policy is idle, waiting for the cartridge clock (`gen2/emulator.py:950-956`).
 
 ## Policy
 
@@ -126,7 +126,7 @@ Shared by both generations, in `planning/`. Each module's first line says what i
 | `errand` | Errands as task objects (`planning/errand.py:41`). |
 | `conditions`, `boss`, `readiness`, `league`, `losses` | Preconditions and boss readiness. |
 | `ledger`, `monitor`, `unreachable` | Resources, progress backoff per goal, walk targets with no route. |
-| `progress`, `shadow` | Progress events from two snapshots, and shadow records. `planning/shadow.py:1` still says the old order decides, which no longer holds for the pipeline. |
+| `progress`, `shadow` | Progress events from two snapshots, and shadow records: the decide pipeline's record, and the arbiter beside the old order at the two Gen II points that still use it (`planning/shadow.py:1-8`). |
 | `stance`, `throws` | Fight, flee or catch, and catch odds. |
 
 There is no goal queue. The manager's pin holds one goal.
@@ -137,12 +137,13 @@ There is no goal queue. The manager's pin holds one goal.
 
 What starts a climb:
 
-- Gen I `_check_guards` (`emulator.py:830`): a glitched state (`:853`), stuck for 600 seconds (`:854-864`, `config.py:42`), a battle over 900 seconds (`emulator.py:865-867`, `config.py:43`), a battle that cannot end (`emulator.py:868-870`), then the stall check (`:871`). A Gen I stuck run first tries the policy's `recover_stall`, which replans with no reload (`:855-862`). The Gen I `_unstick` climb passes no park (`:776-778`).
-- Gen II `_check_guards` (`gen2/emulator.py:964`): a glitched state (`:994-995`), a menu task that failed three times (`:996-997`), the battle timeout (`:998`), a battle that cannot end (`:1000-1002`), stuck (`:1003-1004`), no progress for three times the stuck limit (`:1005-1006`), an unchanged screen, which asks the policy to recover (`:1007-1011`), then the stall check (`:1012`). The Gen II climb parks and reloads after a park (`:883-885`).
+- Gen I `_check_guards` (`emulator.py:807`): a glitched state (`:830`), stuck for 600 seconds (`:831-841`, `config.py:42`), a battle over 900 seconds (`emulator.py:842-844`, `config.py:43`), a battle that cannot end (`emulator.py:845-847`), then the stall check (`:848`). A Gen I stuck run first tries the policy's `recover_stall`, which replans with no reload (`:832-839`). The Gen I `_unstick` climb passes no park (`:753-755`).
+- Gen II `_check_guards` (`gen2/emulator.py:938`): a glitched state (`:968-969`), a menu task that failed three times (`:970-971`), the battle timeout (`:972`), a battle that cannot end (`:974-976`), stuck (`:977-978`), no progress for three times the stuck limit (`:979-980`), an unchanged screen, which asks the policy to recover (`:981-985`), then the stall check (`:986`). The Gen II climb parks and reloads after a park (`:857-859`).
+- Both stall checks run `EmulatorBase._check_stall` (`runtime/emulator.py:384`), which journals the entry through the generation's `_event`.
 
 ## Trace and capture
 
-- The trace keeps one segment per autosave, in `states/trace/<autosave>/segment.jsonl.gz` (`runtime/trace.py:1-8`, `:39-40`). The Gen I autosave opens the next segment (`emulator.py:718-720`).
+- The trace keeps one segment per autosave, in `states/trace/<autosave>/segment.jsonl.gz` (`runtime/trace.py:1-8`, `:39-40`). The Gen I autosave opens the next segment (`emulator.py:695-697`).
 - Capture keeps a stall bundle at each trigger, the kinds `quiet`, `give_up`, `loop`, `gate` and `ladder` (`runtime/capture.py:1-6`, `:19`). Bundles are written by `checkpoints.py:154-156` into the stalls folder (`:295-296`).
 - `replay/capture.py` and `replay/diverge.py` read them back.
 
@@ -170,9 +171,11 @@ These are one run each on one machine. Rerun them before comparing.
 
 ## Known duplication
 
-- The Gen I and Gen II `Emulator` classes share 30 method names, each written twice (Gen I line / Gen II line): `__init__` 82/155, `_boot` 187/237, `start` 214/317, `freeze` 227/327, `_drop_pin` 237/371, `held_back` 244/390, `status` 254/1157, `_load_state_file` 332/465, `_shot_png` 449/405, `current_frame` 456/396, `_frame_png` 465/419, `_observe` 499/571, `_watch_boss` 504/736, `_note_progress` 524/758, `_manifest_fields` 690/427, `_autosave` 693/430, `_reset_watch` 729/783, `_give_up` 735/796, `_unstick` 760/876, `_check_guards` 830/964, `_check_stall` 873/1014, `pc_values` 914/1195, `request_release` 927/1207, `set_trade_preference` 943/1224, `_take_control` 1051/1034, `_resume` 1059/1038, `_flush_before_restart` 1062/1041, `_new_game` 1066/1045, `_start_new_game` 1078/1054, `_run` 1121/1089. Six of them fill `EmulatorBase` hooks: `held_back`, `_frame_png`, `_manifest_fields`, `_take_control`, `_resume` and `_flush_before_restart`.
-- The adapter seam is unused by the application. The `GameAdapter` docstring names the application's emulator as a user (`runtime/adapter.py:42`), but only `HeadlessRun` calls `adapter_for` (`runtime/headless.py:40`). The Gen II emulator imports only `SCREEN_FRAMES` and `new_history` from its adapter module (`gen2/emulator.py:33`). The Gen I emulator imports `SNAPSHOT_EVERY` and does not use it (`emulator.py:37`).
-- Two tools keep a fallback import of a module that no longer exists: `tools/benchmark_decisions.py:283` (`pokesim.headless`) and `tools/quality_hunt_watch.py:78` (`pokesim.gen2.headless`).
+- The Gen I and Gen II `Emulator` classes still write 20 same-named methods twice (Gen I line / Gen II line): `__init__` 84/157, `_boot` 189/239, `start` 216/319, `freeze` 229/329, `status` 249/1111, `_load_state_file` 327/458, `_shot_png` 444/398, `current_frame` 451/389, `_observe` 478/545, `_watch_boss` 483/710, `_note_progress` 503/732, `_autosave` 670/423, `_reset_watch` 706/757, `_give_up` 712/770, `_unstick` 737/850, `_check_guards` 807/938, `set_trade_preference` 876/1156, `_new_game` 999/999, `_start_new_game` 1011/1008, `_run` 1054/1043.
+- Twelve more same-named methods fill `EmulatorBase` hooks: `held_back`, `_frame_png`, `_manifest_fields`, `_take_control`, `_resume`, `_flush_before_restart`, `_event`, `_note_achievement`, `_shiny_reason`, `_species_name`, `_headroom` and `_identity`.
+- `EmulatorBase` holds the one journal sink, `_journal` and `_push` (`runtime/emulator.py:340-362`), and the methods that were written twice before it: `_drop_pin` (`:128`), `pc_values` (`:141`), `request_release` (`:153`), `_report_missed_shiny` (`:364`) and `_check_stall` (`:384`). Gen II pushes without tags (`PUSH_TAGS`), and only the Gen I stall entry names the saved moment (`STALL_NOTE`).
+- The adapter seam is unused by the application. Only `HeadlessRun` calls `adapter_for` (`runtime/headless.py:40`), as the `GameAdapter` docstring says (`runtime/adapter.py:42`). The Gen II emulator imports only `SCREEN_FRAMES` and `new_history` from its adapter module (`gen2/emulator.py:33`). The Gen I emulator imports `SNAPSHOT_EVERY` and does not use it (`emulator.py:38`).
+- Two tools keep a fallback import of a module this tree no longer has, and both still need it. `tools/benchmark_decisions.py:283` (`pokesim.headless`) runs the headless loop of the source root it is given, and releases up to v0.6.2 ship that module. `tools/quality_hunt_watch.py:78` (`pokesim.gen2.headless`) reads an installed application, which can be such a release.
 
 ## Ownership
 
