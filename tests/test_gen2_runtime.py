@@ -1626,6 +1626,17 @@ def test_imported_legends_do_not_require_the_local_wing_quest(monkeypatch):
     assert legends(SimpleNamespace(), snapshot, None) is None
 
 
+def test_pokedex_hunt_asks_each_species_once_and_skips_a_table_nobody_is_hunted_on(monkeypatch):
+    from pokesim.gen2 import collection
+    rows = [{'species': species, 'time': 'any', 'map': 1, 'method': 'grass', 'chance': 10} for species in (16, 16, 19, 16, 19)]
+    asked = []
+    monkeypatch.setattr(collection, 'hunt_wanted', lambda policy, snapshot: lambda species: asked.append(species))
+    monkeypatch.setattr(collection, 'usable', lambda *args: pytest.fail('a row was walked'))
+    policy = SimpleNamespace(data=SimpleNamespace(encounters=rows), collection={}, no_room=lambda snapshot: False)
+    assert collection.pokedex_hunt(policy, SimpleNamespace(items=()), None, 'day') is None
+    assert sorted(asked) == [16, 19]
+
+
 def test_encounter_search_can_leave_and_reenter_a_disconnected_map(real_data, monkeypatch):
     from pokesim.gen2 import collection
     from pokesim.gen2.policy import Goal

@@ -1389,10 +1389,18 @@ def pokedex_hunt(policy, snapshot, Goal, current_time):
             forget(policy, hunt_key(target['species']))
         state['target'] = target = None
     if target is None:
+        # Each species in the table is asked once, and a table nobody is hunted on is not walked. A Crystal
+        # save 6,680 hours in, with a complete Pokédex and no PC room for a linked adventure's copy, walked
+        # all 3,202 rows on every decision and found nothing.
+        table = facts(policy).answer('encounter species', (data.encounters,),
+                                     lambda: frozenset(row['species'] for row in data.encounters))
+        live = {dex for dex in table if hunted(dex)} if room else ()
+        if not live:
+            return None
         groups = {}
         items = dict(snapshot.items)
-        for row in data.encounters if room else ():
-            if (not hunted(row['species']) or not matching_time(row['time'], current_time)
+        for row in data.encounters:
+            if (row['species'] not in live or not matching_time(row['time'], current_time)
                     or standing_down(policy, hunt_key(row['species'])) or not usable(policy, snapshot, row, items)
                     or deferred(policy, snapshot, row['species']) or hopeless(row['species'], row.get('level'))):
                 continue
