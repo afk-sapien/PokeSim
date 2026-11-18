@@ -77,6 +77,26 @@ def test_worth_trading_keeps_copies_other_plans_need():
     assert worth_trading(policy, snapshot, KYLE)
 
 
+def test_journey_scans_the_party_and_boxes_again_only_when_they_change(monkeypatch):
+    scanned, accepts = [], npc_trades.qualifies
+    monkeypatch.setattr(npc_trades, 'qualifies', lambda mon, trade: scanned.append(mon) or accepts(mon, trade))
+    monkeypatch.setattr(npc_trades, 'flags', lambda memory, data: 0)
+    species = {n: {'name': n} for n in range(252)}
+    data = SimpleNamespace(symbols={'wTradeFlags': [0, 0]}, game='gold', species=species)
+    policy = SimpleNamespace(data=data, demand={}, collection={}, person=lambda snapshot, key, *rest: key,
+                             storage_goal=lambda snapshot: SimpleNamespace(map_name=0, x=0, y=0, face=0))
+    snapshot = SimpleNamespace(party=(mon(155), mon(69)), stored=(), owned=frozenset())
+    mem, goal = SimpleNamespace(memory=b''), lambda key, *rest: key
+    assert npc_trades.journey(policy, snapshot, mem, goal) == 'collection_npc_trade'
+    # Mike and Kyle are each counted and searched once, then answered from the facts.
+    assert len(scanned) == 8
+    assert npc_trades.journey(policy, snapshot, mem, goal) == 'collection_npc_trade' and len(scanned) == 8
+    # A Drowzee in a box makes Mike's trade the errand.
+    snapshot.stored = (mon(96, box=0, position=0),)
+    assert npc_trades.journey(policy, snapshot, mem, goal) == 'collection_npc_trade_pc'
+    assert policy.collection['npc_trade'] == 0 and len(scanned) == 14
+
+
 def test_completed_reports_each_new_flag_once(monkeypatch):
     data = SimpleNamespace(symbols={'wTradeFlags': [0, 0]}, game='gold')
     value = {'flags': 0b10}
