@@ -1,17 +1,18 @@
-"""Shadow mode for the utility arbiter: what it would have picked, while the old order still decides.
+"""Shadow records for goal choice. The decide pipeline decides, and the shadow keeps a record beside it.
 
-Each generation's planner calls ``Shadow.compare`` at the points where it already picks a goal, with a
-function that builds the arbiter's candidates and the key the old order chose. The comparison goes only
-to the log and to counters that ``python -m pokesim.replay audit`` reads. Nothing here changes a decision, draws
-a random number, steps the emulator or goes into a saved game.
+``Shadow.weigh`` runs at each generation's decide point (planning/decide.py). The goal the step committed
+is the pipeline's, so the record counts decisions by the source of that goal, and the frames the pipeline's
+pick and the committed goal agree.
+
+Two Gen II points still choose by the old order, the Pokédex hunt and the postgame plan. Each calls
+``Shadow.compare`` with a function that builds the arbiter's candidates and the key the old order chose.
+
+The records go only to the log and to counters that ``python -m pokesim.replay audit`` reads. Nothing here
+changes a decision, draws a random number, steps the emulator or goes into a saved game.
 
 A candidate's ``goal`` holds its kind, such as ``collection new entry`` or ``heal``, for the audit's
-frame share by would-have-chosen kind. An inner point, such as the Gen I collection pick, runs before
-the outer point that holds it, the Gen I decide pipeline, so ``pick`` ends each decision on the outer
-point's kind.
-
-``Shadow.weigh`` runs the decide pipeline (planning/decide.py) beside the old chain in the same way. It
-also counts decisions by the source of the chain's goal, and the frames each point's two picks agree.
+frame share by would-have-chosen kind. An inner point runs before the outer point that holds it, so
+``pick`` ends each decision on the outer point's kind.
 
 A failure in shadow code is logged once per point and never reaches the run.
 """
@@ -83,8 +84,8 @@ class Shadow:
             return None
 
     def weigh(self, point, build, chosen, token=None, frame=None):
-        """Run the decide pipeline from ``build()``, a ``decide.Decision``, beside ``chosen``, the goal key
-        the old chain chose, and return the Decision.
+        """Record the decide pipeline's ``build()``, a ``decide.Decision``, against ``chosen``, the goal key
+        the step committed, and return the Decision.
 
         The agreement is kept on every call, so ``frame`` counts the frames since the last call under it.
         A decision is counted when either key or ``token`` changes, as a long wait under one goal would

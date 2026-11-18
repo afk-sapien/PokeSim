@@ -21,7 +21,7 @@ from . import __version__, config
 from .audio import AudioFeed, enable_checkpoint_sound
 from .build_info import build_info
 from .checkpoints import open_state
-from .events import HIGH, LOW, Event, RunMemory, diff
+from .events import HIGH, Event, RunMemory, diff
 from . import progress_events, rewards, seeds, stall_truth
 from .legendary import LegendaryRecovery
 from .loop_errors import loop_failed
@@ -29,6 +29,7 @@ from .play_clock import PlayClock
 from .palettes import PALETTES, recolor, validate_palette
 from .planning import pin
 from .policies import make_policy
+from .policies.team import storage_headroom
 from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
 from .runtime.game_loop import Decider, GameLoop, gen1_options, write_gen1_options
 from .runtime.policy import BUTTONS, Action
@@ -40,7 +41,7 @@ from .runtime.supervision import CANNOT_END, GIVE_UP, HOLD, Supervisor
 from .runtime.supervision import report as stuck_report
 from .screen import W_OPTIONS
 from .stalls import BEFORE_STALL_CHECKPOINT, LoopGuard, StallWatch, held_rose  # noqa: F401
-from .strategy_data import MAPS
+from .strategy_data import ITEMS, MAPS
 
 LEAGUE = {MAPS[name] for name in ('LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM', 'HALL_OF_FAME')}
 LEAGUE_ENTRY = MAPS['LORELEIS_ROOM']
@@ -78,6 +79,7 @@ class Emulator(EmulatorBase):
     # frame after which whatever is on screen is kept anyway.
     _retakes = ()
     _retake_until = 0
+    STALL_NOTE = ' The saved moment is attached to this journal entry.'
 
     def __init__(self, store, ntfy=None, *, isolated_ram=False):
         self.isolated_ram = isolated_ram
@@ -234,13 +236,6 @@ class Emulator(EmulatorBase):
         self._publish_frame()
 
     # ---------------- public controls (thread-safe) ----------------
-    def _drop_pin(self, reason):
-        """Drop the manager's pin before a recovery, and journal it here since a reload loses any note."""
-        drop = getattr(getattr(self, 'policy', None), 'drop_pin', None)
-        label = drop() if drop else None
-        if label is not None and getattr(self, 'snapshot', None) is not None:
-            self._handle_events([Event(**pin.gave_up(label, reason))], self.snapshot)
-
     def held_back(self, name):
         """Why the game drops this command now, or None when it runs it."""
         if not getattr(self, 'store', None) or name in ('stop', 'speed', 'pause'):
@@ -469,32 +464,16 @@ class Emulator(EmulatorBase):
         self._image().save(buf, "PNG", compress_level=1)
         return buf.getvalue()
 
-    def _report_uncatchable_shiny(self, snapshot):
-        """Say once per battle why a shiny cannot be caught. The policy runs from it as usual.
-
-        Balls cannot be bought and storage cannot be freed in battle, so pausing would only
-        look like a stall. The supply and storage reserves are what keep a shiny catchable.
-        """
-        if not snapshot.enemy_shiny or snapshot.in_battle != 1:
-            self._shiny_reported = False
-            return False
-        from .strategy_data import ITEMS
+    def _shiny_reason(self, snapshot):
         balls = {ITEMS[name] for name in ('POKE_BALL', 'GREAT_BALL', 'ULTRA_BALL', 'MASTER_BALL')}
         if not snapshot.can_catch:
-            why = 'no storage space'
-        elif snapshot.battle_type == 0 and not any(item in balls and qty for item, qty in snapshot.items):
-            why = 'no balls'
-        else:
-            return False
-        if getattr(self, '_shiny_reported', False):
-            return True
-        self._shiny_reported = True
-        species = SPECIES_NAMES.get(snapshot.enemy_species) or 'Pokémon'
-        self._handle_events([Event('shiny_missed', f'Shiny {species} could not be caught: {why}',
-                                   f'A shiny {species} appeared with {why}, so the adventure ran from it. '
-                                   'The supply and storage reserves should prevent this.',
-                                   priority=LOW, tags='star')], snapshot)
-        return True
+            return 'no storage space'
+        if snapshot.battle_type == 0 and not any(item in balls and qty for item, qty in snapshot.items):
+            return 'no balls'
+        return None
+
+    def _species_name(self, species):
+        return SPECIES_NAMES.get(species)
 
     def _observe(self):
         self._retake_shots()
@@ -647,22 +626,20 @@ class Emulator(EmulatorBase):
         # the rotating autosaves are for, and on any adventure that has completed a trade the
         # rewind is refused anyway, because every earlier checkpoint predates the trade barrier.
         for ev in events:
-            eid = self.store.add_event(ev, snap, png, None)
-            if ev.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
-                self.last_achievement = {'id': eid, 'title': ev.title, 'ts': time.time()}
+            eid = self._journal(ev, snap, png, push=not blank)
             log.info("event #%d %s p%d: %s", eid, ev.type, ev.priority, ev.title)
             if blank:
                 # Badges, warps and catches often land during a fade. Keep the entry now and
                 # take its picture, and push it, once the screen shows something again.
                 self._retakes = (*self._retakes, (eid, ev))
                 self._retake_until = self.frame + RETAKE_FRAMES
-            else:
-                self._push(eid, ev, png)
 
-    def _push(self, eid, ev, png):
-        if ev.notable and self.ntfy and self.ntfy.wants(ev):
-            self.ntfy.send(ev.title, ev.body, tags=ev.tags, priority=ev.priority, image=png,
-                           click=f"{config.PUBLIC_URL}/events/{eid}", event_type=ev.type)
+    def _event(self, event, snapshot):
+        self._handle_events([event], snapshot)
+
+    def _note_achievement(self, event, eid):
+        if event.type in ('badge', 'catch', 'evolve', 'obtain', 'champion', 'item', 'trainer', 'level', 'map', 'trade'):
+            self.last_achievement = {'id': eid, 'title': event.title, 'ts': time.time()}
 
     def _retake_shots(self):
         if not self._retakes:
@@ -868,34 +845,12 @@ class Emulator(EmulatorBase):
         elif self.battle_frame is not None and self.policy.hopeless_battle(self.snapshot):
             # The player has worked out that neither side can finish, so the timeout has nothing to wait for.
             self._unstick(self.battle_frame, "battle cannot end")
-        self._check_stall(time.time())
-
-    def _check_stall(self, now):
-        """Report a run that is healthy and moving but has achieved nothing for hours of game time."""
-        snap = self.snapshot
-        if snap is None or not snap.valid or not snap.started:
-            return
-        stall, frames = getattr(self, 'stall', None), self.play_clock.frames
-        quiet = stall.check(frames, now) if stall else None
-        if stall and stall.capture_due(frames):
-            # Kept as soon as game time says it is a stall. The alert waits for real time as well.
-            capture.keep(self, 'quiet', f'no progress for {stall.game_minutes(frames)} game minutes', now)
-        if quiet is None:
-            return
-        details = self.policy.details() if hasattr(self.policy, 'details') else {}
-        objective = (details.get('objective') or {}).get('title') or 'no objective'
-        hours = quiet[0] / 60
-        log.warning('no progress for %.1f game hours at %s: %s', hours, snap.map_name, objective)
-        self._handle_events([Event('stall', f'Stuck? {hours:.0f} game hours without progress',
-                                   f'Objective: {objective}. On {snap.map_name} after {quiet[1]} real minutes '
-                                   f'and {details.get("recoveries", 0)} recoveries. The saved moment is attached '
-                                   'to this journal entry.', priority=HIGH, tags='warning')], snap)
+        self._check_stall()
 
     def _release_journal(self, events, snap):
         """Quote the PC value of a spare the policy let go, and say once when the PC is full with nothing
         that may go, with the box counts and the objective waiting for room (pcvalue.full_alert)."""
         from .pcvalue import full_alert, full_notice
-        from .policies.team import storage_headroom
         policy = getattr(self, 'policy', None)
         # The note of the release the policy started, not the next target's.
         note = getattr(policy, 'released_note', None)
@@ -911,34 +866,12 @@ class Emulator(EmulatorBase):
             events.append(Event('pc_full', 'PC full', f'{text} Release or unlock one from the PC tab.',
                                 priority=HIGH, tags='warning'))
 
-    def pc_values(self):
-        """Each boxed Pokémon's PC value by (box, position), and whether nothing may go (pcvalue.annotate)."""
-        from .pcvalue import annotate, deadlocked
-        from .policies.team import storage_headroom
+    _headroom = staticmethod(storage_headroom)
 
-        def view():
-            snap = self.snapshot
-            if snap is None or not hasattr(self.policy, 'pc_rated'):
-                return {}, False
-            rated = self.policy.pc_rated(snap)
-            return annotate(rated, snap.active_box), deadlocked(rated, storage_headroom(snap))
-        return self.call(view, timeout=5)
-
-    def request_release(self, box, position, key, confirm=''):
-        """Store the owner's Release for the boxed Pokémon at (box, position), or raise ValueError."""
-        from .pcvalue import pc_request
-        from .trade.preferences import base, identity
-        # Release requests stay on the family key the PC rows carry, also for a twin.
-        key = base(key)
-
-        def request():
-            snap = self.snapshot
-            if snap is None or not hasattr(self.policy, 'pc_rated'):
-                raise ValueError('Wait for the adventure to be ready before releasing.')
-            value = pc_request(self.policy.pc_rated(snap), (box, position), key, identity, confirm)
-            self.store.set_release_request(key, value)
-            return value
-        return self.call(request)
+    @staticmethod
+    def _identity(mon):
+        from .trade.preferences import identity
+        return identity(mon)
 
     def set_trade_preference(self, key, state):
         done, response = threading.Event(), {}
@@ -1155,7 +1088,7 @@ class Emulator(EmulatorBase):
                     continue
                 if not loop.pending:
                     snap = read_snapshot(self.pb.memory, self.frame)
-                    self._report_uncatchable_shiny(snap)
+                    self._report_missed_shiny(snap)
                     preparation = getattr(self, 'preparation', None)
                     loop.decide(snap, preparation)
                     if not preparation and hasattr(self.policy, 'collection'):

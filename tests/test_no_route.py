@@ -89,7 +89,7 @@ def gen1_guards(policy):
     events = []
     emu = SimpleNamespace(snapshot=SimpleNamespace(valid=True, started=True), play_clock=SimpleNamespace(frames=1000),
                           stall=StallWatch(), policy=policy)
-    emu._handle_events = lambda batch, snapshot: events.extend(batch)
+    emu._event = lambda event, snapshot: events.append(event)
     Emulator._check_stall(emu, time.time())
     return [], events
 

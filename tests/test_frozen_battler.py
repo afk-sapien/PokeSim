@@ -115,7 +115,7 @@ def test_a_hopeless_battle_is_reloaded_without_waiting_for_the_timeout():
     frame = 10 ** 6
     game = SimpleNamespace(frame=frame, last_reload_frame=0, invalid_frame=None, stuck_frame=frame, snapshot=None,
                            battle_frame=frame - 90 * FRAMES_PER_SECOND,
-                           policy=SimpleNamespace(hopeless_battle=lambda snapshot: True), _check_stall=lambda now: None,
+                           policy=SimpleNamespace(hopeless_battle=lambda snapshot: True), _check_stall=lambda: None,
                            _unstick=lambda since, why: reloaded.append(why))
     Emulator._check_guards(game)
     game.policy.hopeless_battle = lambda snapshot: False
