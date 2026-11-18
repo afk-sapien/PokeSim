@@ -2,12 +2,13 @@
 
 ``pokesim/emulator.py`` (Gen I) and ``pokesim/gen2/emulator.py`` (Gen II) subclass ``EmulatorBase``. The
 base runs the command queue, the control lease, manual presses, the step with its pacing and frame
-publishing, the named checkpoints, the trade and reward barriers, and the choice of save a reload goes
-back to. It also writes each journal entry, reports a stall, a dropped pin and a shiny that cannot be
-caught, and serves the PC values and release requests. Each generation keeps what reads its own
-cartridge: boot, load, observation, what goes in the journal, the guards, when an autosave is allowed,
-the run loop and the status page. Where the two differ in one step, the base calls a hook below that the
-generation fills. docs/design/one-bot.md, item 2.
+publishing, the named checkpoints, the trade and reward barriers, the autosave once one is allowed, and
+the choice of save a reload goes back to. It also writes each journal entry, reports a stall, a dropped
+pin and a shiny that cannot be caught, serves the PC values and release requests, and gives the status
+keys both generations report alike. Each generation keeps what reads its own cartridge: boot, load,
+observation, what goes in the journal, the guards, when an autosave is allowed, the run loop and its own
+status keys. Where the two differ in one step, the base calls a hook below that the generation fills.
+docs/design/one-bot.md, item 2.
 """
 from __future__ import annotations
 
@@ -17,13 +18,14 @@ import queue
 import threading
 import time
 
-from .. import audio, config
+from .. import __version__, audio, config
+from ..build_info import build_info
 from ..events import HIGH, LOW, Event
 from ..planning import pin
 from . import capture, trace
 from .manifest import checkpoint_manifest
 from .policy import BUTTONS, Action
-from .reload import reload_target
+from .reload import FRAMES_PER_SECOND, reload_target
 from .restart import restart
 
 log = logging.getLogger(__name__)
@@ -84,6 +86,20 @@ class EmulatorBase:
         healthy = alive and not self.fatal_error and age < 30 and not self.stopping
         return {'ok': healthy, 'worker_alive': alive, 'activity_age_seconds': round(age, 1),
                 'error': self.fatal_error}
+
+    def _shared_status(self) -> dict:
+        """The status keys both generations report alike. Each generation's ``status`` adds its own."""
+        from .. import rewards
+        from ..randomized import status as randomizer_status
+        return {'version': __version__, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
+                'stopped': self.frozen, 'health': self.health(), 'paused': self.paused,
+                'manual_mode': self.manual_mode, 'speed': self.speed, 'policy': self.policy.describe(),
+                'frame': self.frame, 'rom': self.rom_note, 'play_clock': self.play_clock.status(),
+                'performance': {'frames': self.executed_frames, 'sampled_at': time.monotonic()},
+                'uptime': int(time.time() - self.started_at),
+                'stuck_seconds': max(0, self.frame - self.stuck_frame) // FRAMES_PER_SECOND,
+                'reloads': self.reloads, 'league_rewards': rewards.status(self.store),
+                'legendary_recovery': self.legendary_recovery.state_dict(), 'randomizer': randomizer_status()}
 
     # ---------------- public controls (thread-safe) ----------------
     def command(self, name: str, arg=None):
@@ -284,6 +300,24 @@ class EmulatorBase:
         return checkpoint_manifest(self.policy, rom_sha1=self.rom_sha1, frame=self.frame, play_clock=self.play_clock,
                                    store=self.store, legendary_recovery=self.legendary_recovery,
                                    **self._manifest_fields())
+
+    def _write_autosave(self):
+        """Write the autosave of this moment, start its trace segment and prune what the store keeps.
+        Each generation's ``_autosave`` decides first whether this moment may be saved."""
+        # The state comes before the manifest, since Gen II's _before_save rebases the clock its manifest reads.
+        state, manifest = self._state_bytes(), self._manifest()
+        path = self.store.write_checkpoint(state, manifest)
+        tracer = getattr(self, 'tracer', None)
+        if tracer is not None:
+            tracer.begin(path.stem, state, manifest, kept=path, pin=trace.pin_state(self.policy))
+        # The first save after an achievement is the last one known to be from before any stall.
+        capture.keep_before(self, path, self.snapshot)
+        self.store.prune_autosaves(config.KEEP_AUTOSAVES)
+        capture.prune_trace(self)
+        self.store.prune_events(config.EVENT_RETENTION_DAYS)
+        self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
+        self.store.prune_reward_results()
+        return path
 
     def _checkpoint_before(self, name: str):
         """Keep the game as it is now under `name` before a rewind or restart replaces it."""

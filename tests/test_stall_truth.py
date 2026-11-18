@@ -2,7 +2,7 @@
 from contextlib import closing, nullcontext
 import sqlite3
 import time
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 from unittest.mock import Mock
 
 from fastapi.testclient import TestClient
@@ -11,6 +11,7 @@ from pokesim import config, progress_events, stall_truth
 from pokesim.app.manager import Manager
 from pokesim.app.registry import identifier
 from pokesim.play_clock import PlayClock
+from pokesim.runtime.emulator import EmulatorBase
 from pokesim.runtime.supervision import Supervisor
 from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, StallWatch
 from pokesim.store import Store
@@ -64,11 +65,14 @@ def gen1_game(store, loop):
 def gen2_game(store, loop):
     now = time.time()
     policy = SimpleNamespace(mode='exploring', describe=lambda: '', details=dict, boxes_full=False)
-    return SimpleNamespace(**stalled_game(store, loop), last_achievement=None, progress_frame=0, waiting=False,
+    game = SimpleNamespace(**stalled_game(store, loop), last_achievement=None, progress_frame=0, waiting=False,
                            supervisor=Supervisor(), last_reload=0, policy=policy, frozen=False, health=dict, speed=1,
                            snapshot=None, rom_note='', executed_frames=0, started_at=now,
                            stuck_frame=130 * MINUTE, history={'maps': set()}, reloads=0, invalid_frame=None,
                            legendary_recovery=SimpleNamespace(state_dict=dict))
+    # The status keys both generations share come from the base, which reads the fake's own fields.
+    game._shared_status = MethodType(EmulatorBase._shared_status, game)
+    return game
 
 
 def help_story(tmp_path, make, ask):

@@ -2,11 +2,12 @@
 import json
 import os
 from pathlib import Path
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 
 from pokesim import config
 from pokesim.checkpoints import CheckpointStore
 from pokesim.emulator import BEFORE_STALL_CHECKPOINT, Emulator
+from pokesim.runtime.emulator import EmulatorBase
 from pokesim.stalls import FRAMES_PER_GAME_MINUTE as MINUTE, StallWatch
 
 MANIFEST = {'policy_state': {}, 'run_memory': {}, 'frame': 5}
@@ -82,10 +83,13 @@ def game(tmp_path, **extra):
                                party=(SimpleNamespace(name='Lapras', level=40, hp=0, status=0),))
     store.get = lambda key: None
     store.set = store.prune_events = store.prune_attachments = store.prune_reward_results = lambda *a: None
-    return SimpleNamespace(store=store, snapshot=snapshot, stall=StallWatch(game_minutes=120, real_minutes=0),
-                           play_clock=SimpleNamespace(state_dict=dict, frames=0), policy=SimpleNamespace(state_dict=dict, details=dict),
-                           _state_bytes=lambda: b'state', _manifest=lambda: dict(MANIFEST), _shot_png=lambda: b'png',
-                           reloads=3, frame=0, **extra)
+    playing = SimpleNamespace(store=store, snapshot=snapshot, stall=StallWatch(game_minutes=120, real_minutes=0),
+                              play_clock=SimpleNamespace(state_dict=dict, frames=0), policy=SimpleNamespace(state_dict=dict, details=dict),
+                              _state_bytes=lambda: b'state', _manifest=lambda: dict(MANIFEST), _shot_png=lambda: b'png',
+                              reloads=3, frame=0, **extra)
+    # Each generation's _autosave ends in the base's write, which reads the fake's own fields.
+    playing._write_autosave = MethodType(EmulatorBase._write_autosave, playing)
+    return playing
 
 
 def test_the_first_autosave_after_progress_is_kept_and_later_ones_leave_it_alone(tmp_path):

@@ -17,9 +17,8 @@ from pokecore.gen1 import W_WALK_COUNTER
 
 from .yellow import YELLOW_SHA1, open_emulator
 
-from . import __version__, config
+from . import config
 from .audio import AudioFeed, enable_checkpoint_sound
-from .build_info import build_info
 from .checkpoints import open_state
 from .events import HIGH, Event, RunMemory, diff
 from . import progress_events, rewards, seeds, stall_truth
@@ -248,36 +247,24 @@ class Emulator(EmulatorBase):
 
     def status(self) -> dict:
         from .investment import rating_problem
-        from .randomized import status as randomizer_status
         snap = self.snapshot
         strategy = self.policy.details()
         preparation = getattr(self, 'preparation', None)
         if preparation:
             strategy = preparation.details(strategy)
         return {
-            "version": __version__, "viewer_only": config.VIEWER_ONLY,
-            "build": build_info(), "stopped": self.frozen,
-            "health": self.health(),
-            "paused": self.paused, "speed": self.speed, "policy": self.policy.describe(),
+            **self._shared_status(),
             # Yellow renders its own Game Boy Color palettes, so like Generation II it reports none.
             "palette": None if self._color_cartridge() else getattr(self, 'palette', 'original'),
             "fair_wild_dvs": getattr(config, 'FAIR_WILD_DVS', False) is True,
-            "manual_mode": self.manual_mode,
             "help_request": stall_truth.observe_help(self, self.help_request(strategy)),
             # Why the PC cannot rate or release, for the library watchdog (investment.rating_problem).
             "rating_problem": rating_problem(),
-            "play_clock": self.play_clock.status(),
-            "performance": {"frames": self.executed_frames, "sampled_at": time.monotonic()},
-            "frame": self.frame, "uptime": int(time.time() - self.started_at),
-            "stuck_seconds": max(0, self.frame - self.stuck_frame) // FRAMES_PER_SECOND, "rom": self.rom_note,
             "game": snap.to_dict() if snap else None,
-            "areas_discovered": len(self.mem.seen_maps), "reloads": self.reloads,
+            "areas_discovered": len(self.mem.seen_maps),
             "glitched": self.invalid_frame is not None,
             "strategy": strategy,
             "progress": self.progress_status(),
-            "league_rewards": rewards.status(self.store),
-            "legendary_recovery": self.legendary_recovery.state_dict(),
-            "randomizer": randomizer_status(),
         }
 
     def help_request(self, strategy):
@@ -689,19 +676,7 @@ class Emulator(EmulatorBase):
         if snap is not None and not snap.valid:
             log.warning("skipping autosave: game state looks glitched")
             return
-        manifest = self._manifest()
-        state = self._state_bytes()
-        path = self.store.write_checkpoint(state, manifest)
-        tracer = getattr(self, 'tracer', None)
-        if tracer is not None:
-            tracer.begin(path.stem, state, manifest, kept=path, pin=trace.pin_state(self.policy))
-        # The first save after an achievement is the last one known to be from before any stall.
-        capture.keep_before(self, path, snap)
-        self.store.prune_autosaves(config.KEEP_AUTOSAVES)
-        capture.prune_trace(self)
-        self.store.prune_events(config.EVENT_RETENTION_DAYS)
-        self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
-        self.store.prune_reward_results()
+        self._write_autosave()
 
     def _reset_watch(self):
         """Restart the guard clocks from the current frame, which a reload has just rewound."""
