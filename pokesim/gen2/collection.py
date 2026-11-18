@@ -105,15 +105,24 @@ def tree_score(x, y, trainer_id):
 
 
 def encounter_points(policy, snapshot, mid, method, *, rare=False):
-    data = policy.data
-    entry = data.maps[mid]
+    """The tiles of ``mid`` where ``method`` meets wild Pokémon, as (x, y, face), kept in the policy's facts
+    while the map's tiles, its smashed rocks and the trainer id hold. The tiles are a new list at each
+    ask and the rocks a frozen copy, so nothing in the key is edited in place."""
+    entry = policy.data.maps[mid]
     grid = policy.nav.collision(snapshot, policy.memory) if mid == snapshot.map else policy.nav.regions.live.get(mid, entry['collision'])
+    cleared = frozenset(policy.nav.regions.cleared_rocks.get(mid, ()))
+    trainer = Memory(policy.memory, policy.data).word('wPlayerID') if method == 'headbutt' else 0
+    return list(facts(policy).answer(('encounter points', mid, method, rare), (grid, cleared, trainer),
+                                     lambda: _encounter_points(policy, mid, method, rare, grid, cleared, trainer)))
+
+
+def _encounter_points(policy, mid, method, rare, grid, cleared, trainer):
+    entry = policy.data.maps[mid]
     width, height = entry['width'], entry['height']
     points = []
     warps = {(warp['x'], warp['y']) for warp in entry['warps']}
     rocks = {(obj['x'], obj['y']) for index, obj in enumerate(entry['objects'], 1)
-             if obj['sprite'] == 'SPRITE_ROCK' and index not in policy.nav.regions.cleared_rocks.get(mid, set())}
-    trainer = Memory(policy.memory, data).word('wPlayerID') if method == 'headbutt' else 0
+             if obj['sprite'] == 'SPRITE_ROCK' and index not in cleared}
     for y in range(height):
         for x in range(width):
             tile = grid[y * width + x]
@@ -192,10 +201,21 @@ def item_hunts(policy, snapshot):
 
     A carrier is wanted while its evolution is missing here, or a peer asks for it and no copy
     is here to send, and neither the bag nor a stored partner already holds the item.
+
+    The hunt asks this for each carrier it weighs, so the answer is kept in the policy's facts while the
+    party, the boxes, the bag, the Pokédex and the demand hold. The regions are frozen and the demand
+    goes in as a sorted copy, so nothing in the key is edited in place.
     """
     demand = getattr(policy, 'demand', None) or {}
-    mons = [mon for mon in [*getattr(snapshot, 'party', ()), *getattr(snapshot, 'stored', ())] if not mon.egg]
-    data, bag, owned = getattr(policy, 'data', None), dict(getattr(snapshot, 'items', ())), getattr(snapshot, 'owned', ())
+    party, stored = getattr(snapshot, 'party', ()), getattr(snapshot, 'stored', ())
+    items, owned = getattr(snapshot, 'items', ()), getattr(snapshot, 'owned', ())
+    inputs = (party, stored, items, owned, tuple(sorted(demand.items())))
+    return dict(facts(policy).answer('item hunts', inputs, lambda: _item_hunts(policy, party, stored, items, owned, demand)))
+
+
+def _item_hunts(policy, party, stored, items, owned, demand):
+    mons = [mon for mon in [*party, *stored] if not mon.egg]
+    data, bag = getattr(policy, 'data', None), dict(items)
     held = Counter(mon.species for mon in mons)
     carried = {(mon.species, getattr(mon, 'held_item', 0)) for mon in mons}
     result = {}

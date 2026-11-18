@@ -268,16 +268,23 @@ def supply_room(policy, snapshot):
     The room is counted once the hunt's own trip has boxed what peer_store boxes, its trainee included,
     since a picked hunt drops the training. Counted before, a Gold run withdrew a Kakuna to train, which
     freed the slot the hunt needed, so the hunt was picked, boxed the Kakuna and lost the slot again.
-    Training and the hunt took turns every minute for nearly three hours."""
-    from ..pcvalue import catch_visit, releases, requested
+    Training and the hunt took turns every minute for nearly three hours.
+
+    The answer is kept in the facts while the rating, the free slots and the open box hold. pc_rated
+    hands back the same rated list until rating_key changes, and only pcvalue.rate writes its rows."""
     from .collection import peer_store_slots
     if not hasattr(snapshot, 'box_counts'):
         return True
     rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
     boxed = len(peer_store_slots(policy, snapshot, trainee=False)) if len(getattr(snapshot, 'party', ())) > 1 else 0
-    needed = catch_visit(headroom(snapshot) - boxed, len(requested(rated)))
-    return not any(row.status == 'kept' and not row.entry.requested
-                   for row in releases(rated, needed, getattr(snapshot, 'active_box', None)))
+    free, box = headroom(snapshot) - boxed, getattr(snapshot, 'active_box', None)
+    return facts(policy).answer('supply room', (rated, free, box), lambda: _supply_room(rated, free, box))
+
+
+def _supply_room(rated, free, box):
+    from ..pcvalue import catch_visit, releases, requested
+    needed = catch_visit(free, len(requested(rated)))
+    return not any(row.status == 'kept' and not row.entry.requested for row in releases(rated, needed, box))
 
 
 def hatch_worth(policy, snapshot):
