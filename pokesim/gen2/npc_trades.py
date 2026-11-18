@@ -33,7 +33,9 @@ def candidate(snapshot, trade):
 
 
 def worth_trading(policy, snapshot, trade):
-    held = sum(qualifies(mon, trade) for mon in snapshot.party + snapshot.stored)
+    # The count of Pokémon the person accepts is kept in the facts until the party or the boxes change.
+    held = facts(policy).answer(('trade holdings', trade.index), (snapshot.party, snapshot.stored),
+                                lambda: sum(qualifies(mon, trade) for mon in snapshot.party + snapshot.stored))
     if trade.give not in snapshot.owned or trade.give in getattr(policy, 'returned', ()):
         # A walking return reopened this trade because its Pokémon has no other source.
         return held - policy.demand.get(trade.request, 0) >= 1 if trade.give in snapshot.owned else True
@@ -99,7 +101,8 @@ def journey(policy, snapshot, mem, Goal):
     for trade in trades(data.game):
         if value >> trade.index & 1 or not worth_trading(policy, snapshot, trade):
             continue
-        mon = candidate(snapshot, trade)
+        mon = facts(policy).answer(('trade candidate', trade.index), (snapshot.party, snapshot.stored),
+                                   lambda: candidate(snapshot, trade))
         if mon is None:
             continue
         if mon.box is not None and len(snapshot.party) == 6 and free_slots(snapshot) < 1:
