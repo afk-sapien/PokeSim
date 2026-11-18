@@ -7,6 +7,7 @@ capped stock and League rewards are found by their mark. A spare holding an item
 first (ledger.py), the Exp. Share included, so no item is lost with the Pokémon.
 """
 from ..trade.preferences import identity, signature
+from .facts import facts
 
 BOX_CAPACITY = 20
 UNOWN = 201
@@ -291,13 +292,7 @@ def hatch_worth(policy, snapshot):
     owned = getattr(snapshot, 'owned', None)
     if owned is None:
         return lambda dex, dvs=None: True
-    key = policy.rating_key(snapshot) if hasattr(policy, 'rating_key') else None
-    cache = getattr(policy, '_hatch_worth', None)
-    if key is None or cache is None or cache[0] != key:
-        cache = (key, {})
-        if key is not None:
-            policy._hatch_worth = cache
-    answers = cache[1]
+    answers = facts(policy).answer('hatch worth', policy.rating_key(snapshot), dict) if hasattr(policy, 'rating_key') else {}
 
     def keeps(dex, dvs=None):
         egg = (dex, tuple(dvs or ()))

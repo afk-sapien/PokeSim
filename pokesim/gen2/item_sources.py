@@ -19,6 +19,7 @@ walked to forever.
 from collections import Counter
 
 from ..planning.decide import NO_CALL
+from .facts import facts
 from .standdown import exhausted, forget, stand_down, standing_down
 
 # item: (trainer, contact id, route, object script, item flag bit, rematch flag bit, beaten event)
@@ -43,7 +44,6 @@ SQUARE_DECISIONS = 8000
 GAP = 2000
 MONDAY, NIGHT = 1, 2
 SQUARE_ROCK = 3
-_NEEDS = [None, None]
 
 
 def phone_key(item):
@@ -59,16 +59,20 @@ def item_needs(policy, snapshot):
     """Evolution items the bag is short of, as {item id: missing count}.
 
     An item counts for each held partner whose item evolution is missing from the Pokédex, is a
-    prerequisite, or is asked for by a peer, the same rule training.projects uses to spend one.
+    prerequisite, or is asked for by a peer, the same rule training.projects uses to spend one. Kept in
+    the facts until the party, a box, the bag, the Pokédex or the demand changes.
     """
+    demand = getattr(policy, 'demand', None) or {}
+    inputs = (getattr(snapshot, 'party', ()), getattr(snapshot, 'stored', ()), getattr(snapshot, 'items', ()),
+              getattr(snapshot, 'owned', ()), tuple(sorted(demand.items())))
+    return dict(facts(policy).answer('item needs', inputs, lambda: _item_needs(policy.data, snapshot, demand)))
+
+
+def _item_needs(data, snapshot, demand):
     from .collection import prerequisites
     from .training import requested
-    data, demand = policy.data, getattr(policy, 'demand', None) or {}
     party, stored = tuple(getattr(snapshot, 'party', ())), tuple(getattr(snapshot, 'stored', ()))
     items, owned = tuple(getattr(snapshot, 'items', ())), frozenset(getattr(snapshot, 'owned', ()))
-    key = (id(data), party, stored, items, owned, tuple(sorted(demand.items())))
-    if _NEEDS[0] == key:
-        return dict(_NEEDS[1])
     needed = prerequisites(data, snapshot) if party or stored else set()
     targets = {}
     for mon in party + stored:
@@ -87,9 +91,7 @@ def item_needs(policy, snapshot):
     bag = Counter()
     for item, count in items:
         bag[item] += count
-    result = {item: len(wanted) - bag[item] for item, wanted in targets.items() if len(wanted) > bag[item]}
-    _NEEDS[:] = [key, result]
-    return dict(result)
+    return {item: len(wanted) - bag[item] for item, wanted in targets.items() if len(wanted) > bag[item]}
 
 
 def _bit(mem, symbol, bit):

@@ -18,6 +18,7 @@ from ..world import update as update_world
 from ..naming import Naming
 from ..menus import (TASKS, Buy, ChangeBox, DayCare, FieldMove, Fly, Forget, Give, Lead, PutAway, Radio, Remedy, Sell,
                      ShowPartner, Storage, Take, Teach, Toss, Use, choose, close_pc, restore)
+from ..facts import Facts
 from .battle import SUBSTATUS_TRANSFORMED, BattlePart, transformed
 from .errands import ErrandPart
 from .items import ItemPart
@@ -88,7 +89,8 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
         # And this with the store's linked adventure trainer ids (trade/partners.py), whose Pokémon may be released.
         self.trade_partners = frozenset
         self.release_cache = (None, None)
-        self.rated_cache = (None, None)
+        # Answers derived from the game state, kept until the state they read changes (facts.py). Never saved.
+        self.facts = Facts()
         self.refused_in_row = 0
         self.result_ref = None
         self.recoveries = 0

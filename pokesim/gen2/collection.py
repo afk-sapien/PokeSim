@@ -22,6 +22,7 @@ from .standdown import (DECISION_FRAMES, exhausted, forget, hold_key, hunt_key, 
                         stand_down, standing_down, train_key)
 from .standdown import monitor as standdown_monitor
 from . import kinds
+from .facts import facts
 
 # Why a catch goal waits when the battle would keep its last balls (planning/throws.py).
 NO_SPARE_BALL = decide.Failure(decide.NEEDS, 'needs ' + throws.spare_words(2))
@@ -170,18 +171,14 @@ def unown_missing(policy, snapshot):
     return letters - set(mem.read('wUnownDex', 26))
 
 
-_HELD = [None, (), Counter()]
-
-
-def held_counts(snapshot):
+def held_counts(policy, snapshot):
     """Copies of each species in the party and every box, eggs aside.
 
-    Planning asks for every encounter row on each step, so the count is made once per snapshot.
+    Planning asks for every encounter row on each step, so the count is kept in the facts until the
+    party or a box changes.
     """
-    objects, sizes = (snapshot, snapshot.party, snapshot.stored), (len(snapshot.party), len(snapshot.stored))
-    if _HELD[0] is None or any(old is not new for old, new in zip(_HELD[0], objects)) or _HELD[1] != sizes:
-        _HELD[:] = [objects, sizes, Counter(mon.species for mon in snapshot.party + snapshot.stored if not mon.egg)]
-    return _HELD[2]
+    return facts(policy).answer('held counts', (snapshot.party, snapshot.stored), lambda: Counter(
+        mon.species for mon in snapshot.party + snapshot.stored if not mon.egg))
 
 
 # Wild partners whose rare held item (the second item in the ROM's base data, 2% of encounters)
@@ -364,7 +361,7 @@ def own_wanted(policy, snapshot, species):
     missing prerequisite, a missing Unown letter or a carrier of a trade item. Only a carrier species
     asks item_hunts, which scans the party and every box."""
     return (species not in snapshot.owned
-            or species in policy.collection.get('prerequisites', ()) and not held_counts(snapshot)[species]
+            or species in policy.collection.get('prerequisites', ()) and not held_counts(policy, snapshot)[species]
             or species == UNOWN and bool(unown_missing(policy, snapshot))
             or species in ITEM_CARRIERS and species in item_hunts(policy, snapshot))
 
@@ -373,7 +370,7 @@ def peer_wanted(policy, snapshot, species):
     """Whether the PC holds fewer copies of ``species`` than its own one and one more for each linked
     adventure that misses it."""
     demand = policy.demand.get(species, 0)
-    return bool(demand) and held_counts(snapshot)[species] < demand + 1
+    return bool(demand) and held_counts(policy, snapshot)[species] < demand + 1
 
 
 def hunt_wanted(policy, snapshot):
