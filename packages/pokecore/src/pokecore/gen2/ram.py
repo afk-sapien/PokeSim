@@ -12,6 +12,7 @@ from math import isqrt
 
 from ..dvs import shiny_bytes
 from ..formulas import experience_at, experience_progress  # noqa: F401  (re-exported)
+from ..regions import clear_region_cache, region as _region  # noqa: F401  (re-exported)
 from .screens import ScreenText, mask_hud
 
 BADGES = ('Zephyr', 'Hive', 'Plain', 'Fog', 'Mineral', 'Storm', 'Glacier', 'Rising',
@@ -341,24 +342,6 @@ class Snapshot:
                 'storage': {'active_box': self.active_box + 1, 'count': len(self.stored), 'capacity': 20,
                             'box_counts': self.box_counts, 'can_catch': self.can_catch,
                             'pokemon': [mon.to_dict(egg_view) for mon in self.stored]}}
-
-
-# Decoded regions keyed strictly by their raw bytes and the static game data. Each region keeps
-# only its latest entry, so the cache stays small and never outlives a change of those bytes.
-_regions = {}
-
-
-def _region(name, key, data, build):
-    entry = _regions.get(name)
-    if entry is not None and entry[0] is data and entry[1] == key:
-        return entry[2]
-    value = build()
-    _regions[name] = (data, key, value)
-    return value
-
-
-def clear_region_cache():
-    _regions.clear()
 
 
 def _party(raw, data):

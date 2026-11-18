@@ -80,16 +80,17 @@ def _goal_row(species, level, dvs, trainer_id):
     return species, level, dvs, trainer_id
 
 
-def _goal_inputs(snapshot):
-    rows = [_goal_row(mon.species, mon.level, mon.dvs, mon.trainer_id) for mon in snapshot.party]
+def _party_rows(party):
+    return tuple(_goal_row(mon.species, mon.level, mon.dvs, mon.trainer_id) for mon in party)
+
+
+def _stored_rows(snapshot):
     if snapshot.stored_details and snapshot.stored_pokemon == tuple(
             (mon.box, mon.species, mon.level, mon.nick) for mon in snapshot.stored_details):
-        rows.extend(_goal_row(mon.species, mon.level, mon.dvs, mon.trainer_id)
-                    for mon in snapshot.stored_details)
-    else:
-        rows.extend(_goal_row(mon['species'], mon['level'], mon.get('dvs'), mon.get('trainer_id'))
-                    for mon in snapshot.storage_entries())
-    return tuple(rows)
+        return tuple(_goal_row(mon.species, mon.level, mon.dvs, mon.trainer_id)
+                     for mon in snapshot.stored_details)
+    return tuple(_goal_row(mon['species'], mon['level'], mon.get('dvs'), mon.get('trainer_id'))
+                 for mon in snapshot.storage_entries())
 
 
 def _goal_token(rows):
@@ -125,9 +126,12 @@ class MilestoneTracker:
         if not snapshot.started or not snapshot.valid or self.store.get('trade_hold'):
             self.previous = None
             return
-        inputs = _goal_inputs(snapshot)
+        # The goals read only these. An unchanged box decodes to the same objects (ram._read_storage),
+        # so comparing the stored parts costs one identity check per Pokémon.
+        party = _party_rows(snapshot.party)
+        inputs = (party, snapshot.stored_pokemon, snapshot.stored_details)
         if inputs != self._inputs:
-            self._token = _goal_token(inputs)
+            self._token = _goal_token(party + _stored_rows(snapshot))
             self._inputs = inputs
         token = self._token
         # Confirm across consecutive observations to ignore partial party/PC writes.

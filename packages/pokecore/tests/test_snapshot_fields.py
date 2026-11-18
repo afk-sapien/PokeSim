@@ -1,4 +1,5 @@
-"""Snapshot fields are fresh each read, and identities and shiny checks read the right bytes."""
+"""Snapshot fields are fresh each read apart from the shared Pokédex sets, and identities and shiny
+checks read the right bytes."""
 from pokecore import snapshot
 from pokecore.identity import pokemon_identity
 
@@ -12,6 +13,20 @@ def test_zero_slots_and_output_ownership():
     first['party'][0]['species'] = 42
     first['party'].clear()
     assert len(snapshot.read_fields(memory)['party']) == 6
+
+
+def test_pokedex_sets_are_shared_until_their_bytes_change_and_party_is_optional():
+    memory = bytearray(65536)
+    memory[0xd30a] = 0b11                     # seen 1 and 2
+    memory[0xd2f7] = 0b101                    # owned 1 and 3, and 3 is not seen
+    first = snapshot.read_fields(memory, party=False)
+    assert 'party' not in first
+    assert first['seen'] == {1, 2} and first['owned'] == {1}
+    second = snapshot.read_fields(memory)
+    assert second['seen'] is first['seen'] and second['owned'] is first['owned']
+    memory[0xd30a] |= 0b100
+    third = snapshot.read_fields(memory)
+    assert third['seen'] == {1, 2, 3} and third['owned'] == {1, 3}
 
 
 def test_identity_matches_existing_serialization_and_tracks_mutation():
