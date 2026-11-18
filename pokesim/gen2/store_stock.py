@@ -299,8 +299,8 @@ def journey(policy, snapshot, Goal):
                 if item not in stock(data, shop) or not policy.clerk_present(snapshot, entry, shop):
                     continue
                 if errand is None or errand['item'] != item:
-                    errand = state['store'] = {'item': item, 'started': policy.decisions, 'tries': 0}
-                errand['amount'] = min(count, snapshot.money // cost)
+                    errand = {'item': item, 'started': policy.decisions, 'tries': 0}
+                state['store'] = {**errand, 'amount': min(count, snapshot.money // cost)}
                 label = f'Buy a {data.item_names.get(item, item)} at the department store'
                 return policy.person(snapshot, 'collection_store', label, entry['constant'], shop['script'])
     return None

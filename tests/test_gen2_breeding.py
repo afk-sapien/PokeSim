@@ -120,6 +120,7 @@ def test_cable_demand_evolves_a_spare_eevee_and_tyrogue(real_data):
 
 
 def test_eevee_waits_without_exp_share_for_the_time_of_day(real_data):
+    from pokesim.gen2 import kinds
     from pokesim.gen2.policy import Goal
     from pokesim.gen2.training import identity, journey
     share = real_data.items['EXP_SHARE']
@@ -129,8 +130,8 @@ def test_eevee_waits_without_exp_share_for_the_time_of_day(real_data):
     state.owned -= {197}
     state.map = real_data.map_ids['GOLDENROD_CITY']
     policy = planner(real_data, {})
-    policy.collection['training'] = {'identity': identity(eevee), 'target': 197, 'item': None, 'species': 133,
-                                     'terminal': False}
+    policy.collection['training'] = kinds.project({'identity': identity(eevee), 'target': 197, 'item': None,
+                                                   'species': 133, 'terminal': False})
     day = SimpleNamespace(byte=lambda name: 1)
     goal = journey(policy, state, day, Goal)
     assert goal.key == 'collection_take' and policy.collection['take_slot'] == 1
@@ -302,6 +303,7 @@ def test_fetching_the_exp_share_keeps_the_trainee_beside_a_carried_egg(real_data
 
 def test_a_carried_egg_hatches_before_the_next_trainee_swaps_in(real_data, monkeypatch):
     """Gold has one spare beside its field move holders, so the egg takes it and the swap waits."""
+    from pokesim.gen2 import kinds
     from pokesim.gen2.breeding import egg_key, hatching
     from pokesim.gen2.policy import Goal
     from pokesim.gen2.training import journey
@@ -312,8 +314,8 @@ def test_a_carried_egg_hatches_before_the_next_trainee_swaps_in(real_data, monke
     carried = egg(215, box=None)
     trainee = mon(93, box=3, position=4, dvs=(2, 10, 8, 13, 8), level=26)
     policy, state = hatcher(real_data, [*party[:5], carried], [trainee, egg(215, box=0, dvs=(3,) * 5)])
-    policy.collection['training'] = {'identity': [4321, [2, 10, 8, 13, 8]], 'target': 93, 'item': None,
-                                     'species': 93, 'terminal': True, 'level_goal': 54}
+    policy.collection['training'] = kinds.project({'identity': [4321, [2, 10, 8, 13, 8]], 'target': 93, 'item': None,
+                                                   'species': 93, 'terminal': True, 'level_goal': 54})
     policy.collection['hatching'] = [egg_key(carried)]
     state.items = ((real_data.items['EXP_SHARE'], 1),)
     clock = SimpleNamespace(byte=lambda name: 1)
@@ -327,6 +329,7 @@ def test_a_carried_egg_hatches_before_the_next_trainee_swaps_in(real_data, monke
 
 def test_eggs_of_a_registered_species_never_hold_up_training(real_data, monkeypatch):
     """Gold boxed 28 Sneasel eggs, and fetching them one by one kept Crobat in the PC for about 110 game hours."""
+    from pokesim.gen2 import kinds
     from pokesim.gen2.breeding import arrive, egg_key, hatching
     from pokesim.gen2.menus import ChangeBox, Storage
     from pokesim.gen2.policy import Goal
@@ -359,8 +362,8 @@ def test_eggs_of_a_registered_species_never_hold_up_training(real_data, monkeypa
     carried = egg(215, box=None, dvs=(2,) * 5)
     trainee = mon(169, box=3, position=4, dvs=(2, 10, 8, 13, 8), level=40)
     policy, state = hatcher(real_data, [*party[:5], carried], [trainee, mon(215, box=1), *sneasel], owned=owned)
-    policy.collection['training'] = {'identity': [4321, [2, 10, 8, 13, 8]], 'target': 169, 'item': None,
-                                     'species': 169, 'terminal': True, 'level_goal': 54}
+    policy.collection['training'] = kinds.project({'identity': [4321, [2, 10, 8, 13, 8]], 'target': 169,
+                                                   'item': None, 'species': 169, 'terminal': True, 'level_goal': 54})
     policy.collection['hatching'] = [egg_key(carried)]
     state.items = ((real_data.items['EXP_SHARE'], 1),)
     clock = SimpleNamespace(byte=lambda name: 1)

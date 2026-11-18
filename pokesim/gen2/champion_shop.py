@@ -352,7 +352,7 @@ def journey(policy, snapshot, Goal):
     plan = state.get(PLAN)
     if plan and not plan.get('bought'):
         if dict(snapshot.items).get(plan['item'], 0) > plan.get('initial', 0):
-            plan['bought'] = True
+            plan = state[PLAN] = {**plan, 'bought': True}
         elif (policy.decisions - plan['started'] > PLAN_DECISIONS
               or not valid_plan(data, snapshot, plan, offers)):
             if policy.decisions - plan['started'] > PLAN_DECISIONS:

@@ -131,8 +131,9 @@ def done(policy, snapshot, activity):
 def finish(policy, activity):
     data = records(policy)
     finished = activity['checkpoint'] == len(course(policy.data).points)
-    events(policy).append(engine.finish(data['records'], activity, finished, course(policy.data)))
-    data['next'], data['clock'] = policy.clock + engine.INTERVAL, CLOCK
+    races = dict(data['records'])
+    events(policy).append(engine.finish(races, activity, finished, course(policy.data)))
+    policy.collection['marathon'] = {**data, 'records': races, 'next': policy.clock + engine.INTERVAL, 'clock': CLOCK}
     policy.marathon_previous = None
 
 

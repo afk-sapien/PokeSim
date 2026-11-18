@@ -101,6 +101,12 @@ class GoalRun(dict):
     def __reduce__(self):
         return _restore, (self.spec, self.rules, dict(self))
 
+    def replace(self, **fields):
+        """A new run of the same goal with ``fields`` written, which leaves this run as it was."""
+        for name in fields:
+            self._writes(name)
+        return _restore(self.spec, self.rules, {**self, **fields})
+
     def _writes(self, name):
         if name not in self.rules.run:
             raise ParamWrite(f'{name} is a param of the goal {self.spec.key}, so it was set before it started')

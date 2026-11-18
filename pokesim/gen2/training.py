@@ -273,14 +273,14 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         state['training'] = None
         return None
     if project.get('terminal'):
-        project['species'] = project['target'] = mon.species
+        project = state['training'] = project.replace(species=mon.species, target=mon.species)
     # Every walk heads for a map the cartridge has wild Pokémon on, and a project with nowhere left to
     # train ends.
     place = None if project['item'] else site(policy, snapshot, project, mon)
     if place is None and not project['item']:
         state['training'] = None
         return None
-    project['site'] = place
+    project = state['training'] = project.replace(site=place)
     spot = {'map_name': place} if place else {}
     evo = next((evo for evo in data.species[mon.species]['evolutions'] if evo['species'] == project['target']), None)
     if (evo and not project.get('terminal') and wrong_time(evo, current_time)

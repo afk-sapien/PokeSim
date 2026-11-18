@@ -83,7 +83,8 @@ def journey(policy, snapshot, Goal, *, force=False):
         state = policy.collection['contest'] = {'entered': False, 'started': policy.decisions}
     name = data.maps[snapshot.map]['constant']
     if running:
-        state['entered'] = True
+        if not state['entered']:
+            state = policy.collection['contest'] = {**state, 'entered': True}
         if name != 'NATIONAL_PARK_BUG_CONTEST':
             return Goal('contest_results', 'Finish the Bug-Catching Contest', name, snapshot.x, snapshot.y)
         wanted = targets(policy, snapshot)
