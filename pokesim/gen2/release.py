@@ -279,26 +279,37 @@ def supply_room(policy, snapshot):
                    for row in releases(rated, needed, getattr(snapshot, 'active_box', None)))
 
 
-def keeps_hatch(policy, snapshot, dex, dvs=None):
-    """Whether the PC would keep what an egg of ``dex`` hatches into (pcvalue.worth): a missing Pokédex
-    entry, a copy its family or a plan needs, a shiny or a rarer copy, rated with ``dvs`` once the egg
-    is laid. The egg already holds its slot, so a hatch brings no PC visit. Gold once boxed dozens of
-    Sneasel eggs, and fetching them one by one held a trainee in the PC for days. Every training step
-    asks this for each boxed egg, so the answers are kept until rating_key changes."""
+def hatch_worth(policy, snapshot):
+    """A test, called with an egg's species and DVs, of whether the PC would keep what the egg hatches
+    into (pcvalue.worth): a missing Pokédex entry, a copy its family or a plan needs, a shiny or a rarer
+    copy, rated with the DVs once the egg is laid. The egg already holds its slot, so a hatch brings no
+    PC visit. Gold once boxed dozens of Sneasel eggs, and fetching them one by one held a trainee in the
+    PC for days. Every training step asks this for each boxed egg, so the answers are kept until
+    rating_key changes, and one test serves every egg of a scan. A Gold save 6,873 hours in boxed 21
+    eggs, and building the key once per egg took a sixth of its time."""
     from .. import pcvalue
     owned = getattr(snapshot, 'owned', None)
     if owned is None:
-        return True
-    egg = (dex, tuple(dvs or ()))
+        return lambda dex, dvs=None: True
     key = policy.rating_key(snapshot) if hasattr(policy, 'rating_key') else None
     cache = getattr(policy, '_hatch_worth', None)
     if key is None or cache is None or cache[0] != key:
         cache = (key, {})
         if key is not None:
             policy._hatch_worth = cache
-    if egg not in cache[1]:
-        cache[1][egg] = pcvalue.worth(_with_new(policy, snapshot, dex, 5, dvs), missing=dex not in owned).keep
-    return cache[1][egg]
+    answers = cache[1]
+
+    def keeps(dex, dvs=None):
+        egg = (dex, tuple(dvs or ()))
+        if egg not in answers:
+            answers[egg] = pcvalue.worth(_with_new(policy, snapshot, dex, 5, dvs), missing=dex not in owned).keep
+        return answers[egg]
+    return keeps
+
+
+def keeps_hatch(policy, snapshot, dex, dvs=None):
+    """Whether the PC would keep what one egg of ``dex`` hatches into (hatch_worth)."""
+    return hatch_worth(policy, snapshot)(dex, dvs)
 
 
 def reserve_allows(policy, snapshot, dex, dvs=None):

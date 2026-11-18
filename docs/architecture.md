@@ -160,12 +160,24 @@ What starts a climb:
 
 ## Measured
 
-Snapshot from 2026-11-17 at `4d4e10e6`. Each run played 216000 frames from a copied save, niced, one at a time, with seed 7 in place of the tool's 12345 (`replay/profile_simulation.py:84`). Shares are of the run's wall time, from the tool's timers, which count only the emulator thread (`:24-25`, `:126-136`). Emulator is `CoreEmulator.tick` with its hooks, policy is the policy's `step`, observe is the emulator's `_observe`.
+Each run plays 216000 frames, one game hour, from a fixture copied from a save, niced, one at a time, with seed 7 in place of the tool's 12345 (`replay/profile_simulation.py:84`). Shares are of the run's wall time, from the tool's timers, which count only the emulator thread (`:24-25`, `:126-136`). Emulator is `CoreEmulator.tick` with its hooks, policy is the policy's `step`, observe is the emulator's `_observe`.
 
 ```sh
+python -m pokesim.replay profile-simulation capture --source ADVENTURE --output FIXTURE \
+    --rom ROM --game-data GAME_DATA
 python -m pokesim.replay profile-simulation run --fixture FIXTURE --output OUT \
     --frames 216000 --profiler timers --cpu 13
 ```
+
+Nearly all simulated time is past the Champion, thousands of hours in, so the deep postgame saves are the standard set and every speed change is measured on them. A Gen II fixture needs game data that holds the Gen II tables. Snapshot from 2026-11-17, at `40679ae6` with the Gen II egg scan building the PC's rating key once per scan, and with the cartridge clock's host time fixed:
+
+| Save | Wall | Frames per second | Emulator | Policy | Observe |
+| --- | --- | --- | --- | --- | --- |
+| Red, 17,136 hours | 40.3 s | 5362 | 22.5% | 27.9% | 26.1% |
+| Gold, 6,873 hours | 62.9 s | 3432 | 16.4% | 62.8% | 11.0% |
+| Crystal, 6,680 hours | 267.3 s | 808 | 4.1% | 90.9% | 2.9% |
+
+Shallower saves, from 2026-11-17 at `4d4e10e6`:
 
 | Save | Wall | Frames per second | Emulator | Policy | Observe |
 | --- | --- | --- | --- | --- | --- |

@@ -8,7 +8,7 @@ from itertools import combinations
 from pokecore.gen2.breeding import branch_parents, descendants_wanted, egg_lines, free_slots, offspring
 
 from .menus import ChangeBox, DayCare, Storage
-from .release import keeps_hatch
+from .release import hatch_worth, keeps_hatch
 from ..planning.ledger import FIELD_MOVES
 from .training import identity
 
@@ -239,8 +239,12 @@ def brought_eggs(state, snapshot):
     return brought
 
 
-def _hatches(policy, snapshot, mon):
-    return keeps_hatch(policy, snapshot, mon.species, mon.dvs)
+def _hatches(policy, snapshot, mons):
+    """The eggs among ``mons`` worth hatching (release.hatch_worth), one at a time. The PC's rating key
+    is built once for all of them, and not at all when none is an egg."""
+    eggs = [mon for mon in mons if getattr(mon, 'egg', False)]
+    keeps = hatch_worth(policy, snapshot) if eggs else None
+    return (mon for mon in eggs if keeps(mon.species, mon.dvs))
 
 
 def carried(policy, snapshot, mon):
@@ -250,7 +254,7 @@ def carried(policy, snapshot, mon):
     egg that adds nothing may go back to make room for a trainee.
     """
     return (bool(getattr(mon, 'egg', False)) and egg_key(mon) in brought_eggs(getattr(policy, 'collection', {}), snapshot)
-            and _hatches(policy, snapshot, mon))
+            and any(_hatches(policy, snapshot, (mon,))))
 
 
 def hatch_spares(policy, snapshot, *, trainee=True):
@@ -287,8 +291,7 @@ def hatching(policy, snapshot, Goal):
     state = policy.collection
     carried = sum(getattr(mon, 'egg', False) for mon in snapshot.party)
     # Only eggs that add something get a trip. The rest stay boxed rather than hold up training.
-    boxed = any(getattr(mon, 'egg', False) and _hatches(policy, snapshot, mon)
-                for mon in getattr(snapshot, 'stored', ()))
+    boxed = any(_hatches(policy, snapshot, getattr(snapshot, 'stored', ())))
     # A Battle Tower run or a Time Capsule restore needs an exact party, so the eggs wait for it.
     if (not boxed or carried >= HATCH_BATCH or state.get('breeding') or state.get('tower')
             or state.get('time_capsule_restore') or standing_down(policy, HATCH_KEY) or carried and not state.get('hatch_fill')):
@@ -324,7 +327,7 @@ def hatch_arrive(policy, snapshot):
     from .standdown import stand_down
     state = policy.collection
     state['hatch_ops'] = state.get('hatch_ops', 0) + 1
-    eggs = sorted((mon for mon in snapshot.stored if mon.egg and _hatches(policy, snapshot, mon)), key=lambda mon: (mon.box != snapshot.active_box, mon.box))
+    eggs = sorted(_hatches(policy, snapshot, snapshot.stored), key=lambda mon: (mon.box != snapshot.active_box, mon.box))
     if not eggs or state['hatch_ops'] > HATCH_OPS:
         # Nothing left to bring, or the trip keeps failing. Leave the PC and let other work go on.
         stand_down(policy, HATCH_KEY)
