@@ -2099,6 +2099,42 @@ def test_storage_goal_keeps_its_pick_across_the_rock_tunnel_warp(real_data):
     assert picks[0] in ('LAVENDER_POKECENTER_1F', 'ROUTE_10_POKECENTER_1F')
 
 
+def test_storage_places_are_found_again_only_when_the_walk_could_change(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data, starter='cyndaquil')
+    policy.completed = {'kanto': 1}
+    asked, places = [], policy.storage_places
+    policy.storage_places = lambda snapshot, region: asked.append(snapshot.map) or places(snapshot, region)
+    route = SimpleNamespace(map=real_data.map_ids['ROUTE_10_SOUTH'], frame=100, badges=16, party=[None], x=6, y=1)
+    first = policy.storage_goal(route)
+    assert policy.storage_goal(route) == first and len(asked) == 1
+    policy.nav.failed_edges[(route.map, real_data.map_ids['ROUTE_10_POKECENTER_1F'])] = 1
+    policy.storage_goal(route)
+    assert len(asked) == 2
+
+
+def test_encounter_points_are_found_again_only_when_the_tiles_or_the_rocks_change(real_data, monkeypatch):
+    from pokesim.gen2 import collection
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data, starter='cyndaquil')
+    asked, find = [], collection._encounter_points
+    monkeypatch.setattr(collection, '_encounter_points', lambda *args: asked.append(args[1]) or find(*args))
+    mid, away = real_data.map_ids['ROUTE_29'], SimpleNamespace(map=real_data.map_ids['NEW_BARK_TOWN'])
+    first = collection.encounter_points(policy, away, mid, 'grass')
+    first.clear()
+    assert collection.encounter_points(policy, away, mid, 'grass') and len(asked) == 1
+    # Seen tiles and smashed rocks are replaced, never edited (routes.py), so a new value is a new key.
+    tiles = list(real_data.maps[mid]['collision'])
+    policy.nav.regions.live[mid] = tiles
+    collection.encounter_points(policy, away, mid, 'grass')
+    assert len(asked) == 1
+    policy.nav.regions.live[mid] = [0xFF, *tiles[1:]]
+    collection.encounter_points(policy, away, mid, 'grass')
+    policy.nav.regions.cleared_rocks[mid] = {1}
+    collection.encounter_points(policy, away, mid, 'grass')
+    assert len(asked) == 3
+
+
 def _clock_policy(real_data, day, daily=0):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, starter='cyndaquil')
@@ -2456,6 +2492,24 @@ def test_wild_carriers_are_hunted_for_the_kings_rock_once_the_bag_has_none(real_
     asked = SimpleNamespace(data=real_data, demand={230: 1}, collection={})
     no_kingdra = SimpleNamespace(party=(), stored=stored[:4], items=(), owned=owned)
     assert item_hunts(asked, no_kingdra) == {61: rock, 117: scale}
+
+
+def test_item_hunts_are_worked_out_again_only_when_an_input_changes(real_data, monkeypatch):
+    from pokesim.gen2 import collection
+    rock = real_data.items['KINGS_ROCK']
+    stored = tuple(SimpleNamespace(species=species, held_item=0, egg=False, box=0, position=0, dvs=(1, 2, 3, 4, 5))
+                   for species in (61, 79, 117, 199, 230))
+    snapshot = SimpleNamespace(party=(), stored=stored, items=(), owned=frozenset({60, 61, 62, 79, 80, 116, 117, 199, 230}))
+    policy = SimpleNamespace(data=real_data, demand={}, collection={})
+    asked, work = [], collection._item_hunts
+    monkeypatch.setattr(collection, '_item_hunts', lambda *args: asked.append(1) or work(*args))
+    # Each caller gets its own copy, so clearing one leaves the kept answer whole.
+    collection.item_hunts(policy, snapshot).clear()
+    assert collection.item_hunts(policy, snapshot) == {61: rock} and len(asked) == 1
+    # The demand is a dict the policy edits in place, so the key holds a copy and sees the edit.
+    policy.demand[230] = 1
+    collection.item_hunts(policy, snapshot)
+    assert len(asked) == 2
 
 
 def test_a_carrier_hunt_stands_down_after_its_decision_budget(real_data):

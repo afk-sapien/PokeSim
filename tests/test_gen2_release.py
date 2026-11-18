@@ -331,6 +331,37 @@ def test_a_copy_for_trade_counts_the_room_left_once_the_hunt_boxes_the_trainee(m
     assert supply_room(policy, training)
 
 
+def test_supply_room_is_counted_again_only_when_the_rating_or_the_free_slots_change(monkeypatch):
+    from pokesim.gen2 import release
+    monkeypatch.setattr('pokecore.gen2.breeding.breeding_stock', lambda data, species: set())
+    names = {16: 'Pidgey', 19: 'Rattata', 79: 'Slowpoke'}
+    policy = SimpleNamespace(data=SimpleNamespace(species={dex: {'name': name} for dex, name in names.items()},
+                                                  game='crystal'),
+                             demand={16: 1, 79: 1}, collection={}, trade_preferences=lambda: {})
+    stored = (mon(79, position=19), mon(16, position=0), mon(16, position=1), mon(19, position=2), mon(19, position=3))
+
+    def view(**place):
+        return SimpleNamespace(**vars(snapshot(stored, **place)), owned=frozenset(names))
+
+    # pc_rated hands back the one rated list it keeps until the rating changes.
+    kept = release.release_rated(policy, view())
+    policy.pc_rated = lambda snapshot: kept
+    asked, count = [], release._supply_room
+    monkeypatch.setattr(release, '_supply_room', lambda *args: asked.append(args[1:]) or count(*args))
+    full = view()
+    assert not release.supply_room(policy, full) and not release.supply_room(policy, view())
+    assert len(asked) == 1
+    # Free slots and the open box are asked again.
+    assert release.supply_room(policy, view(boxes=(10,) * 14)) and len(asked) == 2
+    release.supply_room(policy, view(active_box=3))
+    assert asked[-1] == (0, 3) and len(asked) == 3
+    # So is a new rating, though the boxes are as they were.
+    policy.demand = {79: 1}
+    kept = release.release_rated(policy, full)
+    release.supply_room(policy, view(active_box=3))
+    assert len(asked) == 4
+
+
 def test_trade_targets_read_each_data_load_not_the_first_one_with_its_game_name():
     from pokesim.gen2.collection import trade_targets
     # The test above reads a Crystal stand-in with no evolutions. Keyed by game name, its empty answer

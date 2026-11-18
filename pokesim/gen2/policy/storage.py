@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pokecore.gen2.state import trainer_id
 from ..menus import Release
+from ..navigation import field_moves
 from .state import Goal
 
 
@@ -121,8 +122,28 @@ class StoragePart:
                     goal.map_name, goal.x, goal.y, goal.face)
 
     def storage_goal(self, snapshot):
-        choices, unreachable = [], []
         region = self.travel_region(snapshot)
+        # The places hold while the walk's own search key holds (navigation.walk), with the region and Ice Path.
+        inputs = (snapshot.map, region, field_moves(snapshot), frozenset(self.nav.failed_edges),
+                  'ice_path' in self.completed)
+        tied, fallback = self.facts.answer('storage places', inputs, lambda: self.storage_places(snapshot, region))
+        if not tied:
+            if snapshot.map == self.data.map_ids['POKECENTER_2F']:
+                return Goal('return_from_cable', 'Return downstairs after the Cable Club', 'POKECENTER_2F', 0, 7)
+            # Aim at the nearest known Pokémon Center by id and let navigation and stall recovery sort it out.
+            mid, x, y = fallback
+        else:
+            # Two Pokémon Centers the same number of maps away can swap places as the player crosses a
+            # warp, as Rock Tunnel and Route 10 do. Keeping the earlier pick stops the walk turning back.
+            kept = getattr(self, 'storage_pick', None)
+            mid, x, y = kept if kept in tied else min(tied)
+            self.storage_pick = (mid, x, y)
+        return Goal('storage', 'Prepare a place for a field move partner', self.data.maps[mid]['constant'], x, y, 'up')
+
+    def storage_places(self, snapshot, region):
+        """The PCs of the Pokémon Centers fewest maps away by walk in the travel region, as (map, x, y), and
+        the PC first by map id for when no walk reaches one."""
+        choices, unreachable = [], []
         for mid, entry in self.data.maps.items():
             if not entry['constant'].endswith('POKECENTER_1F'):
                 continue
@@ -139,16 +160,6 @@ class StoragePart:
                 continue
             choices.extend((len(route), mid, x, y) for x, y in pcs)
         if not choices:
-            if snapshot.map == self.data.map_ids['POKECENTER_2F']:
-                return Goal('return_from_cable', 'Return downstairs after the Cable Club', 'POKECENTER_2F', 0, 7)
-            # Aim at the nearest known Pokémon Center by id and let navigation and stall recovery sort it out.
-            _, mid, x, y = min(unreachable)
-        else:
-            nearest = min(choices)[0]
-            tied = [choice[1:] for choice in choices if choice[0] == nearest]
-            # Two Pokémon Centers the same number of maps away can swap places as the player crosses a
-            # warp, as Rock Tunnel and Route 10 do. Keeping the earlier pick stops the walk turning back.
-            kept = getattr(self, 'storage_pick', None)
-            mid, x, y = kept if kept in tied else min(tied)
-            self.storage_pick = (mid, x, y)
-        return Goal('storage', 'Prepare a place for a field move partner', self.data.maps[mid]['constant'], x, y, 'up')
+            return (), min(unreachable)[1:]
+        nearest = min(choices)[0]
+        return tuple(choice[1:] for choice in choices if choice[0] == nearest), None
