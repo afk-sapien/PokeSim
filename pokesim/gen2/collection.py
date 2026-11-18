@@ -3,6 +3,7 @@ from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
 from functools import cache, partial
+import operator
 
 from ..planning import values
 from ..planning import arbiter, decide, pin, throws
@@ -753,33 +754,32 @@ def _restore(policy, saved):
             _set(policy, slot, value)
 
 
-def _edited_in_place(slot):
-    """Whether ``slot`` is a monitor table or the milestones, which a build may add to or remove from."""
-    return slot == 'completed' or isinstance(slot, tuple) and slot[0] == 'monitor'
-
-
 def draft(policy, build):
     """Run ``build`` and take its writes back. Returns what ``build`` gave and its writes, each slot's new
     value or _MISSING for a slot it removed, which ``write`` lands.
 
     A build replaces a value it changes and never edits one the state held before it (tests/conftest.py
     checks this), so a one-level copy puts the old state back exactly. A collection field is written when
-    it holds another object, and so is the menu task. A monitor table or the milestones are written when
-    they no longer equal their copy. A goal or menu task that holds an object the build wrote holds the one
-    ``write`` lands. A build that fails puts nothing back.
+    it holds another object, and so is the menu task. A monitor table or the milestones, which a build adds
+    to in place, are written when they no longer equal their copy. A goal or menu task that holds an object
+    the build wrote holds the one ``write`` lands. A build that fails puts nothing back.
     """
-    before = {slot: dict(value) if _edited_in_place(slot) and isinstance(value, dict) else value
-              for slot, value in _slots(policy).items()}
+    collection, menu, completed = dict(policy.collection), getattr(policy, 'menu', None), getattr(policy, 'completed', None)
+    tables = {key: dict(table) if isinstance(table, dict) else table for key, table in policy.monitor_tables.items()}
+    completed = dict(completed) if isinstance(completed, dict) else completed
     result = build()
-    now = _slots(policy)
-    writes = {}
-    for slot in set(now) | set(before):
-        value, old = now.get(slot, _MISSING), before.get(slot, _MISSING)
-        if value != old if _edited_in_place(slot) else value is not old:
-            # The milestones dict is cleared in place when it is put back, so its writes are a copy.
-            writes[slot] = dict(value) if slot == 'completed' and isinstance(value, dict) else value
-    for slot in writes:
-        _set(policy, slot, before.get(slot, _MISSING))
+    writes, undo = {}, {}
+    for kind, now, before, same in (('collection', policy.collection, collection, operator.is_),
+                                    ('monitor', policy.monitor_tables, tables, operator.eq)):
+        for key in now.keys() | before.keys():
+            if not same(value := now.get(key, _MISSING), old := before.get(key, _MISSING)):
+                writes[kind, key], undo[kind, key] = value, old
+    if getattr(policy, 'menu', None) is not menu:
+        writes['menu'], undo['menu'] = policy.menu, menu
+    if (value := getattr(policy, 'completed', None)) != completed:
+        # The milestones dict is cleared in place when it is put back, so its writes are a copy.
+        writes['completed'], undo['completed'] = dict(value) if isinstance(value, dict) else value, completed
+    write(policy, undo)
     return result, writes
 
 
