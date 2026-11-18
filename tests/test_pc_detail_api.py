@@ -57,7 +57,6 @@ def test_gen1_box_records_decode_current_hp_status_and_pp_ups():
     raw[8:10] = bytes((33, 45))                 # Tackle, Growl
     raw[27:29] = bytes((0x11, 0x11))           # HP DV 15: (60 * 2) * 20 // 100 + 30 = 54
     raw[29], raw[30] = 0x80 | 30, 0x40 | 7      # two PP Ups on Tackle, one on Growl
-    _decode_box.cache_clear()
     mon = _decode_box(0, bytes(raw), bytes([0x50] * 11))[0]
     assert mon.hp == 12 and mon.status == 8 and mon.pp == (30, 7, 0, 0)
     assert mon.max_pp == (35 + 7 * 2, 40 + 7, 0, 0)  # each PP Up adds at most 7

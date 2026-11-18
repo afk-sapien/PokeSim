@@ -2,6 +2,7 @@
 from dataclasses import replace
 
 import pytest
+from pokecore import regions
 
 from pokesim import ram
 from pokesim.trade import boxes
@@ -72,13 +73,29 @@ def test_flat_memory_with_initialized_boxes_still_reads_active_box():
 
 
 def test_box_cache_is_bounded_during_long_running_training():
-    ram._decode_box.cache_clear()
+    regions.clear_region_cache()
     memory = populate(Memory(), contents=((1, 148, 30),))
     for experience in range(200):
         memory[ram.W_BOX_COUNT + 22 + 16] = experience
         ram.read_stored_details(memory)
-    info = ram._decode_box.cache_info()
-    assert info.currsize == info.maxsize == 128
+    assert [name for name in regions._regions if name.startswith('gen1 box')] == ['gen1 box0']
+
+
+def test_unchanged_party_and_rows_hand_back_the_same_objects():
+    memory = populate(Memory(), contents=((1, 148, 30), (7, 41, 41)))
+    memory[ram.W_PARTY_COUNT] = 1
+    memory[ram.W_PARTY_MONS] = 148
+    memory[ram.W_PARTY_MONS + 33] = 30
+    first = ram.read_snapshot(memory, 10)
+    memory[ram.W_X] = 9
+    second = ram.read_snapshot(memory, 11)
+    assert second.party is first.party and second.party[0].level == 30
+    assert all(a is b for a, b in zip(first.stored_pokemon, second.stored_pokemon))
+    assert second.owned is first.owned and second.seen is first.seen
+    memory[ram.W_PARTY_MONS + 33] = 31
+    third = ram.read_snapshot(memory, 12)
+    assert third.party[0].level == 31
+    assert all(a is b for a, b in zip(first.stored_details, third.stored_details))
 
 
 def test_storage_rows_are_independent_and_match_dataclass_serialization():

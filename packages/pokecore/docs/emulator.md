@@ -128,10 +128,16 @@ returns the next button toward `target` (map, x, y). Without `walk` the driver r
 
 ## Snapshot reads
 
-- `pokecore.snapshot.read_fields(memory, move_data=None)` returns fresh
-  snapshot fields, including party dictionaries. It never advances the emulator
-  or reads banked storage. Call it on the emulator's owning thread between
-  steps.
+- `pokecore.snapshot.read_fields(memory, move_data=None, *, party=True)` returns
+  fresh snapshot fields, including party dictionaries. `party=False` leaves the
+  party out for a caller that decodes it itself. The Pokédex frozensets are
+  shared while their bytes are unchanged. It never advances the emulator or
+  reads banked storage. Call it on the emulator's owning thread between steps.
+- `pokecore.regions.region(name, key, data, build)` returns `build()`, or the
+  value kept under `name` while `key` is equal and `data` is the same object.
+  Each name keeps only its latest value, and only immutable values belong there.
+  The Gen I Pokédex and the Gen II snapshot regions use it, and
+  `clear_region_cache()` drops them all.
 - `Memory.read_bytes(start, stop)` returns detached bytes.
 - `Emulator.tick_read(frames, start, stop, render=True, sound=True)` is an
   experimental combined advance and byte read. It keeps pending inputs, hooks,

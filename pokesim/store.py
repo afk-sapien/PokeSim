@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from copy import deepcopy
 import json
 import os
 import logging
@@ -215,14 +214,13 @@ class Store:
                 if epoch != self._read_epoch:
                     self._read_cache.clear()
                     self._read_epoch = epoch
+                # The cache keeps the stored text, so every hit parses its own detached value.
                 if k in self._read_cache:
-                    exists, value = self._read_cache[k]
-                    return deepcopy(value) if exists else default
+                    text = self._read_cache[k]
+                    return default if text is None else json.loads(text)
             r = self.db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
             if cached:
-                value = json.loads(r["v"]) if r else None
-                self._read_cache[k] = (r is not None, value)
-                return deepcopy(value) if r else default
+                self._read_cache[k] = r["v"] if r else None
         return json.loads(r["v"]) if r else default
 
     def set(self, k, v):

@@ -50,9 +50,9 @@ from pokecore.gen1 import (
 from .display_names import place_name
 from .game_data import load
 from dataclasses import dataclass, fields, replace
-from functools import lru_cache
 from pokecore.storage import decode_box, read_box_counts as read_box_counts, read_box_records
-from pokecore.gen1 import BIT_TRANSFORMED, W_ENEMY_BATTLE_STATUS3, W_MAP_PAL_OFFSET, W_TOWN_VISITED
+from pokecore.gen1 import BIT_TRANSFORMED, W_ENEMY_BATTLE_STATUS3, W_MAP_PAL_OFFSET, W_TOWN_VISITED, read_party
+from pokecore.regions import region
 from pokecore import repairs
 
 # Yellow's opening scene, where Oak catches Pikachu before the player has a party.
@@ -321,12 +321,11 @@ def repair_party_nicknames(mem):
 
 
 def read_stored_pokemon(mem):
-    return tuple((mon.box, mon.species, mon.level, mon.nick) for mon in read_stored_details(mem))
+    return _read_storage(mem)[1]
 
 
-@lru_cache(maxsize=128)
 def _decode_box(box, structs, names):
-    """Cache immutable records by their bytes, never by emulator identity or time."""
+    """The valid Pokémon of one box's raw records."""
     from .strategy_data import MOVES as MOVE_DATA
     return tuple(StoredMon(box, mon.position, mon.species, mon.level, mon.nick,
                            mon.moves, mon.experience, mon.dvs, mon.stat_exp, mon.trainer_id,
@@ -349,21 +348,41 @@ def read_stored_details(mem, *, counts=None):
     return _read_storage(mem, counts)[0]
 
 
-def _read_storage(mem, counts=None):
-    """Stored Pokémon, and the (box, position) pairs the PC list cannot reach without the stack pointer.
-
-    See pc_list for which nicknames stop the list. With the stack pointer every slot is reachable,
-    so callers apply these through pc_list.guarded.
-    """
+def _decode_storage_box(box, structs, names, yellow):
+    """One box's stored Pokémon, their (box, species, level, nick) rows, and its unlisted slots."""
     from .pc_list import gen1_unlisted
+    mons = _decode_box(box, structs, names)
+    return (mons, tuple((mon.box, mon.species, mon.level, mon.nick) for mon in mons),
+            tuple((box, position) for position in gen1_unlisted(names, len(structs) // 33, yellow)))
+
+
+def _read_storage(mem, counts=None):
+    """Stored Pokémon, their (box, species, level, nick) rows, and the (box, position) pairs the PC
+    list cannot reach without the stack pointer.
+
+    Each box is decoded again only when its bytes change (pokecore.regions), so an unchanged box
+    hands back the same objects. See pc_list for which nicknames stop the list. With the stack
+    pointer every slot is reachable, so callers apply these through pc_list.guarded.
+    """
+    from .strategy_data import MOVES as MOVE_DATA
     from .yellow import YellowMemory
     yellow = isinstance(mem, YellowMemory)
-    out, unlisted = [], []
+    stored, rows, unlisted = [], [], []
     for record in read_box_records(mem, counts):
-        out.extend(_decode_box(record.box, record.structs, record.names))
-        unlisted.extend((record.box, position)
-                        for position in gen1_unlisted(record.names, record.count, yellow))
-    return tuple(out), tuple(unlisted)
+        mons, box_rows, box_unlisted = region(
+            f'gen1 box{record.box}', (yellow, record.structs, record.names), MOVE_DATA,
+            lambda: _decode_storage_box(record.box, record.structs, record.names, yellow))
+        stored.extend(mons)
+        rows.extend(box_rows)
+        unlisted.extend(box_unlisted)
+    return tuple(stored), tuple(rows), tuple(unlisted)
+
+
+def _read_party(mem, move_data):
+    """The party, decoded again only when its bytes change (pokecore.regions)."""
+    raw = bytes(mem[W_PARTY_COUNT:W_PARTY_NICKS + 6 * 11])
+    return region('gen1 party', raw, move_data,
+                  lambda: tuple(PartyMon(**mon) for mon in read_party(mem, move_data)))
 
 
 def read_snapshot(mem, frame: int) -> Snapshot:
@@ -382,10 +401,10 @@ def read_snapshot(mem, frame: int) -> Snapshot:
 def _decode_snapshot(mem, frame: int) -> Snapshot:
     from .strategy_data import MOVES as MOVE_DATA
     from pokecore.snapshot import read_fields
-    decoded = read_fields(mem, move_data=MOVE_DATA)
-    decoded['party'] = tuple(PartyMon(**mon) for mon in decoded['party'])
+    decoded = read_fields(mem, party=False)
+    decoded['party'] = _read_party(mem, MOVE_DATA)
     box_counts = read_box_counts(mem)
-    stored, unlisted = _read_storage(mem, box_counts)
+    stored, rows, unlisted = _read_storage(mem, box_counts)
     from .yellow import PIKACHU_HAPPINESS, YellowMemory
     if isinstance(mem, YellowMemory):
         decoded['pikachu_happiness'] = mem.raw[PIKACHU_HAPPINESS]
@@ -396,5 +415,4 @@ def _decode_snapshot(mem, frame: int) -> Snapshot:
         # A transformed Ditto reads as the player's species, and species2 keeps the one that was met.
         decoded['enemy_species'] = mem[W_ENEMY_SPECIES2]
     return Snapshot(frame=frame, **decoded, box_counts=box_counts,
-                    stored_pokemon=tuple((mon.box, mon.species, mon.level, mon.nick) for mon in stored),
-                    stored_details=stored, unlisted=unlisted)
+                    stored_pokemon=rows, stored_details=stored, unlisted=unlisted)

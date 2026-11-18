@@ -12,6 +12,7 @@ from math import isqrt
 
 from ..dvs import shiny_bytes
 from ..formulas import experience_at, experience_progress  # noqa: F401  (re-exported)
+from ..regions import clear_region_cache, region as _region  # noqa: F401  (re-exported)
 from .screens import ScreenText, mask_hud
 
 BADGES = ('Zephyr', 'Hive', 'Plain', 'Fog', 'Mineral', 'Storm', 'Glacier', 'Rising',
@@ -343,24 +344,6 @@ class Snapshot:
                             'pokemon': [mon.to_dict(egg_view) for mon in self.stored]}}
 
 
-# Decoded regions keyed strictly by their raw bytes and the static game data. Each region keeps
-# only its latest entry, so the cache stays small and never outlives a change of those bytes.
-_regions = {}
-
-
-def _region(name, key, data, build):
-    entry = _regions.get(name)
-    if entry is not None and entry[0] is data and entry[1] == key:
-        return entry[2]
-    value = build()
-    _regions[name] = (data, key, value)
-    return value
-
-
-def clear_region_cache():
-    _regions.clear()
-
-
 def _party(raw, data):
     count, species, mons, names = raw[0], raw[1:7], raw[7:295], raw[295:361]
     party = []
@@ -381,6 +364,11 @@ def _box(raw, box, data):
         if mon:
             stored.append(mon)
     return count, tuple(stored)
+
+
+def _machines(raw, data):
+    items = [data.items.get(f'TM{i:02d}') for i in range(1, 51)] + [data.items.get(f'HM{i:02d}') for i in range(1, 8)]
+    return tuple((item, qty) for item, qty in zip(items, raw) if item and qty)
 
 
 def _daycare(raw, data):
@@ -448,8 +436,8 @@ def _decode_snapshot(memory, data, frame, cache):
         raw = mem.read(symbol, size * 2, 1)
         pockets[pocket] = tuple((raw[i], raw[i + 1]) for i in range(0, len(raw), 2) if raw[i] != 0xFF)
     pockets['key'] = tuple((item, 1) for item in mem.read('wNumKeyItems', min(mem.byte('wNumKeyItems'), 26), 1) if item != 0xFF)
-    machines = [data.items.get(f'TM{i:02d}') for i in range(1, 51)] + [data.items.get(f'HM{i:02d}') for i in range(1, 8)]
-    pockets['machines'] = tuple((item, qty) for item, qty in zip(machines, mem.read('wTMsHMs', 57)) if item and qty)
+    machines_raw = mem.read('wTMsHMs', 57)
+    pockets['machines'] = region('machines', machines_raw, data, lambda: _machines(machines_raw, data))
     objects = []
     for slot in range(1, 13):
         raw = mem.read('wObjectStructs', 40, slot * 40)
