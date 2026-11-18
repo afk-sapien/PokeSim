@@ -180,10 +180,11 @@ def test_release_task_ends_when_someone_else_sits_in_the_slot():
 
 def test_held_counts_follow_a_new_snapshot():
     from pokesim.gen2.collection import held_counts
+    policy = SimpleNamespace()
     first = snapshot([mon(16), mon(16), mon(19, egg=True)])
-    assert held_counts(first)[16] == 2 and held_counts(first)[19] == 0
+    assert held_counts(policy, first)[16] == 2 and held_counts(policy, first)[19] == 0
     second = snapshot([mon(16)])
-    assert held_counts(second)[16] == 1
+    assert held_counts(policy, second)[16] == 1
 
 
 def guard_emulator(idle):
@@ -356,6 +357,60 @@ def test_a_copy_with_known_dvs_is_kept_only_when_twice_as_rare(monkeypatch):
     assert keeps_another(policy, SimpleNamespace(**vars(view), owned=frozenset()), 16, dvs=even(2))
     assert keeps_another(policy, view, 16, dvs=(0, 2, 10, 10, 10))
     assert not keeps_another(policy, view, 16, dvs=even(2))
+
+
+def test_facts_keep_an_answer_until_its_inputs_or_arguments_change():
+    from pokesim.gen2.facts import Facts
+    store, asked = Facts(), []
+
+    def count(*args):
+        asked.append(args)
+        return len(asked)
+    party = (mon(16),)
+    assert store.answer('count', (party,), count) == store.answer('count', (party,), count) == 1
+    # Equal inputs that are new objects answer from the store, and another question keeps its own.
+    assert store.answer('count', (tuple(party),), count) == 1
+    assert store.answer('other', (party,), count) == 2
+    assert store.answer('count', (party,), count, 'one more') == 3
+    assert store.answer('count', ((mon(16), mon(19)),), count, 'one more') == 4
+    assert store.answer('other', (party,), count) == 2
+
+
+def test_a_wild_battle_rates_the_pc_with_its_catch_once_and_notes_it_every_step(monkeypatch):
+    from pokesim.gen2 import release
+    from pokesim.gen2.facts import Facts
+    from pokesim.gen2.policy.storage import StoragePart
+    monkeypatch.setattr('pokecore.gen2.breeding.breeding_stock', lambda data, species: set())
+    ratings, rate = [], release.release_rated
+
+    def counted(policy, snapshot, **extra):
+        ratings.append(bool(extra))
+        return rate(policy, snapshot, **extra)
+    monkeypatch.setattr(release, 'release_rated', counted)
+    noted = []
+
+    class Policy(StoragePart):
+        data = SimpleNamespace(species={16: {'name': 'Pidgey'}}, game='gold')
+        demand, collection, facts = {}, {}, Facts()
+        visit_team = SimpleNamespace(keys=frozenset())
+        goal_watch = SimpleNamespace(expect=lambda dex, dvs, found: noted.append((dex, dvs)))
+
+        def trade_preferences(self):
+            return {}
+
+        def release_owners(self):
+            return None
+    policy, rarest = Policy(), (0, 0, 9, 14, 15)
+    view = snapshot([mon(16, dvs=even(8))])
+    policy.pc_rated(view)
+    # Every battle step asks again with the same wild DVs. The PC is rated with the catch once, apart
+    # from the plain rating, and every step still notes the catch on the goal watch.
+    assert all(release.keeps_another(policy, view, 16, dvs=rarest) for _ in range(3))
+    policy.pc_rated(view)
+    assert ratings == [False, True] and noted == [(16, rarest)] * 3
+    release.keeps_another(policy, view, 16, dvs=even(2))
+    release.keeps_another(policy, snapshot([mon(16, dvs=even(9))]), 16, dvs=even(2))
+    assert ratings == [False, True, True, True] and len(noted) == 5
 
 
 def test_a_better_dv_hunt_catches_only_a_copy_the_pc_keeps(monkeypatch):

@@ -119,7 +119,7 @@ This table lists the plan-like state, not every field.
 | Rescue presses | none | `rescue` (`gen2/policy/__init__.py:96`), filled on a recovery (`:204-208`), played first in a step (`:277-280`) |
 | Navigator memory | `visits`, `blocked` and `failures` beside the walk path (`policies/navigation.py:251-254`) | `blocked`, `visits`, `explored`, `exploring`, `failed_edges` and `searches` (`gen2/navigation.py:97-103`) |
 
-Gen II stores no walk path. `toward` (`gen2/navigation.py:377-405`) routes again on every call and drops the expired region failures (`:381`). Its BFS search caches progress per start (`gen2/routes.py:13-19`). A Gen I restore resets about 60 fields in `on_restore`, the trip, menu and shortcut among them (`policies/strategic.py:245-324`).
+Gen II stores no walk path. `toward` (`gen2/navigation.py:377-405`) routes again on every call and drops the expired region failures (`:381`). Its BFS search caches progress per start (`gen2/routes.py:13-19`). Gen II answers derived from the game state, the PC rating, held counts and item needs so far, sit in one facts store on the policy (`gen2/facts.py`). Each is kept until the snapshot regions and settings it reads change, and none is saved. A Gen I restore resets about 60 fields in `on_restore`, the trip, menu and shortcut among them (`policies/strategic.py:245-324`).
 
 ## Planning
 
@@ -169,13 +169,13 @@ python -m pokesim.replay profile-simulation run --fixture FIXTURE --output OUT \
     --frames 216000 --profiler timers --cpu 13
 ```
 
-Nearly all simulated time is past the Champion, thousands of hours in, so the deep postgame saves are the standard set and every speed change is measured on them. A Gen II fixture needs game data that holds the Gen II tables. Snapshot from 2026-11-17 with the cartridge clock's host time fixed. Red is at `40679ae6` with the Gen II egg scan building the PC's rating key once per scan. Gold and Crystal are at `8cad58d6` with the Gen II Pokédex hunt answering each species once per scan:
+Nearly all simulated time is past the Champion, thousands of hours in, so the deep postgame saves are the standard set and every speed change is measured on them. A Gen II fixture needs game data that holds the Gen II tables. Snapshot from 2026-11-17 with the cartridge clock's host time fixed. Red is at `40679ae6` with the Gen II egg scan building the PC's rating key once per scan. Gold and Crystal are at `e06c0e60` with the Gen II PC rating kept in the facts store:
 
 | Save | Wall | Frames per second | Emulator | Policy | Observe |
 | --- | --- | --- | --- | --- | --- |
 | Red, 17,136 hours | 40.3 s | 5362 | 22.5% | 27.9% | 26.1% |
-| Gold, 6,873 hours | 59.2 s | 3648 | 17.1% | 60.2% | 12.1% |
-| Crystal, 6,680 hours | 78.3 s | 2760 | 14.3% | 66.8% | 10.8% |
+| Gold, 6,873 hours | 56.0 s | 3859 | 19.7% | 55.4% | 13.3% |
+| Crystal, 6,680 hours | 74.0 s | 2918 | 15.5% | 65.7% | 10.6% |
 
 Shallower saves, from 2026-11-17 at `4d4e10e6`:
 

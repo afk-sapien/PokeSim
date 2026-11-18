@@ -32,7 +32,7 @@ class StoragePart:
         seen at this PC visit, the Pokédex and the open hunt."""
         from ..release import hunt_focus, plan_partners
         preferences = self.trade_preferences()
-        return (snapshot.party, snapshot.stored, snapshot.active_box, tuple(sorted(self.demand.items())), self.visit_team.keys,
+        return (snapshot.party, snapshot.stored, getattr(snapshot, 'active_box', None), tuple(sorted(self.demand.items())), self.visit_team.keys,
                 frozenset(getattr(snapshot, 'owned', ()) or ()), hunt_focus(self.collection),
                 tuple(sorted(map(str, plan_partners(self.collection)))), self.release_owners(),
                 tuple(sorted((key, (value or {}).get('state')) for key, value in preferences.items())),
@@ -42,15 +42,16 @@ class StoragePart:
 
     def pc_rated(self, snapshot, marks=frozenset(), extra=()):
         """Every Pokémon scored as the next release scores it (pcvalue.py), for the PC tab, the ledger
-        and the owner's requests. Kept until rating_key changes, so a waiting request does not rate the
-        whole PC on every decision. Extra League reward ``marks`` or ``extra`` rows give a one-off rating."""
+        and the owner's requests. Kept in the facts until rating_key changes, so a waiting request does
+        not rate the whole PC on every decision. A rating with extra League reward ``marks`` or ``extra``
+        rows is kept apart, the latest one, so a wild battle rates the PC with its catch once per
+        encounter and not on every battle step."""
         from ..release import release_rated
-        if marks or extra:
-            return release_rated(self, snapshot, marks=marks, extra=extra)
         key = self.rating_key(snapshot)
-        if self.rated_cache[0] != key:
-            self.rated_cache = (key, release_rated(self, snapshot))
-        return self.rated_cache[1]
+        if marks or extra:
+            return self.facts.answer('pc rating with extra', key, lambda marks, extra: release_rated(
+                self, snapshot, marks=marks, extra=extra), marks, extra)
+        return self.facts.answer('pc rating', key, lambda: release_rated(self, snapshot))
 
     def release_target(self, snapshot):
         """The spare duplicate to release next straight from the box, or None."""
