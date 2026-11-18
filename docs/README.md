@@ -52,7 +52,7 @@ Each design's status line says what is built. Its "Today" describes main when it
 - [One bot, two adapters](design/one-bot.md): built. One policy protocol and one runtime loop for both generations, with a game adapter that only headless runs use today.
 - [Goal queue](design/goal-queue.md): proposed, not built. An ordered, saved list of goals that a manager can add to and reorder.
 - [Nuzlocke mode](design/nuzlocke.md): proposed, not built. A per-adventure challenge mode where a Pokémon that faints is dead for good.
-- [When to rethink the goal](design/when-to-rethink.md): proposed, not built. Whether to pick the goal again only on named events instead of at every decision. It recommends keeping today's model.
+- [When to rethink the goal](design/when-to-rethink.md): proposed, not built. Whether to pick the goal again only on named events instead of at every decision, measured on saves thousands of game hours past the Champion. It recommends keeping today's model and asking each whole-PC question once per PC change, starting with the Gen II egg scan.
 
 ## Historical records
 
