@@ -119,7 +119,7 @@ This table lists the plan-like state, not every field.
 | Rescue presses | none | `rescue` (`gen2/policy/__init__.py:96`), filled on a recovery (`:204-208`), played first in a step (`:277-280`) |
 | Navigator memory | `visits`, `blocked` and `failures` beside the walk path (`policies/navigation.py:251-254`) | `blocked`, `visits`, `explored`, `exploring`, `failed_edges` and `searches` (`gen2/navigation.py:97-103`) |
 
-Gen II stores no walk path. `toward` (`gen2/navigation.py:377-405`) routes again on every call and drops the expired region failures (`:381`). Its BFS search caches progress per start (`gen2/routes.py:13-19`). A Gen I restore resets about 60 fields in `on_restore`, the trip, menu and shortcut among them (`policies/strategic.py:245-324`).
+Gen II stores no walk path. `toward` (`gen2/navigation.py:377-405`) routes again on every call and drops the expired region failures (`:381`). Its BFS search caches progress per start (`gen2/routes.py:13-19`). Gen II answers derived from the game state, the PC rating, held counts and item needs so far, sit in one facts store on the policy (`gen2/facts.py`). Each is kept until the snapshot regions and settings it reads change, and none is saved. A Gen I restore resets about 60 fields in `on_restore`, the trip, menu and shortcut among them (`policies/strategic.py:245-324`).
 
 ## Planning
 
