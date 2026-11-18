@@ -468,23 +468,14 @@ def lapras(policy, snapshot, mem, Goal):
     return Goal('collection_lapras', 'Catch the Friday Lapras in Union Cave', 'UNION_CAVE_B2F', px, py, face)
 
 
-_PREREQUISITES = [None, None]
-
-
-def prerequisites(data, snapshot):
+def prerequisites(policy, snapshot):
     """Find breeding and evolution partners that were collected but later traded away.
 
-    Called several times per step, so the answer is kept until the species table, the dex or a
-    held copy changes. Snapshot regions are reused while their bytes match, so the key compares
-    by identity in the common case.
+    Called several times per step, so the answer is kept in the facts until the dex or a held copy
+    changes. Callers only read it.
     """
-    key = (data.species, snapshot.owned, snapshot.party, snapshot.stored, getattr(snapshot, 'daycare', ()))
-    cached = _PREREQUISITES[0]
-    if cached is not None and cached[0] is key[0] and cached[1:] == key[1:]:
-        return set(_PREREQUISITES[1])
-    needed = _prerequisites(data, snapshot)
-    _PREREQUISITES[:] = [key, frozenset(needed)]
-    return needed
+    inputs = (snapshot.owned, snapshot.party, snapshot.stored, getattr(snapshot, 'daycare', ()))
+    return facts(policy).answer('prerequisites', inputs, lambda: frozenset(_prerequisites(policy.data, snapshot)))
 
 
 def _prerequisites(data, snapshot):
@@ -1070,12 +1061,12 @@ def journey(policy, snapshot, mem, Goal):
     back active work. The rungs' offers go on the step's ballot (policy.journey), and the pick's writes
     land now, since the step reads them next.
     """
-    data, state = policy.data, policy.collection
+    state = policy.collection
     # The decision that asked the collection, which tells the decide pipeline the story goal is its own.
     policy.collection_decision = getattr(policy, 'decisions', None)
     policy.collection_offers, policy.collection_pinned, policy.collection_goal = [], None, None
     from .npc_trades import requests as trade_requests
-    state['prerequisites'] = sorted(prerequisites(data, snapshot) | trade_requests(policy, snapshot, getattr(mem, 'memory', None)))
+    state['prerequisites'] = sorted(prerequisites(policy, snapshot) | trade_requests(policy, snapshot, getattr(mem, 'memory', None)))
     goal = held(policy, snapshot, mem, Goal)
     policy.ladder_hold = goal or None
     if goal:

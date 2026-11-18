@@ -479,9 +479,9 @@ def test_training_uses_matching_time_for_eevee(real_data):
     from pokesim.gen2.training import projects
     mon = SimpleNamespace(species=133, egg=False, level=20, experience=8000, friendship=220,
                           box=None, trainer_id=1, dvs=(10, 10, 10, 10, 10))
-    snapshot = SimpleNamespace(items=[], party=(mon,), stored=(), owned={133})
-    assert {row[4] for row in projects(real_data, snapshot, 'day')} == {196}
-    assert {row[4] for row in projects(real_data, snapshot, 'night')} == {197}
+    snapshot, policy = SimpleNamespace(items=[], party=(mon,), stored=(), owned={133}), SimpleNamespace(data=real_data)
+    assert {row[4] for row in projects(policy, snapshot, 'day')} == {196}
+    assert {row[4] for row in projects(policy, snapshot, 'night')} == {197}
 
 
 def test_leaf_stone_evolves_a_peer_request_when_the_only_copy_is_a_kept_veteran(real_data):
@@ -494,18 +494,19 @@ def test_leaf_stone_evolves_a_peer_request_when_the_only_copy_is_a_kept_veteran(
                                stat_exp=(stat_exp,) * 5, position=0)
     veteran, seed = mon(103, 6, 18000), mon(102, 14, 0, level=23)
     snapshot = SimpleNamespace(items=[(stone, 1)], party=(), stored=(veteran, seed), owned={102, 103})
+    policy = SimpleNamespace(data=real_data)
     # Without a request the owned entry needs no stone.
-    assert not projects(real_data, snapshot, 'day')
+    assert not projects(policy, snapshot, 'day')
     # Peers ask for Exeggutor, and the only copy here is a trained partner automatic trading keeps.
-    rows = projects(real_data, snapshot, 'day', {103: 2})
+    rows = projects(policy, snapshot, 'day', {103: 2})
     assert [(row[4], row[5]) for row in rows] == [(103, stone)]
     # A spare copy can travel instead, so the stone stays in the bag.
     spare = mon(103, 7, 0)
     snapshot.stored = (veteran, seed, spare)
-    assert not projects(real_data, snapshot, 'day', {103: 2})
+    assert not projects(policy, snapshot, 'day', {103: 2})
     # The stone is kept for this cartridge's own missing Vileplume.
     snapshot.stored = (veteran, seed, mon(44, 3, 0, level=30))
-    assert {row[4] for row in projects(real_data, snapshot, 'day', {103: 2})} == {45}
+    assert {row[4] for row in projects(policy, snapshot, 'day', {103: 2})} == {45}
 
 
 def test_real_move_and_machine_names_do_not_shift_at_alias_constants(real_data):
@@ -549,12 +550,12 @@ def test_tyrogue_training_selects_the_actual_stat_branch(real_data):
     from pokesim.gen2.training import projects
     mon = SimpleNamespace(species=236, egg=False, level=19, experience=6859, friendship=70,
                           box=None, trainer_id=1, dvs=(10,) * 5, stat_exp=(0,) * 5)
-    snapshot = SimpleNamespace(items=[], party=(mon,), stored=(), owned={236})
-    assert {row[4] for row in projects(real_data, snapshot, 'day')} == {237}
+    snapshot, policy = SimpleNamespace(items=[], party=(mon,), stored=(), owned={236}), SimpleNamespace(data=real_data)
+    assert {row[4] for row in projects(policy, snapshot, 'day')} == {237}
     mon.dvs = (10, 15, 0, 10, 10)
-    assert {row[4] for row in projects(real_data, snapshot, 'day')} == {106}
+    assert {row[4] for row in projects(policy, snapshot, 'day')} == {106}
     mon.dvs = (10, 0, 15, 10, 10)
-    assert {row[4] for row in projects(real_data, snapshot, 'day')} == {107}
+    assert {row[4] for row in projects(policy, snapshot, 'day')} == {107}
 
 
 def test_breeding_observes_baby_groups_gender_and_related_dvs(real_data):
@@ -1480,13 +1481,14 @@ def test_collection_recovers_parents_that_were_traded_away(real_data):
     from pokesim.gen2.collection import prerequisites, wanted
     snapshot = SimpleNamespace(party=(), stored=(), daycare=(),
         owned=set(range(1, 252)) - {174, 182, 197, 242})
-    needs = prerequisites(real_data, snapshot)
+    policy = SimpleNamespace(data=real_data, demand={})
+    needs = prerequisites(policy, snapshot)
     assert {39, 40, 44, 113, 132, 133} <= needs
-    policy = SimpleNamespace(demand={}, collection={'prerequisites': needs})
+    policy.collection = {'prerequisites': needs}
     assert wanted(policy, snapshot, 39)
     snapshot.party = (SimpleNamespace(species=39, level=20, egg=False),)
     assert not wanted(policy, snapshot, 39)
-    assert not {39, 40} & prerequisites(real_data, snapshot)
+    assert not {39, 40} & prerequisites(policy, snapshot)
 
 
 def test_training_can_replace_an_owned_intermediate_needed_for_a_missing_evolution(real_data):
@@ -1494,7 +1496,7 @@ def test_training_can_replace_an_owned_intermediate_needed_for_a_missing_evoluti
     mareep = SimpleNamespace(species=179, level=14, experience=2000, egg=False,
         box=None, trainer_id=1, dvs=(5,) * 5)
     snapshot = SimpleNamespace(party=(mareep,), stored=(), items=(), owned=set(range(1, 252)) - {181})
-    assert {row[4] for row in projects(real_data, snapshot, 'day')} == {180}
+    assert {row[4] for row in projects(SimpleNamespace(data=real_data), snapshot, 'day')} == {180}
 
 
 def test_level_100_partners_can_still_use_evolution_stones(real_data):
@@ -1505,8 +1507,8 @@ def test_level_100_partners_can_still_use_evolution_stones(real_data):
     snapshot = SimpleNamespace(party=(mon,), stored=(), owned=set(range(1, 252)) - {182},
         items=((real_data.items['SUN_STONE'], 1), (real_data.items['EXP_SHARE'], 1)),
         map=real_data.map_ids['GOLDENROD_CITY'], x=1, y=1)
-    assert {row[4] for row in projects(real_data, snapshot, 'day')} == {182}
     policy = SimpleNamespace(data=real_data, collection={}, monitor_tables={}, clock=0)
+    assert {row[4] for row in projects(policy, snapshot, 'day')} == {182}
     assert journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal).key == 'collection_evolve_item'
 
 

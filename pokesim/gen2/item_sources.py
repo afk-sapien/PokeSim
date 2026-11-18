@@ -65,15 +65,16 @@ def item_needs(policy, snapshot):
     demand = getattr(policy, 'demand', None) or {}
     inputs = (getattr(snapshot, 'party', ()), getattr(snapshot, 'stored', ()), getattr(snapshot, 'items', ()),
               getattr(snapshot, 'owned', ()), tuple(sorted(demand.items())))
-    return dict(facts(policy).answer('item needs', inputs, lambda: _item_needs(policy.data, snapshot, demand)))
+    return dict(facts(policy).answer('item needs', inputs, lambda: _item_needs(policy, snapshot, demand)))
 
 
-def _item_needs(data, snapshot, demand):
+def _item_needs(policy, snapshot, demand):
     from .collection import prerequisites
     from .training import requested
+    data = policy.data
     party, stored = tuple(getattr(snapshot, 'party', ())), tuple(getattr(snapshot, 'stored', ()))
     items, owned = tuple(getattr(snapshot, 'items', ())), frozenset(getattr(snapshot, 'owned', ()))
-    needed = prerequisites(data, snapshot) if party or stored else set()
+    needed = prerequisites(policy, snapshot) if party or stored else set()
     targets = {}
     for mon in party + stored:
         if mon.egg:

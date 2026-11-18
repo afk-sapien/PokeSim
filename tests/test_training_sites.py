@@ -19,14 +19,14 @@ def test_wild_levels_are_read_again_once_the_wild_table_is_replaced():
 
     def row(mid, level, method='grass'):
         return {'map': mid, 'level': level, 'method': method}
-    data = SimpleNamespace(encounters=[row(1, 4), row(1, 7), row(2, 3), row(3, 30, 'surf')])
-    assert wild_levels(data) == {1: 7, 2: 3}
-    assert wild_levels(data) is wild_levels(data)
-    # A cartridge's own table replaces the bundle's, and so does another game's data.
-    data.encounters = [row(1, 4), row(2, 9)]
-    assert wild_levels(data) == {1: 4, 2: 9}
-    assert wild_levels(SimpleNamespace(encounters=[row(5, 12)])) == {5: 12}
-    assert wild_levels(data) == {1: 4, 2: 9}
+    policy = SimpleNamespace(data=SimpleNamespace(encounters=[row(1, 4), row(1, 7), row(2, 3), row(3, 30, 'surf')]))
+    assert wild_levels(policy) == {1: 7, 2: 3}
+    assert wild_levels(policy) is wild_levels(policy)
+    # A cartridge's own table replaces the bundle's. Another policy keeps its own answer.
+    policy.data.encounters = [row(1, 4), row(2, 9)]
+    assert wild_levels(policy) == {1: 4, 2: 9}
+    assert wild_levels(SimpleNamespace(data=SimpleNamespace(encounters=[row(5, 12)]))) == {5: 12}
+    assert wild_levels(policy) == {1: 4, 2: 9}
 
 
 def mon(level, trainer_id=1, experience=1000):

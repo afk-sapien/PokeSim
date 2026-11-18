@@ -94,8 +94,13 @@ def test_the_last_parent_of_a_single_source_family_stays_home(real_data):
 
 def test_collection_keeps_a_ditto_after_the_pokedex_is_complete(real_data):
     from pokesim.gen2.collection import prerequisites
-    assert 132 in prerequisites(real_data, snapshot((mon(133),)))
-    assert 132 not in prerequisites(real_data, snapshot((mon(132, 'Genderless'),)))
+    policy, state = SimpleNamespace(data=real_data), snapshot((mon(133),))
+    assert 132 in prerequisites(policy, state)
+    assert prerequisites(policy, state) is prerequisites(policy, state)
+    # A Ditto left at the Day Care is still held.
+    state.daycare = (mon(132, 'Genderless'), None)
+    assert 132 not in prerequisites(policy, state)
+    assert 132 not in prerequisites(policy, snapshot((mon(132, 'Genderless'),)))
 
 
 def test_happiness_levels_follow_the_cartridge_tiers():
@@ -108,15 +113,16 @@ def test_happiness_levels_follow_the_cartridge_tiers():
 
 def test_cable_demand_evolves_a_spare_eevee_and_tyrogue(real_data):
     from pokesim.gen2.training import projects
+    policy = SimpleNamespace(data=real_data)
     eevee = mon(133, level=20, experience=8000, friendship=220)
     state = snapshot((eevee,))
-    assert not projects(real_data, state, 'night')
-    assert {row[4] for row in projects(real_data, state, 'night', {197: 1})} == {197}
-    assert not projects(real_data, state, 'day', {197: 1})
+    assert not projects(policy, state, 'night')
+    assert {row[4] for row in projects(policy, state, 'night', {197: 1})} == {197}
+    assert not projects(policy, state, 'day', {197: 1})
     # Attack above Defense at level 20 makes Hitmonlee, so only a Hitmonlee request trains this one.
     tyrogue = mon(236, level=19, experience=6000, dvs=(10, 15, 0, 10, 10))
     state = snapshot((tyrogue,))
-    assert {row[4] for row in projects(real_data, state, 'day', {106: 1, 107: 1})} == {106}
+    assert {row[4] for row in projects(policy, state, 'day', {106: 1, 107: 1})} == {106}
 
 
 def test_kept_projects_answer_again_only_when_an_input_changes(real_data, monkeypatch):

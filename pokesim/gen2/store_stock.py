@@ -203,7 +203,7 @@ def _targets(policy, snapshot):
     from .training import requested
     data, demand = policy.data, getattr(policy, 'demand', None) or {}
     party, stored = tuple(snapshot.party), tuple(snapshot.stored)
-    needed = prerequisites(data, snapshot) if party or stored else set()
+    needed = prerequisites(policy, snapshot) if party or stored else set()
     owned = set(snapshot.owned)
     names = set(STONES)
     # A trade evolution needs a cable partner, so its item is only wanted while a peer is linked.

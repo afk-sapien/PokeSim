@@ -1,6 +1,6 @@
 # Gen II rung builds
 
-Status: proposal, nothing built. Every line number was read from main at `b1ebb9ff` (#665). Paths are under `pokesim/` unless they start with `tests/` or `data/`.
+Status: PRs 1 to 4 built, the rest declined (3g). Every line number was read from main at `b1ebb9ff` (#665). Paths are under `pokesim/` unless they start with `tests/` or `data/`.
 
 The question: how do the Gen II activities (the rungs) stop being asked and built again when nothing they read has changed, and how does the draft wrapper go away.
 
@@ -334,6 +334,10 @@ I would not:
 - Move the phase and the decision stamps out of the builds for speed alone. That saves about 2.1 s on Gold and 2.2 s on Crystal and keeps all the fingerprint code.
 
 The simplest version that removes the draft copy is PR 1 plus PR 2. It keeps asking every rung at every decision, keeps every write where it is, and replaces the deep copy, the fingerprint and the held copy with a one-level copy and an identity compare, about 4.65 s back on deep Gold and 6.81 s on deep Crystal.
+
+### g. After PR 4
+
+PRs 1 to 4 are merged (#667 to #670), and PRs 5 to 7 are not built. Measured at `d8444bbe` on the same saves, build fell from 16.6 s to 10.0 s on deep Gold (wall 43.0 s) and from 24.4 s to 15.5 s on deep Crystal (wall 56.4 s), and the draft costs 3.2 s and 6.1 s beyond its build. Keeping whole rungs would save at most 6.2 s on Gold and 15.0 s on Crystal, or 3.6 s and 10.8 s for the rungs whose draft writes nothing, before the cost of comparing reads, and it needs hand-named input lists or a recording proxy, so PR 7 is declined under the speed rule, and PRs 5 and 6 with it. Three corrections. PR 1 found in-place edits beyond 3b's list: the training project's goal run (GoalRun.replace now), postgame's record and its quality search counts, and the marathon's records. The snapshot copy behind store's wide reads is navigation.person at gen2/policy/navigation.py:69, which store's walk to the clerk calls (gen2/store_stock.py:305), not gen2/flight.py. Under the identity compare a build that puts back an equal new value counts as a write, so 3a's counts rise: Crystal training wrote 991 times where the fingerprint saw 152, Crystal store 115 against 2 and Gold store 3227 against 3080. Those writes land equal values, so no decision changed.
 
 ## 4. Raw output
 
