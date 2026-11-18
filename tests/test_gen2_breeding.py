@@ -119,6 +119,23 @@ def test_cable_demand_evolves_a_spare_eevee_and_tyrogue(real_data):
     assert {row[4] for row in projects(real_data, state, 'day', {106: 1, 107: 1})} == {106}
 
 
+def test_kept_projects_answer_again_only_when_an_input_changes(real_data, monkeypatch):
+    from types import SimpleNamespace
+    from pokesim.gen2 import training
+    asked = []
+    real = training.projects
+    monkeypatch.setattr(training, 'projects', lambda *args: asked.append(args) or real(*args))
+    policy = SimpleNamespace(data=real_data, demand={197: 1})
+    state = snapshot((mon(133, level=20, experience=8000, friendship=220),))
+    first = training.kept_projects(policy, state, 'night')
+    assert {row[4] for row in first} == {197}
+    first.clear()
+    assert training.kept_projects(policy, state, 'night') and len(asked) == 1
+    assert not training.kept_projects(policy, state, 'day') and len(asked) == 2
+    policy.demand = {}
+    assert not training.kept_projects(policy, state, 'night') and len(asked) == 3
+
+
 def test_eevee_waits_without_exp_share_for_the_time_of_day(real_data):
     from pokesim.gen2 import kinds
     from pokesim.gen2.policy import Goal

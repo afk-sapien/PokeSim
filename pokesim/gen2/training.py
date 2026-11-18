@@ -3,6 +3,7 @@ from .menus import ChangeBox, Give, PutAway, Release, Remedy, Storage, Take, Tos
 from pokecore.gen2.ram import calculated_stats, experience_at
 from ..planning.ledger import FIELD_MOVES
 from ..planning.stance import TRAIN
+from .facts import facts
 from .ledger import fits, tidy_goal
 from .standdown import TRAINING_DECISIONS, exhausted, site_key, spend, stand_down, standing_down, train_key
 from . import kinds
@@ -215,6 +216,22 @@ def projects(data, snapshot, current_time, demand=None):
     return rows
 
 
+def kept_projects(policy, snapshot, current_time):
+    """``projects`` for this policy, kept in its facts until what it reads changes.
+
+    It reads the party, the boxes, the bag, the Pokédex, the time of day, the demand and the prerequisites.
+    The prerequisites go in as their answer, since they also read the Day Care, whose Pokémon gain
+    experience as the player walks. The snapshot's regions are frozen, and the demand and the
+    prerequisites go in as copies, so nothing in the key is edited in place.
+    """
+    from .collection import prerequisites
+    demand = getattr(policy, 'demand', None) or {}
+    inputs = (snapshot.party, snapshot.stored, snapshot.items, snapshot.owned, current_time,
+              tuple(sorted(demand.items())), frozenset(prerequisites(policy.data, snapshot)))
+    return list(facts(policy).answer('training projects', inputs,
+                                     lambda: projects(policy.data, snapshot, current_time, demand)))
+
+
 def journey(policy, snapshot, mem, Goal, *, terminal=False):
     data, state = policy.data, policy.collection
     from .breeding import hatching
@@ -229,7 +246,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         # Postgame training waits behind collection work and only runs from postgame.journey, but an
         # evolution that adds a Pokédex entry takes its place at once.
         current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
-        if not projects(data, snapshot, current_time, getattr(policy, 'demand', {})):
+        if not kept_projects(policy, snapshot, current_time):
             return None
         state['training'] = None
     share = data.items['EXP_SHARE']
@@ -253,7 +270,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     # instead of walking to the PC to stand each stored partner down in turn.
     sealed = len(snapshot.party) >= 6 and bool(getattr(policy, 'no_room', lambda snapshot: False)(snapshot))
     if project is None:
-        choices = projects(data, snapshot, current_time, demand)
+        choices = kept_projects(policy, snapshot, current_time)
         terminal_project = False
         if not choices and terminal:
             terminal_project = True
