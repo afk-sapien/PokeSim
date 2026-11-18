@@ -5,7 +5,7 @@ import re
 from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
-from functools import partial
+from functools import cache, partial
 
 from ..planning import values
 from ..planning import arbiter, decide, pin, throws
@@ -189,7 +189,6 @@ def held_counts(snapshot):
 # Dragon Scale, so once those are spent a wild carrier is the only way left to Politoed,
 # Slowking or Kingdra. Magnemite's Metal Coat is left out: it would have to move to Onix or Scyther.
 ITEM_CARRIERS = {61: ('KINGS_ROCK', 186), 79: ('KINGS_ROCK', 199), 117: ('DRAGON_SCALE', 230)}
-_ITEM_HUNTS = [None, None]
 # A carrier hunt is expected to meet 1 / (chance * CARRIER_ITEM_ODDS) wild battles before one holds the
 # item, so its search budget comes from that. Silver spent about a third of its frames on carrier hunts.
 CARRIER_ITEM_ODDS = 0.02
@@ -202,14 +201,10 @@ def item_hunts(policy, snapshot):
     is here to send, and neither the bag nor a stored partner already holds the item.
     """
     demand = getattr(policy, 'demand', None) or {}
-    party, stored = tuple(getattr(snapshot, 'party', ())), tuple(getattr(snapshot, 'stored', ()))
-    items, owned = tuple(getattr(snapshot, 'items', ())), frozenset(getattr(snapshot, 'owned', ()))
-    key = (party, stored, items, owned, tuple(sorted(demand.items())))
-    if _ITEM_HUNTS[0] == key:
-        return _ITEM_HUNTS[1]
-    data, bag = getattr(policy, 'data', None), dict(items)
-    held = Counter(mon.species for mon in party + stored if not mon.egg)
-    carried = {(mon.species, getattr(mon, 'held_item', 0)) for mon in party + stored if not mon.egg}
+    mons = [mon for mon in [*getattr(snapshot, 'party', ()), *getattr(snapshot, 'stored', ())] if not mon.egg]
+    data, bag, owned = getattr(policy, 'data', None), dict(getattr(snapshot, 'items', ())), getattr(snapshot, 'owned', ())
+    held = Counter(mon.species for mon in mons)
+    carried = {(mon.species, getattr(mon, 'held_item', 0)) for mon in mons}
     result = {}
     for species, (name, target) in ITEM_CARRIERS.items():
         item = getattr(data, 'items', {}).get(name)
@@ -217,7 +212,6 @@ def item_hunts(policy, snapshot):
             continue
         if target not in owned or demand.get(target) and not held[target]:
             result[species] = item
-    _ITEM_HUNTS[:] = [key, result]
     return result
 
 
@@ -367,11 +361,12 @@ def wanted(policy, snapshot, species):
 
 def own_wanted(policy, snapshot, species):
     """Whether this adventure wants a copy of ``species`` for itself: a missing entry, a plan's
-    missing prerequisite, a missing Unown letter or a carrier of a trade item."""
+    missing prerequisite, a missing Unown letter or a carrier of a trade item. Only a carrier species
+    asks item_hunts, which scans the party and every box."""
     return (species not in snapshot.owned
             or species in policy.collection.get('prerequisites', ()) and not held_counts(snapshot)[species]
             or species == UNOWN and bool(unown_missing(policy, snapshot))
-            or species in item_hunts(policy, snapshot))
+            or species in ITEM_CARRIERS and species in item_hunts(policy, snapshot))
 
 
 def peer_wanted(policy, snapshot, species):
@@ -386,18 +381,17 @@ def hunt_wanted(policy, snapshot):
     for is hunted while one more fits without a kept copy going for it (release.supply_room). Once
     copies kept for trade filled the boxes, each such catch released another kept copy, and that
     copy's own hunt opened next. A Crystal run caught and released Slowpoke, Weedle and Goldeen twice
-    each that way in under an hour. The PC is rated once, and only when such a copy comes up."""
+    each that way in under an hour. The PC is rated once, and only when such a copy comes up. Each
+    species is answered once, though the encounter table lists most of them on many rows."""
     from .release import supply_room
-    room = []
 
+    @cache
+    def room():
+        return supply_room(policy, snapshot)
+
+    @cache
     def hunted(species):
-        if own_wanted(policy, snapshot, species):
-            return True
-        if not peer_wanted(policy, snapshot, species):
-            return False
-        if not room:
-            room.append(supply_room(policy, snapshot))
-        return room[0]
+        return own_wanted(policy, snapshot, species) or peer_wanted(policy, snapshot, species) and room()
     return hunted
 
 
