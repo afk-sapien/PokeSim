@@ -22,14 +22,11 @@ def _held(policy):
 
 
 @pytest.fixture(autouse=True)
-def builds_replace_what_they_change(request, monkeypatch):
+def builds_replace_what_they_change(monkeypatch):
     """A Gen II rung's build replaces a value it changes and never edits one the state held before it.
 
-    The draft that takes a build's writes back can then keep the old objects as they are. The draft's
-    own tests edit in place on purpose, to see that it puts the old state back.
+    The draft that takes a build's writes back then puts the old state back with a one-level copy.
     """
-    if request.module.__name__.rsplit('.', 1)[-1] == 'test_gen2_draft':
-        return
     drafted = collection.draft
 
     def checked(policy, build, *args, **kwargs):
