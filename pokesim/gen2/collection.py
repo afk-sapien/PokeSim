@@ -1,7 +1,4 @@
 """Persistent postgame expeditions using version and time specific encounters."""
-import io
-import pickle
-import re
 from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
@@ -11,7 +8,6 @@ from ..planning import values
 from ..planning import arbiter, decide, pin, throws
 from ..planning.arbiter import Candidate, Tier
 from ..planning.cost import FRAMES_PER_BATTLE, FRAMES_PER_TILE
-from ..planning.goals import GoalSpec, Rules
 from ..planning.ledger import FIELD_MOVES
 from ..planning.stance import HUNT
 from .menus import ChangeBox, FieldMove, Storage, Teach, Use
@@ -746,98 +742,33 @@ def _restore(policy, saved):
             _set(policy, slot, value)
 
 
-# The deepcopy hooks that give the object itself: a goal's spec never changes and one rules object
-# serves every goal of its kind (planning/goals.py).
-_KEPT_BY_DEEPCOPY = frozenset((GoalSpec.__deepcopy__, Rules.__deepcopy__))
-# A pickled float is the opcode G and its eight bytes, big end first. A NaN or an infinity has every
-# exponent bit set, so its first byte is 7f or ff and the top half of its second is f.
-_NOT_FINITE = re.compile(rb'G[\x7f\xff][\xf0-\xff]')
+def _edited_in_place(slot):
+    """Whether ``slot`` is a monitor table or the milestones, which a build may add to or remove from."""
+    return slot == 'completed' or isinstance(slot, tuple) and slot[0] == 'monitor'
 
 
-def _kept(identity):
-    """Stands in a fingerprint for an object ``deepcopy`` keeps. It is never unpickled."""
-    raise TypeError('a draft fingerprint is never unpickled')
-
-
-class _Fingerprint(pickle.Pickler):
-    def reducer_override(self, obj):
-        # This checks the hook ``deepcopy`` checks, in its order: a class is copied as itself first.
-        if isinstance(obj, type):
-            return NotImplemented
-        hook = getattr(obj, '__deepcopy__', None)
-        if hook is None:
-            return NotImplemented
-        if getattr(hook, '__func__', None) in _KEPT_BY_DEEPCOPY:
-            return _kept, (id(obj),)
-        raise pickle.PicklingError(f'{type(obj).__name__} has its own deepcopy')
-
-
-def _fingerprint(slots):
-    """Bytes equal for two states only when ``deepcopy`` gives the same copy of each, or None.
-
-    Equal pickles have the same types, values, order and sharing, and ``deepcopy`` reads the same
-    reductions pickle writes, at the same protocol. An object ``deepcopy`` keeps, as a goal's spec and
-    rules, goes in as its id, so two states match only when they hold that very object. The held copy
-    holds it too, so its id cannot pass to another object. Any other deepcopy hook could copy what pickle
-    does not see, and a NaN is not equal to a copy of itself, so a state with either has no fingerprint.
-    """
-    stream = io.BytesIO()
-    try:
-        _Fingerprint(stream, 4).dump(slots)
-    except Exception:
-        return None
-    fingerprint = stream.getvalue()
-    return None if _NOT_FINITE.search(fingerprint) else fingerprint
-
-
-def _unchanged(slots, kept):
-    """Whether every slot holds the very object ``kept`` holds for it, and no slot came or went."""
-    return len(slots) == len(kept) and all(kept.get(slot, _MISSING) is value for slot, value in slots.items())
-
-
-def draft(policy, build, token=None):
+def draft(policy, build):
     """Run ``build`` and take its writes back. Returns what ``build`` gave and its writes, each slot's new
     value or _MISSING for a slot it removed, which ``write`` lands.
 
-    A build hands the objects it wrote over to its writes and the policy gets copies of the old ones, so a
-    menu task or goal that holds an object the build wrote still holds the one ``write`` lands.
-
-    Most builds write nothing, so the copy of the old state is held for the next draft, which takes it
-    while the state's fingerprint is the same. That spares a deep copy per rung. A draft that puts copied
-    objects back hands them to the policy, and a build that fails leaves the copy unchecked, so either
-    drops it.
-
-    The rungs of one decision pass one ``token``. A build that wrote nothing left every slot equal to the
-    copy, so the next draft with the same token takes the copy without a fingerprint while each slot still
-    holds the same object. A table the monitor makes between two rungs is a new slot, which fails that
-    check. So one decision takes one fingerprint until a rung writes, not one per rung.
+    A build replaces a value it changes and never edits one the state held before it (tests/conftest.py
+    checks this), so a one-level copy puts the old state back exactly. A collection field is written when
+    it holds another object, and so is the menu task. A monitor table or the milestones are written when
+    they no longer equal their copy. A goal or menu task that holds an object the build wrote holds the one
+    ``write`` lands. A build that fails puts nothing back.
     """
-    slots = _slots(policy)
-    # A menu task can hold the emulator, so it is kept by reference. A rung replaces it, never edits it.
-    menu = slots.pop('menu')
-    held, policy.draft_copy = getattr(policy, 'draft_copy', None), None
-    if token is not None and held is not None and held[2] is token and _unchanged(slots, held[3]):
-        fingerprint, copied = held[0], held[1]
-    else:
-        fingerprint = _fingerprint(slots)
-        if fingerprint is not None and held is not None and held[0] == fingerprint:
-            copied = held[1]
-        else:
-            copied = deepcopy(slots)
-    before = {**copied, 'menu': menu}
+    before = {slot: dict(value) if _edited_in_place(slot) and isinstance(value, dict) else value
+              for slot, value in _slots(policy).items()}
     result = build()
     now = _slots(policy)
     writes = {}
     for slot in set(now) | set(before):
-        value = now.get(slot, _MISSING)
-        if _differs(slot, value, before.get(slot, _MISSING)):
+        value, old = now.get(slot, _MISSING), before.get(slot, _MISSING)
+        if value != old if _edited_in_place(slot) else value is not old:
             # The milestones dict is cleared in place when it is put back, so its writes are a copy.
-            writes[slot] = deepcopy(value) if slot == 'completed' else value
+            writes[slot] = dict(value) if slot == 'completed' and isinstance(value, dict) else value
     for slot in writes:
         _set(policy, slot, before.get(slot, _MISSING))
-    if not writes and fingerprint is not None:
-        del now['menu']
-        policy.draft_copy = fingerprint, copied, token, now
     return result, writes
 
 
@@ -878,8 +809,6 @@ class Rungs:
         self.asked, self.labels = set(), {}
         # In a survey, the goals a rung left out for now, each (key, title, Failure), for the catalogue.
         self.skipped = []
-        # Marks this decision's drafts, so a rung after one that wrote nothing takes its copy (draft).
-        self.token = object()
 
     def pinned(self, key):
         """Whether the candidate ``key`` is the pinned goal. A pin on a rung that stood down names the
@@ -935,7 +864,7 @@ class Rungs:
             if goal is None:
                 return None, None, None
             return goal, None if price is None else price(goal), None if blocked is None else blocked(goal)
-        (goal, priced, failure), writes = draft(self.policy, built, self.token)
+        (goal, priced, failure), writes = draft(self.policy, built)
         waiting = getattr(self.policy, 'no_route_waiting', None)
         if goal is not None and failure is None and waiting is not None and waiting(goal):
             # The walk to this goal found no route lately (policy.no_route), so another rung runs first.
