@@ -14,6 +14,17 @@ def new_history():
     return {'maps': [], 'owned': [], 'badges': 0, 'league': 0}
 
 
+def cartridge_game_data(rom, game, data_root):
+    """The game data a run of ``game`` plays with, its encounter rows and boss parties read from the cartridge."""
+    from ..planning.cost import gen2_cartridge_rows
+    from .data import GameData
+    from .readiness import boss_parties
+    data = GameData.load(data_root, game)
+    data.encounters = gen2_cartridge_rows(rom, game, data.encounters)
+    data.boss_parties = boss_parties(rom, game)
+    return data
+
+
 def write_options(pb, data):
     """The text speed and battle animations the runtime sets after every load."""
     bank, address = data.symbols['wOptions']
@@ -38,16 +49,11 @@ class Gen2Adapter:
             raise ValueError('Fair wild DVs is only for Red, Blue and Yellow')
         from pokecore.gen2.clock import boot, follow_game_time
 
-        from ..planning.cost import gen2_cartridge_rows
         from ..randomized import rom_stream
         from ..runtime import trace as trace_module
-        from .data import GameData
-        from .readiness import boss_parties
         from .store_stock import StoreStock
         run.game = self.game
-        run.data = self.data = GameData.load(self.data_root, self.game)
-        self.data.encounters = gen2_cartridge_rows(rom, self.game, self.data.encounters)
-        self.data.boss_parties = boss_parties(rom, self.game)
+        run.data = self.data = cartridge_game_data(rom, self.game, self.data_root)
         # A randomized run (RANDOMIZER set) plays the patched cartridge, as the managed worker does.
         run.pb = boot(rom_stream(rom), sound=False)
         # Before the Mart stock registers its hooks, so the trace knows them.

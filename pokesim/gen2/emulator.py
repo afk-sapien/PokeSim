@@ -9,9 +9,8 @@ import queue
 import threading
 import time
 
-from .. import __version__, config, seeds
+from .. import config, seeds
 from ..audio import AudioFeed
-from ..build_info import build_info
 from ..checkpoints import open_state
 from ..events import HIGH, LOW
 from ..progress_events import mon_identity
@@ -30,8 +29,7 @@ from ..runtime.supervision import report as stuck_report
 from ..stalls import LoopGuard, StallWatch, collected
 from pokecore.gen2.clock import boot, clock_elapsed, follow_game_time, host_elapsed, rebase_to_host
 from pokecore.emulator_state import validate_runtime
-from .adapter import SCREEN_FRAMES, new_history
-from .data import GameData
+from .adapter import SCREEN_FRAMES, cartridge_game_data, new_history, write_options
 from . import journal
 from .ledger import balls
 from .policy import Policy
@@ -161,11 +159,7 @@ class Emulator(EmulatorBase):
         self.rom_sha1 = self.profile.sha1
         self.rom_note = f'Pokémon {self.profile.game.title()} ({self.profile.revision})'
         from ..game_data import directory
-        self.data = GameData.load(directory(), self.profile.game)
-        from ..planning.cost import gen2_cartridge_rows
-        self.data.encounters = gen2_cartridge_rows(self.rom, self.profile.game, self.data.encounters)
-        from .readiness import boss_parties
-        self.data.boss_parties = boss_parties(self.rom, self.profile.game)
+        self.data = cartridge_game_data(self.rom, self.profile.game, directory())
         self.isolated_ram = isolated_ram
         self.preparation = None
         self.options_applied = False
@@ -438,22 +432,10 @@ class Emulator(EmulatorBase):
             return
         self.steps.flush(force=True)
         self.statistics.flush(self.snapshot)
-        state, manifest = self._state_bytes(), self._manifest()
-        path = self.store.write_checkpoint(state, manifest)
-        tracer = getattr(self, 'tracer', None)
-        if tracer is not None:
-            tracer.begin(path.stem, state, manifest, kept=path, pin=trace.pin_state(self.policy))
-        # The first save after an achievement is the last one known to be from before any stall.
-        capture.keep_before(self, path, self.snapshot)
         self.store.set('play_clock', self.play_clock.state_dict())
         # The goals' stand-downs and budgets sit beside the clock they count on, not in the save.
         self.policy.monitor_tables.flush()
-        self.store.prune_autosaves(config.KEEP_AUTOSAVES)
-        capture.prune_trace(self)
-        self.store.prune_events(config.EVENT_RETENTION_DAYS)
-        self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
-        self.store.prune_reward_results()
-        return path
+        return self._write_autosave()
 
     def _load_state_file(self, path):
         metadata = self.store.checkpoint_metadata(path)
@@ -550,14 +532,7 @@ class Emulator(EmulatorBase):
             self.stuck_frame = self.frame
             return
         if not self.options_applied and not self.manual_mode:
-            from pokecore.gen2.ram import Memory
-            mem = Memory(self.pb.memory, self.data)
-            value = mem.byte('wOptions')
-            if config.FAST_TEXT:
-                value = value & ~7 | 1
-            value = value & ~128 if config.BATTLE_ANIMATIONS else value | 128
-            bank, address = self.data.symbols['wOptions']
-            self.pb.memory[bank, address] = value
+            write_options(self.pb, self.data)
             self.options_applied = True
         self.play_clock.seed(snapshot.playtime_seconds)
         self.store.upgrade_trade_preferences(lambda: [mon_view(mon, egg_view=True) for mon in (*snapshot.party, *snapshot.stored)])
@@ -1109,9 +1084,7 @@ class Emulator(EmulatorBase):
             self.stopping = True
 
     def status(self):
-        from .. import rewards
         from ..pcvalue import boxes_full
-        from ..randomized import status as randomizer_status
         from ..stall_truth import observe_help
         from .release import room
         # The same help request and progress line as Red, Blue and Yellow (Supervisor.help_request).
@@ -1120,22 +1093,15 @@ class Emulator(EmulatorBase):
 
         def full():
             return boxes_full(getattr(self.policy, 'boxes_full', False), room(self.snapshot) if self.snapshot else None)
-        return {'version': __version__, 'generation': 2, 'build': build_info(), 'viewer_only': config.VIEWER_ONLY,
-                'stopped': self.frozen,
-                'health': self.health(), 'paused': self.paused, 'manual_mode': self.manual_mode, 'speed': self.speed,
-                'policy': self.policy.describe(), 'strategy': self.policy.details(), 'frame': self.frame,
-                'game': state_view(self.snapshot, egg_view=True) if self.snapshot else None, 'rom': self.rom_note,
-                'play_clock': self.play_clock.status(), 'clock': getattr(self, 'game_clock', None), 'performance': {'frames': self.executed_frames, 'sampled_at': time.monotonic()},
-                'uptime': int(time.time() - self.started_at), 'stuck_seconds': max(0, self.frame - self.stuck_frame) // FRAMES_PER_SECOND,
-                'areas_discovered': len(self.history['maps']), 'reloads': self.reloads,
+        return {**self._shared_status(), 'generation': 2, 'strategy': self.policy.details(),
+                'game': state_view(self.snapshot, egg_view=True) if self.snapshot else None,
+                'clock': getattr(self, 'game_clock', None), 'areas_discovered': len(self.history['maps']),
                 'glitched': self.invalid_frame is not None and self.frame - self.invalid_frame > 300,
                 'help_request': observe_help(self, self.supervisor.help_request(
                     self.stall, frames, full=full, action=self.policy.mode, **shared)),
                 'progress': self.supervisor.progress(
                     self.stall, frames, time.time(), achievement=self.last_achievement, glitched=self.invalid_frame is not None,
-                    last_reload=self.last_reload, mode=self.policy.mode, **shared),
-                'league_rewards': rewards.status(self.store), 'legendary_recovery': self.legendary_recovery.state_dict(),
-                'randomizer': randomizer_status()}
+                    last_reload=self.last_reload, mode=self.policy.mode, **shared)}
 
     def _pc_value_text(self, snapshot, mon):
         """The PC value breakdown of a boxed Pokémon a release is about to take, for its journal entry."""
