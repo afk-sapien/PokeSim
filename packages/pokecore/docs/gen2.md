@@ -29,7 +29,7 @@ roamers = state.read_roamers(memory, "crystal")
 text. `data` is the consumer's game tables: `gen2.GameTables(raw)` builds them
 from a JSON mapping, and any object with the same attributes works. Symbols and
 the charmap default to Core's own. With `cache=True`, decoded regions (party,
-each box, Pokedex, Day Care, screen) are reused while their bytes and `data`
+each box, Pokedex, Day Care, TMs and HMs, screen) are reused while their bytes and `data`
 are unchanged (`pokecore.regions`). `gen2.clear_region_cache()` drops them.
 
 Also in `pokecore.gen2`:

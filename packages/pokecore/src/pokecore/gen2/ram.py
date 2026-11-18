@@ -366,6 +366,11 @@ def _box(raw, box, data):
     return count, tuple(stored)
 
 
+def _machines(raw, data):
+    items = [data.items.get(f'TM{i:02d}') for i in range(1, 51)] + [data.items.get(f'HM{i:02d}') for i in range(1, 8)]
+    return tuple((item, qty) for item, qty in zip(items, raw) if item and qty)
+
+
 def _daycare(raw, data):
     return tuple(decode_mon(raw[2 + i * 43:34 + i * 43], raw[34 + i * 43:45 + i * 43], data) if raw[i] & 1 else None
                  for i in (0, 1))
@@ -431,8 +436,8 @@ def _decode_snapshot(memory, data, frame, cache):
         raw = mem.read(symbol, size * 2, 1)
         pockets[pocket] = tuple((raw[i], raw[i + 1]) for i in range(0, len(raw), 2) if raw[i] != 0xFF)
     pockets['key'] = tuple((item, 1) for item in mem.read('wNumKeyItems', min(mem.byte('wNumKeyItems'), 26), 1) if item != 0xFF)
-    machines = [data.items.get(f'TM{i:02d}') for i in range(1, 51)] + [data.items.get(f'HM{i:02d}') for i in range(1, 8)]
-    pockets['machines'] = tuple((item, qty) for item, qty in zip(machines, mem.read('wTMsHMs', 57)) if item and qty)
+    machines_raw = mem.read('wTMsHMs', 57)
+    pockets['machines'] = region('machines', machines_raw, data, lambda: _machines(machines_raw, data))
     objects = []
     for slot in range(1, 13):
         raw = mem.read('wObjectStructs', 40, slot * 40)

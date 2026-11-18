@@ -36,8 +36,9 @@ def synthetic_data():
                         'gender_ratio': i % 256, 'growth': 'MEDIUM_FAST'} for i in range(1, 252)}
     moves = {str(i): {'name': f'Move {i}', 'pp': 5 + i % 35, 'type': i % 17} for i in range(1, 252)}
     table = {str(i): chr(0x41 + i % 26) for i in range(0x80, 0xFA)}
+    machines = {f'TM{i:02d}': 190 + i for i in range(1, 51)} | {f'HM{i:02d}': 242 + i for i in range(1, 8)}
     return gen2.GameTables({'game': 'gold', 'species': species, 'moves': moves, 'maps': {}, 'charmap': table,
-                            'item_attributes': {}, 'items': {}, 'types': {f'T{i}': i for i in range(17)},
+                            'item_attributes': {}, 'items': machines, 'types': {f'T{i}': i for i in range(17)},
                             'events': {}, 'map_ids': {}, 'symbols': symbols, 'collisions': {}, 'permissions': {}})
 
 
@@ -93,6 +94,10 @@ def test_unchanged_regions_reuse_their_decoded_objects():
     assert first.party and first.stored
     assert all(a is b for a, b in zip(first.party + first.stored, second.party + second.stored))
     assert first.tiles is second.tiles and first.seen is second.seen
+    assert first.pockets['machines'] and first.pockets['machines'] is second.pockets['machines']
+    bank, address = data.symbols['wTMsHMs']
+    memory.banks[bank][address] = (memory.banks[bank][address] + 1) % 100
+    assert read_snapshot(memory, data).pockets['machines'] == read_snapshot(memory, data, cache=False).pockets['machines']
     bank, address = data.symbols['sBox5']
     memory.banks[bank][address + 22 + 31] ^= 1
     third = read_snapshot(memory, data)
