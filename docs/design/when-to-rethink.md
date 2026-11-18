@@ -108,16 +108,16 @@ The rest only needs to run when the state changed:
 - the boss watch and progress highs (`emulator.py:504-510`)
 - the release and PC notes, and hatch, evolve and level (`gen2/emulator.py:609-635`)
 
-A trial on Gen I ran only the clock parts of observe when nothing changed. It saved 7.5% and 6.1% of wall on two Red saves, under the 8% bar, and it needed a hand-kept list of the reads it skipped. It was dropped before a PR.
+A trial on Gen I ran only the clock parts of observe when nothing changed. It saved 7.5% and 6.1% of wall on two Red saves. It was dropped before a PR because it made the code worse. It needed a hand-kept list of the reads it skipped and a second path in `_observe` beside the full one.
 
-On Gen II only 33 to 36% of observes find no change, because NPC objects and the step count move (`packages/pokecore/src/pokecore/gen2/ram.py:441-445`, `:480`). Observe never reads the objects. The step count feeds only `progress_key` (`gen2/emulator.py:148`). A change test that ignores them needs its own list of ignored fields.
+On Gen II only 33 to 36% of observes find no change, because NPC objects and the step count move (`packages/pokecore/src/pokecore/gen2/ram.py:453-457`, `:492`). Observe never reads the objects. The step count feeds only `progress_key` (`gen2/emulator.py:148`). A change test that ignores them needs its own list of ignored fields.
 
 **One state read for decide and observe.**
 
-- Staleness already needs no field list. Every memory write and every call outside a short read-only list, such as a tick, a press or a load, bumps the machine's generation counter (`packages/pokecore/src/pokecore/memory_snapshot.py:31-37`, `:72-78`, `:189-199`). The Gen I `read_snapshot` memo keys on it (`ram.py:369-379`). Gen II has no whole-snapshot memo.
+- Staleness already needs no field list. Every memory write and every call outside a short read-only list, such as a tick, a press or a load, bumps the machine's generation counter (`packages/pokecore/src/pokecore/memory_snapshot.py:31-37`, `:72-78`, `:189-199`). The Gen I `read_snapshot` memo keys on it (`ram.py:369-379`), and so does the Gen II one (`packages/pokecore/src/pokecore/gen2/ram.py:416-426`).
 - The two reads rarely see the same machine, though. Observe reads inside a press at a multiple of 30 frames (`runtime/emulator.py:232-233`, `:251-252`). Decide reads where the action ends, after more ticks, the release, the autosave and the guards (`runtime/game_loop.py:37-54`, `:115-127`).
 - Sharing one read would mean deciding on a stale read, or moving observe to decision points. Moving it changes the cadence that the list above depends on.
-- Gen I already shares the read when nothing ran in between. A Gen II memo like Gen I's would be a few lines with no field list. How many reads it would save is not measured.
+- Both generations share the read when nothing ran in between. The Gen II memo is the same few lines as Gen I's, with no field list. In one game hour it serves 1,499 of 14,930 snapshot reads on late Gold and 1,655 of 14,648 on early Gold. Most are a second `_read` in the same step or a read right after the reward check. It cuts about 0.4% of wall on both Gold saves, with the same decisions and final state.
 
 ## 5. Options
 
@@ -164,7 +164,7 @@ Any ladder baseline an option moves goes to the lead before the merge.
 
 Option 1, do nothing.
 
-The answer to the owner: the bot derives its goal again at every decision because that lets it recover from battles, black outs, reloads and stalls with no plan to repair. The next decision sees the new state and picks from it. Where commitment matters, latches already hold the goal, and Gen I's collection already commits and follows. The cost is about 1% on Gen I. Observe is mostly needed at its cadence, and its cheap split was tried and dropped under the bar.
+The answer to the owner: the bot derives its goal again at every decision because that lets it recover from battles, black outs, reloads and stalls with no plan to repair. The next decision sees the new state and picks from it. Where commitment matters, latches already hold the goal, and Gen I's collection already commits and follows. The cost is about 1% on Gen I. Observe is mostly needed at its cadence, and its cheap split was tried and dropped because it made the code worse.
 
 The one real cost is the late Gen II postgame, at 32% of wall. Option 2 could recover about half of it. But it adds a hand-kept token of the kind the owner turned down twice, and it changes what the bot does after the Champion. Option 3 removes the rebuilt commitment, but it adds a split in about 46 places and changes every decision stream, for about 9 to 12 more points than option 2.
 

@@ -414,7 +414,19 @@ def _enemy_shiny(mem, battle):
 
 
 def read_snapshot(memory, data, frame=0, *, cache=True):
-    """Decode the observable game state. ``cache`` reuses decoded regions whose bytes are unchanged."""
+    """Decode the observable game state. ``cache`` reuses decoded regions whose bytes are unchanged.
+
+    Snapshot emulator memory (memory_snapshot) also keeps the decoded snapshot until the machine
+    next changes, so asking again for the same frame and tables decodes once. Any tick, load or
+    write decodes again. The snapshot is frozen, so sharing it is safe.
+    """
+    memo = getattr(memory, 'snapshot_memo', None) if cache else None
+    if memo is None:
+        return _decode_snapshot(memory, data, frame, cache)
+    return memo(('gen2 snapshot', frame, data), lambda: _decode_snapshot(memory, data, frame, cache))
+
+
+def _decode_snapshot(memory, data, frame, cache):
     mem = Memory(memory, data)
     region = _region if cache else (lambda name, key, data, build: build())
     count = mem.byte('wPartyCount')

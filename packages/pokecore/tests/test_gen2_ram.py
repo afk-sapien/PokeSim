@@ -101,6 +101,39 @@ def test_unchanged_regions_reuse_their_decoded_objects():
     assert all(a is b for a, b in zip(first.party, third.party))
 
 
+class KeepingMemory(BankedMemory):
+    """Keeps each value until the next write, as a snapshot emulator's memory does."""
+
+    def __init__(self):
+        super().__init__()
+        self.kept = {}
+
+    def __setitem__(self, key, value):
+        self.kept.clear()
+        super().__setitem__(key, value)
+
+    def snapshot_memo(self, key, compute):
+        if key not in self.kept:
+            self.kept[key] = compute()
+        return self.kept[key]
+
+
+def test_snapshot_memory_shares_one_decode_until_it_changes():
+    data, memory = synthetic_data(), KeepingMemory()
+    ram.clear_region_cache()
+    fill(memory, data, random.Random(5))
+    first = read_snapshot(memory, data, 3)
+    assert read_snapshot(memory, data, 3) is first
+    assert read_snapshot(memory, data, 4) is not first
+    assert read_snapshot(memory, copy.copy(data), 3) is not first
+    fresh = read_snapshot(memory, data, 3, cache=False)
+    assert fresh is not first and fresh == first
+    bank, address = data.symbols['wXCoord']
+    memory[bank, address] = first.x ^ 1
+    changed = read_snapshot(memory, data, 3)
+    assert changed.x == first.x ^ 1 and changed == read_snapshot(memory, data, 3, cache=False)
+
+
 def test_region_cache_is_keyed_on_the_game_data():
     data, other, memory = synthetic_data(), synthetic_data(), BankedMemory()
     ram.clear_region_cache()
