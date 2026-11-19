@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.12.4
+
+### Added
+
+- `gen2.state.walking(memory, version)` reads the few bytes a held direction is checked
+  against, cheap enough to read every few frames: the map, the coordinates, the battle
+  mode, whether a script holds the pad, each party Pokémon's HP and the tiles that people
+  on the map stand on, step to or step from.
+- The Gen II `Snapshot` has a `flash` field, true while Flash lights a dark cave. It stays
+  set on the next cave floor.
+- `pokecore.regions` keeps a decoded memory region while its raw bytes and the game data
+  it was built from are unchanged. Gen II's region store moved there, and
+  `gen2.ram.clear_region_cache` still clears it.
+- `gen1` names `W_TOWN_VISITED`, `W_MAP_PAL_OFFSET`, `W_JOY_IGNORE` and `JOY_DPAD`.
+
+### Changed
+
+- Gen II `read_snapshot` on a snapshot emulator keeps the decoded snapshot until the
+  machine next changes, so a second ask for the same frame and tables decodes once. The
+  TM and HM pocket is kept while its bytes are unchanged.
+- `snapshot.read_fields` shares the Gen I Pokédex sets while their bytes are unchanged, and
+  takes `party=False` to leave the party out for a caller that decodes it itself.
+
 ## 0.12.3
 
 ### Added
