@@ -1,11 +1,13 @@
-# Release status: 0.7.4 published
+# Release status: 0.7.5 prepared for publication
 
-PokeSim 0.7.4 was published on November 16, 2026. It is a speed release on 0.7.3 with no
-gameplay change: Red, Blue and Yellow decode each step's memory once, Gold, Silver and Crystal
-skip repeated planner work, and a busy Library database no longer fails a play pass. pokecore
-moves to 0.12.3 and PyBoy RS to 0.1.7. See the [release notes](docs/release-notes.md). Main is
-working toward 0.7.5. PokeSim 0.7.3 was published on November 15, 2026
-([notes](docs/release-0.7.3.md)).
+PokeSim 0.7.5 plays deep postgame adventures faster with the same decisions, lights the dark
+caves with Flash in all six games, and fixes runs that stood still after a lost first rival
+fight, at Bill's door in Yellow and in front of a scripted wild battle. pokecore moves to 0.12.4
+and PyBoy RS to 0.1.9. See the [release notes](docs/release-notes.md). The publication workflow
+must verify the exact tagged commit, build the packages and both container images, and verify
+the uploaded assets before making the release public. The publication receipt is recorded after
+that succeeds. PokeSim 0.7.4 was published on November 16, 2026
+([notes](docs/release-0.7.4.md)).
 
 0.5.0 moves every adventure to the Rust emulator (PyBoy RS 0.1.2 through Core 0.7.0) and adds
 Gold, Silver and Crystal. See the [0.5.0 release notes](docs/release-0.5.0.md). Core and PyBoy RS
