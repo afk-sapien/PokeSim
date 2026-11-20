@@ -182,19 +182,32 @@ class StoryPart:
         # borrowed it goes back for it at any depth, on a walk that stays in Johto. Kanto and the League
         # rooms have none, and Silver Cave's one way out is Route 28 into Kanto. Without that walk the
         # step stood down again and again, or took turns with Red at the Kanto border.
-        # A collection goal the last decision walked toward runs on while the collection picks it again, and
-        # an activity that holds the collection does too. The loan comes at the next change of goal. On Gold
-        # post_game it cut a Max Elixir errand at Goldenrod, and the errand walked back to the store after it.
         if not snapshot.event('EVENT_GOT_BICYCLE'):
             walk = self.nav.walk(snapshot, self.data.map_ids['GOLDENROD_BIKE_SHOP'])
             if walk is not None and {self.travel_region(snapshot)} | {
                     self.data.maps[edge[1]]['region'] for edge in walk} == {'johto'}:
                 errand = self.collection_errand()
-                goal = self.story_on(snapshot, mem) if errand is not None else None
-                if goal is not None and (goal.key == errand.key or goal is getattr(self, 'ladder_hold', None)):
+                goal = self.story_on(snapshot, mem)
+                if goal is not None and self.loan_waits(snapshot, goal, errand):
                     return goal
                 return step('bicycle', 'Borrow a Bicycle from the Goldenrod bike shop')
         return self.story_on(snapshot, mem)
+
+    def loan_waits(self, snapshot, goal, errand):
+        """Whether the Bicycle loan waits for ``goal``, the goal the story picks now.
+
+        The loan comes when the story's own walk reaches Goldenrod City. Before that the story goal goes
+        first. From a Champion save in New Bark Town the loan went before Elm's ticket, and the run walked
+        to Goldenrod and back for the ticket, then to Goldenrod again for the Radio Card. Past the story a
+        collection goal the last decision walked toward runs on while the collection picks it again, and
+        an activity that holds the collection does too, so the loan comes at the next change of goal. On
+        Gold post_game it cut a Max Elixir errand at Goldenrod, and the errand walked back to the store.
+        """
+        if self.story_site(goal) == 'story':
+            city, target = self.data.map_ids['GOLDENROD_CITY'], self.data.map_ids.get(goal.map_name)
+            walk = None if target is None else self.nav.walk(snapshot, target)
+            return walk is None or city not in {snapshot.map, *(edge[1] for edge in walk)}
+        return errand is not None and (goal.key == errand.key or goal is getattr(self, 'ladder_hold', None))
 
     def collection_errand(self):
         """The goal the last decision walked toward, if the collection picked it or holds it, or None."""
