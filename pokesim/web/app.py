@@ -344,6 +344,26 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from ..champion_shop import status as shop_status
         return {**status(store, emu.status().get('game')), 'champion_shop': shop_status(store)}
 
+    def shiny_names():
+        if not gen2:
+            from ..ram import DEX_NAMES
+            return DEX_NAMES
+        return {entry['dex']: entry['name'] for entry in emu.data.species.values() if 1 <= entry.get('dex', 0) <= 251}
+
+    def shiny_records(shinies):
+        """The ledger's counts with the newest shiny log entries and how many of each species there were."""
+        from .. import shiny
+        generation, names = 2 if gen2 else 1, shiny_names()
+        with store.reading() as db:
+            return {**shinies, 'log': shiny.log(db, generation, names), 'species': shiny.species(db, generation, names)}
+
+    @app.get('/api/shiny-log')
+    def shiny_log(before: int = Query(ge=1)):
+        """Older shiny log entries than the receipt ``before``, a page at a time."""
+        from ..shiny import OLDER_PAGE, log
+        with store.reading() as db:
+            return log(db, 2 if gen2 else 1, shiny_names(), OLDER_PAGE, before)
+
     @app.get('/api/statistics')
     def statistics():
         from ..statistics import status, recent, overview, highlights
@@ -352,7 +372,6 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from ..money_flow import status as money_flow
         from ..goal_time import status as goal_time
         from ..catch_rates import status as catch_rates
-        from ..shiny import log as shiny_log
         if gen2:
             from ..gen2.steps import STEPS, status as mew_status
             from ..gen2 import returns as gen2_returns
@@ -370,9 +389,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             held = [mon for mon in game.get('party', []) + (game.get('storage') or {}).get('pokemon', [])
                     if not mon.get('egg')]
             shinies['held'] = sum(bool(mon.get('shiny')) for mon in held)
-            names = {entry['dex']: entry['name'] for entry in emu.data.species.values() if 1 <= entry.get('dex', 0) <= 251}
-            with store.reading() as db:
-                shinies['log'] = shiny_log(db, 2, names)
+            shinies = shiny_records(shinies)
             summary = overview(current, {'milestones': goals}, {
                 'steps': walked.get('total'), 'available': bool(walked), 'started_at': walked.get('started_at')})
             catches = store.get(CAPTURES) or {'available': False}
@@ -401,9 +418,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         from .. import step_events, mew_returns
         returns = returns_status(store)
         summary, catches = overview(current, records, returns), catch_status(store)
-        from ..ram import DEX_NAMES
-        with store.reading() as db:
-            shinies = {**records['shiny'], 'log': shiny_log(db, 1, DEX_NAMES)}
+        shinies = shiny_records(records['shiny'])
         return {**status(store), 'overview': summary,
                 'milestone_records': record_status(store), 'recent': recent(store),
                 'highlights': highlights(current.get('game')), 'legendary_returns': returns,

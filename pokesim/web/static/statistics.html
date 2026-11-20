@@ -74,8 +74,10 @@ ${library_nav}<nav aria-label="Main navigation"><a href="${game_base}/">Live</a>
 <div><span class="micro">Wild encounters per catch</span><strong class="readout" id="stats-per-catch">—</strong><span class="note">Since encounter counting began</span></div>
 </div></section>
 <section class="statistics-section" id="shiny-log" aria-labelledby="shiny-log-heading" hidden>
-<div class="column-head"><h2 class="legend legend--ink" id="shiny-log-heading">Shiny log</h2><span class="micro">Newest first</span></div>
+<div class="column-head"><h2 class="legend legend--ink" id="shiny-log-heading">Shiny log</h2><span class="micro" id="shiny-log-count">Newest first</span></div>
+<ul class="shiny-species" id="shiny-species" aria-label="Shinies by species"></ul>
 <ol class="progress-panel" id="shiny-log-list"></ol>
+<button type="button" id="shiny-log-more" class="key load-more" hidden>Older shinies ↓</button>
 </section>
 <section class="statistics-section" id="activity-details" aria-labelledby="activity-heading">
 <div class="column-head"><h2 class="legend legend--ink" id="activity-heading">Activity</h2></div>

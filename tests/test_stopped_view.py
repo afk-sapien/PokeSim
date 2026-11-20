@@ -11,7 +11,7 @@ from pokesim import game_data
 
 PANELS = ('/', '/pokedex', '/team', '/journey', '/pc', '/journal', '/journal/stats', '/stats', '/stats/pokemon',
           '/stats/items', '/trading', '/api/state?storage=1', '/api/pokedex', '/api/pokedex/status',
-          '/api/statistics', '/api/statistics/activity', '/api/trading', '/api/events', '/api/progress',
+          '/api/statistics', '/api/statistics/activity', '/api/shiny-log?before=1', '/api/trading', '/api/events', '/api/progress',
           '/frame.jpg', '/feed.xml')
 
 

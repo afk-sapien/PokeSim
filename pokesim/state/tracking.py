@@ -58,11 +58,20 @@ def add_shiny(db, generation, kind, fingerprint, dex, now):
                            'VALUES (?,?,?,?)', (kind, fingerprint, dex, now)).rowcount)
 
 
-def shiny_receipts(db, generation, limit):
-    """(kind, dex, ts) of the newest shiny receipts, newest first. Receipts from before dates were
-    kept come last."""
-    return db.execute(f'SELECT kind, dex, ts FROM {SHINY_RECEIPTS[generation]} '
-                      'ORDER BY ts IS NOT NULL DESC, ts DESC, rowid DESC LIMIT ?', (limit,)).fetchall()
+def shiny_receipts(db, generation, limit, before=None):
+    """(id, kind, dex, ts) of the newest shiny receipts, newest first, only those older than the
+    receipt id ``before`` when it is given. Receipts are only ever added, and a restart clears them
+    all, so the row id is the order they arrived in. Undated ones from before dates were kept are the
+    oldest."""
+    older, args = ('WHERE rowid < ? ', (before,)) if before is not None else ('', ())
+    return db.execute(f'SELECT rowid, kind, dex, ts FROM {SHINY_RECEIPTS[generation]} {older}'
+                      'ORDER BY rowid DESC LIMIT ?', (*args, limit)).fetchall()
+
+
+def shiny_species(db, generation):
+    """(dex, seen, acquired) for each species with a shiny receipt, the most receipts first."""
+    return db.execute(f"SELECT dex, SUM(kind = 'seen'), SUM(kind = 'acquired') FROM {SHINY_RECEIPTS[generation]} "
+                      'GROUP BY dex ORDER BY COUNT(*) DESC, dex').fetchall()
 
 
 # --- statistics ---
