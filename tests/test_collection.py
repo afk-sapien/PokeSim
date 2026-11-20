@@ -214,6 +214,9 @@ def test_coin_project_stages_and_cash_reserve():
     c=Collection()
     c.project={'method':'prize','species':sid(137),'key':'prize'}
     assert c.goal(state()).key=='collect_coins'
+    # The man in the diner's top left corner gives the case. The Fisher by the counter only talks.
+    case=c.goal(state())
+    assert case.approaches==((MAPS['CELADON_DINER'],1,1,'left'),) and case.interact
     s=state(items=((ITEMS['COIN_CASE'],1),),money=20000,coins=9999)
     assert c.goal(s).key=='collect_prize'
     c.remaining=100
