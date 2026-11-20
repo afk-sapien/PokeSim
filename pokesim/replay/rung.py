@@ -185,10 +185,11 @@ def _stand_downs(run, seen):
     return [last['key']] if last['status'] == 'deferred' else []
 
 
-def _goal_events(key, previous, current):
+def _goal_events(key, previous, current, cards=None):
     """The progress events of ``current`` for goal ``key``. Any goal also progresses on experience. A level
     can take many battles, and a training detour fights its battles while the policy reports the goal it
-    detoured from, so a span that gained experience was not wasted."""
+    detoured from, so a span that gained experience was not wasted. ``cards`` is the run's Pokégear cards
+    before and after, or None where the run has no Pokégear."""
     from pokesim.planning.monitor import ProgressEvent
     from pokesim.planning.progress import _held, events
     found = events(previous, current)
@@ -254,7 +255,27 @@ def _goal_events(key, previous, current):
         moved = sum((after - before).values()) or sum((before - after).values())
         if moved:
             found.append(ProgressEvent('trainee', moved))
+    # The Pokégear and each of its cards are story steps of their own, yet only wPokegearFlags holds them,
+    # so no other event shows them. ``cards`` holds that byte before and after. The story fetches the Radio
+    # Card before it boards the S.S. Aqua, and all 5,544 frames of a Gold run's Radio Card span read as wasted.
+    if cards is not None and None not in cards and previous is not None and current is not None and not found \
+            and getattr(current, 'valid', True) and getattr(previous, 'valid', True) and cards[1] & ~cards[0]:
+        found.append(ProgressEvent('card', cards[1] & ~cards[0]))
     return found
+
+
+def _cards(run):
+    """The Pokégear cards a Gold, Silver or Crystal run holds (gen2.kanto.pokegear_cards). Red, Blue and
+    Yellow have no Pokégear, and a read that fails gives None."""
+    if getattr(run, 'generation', 1) != 2:
+        return None
+    from pokecore.gen2.ram import Memory
+
+    from ..gen2.kanto import pokegear_cards
+    try:
+        return pokegear_cards(Memory(run.pb.memory, run.adapter.data))
+    except Exception:  # A read can fail mid transition, as a snapshot read can. The next one counts.
+        return None
 
 
 def _identity(mon):
@@ -313,6 +334,7 @@ def run_one(args, watch=None):
     errors = 0
     recoveries = getattr(run.policy, 'recoveries', 0)
     snapshot = read()
+    cards = _cards(run)
     party = [_levels(snapshot)]
     span = None  # [row, frames, progressed]
     # A Red, Blue or Yellow errand keeps its label only outside battle, so a wild battle on the way runs
@@ -353,13 +375,14 @@ def run_one(args, watch=None):
             current = read()
         except Exception:  # A snapshot read can fail mid transition. The next one counts.
             current = None
+        cards_now = _cards(run)
         goal = run.policy.goal
         if held is None and goal is not None and (run.generation == 2 or getattr(run.policy, 'completed', None)):
             held = story_milestones(run.policy)
         key = goal.key if goal is not None else 'none'
         line, title = row(key, describe(goal))
         titles.setdefault(line, title)
-        found = _goal_events(key, snapshot, current)
+        found = _goal_events(key, snapshot, current, (cards, cards_now))
         if span is None or span[0] != line:
             fighting = bool(getattr(snapshot, 'in_battle', 0))
             if paused is not None and paused[0] == line:
@@ -394,6 +417,8 @@ def run_one(args, watch=None):
             released += _released(snapshot, current, run.frame)
         if current is not None:
             snapshot = current
+        if cards_now is not None:
+            cards = cards_now
         if watch is not None and watch(run, snapshot):
             break
     run.stop()

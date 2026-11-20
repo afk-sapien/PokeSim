@@ -36,7 +36,7 @@ ALLOWED = {
     'pokesim/gen2/flight.py': (0, 2),
     'pokesim/gen2/gamecorner.py': (0, 1),
     'pokesim/gen2/item_sources.py': (0, 5),
-    'pokesim/gen2/kanto.py': (0, 2),
+    'pokesim/gen2/kanto.py': (0, 1),
     'pokesim/gen2/legendary.py': (0, 2),
     'pokesim/gen2/menus.py': (0, 5),
     'pokesim/gen2/naming.py': (2, 4),
