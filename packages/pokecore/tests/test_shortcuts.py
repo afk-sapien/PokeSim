@@ -8,7 +8,8 @@ resting screen with the effect observed, or that a refusal sends nothing.
 import pytest
 
 from pokecore.controls import ControllerPort
-from pokecore.gen1 import W_TILEMAP
+from pokecore.gen1 import W_PARTY_NICKS, W_TILEMAP
+from pokecore.menus import menu_options
 from pokecore.shortcuts import (RunAway, buy_item, change_box, choose_move, deposit_item,
                                     deposit_pokemon, item_kind, learn_move, list_items, list_moves, list_party,
                                     release_pokemon, reorder_party, run_away, sell_item, switch_pokemon,
@@ -190,6 +191,36 @@ def field_bag(game, *, on_use=None, on_target=None):
 
 
 # Items ----------------------------------------------------------------------
+
+def party_menu(names, drawn=None):
+    """Memory with the party menu open, its cursor on the first row, showing ``drawn`` (the nicknames by default)."""
+    memory = bytearray(0x10000)
+    memory[0xFF40], memory[0xFF47] = 0x80, 0xE4
+    memory[W_TILEMAP:W_TILEMAP + 360] = bytes([0x7F]) * 360
+    memory[0xD163] = len(names)
+    for slot, (name, shown) in enumerate(zip(names, drawn or names)):
+        start = W_PARTY_NICKS + 11 * slot
+        memory[start:start + 11] = bytes(encode(name)).ljust(11, b'\x50')
+        put(memory, 3, 2 * slot, shown)
+    memory[W_TILEMAP + 20] = 0xED
+    memory[0xCC24], memory[0xCC25], memory[0xCC28] = 1, 0, len(names) - 1
+    return memory
+
+
+def test_a_party_nickname_with_a_contraction_tile_still_shows_the_party_screen():
+    # The screen text shows the 'l tile as a blank while the decoded nickname has '?' there.
+    # When the names were compared as text, the party screen was never seen and every field move gave up.
+    memory = party_menu(['ONE', "NACHOPO'lT"])
+    assert current_screen(memory) == 'party'
+    assert [option['text'] for option in menu_options(memory, read_screen(memory))] == ['1: ONE', '2: NACHOPO?T']
+
+
+@pytest.mark.parametrize('drawn', [['ONEX', 'TWO'], ['ON', 'TWO'], ['TWO', 'ONE']])
+def test_party_rows_that_show_other_names_are_not_the_party_screen(drawn):
+    memory = party_menu(['ONE', 'TWO'], drawn)
+    assert current_screen(memory) != 'party'
+    assert not any(option['text'].startswith('1: ') for option in menu_options(memory, read_screen(memory)))
+
 
 def test_field_heal_finishes_at_the_overworld():
     game = Game(bag=[(0x14, 2), (0x11, 1)])

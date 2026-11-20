@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 
 from ..gen1 import W_TILEMAP, decode_text, read_party
-from ..gen1_ui import _VISIBLE_GLYPHS, read_screen
+from ..gen1_ui import _VISIBLE_GLYPHS, party_names_drawn, read_screen
 from ..yellow import red_layout
 from .items import generation
 
@@ -120,7 +120,7 @@ def party_screen(memory, screen, version=None):
     party = read_party(memory, version=version)
     if not party or memory[0xCC28] + 1 != len(party):
         return False
-    return all(screen['rows'][2 * i][3:13].strip() == mon['nick'] for i, mon in enumerate(party))
+    return party_names_drawn(memory, len(party), version=version)
 
 
 def _list_kind(memory, screen):

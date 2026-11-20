@@ -1149,6 +1149,18 @@ def test_switch_in_battle_from_the_menu_and_from_the_switch_prompt():
     refused(switch_pokemon(game.port(), 1), game, 'already active')
 
 
+def test_a_party_nickname_with_a_contraction_tile_still_shows_the_party_screen():
+    # The screen text shows the 'l tile (0xD1) as a blank while the decoded nickname spells it out.
+    game = Game2(party=[mon('ONE'), mon('NACHOPOXT')])
+    game.go_party('field')
+    game.sync()
+    game.put('wPartyMonNicknames', [0xD1], 11 + 7)
+    game.put('wTilemap', [0xD1], 3 * 20 + 3 + 7)
+    assert current_screen(game.memory, 'crystal') == 'party'
+    game.put('wTilemap', [0xD5], 3 * 20 + 3 + 7)
+    assert current_screen(game.memory, 'crystal') != 'party', "the 't tile is a different name"
+
+
 def test_forced_switch_waits_for_the_party_screen_under_which_pkmn():
     game = Game2(battle=1, party=[mon('ONE', hp=0), mon('TWO'), mon('SIX')])
     waits = []
