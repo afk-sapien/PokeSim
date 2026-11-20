@@ -571,7 +571,8 @@ class StrategicPolicy(Policy):
         # meet: the story is the pick until then and inside the League, and the plan placeholder after.
         if self.collection.completed_champion and s.map not in LEAGUE:
             # A run that reached the League without the Bicycle fetches it before planning the next project.
-            bike = bicycle_goal(s)
+            # Against a project under way the errand and the project took turns at every decision.
+            bike = None if self.collection.project else bicycle_goal(s)
             base = bike or Goal('collect_plan', 'Plan the next adventure project',
                                 'Choose a collecting, evolution, training, or exploration objective')
             choice = Ballot(base, goal_candidate(base, self.collection), source='story' if bike else 'plan')

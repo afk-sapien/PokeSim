@@ -141,10 +141,12 @@ class StoryPart:
             return step('cut', 'Receive Cut from the charcoal maker')
         self.completed.setdefault('cut', snapshot.frame)
         # Goldenrod's bike shop lends the Bicycle to anyone who agrees to ride it. A run that never
-        # borrowed it, at any depth, goes back for it here.
-        if not snapshot.event('EVENT_GOT_BICYCLE'):
+        # borrowed it goes back for it at any depth, but only from Johto: Kanto and the League rooms have
+        # no walk back to Goldenrod, and a walk with no route stands down again and again.
+        if snapshot.event('EVENT_GOT_BICYCLE'):
+            self.completed.setdefault('bicycle', snapshot.frame)
+        elif self.travel_region(snapshot) == 'johto':
             return step('bicycle', 'Borrow a Bicycle from the Goldenrod bike shop')
-        self.completed.setdefault('bicycle', snapshot.frame)
         if not snapshot.badges & 4:
             if snapshot.event('EVENT_MADE_WHITNEY_CRY'):
                 return step('whitney_cry', 'Give Whitney a moment')

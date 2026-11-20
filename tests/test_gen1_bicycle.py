@@ -6,7 +6,8 @@ import pytest
 
 from pokesim.policies.menus import tap
 from pokesim.policies.navigation import Navigator
-from pokesim.policies.progression import bicycle_goal, story_goal
+from pokesim.policies.progression import Goal, bicycle_goal, story_goal
+from pokesim.runtime.policy import PolicyContext
 from pokesim.policies.strategic import MOUNT_STEPS, WATER_TILES, StrategicPolicy, ride_ahead, rideable
 from pokecore.gen1 import W_WALK_BIKE_SURF_STATE
 from pokesim.strategy_data import ITEMS, MAPS, WORLD
@@ -52,6 +53,23 @@ def test_the_bicycle_is_fetched_after_flash_and_only_before_rock_tunnel():
     # A run already through the tunnel gets it after the League instead of walking back.
     past = road(party=FLASH_KNOWN, towns_visited=1 << MAPS['LAVENDER_TOWN'])
     assert story_goal(past).key not in ('bike_voucher', 'bicycle')
+
+
+def test_a_run_past_the_league_fetches_the_bicycle_only_between_projects():
+    """Victory Road replays took the voucher errand and a project under way in turns, 121 changes an hour."""
+    policy = StrategicPolicy(7)
+    hunt = Goal('collect_hunt', 'Hunt', 'Find grass', ((255, 1, 1), (255, 2, 1)))
+    policy.collection.completed_champion = True
+    policy.collection.project = {'key': 'grass:1', 'method': 'hunt'}
+    policy.collection.remaining = 10 ** 6
+    policy.collection.goal = lambda *_, **__: hunt
+    policy.nav.guided = lambda *args, **kwargs: 'up'
+    for frame in (0, 60):
+        policy.step(PolicyContext(snap(frame=frame, party=(mon(),)), frame, bytearray(65536)))
+    assert policy.goal.key == 'collect_hunt'
+    policy.collection.project = None
+    policy.step(PolicyContext(snap(frame=120, party=(mon(),)), 120, bytearray(65536)))
+    assert policy.goal.key == 'bike_voucher'
 
 
 def walkable_from_door(m):
