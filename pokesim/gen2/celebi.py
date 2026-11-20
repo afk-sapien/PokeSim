@@ -64,8 +64,9 @@ def activate(emu):
     return record
 
 
-def journey(policy, snapshot, Goal):
-    if policy.data.game != 'crystal' or 251 in snapshot.owned and 251 not in getattr(policy, 'returned', ()):
+def journey(policy, snapshot, Goal, returned=frozenset()):
+    """The GS Ball quest's next step while Celebi is missing from the Pokédex or in ``returned``."""
+    if policy.data.game != 'crystal' or 251 in snapshot.owned and 251 not in returned:
         return None
     mem = Memory(policy.memory, policy.data)
     if not snapshot.event('EVENT_GOT_GS_BALL_FROM_GOLDENROD_POKEMON_CENTER'):
