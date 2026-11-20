@@ -10,6 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 import re
 
+from ..gen1_ui import names_drawn
 from ..gen2.charmap import charmap
 from ..gen2.memory_map import symbols as core_symbols
 from ..gen2.ram import Memory
@@ -192,20 +193,16 @@ def choices(view, cursor):
     return out
 
 
-def party_names(view):
-    from ..gen2.state import read_party_structs
-    try:
-        return [('EGG' if mon['egg'] else mon['nickname']) for mon in read_party_structs(view.raw, view.version)]
-    except (TypeError, IndexError, KeyError, ValueError):
-        return []
-
-
 def roster(view, rows):
-    """True when the party list shows every owned party member at its row."""
-    names = party_names(view)
-    if not names or rows[0].strip():
+    """True when the party list shows every owned party member's nickname at its row."""
+    if rows[0].strip():
         return False
-    return all(rows[2 * index + 1][3:13].strip() == name.strip() for index, name in enumerate(names))
+    try:
+        count = min(view.byte('wPartyCount'), 6)
+        names = view.read('wPartyMonNicknames', 11 * count) if count else b''
+    except (TypeError, IndexError, KeyError, ValueError):
+        return False
+    return bool(names) and names_drawn(view.tiles, names, 1)
 
 
 def quantity_box(view):

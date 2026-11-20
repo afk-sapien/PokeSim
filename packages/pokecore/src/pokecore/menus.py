@@ -1,5 +1,6 @@
 """Read visible English Red/Blue menu choices without selecting a policy."""
 from .gen1 import read_party
+from .gen1_ui import party_names_drawn
 
 
 def menu_options(memory, screen, kind=None, *, party_reader=read_party):
@@ -12,7 +13,7 @@ def menu_options(memory, screen, kind=None, *, party_reader=read_party):
     party = party_reader(memory)
     if (party and cursor[0] == 0 and memory[0xCC24] == 1
             and memory[0xCC28] + 1 == len(party)
-            and all(screen["rows"][2 * i][3:13].strip() == mon["nick"] for i, mon in enumerate(party))):
+            and party_names_drawn(memory, len(party))):
         return [{"text": f"{i + 1}: {mon['nick']}", "cursor": [0, 1 + 2 * i]}
                 for i, mon in enumerate(party)]
     if kind == "move_menu":

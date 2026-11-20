@@ -9,7 +9,7 @@ fields take ``version`` like the ``gen1`` readers.
 from .yellow import red_layout
 from .storage import box_location, decode_box, memory_bytes
 from .gen1 import (W_TILEMAP, decode_text, W_CURRENT_BOX, BOX_MONS_OFFSET, BOX_NICKS_OFFSET, W_CURRENT_MENU_ITEM,
-                   W_LIST_SCROLL_OFFSET, W_TOP_MENU_ITEM_X, W_TOP_MENU_ITEM_Y)
+                   W_LIST_SCROLL_OFFSET, W_PARTY_NICKS, W_TOP_MENU_ITEM_X, W_TOP_MENU_ITEM_Y)
 
 
 _RAW_GLYPHS = tuple(decode_text(bytes([tile])) or " " for tile in range(256))
@@ -35,6 +35,27 @@ def read_screen(memory, *, raw_text=False):
     return {"rows": rows, "cursor": cursor, "menu_index": memory[W_CURRENT_MENU_ITEM],
             "scroll": memory[W_LIST_SCROLL_OFFSET], "textbox": raw[240] == 0x79,
             "pause": raw[10] == 0x79, "tiles": list(raw)}
+
+
+def names_drawn(tiles, names, first_row):
+    """True when each 11-byte name in ``names`` is drawn from column 3 of every other row
+    from ``first_row``, with blanks after it up to column 13, as a party menu draws nicknames.
+
+    Tiles are compared, not decoded text. A decoded nickname and the screen text show
+    some tiles differently, the 'l contraction tile among them.
+    """
+    for slot in range(len(names) // 11):
+        name = bytes(names[11 * slot:11 * slot + 11]).split(b"\x50", 1)[0][:10]
+        start = (first_row + 2 * slot) * 20 + 3
+        if bytes(tiles[start:start + 10]) != name.ljust(10, b"\x7f"):
+            return False
+    return True
+
+
+def party_names_drawn(memory, count, *, version=None):
+    """True when the party menu rows show the first ``count`` party nicknames."""
+    nicks = red_layout(memory, version)
+    return names_drawn(memory[W_TILEMAP:W_TILEMAP + 360], nicks[W_PARTY_NICKS:W_PARTY_NICKS + 11 * count], 0)
 
 
 def read_sprites(memory):
