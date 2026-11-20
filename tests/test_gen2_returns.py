@@ -139,9 +139,9 @@ def test_a_refused_lugia_return_closes_until_the_next_milestone(world, monkeypat
                            party=[], stored=[], pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
     planner = SimpleNamespace(data=data, collection={}, returned={249},
                               person=lambda snapshot, key, label, map_name, script: Goal(key, label, map_name, 0, 0))
-    assert legends(planner, plan, Goal).key == 'legend_lugia'
+    assert legends(planner, plan, Goal, returned={249}).key == 'legend_lugia'
     planner.returned = ready
-    assert legends(planner, plan, Goal) is None
+    assert legends(planner, plan, Goal, returned=ready) is None
     # The declined encounter is hidden again, and the #217 retry timers leave it hidden however long the wait.
     observe(world.store, snap, world.memory)
     assert world.event('EVENT_FOUGHT_LUGIA') and world.event('EVENT_WHIRL_ISLAND_LUGIA_CHAMBER_LUGIA')
@@ -480,7 +480,9 @@ def test_policy_returns_to_catch_returned_legendaries(data):
                                party=[], stored=[], pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
     assert legends(policy, snapshot, Goal) is None
     policy.returned = {249}
-    goal = legends(policy, snapshot, Goal)
+    # The rung for legendaries missing from the Pokédex leaves a walking return to its own priced rung.
+    assert legends(policy, snapshot, Goal) is None
+    goal = legends(policy, snapshot, Goal, returned={249})
     # The trip is a hunt, so it runs from the other wild battles on its way. As a story goal it fought
     # each one, ran its lead's strong attacks out on Route 41 and turned back to heal, again and again.
     assert goal.key == 'legend_lugia' and goal.kind == HUNT
@@ -489,14 +491,67 @@ def test_policy_returns_to_catch_returned_legendaries(data):
     rainbow = data.items['RAINBOW_WING']
     flags -= {'EVENT_FOUGHT_HO_OH'}
     policy.returned, snapshot.items = {250}, ((wing, 1), (rainbow, 1))
-    goal = legends(policy, snapshot, Goal)
+    goal = legends(policy, snapshot, Goal, returned={250})
     assert goal.key == 'legend_ho_oh' and goal.kind == HUNT
     if data.game == 'crystal':
         flags -= {'EVENT_FOUGHT_SUICUNE'}
         flags |= {'EVENT_KOJI_ALLOWS_YOU_PASSAGE_TO_TIN_TOWER'}
         policy.returned = {245}
-        goal = legends(policy, snapshot, Goal)
+        # A walking return of an owned Suicune clears its fought flag, but only its own trip goes back for it.
+        assert legends(policy, snapshot, Goal) is None
+        goal = legends(policy, snapshot, Goal, returned={245})
         assert goal.key == 'legend_suicune' and goal.kind == HUNT
+
+
+def test_a_walking_return_of_an_owned_legendary_waits_behind_open_work(data, monkeypatch):
+    """Issue #651: a Gold run went to each walking return of an owned legendary ahead of all other work,
+    started the battle and fled at once, since the battle keeps such a return only for a better roll."""
+    from pokesim.gen2 import quests
+    from pokesim.gen2.collection import journey
+    from pokesim.gen2.policy import Goal
+    from tests.test_gen2_less_waiting import clock, expedition, lead, snapshot, stub_activities
+    lugia = Goal('legend_lugia', 'Seek Lugia in the Whirl Islands', 'WHIRL_ISLAND_LUGIA_CHAMBER', 9, 9)
+    train = Goal('collection_train', 'Train MON toward level 100', 'SILVER_CAVE_ROOM_1', 9, 31)
+    asked = []
+
+    def legends(policy, snapshot, Goal, returned=frozenset()):
+        asked.append(set(returned))
+        return lugia if 249 in returned else None
+
+    def plan():
+        policy = expedition(data)
+        policy.returned = {249}
+        return policy
+
+    stub_activities(monkeypatch, **{'training.journey': train})
+    monkeypatch.setattr(quests, 'legends', legends)
+    assert journey(plan(), snapshot([lead()]), clock(), Goal).key == 'collection_train'
+    # The rung for legendaries missing from the Pokédex never plans the return, and the training goal
+    # is priced ahead of the return's own rung, so that rung is not built.
+    assert asked == [set()]
+    # With nothing else open, the return's own rung plans the trip, ahead of a patrol.
+    asked.clear()
+    patrols = stub_activities(monkeypatch)
+    monkeypatch.setattr(quests, 'legends', legends)
+    assert journey(plan(), snapshot([lead()]), clock(), Goal).key == 'legend_lugia' and not patrols
+    assert {249} in asked
+
+
+def test_a_walking_return_is_priced_as_a_better_roll_unless_a_plan_needs_the_copy(data):
+    from pokesim.gen2.collection import return_price
+    from pokesim.gen2.postgame import best_tail, catch_value
+    from pokesim.planning import values
+    from pokesim.planning.arbiter import Tier
+    from pokesim.policies.collection import HUNT_TIER
+    from tests.test_gen2_less_waiting import lead, mon, snapshot
+    policy = SimpleNamespace(data=data, demand={})
+    state = snapshot([lead()], [mon(249, box=2, dvs=(12, 12, 12, 12, 12), level=60)])
+    tier, value = return_price(policy, state, 249)
+    assert (tier, value) == (HUNT_TIER, catch_value(best_tail(data, state, 249)))
+    assert value < values.NEW_ENTRY
+    # A trade or breeding plan that asks for another Lugia makes the copy itself the work.
+    policy.demand = {249: 1}
+    assert return_price(policy, state, 249) == (Tier.PROGRESS, values.NEW_ENTRY)
 
 
 def test_returned_statics_make_room_and_need_a_ball_before_the_trip(data):
@@ -541,8 +596,12 @@ def test_static_legendary_trip_waits_for_an_affordable_ultra_ball_stock(data):
     from pokesim.gen2.quests import ball_ready, static_wanted, ultra_shortfall
     policy = SimpleNamespace(data=data, returned={249})
     ultra = data.items['ULTRA_BALL']
-    snapshot = SimpleNamespace(owned={249}, roamers=(), money=50000, pockets={'balls': [(ultra, 3)]},
+    snapshot = SimpleNamespace(owned={245, 249, 250}, roamers=(), money=50000, pockets={'balls': [(ultra, 3)]},
                                event=lambda name: False)
+    # Every static legendary is owned and Lugia walks back. That return is worth only a better roll, so it
+    # never starts a League run for money.
+    assert not static_wanted(policy, snapshot)
+    policy.returned, snapshot.owned = set(), set()
     assert static_wanted(policy, snapshot)
     # Money for ten Ultra Balls: shop before the trip.
     assert not ball_ready(policy, snapshot) and not ultra_shortfall(policy, snapshot)
