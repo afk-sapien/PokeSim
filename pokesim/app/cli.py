@@ -94,11 +94,17 @@ class RunningApplication:
             identity = json.loads((root / 'manager.json').read_text(encoding='utf-8'))
         except (OSError, ValueError) as error:
             raise Conflict('Start the PokeSim application for this data directory before using this command') from error
-        address = urlsplit(identity.get('url', ''))
-        if address.scheme not in {'http', 'https'} or not address.netloc or address.username or address.password:
+        # An application from before local_url was kept listens on its public address.
+        local = identity.get('local_url', identity.get('url', ''))
+        address, listening = urlsplit(identity.get('url', '')), urlsplit(local)
+        if any(part.scheme not in {'http', 'https'} or not part.netloc or part.username or part.password
+               for part in (address, listening)):
             raise Conflict('The application address in manager.json is invalid')
         self.expected_application = identity['application_id']
-        self.client = httpx.Client(base_url=identity['url'].rstrip('/'), trust_env=False, timeout=300)
+        # The application refuses a request whose Host is not its public address, so the request
+        # names that address while it connects to the local one.
+        self.client = httpx.Client(base_url=local.rstrip('/'), headers={'Host': address.netloc},
+                                   trust_env=False, timeout=300)
         # The running app writes this token for commands on its own machine, so they act
         # as the first admin when the library has accounts.
         try:
@@ -111,6 +117,9 @@ class RunningApplication:
                 raise Conflict('The running application does not match this data directory')
             session = self.request('GET', '/api/v1/session')
             self.client.headers['X-PokeSim-CSRF'] = session['csrf_token']
+            # An https public address marks the session cookie secure, and httpx sends a secure
+            # cookie only over https, so the plain local connection sends it as a header.
+            self.client.headers['Cookie'] = '; '.join(f'{cookie.name}={cookie.value}' for cookie in self.client.cookies.jar)
         except BaseException:
             self.client.close()
             raise

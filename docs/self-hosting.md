@@ -198,6 +198,12 @@ pokesim adventures create --data-dir /path/to/library --name "Red orchard" --rom
 pokesim backup --data-dir /path/to/library
 ```
 
+In Docker, run them in the container. It reads the `--rom` path inside the container, so this ROM is in the data folder:
+
+```sh
+docker compose exec pokesim pokesim adventures create --data-dir /data --name "Red orchard" --rom /data/pokered.gb --start
+```
+
 ### Migration and recovery
 
 Stop both the source adventure and destination application. Back up the original files, then import into a fresh application root:
