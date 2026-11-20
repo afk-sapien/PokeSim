@@ -32,7 +32,7 @@ def lead():
 
 def snapshot(party, stored=()):
     return SimpleNamespace(frame=60000, party=tuple(party), stored=tuple(stored), daycare=(None, None), owned=set(range(1, 252)),
-                           box_counts=(5,) * 14, active_box=0, map=1, x=1, y=1, items=(), can_catch=True,
+                           box_counts=(5,) * 14, active_box=0, map=1, x=1, y=1, items=(), can_catch=True, badges=0xFFFF,
                            hall_of_fame_count=3, pockets={'balls': [(5, 20)]}, event=lambda name: True)
 
 

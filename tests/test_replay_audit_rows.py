@@ -266,13 +266,13 @@ def test_a_battle_on_an_errands_way_does_not_cut_the_errand_short(monkeypatch, t
 
 def test_a_run_counts_only_the_story_milestones_it_earned_after_its_first_goal(monkeypatch, tmp_path):
     # The gate ranks a rung by the milestones it earned. The save already holds the ones before its first
-    # goal, so those are not counted, and a contest or a tower visit is no story.
+    # goal, so those are not counted, and a contest, a tower visit or the Bicycle loan is no story.
     # Red, Blue and Yellow start on a boot goal and read the milestones on the next decision. The gate's
     # first run counted every badge in the save as earned.
     held = {'starter': True, 'parcel': True, 'boulder': True, 'cascade': False, 'thunder': False}
     cascade = {**held, 'cascade': True}
     steps = [('boot', _walk()), ('story', _walk()), ('story', _walk()), ('story', _walk())]
-    completed = [{}, held, cascade, {**cascade, 'thunder': True, 'contest': 1200}]
+    completed = [{}, held, cascade, {**cascade, 'thunder': True, 'contest': 1200, 'bicycle': 1300}]
     result = _audit(monkeypatch, tmp_path / 'story.json', steps, completed)
     assert result['story'] == ['cascade', 'thunder']
     assert _audit(monkeypatch, tmp_path / 'none.json', steps)['story'] == []

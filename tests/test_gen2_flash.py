@@ -70,7 +70,7 @@ def test_flash_is_fetched_after_falkner_only_while_the_road_is_in_violet(real_da
 
     def key(*events):
         state = SimpleNamespace(frame=100, badges=1, party=[], map=real_data.map_ids['VIOLET_CITY'],
-                                event=lambda flag: flag in before_story | set(events))
+                                hall_of_fame_count=0, event=lambda flag: flag in before_story | set(events))
         return owner.story(state, None).key
 
     assert key() == 'flash'
