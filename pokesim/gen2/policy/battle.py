@@ -721,14 +721,28 @@ class BattlePart:
         A switch comes before the opponent's move, and every Pokémon sent out shares the experience, so the
         trainee still levels without an Exp. Share. It only happens while the trainee is out, so it never repeats.
         A trainee that leads the training walk with its Exp. Share (training_lead) switches out the same way.
+
+        On the training walk a leading trainee also leaves a foe that can trap it, since a trapped trainee
+        cannot leave once the battle turns. A Machoke at full HP fell to a Golbat's Mean Look, Confuse Ray and
+        Wing Attack. Any other member there LEAD_MARGIN above the foe that runs out of HP or strong PP mid
+        battle (walk_fighters) gives way to the fighter with the most room, where a spent Electrode had used
+        Explosion. A low sleeper that leads on purpose is never above the foe, so it stays.
         """
         from ..training import LEAD_MARGIN, trainee_index, trainee_slot, walk_fighters
+        able = walk_fighters(self, snapshot)
         slot = trainee_slot(self, snapshot)
-        if slot is None and walk_fighters(self, snapshot):
+        if slot is None and able:
             slot = trainee_index(self, snapshot)
-        if active != slot or active >= len(snapshot.party):
+        if active >= len(snapshot.party):
             return None
         mon = snapshot.party[active]
+        if active != slot:
+            spent = able and active not in able and mon.level >= snapshot.enemy_level + LEAD_MARGIN
+            return max(able, key=able.get) if spent else None
+        trap = able and any(self.data.moves.get(move, {}).get('effect') == 'EFFECT_MEAN_LOOK'
+                            for move in self.reads.enemy.moves)
+        if trap:
+            return max((i for i in able if i != active), key=able.get, default=None)
         if mon.level >= snapshot.enemy_level + LEAD_MARGIN and mon.hp * 2 > mon.max_hp:
             return None
         healthy = [i for i, row in enumerate(snapshot.party) if i != active and not row.egg and row.hp * 4 > row.max_hp]

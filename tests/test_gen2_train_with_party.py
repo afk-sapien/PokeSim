@@ -84,8 +84,16 @@ def test_the_trainee_leads_the_walk_once_it_can_fight_there(data):
     assert policy.level_lead(snapshot) == Lead(1, (2, (2, 0, 0, 0)))
 
 
+def foe(policy, *effects):
+    """The wild foe's moves as the battle reads them: one move of each effect in ``effects``."""
+    moves = tuple(next(mid for mid, entry in policy.data.moves.items() if entry.get('effect') == effect)
+                  for effect in effects)
+    policy.reads = SimpleNamespace(enemy=SimpleNamespace(moves=moves))
+
+
 def test_a_trainee_leading_the_walk_switches_out_of_a_close_battle(data):
     policy, top = walk(data)
+    foe(policy)
     party = [mon(data, 3, top + 5), mon(data, 1, top + 20), mon(data, 2, top + 10)]
     snapshot = train(policy, party, 0)
     snapshot.enemy_level = top + 2
@@ -95,6 +103,45 @@ def test_a_trainee_leading_the_walk_switches_out_of_a_close_battle(data):
     assert policy.trainee_switch(snapshot, 0) is None
     # Off the training walk a trainee with its Exp. Share is no lead of its own.
     snapshot.enemy_level = top + 2
+    policy.goal = None
+    assert policy.trainee_switch(snapshot, 0) is None
+
+
+def test_a_leading_trainee_leaves_a_foe_that_can_trap_it(data):
+    policy, top = walk(data)
+    party = [mon(data, 3, top + 20), mon(data, 1, top + 10, hp=70), mon(data, 2, top + 10)]
+    snapshot = train(policy, party, 0)
+    snapshot.enemy_level = top
+    # Far above an ordinary foe it fights the battle out.
+    foe(policy, 'EFFECT_CONFUSE')
+    assert policy.trainee_switch(snapshot, 0) is None
+    # A foe with Mean Look could trap it, so it gives way to the fighter with the most room.
+    foe(policy, 'EFFECT_CONFUSE', 'EFFECT_MEAN_LOOK')
+    assert policy.trainee_switch(snapshot, 0) == 2
+    # Off the training walk the usual rule decides.
+    policy.goal = None
+    assert policy.trainee_switch(snapshot, 0) is None
+
+
+def test_a_spent_member_gives_way_mid_battle_on_the_walk(data):
+    policy, top = walk(data)
+    foe(policy)
+    party = [mon(data, 1, top + 30), mon(data, 2, top + 10), mon(data, 3, 2)]
+    snapshot = train(policy, party, 2)
+    snapshot.enemy_level = top
+    assert policy.trainee_switch(snapshot, 0) is None
+    # Its last strong PP went this battle, so the fighter with room takes over before it is left with
+    # nothing but a move that knocks itself out.
+    party[0].pp = (0,)
+    assert policy.trainee_switch(snapshot, 0) == 1
+    # Below the heal line it gives way the same way.
+    party[0].pp, party[0].hp = (35,), 40
+    assert policy.trainee_switch(snapshot, 0) == 1
+    # A member no higher than the foe is no fighter here, so it is left as it is.
+    party[0].level = top
+    assert policy.trainee_switch(snapshot, 0) is None
+    # So is any member off the training walk.
+    party[0].level = top + 30
     policy.goal = None
     assert policy.trainee_switch(snapshot, 0) is None
 
@@ -124,3 +171,8 @@ def test_the_training_walk_keeps_each_deliberate_lead(data, lead):
         policy.static_sleeper = sleeper
         policy.goal = Goal(f'collection_{lead}', 'Make room in storage', 'CHERRYGROVE_POKECENTER_1F', 3, 1, 'up')
     assert policy.level_lead(snapshot) is None
+    # Mid battle the walk never sends the sleeper out either, even worn and facing a foe that traps.
+    foe(policy, 'EFFECT_MEAN_LOOK')
+    snapshot.enemy_level = top
+    party[0].hp = 30
+    assert policy.trainee_switch(snapshot, 0) is None
