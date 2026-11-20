@@ -172,6 +172,48 @@ def test_a_save_past_the_bicycle_earns_none_of_its_milestones_when_the_step_fire
     assert story_milestones(owner) == held
 
 
+def test_a_collection_errand_under_way_finishes_before_the_bicycle(real_data, monkeypatch):
+    """On Gold post_game a Max Elixir errand walked into Goldenrod, the loan cut it there for 2,132 frames, and
+    the errand walked back to the store after it. The loan now waits for the next change of goal."""
+    import pokesim.gen2.policy.story as story
+    from pokesim.gen2.policy import Policy
+    owner = Policy(real_data, starter='cyndaquil')
+    owner.story_step = lambda snapshot, key, title, row=None: SimpleNamespace(key=key)
+    # The chain notes the Ice Path on arrival in Blackthorn City, which this save did long ago.
+    owner.completed['ice_path'] = 1
+    # Gyarados learns Surf, Whirlpool and Waterfall, so the story looks for no partner on its way to Kanto.
+    gyarados = SimpleNamespace(moves=[57], species=130, level=50, hp=1, max_hp=1, status=0, egg=False)
+    shop, train = SimpleNamespace(key='collection_champion_shop'), SimpleNamespace(key='collection_train')
+    box, heal = SimpleNamespace(key='collection_box'), SimpleNamespace(key='heal')
+    asked, now = [], {}
+
+    def collect(policy, snapshot, mem, Goal):
+        # The collection's pick, or the activity that holds it, as collection.journey leaves them.
+        asked.append(now['goal'].key)
+        policy.collection_goal, policy.ladder_hold = (None, now['goal']) if now['hold'] else (now['goal'], None)
+        return now['goal']
+
+    monkeypatch.setattr(story, 'kanto_journey', collect)
+    state = SimpleNamespace(frame=100, badges=0xFFFF, party=[gyarados], map=real_data.map_ids['GOLDENROD_CITY'], x=0,
+                            y=0, farfetchd_position=None, hall_of_fame_count=1,
+                            event=lambda flag: flag != 'EVENT_GOT_BICYCLE')
+
+    def pick(previous, last, goal, hold=False):
+        owner.goal, owner.collection_goal, owner.ladder_hold = previous, last, None
+        now.update(goal=goal, hold=hold)
+        return owner.story(state, None).key
+
+    # The errand the collection picks again runs on, and the loan comes once the collection picks another goal.
+    assert pick(shop, shop, shop) == 'collection_champion_shop'
+    assert pick(shop, shop, train) == 'bicycle'
+    # An activity that holds the collection runs on as well.
+    assert pick(shop, shop, box, hold=True) == 'collection_box'
+    assert asked == ['collection_champion_shop', 'collection_train', 'collection_box']
+    # A goal from outside the collection, and no goal at all, take the loan without asking the collection.
+    assert pick(heal, shop, shop) == 'bicycle' and pick(None, None, shop) == 'bicycle'
+    assert len(asked) == 3 and 'bicycle' not in owner.completed
+
+
 def test_a_register_task_rebuilt_after_the_register_ends_without_the_pack(monkeypatch):
     register(monkeypatch, BIKE)
     mem = SimpleNamespace(memory=None, data=SimpleNamespace(game='gold'))
