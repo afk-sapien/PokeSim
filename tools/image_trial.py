@@ -2,7 +2,14 @@
 cold backup of the host's app folder, before tools/deploy_host.sh may ship it.
 
   python3 tools/image_trial.py run --candidate <full sha> --backup <cold backup .tar.gz> --work <empty folder>
+                                   [--game-data <folder holding gen2/<game>>]
   python3 tools/image_trial.py check <full sha> <image tag>
+
+The trial has no network, so it cannot download Gen II game data. Right after the copy, before the
+container starts, the candidate image checks the Gen II data of each game an adventure wants running.
+When the commit changed the data's schema or source, the run stops there with a note, unless --game-data
+names a folder whose data the candidate accepts, which the run then copies into the copy as the app would
+have downloaded it. tools/live_soak.py smoke takes --game-data the same way.
 
 The run builds the image the way tools/deploy_host.sh does and keeps it, so the deploy ships that very
 image and never builds it again. It takes compose.yaml and the ./app folder from the backup. It never
@@ -85,6 +92,46 @@ with open(folder + '/app/manager.json', encoding='utf-8') as stream:
     url = json.load(stream).get('url')
 print(json.dumps({'url': url, 'wanted': wanted_running}))
 '''
+# Runs in the candidate image as root after the copy, with no network. Arguments are the copied app folder
+# and, when given, the game data folder to install from, which holds gen2/<game> as GEN2_DATA_DIR does.
+# Each Gen II game an adventure the copy wants running plays must pass the candidate's own check in the
+# copy, or pass it in the given folder and be copied in with the owner the container runs as. It prints
+# the candidate's Gen II schema, the games it copied and the games still missing.
+GAME_DATA = '''
+import json, os, shutil, sqlite3, sys
+from pathlib import Path
+from pokesim import game_data
+from pokesim.gen2.data import SCHEMA, GameData
+folder, source = Path(sys.argv[1]), (Path(sys.argv[2]) if len(sys.argv) > 2 else None)
+db = sqlite3.connect('file:' + str(folder / 'app.sqlite') + '?mode=ro', uri=True)
+games = sorted({version for (version,) in db.execute(
+    "SELECT version FROM adventures WHERE archived=0 AND desired_state='running'")} & {'gold', 'silver', 'crystal'})
+reference = folder / 'assets' / 'reference' / game_data.SOURCE_REVISION
+owner = folder.stat()
+def verified(root, game):
+    try:
+        GameData.load(root, game)
+    except (OSError, ValueError, KeyError):
+        return False
+    return True
+copied, missing = [], []
+for game in games:
+    if verified(reference, game):
+        continue
+    if source is None or not verified(source, game):
+        missing.append(game)
+        continue
+    target = reference / 'gen2' / game
+    created = [path for path in (reference.parent, reference, reference / 'gen2', target) if not path.exists()]
+    target.mkdir(parents=True, exist_ok=True)
+    for name in ('data.json', 'manifest.json'):
+        shutil.copyfile(source / 'gen2' / game / name, target / name)
+        created.append(target / name)
+    for path in created:
+        os.chown(path, owner.st_uid, owner.st_gid)
+    copied.append(game)
+print(json.dumps({'schema': SCHEMA, 'copied': copied, 'missing': missing}))
+'''
 # Runs in the trial container. It prints how many adventures it wants running, how many run, and the
 # exit code of the image's own health check.
 PROBE = '''
@@ -138,6 +185,15 @@ def extract(tag, backup, work):
     done = subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--user', '0:0', '--entrypoint', 'python',
                            '-v', f'{backup.parent}:/in:ro', '-v', f'{work}:/w', tag, '-c', EXTRACT,
                            f'/in/{backup.name}', '/w', *SECRETS], check=True, capture_output=True, text=True)
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def install_game_data(tag, work, game_data):
+    """Check the copy holds the Gen II data the candidate wants, copying it in from `game_data` when given."""
+    mounts = ['-v', f'{game_data}:/g:ro'] if game_data else []
+    done = subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--user', '0:0', '--entrypoint', 'python',
+                           '-v', f'{work}:/w', *mounts, tag, '-c', GAME_DATA, '/w/app', *(['/g'] if game_data else [])],
+                          check=True, capture_output=True, text=True)
     return json.loads(done.stdout.strip().splitlines()[-1])
 
 
@@ -251,6 +307,15 @@ def run(args):
     built = build(sha, tag, version, schema)
     print(f'image trial: copying ./app from {backup.name}', file=sys.stderr)
     copy = extract(tag, backup, work)
+    data = install_game_data(tag, work, args.game_data.resolve() if args.game_data else None)
+    if data['missing']:
+        raise SystemExit(f'image trial: {", ".join(data["missing"])} need Gen II game data with schema '
+                         f'{data["schema"]} that {backup.name} does not hold, and the trial has no network to '
+                         f'download it. Run again on an empty --work with --game-data and a folder holding '
+                         f'gen2/<game> for this commit, such as GEN2_DATA_DIR')
+    if data['copied']:
+        print(f'image trial: copied Gen II game data schema {data["schema"]} for {", ".join(data["copied"])}',
+              file=sys.stderr)
     compose = (work / 'compose.yaml').read_bytes()
     (trial / 'compose.yaml').write_bytes(compose)
     (trial / 'trial.json').write_text(json.dumps({
@@ -264,7 +329,7 @@ def run(args):
     command = compose_command(trial)
     report = {'commit': sha, 'tag': tag, 'image_id': built, 'compose_sha256': hashlib.sha256(compose).hexdigest(),
               'backup': backup.name, 'wanted': copy['wanted'], 'started': time.time(), 'caps': CAPS,
-              'trusted_proxies': TRUSTED_PROXIES}
+              'trusted_proxies': TRUSTED_PROXIES, 'game_data_copied': data['copied']}
     probes, log, seconds = [], '', 0
     print(f'image trial: starting {tag} on {copy["wanted"]} adventures for {args.minutes} minutes', file=sys.stderr)
     try:
@@ -340,6 +405,8 @@ def main(argv=None):
     running.add_argument('--backup', required=True, type=Path, help="a cold backup .tar.gz of the host's app folder")
     running.add_argument('--work', required=True, type=Path, help='an empty folder for the copy, kept afterwards')
     running.add_argument('--minutes', type=int, default=MIN_SECONDS // 60, help='how long to run, 30 to pass')
+    running.add_argument('--game-data', type=Path, help='Gen II game data to install when the commit wants data '
+                         'the backup does not hold, a folder holding gen2/<game>')
     checking = commands.add_parser('check', help='exit 0 and print the compose sha256 when a fresh trial passed')
     checking.add_argument('sha')
     checking.add_argument('tag')

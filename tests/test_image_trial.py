@@ -94,6 +94,69 @@ def test_the_copy_takes_only_the_app_folder_and_compose_file_and_no_secret(tmp_p
     assert copied == sorted(files)
 
 
+def gen2_bundle(root, game, schema=None):
+    """A Gen II data folder the candidate's check accepts, or one an older schema wrote."""
+    from pokesim.gen2.data import write_bundle
+    raw = {'game': game, **{name: {} for name in ('species', 'moves', 'maps', 'charmap', 'item_attributes', 'items',
+                                                  'types', 'events', 'map_ids', 'symbols', 'collisions',
+                                                  'permissions')}}
+    write_bundle(root, game, raw)
+    if schema is not None:
+        manifest = root / 'gen2' / game / 'manifest.json'
+        manifest.write_text(json.dumps({**json.loads(manifest.read_text()), 'schema': schema}))
+
+
+def game_data_check(app, source=None):
+    done = subprocess.run([sys.executable, '-c', image_trial.GAME_DATA, str(app), *([str(source)] if source else [])],
+                          check=True, capture_output=True, text=True)
+    return json.loads(done.stdout)
+
+
+def test_the_trial_stops_before_it_starts_when_a_game_lacks_the_data_the_candidate_wants(tmp_path):
+    from pokesim import game_data
+    from pokesim.gen2.data import SCHEMA, GameData
+    app = tmp_path / 'app'
+    app.mkdir()
+    db = sqlite3.connect(app / 'app.sqlite')
+    db.execute('CREATE TABLE adventures (id TEXT, version TEXT, archived INTEGER, desired_state TEXT)')
+    db.executemany('INSERT INTO adventures VALUES (?, ?, ?, ?)', [
+        ('a', 'gold', 0, 'running'), ('b', 'crystal', 0, 'running'), ('c', 'silver', 0, 'stopped'),
+        ('d', 'red', 0, 'running')])
+    db.commit()
+    db.close()
+    reference = app / 'assets' / 'reference' / game_data.SOURCE_REVISION
+    gen2_bundle(reference, 'gold')
+    gen2_bundle(reference, 'crystal', schema=SCHEMA - 1)
+    # Stopped Silver needs nothing, Gold already passes, Crystal holds the older schema.
+    assert game_data_check(app) == {'schema': SCHEMA, 'copied': [], 'missing': ['crystal']}
+    stale = tmp_path / 'stale'
+    gen2_bundle(stale, 'crystal', schema=SCHEMA - 1)
+    assert game_data_check(app, stale)['missing'] == ['crystal']
+    fresh = tmp_path / 'fresh'
+    gen2_bundle(fresh, 'crystal')
+    assert game_data_check(app, fresh) == {'schema': SCHEMA, 'copied': ['crystal'], 'missing': []}
+    assert GameData.load(reference, 'crystal').game == 'crystal'
+    assert game_data_check(app) == {'schema': SCHEMA, 'copied': [], 'missing': []}
+
+
+def test_a_run_missing_game_data_never_starts_the_container(tmp_path, monkeypatch):
+    commands = []
+    monkeypatch.setattr(image_trial, '_under_heavy_gate', lambda args: None)
+    monkeypatch.setattr(image_trial, 'git', lambda *args: 'a' * 40 + '\n')
+    monkeypatch.setattr(image_trial, 'image_tag', lambda sha: ('pokesim:0.7.0-local-aaaaaaa', '0.7.0', '7'))
+    monkeypatch.setattr(image_trial, 'build', lambda *args: 'sha256:built')
+    monkeypatch.setattr(image_trial, 'extract', lambda *args: {'url': 'https://app.example', 'wanted': 7})
+    monkeypatch.setattr(image_trial, 'install_game_data',
+                        lambda tag, work, data: {'schema': 7, 'copied': [], 'missing': ['crystal', 'gold']})
+    monkeypatch.setattr(image_trial.subprocess, 'run',
+                        lambda command, **kwargs: commands.append(command) or SimpleNamespace(stdout='', returncode=0))
+    args = SimpleNamespace(candidate='main', backup=tmp_path / 'cold.tar.gz', work=tmp_path / 'work', minutes=30,
+                           game_data=None, argv=[])
+    with pytest.raises(SystemExit, match='crystal, gold need Gen II game data with schema 7'):
+        image_trial.run(args)
+    assert not [command for command in commands if 'compose' in command]
+
+
 @pytest.fixture
 def reports(tmp_path, monkeypatch):
     monkeypatch.setenv('LIVE_SOAK_REPORTS', str(tmp_path))
