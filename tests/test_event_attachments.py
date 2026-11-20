@@ -1,4 +1,5 @@
-"""Routine journal entries keep their screenshot and save only for the newest few, milestones forever."""
+"""Routine journal entries keep their screenshot and save only for the newest few. Milestones keep their
+screenshot forever, and their save for the first of each kind and the newest repeats."""
 import os
 import time
 
@@ -80,6 +81,62 @@ def test_entries_with_only_a_screenshot_count_as_routine(store):
     faints = [store.add_event(Event('faint', 'Pidgey fainted', priority=1), snap(), b'png', None) for _ in range(3)]
     assert store.prune_attachments(1) == 2
     assert [store.event(eid)['shot'] for eid in faints] == [None, None, f'{faints[2]}.png']
+
+
+def milestone(store, kind, title, priority=5):
+    eid = store.add_event(Event(kind, title, priority=priority), snap(), b'png', b'state')
+    store.write_checkpoint(b'state', MANIFEST, name=f'event-{eid}.state', compress=True)
+    return eid
+
+
+def save_kept(store, eid):
+    return store.event(eid)['state'] is not None and (store.states / f'event-{eid}.state').exists()
+
+
+def test_the_default_keeps_a_thousand_repeat_milestone_saves():
+    assert config.EVENT_MILESTONE_SAVE_KEEP == 1000
+
+
+def test_repeat_league_victories_past_the_cap_lose_only_their_save_oldest_first(store):
+    wins = [milestone(store, 'champion', f'Champion! League victory #{number}') for number in range(1, 6)]
+    assert store.prune_milestone_saves(2) == 2
+    assert save_kept(store, wins[0]), 'the first League victory keeps its save forever'
+    for eid in wins[1:3]:
+        row = store.event(eid)
+        assert row['state'] is None and row['title'].startswith('Champion!')
+        assert row['shot'] == f'{eid}.png' and (store.shots / f'{eid}.png').exists(), 'the journal keeps its screenshot'
+        assert not (store.states / f'event-{eid}.state').exists() and not (store.states / f'event-{eid}.json').exists()
+    assert all(save_kept(store, eid) for eid in wins[3:])
+    assert store.prune_milestone_saves(2) == 0
+
+
+def test_the_first_of_each_kind_keeps_its_save_and_does_not_count_toward_the_cap(store):
+    firsts = [milestone(store, 'badge', 'Earned the Zephyr Badge'),
+              milestone(store, 'catch', 'Caught Sentret', priority=4),
+              milestone(store, 'trainer', 'Defeated Will')]
+    rematches = [milestone(store, 'trainer', 'Defeated Will') for _ in range(3)]
+    assert store.prune_milestone_saves(1) == 2
+    assert all(save_kept(store, eid) for eid in firsts)
+    assert [save_kept(store, eid) for eid in rematches] == [False, False, True]
+
+
+def test_a_kind_whose_first_entry_has_no_save_keeps_its_oldest_save(store):
+    store.add_event(Event('evolve', 'Pidgey evolved into Pidgeotto', priority=4), snap(), b'png', None)
+    later = [milestone(store, 'evolve', 'Pidgey evolved into Pidgeotto', priority=4) for _ in range(3)]
+    assert store.prune_milestone_saves(1) == 1
+    assert [save_kept(store, eid) for eid in later] == [True, False, True]
+
+
+def test_zero_keeps_every_milestone_save(store):
+    wins = [milestone(store, 'champion', f'Champion! League victory #{number}') for number in range(1, 4)]
+    assert store.prune_milestone_saves(0) == 0
+    assert all(save_kept(store, eid) for eid in wins)
+
+
+def test_routine_entries_are_left_to_the_routine_cap(store):
+    ids = [routine(store) for _ in range(3)]
+    assert store.prune_milestone_saves(1) == 0
+    assert all(kept(store, eid) for eid in ids)
 
 
 def test_finished_custom_reward_saves_are_removed_and_the_pending_one_stays(store):
