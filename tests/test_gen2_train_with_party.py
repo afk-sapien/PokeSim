@@ -108,22 +108,29 @@ def test_a_trainee_leading_the_walk_switches_out_of_a_close_battle(data):
     assert policy.trainee_switch(snapshot, 0) is None
 
 
-def test_a_leading_trainee_leaves_a_foe_that_can_trap_it(data):
+def test_a_leading_trainee_leaves_a_foe_that_would_trap_it_in_a_lost_fight(data):
     policy, top = walk(data)
     party = [mon(data, 3, top + 20), mon(data, 1, top + 10, hp=70), mon(data, 2, top + 10)]
     snapshot = train(policy, party, 0)
     snapshot.enemy_level = top
     # Far above an ordinary foe it fights the battle out.
-    foe(policy, 'EFFECT_CONFUSE')
+    foe(policy, 'EFFECT_CONFUSE', 'EFFECT_NORMAL_HIT')
     assert policy.trainee_switch(snapshot, 0) is None
-    # A foe with Mean Look could trap it, so it gives way to the fighter with the most room.
-    foe(policy, 'EFFECT_CONFUSE', 'EFFECT_MEAN_LOOK')
+    # It beats a foe with Mean Look in fewer turns than the foe needs, so it stays and keeps all the experience.
+    foe(policy, 'EFFECT_CONFUSE', 'EFFECT_MEAN_LOOK', 'EFFECT_NORMAL_HIT')
+    assert policy.trainee_switch(snapshot, 0) is None
+    # Its Tackle cannot touch a Gastly, so the trap would hold it in a fight it loses, and it gives way to the
+    # fighter with the most room.
+    snapshot.enemy_species = next(sid for sid, entry in data.species.items() if entry['constant'] == 'GASTLY')
     assert policy.trainee_switch(snapshot, 0) == 2
-    # A foe its Tackle knocks out falls before the trap can hold it, so it stays and keeps all the experience.
-    snapshot.enemy_hp = 5
+    # Without Mean Look it can still leave once its HP runs low, so it fights on.
+    foe(policy, 'EFFECT_CONFUSE', 'EFFECT_NORMAL_HIT')
+    assert policy.trainee_switch(snapshot, 0) is None
+    # A foe that cannot hurt it never wins, trap or not.
+    foe(policy, 'EFFECT_CONFUSE', 'EFFECT_MEAN_LOOK')
     assert policy.trainee_switch(snapshot, 0) is None
     # Off the training walk the usual rule decides.
-    snapshot.enemy_hp = 100
+    foe(policy, 'EFFECT_CONFUSE', 'EFFECT_MEAN_LOOK', 'EFFECT_NORMAL_HIT')
     policy.goal = None
     assert policy.trainee_switch(snapshot, 0) is None
 
