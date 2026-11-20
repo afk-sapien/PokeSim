@@ -123,19 +123,24 @@ def test_the_bicycle_is_borrowed_after_cut_at_any_depth(real_data):
     owner.story_step = lambda snapshot, key, title, row=None: SimpleNamespace(key=key)
 
     # Zephyr and Hive, the two badges before Cut.
-    def key(*unset, badges=3, place='GOLDENROD_CITY'):
-        state = SimpleNamespace(frame=100, badges=badges, party=[], map=real_data.map_ids[place], x=0, y=0,
-                                farfetchd_position=None, event=lambda flag: flag not in unset)
+    def key(*unset, badges=3, place='GOLDENROD_CITY', party=()):
+        state = SimpleNamespace(frame=100, badges=badges, party=list(party), map=real_data.map_ids[place], x=0,
+                                y=0, farfetchd_position=None, event=lambda flag: flag not in unset)
         return owner.story(state, None).key
 
     assert key('EVENT_GOT_HM01_CUT', 'EVENT_GOT_BICYCLE') == 'cut'
     assert key('EVENT_GOT_BICYCLE') == 'bicycle'
     assert key('EVENT_GOT_BICYCLE', badges=255) == 'bicycle'
-    # Kanto and the League rooms have no walk back to Goldenrod, and the gate stood down there 4 times in a row.
-    # The story moves on to the step after the Bicycle, here Whitney with three badges.
-    for place in ('VERMILION_PORT', 'KARENS_ROOM', 'INDIGO_PLATEAU_POKECENTER_1F'):
+    # Kanto, the League rooms and Silver Cave have no walk to Goldenrod inside Johto. The gate stood down 4 times
+    # in a row in Kanto, and took turns with Red at Silver Cave a thousand times. The story moves on to the step
+    # after the Bicycle, here Whitney with three badges.
+    for place in ('VERMILION_PORT', 'KARENS_ROOM', 'INDIGO_PLATEAU_POKECENTER_1F', 'SILVER_CAVE_OUTSIDE'):
         assert key('EVENT_GOT_BICYCLE', 'EVENT_MADE_WHITNEY_CRY', place=place) == 'plain'
         assert 'bicycle' not in owner.completed
+    # With Surf a walk from Silver Cave reaches Goldenrod, but through Route 28 in Kanto, so the step stays off.
+    surfer = SimpleNamespace(moves=[57], species=9, level=50, hp=1, max_hp=1, status=0, egg=False)
+    assert key('EVENT_GOT_BICYCLE', badges=255, place='SILVER_CAVE_OUTSIDE', party=[surfer]) != 'bicycle'
+    assert key('EVENT_GOT_BICYCLE', badges=255, place='ROUTE_27', party=[surfer]) == 'bicycle'
     assert key() != 'bicycle' and owner.completed['bicycle'] == 100
     found = row(2, real_data.game, 'bicycle')
     assert (found['map'], found['object']) == ('GOLDENROD_BIKE_SHOP', 'GoldenrodBikeShopClerkScript')
