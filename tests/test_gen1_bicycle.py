@@ -72,6 +72,20 @@ def test_a_run_past_the_league_fetches_the_bicycle_only_between_projects():
     assert policy.goal.key == 'bike_voucher'
 
 
+def test_the_bicycle_fetch_after_the_league_draws_no_project():
+    """The fetch won every draw, and each draw cost about half a second on red post_game."""
+    policy = StrategicPolicy(7)
+    collection = policy.collection
+    collection.completed_champion = True
+    drawn = []
+    collection.offers = lambda *args, **kwargs: drawn.append(args) or Goal('collect_hunt', 'Hunt', 'Find grass')
+    state = snap(party=(mon(),), event_flags=flags('EVENT_GOT_POKEDEX'))
+    assert collection.pick(state, policy.nav, policy.rng, bicycle_goal(state)) is None
+    assert not drawn
+    assert collection.pick(state, policy.nav, policy.rng, Goal('collect_plan', 'Plan', 'Plan')) is not None
+    assert drawn
+
+
 def walkable_from_door(m):
     """The tiles of map ``m`` a player walks to from its first warp, around standing people."""
     world = WORLD[m]
