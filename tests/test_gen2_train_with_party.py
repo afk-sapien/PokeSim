@@ -39,7 +39,8 @@ def train(policy, party, slot):
     party[slot].held_item = policy.data.items['EXP_SHARE']
     policy.collection['training'] = {'identity': identity(party[slot])}
     return SimpleNamespace(party=tuple(party), stored=(), items=(), map=policy.data.map_ids[SITE], x=5, y=5, frame=0,
-                           badges=0, event=lambda name: True, owned=frozenset(), roamers=(), enemy_level=0)
+                           badges=0, event=lambda name: True, owned=frozenset(), roamers=(), enemy_level=0,
+                           enemy_species=16, enemy_hp=100)
 
 
 def test_a_worn_partner_waits_while_another_member_can_fight(data):
@@ -88,7 +89,7 @@ def foe(policy, *effects):
     """The wild foe's moves as the battle reads them: one move of each effect in ``effects``."""
     moves = tuple(next(mid for mid, entry in policy.data.moves.items() if entry.get('effect') == effect)
                   for effect in effects)
-    policy.reads = SimpleNamespace(enemy=SimpleNamespace(moves=moves))
+    policy.reads = SimpleNamespace(enemy=SimpleNamespace(moves=moves, stats=(100, 50, 50, 50, 50, 50)))
 
 
 def test_a_trainee_leading_the_walk_switches_out_of_a_close_battle(data):
@@ -118,9 +119,26 @@ def test_a_leading_trainee_leaves_a_foe_that_can_trap_it(data):
     # A foe with Mean Look could trap it, so it gives way to the fighter with the most room.
     foe(policy, 'EFFECT_CONFUSE', 'EFFECT_MEAN_LOOK')
     assert policy.trainee_switch(snapshot, 0) == 2
+    # A foe its Tackle knocks out falls before the trap can hold it, so it stays and keeps all the experience.
+    snapshot.enemy_hp = 5
+    assert policy.trainee_switch(snapshot, 0) is None
     # Off the training walk the usual rule decides.
+    snapshot.enemy_hp = 100
     policy.goal = None
     assert policy.trainee_switch(snapshot, 0) is None
+
+
+def test_a_trainee_losing_on_the_walk_hands_the_battle_to_the_fighter_with_most_room(data):
+    policy, top = walk(data)
+    foe(policy)
+    # The highest member is worn below the heal line, so the walk would pull it again a turn later.
+    party = [mon(data, 3, top + 5), mon(data, 1, top + 30, hp=30), mon(data, 2, top + 10)]
+    snapshot = train(policy, party, 0)
+    snapshot.enemy_level = top + 2
+    assert policy.trainee_switch(snapshot, 0) == 2
+    # Healed, it has as much room as the other and takes the battle by its place in the party.
+    party[1].hp = 100
+    assert policy.trainee_switch(snapshot, 0) == 1
 
 
 def test_a_spent_member_gives_way_mid_battle_on_the_walk(data):

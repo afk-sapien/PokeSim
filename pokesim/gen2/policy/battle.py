@@ -724,9 +724,12 @@ class BattlePart:
 
         On the training walk a leading trainee also leaves a foe that can trap it, since a trapped trainee
         cannot leave once the battle turns. A Machoke at full HP fell to a Golbat's Mean Look, Confuse Ray and
-        Wing Attack. Any other member there LEAD_MARGIN above the foe that runs out of HP or strong PP mid
-        battle (walk_fighters) gives way to the fighter with the most room, where a spent Electrode had used
-        Explosion. A low sleeper that leads on purpose is never above the foe, so it stays.
+        Wing Attack. A trainee whose best hit knocks the foe out stays, since the foe falls before a trap can
+        hold it. A Kingler that left every Golbat on its walk gave half of each battle's experience to partners
+        at level 100, which gain none. Any other member there LEAD_MARGIN above the foe that runs out of HP or
+        strong PP mid battle (walk_fighters) gives way to the fighter with the most room, where a spent
+        Electrode had used Explosion. A low sleeper that leads on purpose is never above the foe, so it stays.
+        Every switch on the walk sends that fighter, so the member sent in is one the walk keeps in.
         """
         from ..training import LEAD_MARGIN, trainee_index, trainee_slot, walk_fighters
         able = walk_fighters(self, snapshot)
@@ -739,12 +742,18 @@ class BattlePart:
         if active != slot:
             spent = able and active not in able and mon.level >= snapshot.enemy_level + LEAD_MARGIN
             return max(able, key=able.get) if spent else None
-        trap = able and any(self.data.moves.get(move, {}).get('effect') == 'EFFECT_MEAN_LOOK'
-                            for move in self.reads.enemy.moves)
-        if trap:
-            return max((i for i in able if i != active), key=able.get, default=None)
+        others = {i: room for i, room in (able or {}).items() if i != active}
+        fighter = max(others, key=others.get, default=None)
+        if fighter is not None and any(self.data.moves.get(move, {}).get('effect') == 'EFFECT_MEAN_LOOK'
+                                       for move in self.reads.enemy.moves):
+            opponent = self.battle_target(snapshot)
+            hit = max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
+            if hit < snapshot.enemy_hp:
+                return fighter
         if mon.level >= snapshot.enemy_level + LEAD_MARGIN and mon.hp * 2 > mon.max_hp:
             return None
+        if fighter is not None:
+            return fighter
         healthy = [i for i, row in enumerate(snapshot.party) if i != active and not row.egg and row.hp * 4 > row.max_hp]
         best = max(healthy, key=lambda i: snapshot.party[i].level, default=None)
         return best if best is not None and snapshot.party[best].level > mon.level else None
