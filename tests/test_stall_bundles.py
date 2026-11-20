@@ -83,6 +83,7 @@ def game(tmp_path, **extra):
                                party=(SimpleNamespace(name='Lapras', level=40, hp=0, status=0),))
     store.get = lambda key: None
     store.set = store.prune_events = store.prune_attachments = store.prune_reward_results = lambda *a: None
+    store.prune_milestone_saves = lambda *a: None
     playing = SimpleNamespace(store=store, snapshot=snapshot, stall=StallWatch(game_minutes=120, real_minutes=0),
                               play_clock=SimpleNamespace(state_dict=dict, frames=0), policy=SimpleNamespace(state_dict=dict, details=dict),
                               _state_bytes=lambda: b'state', _manifest=lambda: dict(MANIFEST), _shot_png=lambda: b'png',

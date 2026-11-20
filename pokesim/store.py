@@ -502,9 +502,30 @@ class Store:
     def prune_attachments(self, keep: int) -> int:
         """Keep the screenshot and save of only the newest ``keep`` routine entries, and return how many lost theirs.
 
-        Milestones keep theirs forever and every entry keeps its text. The oldest go first. Files go
-        before the row forgets them, so an interrupted pass leaves a row naming a missing file, which
-        the journal already treats as having none, and never a file that no row names.
+        Milestones are left to ``prune_milestone_saves`` and every entry keeps its text. The oldest go first.
+        """
+        routine = "(shot IS NOT NULL OR state IS NOT NULL) AND NOT (notable=1 AND priority>=?)"
+        return self._clear_oldest(routine, (MILESTONE_PRIORITY,), keep, ("shot", "state"))
+
+    def prune_milestone_saves(self, keep: int) -> int:
+        """Keep the save of only the newest ``keep`` repeat milestones, and return how many lost theirs.
+
+        The oldest save of each kind of milestone stays forever, so each badge, each new Pokédex entry,
+        the first win over each trainer and the first League victory can still be loaded. A kind is the
+        entry's type and title, and every League victory is one kind, since its title counts them.
+        Milestones keep their screenshot and text, so the journal only loses the rewind on old repeats.
+        """
+        milestone = "notable=1 AND priority>=?"
+        firsts = (f"SELECT MIN(id) FROM events WHERE state IS NOT NULL AND {milestone} "
+                  "GROUP BY type, CASE WHEN type='champion' THEN '' ELSE title END")
+        repeats = f"state IS NOT NULL AND {milestone} AND id NOT IN ({firsts})"
+        return self._clear_oldest(repeats, (MILESTONE_PRIORITY, MILESTONE_PRIORITY), keep, ("state",))
+
+    def _clear_oldest(self, where: str, params: tuple, keep: int, columns: tuple) -> int:
+        """Clear ``columns`` and remove their files on the oldest entries matching ``where`` past the newest ``keep``.
+
+        ``0`` keeps all. Files go before the row forgets them, so an interrupted pass leaves a row naming
+        a missing file, which the journal already treats as having none, and never a file that no row names.
 
         This runs inside the adventure's own process, which holds its runtime lock. Backups, restores
         and deletions take the app's maintenance guard and stop the adventure before touching its
@@ -512,20 +533,19 @@ class Store:
         """
         if keep <= 0:
             return 0
+        folders = {"shot": self.shots, "state": self.states}
         removed = 0
         while True:
             with self.lock:
-                routine = "(shot IS NOT NULL OR state IS NOT NULL) AND NOT (notable=1 AND priority>=?)"
-                total = self.db.execute(f"SELECT COUNT(*) FROM events WHERE {routine}",
-                                        (MILESTONE_PRIORITY,)).fetchone()[0]
+                total = self.db.execute(f"SELECT COUNT(*) FROM events WHERE {where}", params).fetchone()[0]
                 if total <= keep:
                     return removed
                 # Rounds of a few hundred keep a first pass over a long adventure from blocking new entries.
-                rows = self.db.execute(f"SELECT id, shot, state FROM events WHERE {routine} ORDER BY id LIMIT ?",
-                                       (MILESTONE_PRIORITY, min(total - keep, ATTACHMENT_ROUND))).fetchall()
+                rows = self.db.execute(f"SELECT id, {', '.join(columns)} FROM events WHERE {where} ORDER BY id LIMIT ?",
+                                       (*params, min(total - keep, ATTACHMENT_ROUND))).fetchall()
                 cleared = []
                 for row in rows:
-                    names = [(self.shots, row["shot"]), (self.states, row["state"])]
+                    names = [(folders[column], row[column]) for column in columns]
                     if row["state"]:
                         names.append((self.states, str(Path(row["state"]).with_suffix(".json"))))
                     try:
@@ -537,7 +557,8 @@ class Store:
                         continue
                     cleared.append((row["id"],))
                 with self.transaction():
-                    self.db.executemany("UPDATE events SET shot=NULL, state=NULL WHERE id=?", cleared)
+                    self.db.executemany(f"UPDATE events SET {', '.join(f'{column}=NULL' for column in columns)} "
+                                        "WHERE id=?", cleared)
                 removed += len(cleared)
                 if len(cleared) < len(rows):
                     return removed
