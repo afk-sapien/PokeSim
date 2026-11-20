@@ -292,6 +292,8 @@ the `EVENT_` constants of the pret disassemblies are.
   (column, row) menu cursor counted from 1, and `pocket`, one of `state.POCKETS`.
   `party_slot` is the party slot a menu chose last. `state.read_ui(memory, game)`
   reads it alone.
+- `state.read_registered_item(memory, game)` is the item ID a Gen II pack
+  registered to SELECT, or None when none is. It is always None in Gen I.
 
 `menu_item` counts from the top entry shown. `scroll` counts the entries a screen in
 `state.LIST_SCREENS` has scrolled past, and is 0 on any other screen, so the list

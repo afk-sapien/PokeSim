@@ -11,7 +11,7 @@ from pokecore.identity import GEN1_DEX
 from pokecore.shortcuts import gen2ui
 from pokecore.shortcuts.screens import W_STATUS_FLAGS_6
 from pokecore.state import (ABSENT, BATTLE_KINDS, GENERATIONS, LIST_SCREENS, POCKETS, SCREENS, Boxes, GameState, Party,
-                            read_battle, read_battlers, read_state, read_ui)
+                            read_battle, read_battlers, read_registered_item, read_state, read_ui)
 from pokecore.storage import box_location
 
 GEN1_MOVES = {84: {'pp': 30}, 45: {'pp': 40}}
@@ -747,6 +747,18 @@ def test_gen2_facing_and_movement(game, direction, player_state, expected):
     memory.put('wPlayerState', [player_state])
     ui = read_ui(memory, game)
     assert (ui.facing, ui.movement) == expected and ui.movement_state == player_state
+
+
+@pytest.mark.parametrize('game', ['red', 'yellow', 'gold', 'crystal'])
+def test_the_item_registered_to_select(game):
+    if GENERATIONS[game] == 1:
+        assert read_registered_item(gen1_memory(game), game) is None
+        return
+    memory = gen2_memory(game)
+    memory.put('wRegisteredItem', [7])
+    assert read_registered_item(memory, game) is None
+    memory.put('wWhichRegisteredItem', [0x41])
+    assert read_registered_item(memory, game) == 7
 
 
 @pytest.mark.parametrize('game', ['gold', 'silver', 'crystal'])

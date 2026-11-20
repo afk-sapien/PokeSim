@@ -71,6 +71,8 @@ BIKE_MAPS = frozenset((MAPS['ROUTE_23'], MAPS['INDIGO_PLATEAU']))
 WATER_TILES = (0x14, 0x32, 0x48)
 # Getting on costs about what the Bicycle saves over this many steps, so a shorter walk goes on foot.
 MOUNT_STEPS = 20
+# Victory Road's southern entrance, on Route 23.
+VICTORY_SOUTH = ((MAPS['ROUTE_23'], 8, 138),)
 
 
 def rideable(m):
@@ -570,9 +572,12 @@ class StrategicPolicy(Policy):
         # Collection projects only start once the Champion is beaten, so the story and a project never
         # meet: the story is the pick until then and inside the League, and the plan placeholder after.
         if self.collection.completed_champion and s.map not in LEAGUE:
-            # A run that reached the League without the Bicycle fetches it before planning the next project.
-            # Against a project under way the errand and the project took turns at every decision.
+            # A run that reached the League without the Bicycle fetches it before planning the next project,
+            # once the passage has taken it south of Victory Road. Against a project under way the errand and
+            # the project took turns at every decision.
             bike = None if self.collection.project else bicycle_goal(s)
+            if bike and self.north_of_victory_road(s):
+                bike = None
             base = bike or Goal('collect_plan', 'Plan the next adventure project',
                                 'Choose a collecting, evolution, training, or exploration objective')
             choice = Ballot(base, goal_candidate(base, self.collection), source='story' if bike else 'plan')
@@ -930,6 +935,12 @@ class StrategicPolicy(Policy):
         self.collection.activity_events.extend(rows)
         return verdict
 
+    def north_of_victory_road(self, s):
+        """Whether the run is inside Victory Road, or on the plateau or Route 23 with no route to the road's
+        southern entrance through the gates open now. Most of Kanto is out of reach from there."""
+        return s.map in VICTORY_MAPS or (s.map in (MAPS['INDIGO_PLATEAU'], MAPS['ROUTE_23'])
+                                         and self.nav.open_route(s, VICTORY_SOUTH) is None)
+
     def _overworld(self, s, mem):
         self.menu_context = None
         self.intent = None
@@ -1071,14 +1082,10 @@ class StrategicPolicy(Policy):
                 goal = choice.offer(pickup, pickup_errand, site='pickup_new',
                                     commit=partial(self._commit_pick, start, goal))
         # A plan made north of Victory Road cannot reach most of Kanto, so the passage replaces it.
-        # North means no route to the southern entrance through the gates open now.
-        south = ((MAPS['ROUTE_23'], 8, 138),)
-        if goal.key == 'collect_plan' and (
-                s.map in VICTORY_MAPS or s.map in (MAPS['INDIGO_PLATEAU'], MAPS['ROUTE_23'])
-                and self.nav.open_route(s, south) is None):
+        if goal.key == 'collect_plan' and self.north_of_victory_road(s):
             goal = choice.offer(Goal('collect_passage', 'Return to Kanto for another expedition',
                                      'Solve the remaining passage puzzles and leave through the southern entrance',
-                                     south),
+                                     VICTORY_SOUTH),
                                 choice.errand_candidate('collect_passage', 'passage'), site='passage')
         if s.map in (MAPS["ROCKET_HIDEOUT_ELEVATOR"], MAPS["CELADON_MART_ELEVATOR"], MAPS["SILPH_CO_ELEVATOR"]):
             rocket_lift = s.map == MAPS["ROCKET_HIDEOUT_ELEVATOR"]

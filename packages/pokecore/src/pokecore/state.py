@@ -7,7 +7,8 @@ cartridge's IDs and no tables, so species, move and item names stay with the
 caller. A field a generation does not have is ``None``, and :data:`ABSENT` gives
 the reason for each one. :func:`read_battle` reads the battle part alone, and
 :func:`read_ui` the screen part. :func:`read_battlers` reads both sides' battle
-structures whatever the battle mode says.
+structures whatever the battle mode says. :func:`read_registered_item` reads the
+item a Gen II pack registered to SELECT.
 """
 from __future__ import annotations
 
@@ -397,6 +398,15 @@ def read_ui(memory, game) -> UiState:
     if generation == 1:
         return _gen1_ui(red_layout(memory, game), game)
     return _gen2_ui(memory, game)
+
+
+def read_registered_item(memory, game) -> int | None:
+    """The item ID registered to SELECT, or None when none is. Gen I registers no item."""
+    game, generation = _game(game)
+    if generation == 1:
+        return None
+    mem = gen2_state.memory_reader(memory, game)
+    return mem.byte('wRegisteredItem') if mem.byte('wWhichRegisteredItem') else None
 
 
 def _gen1_ui(mem, game):

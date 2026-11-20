@@ -245,8 +245,10 @@ class NavigationPart:
             self.interaction = key
             return Action(path[0], 8, 16)
         self.interaction = None
-        state = reads.ui.movement_state
-        ride = self.mount(snapshot, memory, path) if state == 0 else None
+        # Only an owner of the Bicycle rides or gets on, so no one else's walk reads the screen state.
+        owned = self.data.items.get('BICYCLE') in dict(snapshot.items)
+        state = reads.ui.movement_state if owned else 0
+        ride = self.mount(snapshot, memory, path) if owned and state == 0 else None
         if ride:
             return ride
         self.nav.issued(snapshot, path[0])

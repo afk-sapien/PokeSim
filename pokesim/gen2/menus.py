@@ -11,8 +11,8 @@ from pokecore.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseMove,
                                     Done, FieldMove as CoreFieldMove, GiveItem, LearnMove, RegisterItem, ReleasePokemon,
                                     ReorderParty, RunAway, SellItem, SwitchPokemon, TakeItem, TossItem, UseItem,
                                     WithdrawPokemon, current_screen)
-from pokecore.gen2.ram import Memory
 from pokecore.shortcuts.machine import BACKABLE
+from pokecore.state import read_registered_item
 
 from pokecore.textmatch import has_word
 from ..planning.ledger import FIELD_MOVES
@@ -382,8 +382,7 @@ class Register(CoreTask):
 
 def registered(memory, data):
     """The key item registered to SELECT, or None."""
-    mem = Memory(memory, data)
-    return mem.byte('wRegisteredItem') if mem.byte('wWhichRegisteredItem') else None
+    return read_registered_item(memory, data.game)
 
 
 @dataclass
