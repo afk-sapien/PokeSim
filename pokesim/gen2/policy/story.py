@@ -11,6 +11,51 @@ from ..menus import menu_label
 from .state import Goal
 
 
+def _flag(name):
+    return lambda snapshot: snapshot.event(name)
+
+
+def _badges(mask):
+    return lambda snapshot: snapshot.badges & mask == mask
+
+
+# Each story milestone and what the save holds once it is done, in story order. The story notes every one
+# the save holds, with its frame, before it picks a goal. A step it takes at any depth, as the Bicycle loan,
+# so never hides a milestone past it. The Ice Path is noted in the chain on arrival in Blackthorn City,
+# since the story walks it until then.
+MILESTONES = (
+    ('starter', _flag('EVENT_GOT_A_POKEMON_FROM_ELM')),
+    ('mystery_egg', _flag('EVENT_GOT_MYSTERY_EGG_FROM_MR_POKEMON')),
+    ('deliver_egg', _flag('EVENT_GAVE_MYSTERY_EGG_TO_ELM')),
+    ('zephyr', _badges(1)),
+    ('flash', _flag('EVENT_GOT_HM05_FLASH')),
+    ('togepi', _flag('EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE')),
+    ('slowpoke', _flag('EVENT_CLEARED_SLOWPOKE_WELL')),
+    ('hive', _badges(2)),
+    ('cut', _flag('EVENT_GOT_HM01_CUT')),
+    ('bicycle', _flag('EVENT_GOT_BICYCLE')),
+    ('plain', _badges(4)),
+    ('sudowoodo', _flag('EVENT_FOUGHT_SUDOWOODO')),
+    ('surf', _flag('EVENT_GOT_HM03_SURF')),
+    ('fog', _badges(8)),
+    ('storm', _badges(32)),
+    ('mineral', _badges(16)),
+    ('rocket_hideout', _flag('EVENT_CLEARED_ROCKET_HIDEOUT')),
+    ('glacier', _badges(64)),
+    ('radio_tower', _flag('EVENT_CLEARED_RADIO_TOWER')),
+    ('rising', _badges(128)),
+    ('champion', lambda snapshot: snapshot.hall_of_fame_count),
+    ('kanto', _flag('EVENT_FAST_SHIP_FIRST_TIME')),
+    ('surge', _badges(1024)),
+    ('sabrina', _badges(8192)),
+    ('erika', _badges(2048)),
+    ('janine', _badges(4096)),
+    ('sixteen_badges', _badges(0xFFFF)),
+    # Red's flag counts only once Oak has opened Silver Cave, as the Kanto story reads it.
+    ('red', lambda snapshot: snapshot.event('EVENT_OPENED_MT_SILVER') and snapshot.event('EVENT_RED_IN_MT_SILVER')),
+)
+
+
 class StoryPart:
     """The journey and story goals, boulder puzzles and story prompts."""
 
@@ -63,6 +108,9 @@ class StoryPart:
         return story_candidate(goal, kind, Tier.PROGRESS if 'red' in self.completed else Tier.STORY)
 
     def story(self, snapshot, mem):
+        for key, done in MILESTONES:
+            if key not in self.completed and done(snapshot):
+                self.completed[key] = snapshot.frame
         # A saved postgame outing waits while an evolution, trade or other collection task takes
         # priority. Its battle rules resume only when the director chooses its hunting goal again.
         activity = (self.collection.get('postgame') or {}).get('activity')
@@ -91,23 +139,17 @@ class StoryPart:
         if not snapshot.event('EVENT_GOT_A_POKEMON_FROM_ELM'):
             row = next(row for row in facts.rows(2, self.data.game, 'starter') if row['starter'] == self.starter)
             return self.story_step(snapshot, 'starter', f'Choose {self.starter.title()}', row)
-        self.completed.setdefault('starter', snapshot.frame)
         if not snapshot.event('EVENT_GOT_MYSTERY_EGG_FROM_MR_POKEMON'):
             return step('mystery_egg', 'Visit Mr. Pokémon')
-        self.completed.setdefault('mystery_egg', snapshot.frame)
         if not snapshot.event('EVENT_GAVE_MYSTERY_EGG_TO_ELM'):
             if not snapshot.event('EVENT_COP_IN_ELMS_LAB'):
                 return step('officer', 'Tell the officer about the rival')
             return step('deliver_egg', 'Bring the mystery egg to Elm')
-        self.completed.setdefault('deliver_egg', snapshot.frame)
         if not snapshot.badges & 1:
             return step('zephyr', 'Challenge Falkner')
-        self.completed.setdefault('zephyr', snapshot.frame)
         # Flash lights the dark caves for viewers. It is taken only while the road is still in Violet City,
         # so a game already past it never walks back for it.
-        if snapshot.event('EVENT_GOT_HM05_FLASH'):
-            self.completed.setdefault('flash', snapshot.frame)
-        elif not snapshot.event('EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE'):
+        if not snapshot.event('EVENT_GOT_HM05_FLASH') and not snapshot.event('EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE'):
             return step('flash', 'Receive Flash from Elder Li')
         if not snapshot.event('EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE'):
             from ..quests import room_for_gift
@@ -115,15 +157,12 @@ class StoryPart:
             if room:
                 return room
             return step('togepi', 'Receive Elm’s egg')
-        self.completed.setdefault('togepi', snapshot.frame)
         if not snapshot.event('EVENT_CLEARED_SLOWPOKE_WELL'):
             if not snapshot.event('EVENT_AZALEA_TOWN_SLOWPOKETAIL_ROCKET'):
                 return step('kurt', 'Help Kurt rescue the Slowpoke')
             return step('slowpoke', 'Drive Team Rocket out of the well')
-        self.completed.setdefault('slowpoke', snapshot.frame)
         if not snapshot.badges & 2:
             return step('hive', 'Challenge Bugsy')
-        self.completed.setdefault('hive', snapshot.frame)
         if not snapshot.event('EVENT_HERDED_FARFETCHD'):
             if snapshot.farfetchd_position is not None:
                 position = snapshot.farfetchd_position or 1
@@ -139,14 +178,11 @@ class StoryPart:
             return Goal(f'farfetchd_{position}', 'Return the lost Farfetch’d', row['map'], x, y, face)
         if not snapshot.event('EVENT_GOT_HM01_CUT'):
             return step('cut', 'Receive Cut from the charcoal maker')
-        self.completed.setdefault('cut', snapshot.frame)
         # Goldenrod's bike shop lends the Bicycle to anyone who agrees to ride it. A run that never
         # borrowed it goes back for it at any depth, on a walk that stays in Johto. Kanto and the League
         # rooms have none, and Silver Cave's one way out is Route 28 into Kanto. Without that walk the
         # step stood down again and again, or took turns with Red at the Kanto border.
-        if snapshot.event('EVENT_GOT_BICYCLE'):
-            self.completed.setdefault('bicycle', snapshot.frame)
-        else:
+        if not snapshot.event('EVENT_GOT_BICYCLE'):
             walk = self.nav.walk(snapshot, self.data.map_ids['GOLDENROD_BIKE_SHOP'])
             if walk is not None and {self.travel_region(snapshot)} | {
                     self.data.maps[edge[1]]['region'] for edge in walk} == {'johto'}:
@@ -155,7 +191,6 @@ class StoryPart:
             if snapshot.event('EVENT_MADE_WHITNEY_CRY'):
                 return step('whitney_cry', 'Give Whitney a moment')
             return step('plain', 'Challenge Whitney')
-        self.completed.setdefault('plain', snapshot.frame)
         if not snapshot.event('EVENT_GOT_SQUIRTBOTTLE'):
             if self.data.game == 'crystal':
                 if not snapshot.event('EVENT_MET_FLORIA'):
@@ -171,7 +206,6 @@ class StoryPart:
             goal = self.returned_encounter(snapshot, Goal, 'Sudowoodo')
             if goal is not None:
                 return goal or step('sudowoodo', 'Investigate the moving tree')
-        self.completed.setdefault('sudowoodo', snapshot.frame)
         if self.data.game == 'crystal' and not snapshot.event('EVENT_RELEASED_THE_BEASTS'):
             if not snapshot.event('EVENT_HOLE_IN_BURNED_TOWER'):
                 return step('burned_tower', 'Explore the Burned Tower')
@@ -183,10 +217,8 @@ class StoryPart:
                 if not snapshot.event(f'EVENT_BEAT_KIMONO_GIRL_{name}'):
                     return step(f'kimono_{name.lower()}', 'Challenge the Kimono Girls')
             return step('surf', 'Receive Surf')
-        self.completed.setdefault('surf', snapshot.frame)
         if not snapshot.badges & 8:
             return step('fog', 'Challenge Morty')
-        self.completed.setdefault('fog', snapshot.frame)
         if not snapshot.event('EVENT_GOT_HM04_STRENGTH'):
             return step('strength', 'Receive Strength')
         partner = self.partner_goal(snapshot, 57)
@@ -206,14 +238,12 @@ class StoryPart:
                     if live.get(index, point) == point:
                         return Goal(f'push_{point}', 'Move the gym boulders with Strength', 'CIANWOOD_GYM', *stand, face)
             return step('storm', 'Challenge Chuck')
-        self.completed.setdefault('storm', snapshot.frame)
         if not snapshot.event('EVENT_GOT_HM02_FLY'):
             return step('fly', 'Receive Fly from Chuck’s wife')
         if not snapshot.event('EVENT_JASMINE_RETURNED_TO_GYM'):
             return step('heal_amphy', 'Deliver Amphy’s medicine')
         if not snapshot.badges & 16:
             return step('mineral', 'Challenge Jasmine')
-        self.completed.setdefault('mineral', snapshot.frame)
         if not snapshot.event('EVENT_LAKE_OF_RAGE_RED_GYARADOS'):
             return step('red_gyarados', 'Investigate the red Gyarados')
         if not snapshot.event('EVENT_DECIDED_TO_HELP_LANCE'):
@@ -239,10 +269,8 @@ class StoryPart:
                 if not snapshot.event(f'EVENT_TEAM_ROCKET_BASE_B2F_ELECTRODE_{number}'):
                     return step(f'electrode_{number}', 'Stop the radio transmitter')
             return self.story_place('hideout_done', 'Finish helping Lance')
-        self.completed.setdefault('rocket_hideout', snapshot.frame)
         if not snapshot.badges & 64:
             return step('glacier', 'Challenge Pryce')
-        self.completed.setdefault('glacier', snapshot.frame)
         if not snapshot.event('EVENT_CLEARED_RADIO_TOWER'):
             if not snapshot.event('EVENT_BEAT_ROCKET_EXECUTIVEM_3'):
                 return step('fake_director', 'Find the Radio Tower director')
@@ -268,7 +296,6 @@ class StoryPart:
             if not snapshot.event('EVENT_USED_THE_CARD_KEY_IN_THE_RADIO_TOWER'):
                 return step('card_key_slot', 'Open the Radio Tower shutter')
             return step('radio_tower', 'Free the Radio Tower')
-        self.completed.setdefault('radio_tower', snapshot.frame)
         partner = self.partner_goal(snapshot, 250)
         if partner:
             return partner
@@ -312,7 +339,6 @@ class StoryPart:
             if self.data.game == 'crystal':
                 return step('rising', 'Complete the Dragon Master’s test')
             return step('rising', 'Find the Dragon Fang')
-        self.completed.setdefault('rising', snapshot.frame)
         partner = self.partner_goal(snapshot, 127)
         if partner:
             return partner
@@ -323,7 +349,6 @@ class StoryPart:
             if not snapshot.event('EVENT_BEAT_CHAMPION_LANCE'):
                 return step('league_lance', 'Challenge Champion Lance')
             return step('hall_of_fame', 'Enter the Hall of Fame')
-        self.completed.setdefault('champion', snapshot.frame)
         return kanto_journey(self, snapshot, mem, Goal)
 
     def boulder(self, snapshot, mem, map_name, event, warp):

@@ -962,7 +962,7 @@ def test_full_party_makes_room_before_togepi_gift(real_data):
     policy = Policy(real_data, starter='cyndaquil')
     policy.storage_goal = lambda snapshot: Goal('storage', 'PC', 'VIOLET_POKECENTER_1F', 9, 2, 'up')
     snapshot = SimpleNamespace(frame=100, badges=1, party=[None] * 6, map=real_data.map_ids['VIOLET_POKECENTER_1F'],
-                               event=lambda flag: flag != 'EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE')
+                               hall_of_fame_count=0, event=lambda flag: flag != 'EVENT_GOT_TOGEPI_EGG_FROM_ELMS_AIDE')
     assert policy.journey(snapshot, None).key == 'collection_gift_room'
 
 
@@ -1208,7 +1208,8 @@ def test_time_capsule_team_restoration_takes_priority_over_story(real_data):
     policy.collection['time_capsule_restore'] = [key(original)]
     from pokesim.gen2.policy import Goal
     policy.storage_goal = lambda _: Goal('pc', 'PC', 'NEW_BARK_TOWN', 1, 1, 'up')
-    snapshot = SimpleNamespace(party=(), stored=(original,), map=real_data.map_ids['NEW_BARK_TOWN'])
+    snapshot = SimpleNamespace(frame=100, badges=0, hall_of_fame_count=0, event=lambda flag: False, party=(),
+                               stored=(original,), map=real_data.map_ids['NEW_BARK_TOWN'])
     goal = policy.journey(snapshot, None)
     assert goal.key == 'collection_activity_team'
 
@@ -1338,7 +1339,8 @@ def test_active_tower_preempts_campaign_field_partner_recruitment(real_data, mon
     policy.collection['tower'] = {'entered': False}
     expected = Goal('tower_enter', 'Tower', 'BATTLE_TOWER_1F', 7, 7, 'up')
     monkeypatch.setattr(tower, 'journey', lambda *args: expected)
-    snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_POKECENTER_1F'])
+    snapshot = SimpleNamespace(frame=100, badges=0, hall_of_fame_count=0, event=lambda flag: False,
+                               map=real_data.map_ids['SILVER_CAVE_POKECENTER_1F'])
     assert policy.journey(snapshot, None) == expected
 
 
@@ -2924,7 +2926,7 @@ def test_first_gym_waits_for_a_level_fourteen_partner(real_data, route_31_walk):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
     mon = SimpleNamespace(level=9, egg=False, moves=(TACKLE,))
-    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0,
+    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0, hall_of_fame_count=0,
                                party=(mon,), event=lambda name: True)
     goal = policy.journey(snapshot, None)
     assert goal.key == 'collection_train'
@@ -2955,7 +2957,7 @@ def test_a_pokemon_with_no_damaging_move_is_no_fighter_for_falkner(real_data, ro
     chikorita = SimpleNamespace(level=13, egg=False, moves=(TACKLE, 0, 0, 0))
     metapod = SimpleNamespace(level=20, egg=False, moves=(HARDEN, 0, 0, 0))
     egg = SimpleNamespace(level=20, egg=True, moves=(TACKLE, 0, 0, 0))
-    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0,
+    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0, hall_of_fame_count=0,
                                party=(chikorita, metapod, egg), event=lambda name: True)
     assert best_level(snapshot.party, policy.move_power) == 13
     assert policy.journey(snapshot, None).key == 'collection_train'
@@ -2970,8 +2972,8 @@ def test_a_loss_to_falkner_raises_the_level_the_team_trains_to(real_data, route_
     # Harden, which went in at Lv 12 and lost. Here Chikorita meets the floor and still loses.
     party = tuple(SimpleNamespace(level=level, egg=False, hp=0, moves=(TACKLE,)) for level in (14, 5, 4, 3, 3))
     party += (SimpleNamespace(level=7, egg=False, hp=0, moves=(HARDEN,)),)
-    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0, party=party,
-                               event=lambda name: True)
+    snapshot = SimpleNamespace(map=real_data.map_ids['VIOLET_GYM'], frame=1000, badges=0, hall_of_fame_count=0,
+                               party=party, event=lambda name: True)
     policy.goal = policy.journey(snapshot, None)
     assert policy.goal.key == 'zephyr'
     policy.note_boss_loss(snapshot)

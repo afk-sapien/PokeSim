@@ -21,11 +21,9 @@ def journey(policy, snapshot, mem, Goal):
         if not snapshot.event('EVENT_FAST_SHIP_FOUND_GIRL'):
             return step('find_girl', 'Find the missing granddaughter')
         return step('leave_ship', 'Disembark in Vermilion City')
-    policy.completed.setdefault('kanto', snapshot.frame)
     for mask, key in [(1024, 'surge'), (8192, 'sabrina'), (2048, 'erika'), (4096, 'janine')]:
         if not snapshot.badges & mask:
             return step(key, f'Challenge {key.title()}')
-        policy.completed.setdefault(key, snapshot.frame)
     if not snapshot.event('EVENT_MET_MANAGER_AT_POWER_PLANT'):
         return step('power_plant', 'Investigate the Power Plant theft')
     if not snapshot.event('EVENT_MET_ROCKET_GRUNT_AT_CERULEAN_GYM'):
@@ -58,13 +56,11 @@ def journey(policy, snapshot, mem, Goal):
         return step('find_blue', 'Invite Blue back to his Gym')
     if not snapshot.badges & 32768:
         return step('blue', 'Challenge Blue')
-    policy.completed.setdefault('sixteen_badges', snapshot.frame)
     if not snapshot.event('EVENT_OPENED_MT_SILVER'):
         return step('oak', 'Show Professor Oak all sixteen badges')
     if 'red' not in policy.completed and not snapshot.event('EVENT_RED_IN_MT_SILVER'):
         goal = red_funding(policy, snapshot, Goal)
         return goal or step('red', 'Challenge Red on Mt. Silver')
-    policy.completed.setdefault('red', snapshot.frame)
     from .collection import journey as collect
     return collect(policy, snapshot, mem, Goal)
 

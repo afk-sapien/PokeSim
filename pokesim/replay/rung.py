@@ -43,9 +43,10 @@ GATE_FURTHER_POINTS = 10.0
 GATE_TIMEOUT = 1800
 # The share of decide pipeline decisions a rung agrees on before a switch, from the decide pipeline design.
 PIPELINE_BAR = 0.95
-# Gold, Silver and Crystal also note their last Bug-Catching Contest and Battle Tower visit among the
-# milestones. Both repeat, and neither is story.
-ACTIVITIES = frozenset({'contest', 'tower'})
+# Gold, Silver and Crystal also note their last Bug-Catching Contest and Battle Tower visit and the Bicycle
+# loan among the milestones. None of them is story: the first two repeat, and the story borrows the Bicycle
+# at any depth, so a rung that fetched it earned no more story than one that had it.
+ERRANDS = frozenset({'contest', 'tower', 'bicycle'})
 
 
 def describe(goal):
@@ -76,9 +77,9 @@ def _hunt(description):
 def story_milestones(policy):
     """The story milestones ``policy`` holds, in story order. Red, Blue and Yellow check each one every
     decision, from the starter through the eight badges to the Champion. Gold, Silver and Crystal note
-    each story checkpoint with its frame as their story passes it, from the starter to Red."""
+    each one the save holds with its frame before their story picks a goal, from the starter to Red."""
     return [key for key, held in getattr(policy, 'completed', {}).items()
-            if held is not False and key not in ACTIVITIES]
+            if held is not False and key not in ERRANDS]
 
 
 def row(key, description):
@@ -327,7 +328,7 @@ def run_one(args, watch=None):
             wasted[done[0]] += done[1]
     seeded = None  # The goal key the last reseed was for. Seeds follow goal keys, not rows.
     # The story milestones held when the policy first read them, so the run counts what it earned after.
-    # Gold, Silver and Crystal note the checkpoints a checkpoint state has passed as their story picks
+    # Gold, Silver and Crystal note every milestone a checkpoint state holds before their story picks
     # the first goal. Red, Blue and Yellow start on a boot goal and read every milestone at once on
     # their first decision after it.
     held = None

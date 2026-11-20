@@ -270,13 +270,17 @@ def test_gen2_step_stays_within_budget_on_a_large_state(game):
     mid = data.map_ids['VICTORY_ROAD']
     memory = Gen2Memory(data)
     memory.load(mid)
+    # Every flag but Silver Cave's: Oak opens it only after the Hall of Fame, and a save past it prices the
+    # League walk against postgame goals.
+    flags = bytearray([255] * 256)
+    flags[data.events['EVENT_OPENED_MT_SILVER'] // 8] &= ~(1 << data.events['EVENT_OPENED_MT_SILVER'] % 8)
     snapshot = Gen2Snapshot(
         frame=100, map=mid, x=9, y=67, player_name='GOLD', rival_name='SILVER', party=party, stored=stored,
         box_counts=(20,) * 14, active_box=0, owned=frozenset(range(1, 252)), seen=frozenset(range(1, 252)),
         badges=0xFFFF, items=balls + ((data.items['FULL_RESTORE'], 20),),
         pockets={'items': (), 'balls': balls, 'key': (), 'machines': ()}, money=500000, coins=0, in_battle=0,
         enemy_species=0, enemy_level=0, enemy_hp=0, enemy_max_hp=0, trainer_class=0, battle_type=0,
-        playtime=(100, 0, 0), hall_of_fame_count=0, event_flags=bytes([255] * 256), tiles=(' ' * 20,) * 18,
+        playtime=(100, 0, 0), hall_of_fame_count=0, event_flags=bytes(flags), tiles=(' ' * 20,) * 18,
         objects=(), valid=True, data=data)
     policy = Policy(data, starter='totodile', seed=7)
     reference = Reference()

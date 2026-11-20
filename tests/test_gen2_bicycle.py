@@ -125,7 +125,7 @@ def test_the_bicycle_is_borrowed_after_cut_at_any_depth(real_data):
     # Zephyr and Hive, the two badges before Cut.
     def key(*unset, badges=3, place='GOLDENROD_CITY', party=()):
         state = SimpleNamespace(frame=100, badges=badges, party=list(party), map=real_data.map_ids[place], x=0,
-                                y=0, farfetchd_position=None, event=lambda flag: flag not in unset)
+                                y=0, farfetchd_position=None, hall_of_fame_count=0, event=lambda flag: flag not in unset)
         return owner.story(state, None).key
 
     assert key('EVENT_GOT_HM01_CUT', 'EVENT_GOT_BICYCLE') == 'cut'
@@ -144,6 +144,32 @@ def test_the_bicycle_is_borrowed_after_cut_at_any_depth(real_data):
     assert key() != 'bicycle' and owner.completed['bicycle'] == 100
     found = row(2, real_data.game, 'bicycle')
     assert (found['map'], found['object']) == ('GOLDENROD_BIKE_SHOP', 'GoldenrodBikeShopClerkScript')
+
+
+def test_a_save_past_the_bicycle_earns_none_of_its_milestones_when_the_step_fires(real_data):
+    """The gate counts the milestones a rung earned after its first goal. A checkpoint state notes its newest
+    milestone on the story's first pick, and the Bicycle step returned before the notes past it, so a Badges 6
+    rung earned the Mineral Badge its save already held, and the loan as well."""
+    from pokesim.gen2.policy import Policy
+    from pokesim.gen2.policy.story import MILESTONES
+    from pokesim.replay.rung import story_milestones
+    owner = Policy(real_data, starter='cyndaquil')
+    owner.story_step = lambda snapshot, key, title, row=None: SimpleNamespace(key=key)
+    # Every flag but the Bicycle's, all sixteen badges and a Hall of Fame entry. Lapras learns Surf and
+    # Whirlpool, so the story looks for no partner on its way to the Ice Path.
+    lapras = SimpleNamespace(moves=[57], species=131, level=50, hp=1, max_hp=1, status=0, egg=False)
+
+    def pick(frame, *unset):
+        state = SimpleNamespace(frame=frame, badges=0xFFFF, party=[lapras], map=real_data.map_ids['GOLDENROD_CITY'],
+                                x=0, y=0, farfetchd_position=None, hall_of_fame_count=1,
+                                event=lambda flag: flag not in unset)
+        return owner.story(state, None).key
+
+    assert pick(100, 'EVENT_GOT_BICYCLE') == 'bicycle'
+    held = story_milestones(owner)
+    assert set(held) == {key for key, _ in MILESTONES} - {'bicycle'}
+    assert pick(200) != 'bicycle' and owner.completed['bicycle'] == 200
+    assert story_milestones(owner) == held
 
 
 def test_a_register_task_rebuilt_after_the_register_ends_without_the_pack(monkeypatch):
