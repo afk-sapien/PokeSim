@@ -4,7 +4,7 @@ from pokecore.gen2.ram import calculated_stats, experience_at
 from ..planning.ledger import FIELD_MOVES
 from ..planning.stance import TRAIN
 from .facts import facts
-from .ledger import fits, tidy_goal
+from .ledger import fight_room, fits, members_room, tidy_goal
 from .standdown import TRAINING_DECISIONS, exhausted, site_key, spend, stand_down, standing_down, train_key
 from . import kinds
 
@@ -113,15 +113,92 @@ def share_room(data, snapshot, mon):
     return next((item for item in back if not fits(data, snapshot, item)), None)
 
 
+def trainee_index(policy, snapshot):
+    """The party slot of the Pokémon the training project raises, or None."""
+    project = policy.collection.get('training')
+    if not project:
+        return None
+    return next((i for i, mon in enumerate(snapshot.party) if not mon.egg and identity(mon) == project['identity']), None)
+
+
 def trainee_slot(policy, snapshot):
     """The party slot of a partner levelling without an Exp. Share, which leads so it joins every battle."""
     project = policy.collection.get('training')
     if not project or project.get('item'):
         return None
-    slot = next((i for i, mon in enumerate(snapshot.party) if not mon.egg and identity(mon) == project['identity']), None)
+    slot = trainee_index(policy, snapshot)
     if slot is None or not (shareless(policy.data, snapshot) or share_room(policy.data, snapshot, snapshot.party[slot])):
         return None
     return slot
+
+
+# Levels a fighter on the training walk keeps over the site's top wild level. A trainee this far above its
+# opponent fights the battle out rather than switch (Policy.trainee_switch).
+LEAD_MARGIN = 5
+
+
+def walk_fighters(policy, snapshot):
+    """The party slots that can fight on the training walk, each with its room (ledger.fight_room), or
+    None to leave the heal walk and the lead to their usual rules.
+
+    A fighter has room left and a level at least LEAD_MARGIN above the top wild level of the map the walk
+    trains on, so a wild battle there costs it little. None off the training walk and when no member
+    stands that far above the map, where any member's wear still sends the party to heal (ledger.battle_room).
+    Callers pass the party as the field cures in the bag leave it (ledger.cured), as the heal check reads it.
+    """
+    goal = policy.goal
+    if goal is None or goal.key != 'collection_train' or not policy.collection.get('training'):
+        return None
+    data = policy.data
+    top = wild_levels(policy).get(data.map_ids.get(goal.map_name))
+    if top is None:
+        return None
+    party = snapshot.party
+    tall = [i for i, mon in enumerate(party) if not mon.egg and mon.level >= top + LEAD_MARGIN]
+    if not tall:
+        return None
+    rooms = {i: fight_room(data, party[i]) for i in tall}
+    return {i: room for i, room in rooms.items() if room}
+
+
+def training_spent(policy, snapshot):
+    """Whether the training walk needs a Pokémon Center, or None to leave it to the usual rule (walk_fighters).
+
+    It does once no fighter is left, or once the trainee has fainted, since a fainted Pokémon gains no
+    experience. A trainee that leads without an Exp. Share (trainee_slot) gains only from its own battles,
+    so its own wear still sends the party to heal. A partner's wear alone does not while another can fight.
+    """
+    able = walk_fighters(policy, snapshot)
+    if able is None:
+        return None
+    if not able:
+        return True
+    slot = trainee_index(policy, snapshot)
+    if slot is None:
+        return False
+    mon = snapshot.party[slot]
+    if slot == trainee_slot(policy, snapshot):
+        return 0 in members_room(policy.data, [mon]).values()
+    return not mon.hp
+
+
+def training_lead(policy, snapshot):
+    """The party slot that leads the training walk, or None to leave the lead to the usual rule.
+
+    The trainee leads while it is a fighter (walk_fighters), so it gains a participant's share of each
+    battle on top of the Exp. Share's. Otherwise the lead keeps its place while it is a fighter, and a worn
+    lead gives way to the fighter with the most room. None off the training walk and once no fighter is
+    left, when the party is due at a Pokémon Center.
+    """
+    able = walk_fighters(policy, snapshot)
+    if not able:
+        return None
+    trainee = trainee_index(policy, snapshot)
+    if trainee in able:
+        return trainee
+    if 0 in able:
+        return 0
+    return max(able, key=able.get)
 
 
 def happiness_levels(friendship):
