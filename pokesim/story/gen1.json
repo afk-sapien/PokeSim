@@ -29,7 +29,7 @@
      "done_when": {"flags": ["EVENT_GOT_HM05"], "items": ["HM05"], "moves": [148]}},
     {"key": "bike_voucher", "map": "POKEMON_FAN_CLUB", "object": "CHAIRMAN",
      "done_when": {"flags": ["EVENT_GOT_BIKE_VOUCHER"], "items": ["BIKE_VOUCHER"]}},
-    {"key": "bicycle", "map": "BIKE_SHOP", "object": "CLERK",
+    {"key": "bicycle", "map": "BIKE_SHOP", "x": 6, "y": 4, "face": "up",
      "done_when": {"flags": ["EVENT_GOT_BICYCLE"], "items": ["BICYCLE"], "drop": ["BIKE_VOUCHER"]}},
     {"key": "rainbow", "gym": true, "done_when": {"badges": 8}},
     {"key": "poster_guard", "map": "GAME_CORNER", "object": "ROCKET",

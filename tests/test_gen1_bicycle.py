@@ -54,6 +54,31 @@ def test_the_bicycle_is_fetched_after_flash_and_only_before_rock_tunnel():
     assert story_goal(past).key not in ('bike_voucher', 'bicycle')
 
 
+def walkable_from_door(m):
+    """The tiles of map ``m`` a player walks to from its first warp, around standing people."""
+    world = WORLD[m]
+    people = {(o[0], o[1]) for o in world['objects'] if o[3] == 'STAY'}
+    start = tuple(world['warps'][0][:2])
+    seen, todo = {start}, deque([start])
+    while todo:
+        x, y = todo.popleft()
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if (0 <= nx < world['width'] and 0 <= ny < world['height'] and (nx, ny) not in seen
+                    and (nx, ny) not in people and world['tiles'][ny][nx] in world['passable']):
+                seen.add((nx, ny))
+                todo.append((nx, ny))
+    return seen
+
+
+@pytest.mark.parametrize('key, items', [('bike_voucher', ()), ('bicycle', ((ITEMS['BIKE_VOUCHER'], 1),))])
+def test_each_errand_stands_where_the_door_leads(key, items):
+    """The bike shop clerk stands behind his counter, so the tiles beside him were out of reach and a fresh
+    Red run explored Vermilion for the shop's goal until its hours ran out."""
+    goal = bicycle_goal(snap(items=items))
+    assert goal.key == key
+    assert any((x, y) in walkable_from_door(m) for m, x, y in goal.targets)
+
+
 @pytest.mark.parametrize('name, allowed', [('ROUTE_1', True), ('VIRIDIAN_FOREST', True), ('MT_MOON_1F', True),
                                            ('ROUTE_23', True), ('INDIGO_PLATEAU', True), ('UNDERGROUND_PATH_NORTH_SOUTH', True),
                                            ('REDS_HOUSE_1F', False), ('VIRIDIAN_POKECENTER', False),
