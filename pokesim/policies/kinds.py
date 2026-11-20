@@ -424,7 +424,8 @@ class Prize(Kind):
     def target(self, view, p):
         s, collection = view.s, view.collection
         if not dict(s.items).get(ITEMS['COIN_CASE']):
-            return object_goal('collect_coins', 'Get the Coin Case', 'Prepare to exchange coins for Porygon', 'CELADON_DINER', 'FISHER')
+            # The man by the diner's top left corner gives the case (CeladonDinerGymGuideText in pokered).
+            return object_goal('collect_coins', 'Get the Coin Case', 'Prepare to exchange coins for Porygon', 'CELADON_DINER', 'GYM_GUIDE')
         cost = c.PORYGON_COINS.get(collection.version, 9999)
         if s.coins < cost:
             if s.money < 10000:

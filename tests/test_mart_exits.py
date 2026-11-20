@@ -1,6 +1,6 @@
 import pytest
 
-from pokesim.policies.navigation import Navigator
+from pokesim.policies.navigation import DIRS, Navigator
 from pokesim.strategy_data import MAPS, WORLD
 
 
@@ -49,3 +49,19 @@ def test_ladders_on_a_map_edge_still_warp_when_stepped_on():
     ladder = next(w for w in WORLD[m]['warps'] if w[2] != -1 and (w[0] in (0, WORLD[m]['width'] - 1) or w[1] in (0, WORLD[m]['height'] - 1)))
     nav = Navigator()
     assert all(nav._directed_warp(m, ladder, direction) == nav._warp(m, ladder) for direction in ('up', 'down', 'left', 'right'))
+
+
+def test_a_route_gate_door_warps_only_while_facing_its_carpet():
+    # Outdoors, a warp square whose own tile is not a door warps only while the player faces a carpet
+    # tile. Route 7's east gate is entered walking left from (19, 10). The map file also lists (18, 9),
+    # which faces no carpet, and a route that walked onto it paced there without entering.
+    m = MAPS['ROUTE_7']
+    nav = Navigator()
+    warps = {tuple(warp[:2]): warp for warp in WORLD[m]['warps']}
+    facing = {square: [d for d in DIRS if nav._directed_warp(m, warps[square], d)] for square in warps}
+    assert facing == {(18, 9): [], (18, 10): ['left'], (11, 9): [], (11, 10): ['right'],
+                      (5, 13): ['up', 'down', 'left', 'right']}
+    gate = nav._warp(m, warps[(18, 10)])
+    assert ('left', gate) in list(nav.neighbors((m, 19, 10), 0))
+    assert ('left', (m, 18, 9)) in list(nav.neighbors((m, 19, 9), 0))
+    assert gate not in [q for _, q in nav.neighbors((m, 18, 9), 0)]

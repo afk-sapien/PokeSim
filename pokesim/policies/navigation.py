@@ -18,6 +18,21 @@ FACING = {"down": 0, "up": 4, "left": 8, "right": 12}
 PAIR_COLLISIONS = {(ts, a, b) for ts, a, b in DATA["collision_pairs"]}
 WATER_TILESETS = {"OVERWORLD", "PLATEAU", "FOREST", "CAVERN", "SHIP_PORT"}
 OPTIONAL_LIFTS = {MAPS[row.map] for row in HAND if row.kind == 'lift'}
+# Where Red, Blue and Yellow look at the tile in front of the player before a warp (pokered
+# home/overworld.asm, ExtraWarpCheck and CheckWarpsNoCollision). There a warp square whose own tile
+# is not an arrival tile warps only while the player faces a carpet tile, at the end of a step with the
+# direction still held or on a press into the carpet. Copied from data/tilesets/warp_tile_ids.asm and
+# warp_carpet_tile_ids.asm.
+FRONT_WARP_TILESETS = {"OVERWORLD", "SHIP", "SHIP_PORT", "PLATEAU"}
+FRONT_WARP_MAPS = {MAPS[name] for name in ('ROCKET_HIDEOUT_B1F', 'ROCKET_HIDEOUT_B2F', 'ROCKET_HIDEOUT_B4F',
+                                           'ROCK_TUNNEL_1F')}
+ARRIVAL_WARP_TILES = {"OVERWORLD": {0x1B, 0x58}, "SHIP": {0x1E, 0x37, 0x39, 0x4A}, "SHIP_PORT": set(),
+                      "PLATEAU": {0x1B, 0x3B}, "FACILITY": {0x13, 0x1B, 0x20, 0x43, 0x58},
+                      "CAVERN": {0x18, 0x1A, 0x22}}
+WARP_CARPETS = {"down": {0x01, 0x04, 0x12, 0x17, 0x18, 0x33, 0x3D}, "up": {0x01, 0x5C},
+                "left": {0x1A, 0x4B}, "right": {0x0F, 0x4E}}
+# The S.S. Anne bow faces one tile instead, and its 3F checks only for the map edge.
+BOW_CARPET = {0x15}
 
 
 def _falls(mansion):
@@ -532,6 +547,14 @@ class Navigator:
             outward = {name for name, edge in (("left", x == 0), ("right", x == world["width"] - 1),
                                                ("up", y == 0), ("down", y == world["height"] - 1)) if edge}
             if outward and direction not in outward:
+                return None
+        if ((world["tileset"] in FRONT_WARP_TILESETS or source in FRONT_WARP_MAPS) and source != MAPS['SS_ANNE_3F']
+                and self.active_tile(world, x, y) not in ARRIVAL_WARP_TILES.get(world["tileset"], ())):
+            # A square facing off the map is an edge exit and keeps the rule above.
+            dx, dy = DIRS[direction]
+            front = self.active_tile(world, x + dx, y + dy)
+            carpets = BOW_CARPET if source == MAPS['SS_ANNE_BOW'] else WARP_CARPETS[direction]
+            if front is not None and front not in carpets:
                 return None
         target = self._warp(source, warp)
         if target and source == MAPS['ROCKET_HIDEOUT_ELEVATOR'] and self.hideout_lift_floor() == 'B2F':
