@@ -2143,7 +2143,10 @@ def main(argv=None):
                 webbrowser.open(identity['url'])
             return
         manager.listen_host = host
-        identity = {'url': public_url, 'application_id': manager.registry.setting('application_id')}
+        # Commands on this machine connect to local_url. PUBLIC_URL can name a published container
+        # port or a proxy, which this process does not listen on.
+        identity = {'url': public_url, 'local_url': f'http://{browser_host}:{actual_port}',
+                    'application_id': manager.registry.setting('application_id')}
         CheckpointStore.atomic_write(manager.root / 'manager.json', json.dumps(identity).encode())
         manager.bootstrap_admin(os.environ.get('POKESIM_ADMIN_USER', '').strip(), os.environ.get('POKESIM_ADMIN_PASSWORD', ''))
         manager.issue_cli_token()
