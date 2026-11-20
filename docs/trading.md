@@ -198,10 +198,16 @@ training, evolution and the Time Capsule: Pichu, Pikachu and Raichu share one
 family, and Tyrogue shares one with Hitmonlee, Hitmonchan and Hitmontop because
 it can become any of them. Two different species that share a trainer and DVs,
 which emulator reloads and Day Care breeding both produce, have different keys
-and trade normally. Only two Pokémon of the same family with the same trainer
-and DVs remain impossible to tell apart. Their settings are suspended, their
-controls are disabled and the reason reads "Another Rattata from the same
-trainer has identical stats, so the game can't tell them apart". Older
+and trade normally. Copies of one family with the same trainer and DVs are told
+apart by nickname. Copies that share the nickname too but differ in level,
+experience, moves or other stats get a key each that adds 8 hex digits of a
+SHA-256 over those stats. A boxed copy keeps its stats, and once a picked copy
+is in the party the trade follows its party slot, so the key still finds it as
+it is played. Their settings are shared by nickname, so a lock or unlock applies
+to every copy with that nickname. Only copies whose stats are the same as well
+stay impossible to tell apart. Their settings are suspended, their controls are
+disabled and the reason reads "Another Rattata from the same trainer has the
+same DVs and no nickname, so this one can't be picked out safely". Older
 snapshots without identity data retain read-only automatic offers.
 
 Releases before 0.5.0 keyed partners by trainer ID and DVs alone. The first

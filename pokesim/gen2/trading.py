@@ -15,7 +15,7 @@ from ..shiny import shiny_bytes
 from ..runtime import trace
 from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows, merge_partners
 from ..trade.partners import received
-from ..trade.preferences import answers, apply, base, find, name as setting_name
+from ..trade.preferences import answers, apply, base, find, name as setting_name, tagged
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin, reserves
 from pokecore.gen2.ram import Memory, read_snapshot
@@ -287,9 +287,10 @@ class Participant(BaseParticipant):
         CheckpointStore.atomic_write(path, raw)
         row = party(self.emu.pb, self.emu.data)[prepared['party_slot']]
         snapshot = read_snapshot(self.emu.pb.memory, self.emu.data, self.emu.frame)
-        # The struct bytes give the family key. The nickname tells a twin apart.
+        # The struct bytes give the family key. The nickname tells a twin apart, and the preparation
+        # followed a copy picked by its stats to this slot.
         if (not same(individual_key(row), base(selected)) or prepared['party_slot'] >= len(snapshot.party)
-                or not answers(mon_view(snapshot.party[prepared['party_slot']], egg_view=True), selected)):
+                or not answers(mon_view(snapshot.party[prepared['party_slot']], egg_view=True), tagged(selected))):
             raise ValueError('Prepared party member does not match the selected individual')
         if snapshot.map != self.emu.data.map_ids['POKECENTER_2F'] or snapshot.in_battle:
             raise ValueError('Prepared adventure is not in a Pokémon Center')

@@ -82,11 +82,17 @@ def test_manual_offer_does_not_bypass_project_or_last_copy_protection():
     assert not routine.offers(normal(data, choice), False)
 
 
-def test_ambiguous_individuals_are_never_spent():
+def test_ambiguous_individuals_are_never_spent(monkeypatch):
     data = payload()
     a, b = data['storage']['pokemon']
     b['dvs'] = a['dvs'][:]
     key = preferences.identity(a)
+    # Twins whose stats differ are each named by a stamp, so offers and edits work.
+    red = normal(data, {key: {'state': 'offered'}})
+    assert routine.offers(red, True)
+    assert all(row['editable'] for row in routine.listings(red))
+    # Only two sets of stats that give one stamp leave them impossible to tell apart.
+    monkeypatch.setattr(preferences, 'stamp', lambda mon: 'f00000000')
     red = normal(data, {key: {'state': 'offered'}})
     assert not routine.offers(red, True)
     assert all(not row['editable'] for row in routine.listings(red))

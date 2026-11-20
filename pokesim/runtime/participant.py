@@ -15,7 +15,7 @@ from fastapi import HTTPException, Request
 from ..checkpoints import CheckpointStore
 from pokecore.identity import legacy, same
 from ..app.registry import digest, validate_id
-from ..trade.preferences import answers, base, find
+from ..trade.preferences import answers, base, find, tagged
 from ..state import journal, kv, ledgers
 from . import trace
 
@@ -514,9 +514,10 @@ class Participant:
         from pokecore.centers import safe_center
         from ..ram import read_snapshot
         snapshot = read_snapshot(self.emu.pb.memory, self.emu.frame)
-        # The struct bytes give the family key. The nickname tells a twin apart.
+        # The struct bytes give the family key. The nickname tells a twin apart, and the preparation
+        # followed a copy picked by its stats to this slot.
         if (not same(identity(chosen), base(selected)) or slot >= len(snapshot.party)
-                or not answers(asdict(snapshot.party[slot]), selected)):
+                or not answers(asdict(snapshot.party[slot]), tagged(selected))):
             raise ValueError('Prepared party member does not match the selected individual')
         if not safe_center(snapshot, snapshot.map, self.emu.pb.memory):
             raise ValueError('Prepared adventure is not in a supported Center')

@@ -59,17 +59,71 @@ def test_key_survives_evolution_in_both_generations_and_the_time_capsule():
     assert preferences.identity(gen2(19, 'Rattata')) == preferences.identity(gen1(RATTATA))
 
 
-def test_true_twins_stay_blocked_with_a_plain_reason():
+def test_the_stamp_is_a_pinned_sha256_of_the_stats():
+    # Python's hash() changes with each process, so a key built on it would name nothing after a restart.
+    mon = {'dex': 19, 'species': 165, 'nick': 'RATS', 'level': 9, 'experience': 729, 'moves': [33, 39],
+           'friendship': 70}
+    assert preferences.stamp(mon) == 'fe0dcc84c'
+    assert preferences.stamp({**mon, 'level': 10}) != 'fe0dcc84c'
+
+
+def test_twins_whose_stats_differ_get_a_stamped_key_each():
+    listed = rows(collection(gen1(RATTATA), gen1(RATTATA, level=9), gen1(PIDGEY)))
+    keys = [mon['trade_key'] for mon in listed]
+    assert not any(mon['trade_ambiguous'] for mon in listed)
+    assert {preferences.blocked(mon) for mon in listed} == {''}
+    assert keys[0] != keys[1] and preferences.stamped(keys[0]) and preferences.stamped(keys[1])
+    assert preferences.tagged(keys[0]) == preferences.tagged(keys[1]) == f'{preferences.identity(listed[0])}~d'
+    assert keys[0] == f'{preferences.tagged(keys[0])}~{preferences.stamp(listed[0])}'
+    assert [preferences.find(listed, key) for key in keys[:2]] == listed[:2]
+    # An evolved copy and a nicknamed pair are stamped the same way.
+    evolved = rows(collection(gen1(PIKACHU), gen1(RAICHU, level=30)))
+    assert len({mon['trade_key'] for mon in evolved}) == 2 and not any(mon['trade_ambiguous'] for mon in evolved)
+    named = rows(collection(gen1(RATTATA, nick='RATS'), gen1(RATTATA, nick='RATS', level=9)))
+    assert len({mon['trade_key'] for mon in named}) == 2 and not any(mon['trade_ambiguous'] for mon in named)
+
+
+def test_twins_whose_stamps_collide_stay_blocked_with_a_plain_reason(monkeypatch):
+    monkeypatch.setattr(preferences, 'stamp', lambda mon: 'f00000000')
     listed = rows(collection(gen1(RATTATA), gen1(RATTATA, level=9), gen1(PIDGEY)))
     assert [mon['trade_ambiguous'] for mon in listed] == [True, True, False]
-    assert preferences.blocked(listed[0]) == ("Another Rattata from the same trainer has identical stats and "
-                                              "no nickname, so the game can't tell them apart")
+    # Their levels differ, so the reason never claims identical stats.
+    assert preferences.blocked(listed[0]) == ("Another Rattata from the same trainer has the same DVs and "
+                                              "no nickname, so this one can't be picked out safely")
     evolved = rows(collection(gen1(PIKACHU), gen1(RAICHU, level=30)))
-    assert preferences.blocked(evolved[0]) == ("Raichu is from the same trainer, has identical stats, the same "
-                                               "evolution family and no nickname, so the game can't tell them apart")
+    assert preferences.blocked(evolved[0]) == ("Raichu is from the same trainer, has the same DVs, the same "
+                                               "evolution family and no nickname, so this one can't be picked out safely")
     named = rows(collection(gen1(RATTATA, nick='RATS'), gen1(RATTATA, nick='RATS', level=9)))
-    assert preferences.blocked(named[0]) == ("Another Rattata from the same trainer has identical stats and "
-                                             "the same nickname, so the game can't tell them apart")
+    assert preferences.blocked(named[0]) == ("Another Rattata from the same trainer has the same DVs and "
+                                             "the same nickname, so this one can't be picked out safely")
+    assert not any('identical' in preferences.blocked(mon) for mon in listed + evolved + named)
+
+
+def old_answers(mon, key):
+    """answers as releases before stamps had it, which split a twin key in two."""
+    if isinstance(key, str) and preferences.TWIN in key:
+        root, mark = key.split(preferences.TWIN, 1)
+        return preferences.identity(mon) == root and preferences.tag(mon) == mark
+    return individual.same(preferences.identity(mon), key)
+
+
+def old_find(rows, wanted, field='trade_key'):
+    """find as releases before stamps had it."""
+    exact = [row for row in rows if row.get(field) and row.get(field) == wanted]
+    if (len(exact) > 1 and isinstance(wanted, str) and preferences.TWIN in wanted
+            and not any(row.get('trade_ambiguous') or row.get('blocked') for row in exact)):
+        return exact[0]
+    return individual.find(rows, wanted, field)
+
+
+def test_an_older_reader_given_a_stamped_key_names_nothing():
+    listed = rows(collection(gen1(RATTATA), gen1(RATTATA, level=9), gen1(PIDGEY)))
+    stamped = [mon['trade_key'] for mon in listed[:2]]
+    # An older release lists the same copies under its two part twin keys.
+    old = [{**mon, 'trade_key': preferences.tagged(mon['trade_key'])} for mon in listed]
+    for key in stamped:
+        assert not any(old_answers(mon, key) for mon in old)
+        assert old_find(old, key) is None
 
 
 def test_nicknames_tell_twins_apart():
@@ -80,7 +134,7 @@ def test_nicknames_tell_twins_apart():
     assert not any(mon['trade_ambiguous'] for mon in listed)
     # A nickname that only spells the species name is no nickname.
     plain = rows(collection(gen1(RATTATA, nick='RATTATA'), gen1(RATTATA, level=9)))
-    assert [mon['trade_ambiguous'] for mon in plain] == [True, True]
+    assert {preferences.tagged(mon['trade_key']) for mon in plain} == {f'{preferences.identity(plain[0])}~d'}
     # A lone Pokémon keeps its family key, as 0.7.4 stored it.
     alone = rows(collection(gen1(RATTATA, nick='RATS')))
     assert alone[0]['trade_key'] == preferences.identity(alone[0])
@@ -94,8 +148,13 @@ def test_interchangeable_twins_share_a_key_and_can_be_picked():
     assert preferences.interchangeable(listed, listed[0]['trade_key']) == listed[:2]
     assert preferences.sendable(listed, 0, listed[0]['trade_key'])
     differing = rows(collection(gen1(RATTATA, level=9), gen1(RATTATA, level=10)))
-    assert preferences.find(differing, differing[0]['trade_key']) is None
-    assert not preferences.sendable(differing, 0, differing[0]['trade_key'])
+    assert preferences.find(differing, differing[0]['trade_key']) is differing[0]
+    assert preferences.sendable(differing, 0, differing[0]['trade_key'])
+    # The party copy a stamped key picked gains a level on the way, and the slot still answers.
+    grown = rows(collection(gen1(RATTATA, level=11), gen1(RATTATA, level=10)))
+    assert preferences.sendable(grown, 0, differing[0]['trade_key'])
+    # A two part key from before the copies differed names two that are no longer interchangeable.
+    assert not preferences.sendable(differing, 0, preferences.tagged(differing[0]['trade_key']))
     # The party Pokémon must answer to the key the trade agreed on.
     named = rows(collection(gen1(RATTATA, nick='RATS'), gen1(RATTATA, nick='FANG')))
     assert not preferences.sendable(named, 0, named[1]['trade_key'])

@@ -1,5 +1,5 @@
 """Prepare a boxed Gen II offer with ordinary travel and PC controls."""
-from ..trade.preferences import TWIN, answers, apply
+from ..trade.preferences import TWIN, answers, apply, stamped, tagged
 from .teams import key as team_key
 from ..planning.ledger import FIELD_MOVES
 from ..runtime.policy import Action, PolicyContext, stack_pointer
@@ -50,16 +50,25 @@ def answering(snapshot, preferences, key):
     return matches
 
 
-def selected(snapshot, preferences, key, copies=None):
+def selected(snapshot, preferences, key, copies=None, slot=None):
     """The slot of the Pokémon a trade key names, a party copy first, as (location, slot, mon).
 
     Interchangeable twins share a twin key, so any of them may go. ``copies`` is how many answered when
-    the preparation began, so a copy that left or arrived on the way fails it.
+    the preparation began, so a copy that left or arrived on the way fails it. ``slot`` is the party slot
+    a copy picked by a stamped key was held in. Its friendship and held item change on the way, so that
+    slot must still hold a copy with its family key and nickname.
     """
-    matches = answering(snapshot, preferences, key)
+    if slot is not None:
+        matches = [match for match in answering(snapshot, preferences, tagged(key)) if match[:2] == ('party', slot)]
+        if not matches:
+            raise ValueError('The selected Pokémon left its party slot')
+    else:
+        matches = answering(snapshot, preferences, key)
     twins = isinstance(key, str) and TWIN in key
-    if (not matches or len(matches) > 1 and (not twins or any(row['trade_ambiguous'] for *_, row in matches))
-            or copies is not None and len(matches) != copies or matches[0][2].egg):
+    # A key from before a twin was stamped names copies that are no longer interchangeable.
+    if (not matches or len(matches) > 1 and (not twins or any(row['trade_ambiguous'] or row['trade_key'] != key
+                                                              for *_, row in matches))
+            or slot is None and copies is not None and len(matches) != copies or matches[0][2].egg):
         raise ValueError('The selected individual is missing or ambiguous')
     if matches[0][3]['trade_locked']:
         raise ValueError('The selected Pokémon is protected or withdrawn')
@@ -85,18 +94,23 @@ def begin(emu, key, tid, *, time_capsule=False, manual=False, session=False, pro
     if session:
         if key is not None or time_capsule:
             raise ValueError('A Cable Club session brings the whole party and no selected Pokémon')
-    elif selected(snapshot, preferences, key)[0] != 'box' and not manual:
-        raise ValueError('Choose a boxed offer. Active party members are protected')
+        picked = None
+    else:
+        picked = selected(snapshot, preferences, key)
+        if picked[0] != 'box' and not manual:
+            raise ValueError('Choose a boxed offer. Active party members are protected')
     if time_capsule:
         from .timecapsule import compatible, unlocked
         if not unlocked(snapshot, Memory(emu.pb.memory, emu.data)):
             raise ValueError('The Time Capsule opens the day after meeting Bill')
-        if not compatible(selected(snapshot, preferences, key)[2], emu.data):
+        if not compatible(picked[2], emu.data):
             raise ValueError('The selected Pokémon cannot enter the Time Capsule')
     state = {'id': tid, 'trade_key': key, 'phase': 'travelling', 'started_frame': emu.frame,
              'party_slot': None, 'time_capsule': time_capsule}
     if manual:
         state['manual'] = True
+    if picked and picked[0] == 'party' and stamped(key):
+        state['slot'] = picked[1]
     if session:
         state['session'] = True
     # Hand-picked Pokémon and wished species the PC must keep if it has to release one to make room.
@@ -246,7 +260,11 @@ class Preparation:
             location, slot, mon, incompatible, needs_storage = 'party', 0, None, None, False
         else:
             location, slot, mon = selected(snapshot, {} if state.get('manual') else emu.store.trade_preferences(),
-                                           state['trade_key'], state.get('copies'))
+                                           state['trade_key'], state.get('copies'), state.get('slot'))
+            if location == 'party' and stamped(state['trade_key']) and state.get('slot') is None:
+                # Its friendship and held item change on the way, so the trade follows its slot from here.
+                state['slot'] = slot
+                emu.store.set(KEY, state)
             from .timecapsule import compatible
             incompatible = next((i for i, member in enumerate(snapshot.party) if not compatible(member, data)), None)
             needs_storage = location != 'party' or state.get('time_capsule') and incompatible is not None
