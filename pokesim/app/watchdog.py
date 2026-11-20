@@ -429,7 +429,8 @@ class Watchdog:
             found[f'stuck:{aid}'] = Problem(
                 f'stuck:{aid}', 'stuck', f'{name} has been stuck in {place} for {duration(stuck)}.',
                 now - stuck, aid, f'{name} is moving again.')
-        if self._quiet(aid, status, now) and not stuck_now:
+        reading = (self.readings.get(aid) or (None, None))[1]
+        if self._quiet(aid, status, now, reading and reading.improved) and not stuck_now:
             window = self.progress[aid]
             found[f'progress:{aid}'] = Problem(
                 f'progress:{aid}', 'no_progress',
@@ -460,14 +461,18 @@ class Watchdog:
                 f'{name} has stopped playing. Its game clock has not moved for {duration(still)}. Restart it.',
                 last[1], aid, f'{name} is playing again.')
 
-    def _quiet(self, aid, status, now):
+    def _quiet(self, aid, status, now, improved=None):
         """True when the game played the whole window without doing anything new. The window counts
         PlayClock seconds, so the game's pace does not change it.
 
         Moving around does not count, because a game caught in a loop moves too. New events,
         Pokédex entries, badges, League wins, newly discovered areas, maps not seen during this
         window and level-ups do. A level-up is a party level total above the highest this window
-        saw, so swapping the same Pokémon in and out of the party counts once at most.
+        saw, so swapping the same Pokémon in and out of the party counts once at most. A new improve
+        row does too. Most are catches the collection keeps as improvements (a rarer or shiny copy,
+        a needed copy or a family member), which add no Pokédex entry. The rest are level gains
+        toward the next boss, which the level total counts already. ``improved`` is the time of the
+        newest improve row the progress sweep read.
         """
         seconds = played(status)
         if seconds is None:
@@ -475,7 +480,7 @@ class Watchdog:
         watch = status.get('watch') or {}
         achievement = (status.get('progress') or {}).get('last_achievement') or {}
         fingerprint = (achievement.get('id'), watch.get('owned'), watch.get('badges'), watch.get('hall_of_fame'),
-                       (status.get('league_rewards') or {}).get('wins'), status.get('areas_discovered'))
+                       (status.get('league_rewards') or {}).get('wins'), status.get('areas_discovered'), improved)
         place = watch.get('map', (status.get('game') or {}).get('map_name'))
         levels = watch.get('levels')
         current = self.progress.get(aid)
