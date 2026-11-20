@@ -3,13 +3,22 @@
 Where each step happens is in pokesim/story/gen2.json. The order of the steps stays here.
 """
 
+# wPokegearFlags bits: the Radio Card and the Kanto expansion card (bit 7 is the Pokégear itself).
+RADIO_CARD = 2
+EXPANSION = 8
+
+
+def pokegear_cards(mem):
+    """The Pokégear's flag byte, which holds each card the player has."""
+    return mem.byte('wPokegearFlags')
+
 
 def journey(policy, snapshot, mem, Goal):
     step = lambda key, title: policy.story_step(snapshot, key, title)
     name = policy.data.maps[snapshot.map]['constant']
     if not snapshot.event('EVENT_GOT_SS_TICKET_FROM_ELM'):
         return step('ticket', 'Receive the S.S. Aqua ticket')
-    if not mem.byte('wPokegearFlags') & 2:
+    if not pokegear_cards(mem) & RADIO_CARD:
         return step('radio_card', 'Get the Pokégear Radio Card')
     if not snapshot.event('EVENT_FAST_SHIP_FIRST_TIME'):
         if not name.startswith('FAST_SHIP'):
@@ -38,7 +47,7 @@ def journey(policy, snapshot, mem, Goal):
         return step('find_misty', 'Find Misty on Route 25')
     if not snapshot.badges & 512:
         return step('misty', 'Challenge Misty')
-    if not mem.byte('wPokegearFlags') & 8:
+    if not pokegear_cards(mem) & EXPANSION:
         return step('expansion', 'Receive the Kanto radio expansion')
     snorlax = step('snorlax', 'Wake Snorlax with the Poké Flute channel')
     if not snapshot.event('EVENT_FOUGHT_SNORLAX'):

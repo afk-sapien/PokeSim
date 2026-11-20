@@ -278,6 +278,51 @@ def test_a_run_counts_only_the_story_milestones_it_earned_after_its_first_goal(m
     assert _audit(monkeypatch, tmp_path / 'none.json', steps)['story'] == []
 
 
+def test_a_new_pokegear_card_is_progress_and_one_already_held_is_not():
+    # The story fetches the Radio Card before the S.S. Aqua. Only wPokegearFlags holds it, and all 5,544
+    # frames of a Gold run's Radio Card span read as wasted.
+    before, after = _snapshot([_mon('Cyndaquil')], []), _snapshot([_mon('Cyndaquil')], [])
+    assert [(event.kind, event.detail) for event in _goal_events('radio_card', before, after, (0x81, 0x83))] \
+        == [('card', 2)]
+    # The Kanto expansion after Misty counts the same way.
+    assert [(event.kind, event.detail) for event in _goal_events('expansion', before, after, (0x83, 0x8B))] \
+        == [('card', 8)]
+    # A card held already, a read that failed and a run with no Pokégear gain nothing.
+    assert _goal_events('radio_card', before, after, (0x83, 0x83)) == []
+    assert _goal_events('radio_card', before, after, (0x81, None)) == []
+    assert _goal_events('radio_card', before, after) == []
+    after.valid = False
+    assert _goal_events('radio_card', before, after, (0x81, 0x83)) == []
+
+
+def test_a_span_that_gains_only_a_pokegear_card_is_not_wasted(monkeypatch, tmp_path):
+    from pokesim.replay import rung
+    steps = [('radio_card', _walk()), ('radio_card', _walk()), ('story', _walk()), ('story', _walk())]
+    # The run's first read, then one after each step. A read that fails keeps the cards read before it.
+    cards = [0x81, None, 0x83, 0x83, 0x83]
+    monkeypatch.setattr(rung, '_cards', lambda run: cards[run.frame // 100])
+    assert _audit(monkeypatch, tmp_path / 'card.json', steps)['wasted'] == {}
+    cards = [0x81] * 5
+    assert _audit(monkeypatch, tmp_path / 'flat.json', steps)['wasted'] == {'radio_card': 200}
+
+
+def test_the_gate_reads_the_pokegear_cards_only_where_a_pokegear_exists():
+    from pokesim.replay.rung import _cards
+
+    class Ram:
+        def __getitem__(self, key):
+            bank, span = key
+            assert (bank, span.start, span.stop) == (1, 0xD67C, 0xD67D)
+            return [0x83]
+    gold = SimpleNamespace(generation=2, pb=SimpleNamespace(memory=Ram()),
+                           adapter=SimpleNamespace(data=SimpleNamespace(symbols={'wPokegearFlags': (1, 0xD67C)})))
+    assert _cards(gold) == 0x83
+    # Red, Blue and Yellow have no Pokégear, and a read that fails gives no cards.
+    assert _cards(SimpleNamespace(generation=1)) is None
+    gold.adapter.data.symbols = {}
+    assert _cards(gold) is None
+
+
 RED_ROM = Path(os.environ.get('ROM_PATH', 'roms/pokered.gb'))
 
 
