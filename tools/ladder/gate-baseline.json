@@ -65,7 +65,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 3.95,
+   "waste": 3.62,
    "milestones": 0.0,
    "story": []
   },
@@ -502,7 +502,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 4.88,
+   "waste": 4.75,
    "milestones": 0.0,
    "story": []
   },
@@ -542,7 +542,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 2.32,
+   "waste": 1.76,
    "milestones": 0.0,
    "story": []
   }
