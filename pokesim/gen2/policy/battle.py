@@ -701,6 +701,13 @@ class BattlePart:
         if trainee is not None:
             mon = snapshot.party[trainee]
             return Lead(trainee, (mon.trainer_id, mon.dvs)) if trainee else None
+        # On the training walk a worn lead gives way to a member that can still fight there, and the trainee
+        # leads while it can (training_lead).
+        from ..training import training_lead
+        slot = training_lead(self, snapshot)
+        if slot is not None:
+            mon = snapshot.party[slot]
+            return Lead(slot, (mon.trainer_id, mon.dvs)) if slot else None
         strongest = max((i for i, mon in enumerate(snapshot.party) if not mon.egg),
                         key=lambda i: snapshot.party[i].level, default=0)
         if not strongest or snapshot.party[strongest].level <= snapshot.party[0].level + 5:
@@ -713,12 +720,16 @@ class BattlePart:
 
         A switch comes before the opponent's move, and every Pokémon sent out shares the experience, so the
         trainee still levels without an Exp. Share. It only happens while the trainee is out, so it never repeats.
+        A trainee that leads the training walk with its Exp. Share (training_lead) switches out the same way.
         """
-        from ..training import trainee_slot
-        if active != trainee_slot(self, snapshot) or active >= len(snapshot.party):
+        from ..training import LEAD_MARGIN, trainee_index, trainee_slot, walk_fighters
+        slot = trainee_slot(self, snapshot)
+        if slot is None and walk_fighters(self, snapshot):
+            slot = trainee_index(self, snapshot)
+        if active != slot or active >= len(snapshot.party):
             return None
         mon = snapshot.party[active]
-        if mon.level >= snapshot.enemy_level + 5 and mon.hp * 2 > mon.max_hp:
+        if mon.level >= snapshot.enemy_level + LEAD_MARGIN and mon.hp * 2 > mon.max_hp:
             return None
         healthy = [i for i, row in enumerate(snapshot.party) if i != active and not row.egg and row.hp * 4 > row.max_hp]
         best = max(healthy, key=lambda i: snapshot.party[i].level, default=None)

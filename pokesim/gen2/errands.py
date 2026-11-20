@@ -113,6 +113,7 @@ class Heal(Errand):
         from ..planning.ledger import PP
         from .ledger import battle_room, cured, walk_spent
         from .policy import Goal
+        from .training import training_spent
         if policy.heal_blocked(snapshot):
             if any(not mon.egg for mon in getattr(snapshot, 'party', ())):
                 # No walk out from here, so a boss ahead is met as the party stands.
@@ -121,7 +122,10 @@ class Heal(Errand):
         data = policy.data
         healthy = [mon for mon in snapshot.party if not mon.egg]
         # A status a cure in the bag clears is treated where the party stands (field_cure), not walked to a nurse.
-        spent = bool(healthy) and walk_spent(data, cured(data, snapshot))
+        # On the training walk a worn member waits while another can still fight there (training_spent).
+        party = cured(data, snapshot)
+        training = training_spent(policy, party)
+        spent = bool(healthy) and (walk_spent(data, party) if training is None else training)
         surveying = getattr(policy, 'ladder_survey', False)
         if not healthy or not spent and policy.boss_ready(snapshot, False) != boss.HEAL:
             if not surveying:
