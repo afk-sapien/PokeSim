@@ -116,11 +116,20 @@ def real_data(request):
     return GameData.load(directory, request.param)
 
 
-def test_the_bicycle_is_borrowed_after_cut_at_any_depth(real_data):
+def owner_of(data):
+    """A policy whose story steps are bare goals at the map gen2.json gives each step."""
     from pokesim.gen2.policy import Policy
+    from pokesim.story import row as fact
+    owner = Policy(data, starter='cyndaquil')
+    owner.story_step = lambda snapshot, key, title, row=None: SimpleNamespace(
+        key=key, map_name=(row or fact(2, data.game, key))['map'])
+    return owner
+
+
+def test_the_bicycle_is_borrowed_after_cut_at_any_depth(real_data):
     from pokesim.story import row
-    owner = Policy(real_data, starter='cyndaquil')
-    owner.story_step = lambda snapshot, key, title, row=None: SimpleNamespace(key=key)
+    owner = owner_of(real_data)
+    surfer = SimpleNamespace(moves=[57], species=9, level=50, hp=1, max_hp=1, status=0, egg=False)
 
     # Zephyr and Hive, the two badges before Cut.
     def key(*unset, badges=3, place='GOLDENROD_CITY', party=()):
@@ -130,7 +139,7 @@ def test_the_bicycle_is_borrowed_after_cut_at_any_depth(real_data):
 
     assert key('EVENT_GOT_HM01_CUT', 'EVENT_GOT_BICYCLE') == 'cut'
     assert key('EVENT_GOT_BICYCLE') == 'bicycle'
-    assert key('EVENT_GOT_BICYCLE', badges=255) == 'bicycle'
+    assert key('EVENT_GOT_BICYCLE', badges=255, party=[surfer]) == 'bicycle'
     # Kanto, the League rooms and Silver Cave have no walk to Goldenrod inside Johto. The gate stood down 4 times
     # in a row in Kanto, and took turns with Red at Silver Cave a thousand times. The story moves on to the step
     # after the Bicycle, here Whitney with three badges.
@@ -138,9 +147,12 @@ def test_the_bicycle_is_borrowed_after_cut_at_any_depth(real_data):
         assert key('EVENT_GOT_BICYCLE', 'EVENT_MADE_WHITNEY_CRY', place=place) == 'plain'
         assert 'bicycle' not in owner.completed
     # With Surf a walk from Silver Cave reaches Goldenrod, but through Route 28 in Kanto, so the step stays off.
-    surfer = SimpleNamespace(moves=[57], species=9, level=50, hp=1, max_hp=1, status=0, egg=False)
     assert key('EVENT_GOT_BICYCLE', badges=255, place='SILVER_CAVE_OUTSIDE', party=[surfer]) != 'bicycle'
-    assert key('EVENT_GOT_BICYCLE', badges=255, place='ROUTE_27', party=[surfer]) == 'bicycle'
+    # From Route 27 the walk to Goldenrod stays in Johto, and the loan comes on the story's walk to the Radio Tower.
+    # The story's walk to the Ice Path skips Goldenrod, so the loan waits for it.
+    tower = ('EVENT_CLEARED_RADIO_TOWER', 'EVENT_BEAT_ROCKET_EXECUTIVEM_3')
+    assert key('EVENT_GOT_BICYCLE', *tower, badges=255, place='ROUTE_27', party=[surfer]) == 'bicycle'
+    assert key('EVENT_GOT_BICYCLE', badges=255, place='ROUTE_27', party=[surfer]) == 'ice_descent'
     assert key() != 'bicycle' and owner.completed['bicycle'] == 100
     found = row(2, real_data.game, 'bicycle')
     assert (found['map'], found['object']) == ('GOLDENROD_BIKE_SHOP', 'GoldenrodBikeShopClerkScript')
@@ -150,11 +162,9 @@ def test_a_save_past_the_bicycle_earns_none_of_its_milestones_when_the_step_fire
     """The gate counts the milestones a rung earned after its first goal. A checkpoint state notes its newest
     milestone on the story's first pick, and the Bicycle step returned before the notes past it, so a Badges 6
     rung earned the Mineral Badge its save already held, and the loan as well."""
-    from pokesim.gen2.policy import Policy
     from pokesim.gen2.policy.story import MILESTONES
     from pokesim.replay.rung import story_milestones
-    owner = Policy(real_data, starter='cyndaquil')
-    owner.story_step = lambda snapshot, key, title, row=None: SimpleNamespace(key=key)
+    owner = owner_of(real_data)
     # Every flag but the Bicycle's, all sixteen badges and a Hall of Fame entry. Lapras learns Surf and
     # Whirlpool, so the story looks for no partner on its way to the Ice Path.
     lapras = SimpleNamespace(moves=[57], species=131, level=50, hp=1, max_hp=1, status=0, egg=False)
@@ -176,9 +186,7 @@ def test_a_collection_errand_under_way_finishes_before_the_bicycle(real_data, mo
     """On Gold post_game a Max Elixir errand walked into Goldenrod, the loan cut it there for 2,132 frames, and
     the errand walked back to the store after it. The loan now waits for the next change of goal."""
     import pokesim.gen2.policy.story as story
-    from pokesim.gen2.policy import Policy
-    owner = Policy(real_data, starter='cyndaquil')
-    owner.story_step = lambda snapshot, key, title, row=None: SimpleNamespace(key=key)
+    owner = owner_of(real_data)
     # The chain notes the Ice Path on arrival in Blackthorn City, which this save did long ago.
     owner.completed['ice_path'] = 1
     # Gyarados learns Surf, Whirlpool and Waterfall, so the story looks for no partner on its way to Kanto.
@@ -190,6 +198,7 @@ def test_a_collection_errand_under_way_finishes_before_the_bicycle(real_data, mo
     def collect(policy, snapshot, mem, Goal):
         # The collection's pick, or the activity that holds it, as collection.journey leaves them.
         asked.append(now['goal'].key)
+        policy.collection_decision = policy.decisions
         policy.collection_goal, policy.ladder_hold = (None, now['goal']) if now['hold'] else (now['goal'], None)
         return now['goal']
 
@@ -200,6 +209,7 @@ def test_a_collection_errand_under_way_finishes_before_the_bicycle(real_data, mo
 
     def pick(previous, last, goal, hold=False):
         owner.goal, owner.collection_goal, owner.ladder_hold = previous, last, None
+        owner.decisions += 1
         now.update(goal=goal, hold=hold)
         return owner.story(state, None).key
 
@@ -209,9 +219,35 @@ def test_a_collection_errand_under_way_finishes_before_the_bicycle(real_data, mo
     # An activity that holds the collection runs on as well.
     assert pick(shop, shop, box, hold=True) == 'collection_box'
     assert asked == ['collection_champion_shop', 'collection_train', 'collection_box']
-    # A goal from outside the collection, and no goal at all, take the loan without asking the collection.
+    # A goal from outside the collection, and no goal at all, take the loan.
     assert pick(heal, shop, shop) == 'bicycle' and pick(None, None, shop) == 'bicycle'
-    assert len(asked) == 3 and 'bicycle' not in owner.completed
+    assert 'bicycle' not in owner.completed
+
+
+def test_the_bicycle_waits_until_the_story_walks_through_goldenrod(real_data):
+    """From a Champion save in New Bark Town the loan went before Elm's ticket. The run walked to Goldenrod for it,
+    back to New Bark for the ticket, then to Goldenrod again for the Radio Card. Crystal reached Kanto after about
+    88,000 frames instead of about 56,000. The loan now waits until the story's own walk reaches Goldenrod City."""
+    owner = owner_of(real_data)
+    owner.completed['ice_path'] = 1
+    gyarados = SimpleNamespace(moves=[57], species=130, level=50, hp=1, max_hp=1, status=0, egg=False)
+
+    # Every Johto badge and a Hall of Fame entry, before the S.S. Aqua.
+    def pick(place, *unset, radio_card=False):
+        unset = unset + ('EVENT_FAST_SHIP_FIRST_TIME',)
+        owner.decisions += 1
+        state = SimpleNamespace(frame=100, badges=0xFF, party=[gyarados], map=real_data.map_ids[place], x=0, y=0,
+                                farfetchd_position=None, hall_of_fame_count=1, event=lambda flag: flag not in unset)
+        mem = SimpleNamespace(byte=lambda name: 2 if radio_card else 0)
+        return owner.story(state, mem).key
+
+    assert pick('NEW_BARK_TOWN', 'EVENT_GOT_BICYCLE', 'EVENT_GOT_SS_TICKET_FROM_ELM') == 'ticket'
+    # The Radio Card is in Goldenrod's Radio Tower, so the loan comes on that walk.
+    assert pick('NEW_BARK_TOWN', 'EVENT_GOT_BICYCLE') == 'bicycle'
+    assert pick('GOLDENROD_CITY', 'EVENT_GOT_BICYCLE') == 'bicycle'
+    # The walk to Olivine's port stays out of Goldenrod, so the ship goes first.
+    assert pick('ECRUTEAK_CITY', 'EVENT_GOT_BICYCLE', radio_card=True) == 'board_ship'
+    assert 'bicycle' not in owner.completed
 
 
 def test_a_register_task_rebuilt_after_the_register_ends_without_the_pack(monkeypatch):
