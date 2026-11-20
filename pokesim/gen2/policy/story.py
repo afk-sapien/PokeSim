@@ -140,6 +140,11 @@ class StoryPart:
         if not snapshot.event('EVENT_GOT_HM01_CUT'):
             return step('cut', 'Receive Cut from the charcoal maker')
         self.completed.setdefault('cut', snapshot.frame)
+        # Goldenrod's bike shop lends the Bicycle to anyone who agrees to ride it. A run that never
+        # borrowed it, at any depth, goes back for it here.
+        if not snapshot.event('EVENT_GOT_BICYCLE'):
+            return step('bicycle', 'Borrow a Bicycle from the Goldenrod bike shop')
+        self.completed.setdefault('bicycle', snapshot.frame)
         if not snapshot.badges & 4:
             if snapshot.event('EVENT_MADE_WHITNEY_CRY'):
                 return step('whitney_cry', 'Give Whitney a moment')
@@ -383,8 +388,9 @@ class StoryPart:
             return self.story_step(snapshot, 'good_rod', 'Get a fishing rod', facts.place(2, self.data.game, 'good_rod'))
         return self.fishing(snapshot, shore)
 
-    # Prompts where the adventure should answer YES at once, and prompts it must always decline.
-    YES_PROMPTS = re.compile(r'HEAL')
+    # Prompts where the adventure should answer YES at once, and prompts it must always decline. The bike
+    # shop clerk lends the Bicycle only to a player who agrees to ride it around town.
+    YES_PROMPTS = re.compile(r'HEAL|BICYCLE AND ADVER')
     NO_PROMPTS = re.compile(r'MONEY|SAVE|CALL|PHONE|REGISTER|NUMBER')
     NO_LIMIT = 3
 

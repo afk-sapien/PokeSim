@@ -9,8 +9,8 @@ buttons through ``port.send`` on Gold, Silver and Crystal.
 """
 from ..controls import machine_options, switch_pokemon, use_item
 from .actions import (BuyItem, ChangeBox, ChooseMove, DayCare, DeleteMove, DepositItem, DepositPokemon, FieldMove,
-                      GiveItem, LearnMove, Radio, ReleasePokemon, ReorderParty, TakeItem, RunAway, SellItem,
-                      ShowPartner, SwitchPokemon, TossItem, UseItem, WithdrawItem, WithdrawPokemon)
+                      GiveItem, LearnMove, Radio, RegisterItem, ReleasePokemon, ReorderParty, TakeItem, RunAway,
+                      SellItem, ShowPartner, SwitchPokemon, TossItem, UseItem, WithdrawItem, WithdrawPokemon)
 from .catalog import describe, result_schema
 from .dialogue import AdvanceDialogue
 from .items import ItemKind, item_kind, item_names, move_names, tm_number
@@ -96,6 +96,11 @@ def take_item(port, slot, **options):
     return _run(port, TakeItem, slot, **options)
 
 
+def register_item(port, item, **options):
+    """Gen 2: register key item ``item`` to SELECT, from the pack's SEL."""
+    return _run(port, RegisterItem, item, **options)
+
+
 def learn_move(port, forget, **options):
     """Answer the learn-a-new-move prompt on screen: forget move slot ``forget`` (0 to 3), or ``'keep'``."""
     return _run(port, LearnMove, forget, **options)
@@ -138,11 +143,11 @@ def walk(port, direction, tiles=1, **options):
 
 __all__ = ['Abort', 'AdvanceDialogue', 'BuyItem', 'ChangeBox', 'Choose', 'ChooseMove', 'DayCare', 'DeleteMove',
            'DepositItem', 'DepositPokemon', 'Done', 'FieldMove', 'GiveItem', 'ItemKind', 'LearnMove', 'Radio',
-           'ReleasePokemon', 'ReorderParty', 'RunAway', 'SCREENS', 'STOP_REASONS', 'SellItem', 'Shortcut',
-           'ShowPartner', 'StopReason', 'SwitchPokemon', 'TakeItem', 'TossItem', 'UseItem', 'Walk', 'WithdrawItem',
-           'WithdrawPokemon', 'advance_dialogue', 'buy_item', 'change_box', 'choose_move', 'continue_ready',
-           'current_screen', 'day_care', 'delete_move', 'deposit_item', 'deposit_pokemon', 'describe', 'drive',
-           'give_item', 'item_kind', 'item_names', 'learn_move', 'list_box', 'list_items', 'list_moves', 'list_party',
-           'move_names', 'release_pokemon', 'reorder_party', 'result_schema', 'run', 'run_away', 'sell_item',
-           'show_partner', 'switch_pokemon', 'take_item', 'tm_number', 'toss_item', 'tune_radio', 'use_field_move',
+           'RegisterItem', 'ReleasePokemon', 'ReorderParty', 'RunAway', 'SCREENS', 'STOP_REASONS', 'SellItem',
+           'Shortcut', 'ShowPartner', 'StopReason', 'SwitchPokemon', 'TakeItem', 'TossItem', 'UseItem', 'Walk',
+           'WithdrawItem', 'WithdrawPokemon', 'advance_dialogue', 'buy_item', 'change_box', 'choose_move',
+           'continue_ready', 'current_screen', 'day_care', 'delete_move', 'deposit_item', 'deposit_pokemon',
+           'describe', 'drive', 'give_item', 'item_kind', 'item_names', 'learn_move', 'list_box', 'list_items',
+           'list_moves', 'list_party', 'move_names', 'register_item', 'release_pokemon', 'reorder_party',
+           'result_schema', 'run', 'run_away', 'sell_item', 'show_partner', 'switch_pokemon', 'take_item', 'tm_number', 'toss_item', 'tune_radio', 'use_field_move',
            'use_item', 'walk', 'withdraw_item', 'withdraw_pokemon']

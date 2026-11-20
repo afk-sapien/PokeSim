@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ...runtime.policy import Action, Hold
+from ..menus import Register, registered
 from ..navigation import DIRS, HeldWalk
 from .reads import Reads
 from .state import STUCK_WAITS, Goal
@@ -13,6 +14,8 @@ class NavigationPart:
     """Walking, waiting and the approach to people and goals."""
 
     STRANDED_LIMIT = 60
+    # Water collision, which Surf crosses and the Bicycle cannot.
+    WATER = (0x21, 0x29)
 
     def unloaded(self, snapshot):
         """Whether the cartridge restarted to its opening while memory still shows the save it read.
@@ -231,7 +234,7 @@ class NavigationPart:
                     and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in (0x12, 0x1A))
         # The screen state is read last, only for a step onto water.
         water = (surf and 0 <= nx < entry['width'] and 0 <= ny < entry['height']
-                 and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in (0x21, 0x29)
+                 and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in self.WATER
                  and reads.ui.movement_state not in (4, 8))
         obstacle = (surf and 0 <= nx < entry['width'] and 0 <= ny < entry['height']
                     and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in ((0x24, 0x2C, 0x33) if path[0] == 'up' else (0x24, 0x2C)))
@@ -242,12 +245,62 @@ class NavigationPart:
             self.interaction = key
             return Action(path[0], 8, 16)
         self.interaction = None
+        state = reads.ui.movement_state
+        ride = self.mount(snapshot, memory, path) if state == 0 else None
+        if ride:
+            return ride
         self.nav.issued(snapshot, path[0])
         tiles = self.held_tiles(snapshot, memory, path, reads)
         if tiles:
             stop = HeldWalk(self.nav, memory, self.data.game, snapshot.frame, path[0], tiles)
             return Hold(path[0], 16 * tiles + 32, 16, stop=stop)
+        # The Bicycle covers a tile in 8 frames, so a 16-frame press would start a second step. A press in a
+        # new direction turns the rider first, and an 8-frame press ends in that turn.
+        if state == 1 and reads.ui.facing == path[0]:
+            return Action(path[0], 8, 8)
         return Action(path[0], 16, 16)
+
+    # The map environments the game lets the Bicycle out in (BikeFunction).
+    BIKE_ENVIRONMENTS = frozenset(('ROUTE', 'TOWN', 'CAVE', 'GATE'))
+    # Getting on costs about what the Bicycle saves over this many steps, so a shorter walk goes on foot.
+    MOUNT_STEPS = 20
+
+    def mount(self, snapshot, memory, path):
+        """The press that gets on an owned Bicycle when the walk ahead on this map keeps to land for
+        MOUNT_STEPS, or None to walk.
+
+        The game also wants the player on plain floor, not grass. Puzzle maps are walked, as their pushes
+        and slides were planned one walking step at a time. The Bicycle is registered to SELECT once, so
+        each later mount is one press with no message. A press that leaves the player on foot is not
+        repeated on the same tile.
+        """
+        from ..errands import puzzle_maps
+        bike = self.data.items.get('BICYCLE')
+        entry = self.data.maps[snapshot.map]
+        if (len(path) < self.MOUNT_STEPS or bike not in dict(snapshot.items)
+                or entry.get('environment') not in self.BIKE_ENVIRONMENTS or snapshot.map in puzzle_maps(self.data)):
+            return None
+        grid = self.nav.collision(snapshot, memory)
+        width, height = entry['width'], entry['height']
+        x, y = snapshot.x, snapshot.y
+        if grid[y * width + x] & 0x0F:
+            return None
+        for button in path[:self.MOUNT_STEPS]:
+            dx, dy = DIRS[button]
+            x, y = x + dx, y + dy
+            if not (0 <= x < width and 0 <= y < height) or grid[y * width + x] in self.WATER:
+                return None
+        if registered(memory, self.data) == bike:
+            spot = (snapshot.map, snapshot.x, snapshot.y)
+            if getattr(self, 'select_spot', None) == spot:
+                return None
+            self.select_spot = spot
+            return Action('select', 8, 24)
+        task = Register(bike)
+        if not self.allowed(task, snapshot):
+            return None
+        self.menu = task
+        return Action(None, 0, 24)
 
     # A straight run of at least HELD_MIN tiles is walked with one held press, at most HELD_TILES long.
     HELD_MIN, HELD_TILES = 3, 8
@@ -257,7 +310,8 @@ class NavigationPart:
     def held_tiles(self, snapshot, memory, path, reads):
         """How many of the path's first tiles one held press walks, or 0 where each tile is its own press.
 
-        Only an on-foot walk outdoors or in a cave holds, and never on a puzzle or ice map. Each tile held
+        Only a walk on foot or on the Bicycle outdoors or in a cave holds, and never on a puzzle or ice map.
+        A held press ends on coordinates, so the Bicycle's 8-frame tiles stop in the same place. Each tile held
         onto is floor or grass with no warp, person or known wall, and so is the tile past it in bounds
         with no warp, person or ledge, so a press that comes up a tile late still lands somewhere plain.
         """
@@ -267,7 +321,7 @@ class NavigationPart:
         while run < min(len(path), self.HELD_TILES) and path[run] == path[0]:
             run += 1
         if (run < self.HELD_MIN or entry.get('environment') in ('INDOOR', 'GATE')
-                or snapshot.map in puzzle_maps(self.data) or reads.ui.movement_state != 0):
+                or snapshot.map in puzzle_maps(self.data) or reads.ui.movement_state not in (0, 1)):
             return 0
         dx, dy = DIRS[path[0]]
         width, height = entry['width'], entry['height']

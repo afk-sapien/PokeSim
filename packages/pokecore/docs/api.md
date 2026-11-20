@@ -442,7 +442,7 @@ also cover English Gold, Silver and Crystal.
 `SwitchPokemon`, `RunAway`, `ReorderParty`, `FieldMove`, `TossItem`, `BuyItem`,
 `SellItem`, `DepositPokemon`, `WithdrawPokemon`, `ReleasePokemon`, `DepositItem`,
 `WithdrawItem`, `ChangeBox`, `LearnMove`, `AdvanceDialogue`, `Walk`, and for Gen 2
-`GiveItem`, `TakeItem` and `DeleteMove`) and a function of the same name in snake case
+`GiveItem`, `TakeItem`, `RegisterItem` and `DeleteMove`) and a function of the same name in snake case
 that runs it on a port.
 
 - `machine.step(memory, ui=None)` returns a button name, None to wait, or `Done`.
@@ -508,6 +508,7 @@ Gen 2 (Gold, Silver, Crystal):
   budget is 600 steps, and 900 for marts.
 - `use_item` turns to the item's pocket. Hold items go through `give_item(port,
   item, slot, swap=False)` and come back with `take_item(port, slot)`.
+  `register_item(port, item)` puts a key item on SELECT.
 - `use_field_move` adds WHIRLPOOL, WATERFALL, ROCKSMASH and HEADBUTT.
 - Gaps: mail, changing the Bill's PC box, and PC boxes other than the current one.
 

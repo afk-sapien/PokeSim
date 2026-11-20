@@ -173,8 +173,9 @@ def test_indoor_maps_are_walked_one_tile_at_a_time(environment):
     assert held(part(environment=environment), ['up'] * 6) == 0
 
 
-def test_surfing_or_cycling_is_walked_one_tile_at_a_time():
-    assert held(part(), ['up'] * 6, reads=SimpleNamespace(ui=SimpleNamespace(movement_state=1))) == 0
+@pytest.mark.parametrize('state, tiles', [(1, 6), (4, 0), (8, 0)], ids=['cycling', 'surfing', 'surfing_pikachu'])
+def test_a_ride_is_held_and_a_surf_is_walked_one_tile_at_a_time(state, tiles):
+    assert held(part(), ['up'] * 6, reads=SimpleNamespace(ui=SimpleNamespace(movement_state=state))) == tiles
 
 
 def test_an_ice_map_is_walked_one_tile_at_a_time():

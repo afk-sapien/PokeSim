@@ -121,7 +121,8 @@ def test_travel_collision_raises_the_story_walls_until_they_clear():
     assert maps.travel_collision(data, at(1, {'EVENT_ROUTE_36_SUDOWOODO'}), 1, data.maps[1]['collision']) == [0] * 480
     assert sum(maps.travel_collision(data, at(2), 2, data.maps[2]['collision'])) == 4 * 7
     assert sum(maps.travel_collision(data, at(3), 3, data.maps[3]['collision'])) == 2 * 7
-    assert sum(maps.travel_collision(data, at(3, items=[(7, 1)]), 3, data.maps[3]['collision'])) == 0
+    assert sum(maps.travel_collision(data, at(3, items=[(7, 1)]), 3, data.maps[3]['collision'])) == 2 * 7, \
+        'Cycling Road stays closed with a Bicycle'
     gate = maps.travel_collision(data, at(4, {'EVENT_OPENED_MT_SILVER'}), 4, data.maps[4]['collision'])
     assert gate[5 * 40 + 12] == 7 and gate[5 * 40 + 7] == 0
     assert sum(maps.travel_collision(data, at(5), 5, data.maps[5]['collision'])) == 6 * 4 * 7

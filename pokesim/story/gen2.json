@@ -29,6 +29,8 @@
      "done_when": {"flags": ["EVENT_HERDED_FARFETCHD"]}},
     {"key": "cut", "map": "ILEX_FOREST", "x": 5, "y": 29, "face": "up",
      "done_when": {"flags": ["EVENT_GOT_HM01_CUT"], "moves": [15]}},
+    {"key": "bicycle", "map": "GOLDENROD_BIKE_SHOP", "object": "GoldenrodBikeShopClerkScript",
+     "done_when": {"flags": ["EVENT_GOT_BICYCLE"]}},
     {"key": "plain", "map": "GOLDENROD_GYM", "x": 8, "y": 4, "face": "up",
      "done_when": {"flags": ["EVENT_MADE_WHITNEY_CRY"]}},
     {"key": "whitney_cry", "map": "GOLDENROD_GYM", "x": 8, "y": 5, "done_when": {"badges": 4}},
