@@ -4,7 +4,7 @@ import sqlite3
 
 import pytest
 
-from pokesim.replay.progress import (Axis, Episode, Flag, alarms, connect, ground_truth, load, main, rebuild,
+from pokesim.replay.progress import (Axis, Episode, Flag, Row, alarms, connect, ground_truth, load, main, rebuild,
                                      reclassified, replay, score, segments, stored_rows)
 from pokesim.progress_events import HOUR
 
@@ -107,6 +107,20 @@ def test_duplicate_catches_stall_old_misses_new_catches(tmp_path):
     assert churn
     assert score(episodes, old, end - 86400, end)['missed'] == 1
     assert score(episodes, new, end - 86400, end)['caught'] == 1
+
+
+def test_the_old_watchdog_counts_an_improve_row_as_main_does(tmp_path):
+    # Playtime entries every 10 minutes keep the worker running, and none of them is progress.
+    events = [(T0, 'map', 'Found Route 2', '')] + [(T0 + i * 600, 'playtime', 'Played on', '') for i in range(1, 25)]
+    adv = load(store(tmp_path / 'adv', events=events))
+    axis = Axis([(e.ts, (e.ts - T0 + 3600) * 60) for e in adv.events], 'playtime')
+    # A kept rarer copy every 50 minutes and no other progress for four hours.
+    improves = [Row(T0 + minute * 60, axis(T0 + minute * 60), 'improve', 1) for minute in range(50, 240, 50)]
+
+    def quiet(rows):
+        old, _, _ = replay(adv, axis, rows, T0, T0 + 4 * 3600)
+        return [f for f in old if f.check == 'watchdog']
+    assert quiet([]) and not quiet(improves)
 
 
 def test_score_counts_false_alarms_and_time_to_detect():

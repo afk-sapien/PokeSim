@@ -497,6 +497,8 @@ class Status:
     def __init__(self):
         self.achievement = self.owned = self.badges = self.league = None
         self.areas, self.place, self.net = 0, None, 0
+        # When the newest improve row was written, as the watchdog's progress sweep reads it.
+        self.improved = None
         # Receives and releases since the newest net row, for the new loop check.
         self.cycle = deque(maxlen=LOOP_EVENTS)
         self.catches = 0
@@ -541,7 +543,7 @@ class OldChecks:
         quiet = Watchdog._quiet(self.watch, 'replay', {
             'watch': {'owned': s.owned, 'badges': s.badges, 'hall_of_fame': s.league, 'map': s.place},
             'progress': {'last_achievement': {'id': s.achievement}}, 'league_rewards': {'wins': s.league},
-            'areas_discovered': s.areas, 'play_clock': {'seconds': int(frame // 60)}}, ts)
+            'areas_discovered': s.areas, 'play_clock': {'seconds': int(frame // 60)}}, ts, s.improved)
         if quiet and not self.quiet:
             flags.append(Flag(ts, frame, 'watchdog', self.stall.frame))
         self.quiet = quiet
@@ -643,6 +645,8 @@ def replay(adventure, axis, rows, start, end, churn_n=10):
                     old.owned(ts, frame)
                 best_owned = owned if best_owned is None else max(best_owned, owned)
             else:
+                if item.kind == 'improve':
+                    status.improved = item.ts
                 if item.net:
                     status.net += 1
                     status.cycle.clear()

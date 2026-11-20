@@ -2,6 +2,7 @@
 
 The rows come from the original games' progress tables and journals.
 """
+from contextlib import closing
 import sqlite3
 from types import SimpleNamespace
 
@@ -67,7 +68,7 @@ def sweep(tmp_path):
 
     def kinds():
         return sorted(row['kind'] for row in watchdog.public()['problems'])
-    return SimpleNamespace(adventure=adventure, start=start, at=at, sent=sent, kinds=kinds)
+    return SimpleNamespace(adventure=adventure, start=start, at=at, sent=sent, kinds=kinds, watchdog=watchdog)
 
 
 def test_the_story_limit_is_twice_the_slowest_stage_with_a_three_hour_floor():
@@ -141,6 +142,35 @@ def test_story_levels_do_not_count_and_a_new_area_does(sweep):
     assert len(sweep.at(last + 3 * HOUR + 60)) == 1
     sweep.adventure.event(last + 3 * HOUR + 90, 'map', 'Found Route 23')
     assert sweep.at(last + 3 * HOUR + 120) == []
+
+
+def test_a_kept_improvement_restarts_the_hour_without_progress(sweep):
+    """A rarer or shiny copy of a species already owned adds no Pokédex entry, so the worker summary
+    stays the same. Its improve row is progress all the same."""
+    sweep.watchdog.limits = Limits(not_live=10 ** 9, sweep=0)
+    sweep.adventure.row(SILVER)
+    start = SILVER[0]
+    sweep.start(start, 'silver', status(play_clock={'seconds': 0}))
+    sweep.at(start)
+    for minute in (50, 100, 150):
+        sweep.adventure.db.execute("INSERT INTO progress_events(ts, kind, net) VALUES (?, 'improve', 1)",
+                                   (start + minute * 60 - 30,))
+        sweep.at(start + minute * 60, status(play_clock={'seconds': minute * 60}))
+        assert 'no_progress' not in sweep.kinds()
+    sweep.at(start + 211 * 60, status(play_clock={'seconds': 211 * 60}))
+    assert 'no_progress' in sweep.kinds()
+
+
+def test_a_database_from_before_progress_events_reads_no_improvement(tmp_path):
+    path = tmp_path / 'pokesim.sqlite'
+    with closing(sqlite3.connect(path)) as db:
+        db.execute('CREATE TABLE progress (ts REAL, badges INTEGER, owned INTEGER, seen INTEGER, league INTEGER, '
+                   'level100 INTEGER, perfect INTEGER)')
+        db.execute('CREATE TABLE events (id INTEGER PRIMARY KEY, ts REAL, type TEXT, map TEXT)')
+        db.execute('INSERT INTO progress VALUES (?,?,?,?,?,?,?)', SILVER)
+        db.commit()
+    reading = progress_sweep.read(path, 2)
+    assert reading.postgame and reading.improved == 0
 
 
 def test_a_library_outside_the_app_reads_the_same_way(tmp_path):

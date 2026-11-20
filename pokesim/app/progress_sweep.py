@@ -56,6 +56,7 @@ class Reading:
     badges: int
     stalls: tuple = ()     # (time, place) of the newest stall entries, newest first
     caught: float = 0      # when the game last caught a Pokémon
+    improved: float = 0    # when the game last wrote an improve row (progress_events.NET)
 
 
 def repeated(stalls, now):
@@ -105,8 +106,11 @@ def read(path, gen):
         event = db.execute('SELECT ts FROM events WHERE type=? ORDER BY id DESC LIMIT 1', (kind,)).fetchone()
         stalls = db.execute("SELECT ts, map FROM events WHERE type='stall' ORDER BY id DESC LIMIT 10").fetchall()
         caught = db.execute("SELECT MAX(ts) FROM events WHERE type='catch'").fetchone()[0]
+        # A database from before progress events keeps no improve rows.
+        improved = (db.execute("SELECT MAX(ts) FROM progress_events WHERE kind='improve'").fetchone()[0]
+                    if db.execute("SELECT 1 FROM sqlite_master WHERE name='progress_events'").fetchone() else 0)
     return Reading(max(last, event[0] if event else 0), seconds, postgame, badges,
-                   tuple((ts, place or 'the same place') for ts, place in stalls), caught or 0)
+                   tuple((ts, place or 'the same place') for ts, place in stalls), caught or 0, improved or 0)
 
 
 def library(root, now=None):
