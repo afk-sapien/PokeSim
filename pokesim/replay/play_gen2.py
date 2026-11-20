@@ -84,7 +84,7 @@ def main(argv=None, prog=None):
                 if (policy.collection.get('funding') is not None
                         or snapshot.money < 5000 and sum(count for _, count in snapshot.pockets['balls']) < 4):
                     return collection.journey(policy, snapshot, Memory(policy.memory, data), Goal)
-                return quests.legends(policy, snapshot, Goal)
+                return quests.legends(policy, snapshot, Goal, returned=policy.returned)
 
             task = legends
         if args.focus == 'restore':

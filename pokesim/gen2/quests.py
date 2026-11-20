@@ -113,13 +113,14 @@ def gifts(policy, snapshot, Goal):
     return None
 
 
-def legends(policy, snapshot, Goal):
+def legends(policy, snapshot, Goal, returned=frozenset()):
+    """The next step toward a legendary missing from the Pokédex, or toward one of ``returned``, the
+    walking returns this trip goes for again (collection.return_price says what such a trip is worth)."""
     from .celebi import journey
-    celebi = journey(policy, snapshot, Goal)
+    celebi = journey(policy, snapshot, Goal, returned)
     if celebi:
         return celebi
-    # A walking return makes an owned legendary worth another capture.
-    owned = snapshot.owned - getattr(policy, 'returned', set())
+    owned = snapshot.owned - returned
     if {243, 244, 245, 249, 250} <= owned:
         return None
     data = policy.data
@@ -163,8 +164,10 @@ def legends(policy, snapshot, Goal):
                 if not snapshot.event(f'EVENT_BEAT_SAGE_{trainer}'):
                     return policy.person(snapshot, 'sage_' + trainer.lower(), 'Pass the Wise Trio’s test',
                                          'WISE_TRIOS_ROOM', 'TrainerSage' + trainer.title())
-        return static_lead(policy, snapshot, 245, Goal) or Goal('legend_suicune', 'Meet Suicune at the Tin Tower',
-                                                                 'TIN_TOWER_1F', 9, 12, kind=HUNT)
+        # A walking return clears the fought flag of an owned Suicune, which only its own trip goes back for.
+        if 245 not in owned:
+            return static_lead(policy, snapshot, 245, Goal) or Goal('legend_suicune', 'Meet Suicune at the Tin Tower',
+                                                                     'TIN_TOWER_1F', 9, 12, kind=HUNT)
     if 249 not in owned and not snapshot.event('EVENT_FOUGHT_LUGIA') and ball_ready(policy, snapshot):
         return (static_lead(policy, snapshot, 249, Goal)
                 or hunt(policy.person(snapshot, 'legend_lugia', 'Seek Lugia in the Whirl Islands', 'WHIRL_ISLAND_LUGIA_CHAMBER', 'Lugia')))
@@ -176,7 +179,7 @@ def legends(policy, snapshot, Goal):
             and ball_ready(policy, snapshot)):
         return (static_lead(policy, snapshot, 250, Goal)
                 or hunt(policy.person(snapshot, 'legend_ho_oh', 'Seek Ho-Oh above the Tin Tower', 'TIN_TOWER_ROOF', 'TinTowerHoOh')))
-    return roamers(policy, snapshot, Goal)
+    return roamers(policy, snapshot, Goal, returned)
 
 
 def hunt(goal):
@@ -322,8 +325,11 @@ def ultra_shortfall(policy, snapshot):
 
 
 def static_wanted(policy, snapshot):
-    """Lugia, Ho-Oh or Crystal's Suicune is still to catch and waiting in its room."""
-    owned = snapshot.owned - getattr(policy, 'returned', set())
+    """Lugia, Ho-Oh or Crystal's Suicune is missing from the Pokédex and waiting in its room.
+
+    A walking return of an owned one does not count. Its trip is worth only a better roll, so it stocks
+    balls while it is the work (ledger.supplies) and never starts a League run for Ultra Ball money."""
+    owned = snapshot.owned
     statics = [(249, 'LUGIA'), (250, 'HO_OH')] + ([(245, 'SUICUNE')] if policy.data.game == 'crystal' else [])
     return any(dex not in owned and not snapshot.event('EVENT_FOUGHT_' + flag) for dex, flag in statics)
 
@@ -458,8 +464,9 @@ def static_lead(policy, snapshot, species, Goal):
     return None
 
 
-def roamers(policy, snapshot, Goal):
-    """Track the roaming beasts with the cartridge's own movement rule.
+def roamers(policy, snapshot, Goal, returned=frozenset()):
+    """Track the roaming beasts missing from the Pokédex, and those of ``returned``, with the cartridge's
+    own movement rule.
 
     Each time the player crosses a map connection, every roamer steps to a random neighbour of its
     route that is not the map the player left before the current one (wRoamMons_LastMap). Walking
@@ -469,7 +476,7 @@ def roamers(policy, snapshot, Goal):
     from .collection import encounter_points
     from pokecore.gen2.ram import Memory
     state, data = policy.collection, policy.data
-    owned = snapshot.owned - getattr(policy, 'returned', set())
+    owned = snapshot.owned - returned
     if policy.decisions < state.get('roam_after', 0):
         return None
     started = state.setdefault('roam_started', policy.decisions)

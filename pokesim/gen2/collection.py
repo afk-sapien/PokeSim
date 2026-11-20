@@ -1087,12 +1087,6 @@ def journey(policy, snapshot, mem, Goal):
     def tutor(flag, map_name, script, label):
         return lambda: None if snapshot.event(flag) else policy.person(snapshot, flag.lower(), label, map_name, script)
 
-    def returned():
-        if not getattr(policy, 'returned', set()) & {243, 244, 245, 249, 250, 251}:
-            return None
-        from .quests import legends
-        return legends(policy, snapshot, Goal)
-
     from .item_sources import phones, pickups
     from .quests import gifts, legends, stones, trade_items
     from .ruins import journey as ruins
@@ -1112,8 +1106,6 @@ def journey(policy, snapshot, mem, Goal):
     offer('rock_smash_tutor', UPKEEP, new, ERRAND_FRAMES, tutor('EVENT_GOT_TM08_ROCK_SMASH', 'ROUTE_36',
           'Route36RockSmashGuyScript', 'Learn about Rock Smash encounters'))
     offer('funding', UPKEEP, new, LEAGUE_FRAMES, lambda: start_funding(policy, snapshot, Goal))
-    # A returned legendary waits at its original home ahead of routine collection.
-    offer('returned', UPKEEP, new, LEGEND_FRAMES, returned)
     # A stone a phone trainer holds today and the Monday night Moon Stone expire, so they are upkeep.
     offer('pickups', UPKEEP, new, ERRAND_FRAMES, lambda: pickups(policy, snapshot, mem, Goal))
     offer('ruins', PROGRESS, new, ACTIVITY_FRAMES, lambda: ruins(policy, snapshot, Goal))
@@ -1145,6 +1137,11 @@ def journey(policy, snapshot, mem, Goal):
     # at a time, a due marathon, shiny searches and League runs, as the postgame's own arbiter picks them.
     offer('postgame', Tier.RACE, values.SMALL, 0, lambda: postgame.journey(policy, snapshot, mem, Goal, current_time),
           price=lambda goal: postgame_price(policy, snapshot))
+    # The battle keeps a walking return of an owned legendary only for a better roll (release.keeps_another),
+    # so its trip is priced as one encounter of a better-DV hunt, not as a new entry.
+    for dex in sorted(policy.returned & set(snapshot.owned) & RETURNED_LEGENDS):
+        offer('returned', *return_price(policy, snapshot, dex), LEGEND_FRAMES,
+              lambda dex=dex: legends(policy, snapshot, Goal, returned={dex}))
     if 'tower' in policy.completed:
         # A repeat challenge earns nothing new, so it is filler.
         offer('tower', Tier.FILLER, values.SMALL, TOWER_FRAMES, lambda: tower(policy, snapshot, Goal))
@@ -1351,6 +1348,19 @@ def hunt_blocked(policy, snapshot):
     if target and not spare_throw(policy.data, snapshot, target['species']):
         return NO_SPARE_BALL
     return None
+
+
+RETURNED_LEGENDS = frozenset({243, 244, 245, 249, 250, 251})
+
+
+def return_price(policy, snapshot, dex):
+    """The tier and value of a trip to the walking return of owned legendary ``dex``: a new entry when a
+    plan demands another copy, otherwise one better-DV catch against the best copy held."""
+    from .postgame import best_tail, catch_value
+    from ..policies.collection import HUNT_TIER
+    if policy.demand.get(dex):
+        return Tier.PROGRESS, values.NEW_ENTRY
+    return HUNT_TIER, catch_value(best_tail(policy.data, snapshot, dex))
 
 
 def postgame_price(policy, snapshot):
