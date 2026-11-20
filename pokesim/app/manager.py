@@ -342,17 +342,15 @@ class Manager:
                     stall_truth.lifecycle(self.root / 'adventures' / adventure['id'], 'start', 'boot')
                     try:
                         self.supervisor.start(adventure['id'])
-                    except NotReady as error:
+                    except NotReady:
                         if self.closing:
                             raise
                         # A host still busy after a power cut can keep a worker from getting ready in
-                        # time. The failed start stopped that worker and let go of it, so one more
-                        # start is safe. Any other error fails the adventure at once.
-                        log.warning('Adventure %s was not ready in time at startup, so it starts once more: %s',
-                                    adventure['id'], error)
-                        stall_truth.lifecycle(self.root / 'adventures' / adventure['id'], 'start', 'boot',
-                                              why='its first start was not ready in time')
-                        self.supervisor.start(adventure['id'])
+                        # time for minutes. The failed start stopped that worker and left the adventure
+                        # failed, so it restarts later like a worker that exited, waiting twice as long
+                        # after each start that is not ready. The other adventures start meanwhile.
+                        # Any other error fails the adventure at once.
+                        self.supervisor.schedule_restart(adventure['id'], 'it was not ready in time at startup')
                 except Exception as error:
                     self.registry.transition(adventure['id'], 'failed', f'it did not start with PokeSim: {error}',
                                              error=str(error))
