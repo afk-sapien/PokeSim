@@ -218,6 +218,7 @@ class Progress:
     since: float     # real time, for the problem's date
     played: int      # PlayClock seconds, which the window counts
     maps: set = field(default_factory=set)
+    levels: int | None = None   # the highest party level total this window saw
 
 
 def played(status):
@@ -464,8 +465,9 @@ class Watchdog:
         PlayClock seconds, so the game's pace does not change it.
 
         Moving around does not count, because a game caught in a loop moves too. New events,
-        Pokédex entries, badges, League wins, newly discovered areas and maps not seen during
-        this window do.
+        Pokédex entries, badges, League wins, newly discovered areas, maps not seen during this
+        window and level-ups do. A level-up is a party level total above the highest this window
+        saw, so swapping the same Pokémon in and out of the party counts once at most.
         """
         seconds = played(status)
         if seconds is None:
@@ -475,12 +477,16 @@ class Watchdog:
         fingerprint = (achievement.get('id'), watch.get('owned'), watch.get('badges'), watch.get('hall_of_fame'),
                        (status.get('league_rewards') or {}).get('wins'), status.get('areas_discovered'))
         place = watch.get('map', (status.get('game') or {}).get('map_name'))
+        levels = watch.get('levels')
         current = self.progress.get(aid)
         if current is None or current.fingerprint != fingerprint:
-            self.progress[aid] = Progress(fingerprint, now, seconds, {place})
+            self.progress[aid] = Progress(fingerprint, now, seconds, {place}, levels)
             return False
-        if place not in current.maps:
+        trained = isinstance(levels, int) and levels > (current.levels or 0)
+        if place not in current.maps or trained:
             current.maps.add(place)
+            if trained:
+                current.levels = levels
             current.since, current.played = now, seconds
             return False
         return seconds - current.played >= self.limits.no_progress
