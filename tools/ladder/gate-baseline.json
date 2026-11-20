@@ -1,7 +1,7 @@
 {
- "commit": "bd887dd1",
+ "commit": "d8996787",
  "attempt": 1,
- "taken": "2026-11-17",
+ "taken": "2026-11-20",
  "frames": 108000,
  "seeds": [
   7,
@@ -41,7 +41,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 8.68,
+   "waste": 7.7,
    "milestones": 0.0,
    "story": []
   },
@@ -65,7 +65,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 3.62,
+   "waste": 3.95,
    "milestones": 0.0,
    "story": []
   },
@@ -198,7 +198,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 0.0,
+   "waste": 1.25,
    "milestones": 0.0,
    "story": []
   },
@@ -222,13 +222,12 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 6.14,
-   "milestones": 3.33,
+   "waste": 1.01,
+   "milestones": 3.0,
    "story": [
     "kanto",
     "surge",
-    "sabrina",
-    "erika"
+    "sabrina"
    ]
   },
   "gold/kanto_entry": {
@@ -353,7 +352,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 2.92,
+   "waste": 2.21,
    "milestones": 0.0,
    "story": []
   },
@@ -451,7 +450,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 6.09,
+   "waste": 1.01,
    "milestones": 3.0,
    "story": [
     "kanto",
@@ -503,7 +502,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 4.75,
+   "waste": 4.88,
    "milestones": 0.0,
    "story": []
   },
@@ -519,7 +518,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 14.51,
+   "waste": 11.34,
    "milestones": 0.0,
    "story": []
   },
@@ -543,7 +542,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 1.76,
+   "waste": 2.32,
    "milestones": 0.0,
    "story": []
   }
