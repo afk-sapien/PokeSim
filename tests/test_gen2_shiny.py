@@ -107,8 +107,13 @@ def test_gen2_statistics_and_first_shiny_milestone_use_receipts(tmp_path):
         shiny.start(store.db, 2, available=True, fresh=True)
         shiny.record(store.db, 'seen', 'a', 130, generation=2)
         shiny.record(store.db, 'acquired', 'a', 130, generation=2)
-    record = TestClient(create_app(gen2_emulator(), store)).get('/api/statistics').json()['collection_records']['shiny']
+    client = TestClient(create_app(gen2_emulator(), store))
+    record = client.get('/api/statistics').json()['collection_records']['shiny']
     assert (record['available'], record['seen'], record['acquired'], record['held']) == (True, 1, 1, 0)
+    assert [(entry['id'], entry['kind'], entry['dex']) for entry in record['log']] == [(2, 'acquired', 130), (1, 'seen', 130)]
+    assert [(row['dex'], row['seen'], row['acquired']) for row in record['species']] == [(130, 1, 1)]
+    assert [entry['id'] for entry in client.get('/api/shiny-log?before=2').json()] == [1]
+    assert client.get('/api/shiny-log').status_code == 422
     tracker = adventure_records.RecordTracker(store, generation=2)
     snapshot = SimpleNamespace(badges=0, hall_of_fame_count=0, owned=frozenset(), party=(), stored=())
     assert tracker.conditions(snapshot)[5]

@@ -15,6 +15,10 @@ KEY = 'shiny-statistics-v1'
 GEN2_KEY = 'gen2-shiny-statistics-v1'
 # generation: (kv key, receipt table, Pokédex size)
 LEDGERS = {1: (KEY, tracking.SHINY_RECEIPTS[1], 151), 2: (GEN2_KEY, tracking.SHINY_RECEIPTS[2], 251)}
+# The statistics page refreshes every 30 seconds with the newest few log entries. Older ones load
+# a page at a time when asked for.
+FIRST_PAGE = 10
+OLDER_PAGE = 50
 # LoadEnemyMonData.storeDVs writes both DV bytes before loading the enemy level.
 # Scan only the verified English Red/Blue bank, then verify the complete instruction sequence.
 BANK = 15
@@ -47,12 +51,18 @@ def initialize(db, generation=1):
     kv.add(db, LEDGERS[generation][0], empty())
 
 
-def log(db, generation, names, limit=200):
-    """The newest shinies seen and acquired, with their dates where known, oldest first. Receipts
-    from before dates were kept stay undated."""
-    rows = tracking.shiny_receipts(db, generation, limit)
-    return [{'kind': kind, 'dex': dex, 'name': names.get(dex, f'#{dex:03d}'), 'ts': when}
-            for kind, dex, when in reversed(rows)]
+def log(db, generation, names, limit=FIRST_PAGE, before=None):
+    """The newest shinies seen and acquired, newest first, with their dates where known. ``before`` is
+    a receipt id, to page back through older ones. Receipts from before dates were kept stay undated."""
+    rows = tracking.shiny_receipts(db, generation, limit, before)
+    return [{'id': receipt, 'kind': kind, 'dex': dex, 'name': names.get(dex, f'#{dex:03d}'), 'ts': when}
+            for receipt, kind, dex, when in rows]
+
+
+def species(db, generation, names):
+    """How many of each species were seen and acquired shiny, the most first."""
+    return [{'dex': dex, 'name': names.get(dex, f'#{dex:03d}'), 'seen': seen, 'acquired': acquired}
+            for dex, seen, acquired in tracking.shiny_species(db, generation)]
 
 
 def record(db, kind, fingerprint, dex, *, generation=1):

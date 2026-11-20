@@ -448,10 +448,11 @@ def test_both_generations_report_catch_pace_and_a_dated_shiny_log(tmp_path, gen2
         records = pages['statistics']['collection_records']
         pidgey = next(row for row in pages['activity']['pokemon'] if row['id'] == 16)
         log = [(entry['kind'], entry['dex'], entry['name'].upper(), entry['ts'] > 0) for entry in records['shiny']['log']]
-        found.append((records['rates'], pidgey['per_catch'], log))
+        species = [(row['dex'], row['name'].upper(), row['seen'], row['acquired']) for row in records['shiny']['species']]
+        found.append((records['rates'], pidgey['per_catch'], log, species))
     assert found[0] == found[1]
     assert found[0] == ({'catches_per_hour': 3.0, 'encounters_per_catch': 10.0, 'partial': False}, 10.0,
-                        [('seen', 16, 'PIDGEY', True)])
+                        [('seen', 16, 'PIDGEY', True)], [(16, 'PIDGEY', 1, 0)])
 
 
 def test_both_generations_count_money_earned_and_spent_by_source(tmp_path, gen2_data):

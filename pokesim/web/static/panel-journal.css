@@ -597,6 +597,10 @@
 .milestone-row { padding-block: var(--s3) }
 .milestone-row + .milestone-row { border-top: var(--hair) solid var(--rule-faint) }
 .milestone-row > * { overflow-wrap: anywhere }
+/* The shiny log's per species summary, a few words each, wrapping as the width allows. */
+.shiny-species { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); margin: 0 0 var(--s3); padding: 0; list-style: none }
+.shiny-species:empty { display: none }
+.shiny-species-row { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1); min-width: 0; overflow-wrap: anywhere }
 /* A full-size tap target. The name still wraps when it is long. */
 .highlight-name { display: flex }
 .highlight-name { align-items: center }

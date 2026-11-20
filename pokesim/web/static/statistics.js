@@ -169,16 +169,54 @@
     }
     renderRecent()
   }
-  function renderShinyLog(log) {
+  // The newest shinies come with every refresh and older ones load a page at a time. A refresh keeps
+  // the pages already loaded until a new shiny arrives, then starts over from the newest.
+  const shinyLog = {rows: [], total: 0}
+  function renderShinyRows() {
     const list = document.querySelector('#shiny-log-list')
     list.replaceChildren()
-    document.querySelector('#shiny-log').hidden = !log?.length
     // Newest first. Receipts kept before dates were recorded say so rather than guess.
-    for (const entry of [...(log || [])].reverse()) {
+    for (const entry of shinyLog.rows) {
       const row = add(list, 'li', 'milestone-row shiny-log-row', '')
       row.dataset.dex = entry.dex
       add(row, 'strong', '', entry.name)
       add(row, 'span', 'note', `${entry.kind === 'seen' ? 'Seen in the wild' : 'Acquired'}, ${date(entry.ts)}`)
+    }
+    document.querySelector('#shiny-log-more').hidden = shinyLog.rows.length >= shinyLog.total
+  }
+  function renderShinyLog(shiny) {
+    const log = shiny?.log || []
+    const species = shiny?.species || []
+    shinyLog.total = species.reduce((sum, row) => sum + row.seen + row.acquired, 0)
+    if (log[0]?.id !== shinyLog.rows[0]?.id) shinyLog.rows = log
+    document.querySelector('#shiny-log').hidden = !log.length
+    document.querySelector('#shiny-log-count').textContent = `${number(shinyLog.total)} ${shinyLog.total === 1 ? 'entry' : 'entries'}, ${number(species.length)} species, newest first`
+    const summary = document.querySelector('#shiny-species')
+    summary.replaceChildren()
+    for (const row of species) {
+      const item = add(summary, 'li', 'shiny-species-row', '')
+      item.dataset.dex = row.dex
+      add(item, 'strong', '', row.name)
+      add(item, 'span', 'note', [row.seen && `${number(row.seen)} seen`, row.acquired && `${number(row.acquired)} acquired`].filter(Boolean).join(', '))
+    }
+    renderShinyRows()
+  }
+  document.querySelector('#shiny-log-more').onclick = async event => {
+    const button = event.currentTarget
+    const last = shinyLog.rows.at(-1)
+    if (!last || button.disabled) return
+    button.disabled = true
+    try {
+      const response = await PokeSim.fetch(`/api/shiny-log?before=${last.id}`, {cache: 'no-store'})
+      if (!response.ok) throw new Error('Shiny log unavailable')
+      const older = await response.json()
+      // A refresh that started over from the newest while this loaded keeps its own rows.
+      if (shinyLog.rows.at(-1) === last) shinyLog.rows = [...shinyLog.rows, ...older]
+      renderShinyRows()
+    } catch (_) {
+      document.querySelector('#statistics-status').textContent = 'Stats are reconnecting. Saved history is safe.'
+    } finally {
+      button.disabled = false
     }
   }
   function render(data) {
@@ -215,7 +253,7 @@
     document.querySelector('#stats-catch-pace-note').textContent = rates.partial
       ? 'Catches since tracking began, over all playtime' : 'Per hour of simulated playtime'
     document.querySelector('#stats-per-catch').textContent = Number.isFinite(rates.encounters_per_catch) ? number(rates.encounters_per_catch) : 'Not tracked'
-    renderShinyLog(shiny?.log)
+    renderShinyLog(shiny)
 
     document.querySelectorAll('.stats-overview .readout, #collection-details .readout').forEach(node => {
       node.classList.toggle('readout--missing', node.textContent === 'Not tracked')

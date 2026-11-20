@@ -70,14 +70,19 @@ def test_a_capture_receipt_counts_once(store):
 
 
 @pytest.mark.parametrize('generation', (1, 2))
-def test_shiny_receipts_come_newest_first_with_undated_ones_last(store, generation):
+def test_shiny_receipts_come_newest_first_in_the_order_they_arrived(store, generation):
     with store.transaction() as db:
+        # An undated receipt is from before dates were kept, so it is the oldest.
+        assert tracking.add_shiny(db, generation, 'seen', 'c', 12, None)
         assert tracking.add_shiny(db, generation, 'seen', 'a', 10, 5.0)
         assert tracking.add_shiny(db, generation, 'acquired', 'b', 11, 7.0)
-        assert tracking.add_shiny(db, generation, 'seen', 'c', 12, None)
         assert not tracking.add_shiny(db, generation, 'seen', 'a', 10, 9.0)
         rows = [tuple(row) for row in tracking.shiny_receipts(db, generation, 10)]
-    assert rows == [('acquired', 11, 7.0), ('seen', 10, 5.0), ('seen', 12, None)]
+        older = [tuple(row) for row in tracking.shiny_receipts(db, generation, 10, before=2)]
+        species = [tuple(row) for row in tracking.shiny_species(db, generation)]
+    assert rows == [(3, 'acquired', 11, 7.0), (2, 'seen', 10, 5.0), (1, 'seen', 12, None)]
+    assert older == [(1, 'seen', 12, None)]
+    assert species == [(10, 1, 0), (11, 0, 1), (12, 1, 0)]
 
 
 def test_a_record_is_dated_only_from_a_progress_column(store):

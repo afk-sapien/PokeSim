@@ -59,6 +59,7 @@ GAME_QUERY_FLAGS = {
     ('api/events', 'all'): 'adventure.watch',
     ('api/events', 'types'): 'adventure.watch',
     ('api/events', 'before'): 'adventure.watch',
+    ('api/shiny-log', 'before'): 'adventure.watch',
     ('api/audio', 'after'): 'adventure.watch',
     ('feed.xml', 'types'): 'adventure.watch',
     ('feed.xml', 'all'): 'adventure.watch',

@@ -321,6 +321,35 @@ def test_shiny_log_lists_each_shiny_newest_first_with_its_date(page, game, width
 
 
 @pytest.mark.parametrize('width', [1280, 320])
+def test_shiny_log_shows_the_newest_and_loads_older_ones_with_a_species_summary(page, game, width):
+    from pokesim import shiny
+    url, store, _, _ = game
+    page.set_viewport_size({'width': width, 'height': 900})
+    with store.lock, store.db:
+        shiny.initialize(store.db)
+        for index in range(12):
+            shiny.record(store.db, 'seen', f'wild-{index}', 129 if index % 3 else 25)
+        shiny.record(store.db, 'acquired', 'gift', 25)
+    page.goto(url + '/stats')
+    rows = page.locator('#shiny-log-list li')
+    expect(rows).to_have_count(shiny.FIRST_PAGE)
+    expect(rows.first).to_contain_text('Acquired')
+    expect(page.locator('#shiny-log-count')).to_have_text('13 entries, 2 species, newest first')
+    summary = page.locator('#shiny-species li')
+    expect(summary).to_have_count(2)
+    expect(summary.first).to_have_attribute('data-dex', '129')
+    expect(summary.first).to_contain_text('8 seen')
+    expect(summary.last).to_contain_text('4 seen, 1 acquired')
+    more = page.locator('#shiny-log-more')
+    expect(more).to_be_visible()
+    more.click()
+    expect(rows).to_have_count(13)
+    expect(rows.last).to_have_attribute('data-dex', '25')
+    expect(more).to_be_hidden()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('width', [1280, 320])
 def test_money_panel_shows_earned_spent_and_each_source(page, game, width):
     url, store, emu, _ = game
     page.set_viewport_size({'width': width, 'height': 900})
