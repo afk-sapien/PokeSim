@@ -40,6 +40,9 @@ def terrain(monkeypatch):
     worlds[FIELD]['tiles'][1][5] = 7
     worlds[FIELD]['tiles'][3][3] = 44
     worlds[FIELD]['tiles'][4][3] = 55
+    # The doorway sits on an overworld door tile, so it warps from any side as a real door does.
+    worlds[FIELD]['tiles'][2][2] = 0x1B
+    worlds[FIELD]['passable'] = [0, 7, 44, 0x1B]
     worlds[COAST]['tiles'][1][0] = 0x14
     worlds[FIELD]['opened_tiles'] = [['TEST_GATE_OPEN', 3, 0, 0]]
     worlds[FIELD]['locked_doors'] = [[4, 4, 'TEST_DOOR_OPEN']]
