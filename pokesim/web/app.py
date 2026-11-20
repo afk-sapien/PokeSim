@@ -172,9 +172,12 @@ def status_summary(status):
     # The library watchdog compares these between polls to tell a looping game from a playing one.
     storage = game.get('storage') or {}
     counts, capacity = storage.get('box_counts') or (), storage.get('capacity')
+    party = game.get('party')
     watch = {'map': game.get('map'), 'owned': game.get('owned'),
              'badges': len(badges) if isinstance(badges, (list, tuple)) else badges,
              'hall_of_fame': game.get('hall_of_fame_count'),
+             'levels': sum(mon.get('level') or 0 for mon in party if not mon.get('egg'))
+             if isinstance(party, list) else None,
              'boxes_full': bool(counts and capacity and all(count >= capacity for count in counts))}
     return {**{key: value for key, value in status.items() if key not in ('game', 'strategy')},
             'game': {key: game[key] for key in ('map_name', 'playtime') if key in game}, 'watch': watch}

@@ -235,6 +235,44 @@ def test_a_new_map_or_a_pause_restarts_the_progress_window(world):
     assert world.sent == []
 
 
+def test_a_level_up_restarts_the_progress_window(world):
+    """Long postgame training gains no entry, badge or map for hours, but each level-up is progress."""
+    world.registry.rows = [game()]
+    trained = status()
+    trained['watch']['levels'] = 540
+    world.child(seen=trained)
+    world.tick()
+    for levels in (541, 542, 543):
+        world.tick(3000)
+        trained = status()
+        trained['watch']['levels'] = levels
+        world.child(seen=trained)
+        world.tick(60)
+    assert world.sent == []
+    world.tick(3600)
+    assert world.sent[-1][0] == 'Needs attention'
+
+
+def test_swapping_the_same_pokemon_in_and_out_is_still_no_progress(world):
+    """The level total falls and rises back as the same Pokémon leave and rejoin the party. Only a
+    total above the highest this window saw counts, so a deposit and withdraw loop still alerts."""
+    world.registry.rows = [game()]
+    for minute in range(62):
+        looping = status()
+        looping['watch']['levels'] = 540 if minute % 2 else 480
+        world.child(seen=looping)
+        world.tick(60 if minute else 0)
+    assert world.sent == [('Needs attention', 'Mischievous Badge Hunt has made no progress for 60 minutes of play. '
+                                              'It is still playing in Violet City.')]
+
+
+def test_the_summary_counts_the_party_levels_without_eggs():
+    from pokesim.web.app import status_summary
+    party = [{'level': 100}, {'level': 57}, {'level': 5, 'egg': True}]
+    assert status_summary({'game': {'party': party}})['watch']['levels'] == 157
+    assert status_summary({'game': {}})['watch']['levels'] is None
+
+
 def test_a_stuck_game_is_not_also_reported_as_no_progress(world):
     world.registry.rows = [game()]
     world.child(seen=status(stuck=0))
