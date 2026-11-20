@@ -1,4 +1,5 @@
-"""The Cycling Road gates turn back a player without a Bicycle, so navigation does not route through them."""
+"""The Cycling Road gates turn back a player without a Bicycle, and Route 17 pulls a player who presses
+nothing downhill, so navigation never routes through them."""
 from pokesim.policies.gates import CYCLING_ROAD
 from pokesim.policies.navigation import Navigator
 from pokesim.strategy_data import ITEMS, MAPS
@@ -15,5 +16,11 @@ def test_without_a_bicycle_the_guards_close_the_cycling_road_gates():
     for name, coords in CYCLING_ROAD:
         assert all((MAPS[name], x, y) in nav.story_blocks for x, y in coords)
     assert all(target != (GATE, 4, 4) for _, target in nav.neighbors((GATE, 5, 4), 0))
+
+
+def test_the_cycling_road_gates_stay_closed_with_a_bicycle():
+    """A short northbound press on Route 17 is undone by the downhill pull before the next one."""
+    nav = Navigator()
     nav.update_story(snap(map=GATE, badges=255, items=((ITEMS['BICYCLE'], 1),)))
-    assert not any(m in {MAPS['ROUTE_16_GATE_1F'], GATE} for m, _, _ in nav.story_blocks)
+    for name, coords in CYCLING_ROAD:
+        assert all((MAPS[name], x, y) in nav.story_blocks for x, y in coords)

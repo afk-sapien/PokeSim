@@ -292,6 +292,8 @@ the `EVENT_` constants of the pret disassemblies are.
   (column, row) menu cursor counted from 1, and `pocket`, one of `state.POCKETS`.
   `party_slot` is the party slot a menu chose last. `state.read_ui(memory, game)`
   reads it alone.
+- `state.read_registered_item(memory, game)` is the item ID a Gen II pack
+  registered to SELECT, or None when none is. It is always None in Gen I.
 
 `menu_item` counts from the top entry shown. `scroll` counts the entries a screen in
 `state.LIST_SCREENS` has scrolled past, and is 0 on any other screen, so the list
@@ -442,7 +444,7 @@ also cover English Gold, Silver and Crystal.
 `SwitchPokemon`, `RunAway`, `ReorderParty`, `FieldMove`, `TossItem`, `BuyItem`,
 `SellItem`, `DepositPokemon`, `WithdrawPokemon`, `ReleasePokemon`, `DepositItem`,
 `WithdrawItem`, `ChangeBox`, `LearnMove`, `AdvanceDialogue`, `Walk`, and for Gen 2
-`GiveItem`, `TakeItem` and `DeleteMove`) and a function of the same name in snake case
+`GiveItem`, `TakeItem`, `RegisterItem` and `DeleteMove`) and a function of the same name in snake case
 that runs it on a port.
 
 - `machine.step(memory, ui=None)` returns a button name, None to wait, or `Done`.
@@ -508,6 +510,7 @@ Gen 2 (Gold, Silver, Crystal):
   budget is 600 steps, and 900 for marts.
 - `use_item` turns to the item's pocket. Hold items go through `give_item(port,
   item, slot, swap=False)` and come back with `take_item(port, slot)`.
+  `register_item(port, item)` puts a key item on SELECT.
 - `use_field_move` adds WHIRLPOOL, WATERFALL, ROCKSMASH and HEADBUTT.
 - Gaps: mail, changing the Bill's PC box, and PC boxes other than the current one.
 

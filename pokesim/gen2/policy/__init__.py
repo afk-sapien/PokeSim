@@ -16,8 +16,8 @@ from pokecore.gen2.ram import Memory
 from pokecore.gen2.state import script_running
 from ..world import update as update_world
 from ..naming import Naming
-from ..menus import (TASKS, Buy, ChangeBox, DayCare, FieldMove, Fly, Forget, Give, Lead, PutAway, Radio, Remedy, Sell,
-                     ShowPartner, Storage, Take, Teach, Toss, Use, choose, close_pc, restore)
+from ..menus import (TASKS, Buy, ChangeBox, DayCare, FieldMove, Fly, Forget, Give, Lead, PutAway, Radio, Register,
+                     Remedy, Sell, ShowPartner, Storage, Take, Teach, Toss, Use, choose, close_pc, restore)
 from ..facts import Facts
 from .battle import SUBSTATUS_TRANSFORMED, BattlePart, transformed
 from .errands import ErrandPart
@@ -351,7 +351,8 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
             button = self.menu_step(snapshot, mem)
             if button:
                 labels = {Buy: 'Buy supplies', Sell: 'Sell a spare item', Storage: 'Manage Pokémon storage',
-                          ChangeBox: 'Choose a receiving box', Use: 'Use an item', ShowPartner: 'Show a Pokémon',
+                          ChangeBox: 'Choose a receiving box', Use: 'Use an item', Register: 'Register the Bicycle',
+                          ShowPartner: 'Show a Pokémon',
                           DayCare: 'Manage the Day Care partners', Lead: 'Prepare the lead Pokémon',
                           Give: 'Give a held item', Take: 'Take a held item', Fly: 'Fly to the next destination',
                           FieldMove: 'Use a field move', Radio: 'Tune the radio', Teach: 'Teach a move',

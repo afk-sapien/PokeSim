@@ -306,6 +306,8 @@ FLASH = 148
 AIDE_REQUIREMENT = 10
 # The road into Rock Tunnel from the north. A run standing here never walks back for the HM.
 ROCK_TUNNEL_ROAD = frozenset(MAPS[name] for name in ('ROUTE_10', 'ROCK_TUNNEL_POKECENTER', 'ROCK_TUNNEL_1F', 'ROCK_TUNNEL_B1F'))
+# The bag's distinct entries.
+BAG_SLOTS = 20
 
 
 def flash_learner(party):
@@ -320,6 +322,11 @@ def flash_learner(party):
                key=lambda i: party[i].level, default=None)
 
 
+def past_rock_tunnel(s):
+    """True once the run has entered Lavender or stands on the road into Rock Tunnel."""
+    return bool(s.towns_visited >> MAPS['LAVENDER_TOWN'] & 1) or s.map in ROCK_TUNNEL_ROAD
+
+
 def flash_goal(s):
     """HM05 from Oak's aide and its teaching, on the way to Rock Tunnel, or None to walk the cave dark.
 
@@ -328,8 +335,7 @@ def flash_goal(s):
     road into the tunnel. Below the aide's ten species, or with no partner but the ace able to learn
     Flash, the run walks the cave dark as before rather than make the trip for nothing.
     """
-    if (s.towns_visited >> MAPS['LAVENDER_TOWN'] & 1 or s.map in ROCK_TUNNEL_ROAD
-            or any(FLASH in mon.moves for mon in s.party) or flash_learner(s.party) is None):
+    if (past_rock_tunnel(s) or any(FLASH in mon.moves for mon in s.party) or flash_learner(s.party) is None):
         return None
     if not any(item == ITEMS['HM05'] and qty for item, qty in s.items):
         if event_set(s.event_flags, 'EVENT_GOT_HM05') or len(s.owned) < AIDE_REQUIREMENT:
@@ -338,6 +344,29 @@ def flash_goal(s):
                     'Take Diglett’s Cave from Route 11 to Route 2 and talk to the aide in the gate. Answer yes.')
     reason = 'Teach HM05 to a partner, never the best fighter, to light Rock Tunnel'
     return Goal('teach_flash', 'Teach Flash to a partner', reason, ((s.map, s.x, s.y),), help=reason)
+
+
+def bicycle_goal(s):
+    """The Bike Voucher from the Fan Club chairman, then the Bicycle for it in Cerulean, or None once owned.
+
+    A stored voucher is the only way to lose it, and the bike shop wants it in the bag, so a run with the
+    voucher flag but no voucher goes without the Bicycle rather than wait for one that never comes back.
+    Both gifts are refused into a full bag, and the shop hands over the Bicycle before it takes the voucher,
+    so the voucher waits for two free entries and the Bicycle for one. Until then the run goes on foot.
+    """
+    has = lambda name: any(item == ITEMS[name] and qty for item, qty in s.items)
+    if has('BICYCLE') or event_set(s.event_flags, 'EVENT_GOT_BICYCLE'):
+        return None
+    free = BAG_SLOTS - len(s.items)
+    if has('BIKE_VOUCHER'):
+        if free < 1:
+            return None
+        return step('bicycle', 'Collect the Bicycle', 'Trade the Bike Voucher at the Cerulean bike shop',
+                    'Talk to the clerk at the Cerulean bike shop with the voucher in the bag.')
+    if event_set(s.event_flags, 'EVENT_GOT_BIKE_VOUCHER') or free < 2:
+        return None
+    return step('bike_voucher', 'Hear out the Fan Club chairman', 'He gives a Bike Voucher to anyone who listens',
+                'Talk to the chairman at the back of the Vermilion Fan Club and answer yes.')
 
 
 def campaign_goal(s, fossil="HELIX_FOSSIL"):
@@ -370,9 +399,11 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
             return teaching_goal("teach_cut", "Teach Cut to a partner", "Teach HM01 to a compatible partner to open routes blocked by trees.", s)
         return gym_goal(s, 4)
     if not s.badges & 8:
-        flash = flash_goal(s)
-        if flash is not None:
-            return flash
+        # Vermilion's Fan Club and Cerulean's bike shop both lie on the road from Route 2 to Rock Tunnel.
+        # A run already past the tunnel gets the Bicycle after the League instead of walking back.
+        errand = flash_goal(s) or (None if past_rock_tunnel(s) else bicycle_goal(s))
+        if errand is not None:
+            return errand
         return replace(gym_goal(s, 8), help="Reach Lavender through Rock Tunnel, then go west through the Route 8 underground path to Celadon. Use Cut at Erika’s gym. " + GYM_HELP["rainbow"])
     if not s.badges & 16:
         if not (has("POKE_FLUTE") or done("EVENT_GOT_POKE_FLUTE")):

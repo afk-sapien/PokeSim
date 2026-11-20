@@ -46,8 +46,8 @@ def former_gates(s):
     for row, badge in FORMER_ROUTE_23:
         if not s.badges & badge:
             blocks.update((MAPS['ROUTE_23'], x, row) for x in range(WORLD[MAPS['ROUTE_23']]['width']))
-    if ITEMS['BICYCLE'] not in held:
-        blocks.update((MAPS[name], x, y) for name, coords in FORMER_CYCLING_ROAD for x, y in coords)
+    # The former list opened Cycling Road for a Bicycle. Navigation now keeps it closed, see test_cycling_road_gates.
+    blocks.update((MAPS[name], x, y) for name, coords in FORMER_CYCLING_ROAD for x, y in coords)
     if not s.saffron_open and not held & {ITEMS[name] for name in FORMER_DRINKS}:
         blocks.update((MAPS[name], x, y) for name, coords in FORMER_SAFFRON for x, y in coords)
     if ITEMS['CARD_KEY'] not in held:

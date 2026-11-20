@@ -69,7 +69,7 @@ def test_saved_championship_remains_visible_after_league_flags_reset():
 def postgame_policy(**changes):
     s = returning_trainer(map=MAPS['INDIGO_PLATEAU_LOBBY'], x=8, y=10,
                           hall_of_fame_count=6, frame=100,
-                          items=((ITEMS['POKE_BALL'], 10), (ITEMS['SUPER_POTION'], 10),
+                          items=((ITEMS['BICYCLE'], 1), (ITEMS['POKE_BALL'], 10), (ITEMS['SUPER_POTION'], 10),
                                  (ITEMS['REVIVE'], 5), (ITEMS['FULL_HEAL'], 3)), **changes)
     p = StrategicPolicy(7)
     p.observed_map = s.map
@@ -127,3 +127,16 @@ def test_empty_planner_leaves_the_isolated_east_patch_of_route_23():
     p.observed_map = s.map
     p.step(PolicyContext(s, 0, bytearray(65536)))
     assert p.goal.key == 'collect_passage'
+
+
+def test_a_run_without_the_bicycle_takes_the_passage_south_before_fetching_it():
+    """The Fan Club is south of Victory Road, so north of it the passage leads and the errand waits. The lobby
+    has one door, onto the plateau, so the errand starts there and never heads for Lorelei."""
+    for (m, x, y), expected in (((MAPS['INDIGO_PLATEAU'], 9, 7), 'collect_passage'),
+                                ((MAPS['ROUTE_23'], 19, 32), 'collect_passage'),
+                                ((MAPS['INDIGO_PLATEAU_LOBBY'], 8, 10), 'bike_voucher')):
+        p, s = postgame_policy()
+        s = replace(s, map=m, x=x, y=y, items=tuple(entry for entry in s.items if entry[0] != ITEMS['BICYCLE']))
+        p.observed_map = s.map
+        p.step(PolicyContext(s, 0, bytearray(65536)))
+        assert p.goal.key == expected

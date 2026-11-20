@@ -140,6 +140,17 @@ class StoryPart:
         if not snapshot.event('EVENT_GOT_HM01_CUT'):
             return step('cut', 'Receive Cut from the charcoal maker')
         self.completed.setdefault('cut', snapshot.frame)
+        # Goldenrod's bike shop lends the Bicycle to anyone who agrees to ride it. A run that never
+        # borrowed it goes back for it at any depth, on a walk that stays in Johto. Kanto and the League
+        # rooms have none, and Silver Cave's one way out is Route 28 into Kanto. Without that walk the
+        # step stood down again and again, or took turns with Red at the Kanto border.
+        if snapshot.event('EVENT_GOT_BICYCLE'):
+            self.completed.setdefault('bicycle', snapshot.frame)
+        else:
+            walk = self.nav.walk(snapshot, self.data.map_ids['GOLDENROD_BIKE_SHOP'])
+            if walk is not None and {self.travel_region(snapshot)} | {
+                    self.data.maps[edge[1]]['region'] for edge in walk} == {'johto'}:
+                return step('bicycle', 'Borrow a Bicycle from the Goldenrod bike shop')
         if not snapshot.badges & 4:
             if snapshot.event('EVENT_MADE_WHITNEY_CRY'):
                 return step('whitney_cry', 'Give Whitney a moment')
@@ -383,8 +394,9 @@ class StoryPart:
             return self.story_step(snapshot, 'good_rod', 'Get a fishing rod', facts.place(2, self.data.game, 'good_rod'))
         return self.fishing(snapshot, shore)
 
-    # Prompts where the adventure should answer YES at once, and prompts it must always decline.
-    YES_PROMPTS = re.compile(r'HEAL')
+    # Prompts where the adventure should answer YES at once, and prompts it must always decline. The bike
+    # shop clerk lends the Bicycle only to a player who agrees to ride it around town.
+    YES_PROMPTS = re.compile(r'HEAL|BICYCLE AND ADVER')
     NO_PROMPTS = re.compile(r'MONEY|SAVE|CALL|PHONE|REGISTER|NUMBER')
     NO_LIMIT = 3
 

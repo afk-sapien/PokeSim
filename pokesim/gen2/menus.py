@@ -8,10 +8,11 @@ from dataclasses import KW_ONLY, dataclass, fields
 import re
 
 from pokecore.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseMove, DeleteMove, DepositItem, DepositPokemon,
-                                    Done, FieldMove as CoreFieldMove, GiveItem, LearnMove, ReleasePokemon, ReorderParty,
-                                    RunAway, SellItem, SwitchPokemon, TakeItem, TossItem, UseItem, WithdrawPokemon,
-                                    current_screen)
+                                    Done, FieldMove as CoreFieldMove, GiveItem, LearnMove, RegisterItem, ReleasePokemon,
+                                    ReorderParty, RunAway, SellItem, SwitchPokemon, TakeItem, TossItem, UseItem,
+                                    WithdrawPokemon, current_screen)
 from pokecore.shortcuts.machine import BACKABLE
+from pokecore.state import read_registered_item
 
 from pokecore.textmatch import has_word
 from ..planning.ledger import FIELD_MOVES
@@ -365,6 +366,26 @@ class Use(CoreTask):
 
 
 @dataclass
+class Register(CoreTask):
+    """Register a key item, such as the Bicycle, to SELECT from the pack. Once registered, one SELECT
+    press uses it from the overworld with no message."""
+    item: int
+
+    def step(self, snapshot, mem):
+        if getattr(self, 'machine', None) is None and registered(mem.memory, mem.data) == self.item:
+            return self.end(mem)
+        return super().step(snapshot, mem)
+
+    def build(self, snapshot):
+        return RegisterItem(self.item, **self.options(snapshot))
+
+
+def registered(memory, data):
+    """The key item registered to SELECT, or None."""
+    return read_registered_item(memory, data.game)
+
+
+@dataclass
 class UseOn(CoreTask):
     """Use one item on a party member, such as a PP Up on a move or a Rare Candy."""
     item: int
@@ -620,5 +641,5 @@ class Flee(CoreTask):
         return RunAway(**self.options(snapshot))
 
 
-TASKS = {cls.__name__: cls for cls in (Teach, Buy, Sell, PutAway, Toss, Use, UseOn, Storage, Remedy, Lead, FieldMove, Fly, Give, Take,
+TASKS = {cls.__name__: cls for cls in (Teach, Buy, Sell, PutAway, Toss, Use, Register, UseOn, Storage, Remedy, Lead, FieldMove, Fly, Give, Take,
                                        Throw, Send, Attack, Flee, Forget, ChangeBox, Release, Learn, Radio, DayCare, ShowPartner)}

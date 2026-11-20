@@ -100,7 +100,9 @@ def _guard_gates():
     a run without a Bicycle paced the Route 18 gate until the explore project timed out, and a run with
     six badges argued with the Volcano Badge guard on Route 23 indefinitely.
     """
-    found = [(Item('BICYCLE'), frozenset((MAPS[name], x, y) for x, y in coords)) for name, coords in gates.CYCLING_ROAD]
+    # Cycling Road stays closed with the Bicycle too. Route 17 pushes a player who presses nothing back
+    # down the hill, so each short northbound press between the gaps of a walk was undone at once.
+    found = [(AnyOf(()), frozenset((MAPS[name], x, y) for x, y in coords)) for name, coords in gates.CYCLING_ROAD]
     drink = AnyOf((Event(SAFFRON_OPEN),) + tuple(Item(name) for name in gates.DRINKS))
     found += [(drink, frozenset((MAPS[name], x, y) for x, y in coords)) for name, coords in gates.SAFFRON_GATES]
     route_23 = WORLD.get(MAPS['ROUTE_23'])

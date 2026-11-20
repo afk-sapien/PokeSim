@@ -1417,6 +1417,55 @@ class TakeItem(HeldItemShortcut):
         yield from self.commit_wait(stay=('party', 'party_action', 'menu'))
 
 
+class RegisterItem(GameShortcut):
+    """Gen 2: register a key item to SELECT, from the pack's SEL. SELECT on the overworld then uses it,
+    and gets on or off the Bicycle with no message."""
+
+    kind = 'register_item'
+    label = 'register_item'
+
+    def __init__(self, item, **options):
+        if isinstance(item, bool) or not isinstance(item, (int, str)):
+            raise ValueError('item must be an item ID or name')
+        super().__init__(**options)
+        self.item = item
+
+    def result_fields(self):
+        return {'item_id': getattr(self, 'item_id', self.item)}
+
+    def registered(self, obs):
+        memory = obs.memory
+        return bool(memory.byte('wWhichRegisteredItem')) and memory.byte('wRegisteredItem') == self.item_id
+
+    def check(self, obs):
+        if self.gen != 2:
+            raise Abort('Only Gold, Silver and Crystal register items. No input sent.', cleanup=False)
+        if obs.battle:
+            raise Abort('Items can be registered only outside battle. No input sent.', cleanup=False)
+        self.item_id = self.resolve_item(self.item)
+        if not self.quantity(self.item_id):
+            raise Abort('Requested item is not in the bag. No input sent.', cleanup=False)
+        if not self.is_key_item(self.item_id):
+            raise Abort('Only a key item can be registered. No input sent.', cleanup=False)
+        if self.registered(obs):
+            raise Abort('The item is already registered. No input sent.', cleanup=False, completed=True)
+
+    def effect(self, obs):
+        return self.registered(obs)
+
+    def success_outcome(self):
+        return 'Registered the item to SELECT.'
+
+    def flow(self):
+        yield from self.open_bag(self.item_id)
+        yield from self.pick_list(self.bag_index(self.item_id))
+        if not (yield from self.until_screen('item_action', limit=10, press_text=False)):
+            self.no_effect()
+        self.committed = True
+        yield from self.choose('SEL')
+        yield from self.commit_wait(stay=('bag', 'item_action'))
+
+
 # Markers of the level-up and TM learn prompts.
 LEARN_MARKERS = ('TRYINGTOLEARN', 'DELETEANOLDER', 'ANOLDERMOVE', 'MAKEROOMFOR', 'CANTLEARNMORE',
                  'ABANDONLEARNING', 'STOPLEARNING', 'WHICHMOVESHOULD', 'SHOULDBEFORGOTTEN')

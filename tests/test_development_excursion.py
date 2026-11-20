@@ -55,6 +55,16 @@ def test_an_excursion_without_experience_still_ends():
     assert policy.detour.excursion is None and not policy.detour.developing
 
 
+@pytest.mark.parametrize('key', ['bike_voucher', 'bicycle'])
+def test_the_bicycle_fetch_makes_no_detour(key):
+    """Partner training on the walk to Cerulean after the League stretched one fetch to 30,084 frames."""
+    policy, s = developing()
+    assert policy.detour.act(policy, s, bytearray(65536), Goal('story', 'Story', 'Story')) is not None
+    policy, s = developing()
+    assert policy.detour.act(policy, s, bytearray(65536), Goal(key, 'Bicycle', 'Bicycle')) is None
+    assert policy.detour.excursion is None
+
+
 def test_an_excursion_ends_when_its_partner_leaves_the_party():
     policy, s = developing()
     assert policy.detour.development_done(replace(s, party=(LEAD,), frame=s.frame + 10))

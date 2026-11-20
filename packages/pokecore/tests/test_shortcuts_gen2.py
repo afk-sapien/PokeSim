@@ -15,7 +15,8 @@ from pokecore.controls import ControllerPort
 from pokecore.gen2.charmap import charmap
 from pokecore.shortcuts import (ChooseMove, buy_item, change_box, choose_move, current_screen, day_care,
                                     delete_move, deposit_item, deposit_pokemon, give_item, learn_move, list_box,
-                                    list_items, list_moves, list_party, release_pokemon, reorder_party, run_away,
+                                    list_items, list_moves, list_party, register_item, release_pokemon,
+                                    reorder_party, run_away,
                                     sell_item, show_partner, switch_pokemon, take_item, toss_item, tune_radio,
                                     use_field_move, use_item, withdraw_item, withdraw_pokemon)
 from pokecore.shortcuts import gen2ui
@@ -116,6 +117,7 @@ class Game2:
         self.player_move = self.move_num = 0
         self.disabled = 0
         self.player_state = self.bike = 0
+        self.registered = (0, 0)
         self.map = (10, 1)
         self.badges = badges
         self.stock = list(stock)
@@ -307,8 +309,18 @@ class Game2:
             labels = (['USE', 'QUIT'] if kind.kind in ('tm', 'hm') else ['USE', 'SEL', 'QUIT']
                       if key_item(item, self.version) else ['USE', 'GIVE', 'TOSS', 'SEL', 'QUIT'])
             self.open_menu(labels, {'USE': self.use, 'GIVE': lambda: self.go_party('give'),
-                                    'TOSS': lambda: self.go_quantity('toss', qty), 'QUIT': back},
+                                    'TOSS': lambda: self.go_quantity('toss', qty),
+                                    'SEL': lambda: self.register(back), 'QUIT': back},
                            back, x0=10, y0=6)
+
+    def register(self, back):
+        if not key_item(self.item, self.version):
+            self.say("You can't register that item.", then=back)
+            return
+        pocket = self.pockets['key']
+        index = next(i for i, (item, _) in enumerate(pocket) if item == self.item)
+        self.registered = (0x80 | (index + 1), self.item)
+        self.say('Registered the item.', then=back)
 
     def use(self):
         item, kind = self.item, item_kind(self.item, self.version)
@@ -826,6 +838,8 @@ class Game2:
         put('wCurMoveNum', [self.move_num])
         put('wPlayerState', [self.player_state])
         put('wBikeFlags', [self.bike])
+        put('wWhichRegisteredItem', [self.registered[0]])
+        put('wRegisteredItem', [self.registered[1]])
         put('wMapGroup', [self.map[0]])
         put('wMapNumber', [self.map[1]])
         put('wJohtoBadges', [self.badges])
@@ -1131,6 +1145,27 @@ def test_held_item_prechecks_send_nothing():
     refused(take_item(game.port(), 0), game, 'not holding')
     game = Game2(items=[(POTION, 1)], battle=1, screen='battle_menu')
     refused(give_item(game.port(), POTION, 0), game, 'outside battle')
+
+
+# Registered items -----------------------------------------------------------------------
+
+@pytest.mark.parametrize('version', ['gold', 'crystal'])
+def test_register_item_puts_the_bicycle_on_select(version):
+    game = Game2(version, items=[(POTION, 1)], key=[SUPER_ROD, BICYCLE])
+    result = register_item(game.port(), BICYCLE)
+    assert done(result) and game.registered == (0x82, BICYCLE)
+    assert result['shortcut']['item_id'] == BICYCLE and game.screen == 'overworld'
+    game.inputs.clear()
+    again = register_item(game.port(), BICYCLE)
+    assert 'already registered' in again['outcome'] and again['shortcut']['completed'] and game.inputs == []
+
+
+def test_register_item_prechecks_send_nothing():
+    game = Game2(items=[(POTION, 1)])
+    refused(register_item(game.port(), BICYCLE), game, 'not in the bag')
+    refused(register_item(game.port(), POTION), game, 'key item')
+    game = Game2(items=[(POTION, 1)], key=[BICYCLE], battle=1, screen='battle_menu')
+    refused(register_item(game.port(), BICYCLE), game, 'outside battle')
 
 
 # Party and battle -----------------------------------------------------------------------

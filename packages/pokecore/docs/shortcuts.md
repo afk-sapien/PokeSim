@@ -49,6 +49,7 @@ answers it.
 | `use_item(port, item, target, move)` | All six | The bag count dropped or the item's effect showed (heal, Berry, status, revive, PP, vitamin, Rare Candy, evolution stone, TM or HM learned, ball thrown, repel, escape item, rod cast, bicycle, Poke Flute). Gen 2 turns to the right pocket first. TMs on a full moveset need `forget_move`. |
 | `give_item(port, item, slot, swap=False)` | Gold, Silver, Crystal | The Pokemon holds `item`. Replacing a held item needs `swap=True`. Mail refuses. |
 | `take_item(port, slot)` | Gold, Silver, Crystal | The held item is back in the pack. |
+| `register_item(port, item)` | Gold, Silver, Crystal | The key item is registered to SELECT. SELECT then uses it from the overworld, and gets on or off the Bicycle with no message. |
 | `choose_move(port, slot)` | All six | The turn started with that move selected. With no PP left, or a turn locked by a move such as THRASH, FIGHT runs Struggle or the locked move and `forced` says which. |
 | `learn_move(port, forget)` | All six | At a learn-a-new-move prompt, the move in slot `forget` was replaced, or with `'keep'` the new move was given up. HMs and empty slots refuse. |
 | `switch_pokemon(port, slot)` | All six | In battle the new Pokemon is out, also from the "change Pokemon?" prompt. Outside battle it is the party lead. |

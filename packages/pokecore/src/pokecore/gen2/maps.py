@@ -102,7 +102,7 @@ def travel_collision(data, snapshot, mid, grid):
     """``grid`` with the walls the game raises until story flags or items clear them.
 
     The Sudowoodo on Route 36, the Snorlax by Vermilion City, the Cinnabar rocks on Route 19,
-    the Victory Road gate guards and the bike-only Route 16 and 17 gates. Returns ``grid``
+    the Victory Road gate guards and the Cycling Road gates on Routes 16 and 17. Returns ``grid``
     itself when nothing applies, otherwise a changed copy.
     """
     entry = data.maps[mid]
@@ -121,7 +121,9 @@ def travel_collision(data, snapshot, mid, grid):
             for dy in range(2):
                 for dx in range(2):
                     grid[(y + dy) * width + x + dx] = entry['block_collision'][0x7A][dy * 2 + dx]
-    if name in {'ROUTE_16_GATE', 'ROUTE_17_ROUTE_18_GATE'} and data.items['BICYCLE'] not in dict(snapshot.items):
+    if name in {'ROUTE_16_GATE', 'ROUTE_17_ROUTE_18_GATE'}:
+        # Closed with a Bicycle too. Route 17 pulls a player who presses nothing downhill, so a route
+        # north up it in short presses was undone between them, and travel has no direction to allow south only.
         grid = list(grid)
         for y in (4, 5):
             grid[y * width + 5] = 7

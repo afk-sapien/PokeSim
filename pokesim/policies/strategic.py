@@ -17,8 +17,8 @@ from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
 from .move_development import hm_upgrade, move_name
-from .progression import (BOSS_TABLE, FLASH, GAME_STARTERS, STARTERS, YELLOW, Goal, boss_training, flash_learner,
-                          healing_goal, journey, milestones, power, story_goal)
+from .progression import (BOSS_TABLE, FLASH, GAME_STARTERS, STARTERS, YELLOW, Goal, bicycle_goal, boss_training,
+                          flash_learner, healing_goal, journey, milestones, power, story_goal)
 from ..planning.losses import Losses, ace_slot
 from . import training
 from .menus import select, tap
@@ -64,6 +64,31 @@ HM_TEACH_ITEMS = frozenset((ITEMS['HM03'], ITEMS['HM04']))
 TRAINER_ENGAGING = 1 << BIT_TRAINER_BATTLE
 W_REPEL_STEPS = W_MOVE_NUM - 5  # wRepelRemainingSteps precedes the four-byte wMoves array
 HM_ITEM_MOVES = {ITEMS[f'HM0{number}']: move for number, move in zip(range(1, 6), (15, 19, 57, 70, 148))}
+# The game lets the Bicycle out on Route 23, Indigo Plateau and maps of these tilesets (IsBikeRidingAllowed),
+# and makes the player walk on entering any other map.
+BIKE_TILESETS = frozenset(('OVERWORLD', 'FOREST', 'UNDERGROUND', 'SHIP_PORT', 'CAVERN'))
+BIKE_MAPS = frozenset((MAPS['ROUTE_23'], MAPS['INDIGO_PLATEAU']))
+WATER_TILES = (0x14, 0x32, 0x48)
+# Getting on costs about what the Bicycle saves over this many steps, so a shorter walk goes on foot.
+MOUNT_STEPS = 20
+# Victory Road's southern entrance, on Route 23.
+VICTORY_SOUTH = ((MAPS['ROUTE_23'], 8, 138),)
+
+
+def rideable(m):
+    return m in BIKE_MAPS or WORLD.get(m, {}).get('tileset') in BIKE_TILESETS
+
+
+def ride_ahead(path):
+    """How many steps of ``path``, up to MOUNT_STEPS, stay on land the Bicycle may ride."""
+    steps = 0
+    for _, _, (m, x, y) in path:
+        world = WORLD.get(m)
+        if (steps >= MOUNT_STEPS or not world or not rideable(m)
+                or (world.get('tileset') in WATER_TILESETS and Navigator._tile(world, x, y) in WATER_TILES)):
+            break
+        steps += 1
+    return steps
 
 
 def ready_to_climb(snapshot):
@@ -547,9 +572,15 @@ class StrategicPolicy(Policy):
         # Collection projects only start once the Champion is beaten, so the story and a project never
         # meet: the story is the pick until then and inside the League, and the plan placeholder after.
         if self.collection.completed_champion and s.map not in LEAGUE:
-            base = Goal('collect_plan', 'Plan the next adventure project',
-                        'Choose a collecting, evolution, training, or exploration objective')
-            choice = Ballot(base, goal_candidate(base, self.collection), source='plan')
+            # A run that reached the League without the Bicycle fetches it before planning the next project,
+            # once the passage has taken it south of Victory Road. Against a project under way the errand and
+            # the project took turns at every decision.
+            bike = None if self.collection.project else bicycle_goal(s)
+            if bike and self.north_of_victory_road(s):
+                bike = None
+            base = bike or Goal('collect_plan', 'Plan the next adventure project',
+                                'Choose a collecting, evolution, training, or exploration objective')
+            choice = Ballot(base, goal_candidate(base, self.collection), source='story' if bike else 'plan')
         else:
             base = story_goal(s, self.starter, self.fossil) if s.started else self.goal
             choice = Ballot(base, goal_candidate(base, self.collection), source='story' if s.started else 'current')
@@ -904,6 +935,12 @@ class StrategicPolicy(Policy):
         self.collection.activity_events.extend(rows)
         return verdict
 
+    def north_of_victory_road(self, s):
+        """Whether the run is inside Victory Road, or on the plateau or Route 23 with no route to the road's
+        southern entrance through the gates open now. Most of Kanto is out of reach from there."""
+        return s.map in VICTORY_MAPS or (s.map in (MAPS['INDIGO_PLATEAU'], MAPS['ROUTE_23'])
+                                         and self.nav.open_route(s, VICTORY_SOUTH) is None)
+
     def _overworld(self, s, mem):
         self.menu_context = None
         self.intent = None
@@ -1045,14 +1082,10 @@ class StrategicPolicy(Policy):
                 goal = choice.offer(pickup, pickup_errand, site='pickup_new',
                                     commit=partial(self._commit_pick, start, goal))
         # A plan made north of Victory Road cannot reach most of Kanto, so the passage replaces it.
-        # North means no route to the southern entrance through the gates open now.
-        south = ((MAPS['ROUTE_23'], 8, 138),)
-        if goal.key == 'collect_plan' and (
-                s.map in VICTORY_MAPS or s.map in (MAPS['INDIGO_PLATEAU'], MAPS['ROUTE_23'])
-                and self.nav.open_route(s, south) is None):
+        if goal.key == 'collect_plan' and self.north_of_victory_road(s):
             goal = choice.offer(Goal('collect_passage', 'Return to Kanto for another expedition',
                                      'Solve the remaining passage puzzles and leave through the southern entrance',
-                                     south),
+                                     VICTORY_SOUTH),
                                 choice.errand_candidate('collect_passage', 'passage'), site='passage')
         if s.map in (MAPS["ROCKET_HIDEOUT_ELEVATOR"], MAPS["CELADON_MART_ELEVATOR"], MAPS["SILPH_CO_ELEVATOR"]):
             rocket_lift = s.map == MAPS["ROCKET_HIDEOUT_ELEVATOR"]
@@ -1376,10 +1409,10 @@ class StrategicPolicy(Policy):
             if any(item == ITEMS["CARD_KEY"] and qty for item, qty in s.items):
                 self.mode = "unlocking a door"
                 return tap(direction, 4, 12) if mem[W_FACING] != FACING[direction] else tap("a")
-        if self.nav.can_surf and world.get("tileset") in WATER_TILESETS and tree in (0x14, 0x32, 0x48) and mem[W_WALK_BIKE_SURF_STATE] != 2:
+        if self.nav.can_surf and world.get("tileset") in WATER_TILESETS and tree in WATER_TILES and mem[W_WALK_BIKE_SURF_STATE] != 2:
             here = mem[W_TILEMAP + 9 * 20 + 8]
             ts = world["tileset"]
-            if (live_tile not in (0x14, 0x32, 0x48)
+            if (live_tile not in WATER_TILES
                     or (ts, here, live_tile) in PAIR_COLLISIONS
                     or (ts, live_tile, here) in PAIR_COLLISIONS):
                 self.nav.blocked[(pos, direction)] = s.frame + 600
@@ -1403,9 +1436,16 @@ class StrategicPolicy(Policy):
                 return (self._field(s, 'CUT', target, 'Use Cut to open the route', direction,
                                     'Cut did not clear the tree')
                         or self._avoid(s, direction, 'Find another way around the tree after Cut was refused'))
+        state = mem[W_WALK_BIKE_SURF_STATE]
+        if (state == 0 and any(item == ITEMS['BICYCLE'] and qty for item, qty in s.items)
+                and rideable(s.map) and ride_ahead(self.nav.path) >= MOUNT_STEPS):
+            actions = self._use_item(s, ITEMS['BICYCLE'], purpose='Ride the Bicycle for the walk ahead')
+            if actions:
+                return actions
         self.nav.issued(pos, direction, s.frame)
         self.watch.begin('move', f'Move {direction} or cross into the next area', s, pos)
-        return tap(direction, 8, 12)
+        # The Bicycle covers a tile in 8 frames, half a walking step, so a shorter press keeps pace with it.
+        return tap(direction, 4, 8) if state == 1 else tap(direction, 8, 12)
 
     def _trash_goal(self, snapshot):
         opened = event_set(snapshot.event_flags, "EVENT_1ST_LOCK_OPENED")

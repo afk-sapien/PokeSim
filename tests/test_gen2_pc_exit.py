@@ -111,7 +111,7 @@ def test_return_from_cable_steps_off_the_stairs_instead_of_pressing_a(data):
     from pokesim.gen2.policy import Policy
     policy = Policy(data, seed=1, starter='cyndaquil')
     upstairs = data.map_ids['POKECENTER_2F']
-    snapshot = SimpleNamespace(map=upstairs, x=0, y=7, frame=0, badges=0, party=(), objects=(),
+    snapshot = SimpleNamespace(map=upstairs, x=0, y=7, frame=0, badges=0, party=(), items=(), objects=(),
                                event=lambda name: False)
     assert policy.nav.toward(snapshot, upstairs, [(0, 7)]) == []
     action = policy.step_off(snapshot, None, False)
