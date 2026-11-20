@@ -49,8 +49,8 @@ def test_a_worker_that_keeps_exiting_keeps_restarting_with_a_longer_wait(supervi
         row = supervisor.registry.adventure(aid)
         assert row['state'] == 'failed' and aid not in supervisor.children
         assert row['summary']['next_retry'] > time.time()
-        count, due = supervisor.restarts[aid]
-        assert count == made
+        count, due, why = supervisor.restarts[aid]
+        assert count == made and why == 'its worker exited'
         assert due - before == pytest.approx(restart_delay(made - 1), abs=1)
         # Nothing starts before the wait is over.
         supervisor.run_restarts()

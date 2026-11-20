@@ -1,5 +1,8 @@
+from contextlib import closing, contextmanager
+import sqlite3
 from types import SimpleNamespace
 import threading
+import time
 
 import pytest
 
@@ -344,9 +347,12 @@ def test_readiness_timeout_names_the_last_cause_and_the_log_not_forty_lines(tmp_
     assert 'noise 10' not in message and ' | ' not in message and len(message) < 400
 
 
+@contextmanager
 def booted(tmp_path, monkeypatch, failures):
-    """Run the app's startup over one adventure that should run. Its worker starts raise `failures` in turn."""
+    """Run the app's startup over one adventure that should run, and give the manager, the adventure
+    and every worker it made. Its worker starts raise `failures` in turn."""
     from pokesim.app.manager import Manager
+    from pokesim.store import Store
     children = []
 
     class BootChild(FakeChild):
@@ -362,6 +368,10 @@ def booted(tmp_path, monkeypatch, failures):
     manager.registry.add_rom('rom', 'sha1', 'red')
     aid = manager.registry.create('Red', 'rom', {'starter': 'random'}, identifier())['id']
     manager.registry.request_lifecycle(aid, 'start', identifier())
+    # An adventure that has run has a database, which holds a row for each start.
+    store = Store(tmp_path / 'adventures' / aid)
+    store.set('play_clock', {'frames': 3600, 'initialized': True})
+    store.close()
     (tmp_path / 'fixture.gb').write_bytes(b'fake')
     monkeypatch.setattr(manager.assets, 'rom_path', lambda rid: tmp_path / 'fixture.gb')
     monkeypatch.setattr(manager.assets, 'prepare', lambda report: tmp_path)
@@ -372,7 +382,7 @@ def booted(tmp_path, monkeypatch, failures):
         monkeypatch.setattr(owner, name, lambda: None)
     try:
         manager.start()
-        return manager.registry.adventure(aid), children, manager.supervisor.children.get(aid)
+        yield manager, aid, children
     finally:
         manager.close()
 
@@ -381,24 +391,46 @@ def not_ready():
     return NotReady('Worker was not ready after 45 seconds (still running). Last output: none.')
 
 
-def test_a_startup_start_that_was_not_ready_in_time_starts_once_more(tmp_path, monkeypatch):
-    row, children, running = booted(tmp_path, monkeypatch, [not_ready()])
-    assert row['state'] == 'running' and row['error'] is None
-    assert len(children) == 2 and running is children[1]
-    assert children[0].stops == 1 and children[1].starts == 1
+def start_reasons(folder):
+    """Why each start in the adventure's database was made, oldest first."""
+    from pokesim import stall_truth
+    with closing(sqlite3.connect(folder / 'pokesim.sqlite')) as db:
+        return [(row['source'], row.get('why')) for row in stall_truth.rows(db, 'restart') if row['action'] == 'start']
 
 
-def test_a_startup_start_not_ready_twice_fails_the_adventure(tmp_path, monkeypatch):
-    row, children, running = booted(tmp_path, monkeypatch, [not_ready(), not_ready()])
-    assert row['state'] == 'failed' and 'not ready after 45 seconds' in row['error']
-    assert len(children) == 2 and running is None
-    assert all(child.stops == 1 for child in children)
+def test_a_startup_start_not_ready_in_time_restarts_with_a_wait_that_doubles(tmp_path, monkeypatch):
+    # Over two reboots in a row, a deep save was not ready within 45 seconds in three startup
+    # starts. Its later starts took 7 to 28 seconds, so the host needed only time.
+    from pokesim.app.supervisor import restart_delay
+    with booted(tmp_path, monkeypatch, [not_ready(), not_ready(), not_ready()]) as (manager, aid, children):
+        supervisor = manager.supervisor
+        for made in range(1, 4):
+            row = manager.registry.adventure(aid)
+            assert row['state'] == 'failed' and 'not ready after 45 seconds' in row['error']
+            assert row['summary']['next_retry'] > time.time()
+            count, due, _ = supervisor.restarts[aid]
+            assert count == made and due - time.monotonic() == pytest.approx(restart_delay(made - 1), abs=1)
+            assert len(children) == made and aid not in supervisor.children
+            # Nothing starts before the wait is over.
+            supervisor.run_restarts()
+            assert len(children) == made
+            supervisor.restarts[aid][1] = time.monotonic() - 1
+            supervisor.run_restarts()
+        row = manager.registry.adventure(aid)
+        assert row['state'] == 'running' and row['error'] is None
+        assert len(children) == 4 and supervisor.children[aid] is children[3] and children[3].starts == 1
+        assert all(child.stops == 1 for child in children[:3])
+        assert start_reasons(tmp_path / 'adventures' / aid) == [
+            ('boot', None), ('supervisor', 'it was not ready in time at startup'),
+            ('supervisor', 'its restart did not start'), ('supervisor', 'its restart did not start')]
 
 
 def test_a_startup_start_that_fails_another_way_is_not_tried_again(tmp_path, monkeypatch):
-    row, children, running = booted(tmp_path, monkeypatch, [Refused('Worker exited before becoming ready')])
-    assert row['state'] == 'failed' and row['error'] == 'Worker exited before becoming ready'
-    assert len(children) == 1 and running is None
+    with booted(tmp_path, monkeypatch, [Refused('Worker exited before becoming ready')]) as (manager, aid, children):
+        row = manager.registry.adventure(aid)
+        assert row['state'] == 'failed' and row['error'] == 'Worker exited before becoming ready'
+        assert len(children) == 1 and aid not in manager.supervisor.children
+        assert aid not in manager.supervisor.restarts
 
 
 def test_a_worker_that_fails_to_start_reports_why_instead_of_a_bare_exit(tmp_path):

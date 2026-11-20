@@ -221,7 +221,7 @@ class Supervisor:
         self.guard = threading.RLock()
         self.admission = threading.RLock()
         self.locks = {}
-        self.restarts = {}   # aid -> [automatic restarts in a row, monotonic due time or None]
+        self.restarts = {}   # aid -> [automatic restarts in a row, monotonic due time or None, why]
         self.setup_retries = {}   # aid -> (due time, automatic attempts made) after a failed data download
         self.unhealthy_since = {}
         self.notifications = None   # installed by the manager: adventure row -> worker notification settings
@@ -458,7 +458,7 @@ class Supervisor:
         with self.guard:
             made = self.restarts.get(aid, [0, None])[0]
             delay = restart_delay(made)
-            self.restarts[aid] = [made + 1, time.monotonic() + delay]
+            self.restarts[aid] = [made + 1, time.monotonic() + delay, why]
         log.warning('Adventure %s restarts in %d seconds because %s, restart %d in a row', aid, delay, why, made + 1)
         try:
             summary = {**(self.registry.adventure(aid).get('summary') or {}), 'next_retry': time.time() + delay}
@@ -471,7 +471,7 @@ class Supervisor:
         for RESTART_RESET_SECONDS, so a worker that keeps exiting waits longer each time."""
         now = time.monotonic()
         with self.guard:
-            due = [aid for aid, (_, at) in self.restarts.items() if at is not None and at <= now]
+            due = [aid for aid, (_, at, _) in self.restarts.items() if at is not None and at <= now]
         for aid in due:
             if self.closed.is_set():
                 return
@@ -479,6 +479,7 @@ class Supervisor:
                 if aid not in self.restarts:
                     continue
                 self.restarts[aid][1] = None
+                why = self.restarts[aid][2]
             try:
                 row = self.registry.adventure(aid)
             except KeyError:
@@ -492,7 +493,7 @@ class Supervisor:
                 continue
             if row['state'] != 'failed':
                 continue
-            stall_truth.lifecycle(self.registry.root / 'adventures' / aid, 'start', 'supervisor', why='worker exited')
+            stall_truth.lifecycle(self.registry.root / 'adventures' / aid, 'start', 'supervisor', why=why)
             try:
                 self.start(aid)
             except Exception:
