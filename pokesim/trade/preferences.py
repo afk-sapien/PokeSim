@@ -28,6 +28,8 @@ LEGACY = {'offered': FIRST, 'locked': KEEP, 'withdrawn': KEEP, 'unlocked': AUTO}
 # Copies that share a trainer, DVs and evolution family ("twins") are told apart by nickname: the
 # trade key adds TWIN and the copy's tag to the family key. Neither game stores anything else that
 # stays the same while a Pokémon is played, so nothing is ever written to the game to mark one.
+# Twins with the same nickname whose stats differ add a third part, their stamp (see stamp). A
+# boxed copy keeps its stats, and a trade follows a picked copy by its party slot once it is held.
 TWIN = '~'
 # The tag of a copy that carries its species' own name, or is an Egg. The game renames such a Pokémon
 # when it evolves or hatches, so the tag must not follow that name.
@@ -114,15 +116,32 @@ def base(key):
     return key.split(TWIN, 1)[0] if isinstance(key, str) else key
 
 
+def tagged(key):
+    """A trade key without its stamp: the family key and nickname tag of the copies it names."""
+    return TWIN.join(key.split(TWIN)[:2]) if isinstance(key, str) else key
+
+
+def stamped(key):
+    """Whether a trade key names a copy by its stats as well as its nickname."""
+    return isinstance(key, str) and key.count(TWIN) == 2
+
+
 def fingerprint(mon):
     return tuple(json.dumps(mon.get(field), sort_keys=True, default=str) for field in FINGERPRINT)
 
 
+def stamp(mon):
+    """The stats part of a key: 'f' and 8 hex digits of the SHA-256 of the fingerprint, which every
+    process and release gives alike."""
+    return 'f' + hashlib.sha256(json.dumps(fingerprint(mon)).encode()).hexdigest()[:8]
+
+
 def answers(mon, key):
-    """Whether a held Pokémon is one the key names. A twin key names the copies with its nickname tag."""
+    """Whether a held Pokémon is one the key names. A twin key names the copies with its nickname tag,
+    and a stamped key only those whose stats give its stamp too."""
     if isinstance(key, str) and TWIN in key:
-        root, mark = key.split(TWIN, 1)
-        return identity(mon) == root and tag(mon) == mark
+        root, mark, *stats = key.split(TWIN)
+        return identity(mon) == root and tag(mon) == mark and (not stats or stats == [stamp(mon)])
     return individual.same(identity(mon), key)
 
 
@@ -144,7 +163,8 @@ def assign(rows):
     """Set each row's trade_key and trade_ambiguous in place, as apply lists them.
 
     A Pokémon alone in its family group keeps the family key. Twins get a twin key each. Twins that
-    share a nickname share the key too, and are ambiguous unless they are interchangeable.
+    share a nickname share the key too when they are interchangeable. When their stats differ, each
+    adds its stamp, and copies are ambiguous only if two different sets of stats give one stamp.
     """
     groups = defaultdict(list)
     for mon in rows:
@@ -155,8 +175,14 @@ def assign(rows):
     buckets = defaultdict(list)
     for mon in rows:
         buckets[mon['trade_key']].append(mon)
+    for key, members in list(buckets.items()):
+        if key and len(members) > 1 and len({fingerprint(mon) for mon in members}) > 1:
+            del buckets[key]
+            for mon in members:
+                mon['trade_key'] = f'{key}{TWIN}{stamp(mon)}'
+                buckets[mon['trade_key']].append(mon)
     for key, members in buckets.items():
-        ambiguous = bool(key) and len({fingerprint(mon) for mon in members}) > 1
+        ambiguous = bool(key) and len(members) > 1 and len({fingerprint(mon) for mon in members}) > 1
         for mon in members:
             mon['trade_ambiguous'] = ambiguous
             if ambiguous:
@@ -182,10 +208,16 @@ def interchangeable(rows, key):
 
 def sendable(rows, slot, key):
     """Whether party row ``slot`` may go for the trade key: it answers to the key, and the key names it
-    alone or interchangeable twins. ``rows`` hold the party first, then the boxed Pokémon."""
+    alone or interchangeable twins. ``rows`` hold the party first, then the boxed Pokémon.
+
+    The preparation followed a copy picked by a stamped key to its party slot, and its stats change as
+    it is played, so the slot need only hold an unambiguous copy with that family key and nickname.
+    """
     listed = [dict(row) for row in rows]
     assign(listed)
-    return 0 <= slot < len(listed) and answers(listed[slot], key) and bool(interchangeable(listed, key))
+    if not 0 <= slot < len(listed) or not answers(listed[slot], tagged(key)):
+        return False
+    return not listed[slot]['trade_ambiguous'] if stamped(key) else bool(interchangeable(listed, key))
 
 
 def legacy_lock(preferences, mon):
@@ -292,10 +324,10 @@ def ambiguity(mon, twins):
     others = [other.get('name') or 'Pokémon' for other in twins if other is not mon]
     alike = 'no nickname' if tag(mon) == DEFAULT else 'the same nickname'
     if all(other == name for other in others):
-        return f"Another {name} from the same trainer has identical stats and {alike}, so the game can't tell them apart"
+        return f"Another {name} from the same trainer has the same DVs and {alike}, so this one can't be picked out safely"
     other = next(other for other in others if other != name)
-    return (f"{other} is from the same trainer, has identical stats, the same evolution family and {alike}, "
-            "so the game can't tell them apart")
+    return (f"{other} is from the same trainer, has the same DVs, the same evolution family and {alike}, "
+            "so this one can't be picked out safely")
 
 
 def read(db):
@@ -415,7 +447,8 @@ def changes(preferences, rows, key, value):
     root = base(key)
     group = [mon for mon in rows if identity(mon) == root]
     own_rows = _twin_rows(preferences).get(root, {})
-    mark = key.split(TWIN, 1)[1] if TWIN in key else tag(group[0])
+    # A stamped copy's setting is its nickname group's, since its stats move as it is played.
+    mark = key.split(TWIN)[1] if TWIN in key else tag(group[0])
     if len(group) <= 1 and not any(other != mark for other in own_rows):
         return {root: value, **({f'{root}{TWIN}{mark}': None} if mark in own_rows else {})}
     current = dict(own_rows)

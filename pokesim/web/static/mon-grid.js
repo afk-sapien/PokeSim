@@ -84,7 +84,7 @@
   function lockBlocked(mon, options = {}) {
     if (mon.egg) return 'Eggs are never traded automatically.'
     if (!mon.trade_key) return 'This Pokémon cannot be traded.'
-    if (mon.trade_ambiguous) return mon.trade_ambiguous_reason || 'Another copy has the same trainer, stats and nickname, so it cannot be locked on its own.'
+    if (mon.trade_ambiguous) return mon.trade_ambiguous_reason || 'Another copy has the same trainer, DVs, stats and nickname, so it cannot be locked on its own.'
     if (options.viewer) return 'Only the owner can lock Pokémon.'
     if (options.stale) return 'Waiting for the PC to update.'
     return ''

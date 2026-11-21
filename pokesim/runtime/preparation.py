@@ -17,7 +17,7 @@ from ..ram import read_snapshot
 from ..screen import Screen
 from ..shortcuts import ShortcutRunner, gen1_ui
 from pokecore.identity import dex_of, is_legacy, legacy, same
-from ..trade.preferences import KEEP, TWIN, answers, apply, base, identity, merged
+from ..trade.preferences import KEEP, TWIN, answers, apply, base, identity, merged, stamped, tagged
 from ..web.pokedex import live_status
 
 KEY = 'interaction_preparation'
@@ -61,17 +61,26 @@ def answering(snapshot, preferences, key):
     return matches
 
 
-def selection(snapshot, preferences, key, copies=None):
+def selection(snapshot, preferences, key, copies=None, slot=None):
     """The slot of the Pokémon a trade key names, a party copy first.
 
     Interchangeable twins share a twin key, so any of them may go. ``copies`` is how many answered when
     the preparation began. A PC transfer in flight shows a Pokémon twice or not at all for a few frames,
-    and the count keeps such a frame from passing for a set of twins.
+    and the count keeps such a frame from passing for a set of twins. ``slot`` is the party slot a copy
+    picked by a stamped key was held in. Its stats change as it is played, so that slot must still hold
+    a copy with its family key and nickname.
     """
-    matches = answering(snapshot, preferences, key)
+    if slot is not None:
+        matches = [match for match in answering(snapshot, preferences, tagged(key)) if match[:2] == ('party', slot)]
+        if not matches:
+            raise ValueError('The selected Pokémon left its party slot')
+    else:
+        matches = answering(snapshot, preferences, key)
     twins = isinstance(key, str) and TWIN in key
-    if (not matches or len(matches) > 1 and (not twins or any(row['trade_ambiguous'] for _, _, row in matches))
-            or copies is not None and len(matches) != copies):
+    # A key from before a twin was stamped names copies that are no longer interchangeable.
+    if (not matches or len(matches) > 1 and (not twins or any(row['trade_ambiguous'] or row['trade_key'] != key
+                                                              for _, _, row in matches))
+            or slot is None and copies is not None and len(matches) != copies):
         raise ValueError('The selected Pokémon cannot be identified uniquely')
     if matches[0][2]['trade_locked']:
         raise ValueError('The selected Pokémon is protected or withdrawn')
@@ -115,6 +124,8 @@ def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False, prote
              'protect': sorted(set(protect)), 'wished': sorted(set(wished))}
     if manual:
         state.update(manual=True, from_party=location == 'party')
+        if location == 'party' and stamped(trade_key):
+            state['slot'] = position
     if not overworld_ready(snapshot, Screen(emu.pb.memory).kind(snapshot)):
         state.update(waiting_for='overworld',
                      waiting_reason=('Finishing the League run before travelling to the Cable Club'
@@ -217,6 +228,15 @@ class Preparation:
 
     def _preferences(self):
         return {} if self.state.get('manual') else self.emu.store.trade_preferences()
+
+    def _selection(self, snap):
+        """selection for this trade. A copy a stamped key names is followed by its slot once it is in the party."""
+        found = selection(snap, self._preferences(), self.state['trade_key'], self.state.get('copies'),
+                          self.state.get('slot'))
+        if found[0] == 'party' and stamped(self.state['trade_key']) and self.state.get('slot') is None:
+            self.state['slot'] = found[1]
+            self._save()
+        return found
 
     def _save(self):
         self.emu.store.set(KEY, self.state)
@@ -330,7 +350,7 @@ class Preparation:
             return [Action(None, 0, 12)]
         self.invalid_since = None
         if self.state.get('waiting_for'):
-            location, _, _ = selection(snap, self._preferences(), self.state['trade_key'], self.state.get('copies'))
+            location, _, _ = self._selection(snap)
             if location != 'box' and not self.state.get('manual'):
                 raise ValueError('The selected boxed spare moved before Cable Club preparation began')
             if not overworld_ready(snap, kind):
@@ -352,7 +372,7 @@ class Preparation:
                 if actions:
                     return actions
         try:
-            location, index, mon = selection(snap, self._preferences(), self.state['trade_key'], self.state.get('copies'))
+            location, index, mon = self._selection(snap)
         except ValueError as error:
             # Cartridge PC transfers update party and box records on different frames.
             # Let an in-flight operation settle without sending another menu input.
@@ -456,8 +476,7 @@ class Preparation:
         """Deposit the reserve or withdraw the offered partner with a Core shortcut."""
         operation = self.operation
         machine = (DepositPokemon(self._storage_reserve(snap)) if operation == 'deposit'
-                   else WithdrawPokemon(selection(snap, self._preferences(), self.state['trade_key'],
-                                                  self.state.get('copies'))[1]))
+                   else WithdrawPokemon(self._selection(snap)[1]))
 
         def done(result, finished):
             if not result.completed:

@@ -768,7 +768,7 @@ def test_manual_rows_block_only_hard_limits():
     assert [row['blocked'] for row in rows] == [
         'The game refuses to trade away the only Pokémon that can battle', 'Eggs cannot be traded', '',
         "This Pokémon's trainer and stats could not be read, so it cannot be picked out safely",
-        "Another Rattata from the same trainer has identical stats and no nickname, so the game can't tell them apart"]
+        "Another Rattata from the same trainer has the same DVs and no nickname, so this one can't be picked out safely"]
     assert rows[2]['location'] == 'box'
     assert (rows[2]['box'], rows[2]['slot']) == (3, 4)
     assert manual_rows(payload, 1)[0]['blocked'] == ''
