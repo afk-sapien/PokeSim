@@ -578,17 +578,30 @@ def annotate(rated, active_box=None):
             for row in rated if row.entry.slot is not None}
 
 
-def pc_request(rated, slot, key, keyof, confirm=''):
-    """The request for the boxed Pokémon at ``slot`` whose trade key ``keyof`` gives as ``key`` (request_value)."""
+MOVED = 'That Pokémon has moved. Refresh the PC and try again.'
+
+
+def pc_request(rated, slot, key, keyof, named, confirm=''):
+    """The request for the boxed Pokémon at ``slot`` whose family key ``keyof`` gives as ``key`` (request_value).
+
+    ``named`` are the slots of every held copy the request's trade key names. It must be this one alone,
+    so the request takes one Pokémon. Twins alike in every stat share a key, so neither can be asked for.
+    """
     row = next((row for row in rated if row.entry.slot == slot and keyof(row.entry.record) == key), None)
-    return request_value(row, confirm)
+    value = request_value(row, confirm)
+    if len(named) > 1:
+        raise ValueError(f'Another {row.entry.name} from the same trainer has the same DVs, name and stats, '
+                         "so this one can't be picked out safely.")
+    if list(named) != [slot]:
+        raise ValueError(MOVED)
+    return value
 
 
 def request_value(row, confirm=''):
     """The stored request for an owner's Release on ``row``, or ValueError with the reason it is refused.
     The last copy of a species goes only when ``confirm`` names it."""
     if row is None:
-        raise ValueError('That Pokémon has moved. Refresh the PC and try again.')
+        raise ValueError(MOVED)
     if row.reason == 'Keep':
         raise ValueError(f'{row.entry.name} is set to Keep. Change its trade setting first.')
     if row.reason == 'In the party':

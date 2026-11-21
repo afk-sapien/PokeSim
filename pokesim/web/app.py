@@ -495,13 +495,19 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
             values, deadlock = {}, False
         requests = store.release_requests()
         if isinstance(storage, dict):
+            party, boxed = payload.get('party') or [], storage.get('pokemon') or []
+            rows = [*party, *boxed]
+            # A request marks the one Pokémon it names, never its twin (preferences.picked).
+            asked = {index - len(party) for index in
+                     preferences.picked(requests, [preferences.base(mon.get('trade_key')) for mon in rows],
+                                        rows.__getitem__)}
+
             # A field is sent only when set, so a full PC stays inside the page's payload budget.
-            def mark(mon):
+            def mark(index, mon):
                 value = values.get((mon.get('box', 0) - 1, mon.get('position', 0) - 1))
                 return {**mon, **({'pc_value': value} if value else {}),
-                        **({'release_requested': True}
-                           if preferences.base(mon.get('trade_key')) in requests else {})}
-            storage = {**storage, 'pokemon': [mark(mon) for mon in storage.get('pokemon') or []]}
+                        **({'release_requested': True} if index in asked else {})}
+            storage = {**storage, 'pokemon': [mark(index, mon) for index, mon in enumerate(boxed)]}
         return {**payload, 'storage': storage, 'pc_favor': store.pc_favor(),
                 'pc_deadlock': DEADLOCK if deadlock else None}
 
@@ -557,7 +563,15 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         if view_only():
             raise HTTPException(403, 'This instance is view-only')
         if choice.cancel:
-            store.set_release_request(preferences.base(choice.key), '')
+            # Every saved request that names this copy goes, such as one saved while it had a twin.
+            payload = pokedex_status(plan=False)
+            rows = [*(payload.get('party') or []), *((payload.get('storage') or {}).get('pokemon') or [])]
+            spot = next((index for index, mon in enumerate(rows) if mon.get('trade_key') == choice.key
+                         and (mon.get('box'), mon.get('position')) == (choice.box, choice.position)), None)
+            roots = [preferences.base(mon.get('trade_key')) for mon in rows]
+            for key in store.release_requests():
+                if key == choice.key or spot in preferences.answering(key, roots, rows.__getitem__):
+                    store.set_release_request(key, '')
             return {'ok': True, 'request': None}
         try:
             value = emu.request_release(choice.box - 1, choice.position - 1, choice.key, choice.confirm)

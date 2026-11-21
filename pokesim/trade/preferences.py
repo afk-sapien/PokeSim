@@ -220,6 +220,34 @@ def sendable(rows, slot, key):
     return not listed[slot]['trade_ambiguous'] if stamped(key) else bool(interchangeable(listed, key))
 
 
+def answering(key, roots, listed):
+    """The indices of the held Pokémon a release request's key names.
+
+    ``roots`` are their family keys, party first, and ``listed(index)`` gives one as the PC page lists
+    it, which a twin key's nickname tag and stamp are read from. Only a twin family's copies are listed.
+    """
+    if not isinstance(key, str):
+        return []
+    root = base(key)
+    return [index for index, mine in enumerate(roots)
+            if mine == root and (TWIN not in key or answers(listed(index), key))]
+
+
+def picked(requests, roots, listed):
+    """{index: key} for each release request whose key names exactly one held Pokémon (answering).
+
+    A key that several copies answer names none: a family key saved before twins were told apart, or
+    the key of twins alike in every stat. Such a request takes no Pokémon and is dropped, so it never
+    widens to the other copies.
+    """
+    named = {}
+    for key in requests:
+        found = answering(key, roots, listed)
+        if len(found) == 1:
+            named[found[0]] = key
+    return named
+
+
 def legacy_lock(preferences, mon):
     """Whether a lock still stored under this Pokémon's older trainer and DV key answers to it.
 

@@ -40,7 +40,7 @@ from .ledger import fighters, league_treatment
 from ..planning.arbiter import Candidate, Tier
 from ..planning.stance import FLEE_TRIES, STORY
 from .awareness import ActionWatch
-from .team import (held_identities, potential, readiness, release_note, requested_slots,
+from .team import (held_requests, potential, readiness, release_note, requested_slots,
                    reserve_to_deposit, storage_headroom, team_keys)
 from ..pcvalue import VisitTeam
 from ..screen import Screen, W_PLAYER_MON_NUMBER
@@ -1578,12 +1578,12 @@ class StrategicPolicy(Policy):
             self.collection.abandon(supplies.abandon)
 
     def release_pending(self, snapshot):
-        """Whether an owner's release request waits for the next PC visit. A request whose Pokémon has
-        gone is dropped."""
+        """Whether an owner's release request waits for the next PC visit. A request that names no one
+        held Pokémon, because it has gone or its key fits several copies, is dropped."""
         requests = self.release_requests() if hasattr(self, 'release_requests') else {}
         if not requests:
             return False
-        held = held_identities(snapshot)
+        held = held_requests(snapshot, requests)
         if hasattr(self, 'prune_release_requests') and held is not None and not set(requests) <= held:
             requests = self.prune_release_requests(held)
         return bool(requested_slots(snapshot, requests, self._preferences(), self.pc.avoid))
