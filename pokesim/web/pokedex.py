@@ -159,6 +159,17 @@ def party_record(mon: dict, slot: int) -> dict:
             "status_label": mon.get("status_label"), "slot": slot, **strength(mon)}
 
 
+def stored_record(mon: dict) -> dict:
+    """One boxed Pokémon as the PC page lists it."""
+    return {**mon, "dex": SPECIES.get(mon["species"], {}).get("dex"),
+            "type_names": species_types(mon["species"]),
+            **stored_condition(mon),
+            "experience_progress": experience_details(
+                mon.get("experience"), mon.get("level"),
+                SPECIES.get(mon["species"], {}).get("growth")), **stored_strength(mon), **assessment(mon),
+            'battle_power': battle_power(mon)}
+
+
 def strength(mon: dict) -> dict:
     """Stats, Stat Power and its level 100 ceiling, the DV odds and Battle Power of one record."""
     return {**stored_strength(mon), **assessment(mon), 'battle_power': battle_power(mon)}
@@ -194,21 +205,13 @@ def live_status(game: dict | None, collection: dict | None = None, *, league_rew
     if not game:
         return {"started": False, "owned": [], "seen": [], "party": [], "storage": None, **plan}
     plan["protected_species"] = sorted(set(plan["protected_species"]) | field_move_partners(game))
-    dex_of = {sid: mon["dex"] for sid, mon in SPECIES.items()}
     storage = game.get("storage") or {}
     return {
         "started": True,
         "owned": game.get("dex_owned", []), "seen": game.get("dex_seen", []),
         "player_name": game.get("player_name", ""), "playtime": game.get("playtime", ""),
         "party": [party_record(mon, slot + 1) for slot, mon in enumerate(game.get("party", []))],
-        "storage": {**storage,
-                    "pokemon": [{**mon, "dex": dex_of.get(mon["species"]),
-                                 "type_names": species_types(mon["species"]),
-                                 **stored_condition(mon),
-                                 "experience_progress": experience_details(
-                                     mon.get("experience"), mon.get("level"),
-                                     SPECIES.get(mon["species"], {}).get("growth")), **stored_strength(mon), **assessment(mon), 'battle_power': battle_power(mon)}
-                                for mon in storage.get("pokemon", [])]}
+        "storage": {**storage, "pokemon": [stored_record(mon) for mon in storage.get("pokemon", [])]}
         if storage else None,
         **plan,
     }

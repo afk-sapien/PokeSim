@@ -166,18 +166,24 @@ class EmulatorBase:
             return annotate(rated, snapshot.active_box), deadlocked(rated, self._headroom(snapshot))
         return self.call(view, timeout=5)
 
+    def _request_slots(self, snapshot, key):
+        """The (box, position) of each held Pokémon a release request's key names, None for a party copy."""
+
     def request_release(self, box, position, key, confirm=''):
-        """Store the owner's Release for the boxed Pokémon at (box, position), or raise ValueError."""
+        """Store the owner's Release for the boxed Pokémon at (box, position), or raise ValueError.
+
+        The request is saved under the full trade key the PC row carries, which names that one copy, so
+        a release never takes its twin.
+        """
         from ..pcvalue import pc_request
         from ..trade.preferences import base
-        # Release requests stay on the family key the PC rows carry, also for a twin.
-        key = base(key)
 
         def request():
             snapshot = self.snapshot
             if snapshot is None or not hasattr(self.policy, 'pc_rated'):
                 raise ValueError('Wait for the adventure to be ready before releasing.')
-            value = pc_request(self.policy.pc_rated(snapshot), (box, position), key, self._identity, confirm)
+            value = pc_request(self.policy.pc_rated(snapshot), (box, position), base(key), self._identity,
+                               self._request_slots(snapshot, key), confirm)
             self.store.set_release_request(key, value)
             return value
         return self.call(request)

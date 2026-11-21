@@ -1,5 +1,5 @@
-"""An owner's release request is stored by trade identity, starts the next PC visit, goes first and is
-dropped once its Pokémon has gone. A Keep, party, egg or unconfirmed last copy request never starts one."""
+"""An owner's release request is stored by the trade key of the one copy it names, starts the next PC
+visit, goes first and is dropped once no one held Pokémon answers it. A Keep, party, egg or unconfirmed last copy request never starts one."""
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -10,8 +10,9 @@ from pokesim.gen2 import ledger
 from pokesim.gen2.release import BOX_CAPACITY, pending
 from pokesim.pcvalue import DEADLOCK, LAST_COPY
 from pokesim.planning.ledger import BOX_REFILL
-from pokesim.policies.team import held_identities, requested_slots
+from pokesim.policies.team import held_requests, request_slots, requested_slots
 from pokesim.store import Store
+from pokesim.trade import preferences
 from pokesim.trade.preferences import identity
 from test_gen2_storage_ledger import BEST, PARTY, Policy, mon, no_breeding_stock, snapshot  # noqa: F401  (fixture)
 from test_release_origins import best_and, stored
@@ -61,15 +62,72 @@ def test_a_gen1_request_waits_for_a_visit_unless_it_is_kept():
     lone = stored(2, 19)
     assert requested_slots(gen1_snapshot(best_and(weak, lone)), {gen1_key(lone): 'release'}) == []
     assert requested_slots(gen1_snapshot(best_and(weak, lone)), {gen1_key(lone): LAST_COPY}) == [(0, 2)]
-    assert gen1_key(weak) in held_identities(s)
+    assert held_requests(s, {gen1_key(weak): 'release', 'gone': 'release'}) == {gen1_key(weak)}
 
+
+def listed_keys(s):
+    """Each boxed Pokémon's trade key as the PC page gives it."""
+    from pokesim.web.pokedex import stored_record
+    rows = [stored_record(mon) for mon in s.to_dict()['storage']['pokemon']]
+    preferences.assign(rows)
+    return [row['trade_key'] for row in rows]
+
+
+class Gen1Requests:
+    def __init__(self, requests):
+        from pokesim.policies.strategic import StrategicPolicy
+        self.requests, self.policy = dict(requests), StrategicPolicy(7)
+        self.policy.release_requests = lambda: dict(self.requests)
+        self.policy.prune_release_requests = self.prune
+
+    def prune(self, held):
+        self.requests = {key: value for key, value in self.requests.items() if key in held}
+        return dict(self.requests)
+
+
+def test_a_gen1_request_takes_the_one_twin_it_names():
+    first, second = stored(1, dvs=(2,) * 5), stored(2, dvs=(2,) * 5, level=21)
+    s = gen1_snapshot(best_and(first, second))
+    _, one, other = listed_keys(s)
+    assert preferences.TWIN in one and one != other
+    assert requested_slots(s, {other: 'release'}) == [(0, 2)]
+    assert requested_slots(s, {one: 'release'}) == [(0, 1)]
+    assert request_slots(s, other) == [(0, 2)]
+    asked = Gen1Requests({other: 'release'})
+    assert asked.policy.release_pending(s) and asked.requests == {other: 'release'}
+
+
+def test_a_gen1_family_key_request_on_twins_is_dropped_never_widened():
+    first, second = stored(1, dvs=(2,) * 5), stored(2, dvs=(2,) * 5, level=21)
+    s = gen1_snapshot(best_and(first, second))
+    family = gen1_key(first)
+    # A request saved before the fix names the family, which now holds two copies.
+    assert requested_slots(s, {family: 'release'}) == []
+    asked = Gen1Requests({family: 'release'})
+    assert not asked.policy.release_pending(s) and asked.requests == {}
+
+
+def test_twins_alike_in_every_stat_cannot_be_asked_for():
+    from pokesim.pcvalue import MOVED, pc_request
+    first, second = stored(1, dvs=(2,) * 5), stored(2, dvs=(2,) * 5)
+    s = gen1_snapshot(best_and(first, second))
+    _, one, other = listed_keys(s)
+    assert one == other and request_slots(s, one) == [(0, 1), (0, 2)]
+    from pokesim.policies.strategic import StrategicPolicy
+    rated = StrategicPolicy(7).pc_rated(s)
+    with pytest.raises(ValueError, match='same DVs, name and stats'):
+        pc_request(rated, (0, 1), gen1_key(first), identity, request_slots(s, one))
+    # A key that names another copy is refused as a stale page.
+    with pytest.raises(ValueError, match=MOVED.split('.')[0]):
+        pc_request(rated, (0, 1), gen1_key(first), identity, [(0, 2)])
+    assert pc_request(rated, (0, 1), gen1_key(first), identity, [(0, 1)]) == 'release'
 
 
 def test_compact_fallback_rows_never_drop_a_request():
     weak = stored(1, dvs=(2,) * 5)
     full = gen1_snapshot(best_and(weak))
     compact = replace(full, stored_details=())
-    assert held_identities(compact) is None
+    assert held_requests(compact, {gen1_key(weak): 'release'}) is None
     from pokesim.policies.strategic import StrategicPolicy
     policy = StrategicPolicy(7)
     asked = {gen1_key(weak): 'release', 'gone': 'release'}
@@ -151,6 +209,40 @@ def test_a_gen2_request_for_a_last_copy_waits_until_the_confirm_names_it():
     assert pending(Requests({key(lone): LAST_COPY}), view)
 
 
+def gen2_mon(position, **extra):
+    """A Gen II Pokémon that lists itself as the PC page does (views.mon_view)."""
+    row = mon(position, **extra)
+    row.nick, row.data = getattr(row, 'nick', ''), SimpleNamespace(species={})
+    row.to_dict = lambda egg_view=False: {
+        'dex': row.species, 'species': row.species, 'nick': row.nick, 'level': row.level,
+        'experience': row.experience, 'stat_exp': list(row.stat_exp), 'dvs': list(row.dvs),
+        'trainer_id': row.trainer_id, 'egg': row.egg, 'held_item': row.held_item}
+    return row
+
+
+def gen2_keys(mons):
+    from pokesim.gen2.views import mon_view
+    rows = [mon_view(row, egg_view=True) for row in mons]
+    preferences.assign(rows)
+    return [row['trade_key'] for row in rows]
+
+
+def test_a_gen2_request_takes_the_one_twin_it_names():
+    from pokesim.gen2.release import named_requests, request_slots as gen2_slots
+    first, second = gen2_mon(1), gen2_mon(2, level=21)
+    view = snapshot([BEST, first, second], PARTY)
+    # BEST and the party are other families, so the twins' keys are theirs alone.
+    one, other = gen2_keys([first, second])
+    assert preferences.TWIN in one and one != other
+    assert named_requests([*view.party, *view.stored], {other: 'release'}) == {len(view.party) + 2: other}
+    assert gen2_slots(view, other) == [(0, 2)]
+    policy = Requests({other: 'release'})
+    assert pending(policy, view) and policy.requests == {other: 'release'}
+    # A request saved before the fix names the family, which now holds two copies.
+    legacy = Requests({key(first): 'release'})
+    assert not pending(legacy, view) and legacy.requests == {}
+
+
 def test_the_pc_api_saves_requests_and_favor_and_shows_each_value(game, monkeypatch):
     client, store, emu = game
     mon = client.get('/api/pokedex/status').json()['storage']['pokemon'][0]
@@ -177,6 +269,29 @@ def test_the_pc_api_saves_requests_and_favor_and_shows_each_value(game, monkeypa
     assert client.post('/api/pc/release', json={**body, 'cancel': True}).status_code == 200
     assert store.release_requests() == {}
     assert client.post('/api/pc/favor', json={'favor': 'level'}).status_code == 422
+
+
+def test_the_pc_page_marks_and_cancels_only_the_twin_asked_for(game):
+    client, store, emu = game
+    boxed = emu.status.return_value['game']['storage']['pokemon']
+    boxed[1]['dvs'] = boxed[0]['dvs'][:]
+    emu.pc_values.return_value = ({}, False)
+    first, second = client.get('/api/pokedex/status').json()['storage']['pokemon'][:2]
+    assert preferences.TWIN in second['trade_key'] and first['trade_key'] != second['trade_key']
+    store.set_release_request(second['trade_key'], 'release')
+    shown = client.get('/api/pokedex/status?view=pc').json()['storage']['pokemon']
+    assert [bool(mon.get('release_requested')) for mon in shown[:2]] == [False, True]
+    # A family key saved before the fix names both twins, so it marks neither.
+    family = preferences.base(second['trade_key'])
+    store.set_release_request(family, 'release')
+    store.set_release_request(second['trade_key'], '')
+    shown = client.get('/api/pokedex/status?view=pc').json()['storage']['pokemon']
+    assert not any(mon.get('release_requested') for mon in shown[:2])
+    # Cancel on one twin clears every saved request that names it.
+    store.set_release_request(second['trade_key'], 'release')
+    body = {'key': second['trade_key'], 'box': second['box'], 'position': second['position'], 'cancel': True}
+    assert client.post('/api/pc/release', json=body).status_code == 200
+    assert store.release_requests() == {}
 
 
 def test_the_pc_api_refuses_a_kept_pokemon_and_watchers(game, monkeypatch):

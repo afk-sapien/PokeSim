@@ -177,7 +177,8 @@ def entries(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts
     the species it works with (a dict from plan_inputs marks a trade's give 'trade', which holds a role
     but no floor), ``partners`` the linked adventures' trainer ids, ``gifts`` the species this version
     gives only as a gift or fossil, ``rewards`` the League reward marks (rewards.marks) and
-    ``requested`` maps an identity to an owner's release request.
+    ``requested`` maps a trade key to an owner's release request, which goes to the one Pokémon it
+    names (named_requests).
     """
     from ..pcvalue import Entry
     from ..rewards import mark
@@ -185,7 +186,9 @@ def entries(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts
     preferences, requested = preferences or {}, requested or {}
     player = getattr(s, 'player_id', None)
     rows = []
-    for mon in [*(asdict(mon) | {'box': None} for mon in s.party), *s.storage_entries()]:
+    mons = held(s)
+    named = named_requests(s, requested, mons)
+    for index, mon in enumerate(mons):
         data = SPECIES.get(mon['species'], {})
         dex, trainer, dvs = data.get('dex', 0), mon.get('trainer_id'), tuple(mon.get('dvs') or ())
         state = (preferences.get(identity(mon)) or {}).get('state') if preferences and trainer is not None else None
@@ -206,9 +209,48 @@ def entries(s, preferences=None, roles=(), stock=(), partners=frozenset(), gifts
             mon['level'], mon.get('experience', 0), dvs, tuple(mon.get('stat_exp') or ()), False, origin,
             state in ('locked', 'withdrawn') or bool(preferences) and legacy_lock(preferences, mon),
             trainer is not None and identity(mon) in roles, state == 'offered' or kind is not None,
-            requested.get(identity(mon), '') if trainer is not None else '', mon,
+            requested[named[index]] if index in named else '', mon,
             kind == 'trade' or state == 'offered' and kind != 'plan'))
     return rows
+
+
+def held(s):
+    """The party, then the boxed rows, as entries rates them."""
+    return [*(asdict(mon) | {'box': None} for mon in s.party), *s.storage_entries()]
+
+
+def _reader(s, mons):
+    """The family keys of ``mons``, held(s), and a reader of one as the PC page lists it (preferences.answering)."""
+    from functools import cache
+    from ..trade.preferences import identity
+    from ..web.pokedex import party_record, stored_record
+    party = len(s.party)
+
+    @cache
+    def game():
+        return s.to_dict()
+
+    def listed(index):
+        if index < party:
+            return party_record(game()['party'][index], index + 1)
+        return stored_record(game()['storage']['pokemon'][index - party])
+    return [identity(mon) for mon in mons], listed
+
+
+def named_requests(s, requested, mons=None):
+    """{index in held(s): the key of the owner's release request that names it} (preferences.picked)."""
+    from ..trade.preferences import picked
+    if not requested:
+        return {}
+    return picked(requested, *_reader(s, held(s) if mons is None else mons))
+
+
+def request_slots(s, key):
+    """The (box, position) of each held Pokémon a release request's key names, None for a party copy."""
+    from ..trade.preferences import answering
+    mons = held(s)
+    return [None if mons[index]['box'] is None else (mons[index]['box'], mons[index]['position'])
+            for index in answering(key, *_reader(s, mons))]
 
 
 def requested_slots(s, requested, preferences=None, reserved=()):
@@ -221,14 +263,12 @@ def requested_slots(s, requested, preferences=None, reserved=()):
             if row.entry.slot not in frozenset(reserved)]
 
 
-def held_identities(s):
-    """The trade identity of every Pokémon in the party and the PC, or None while a boxed row is only the
-    compact species and level fallback, which names no trainer, so no request can be told gone."""
-    from ..trade.preferences import identity
-    stored = s.storage_entries()
-    if any(mon.get('trainer_id') is None for mon in stored):
+def held_requests(s, requested):
+    """The keys of the owner's release requests that name a held Pokémon, or None while a boxed row is
+    only the compact species and level fallback, which names no trainer, so no request can be told gone."""
+    if any(mon.get('trainer_id') is None for mon in s.storage_entries()):
         return None
-    return {identity(mon) for mon in [*(asdict(mon) for mon in s.party), *stored] if mon.get('trainer_id') is not None}
+    return set(named_requests(s, requested).values())
 
 
 def _release_target(s, stock, reserved, partners, gifts, preferences, demand, rewards, requested, roles, favor, team=frozenset(),

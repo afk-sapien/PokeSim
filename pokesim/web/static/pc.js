@@ -176,7 +176,9 @@ async function requestRelease(button, cancel) {
       try { detail = (await response.json()).detail } catch (_) {}
       throw new Error(typeof detail === 'string' && detail ? detail : 'Could not save the release.')
     }
-    for (const record of storage?.pokemon || []) if (record.trade_key === key) record.release_requested = !cancel
+    for (const record of storage?.pokemon || []) {
+      if (record.box === mon.box && record.position === mon.position) record.release_requested = !cancel
+    }
   } catch (error) {
     note = error.message
   }

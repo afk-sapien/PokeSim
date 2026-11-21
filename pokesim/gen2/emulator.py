@@ -1119,6 +1119,11 @@ class Emulator(EmulatorBase):
         from .release import _keys
         return _keys(mon)[0]
 
+    @staticmethod
+    def _request_slots(snapshot, key):
+        from .release import request_slots
+        return request_slots(snapshot, key)
+
     def set_trade_preference(self, key, state):
         from ..trade.preferences import update
         from .web import live_status

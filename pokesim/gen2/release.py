@@ -340,12 +340,13 @@ def _with_new(policy, snapshot, dex, level=5, dvs=None):
 
 def pending(policy, snapshot):
     """Whether an owner's release request waits for the next PC visit. A Keep, party, egg or unconfirmed
-    last copy request waits without starting one, and a request whose Pokémon has gone is dropped."""
+    last copy request waits without starting one, and a request that names no one held Pokémon, because
+    it has gone or its key fits several copies, is dropped."""
     from ..pcvalue import requested
     asked = policy.release_requests() if hasattr(policy, 'release_requests') else {}
     if not asked:
         return False
-    held = {key for mon in snapshot.party + snapshot.stored for key in _keys(mon)}
+    held = set(named_requests([*snapshot.party, *snapshot.stored], asked).values())
     if hasattr(policy, 'prune_release_requests') and not set(asked) <= held:
         if not policy.prune_release_requests(held):
             return False
@@ -360,7 +361,7 @@ def spares(snapshot, demand=None, keep=(), preferences=None, partners=(), owners
     ``demand`` maps species to the copies a plan needs, and species in ``keep`` (breeding stock, a
     wished species) are capped stock. ``preferences`` are the stored trade preferences, ``partners``
     the identities a plan relies on (see plan_partners), ``owners`` the player and linked adventures,
-    ``rewards`` the League reward marks and ``requested`` an owner's release requests by identity.
+    ``rewards`` the League reward marks and ``requested`` an owner's release requests by trade key.
     """
     from ..pcvalue import queue
     return [row.entry.record for row in queue(rated(snapshot, demand, keep, preferences, partners, owners,
@@ -374,8 +375,8 @@ def entries(snapshot, names, preferences=None, partners=(), stock=(), owners=Non
     ``names`` maps a species to its name. ``preferences`` are the stored trade preferences: Keep locks
     a Pokémon, and an offered one is capped stock. ``partners`` are the identities a plan relies on
     (plan_partners), ``stock`` the breeding stock species, ``owners`` the player and linked adventures,
-    ``rewards`` the League reward marks (rewards.marks) and ``requested`` maps an identity to an owner's
-    release request.
+    ``rewards`` the League reward marks (rewards.marks) and ``requested`` maps a trade key to an owner's
+    release request, which goes to the one Pokémon it names (named_requests).
     """
     from ..pcvalue import Entry
     from ..rewards import mark
@@ -383,7 +384,9 @@ def entries(snapshot, names, preferences=None, partners=(), stock=(), owners=Non
     locked = {key for key, value in preferences.items() if value.get('state') in ('locked', 'withdrawn')}
     offered = {key for key, value in preferences.items() if value.get('state') == 'offered'}
     rows = []
-    for mon in [*snapshot.party, *snapshot.stored]:
+    mons = [*snapshot.party, *snapshot.stored]
+    named = named_requests(mons, requested)
+    for index, mon in enumerate(mons):
         keys = set(_keys(mon))
         if mark(mon.trainer_id, mon.dvs) in rewards:
             origin = 'reward'
@@ -399,9 +402,30 @@ def entries(snapshot, names, preferences=None, partners=(), stock=(), owners=Non
             None if mon.box is None else (mon.box, mon.position), _group(mon), names.get(mon.species, '?'),
             mon.level, mon.experience, tuple(mon.dvs), tuple(mon.stat_exp), bool(mon.egg), origin,
             bool(locked & keys), bool(set(partners) & keys), bool(offered & keys) or mon.species in stock,
-            next((requested[key] for key in keys if key in requested), ''), mon,
+            requested[named[index]] if index in named else '', mon,
             bool(offered & keys) and mon.species not in stock))
     return rows
+
+
+def _reader(mons):
+    """The family keys of ``mons`` and a reader of one as the PC page lists it (preferences.answering)."""
+    from .views import mon_view
+    return [_keys(mon)[0] for mon in mons], lambda index: mon_view(mons[index], egg_view=True)
+
+
+def named_requests(mons, requested):
+    """{index in ``mons``, the party then the PC: the key of the owner's release request that names it}
+    (preferences.picked)."""
+    from ..trade.preferences import picked
+    return picked(requested, *_reader(mons)) if requested else {}
+
+
+def request_slots(snapshot, key):
+    """The (box, position) of each held Pokémon a release request's key names, None for a party copy."""
+    from ..trade.preferences import answering
+    mons = [*snapshot.party, *snapshot.stored]
+    return [None if mons[index].box is None else (mons[index].box, mons[index].position)
+            for index in answering(key, *_reader(mons))]
 
 
 def target(snapshot, demand=None, keep=(), preferences=None, partners=(), allowed=None, owners=None,

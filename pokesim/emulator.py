@@ -848,6 +848,11 @@ class Emulator(EmulatorBase):
         from .trade.preferences import identity
         return identity(mon)
 
+    @staticmethod
+    def _request_slots(snapshot, key):
+        from .policies.team import request_slots
+        return request_slots(snapshot, key)
+
     def set_trade_preference(self, key, state):
         done, response = threading.Event(), {}
         self.commands.put(('trade_preference', (key, state, done, response)))
