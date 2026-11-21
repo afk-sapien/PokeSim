@@ -747,9 +747,9 @@ class BattlePart:
             return max(able, key=able.get) if spent else None
         others = {i: room for i, room in (able or {}).items() if i != active}
         fighter = max(others, key=others.get, default=None)
-        foe = self.reads.enemy
-        if fighter is not None and any(self.data.moves.get(move, {}).get('effect') == 'EFFECT_MEAN_LOOK'
-                                       for move in foe.moves):
+        foe = self.reads.enemy if fighter is not None else None
+        if foe is not None and any(self.data.moves.get(move, {}).get('effect') == 'EFFECT_MEAN_LOOK'
+                                   for move in foe.moves):
             opponent = self.battle_target(snapshot)
             dealt = max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
             enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=foe.stats)
