@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import math
 import re
 from types import SimpleNamespace
 
@@ -701,6 +702,13 @@ class BattlePart:
         if trainee is not None:
             mon = snapshot.party[trainee]
             return Lead(trainee, (mon.trainer_id, mon.dvs)) if trainee else None
+        # On the training walk a worn lead gives way to a member that can still fight there, and the trainee
+        # leads while it can (training_lead).
+        from ..training import training_lead
+        slot = training_lead(self, snapshot)
+        if slot is not None:
+            mon = snapshot.party[slot]
+            return Lead(slot, (mon.trainer_id, mon.dvs)) if slot else None
         strongest = max((i for i, mon in enumerate(snapshot.party) if not mon.egg),
                         key=lambda i: snapshot.party[i].level, default=0)
         if not strongest or snapshot.party[strongest].level <= snapshot.party[0].level + 5:
@@ -713,13 +721,47 @@ class BattlePart:
 
         A switch comes before the opponent's move, and every Pokémon sent out shares the experience, so the
         trainee still levels without an Exp. Share. It only happens while the trainee is out, so it never repeats.
+        A trainee that leads the training walk with its Exp. Share (training_lead) switches out the same way.
+
+        On the training walk a leading trainee also leaves a foe that can trap it in a fight it would lose, since
+        a trapped trainee cannot leave once its HP runs low. It compares the turns each side needs to knock the
+        other out (move_score), and a tie goes to the foe. A Machoke at full HP fell twice to a Golbat's Mean
+        Look, Confuse Ray and Wing Attack, six and four turns from knocking it out against three and four. A
+        Kingler one or two turns from knocking out each Golbat fought 165 of them and never fell below half,
+        where leaving gave half of each battle's experience to partners at level 100, which gain none.
+        Any other member there LEAD_MARGIN above the foe that runs out of HP or
+        strong PP mid battle (walk_fighters) gives way to the fighter with the most room, where a spent
+        Electrode had used Explosion. A low sleeper that leads on purpose is never above the foe, so it stays.
+        Every switch on the walk sends that fighter, so the member sent in is one the walk keeps in.
         """
-        from ..training import trainee_slot
-        if active != trainee_slot(self, snapshot) or active >= len(snapshot.party):
+        from ..training import LEAD_MARGIN, trainee_index, trainee_slot, walk_fighters
+        able = walk_fighters(self, snapshot)
+        slot = trainee_slot(self, snapshot)
+        if slot is None and able:
+            slot = trainee_index(self, snapshot)
+        if active >= len(snapshot.party):
             return None
         mon = snapshot.party[active]
-        if mon.level >= snapshot.enemy_level + 5 and mon.hp * 2 > mon.max_hp:
+        if active != slot:
+            spent = able and active not in able and mon.level >= snapshot.enemy_level + LEAD_MARGIN
+            return max(able, key=able.get) if spent else None
+        others = {i: room for i, room in (able or {}).items() if i != active}
+        fighter = max(others, key=others.get, default=None)
+        foe = self.reads.enemy if fighter is not None else None
+        if foe is not None and any(self.data.moves.get(move, {}).get('effect') == 'EFFECT_MEAN_LOOK'
+                                   for move in foe.moves):
+            opponent = self.battle_target(snapshot)
+            dealt = max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
+            enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=foe.stats)
+            target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
+                                     enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
+            received = max((self.move_score(move, enemy, target) for move in foe.moves), default=0)
+            if received and (not dealt or math.ceil(snapshot.enemy_hp / dealt) >= math.ceil(mon.hp / received)):
+                return fighter
+        if mon.level >= snapshot.enemy_level + LEAD_MARGIN and mon.hp * 2 > mon.max_hp:
             return None
+        if fighter is not None:
+            return fighter
         healthy = [i for i, row in enumerate(snapshot.party) if i != active and not row.egg and row.hp * 4 > row.max_hp]
         best = max(healthy, key=lambda i: snapshot.party[i].level, default=None)
         return best if best is not None and snapshot.party[best].level > mon.level else None

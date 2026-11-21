@@ -117,12 +117,31 @@ def strong_pp(data, mon):
     return boss.strong_uses([attack_strength(data, mon, move) for move in mon.moves], mon.pp)
 
 
+def fighter(data, mon):
+    """``mon`` as the boss check reads it (planning/boss.py). A state with no maximum PP read counts each
+    move's base PP."""
+    return boss.fighter(mon.hp, mon.max_hp, [attack_strength(data, mon, move) for move in mon.moves], mon.pp,
+                        getattr(mon, 'max_pp', ()) or [data.moves.get(move, {}).get('pp', 0) for move in mon.moves])
+
+
 def fighters(data, snapshot):
-    """The party as the boss check reads it (planning/boss.py), eggs left out. A state with no
-    maximum PP read counts each move's base PP."""
-    return tuple(boss.fighter(mon.hp, mon.max_hp, [attack_strength(data, mon, move) for move in mon.moves], mon.pp,
-                              getattr(mon, 'max_pp', ()) or [data.moves.get(move, {}).get('pp', 0) for move in mon.moves])
-                 for mon in snapshot.party if not mon.egg)
+    """The party as the boss check reads it, eggs left out."""
+    return tuple(fighter(data, mon) for mon in snapshot.party if not mon.egg)
+
+
+def fight_room(data, mon):
+    """How much of its walk ``mon`` has left before it needs a Pokémon Center, from 0 to 1.
+
+    It is the lesser of its HP share above the heal line and its share of strong PP left (boss.fighter),
+    the two things battle_room reads for the whole party. An egg, a status or no attack leaves none.
+    """
+    if mon.egg or mon.status:
+        return 0
+    line = math.ceil(mon.max_hp * HEAL_LINE)
+    row = fighter(data, mon)
+    if not row.strong_max:
+        return 0
+    return min(max(0, mon.hp - line + 1) / max(1, mon.max_hp - line + 1), row.strong_pp / row.strong_max)
 
 
 def league_bag(data, snapshot):
@@ -155,9 +174,13 @@ def battle_room(data, snapshot):
     (strong_pp), so a spare weak attack does not hide spent strong ones. A party with no attack at all
     is never sent to heal for PP, so its PP room is one. Either at zero means the heal walk is due.
     """
+    return members_room(data, [mon for mon in snapshot.party if not mon.egg])
+
+
+def members_room(data, mons):
+    """battle_room for the Pokémon ``mons`` alone."""
     def power(move):
         return data.moves.get(move, {}).get('power', 0)
-    mons = [mon for mon in snapshot.party if not mon.egg]
     hp = min((0 if mon.status else max(0, mon.hp - math.ceil(mon.max_hp * HEAL_LINE) + 1) for mon in mons), default=0)
     pp = min((strong_pp(data, mon) for mon in mons if any(power(move) for move in mon.moves)), default=1)
     return {HP: hp, PP: pp}
