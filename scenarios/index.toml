@@ -119,3 +119,10 @@ rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
 state_sha256 = "6bc57933853928c8bba94c151514b0d602357afbac10111905e056adb60fd4e2"
 frames = [917744, 917744]
 expect = "passes"
+
+[[scenario]]
+name = "red-roof-house-link-help-20261124"
+rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
+state_sha256 = "0a85bd54f734d00e2a910cb9c70814ce8b5a15a922c57720d373537928ffdc3c"
+frames = [571417878, 571417878]
+expect = "passes"

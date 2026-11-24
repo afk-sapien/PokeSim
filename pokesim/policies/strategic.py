@@ -880,6 +880,10 @@ class StrategicPolicy(Policy):
             return self._select(scr, target, scroll=True)
         if kind == "vending":
             return self._select(scr, 0) if self.goal.key == "guard_drink" else tap("b")
+        if kind == 'reading':
+            # Nothing the run wants is in these pages. A random A press while recovering opens one.
+            self.reason = 'Close the reading menu'
+            return tap('b')
         if kind == "list":
             if self.goal.key == 'collect_fossil' and self.menu_context != 'shop':
                 fossils = [item for item in ('DOME_FOSSIL','HELIX_FOSSIL','OLD_AMBER') if dict(s.items).get(ITEMS[item])]
