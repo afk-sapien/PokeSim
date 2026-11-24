@@ -218,7 +218,7 @@ class Progress:
     since: float     # real time, for the problem's date
     played: int      # PlayClock seconds, which the window counts
     maps: set = field(default_factory=set)
-    levels: int | None = None   # the highest party level total this window saw
+    experience: dict = field(default_factory=dict)   # each party Pokémon's highest experience this window saw
 
 
 def played(status):
@@ -467,12 +467,13 @@ class Watchdog:
 
         Moving around does not count, because a game caught in a loop moves too. New events,
         Pokédex entries, badges, League wins, newly discovered areas, maps not seen during this
-        window and level-ups do. A level-up is a party level total above the highest this window
-        saw, so swapping the same Pokémon in and out of the party counts once at most. A new improve
-        row does too. Most are catches the collection keeps as improvements (a rarer or shiny copy,
-        a needed copy or a family member), which add no Pokédex entry. The rest are level gains
-        toward the next boss, which the level total counts already. ``improved`` is the time of the
-        newest improve row the progress sweep read.
+        window and experience do. Each party Pokémon counts against its own best this window, as the
+        supervisor counts it (runtime/supervision.py), so swapping the same Pokémon in and out of the
+        party is no progress, and a level 95 Pokémon that needs hours for its next level still counts
+        each battle it wins. A new improve row does too. Most are catches the collection keeps as
+        improvements (a rarer or shiny copy, a needed copy or a family member), which add no Pokédex
+        entry. The rest are level gains toward the next boss, which the experience counts already.
+        ``improved`` is the time of the newest improve row the progress sweep read.
         """
         seconds = played(status)
         if seconds is None:
@@ -482,16 +483,21 @@ class Watchdog:
         fingerprint = (achievement.get('id'), watch.get('owned'), watch.get('badges'), watch.get('hall_of_fame'),
                        (status.get('league_rewards') or {}).get('wins'), status.get('areas_discovered'), improved)
         place = watch.get('map', (status.get('game') or {}).get('map_name'))
-        levels = watch.get('levels')
+        experience = watch.get('experience')
+        experience = experience if isinstance(experience, dict) else {}
         current = self.progress.get(aid)
         if current is None or current.fingerprint != fingerprint:
-            self.progress[aid] = Progress(fingerprint, now, seconds, {place}, levels)
+            self.progress[aid] = Progress(fingerprint, now, seconds, {place}, dict(experience))
             return False
-        trained = isinstance(levels, int) and levels > (current.levels or 0)
+        trained = False
+        for key, total in experience.items():
+            best = current.experience.get(key)
+            if best is None or total > best:
+                # A Pokémon seen for the first time this window sets its best and counts from there.
+                trained |= best is not None
+                current.experience[key] = total
         if place not in current.maps or trained:
             current.maps.add(place)
-            if trained:
-                current.levels = levels
             current.since, current.played = now, seconds
             return False
         return seconds - current.played >= self.limits.no_progress
