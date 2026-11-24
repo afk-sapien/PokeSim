@@ -7,7 +7,7 @@ from pokesim.policies.battle import (Decision, choose_battle, damage, effectiven
                                     needs_healing, ranked_moves, replacement_slot, shopping_item)
 from pokesim.policies.navigation import Navigator
 from pokesim.planning.losses import Losses
-from pokesim.policies.progression import boss_training, milestones, story_goal
+from pokesim.policies.progression import Goal, boss_training, milestones, story_goal
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.ram import PartyMon, read_snapshot, W_PARTY_MONS, W_PARTY_COUNT, W_EVENT_FLAGS
 from pokesim.screen import Screen, W_CURRENT_MENU_ITEM, W_TOP_MENU_X, W_TOP_MENU_Y, W_TILEMAP
@@ -202,6 +202,25 @@ def test_healing_prompt_and_shop_transition_do_not_cancel():
     mem = fake_mem({1: '  BUY', 3: '  SELL', 5: '  QUIT', 14: 'May I help you?'})
     # The greeting and shop menu overlap before the cursor becomes active.
     assert pol._dispatch(s, Screen(mem), 'dialogue', mem)[0].button == 'a'
+
+
+def test_reading_menus_close_with_b_under_a_collection_goal():
+    # The link cable help in the Celadon Mansion Roof House and the Viridian school blackboard. A
+    # reads a page and returns to the same menu, so a collection goal that pressed A on dialogue
+    # never left it.
+    s = snap(map=MAPS['CELADON_MANSION_ROOF_HOUSE'], x=3, y=1, textbox=True)
+    link = menu({2: '  HOW TO LINK', 4: '  COLOSSEUM', 6: '  TRADE CENTER', 8: '  STOP READING',
+                 14: 'the right in any'}, (1, 2), top=(1, 2))
+    board = menu({2: '  SLP   BRN', 4: '  PSN   FRZ', 6: '  PAR   QUIT'}, (1, 2), top=(1, 2))
+    for mem in (link, board):
+        scr = Screen(mem)
+        assert scr.kind(s) == 'reading'
+        for key in ('collect_plan', 'collect_train'):
+            pol = StrategicPolicy(1)
+            pol.goal = Goal(key, 'Plan the next adventure project', 'Choose an objective')
+            assert pol._dispatch(s, scr, scr.kind(s), mem)[0].button == 'b'
+    # The mart menu also ends in QUIT and stays a shop.
+    assert Screen(menu({1: '  BUY', 3: '  SELL', 5: '  QUIT'}, (1, 1), top=(1, 1))).kind(s) == 'shop'
 
 
 def test_map_transition_does_not_record_mismatched_coordinates():

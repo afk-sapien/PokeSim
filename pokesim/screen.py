@@ -55,6 +55,10 @@ class Screen:
                 return "elevator"
             if "FRESH WATER" in text and "SODA POP" in text and "LEMONADE" in text:
                 return "vending"
+            if "STOP READING" in text or ("SLP" in text and "FRZ" in text and "QUIT" in text):
+                # The link cable help and the Viridian school blackboard. A reads a page and comes
+                # back to the same menu, so only B or the last entry closes it.
+                return "reading"
             if any(row.strip("? ") == "HEAL" for row in self.rows) and "CANCEL" in text:
                 return "heal"
             if self.yes_no:
