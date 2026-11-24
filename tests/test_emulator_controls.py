@@ -232,6 +232,35 @@ def test_stationary_strategic_run_replans_without_rewinding():
     assert emu.input_epoch == 1
 
 
+def test_a_stall_where_the_last_park_left_the_player_reloads_from_before_it_began():
+    from pokesim import config
+    from pokesim.policies.strategic import StrategicPolicy
+    from pokesim.runtime.reload import FRAMES_PER_SECOND
+    limit = (config.STUCK_RELOAD_SECONDS + 1) * FRAMES_PER_SECOND
+    emu = Emulator.__new__(Emulator)
+    emu.policy = StrategicPolicy(7)
+    emu.snapshot = snap(frame=1000)
+    emu.play_clock = PlayClock()
+    emu.supervisor = Supervisor()
+    emu.input_epoch = 0
+    emu._unstick = Mock()
+    emu.frame = 10 ** 6
+    emu.stuck_frame = emu.frame - limit
+    emu._check_guards()
+    # The player moved after the first park, so the next stall parks again.
+    emu.frame += 100
+    began = emu.stuck_frame = emu.frame
+    emu.frame += limit
+    emu._check_guards()
+    emu._unstick.assert_not_called()
+    assert emu.policy.recoveries == 2
+    # Nothing moved after the second park, so the stall after it reloads from before the second stall.
+    emu.frame += limit
+    emu._check_guards()
+    emu._unstick.assert_called_once_with(began, 'stuck')
+    assert emu.policy.recoveries == 2
+
+
 def test_live_progress_uses_achievement_age_and_recovery_state(monkeypatch):
     from pokesim.policies.strategic import StrategicPolicy
     emu = Emulator.__new__(Emulator)

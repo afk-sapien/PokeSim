@@ -110,7 +110,7 @@ The park counts as one rung of the shared ladder (`Supervisor.climb`), so the st
 
 Gen I keeps its rule. `recover_stall` (`policies/strategic.py:1892`) already abandons the project with no reload on every stuck outside battle with a valid snapshot. Slice 3 only types it: the abandoned project's stand-down records `stuck`.
 
-Rule 5 is an adapter setting, `RELOAD_AFTER_PARK`, written beside each generation's guards: `True` for Gen II and `False` for Gen I. A Gen I stall after a park parks again and never climbs to a reload outside battle. The generations differ because Gen II's park is new, so its second stall falls back to the reload it does today, which bounds the change, while Gen I has parked without a reload since `recover_stall` and keeps that play.
+Rule 5 is an adapter setting, `RELOAD_AFTER_PARK`, written beside each generation's guards: `True` for Gen II and `False` for Gen I. A Gen I stall after a park parks again and never climbs to a reload outside battle. The generations differ because Gen II's park is new, so its second stall falls back to the reload it does today, which bounds the change, while Gen I has parked without a reload since `recover_stall` and keeps that play. One exception since 2026-11-24: when the Gen I player has not moved since the last park, the next stall reloads a save from before the stall began (`Emulator._check_guards`). A park cannot free a screen the policy misreads, and the link cable help held a Red run that way for hours.
 
 ### How a parked goal comes back
 
@@ -226,7 +226,7 @@ Each PR deletes what it replaces, runs the targeted tests, and gives the gate an
 
 Decided on 2026-11-11:
 
-1. Gen I does not reload after a park, and Gen II does on a second stall without progress. It is the `RELOAD_AFTER_PARK` adapter setting in section 3.
+1. Gen I does not reload after a park, and Gen II does on a second stall without progress. It is the `RELOAD_AFTER_PARK` adapter setting in section 3. Amended on 2026-11-24: a Gen I stall where the last park left the player, who has not moved since, reloads.
 2. A pin keeps today's auth check: the owner and anyone the owner gave Can manage.
 
 Open:

@@ -53,9 +53,10 @@ PREPARING = {'travelling', 'storage', 'rendezvous'}
 RELOAD_QUIET_FRAMES = 60 * FRAMES_PER_SECOND
 INVALID_GRACE_FRAMES = 5 * FRAMES_PER_SECOND
 CENTER_GRACE_FRAMES = 60 * FRAMES_PER_SECOND
-# A stall away from battle sets the running project aside with no reload, every time. Red, Blue and
-# Yellow never reload after a park (runtime/supervision.py), and the project comes back once its
-# stand-down on the PlayClock runs out (policies/director.RETRY).
+# A stall away from battle sets the running project aside with no reload. Red, Blue and Yellow do not
+# climb to a reload after a park (runtime/supervision.py), and the project comes back once its
+# stand-down on the PlayClock runs out (policies/director.RETRY). The one exception is a player who
+# has not moved since the last park, which reloads (Emulator._check_guards).
 RELOAD_AFTER_PARK = False
 
 log = logging.getLogger("pokesim.emu")
@@ -79,6 +80,8 @@ class Emulator(EmulatorBase):
     _retakes = ()
     _retake_until = 0
     STALL_NOTE = ' The saved moment is attached to this journal entry.'
+    # The last park of a stall as (the frame the stall began, the frame of the park), or None.
+    parked = None
 
     def __init__(self, store, ntfy=None, *, isolated_ram=False):
         self.isolated_ram = isolated_ram
@@ -682,7 +685,7 @@ class Emulator(EmulatorBase):
         """Restart the guard clocks from the current frame, which a reload has just rewound."""
         self.stuck_frame = self.last_reload_frame = self.frame
         self.last_reload = time.time()
-        self.invalid_frame = self.battle_frame = self.throws = None
+        self.invalid_frame = self.battle_frame = self.throws = self.parked = None
 
     def _give_up(self, why, reloads=None):
         """Abandon the collection project that every reload left stuck, so the next goal runs instead.
@@ -805,10 +808,16 @@ class Emulator(EmulatorBase):
             self._unstick(self.invalid_frame, "game state glitched")
         elif config.STUCK_RELOAD_SECONDS and frame - self.stuck_frame > config.STUCK_RELOAD_SECONDS * FRAMES_PER_SECOND:
             recover = getattr(self.policy, 'recover_stall', None)
-            if (recover and self.snapshot and self.snapshot.valid and not self.snapshot.in_battle
+            if self.parked is not None and self.parked[1] == self.stuck_frame:
+                # The player has not moved since the last park, so setting a project aside did not free
+                # it. A screen the policy misreads held a Red run in the link cable help this way for
+                # hours. Go back to a save from before the stall began.
+                self._unstick(self.parked[0], "stuck")
+            elif (recover and self.snapshot and self.snapshot.valid and not self.snapshot.in_battle
                     and self.supervisor.may_park(RELOAD_AFTER_PARK)):
                 self._drop_pin(pin.STUCK)
                 recover(self.snapshot)
+                self.parked = (self.stuck_frame, frame)
                 self.stuck_frame = frame
                 self.input_epoch += 1
                 log.warning('stationary objective abandoned, replanning without a save reload')
