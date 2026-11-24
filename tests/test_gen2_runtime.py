@@ -1879,6 +1879,32 @@ def test_exp_share_goes_to_training_partner_after_storage_retrieval(real_data):
     assert arrive(policy, SimpleNamespace(party=(partner, holder), stored=(), frame=0)) == 'wait' and policy.menu is None
 
 
+def test_the_exp_share_fetch_withdraws_the_copy_that_holds_it(real_data):
+    """Issue #113: copies alike in trainer and DVs, one boxed with the Exp. Share and one in the party. The
+    party copy answered to the holder's identity, so each PC visit ended the fetch and the plan sent it back."""
+    from pokesim.gen2.training import arrive
+    from pokesim.gen2.menus import ChangeBox, Storage
+    from pokesim.gen2.policy import Goal, Policy
+    policy = Policy(real_data)
+    dvs = (8, 9, 6, 6, 6)
+    lead = SimpleNamespace(trainer_id=2, dvs=(3,) * 5, box=None, held_item=0)
+    twin = SimpleNamespace(trainer_id=1, dvs=dvs, box=None, held_item=0)
+    holder = SimpleNamespace(trainer_id=1, dvs=dvs, box=9, position=0, held_item=real_data.items['EXP_SHARE'])
+    policy.collection.update(training={'identity': [1, list(dvs)]}, share_holder=[1, list(dvs)])
+    policy.goal = Goal('collection_train_pc', 'Retrieve Exp. Share from storage', 'CHERRYGROVE_POKECENTER_1F', 3, 3)
+    snapshot = SimpleNamespace(party=(lead, twin), stored=(holder,), active_box=0, box_counts=[0] * 14, frame=0)
+    assert arrive(policy, snapshot) == 'a'
+    assert isinstance(policy.menu, ChangeBox) and policy.menu.box == 9
+    assert policy.collection['share_holder'] == [1, list(dvs)]
+    snapshot.active_box, policy.menu = 9, None
+    assert arrive(policy, snapshot) == 'a'
+    assert isinstance(policy.menu, Storage) and (policy.menu.operation, policy.menu.slot) == ('WITHDRAW', 0)
+    # Once the holder is in the party the fetch is done.
+    holder.box, policy.menu = None, None
+    assert arrive(policy, SimpleNamespace(party=(lead, twin, holder), stored=(), frame=0)) == 'b'
+    assert 'share_holder' not in policy.collection
+
+
 def test_tower_attack_replacement_keeps_recover(real_data):
     from pokesim.gen2.menus import Teach
     menu = Teach(89, 0, replace_move=240)
