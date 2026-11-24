@@ -235,17 +235,18 @@ def test_a_new_map_or_a_pause_restarts_the_progress_window(world):
     assert world.sent == []
 
 
-def test_a_level_up_restarts_the_progress_window(world):
-    """Long postgame training gains no entry, badge or map for hours, but each level-up is progress."""
+def test_experience_restarts_the_progress_window(world):
+    """Long postgame training gains no entry, badge or map for hours. A level 95 Pokémon can go a
+    whole window without a level-up, but each battle it wins adds experience, which is progress."""
     world.registry.rows = [game()]
     trained = status()
-    trained['watch']['levels'] = 540
+    trained['watch']['experience'] = {'trainee': 800000}
     world.child(seen=trained)
     world.tick()
-    for levels in (541, 542, 543):
+    for experience in (805000, 810000, 815000):
         world.tick(3000)
         trained = status()
-        trained['watch']['levels'] = levels
+        trained['watch']['experience'] = {'trainee': experience}
         world.child(seen=trained)
         world.tick(60)
     assert world.sent == []
@@ -254,23 +255,28 @@ def test_a_level_up_restarts_the_progress_window(world):
 
 
 def test_swapping_the_same_pokemon_in_and_out_is_still_no_progress(world):
-    """The level total falls and rises back as the same Pokémon leave and rejoin the party. Only a
-    total above the highest this window saw counts, so a deposit and withdraw loop still alerts."""
+    """The same Pokémon leave and rejoin the party with the experience they had. Each counts only
+    above its own best this window, so a deposit and withdraw loop still alerts."""
     world.registry.rows = [game()]
     for minute in range(62):
         looping = status()
-        looping['watch']['levels'] = 540 if minute % 2 else 480
+        looping['watch']['experience'] = {'kept': 900000, **({'first': 500000} if minute % 2 else {'second': 600000})}
         world.child(seen=looping)
         world.tick(60 if minute else 0)
     assert world.sent == [('Needs attention', 'Mischievous Badge Hunt has made no progress for 60 minutes of play. '
                                               'It is still playing in Violet City.')]
 
 
-def test_the_summary_counts_the_party_levels_without_eggs():
+def test_the_summary_keys_party_experience_by_pokemon_without_eggs():
     from pokesim.web.app import status_summary
-    party = [{'level': 100}, {'level': 57}, {'level': 5, 'egg': True}]
-    assert status_summary({'game': {'party': party}})['watch']['levels'] == 157
-    assert status_summary({'game': {}})['watch']['levels'] is None
+    party = [{'species': 6, 'trainer_id': 1234, 'dvs': [15, 14, 13, 12], 'level': 100, 'experience': {'total': 1059860}},
+             {'species': 25, 'trainer_id': 1234, 'dvs': (1, 2, 3, 4), 'level': 57, 'experience': {'total': 185193}},
+             {'species': 133, 'trainer_id': 1234, 'dvs': [0, 0, 0, 0], 'level': 5, 'egg': True,
+              'experience': {'total': 125}},
+             {'species': 7, 'trainer_id': 1234, 'dvs': [9, 9, 9, 9], 'level': 0, 'experience': None}]
+    assert status_summary({'game': {'party': party}})['watch']['experience'] == {
+        '1234/15,14,13,12/6': 1059860, '1234/1,2,3,4/25': 185193}
+    assert status_summary({'game': {}})['watch']['experience'] is None
 
 
 def test_a_stuck_game_is_not_also_reported_as_no_progress(world):

@@ -163,6 +163,20 @@ def live_view(status):
     return {**status, 'strategy': plan}
 
 
+def party_experience(party):
+    """Each party Pokémon's experience total, keyed by its trainer, DVs and species as the supervisor
+    keys it (runtime/supervision.mon_key), so a swap does not change the key. Eggs are left out."""
+    if not isinstance(party, list):
+        return None
+    totals = {}
+    for mon in party:
+        total = (mon.get('experience') or {}).get('total')
+        if not mon.get('egg') and isinstance(total, int):
+            dvs = ','.join(str(dv) for dv in mon.get('dvs') or ())
+            totals[f"{mon.get('trainer_id')}/{dvs}/{mon.get('species')}"] = total
+    return totals
+
+
 def status_summary(status):
     """What the supervisor and backups read: playback, health and pace, with no game data."""
     if not isinstance(status, dict):
@@ -176,8 +190,7 @@ def status_summary(status):
     watch = {'map': game.get('map'), 'owned': game.get('owned'),
              'badges': len(badges) if isinstance(badges, (list, tuple)) else badges,
              'hall_of_fame': game.get('hall_of_fame_count'),
-             'levels': sum(mon.get('level') or 0 for mon in party if not mon.get('egg'))
-             if isinstance(party, list) else None,
+             'experience': party_experience(party),
              'boxes_full': bool(counts and capacity and all(count >= capacity for count in counts))}
     return {**{key: value for key, value in status.items() if key not in ('game', 'strategy')},
             'game': {key: game[key] for key in ('map_name', 'playtime') if key in game}, 'watch': watch}
