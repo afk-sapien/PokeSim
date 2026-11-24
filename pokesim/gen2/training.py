@@ -474,8 +474,14 @@ def arrive(policy, snapshot):
     if not project:
         return None
     wanted = state.get('share_holder') if policy.goal.key == 'collection_train_pc' else None
+    # The fetch goes by the item as well. Copies alike in trainer and DVs all answer to the holder's
+    # identity, and one already in the party ended each fetch before the holder came out: a Silver run
+    # went back to the PC for three days for an Exp. Share on one of four such Aerodactyl (issue #113).
+    share = data.items['EXP_SHARE']
+    mon = next((row for row in snapshot.party + snapshot.stored
+                if wanted and row.held_item == share and identity(row) == wanted), None)
     wanted = wanted or project['identity']
-    mon = next((row for row in snapshot.party + snapshot.stored if identity(row) == wanted), None)
+    mon = mon or next((row for row in snapshot.party + snapshot.stored if identity(row) == wanted), None)
     key = policy.goal.key
     if key == 'collection_tidy':
         item = state.get('tidy_item')
