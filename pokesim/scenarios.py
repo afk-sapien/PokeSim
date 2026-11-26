@@ -847,9 +847,10 @@ def play(scenario, rom=None, progress=None):
     if variant is not None and variant != current_variant():
         return _play_elsewhere(scenario, rom, variant)
     run, watch = open_run(scenario, rom)
-    run.tick(scenario.idle_frames)
     read = run.read
     try:
+        if scenario.idle_frames:
+            run.tick(scenario.idle_frames)
         start = progress_frame = run.frame
         budget = scenario.budget_game_minutes * MINUTE
         battle_frame = None
