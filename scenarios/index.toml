@@ -162,3 +162,10 @@ state_sha256 = "6a3a1af0286cf644b09cfbdea5afc7fc1a008e1f7aec7b771b6ea26ad1ce8729
 frames = [5400960, 5400960]
 expect = "passes"
 issue = 716
+
+[[scenario]]
+name = "red-postgame-gift-full-bag-20261126"
+rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
+state_sha256 = "4b1565278c77e63e2e5a184610dc6ee084866fd49f96f21da6a3aa0599d6fc71"
+frames = [6259564, 6259564]
+expect = "passes"

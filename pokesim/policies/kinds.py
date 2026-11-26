@@ -12,12 +12,13 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 
 from ..planning.goals import Abandon, Rules
+from ..planning.monitor import hold_key
 from ..planning.stance import HUNT, TRAIN
 from ..strategy_data import ITEMS, MAPS, WORLD, event_set
 from . import collection as c
 from . import marathon, training
 from .move_development import evolution_wait, move_name
-from .progression import Goal, at, object_goal
+from .progression import BAG_SLOTS, Goal, at, bag_room, object_goal
 
 # Run fields every kind may write: what it gained, its last progress mark, a support trip under way,
 # the supplies it prepared and the closest it came to its target.
@@ -27,6 +28,19 @@ SPECIES = ('species', 'species', 'the Pokémon to get')
 MAP = ('map', 'map', 'the map it is on')
 ITEM = ('item', 'item', 'the item to get')
 PARENT = ('parent', 'species', 'the held Pokémon it works with')
+
+
+def gift(view, goal):
+    """``goal``, the walk to an item someone hands over or a ball holds, or first the PC visit that
+    stores a spent key item to make it an entry (bag_room). The giver refuses the item into a full bag,
+    and a Red run after the League walked to each Fishing Guru for nothing. With nothing spent to store,
+    or once a stall set that visit aside, the item waits (None), as HM02 and the Bicycle do."""
+    s = view.s
+    if len(s.items) < BAG_SLOTS:
+        return goal
+    if view.collection.director.waiting(hold_key('bag_room'), view.collection.clock):
+        return None
+    return bag_room(s, 1)
 
 
 @dataclass
@@ -335,7 +349,7 @@ class ReturnFossil(Kind):
     def target(self, view, p):
         room = WORLD[p['map']]['symbol']
         fragment = 'SCIENTIST2' if p['item'] == 'OLD_AMBER' else p['item']
-        return object_goal('collect_pickup', 'Collect another fossil', 'Bring it to the Cinnabar lab', room, fragment)
+        return gift(view, object_goal('collect_pickup', 'Collect another fossil', 'Bring it to the Cinnabar lab', room, fragment))
 
 
 class Marathon(Kind):
@@ -425,7 +439,8 @@ class Prize(Kind):
         s, collection = view.s, view.collection
         if not dict(s.items).get(ITEMS['COIN_CASE']):
             # The man by the diner's top left corner gives the case (CeladonDinerGymGuideText in pokered).
-            return object_goal('collect_coins', 'Get the Coin Case', 'Prepare to exchange coins for Porygon', 'CELADON_DINER', 'GYM_GUIDE')
+            return gift(view, object_goal('collect_coins', 'Get the Coin Case', 'Prepare to exchange coins for Porygon',
+                                          'CELADON_DINER', 'GYM_GUIDE'))
         cost = c.PORYGON_COINS.get(collection.version, 9999)
         if s.coins < cost:
             if s.money < 10000:
@@ -442,8 +457,8 @@ class Rod(Kind):
     params = (ITEM,)
 
     def target(self, view, p):
-        return object_goal('collect_rod', 'Obtain ' + p['item'].replace('_', ' ').title(), 'Unlock more fishing encounters',
-                           p['room'], 'FISHING_GURU')
+        return gift(view, object_goal('collect_rod', 'Obtain ' + p['item'].replace('_', ' ').title(),
+                                      'Unlock more fishing encounters', p['room'], 'FISHING_GURU'))
 
 
 class Amber(Kind):
@@ -452,7 +467,8 @@ class Amber(Kind):
     params = (ITEM,)
 
     def target(self, view, p):
-        return object_goal('collect_amber', 'Collect Old Amber', 'Revive Aerodactyl at the Cinnabar lab', 'MUSEUM_1F', 'SCIENTIST2')
+        return gift(view, object_goal('collect_amber', 'Collect Old Amber', 'Revive Aerodactyl at the Cinnabar lab',
+                                      'MUSEUM_1F', 'SCIENTIST2'))
 
 
 class Partner(Kind):
