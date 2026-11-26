@@ -29,7 +29,7 @@ from .palettes import PALETTES, recolor, validate_palette
 from .planning import pin
 from .policies import make_policy
 from .policies.team import storage_headroom
-from .ram import SPECIES_NAMES, Snapshot, end_damaged_nicknames, read_snapshot
+from .ram import SPECIES_NAMES, Snapshot, end_damaged_nicknames, read_snapshot, start_wild_battle
 from .runtime.game_loop import Decider, GameLoop, gen1_options, write_gen1_options
 from .runtime.policy import BUTTONS, Action
 from .runtime import battle_clock, capture, trace
@@ -502,6 +502,7 @@ class Emulator(EmulatorBase):
         # A text command in a party nickname makes every action through the party menu fail.
         if end_damaged_nicknames(self.pb.memory, snap.party, self.prev_snapshot and self.prev_snapshot.party):
             snap = read_snapshot(self.pb.memory, self.frame)
+        start_wild_battle(self.pb.memory, snap, self.prev_snapshot)
         if snap.started:
             self.play_clock.seed(snap.playtime_seconds)
             self._enforce_options()
