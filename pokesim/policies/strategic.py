@@ -1248,7 +1248,7 @@ class StrategicPolicy(Policy):
                 self.mode = 'moving a boulder to slow the current'
                 self.reason = 'Clear space and push the designated boulders into both holes'
                 self.progress_frame = s.frame
-                return tap(direction, 16, 16)
+                return self._push(s, mem, direction)
         if s.map in VICTORY_MAPS:
             # Every expedition must use currently open gates before assuming
             # another floor's puzzle can be solved along the route.
@@ -1270,7 +1270,7 @@ class StrategicPolicy(Policy):
                 self.mode = "moving a boulder onto the switch"
                 self.reason = "Find legal pushes and keep room to walk around the boulder"
                 self.progress_frame = s.frame
-                return tap(direction, 16, 16)
+                return self._push(s, mem, direction)
             # Any loose boulder can go on any open switch, so a return trip that reaches the
             # second switch or the hole first solves it first, and a boulder in the way of every
             # switch is pushed aside before one of them.
@@ -1450,6 +1450,16 @@ class StrategicPolicy(Policy):
         self.watch.begin('move', f'Move {direction} or cross into the next area', s, pos)
         # The Bicycle covers a tile in 8 frames, half a walking step, so a shorter press keeps pace with it.
         return tap(direction, 4, 8) if state == 1 else tap(direction, 8, 12)
+
+    def _push(self, s, mem, direction):
+        """Press one step of a boulder plan, on foot. The plan moves a square per press, and on the Bicycle this
+        press covers two, so on Victory Road the walk to the square behind a boulder stepped over it and back
+        again. A rider gets off first."""
+        if mem[W_WALK_BIKE_SURF_STATE] == 1:
+            actions = self._use_item(s, ITEMS['BICYCLE'], purpose='Get off the Bicycle to push the boulder')
+            if actions:
+                return actions
+        return tap(direction, 16, 16)
 
     def _trash_goal(self, snapshot):
         opened = event_set(snapshot.event_flags, "EVENT_1ST_LOCK_OPENED")

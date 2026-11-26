@@ -79,7 +79,7 @@ class TravelPolicy(StrategicPolicy):
                     if actions:
                         return actions
                 self.nav.issued(pos, direction, s.frame)
-                return tap(direction, 16, 16)
+                return self._push(s, mem, direction)
             if s.map == MAPS['VICTORY_ROAD_2F']:
                 targets = ((MAPS['VICTORY_ROAD_3F'], 27, 15),
                     (MAPS['VICTORY_ROAD_3F'], 23, 7),)

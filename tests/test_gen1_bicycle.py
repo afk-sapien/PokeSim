@@ -9,7 +9,7 @@ from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal, bicycle_goal, story_goal
 from pokesim.runtime.policy import PolicyContext
 from pokesim.policies.strategic import MOUNT_STEPS, WATER_TILES, StrategicPolicy, ride_ahead, rideable
-from pokecore.gen1 import W_WALK_BIKE_SURF_STATE
+from pokecore.gen1 import BIT_STRENGTH_ACTIVE, W_STATUS_FLAGS1, W_WALK_BIKE_SURF_STATE
 from pokesim.strategy_data import ITEMS, MAPS, WORLD
 from shortcut_fakes import Recorder
 from test_events import snap
@@ -163,3 +163,37 @@ def test_a_short_walk_or_a_walk_indoors_goes_on_foot(steps, items, name):
 def test_a_rider_presses_half_a_step_and_never_uses_the_bicycle_again(state, press):
     policy, shortcuts, s, mem = riding(MOUNT_STEPS, state=state)
     assert policy._move(s, mem, 'up') == press and shortcuts.started == []
+
+
+def pushing(state):
+    """Victory Road 3F's return corridor with Strength on and a boulder to push down, as in
+    test_return_corridor_drops_accessible_boulder_before_unreachable_upper_switch."""
+    from test_travel import prepare_navigation, trainer
+    s = trainer(map=MAPS['VICTORY_ROAD_3F'], x=23, y=10, items=BIKE)
+    policy = StrategicPolicy(0)
+    shortcuts = Recorder.on(policy)
+    prepare_navigation(policy, s)
+    policy.nav.live_positions[-2] = (22, 10)
+    goal = Goal('collect_static', 'Collect Zapdos', '', ((MAPS['POWER_PLANT'], 4, 10),))
+    policy.collection.project = {'method': 'static', 'species': 75}
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *args: (goal, None, None)
+    policy.pickups.pick = lambda *args: None
+    mem = fake_mem({})
+    mem[W_STATUS_FLAGS1] = 1 << BIT_STRENGTH_ACTIVE
+    mem[W_WALK_BIKE_SURF_STATE] = state
+    return policy, shortcuts, policy._overworld(s, mem)
+
+
+def test_a_boulder_push_on_foot_presses_a_full_step():
+    policy, shortcuts, actions = pushing(0)
+    assert policy.mode == 'moving a boulder onto the switch'
+    assert actions == tap('down', 16, 16) and shortcuts.started == []
+
+
+def test_a_rider_gets_off_the_bicycle_before_a_boulder_push():
+    """The push plan moves a square per press. On the Bicycle the press covered two, so on Victory Road 3F the
+    walk to the square behind a boulder stepped over it and back again."""
+    policy, shortcuts, _ = pushing(1)
+    assert shortcuts.kinds() == ['use_item'] and policy.shortcut.key == ('item', ITEMS['BICYCLE'], None)
+    assert policy.shortcut.purpose == 'Get off the Bicycle to push the boulder'
