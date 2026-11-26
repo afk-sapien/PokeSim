@@ -85,3 +85,21 @@ def test_the_plateau_judges_the_lobby_as_its_counter_does():
     shop = ShoppingController(restocking=True)
     assert shop.plan(s, GOAL, None, **OPTIONS, reach=reach(s)).goal is GOAL
     assert not shop.restocking
+
+
+def test_the_lobby_stocks_the_league_kit_only_for_a_walk_into_the_league():
+    # A Red run after the League stopped at the lobby PC to deposit, bought the kit there first and gave
+    # it the bag's last free entry, and the Fishing Gurus then had no room for their rods.
+    s = plateau(map=LOBBY, x=7, y=11, money=30000, items=((ITEMS['POKE_BALL'], 20), (ITEMS['HYPER_POTION'], 4)))
+    for deposit in (Goal('party_collection_space', 'Make room', 'Deposit'), Goal('heal', 'Heal', 'Heal')):
+        shop = ShoppingController()
+        assert shop.plan(s, deposit, None, **{**OPTIONS, 'requested_goal': deposit.key}).goal is deposit
+        assert not shop.restocking
+    for key in ('league_lorelei', 'league_entrance'):
+        trip = Goal(key, 'Challenge Lorelei', 'Start the League')
+        plan = ShoppingController().plan(s, trip, None, **{**OPTIONS, 'requested_goal': key}).goal
+        assert plan.key == 'restock' and plan.targets == (counter(LOBBY),)
+    # A ball short of the reserve still restocks there, whatever the visit is for.
+    short = replace(s, items=((ITEMS['POKE_BALL'], 3), (ITEMS['HYPER_POTION'], 4)))
+    deposit = Goal('party_collection_space', 'Make room', 'Deposit')
+    assert ShoppingController().plan(short, deposit, None, **{**OPTIONS, 'requested_goal': deposit.key}).goal.key == 'restock'

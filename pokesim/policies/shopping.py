@@ -5,7 +5,7 @@ from typing import ClassVar
 
 from ..planning.errand import Errand
 from .battle import BALLS, CURES, HEALING, shopping_item
-from .progression import Goal
+from .progression import LEAGUE_TRAINERS, Goal
 from .collection import legendary_project
 from . import kinds
 from .menus import MenuDecision, tap
@@ -35,6 +35,8 @@ DUNGEONS = {m for m, w in WORLD.items() if 'Pokecenter' not in w['name'] and w['
 # Bag entries a dungeon's story items need, the Lift Key and the Silph Scope in the Rocket Hideout.
 DUNGEON_KEY_SLOTS = 2
 VICTORY_ROAD = frozenset(MAPS[f'VICTORY_ROAD_{floor}F'] for floor in (1, 2, 3))
+# The goals that walk into the League's rooms, the trip the Indigo Plateau lobby's League kit is for.
+LEAGUE_TRIP = frozenset((*(key for key, _ in LEAGUE_TRAINERS), 'league_entrance'))
 RESTORES = frozenset(HEALING)
 BALL_KINDS = frozenset(BALLS)
 SPARE_CURES = frozenset(CURES) - RESTORES
@@ -227,10 +229,14 @@ class ShoppingController(Errand):
             self.restocking = False
         if snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY']:
             counts = dict(snapshot.items)
+            # The League kit is for a walk into the League's rooms, so a PC or heal visit leaves it alone.
+            # A Red run after the League stopped at the lobby PC to deposit, bought the kit first and gave
+            # it the bag's last free entry, and the Fishing Gurus then had no room for their rods.
+            kit = requested_goal in LEAGUE_TRIP and (medicine < 10 or counts.get(ITEMS['REVIVE'], 0) < 5
+                                                    or counts.get(ITEMS['FULL_HEAL'], 0) < 3)
             # A full bag still needs the clerk to sell from it. Without it, a trip planned outside for the
             # full bag ended at the lobby door, which saw nothing to buy and sent the player back out.
-            self.restocking = (bag_full or balls < ball_reserve or medicine < 10 or counts.get(ITEMS['REVIVE'], 0) < 5
-                               or counts.get(ITEMS['FULL_HEAL'], 0) < 3)
+            self.restocking = bag_full or balls < ball_reserve or kit
         if self.restocking and hunting(project) and balls < ball_reserve and not bag_full and unfunded(snapshot, balls):
             # A trip the purse cannot fund is not started. The hunt goes on with the balls in hand and
             # ends below the five it needed to start, so a rematch can refill the purse.
