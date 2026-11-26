@@ -29,10 +29,11 @@ LANDINGS = {
     MAPS['SAFFRON_CITY']: (9, 30),
 }
 TOWN_NAMES = {MAPS[name]: name for name in MAPS if MAPS[name] in LANDINGS}
-# A flight's menus and animation, in walking steps: FLIGHT_FRAMES over the frames a postgame walk takes
-# per step. Both are measured on the deep Red saves, see the pull request that added Kanto's Fly.
-FLIGHT_FRAMES = 900
-STEP_FRAMES = 16
+# A flight's menus and animation, in walking steps: the frames from opening the menu to landing over the
+# frames a postgame walk takes per step, the battles met on the way included since a flight skips those too.
+# Both are means measured on two deep Red saves, see the pull request that added Kanto's Fly.
+FLIGHT_FRAMES = 824
+STEP_FRAMES = 34.5
 FLIGHT_STEPS = round(FLIGHT_FRAMES / STEP_FRAMES)
 
 
