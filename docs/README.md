@@ -54,7 +54,7 @@ Each design's status line says what is built. Its "Today" describes main when it
 - [Nuzlocke mode](design/nuzlocke.md): proposed, not built. A per-adventure challenge mode where a Pokémon that faints is dead for good.
 - [When to rethink the goal](design/when-to-rethink.md): proposed, not built. Whether to pick the goal again only on named events instead of at every decision, measured on saves thousands of game hours past the Champion. It recommends keeping today's model and asking each whole-PC question once per PC change, starting with the Gen II egg scan.
 - [Gen II rung builds](design/gen2-rung-builds.md): proposed, not built. How the Gen II activities stop paying for a deep copy and roll back at every ask, measured on deep Gold and Crystal saves. It recommends a shallow draft with builds that replace values instead of editing them, then Facts on the costly helpers, and keeps asking every rung for now.
-- [Gate paired seeds](design/gate-paired-seeds.md): built. Judge a ladder gate rung that fails on waste or restock on 23 paired seeds against its merge base, about 2 minutes a rung, and charge restock time with its own share.
+- [Gate paired seeds](design/gate-paired-seeds.md): built. Judge a ladder gate rung that fails on waste on 23 paired seeds against its merge base, about 2 minutes a rung, and record restock, heal and PC time in their own shares without judging them.
 
 ## Historical records
 

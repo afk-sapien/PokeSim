@@ -50,12 +50,11 @@ GATE_PAIRED_SEEDS = tuple(range(7, 30))
 GATE_PAIRED_POINTS = 1.0
 GATE_PAIRED_RUNGS = 5
 # A restock that walks a long way and buys one ball counts as progress, so the wasted share never sees its
-# time. The gate keeps the share of frames under restock, heal and PC goals for each rung, and judges the
-# restock share as it judges waste. Heal and PC are only recorded until their spread is measured.
+# time. The gate keeps the share of frames under restock, heal and PC goals for each rung and judges none:
+# their spread from seed to seed on main is above the paired limit (docs/design/gate-paired-seeds.md).
 RESTOCK_GOALS = frozenset({'restock', 'buy_balls', 'sell_supplies'})
 PC_GOALS = frozenset({'party_box', 'party_upgrade', 'collection_box', 'collection_release'})
 SUPPORT = ('restock', 'heal', 'pc')
-GATE_JUDGED = ('waste', 'restock')
 # The share of decide pipeline decisions a rung agrees on before a switch, from the decide pipeline design.
 PIPELINE_BAR = 0.95
 # Gold, Silver and Crystal also note their last Bug-Catching Contest and Battle Tower visit and the Bicycle
@@ -562,8 +561,8 @@ def gate_rung(args):
 
 def mean_result(runs):
     """One rung's gate result from its runs on several seeds: the mean errors, story milestones, wasted share
-    and restock, heal and PC shares, how many runs stalled and the first stall, and every milestone a run earned, in the order the
-    runs earned them. A failed run fails the rung."""
+    and restock, heal and PC shares, how many runs stalled and the first stall, and every milestone a run
+    earned, in the order the runs earned them. A failed run fails the rung."""
     first = runs[0]
     failed = [run for run in runs if run.get('failed')]
     if failed:
@@ -617,10 +616,9 @@ def reach(result, base):
 
 def compare(results, baseline, points=GATE_WASTE_POINTS, further=GATE_FURTHER_POINTS):
     """What a gate run did worse than the baseline: a run that failed, more stalls than the baseline had, more
-    errors, fewer story milestones, or a wasted or restock share up by more than ``points``. A rung that
-    earned more milestones may rise by ``further``. A rung played on several seeds is judged on its runs
-    together (``mean_result``). A rung the baseline lacks is only reported, and so is a restock share the
-    baseline or the result lacks."""
+    errors, fewer story milestones, or a wasted share up by more than ``points``. A rung that earned more
+    milestones may rise by ``further``. A rung played on several seeds is judged on its runs together
+    (``mean_result``). A rung the baseline lacks is only reported."""
     problems = []
     for result in results:
         name = f'{result["ladder"]}/{result["rung"]}'
@@ -640,24 +638,15 @@ def compare(results, baseline, points=GATE_WASTE_POINTS, further=GATE_FURTHER_PO
             elif ahead < 0:
                 missed = next((key for key in base['story'] if key not in result['story']), base['story'][-1])
                 problems.append(f'{name}: stopped before {missed}, which the baseline reached')
-            else:
+            elif result['waste'] - base['waste'] > (further if ahead else points):
                 past = f', more than {further:g} points up past the baseline to {result["story"][-1]}' if ahead else ''
-                for kind in risen(result, base, further if ahead else points):
-                    text = 'wasted' if kind == 'waste' else 'of frames under restock'
-                    problems.append(f'{name}: {result[kind]:.1f}% {text}, {base[kind]:.1f}% before{past}')
+                problems.append(f'{name}: {result["waste"]:.1f}% wasted, {base["waste"]:.1f}% before{past}')
     return problems
 
 
-def risen(result, base, points):
-    """The judged shares, wasted and restock, that ``result`` raised by more than ``points`` over ``base``.
-    A share either one lacks is not judged."""
-    return [kind for kind in GATE_JUDGED if kind in result and kind in base and result[kind] - base[kind] > points]
-
-
-def share_only(results, baseline, points=GATE_WASTE_POINTS):
-    """The results whose only problems are a wasted or restock share up by more than ``points``, which the
-    paired stage judges again. A rung past the baseline's story milestones keeps its own limit and is not
-    among them."""
+def waste_only(results, baseline, points=GATE_WASTE_POINTS):
+    """The results whose one problem is a wasted share up by more than ``points``, which the paired stage
+    judges again. A rung past the baseline's story milestones keeps its own limit and is not among them."""
     return [result for result in results
             if compare([result], baseline, points) and not compare([result], baseline, float('inf'))]
 
@@ -680,9 +669,9 @@ def shares(result):
 
 
 def paired(pairs, points=GATE_PAIRED_POINTS):
-    """The judgment on one share of one rung's paired seeds, given as (seed, base share, head share): the
-    mean, standard error and median of the head's difference in points, and whether the mean rose by at
-    most ``points``. The mean is judged as it prints, to two places."""
+    """The judgment on one rung's paired seeds, given as (seed, base waste, head waste): the mean, standard
+    error and median of the head's difference in points, and whether the mean rose by at most ``points``.
+    The mean is judged as it prints, to two places."""
     differences = [head - base for _, base, head in pairs]
     mean = round(statistics.fmean(differences), 2)
     error = statistics.stdev(differences) / len(differences) ** 0.5 if len(differences) > 1 else 0.0

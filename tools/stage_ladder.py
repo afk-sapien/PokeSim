@@ -33,20 +33,20 @@ first. A randomized ladder plays on its own share code. Goals are reseeded as in
 ``python -m pokesim.replay audit run --reseed-goals``, so two code versions meet the same rolls on each seed.
 A run ends at its first stall, nothing achieved for 20 game minutes, one battle running 20 game minutes
 or a retry loop, and keeps a bundle. The gate judges each rung on its three runs together and compares
-how many stalled and the mean errors, story milestones, wasted share and restock share with the tracked
-tools/ladder/gate-baseline.json. The restock share is the frames under a restock goal over all frames,
-since a long walk that buys one ball counts as progress and never as waste. It exits 1 on more stalls
-than the baseline, more errors, fewer story milestones, or a wasted or restock share more than two points
-higher. A rung that earns more story milestones passes while each share is at most ten points higher, and
-the gate lists it under past_baseline, since its baseline then wants a reviewed rewrite. The report also
-keeps each rung's heal and PC shares, which nothing judges yet.
+how many stalled and the mean errors, story milestones and wasted share with the tracked
+tools/ladder/gate-baseline.json. It exits 1 on more stalls than the baseline, more errors, fewer story
+milestones, or a wasted share more than two points higher. A rung that earns more story milestones
+passes while its wasted share is at most ten points higher, and the gate lists it under past_baseline,
+since its baseline then wants a reviewed rewrite. The report also keeps each rung's share of frames under
+restock, heal and PC goals, and each gate line shows the restock share and its move from the baseline.
+A long walk that buys one ball counts as progress and never as waste, so only that share sees it. None of
+the three is judged, since each moves more from seed to seed than the paired limit.
 
-A rung whose only problems are those shares plays seeds 7 to 29 on the merge base with origin/main,
+A rung whose one problem is that wasted share plays seeds 7 to 29 on the merge base with origin/main,
 checked out in a temporary worktree with its own environment, and on the head, whose three runs stand
-for their seeds. It passes when each share that failed the screen rises at most one point on the mean of
-the 23 pairs, and keeps its baseline. A paired failure prints the pairs and the frames under each goal on
-both trees. With more than five such rungs, or on main, where the merge base is the head, the screen's
-verdict stands.
+for their seeds. It passes when the head wastes at most one point more on the mean of the 23 pairs, and
+keeps its baseline. A paired failure prints the pairs and the frames under each goal on both trees. With
+more than five such rungs, or on main, where the merge base is the head, the screen's verdict stands.
 The story milestones are the ones the policy keeps in story order, ``progression.milestones`` in Red,
 Blue and Yellow and the checkpoints the Gold, Silver and Crystal story notes as it passes them. The gate
 counts the ones a rung earned in its window. ``--write-baseline`` stores the run there, for a pull
@@ -82,8 +82,8 @@ sys.path.insert(0, str(ROOT))
 # The gate's rung runner and its comparison live in pokesim.replay.rung, which the replay bisect shares.
 from pokesim.replay.rung import (GATE_FRAMES, GATE_PAIRED_POINTS, GATE_PAIRED_RUNGS, GATE_PAIRED_SEEDS, GATE_QUIET,
                                  GATE_SEEDS, GATE_TIMEOUT, GATE_WASTE_POINTS, PIPELINE_BAR, _bundle, _cartridges,
-                                 agreement, compare, gate_rung, mean_result, paired, past_baseline, prepare, risen,
-                                 share, share_only, shares)
+                                 agreement, compare, gate_rung, mean_result, paired, past_baseline, prepare, share,
+                                 waste_only)
 
 GEN1_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'post_game')
 GEN2_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'champion_first',
@@ -551,12 +551,10 @@ def goal_frames(folders):
     return dict(total)
 
 
-def pair(rungs, args, out, env, commit, baseline):
-    """Play each rung that failed on a judged share alone on the paired seeds, on the merge base ``commit``
-    and on the head, and return each rung's judgment by name, on each share that rose past the screen's
-    limit. The head's screen runs stand for their own seeds, and the merge base's runs go under
-    OUT/merge-base. Both trees' shares come from each run's run.json, which a merge base from before the
-    restock share also writes."""
+def pair(rungs, args, out, env, commit):
+    """Play each rung that failed on its wasted share alone on the paired seeds, on the merge base
+    ``commit`` and on the head, and return each rung's judgment by name. The head's screen runs stand for
+    their own seeds, and the merge base's runs go under OUT/merge-base."""
     def folder(tree, result, seed):
         return (out / 'merge-base' if tree == 'base' else out) / result['ladder'] / result['rung'] / f'seed-{seed}'
 
@@ -584,12 +582,8 @@ def pair(rungs, args, out, env, commit, baseline):
         if failed:
             verdicts[name] = {'base': commit, 'passed': False, 'failed': ', '.join(failed)}
             continue
-        values = {tree: {seed: shares(json.loads((folder(tree, result, seed) / 'run.json').read_text(encoding='utf-8')))
-                         for seed in GATE_PAIRED_SEEDS} for tree in runs}
-        judged = {kind: paired([(seed, values['base'][seed][kind], values['head'][seed][kind])
-                                for seed in GATE_PAIRED_SEEDS])
-                  for kind in risen(result, baseline[name], args.waste_points)}
-        verdict = {'base': commit, 'passed': all(one['passed'] for one in judged.values()), 'shares': judged}
+        verdict = dict(paired([(seed, runs['base'][seed]['waste'], runs['head'][seed]['waste'])
+                               for seed in GATE_PAIRED_SEEDS]), base=commit)
         if not verdict['passed']:
             verdict['goals'] = {tree: goal_frames(folder(tree, result, seed) for seed in GATE_PAIRED_SEEDS)
                                 for tree in runs}
@@ -598,31 +592,22 @@ def pair(rungs, args, out, env, commit, baseline):
 
 
 def _paired_lines(name, verdict, points=GATE_PAIRED_POINTS):
-    """What the gate prints for a rung judged on paired seeds, as (problems, lines): a line for each share it
-    judged, and on a failure the pairs of each share over the limit and the frames under each goal on both
-    trees, the goal the head spent most more on first. The problems are the lines of the shares over it."""
-    if 'shares' not in verdict:
-        line = f'{name}: no paired judgment against the merge base {verdict["base"][:8]}, {verdict["failed"]}'
-        return [line], [line]
-    problems, lines = [], []
-    for kind, judged in verdict['shares'].items():
-        seeds = len(judged['pairs'])
-        line = (f'{name}: {judged["mean"]:+.2f} points {"wasted" if kind == "waste" else "under restock"} on the '
-                f'mean of {seeds} paired seeds against the merge base {verdict["base"][:8]}, standard error '
-                f'{judged["error"]:.2f}, median {judged["median"]:+.2f}')
-        if judged['passed']:
-            lines.append(f'{line}, within the {points:.1f} point limit')
-            continue
-        problems.append(f'{line}, over the {points:.1f} point limit')
-        lines += [problems[-1], '  seed   base   head  difference']
-        lines += [f'  {seed:4d} {base:6.2f} {head:6.2f} {head - base:+11.2f}' for seed, base, head in judged['pairs']]
-    if problems:
-        base, head = verdict['goals']['base'], verdict['goals']['head']
-        lines.append(f'  frames under each goal over the {len(GATE_PAIRED_SEEDS)} seeds: base, head, difference')
-        for key in sorted(set(base) | set(head), key=lambda key: base.get(key, 0) - head.get(key, 0)):
-            lines.append(f'  {key:<28} {base.get(key, 0):9d} {head.get(key, 0):9d} '
-                         f'{head.get(key, 0) - base.get(key, 0):+10d}')
-    return problems, lines
+    """What the gate prints for a rung judged on paired seeds: one line, and on a failure the pairs and the
+    frames under each goal on both trees, the goal the head spent most more on first."""
+    if 'pairs' not in verdict:
+        return [f'{name}: no paired judgment against the merge base {verdict["base"][:8]}, {verdict["failed"]}']
+    seeds = len(verdict['pairs'])
+    line = (f'{name}: {verdict["mean"]:+.2f} points wasted on the mean of {seeds} paired seeds against the merge '
+            f'base {verdict["base"][:8]}, standard error {verdict["error"]:.2f}, median {verdict["median"]:+.2f}')
+    if verdict['passed']:
+        return [f'{line}, within the {points:.1f} point limit']
+    lines = [f'{line}, over the {points:.1f} point limit', '  seed   base   head  difference']
+    lines += [f'  {seed:4d} {base:6.2f} {head:6.2f} {head - base:+11.2f}' for seed, base, head in verdict['pairs']]
+    base, head = verdict['goals']['base'], verdict['goals']['head']
+    lines.append(f'  frames under each goal over the {seeds} seeds: base, head, difference')
+    for key in sorted(set(base) | set(head), key=lambda key: base.get(key, 0) - head.get(key, 0)):
+        lines.append(f'  {key:<28} {base.get(key, 0):9d} {head.get(key, 0):9d} {head.get(key, 0) - base.get(key, 0):+10d}')
+    return lines
 
 
 def gate(args):
@@ -665,26 +650,26 @@ def gate(args):
                 results.append(result)
                 runs = []
     problems = compare(results, baseline, args.waste_points)
-    shifted = [] if args.write_baseline else share_only(results, baseline, args.waste_points)
+    wasteful = [] if args.write_baseline else waste_only(results, baseline, args.waste_points)
     judged = {}
-    base = shifted and len(shifted) <= GATE_PAIRED_RUNGS and _merge_base()
-    if len(shifted) > GATE_PAIRED_RUNGS:
-        print(f'{len(shifted)} rungs failed on their wasted or restock share alone, more than {GATE_PAIRED_RUNGS}, '
-              'so none plays paired seeds')
-    elif shifted and not base:
-        print(f'{len(shifted)} rungs failed on their wasted or restock share alone, and this tree has no merge base '
-              'with origin/main apart from itself, so none plays paired seeds')
-    elif shifted:
-        print(f'{len(shifted)} rungs failed on their wasted or restock share alone and play seeds '
-              f'{GATE_PAIRED_SEEDS[0]} to {GATE_PAIRED_SEEDS[-1]} on the merge base {base[:8]} and on the head',
-              flush=True)
-        judged = pair(shifted, args, out, env, base, baseline)
+    base = wasteful and len(wasteful) <= GATE_PAIRED_RUNGS and _merge_base()
+    if len(wasteful) > GATE_PAIRED_RUNGS:
+        print(f'{len(wasteful)} rungs failed on their wasted share alone, more than {GATE_PAIRED_RUNGS}, so none '
+              'plays paired seeds')
+    elif wasteful and not base:
+        print(f'{len(wasteful)} rungs failed on their wasted share alone, and this tree has no merge base with '
+              'origin/main apart from itself, so none plays paired seeds')
+    elif wasteful:
+        print(f'{len(wasteful)} rungs failed on their wasted share alone and play seeds {GATE_PAIRED_SEEDS[0]} to '
+              f'{GATE_PAIRED_SEEDS[-1]} on the merge base {base[:8]} and on the head', flush=True)
+        judged = pair(wasteful, args, out, env, base)
         problems = compare([result for result in results if f'{result["ladder"]}/{result["rung"]}' not in judged],
                            baseline, args.waste_points)
         for name, verdict in judged.items():
-            found, lines = _paired_lines(name, verdict)
+            lines = _paired_lines(name, verdict)
             print('\n'.join(lines), flush=True)
-            problems += found
+            if not verdict['passed']:
+                problems.append(lines[0])
     further = past_baseline(results, baseline)
     commit = _commit()
     report = {'commit': commit, 'attempt': attempt(args.root / 'gate', commit), 'frames': args.frames,
@@ -773,7 +758,7 @@ def main(argv=None):
     gating.add_argument('--quiet', type=int, default=GATE_QUIET, help='game minutes without an achievement that count as a stall')
     gating.add_argument('--battle-minutes', type=int, default=GATE_QUIET, help='game minutes one battle may run')
     gating.add_argument('--waste-points', type=float, default=GATE_WASTE_POINTS,
-                        help='how many points a rung\'s wasted or restock share may grow before the gate fails')
+                        help='how many points a rung\'s wasted share may grow before the gate fails')
     gating.add_argument('--seeds', type=lambda text: tuple(int(seed) for seed in text.split(',')), default=GATE_SEEDS,
                         help='the goal seeds each rung plays on, comma separated, by default 7,8,9')
     gating.add_argument('--baseline', type=Path, help='the baseline file, by default tools/ladder/gate-baseline.json')

@@ -213,19 +213,21 @@ and `ROM_PATH` set to that share code and cartridge.
 runs for that commit so far, so a pass on the fifth try reads as one.
 
 The gate plays every rung on goal seeds 7, 8 and 9, each in its own process, and judges the rung on
-the three runs: how many stalled, and the mean errors, story milestones, wasted share and restock
-share. The restock share is the frames under a restock goal over all frames. A restock that buys one
-ball counts as progress, so a long walk to a far shop never shows as waste and only this share sees
-it. The report also keeps a heal and a PC share for each rung, which nothing judges yet. One seed
-alone can move a rung's shares by several points on a change that does not touch the rung. The
-baseline names the seeds it was taken on, and a gate on other seeds stops until `--write-baseline`
+the three runs: how many stalled, and the mean errors, story milestones and wasted share. One seed
+alone can move a rung's wasted share by several points on a change that does not touch the rung.
+The baseline names the seeds it was taken on, and a gate on other seeds stops until `--write-baseline`
 rewrites it.
 
-A rung whose only problems are a wasted or restock share more than two points up goes to a paired
-stage. The gate checks out the merge base with origin/main in a temporary worktree with its own
-environment, plays the rung there on seeds 7 to 29, and on the head on seeds 10 to 29. The rung
-passes when each share that failed the screen rises at most one point on the mean of the 23 pairs,
-and its baseline stays. A paired failure
+The report also keeps three shares for each rung that nothing judges: the frames under restock, heal
+and PC goals over all frames. A restock that buys one ball counts as progress, so a long walk to a
+far shop never shows as waste and only the restock share sees it. Each gate line shows that share and
+its move from the baseline, for the reviewer to read. None of the three is judged, since each moves
+more from seed to seed than the one-point paired limit.
+
+A rung whose one problem is a wasted share more than two points up goes to a paired stage. The gate
+checks out the merge base with origin/main in a temporary worktree with its own environment, plays
+the rung there on seeds 7 to 29, and on the head on seeds 10 to 29. The rung passes when the head
+wastes at most one point more on the mean of the 23 pairs, and its baseline stays. A paired failure
 prints the pairs and the frames under each goal on both trees. With more than five such rungs, or
 on main, where the merge base is the head, the three-seed verdict stands. The pairs take about two
 minutes a rung. `docs/design/gate-paired-seeds.md` has the measurements behind the limit.

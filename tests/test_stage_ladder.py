@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from pokesim.replay.rung import shares
 from tools import stage_ladder
 from tools.stage_ladder import GEN1_LORELEI, main, reached
 
@@ -373,30 +374,27 @@ def test_the_paired_judgment_passes_a_mean_rise_of_at_most_one_point():
     assert not stage_ladder.paired([(7, 10.0, 10.3), (8, 10.0, 11.72)])['passed']
 
 
-def test_only_a_rung_up_on_its_shares_alone_goes_to_the_paired_stage():
-    rung = {'stall': None, 'errors': 0, 'waste': 10.0, 'restock': 5.0, 'story': ['fog']}
-    baseline = {f'gold/{name}': rung for name in ('badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first')}
+def test_only_a_rung_up_on_waste_alone_goes_to_the_paired_stage():
+    baseline = {'gold/badges_2': {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']},
+                'gold/badges_4': {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']},
+                'gold/badges_6': {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']},
+                'gold/badges_8': {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']}}
     results = [_result('badges_2', waste=12.5, story=['fog']), _result('badges_4', waste=12.5, errors=1, story=['fog']),
-               _result('badges_6', waste=11.0, story=['fog']), _result('badges_8', waste=25.0, story=['fog', 'storm']),
-               _result('league_first', restock=7.5, story=['fog'])]
+               _result('badges_6', waste=11.0, story=['fog']), _result('badges_8', waste=25.0, story=['fog', 'storm'])]
     # More errors fail as before, and a rung past its baseline keeps its own ten point limit.
-    assert [result['rung'] for result in stage_ladder.share_only(results, baseline)] == ['badges_2', 'league_first']
+    assert [result['rung'] for result in stage_ladder.waste_only(results, baseline)] == ['badges_2']
 
 
-def test_a_restock_share_up_more_than_two_points_fails_and_one_the_baseline_lacks_is_not_judged():
-    # A long restock walk that buys one ball is progress, so only its own share sees it.
+def test_a_restock_rise_shows_on_the_gate_line_and_fails_nothing():
+    # Restock moves more from seed to seed than the paired limit, so the reviewer sees it and nothing judges it.
     base = {'gold/badges_6': {'stall': None, 'errors': 0, 'waste': 10.0, 'restock': 5.0, 'story': ['fog']}}
-    assert stage_ladder.compare([_result('badges_6', restock=7.0, story=['fog'])], base) == []
-    assert stage_ladder.compare([_result('badges_6', restock=7.5, story=['fog'])], base) == [
-        'gold/badges_6: 7.5% of frames under restock, 5.0% before']
-    assert stage_ladder.compare([_result('badges_6', waste=13.0, restock=7.5, story=['fog'])], base) == [
-        'gold/badges_6: 13.0% wasted, 10.0% before', 'gold/badges_6: 7.5% of frames under restock, 5.0% before']
-    # A baseline from before the restock share, or a result without one, judges waste alone.
-    older = {'gold/badges_6': {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']}}
-    assert stage_ladder.compare([_result('badges_6', restock=40.0, story=['fog'])], older) == []
-    unshared = _result('badges_6', story=['fog'])
-    del unshared['restock']
-    assert stage_ladder.compare([unshared], base) == []
+    risen = _result('badges_6', restock=45.0, story=['fog'])
+    assert stage_ladder.compare([risen], base) == [] and stage_ladder.waste_only([risen], base) == []
+    assert stage_ladder._gate_line(risen, base['gold/badges_6']).startswith(
+        'gold/badges_6                   10.0% wasted ( +0.0), 45.0% restock (+40.0), 0 errors')
+    # A baseline from before the restock share shows the share alone.
+    older = {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']}
+    assert ', 45.0% restock, 0 errors' in stage_ladder._gate_line(risen, older)
 
 
 def test_the_shares_of_a_run_count_restock_heal_and_pc_goals_by_their_key():
@@ -404,16 +402,15 @@ def test_the_shares_of_a_run_count_restock_heal_and_pc_goals_by_their_key():
               'sell_supplies Sell spare items': 50, 'heal Pokemon Center': 200, 'party_box Box a spare': 40,
               'collection_hatch_pc Take an egg': 10, 'collection_hunt quality PIKACHU': 300}
     result = {'frames': 1000, 'wasted': {'collection_hunt quality PIKACHU': 125}, 'frames_by_goal': frames}
-    assert stage_ladder.shares(result) == {'waste': 12.5, 'restock': 45.0, 'heal': 20.0, 'pc': 5.0}
-    assert stage_ladder.shares({'frames': 0, 'wasted': {}, 'frames_by_goal': {}}) == {
-        'waste': 0.0, 'restock': 0.0, 'heal': 0.0, 'pc': 0.0}
+    assert shares(result) == {'waste': 12.5, 'restock': 45.0, 'heal': 20.0, 'pc': 5.0}
+    assert shares({'frames': 0, 'wasted': {}, 'frames_by_goal': {}}) == {'waste': 0.0, 'restock': 0.0, 'heal': 0.0,
+                                                                          'pc': 0.0}
 
 
-def _paired_gate(tmp_path, monkeypatch, base_waste, base='b' * 40, restock=(5.0, 5.0)):
+def _paired_gate(tmp_path, monkeypatch, base_waste, base='b' * 40):
     """A gate over red/badges_2 and red/badges_4 that plays no game. The head wastes 10% on badges_2 and
     13% on badges_4 on every seed, the merge base ``base`` ``base_waste`` on badges_4, and both baselines
-    are 10%. On badges_4 the merge base and the head spend ``restock`` under restock, badges_2 and both
-    baselines 5%."""
+    are 10%."""
     root = tmp_path / 'ladders'
     _ladder(root, 'red', 1, '', ['badges_2', 'badges_4'])
     rung = {'stall': None, 'stalls': 0, 'errors': 0, 'waste': 10.0, 'restock': 5.0, 'milestones': 0, 'story': []}
@@ -428,14 +425,11 @@ def _paired_gate(tmp_path, monkeypatch, base_waste, base='b' * 40, restock=(5.0,
         tree = 'base' if command[3] == 'base-python' else 'head'
         calls.append((tree, rung, seed))
         waste = 10.0 if rung == 'badges_2' else base_waste if tree == 'base' else 13.0
-        restocked = 5.0 if rung == 'badges_2' else restock[tree == 'head']
-        # The run plays 1000 frames, so ten frames are a point.
-        frames = {'collection_hunt partner PIKACHU': 100, 'collection_hunt quality PIKACHU': 20,
-                  'collection_trade': 50 if tree == 'base' else 80, 'restock Buy Poke Balls': round(restocked * 10)}
-        run = {'frames': 1000, 'wasted': {'collection_hunt partner PIKACHU': round(waste * 10)}, 'frames_by_goal': frames}
-        (out / 'run.json').write_text(json.dumps(run), encoding='utf-8')
-        summary = dict(_result(rung, ladder='red'), frames=stage_ladder.GATE_FRAMES, **stage_ladder.shares(run))
+        summary = dict(_result(rung, waste, ladder='red'), frames=stage_ladder.GATE_FRAMES)
         (out / 'summary.json').write_text(json.dumps(summary), encoding='utf-8')
+        frames = {'collection_hunt partner PIKACHU': 100, 'collection_hunt quality PIKACHU': 20,
+                  'collection_restock': 50 if tree == 'base' else 80}
+        (out / 'run.json').write_text(json.dumps({'frames_by_goal': frames}), encoding='utf-8')
         return SimpleNamespace(returncode=0)
 
     @contextlib.contextmanager
@@ -463,8 +457,7 @@ def test_a_rung_up_on_waste_alone_passes_on_paired_seeds_when_the_merge_base_was
     assert sorted(seed for tree, seed in paired if tree == 'head') == list(range(10, 30))
     assert all(rung == 'badges_4' for tree, rung, seed in calls if tree == 'base' or seed > 9)
     verdict = report['paired']['red/badges_4']
-    assert verdict['passed'] and verdict['base'] == 'b' * 40 and set(verdict['shares']) == {'waste'}
-    assert verdict['shares']['waste']['mean'] == 0.5 and len(verdict['shares']['waste']['pairs']) == 23
+    assert verdict['passed'] and verdict['mean'] == 0.5 and verdict['base'] == 'b' * 40 and len(verdict['pairs']) == 23
     assert set(report['paired']) == {'red/badges_4'}
     out = capsys.readouterr().out
     assert ('red/badges_4: +0.50 points wasted on the mean of 23 paired seeds against the merge base bbbbbbbb, '
@@ -478,33 +471,14 @@ def test_a_paired_failure_prints_the_pairs_and_the_frames_under_each_goal(tmp_pa
             'standard error 0.00, median +1.50, over the 1.0 point limit')
     assert code == 1 and report['problems'] == [line]
     assert report['paired']['red/badges_4']['goals'] == {
-        'base': {'collection_hunt': 2760, 'collection_trade': 1150, 'restock': 1150},
-        'head': {'collection_hunt': 2760, 'collection_trade': 1840, 'restock': 1150}}
+        'base': {'collection_hunt': 2760, 'collection_restock': 1150},
+        'head': {'collection_hunt': 2760, 'collection_restock': 1840}}
     out = capsys.readouterr().out
     assert '     7  11.50  13.00       +1.50' in out and '    29  11.50  13.00       +1.50' in out
     # The goal the head spent most more on comes first.
     goals = out[out.index('frames under each goal over the 23 seeds'):]
-    assert goals.index('collection_trade') < goals.index('collection_hunt')
-    assert '  collection_trade                  1150      1840       +690' in goals
-
-
-def test_a_rung_up_on_restock_plays_paired_seeds_on_each_share_that_rose(tmp_path, monkeypatch, capsys):
-    # The head restocks 8% against a baseline of 5%, and the merge base 7.2%, so the rise is the story's.
-    code, _, report = _paired_gate(tmp_path / 'near', monkeypatch, base_waste=13.0, restock=(7.2, 8.0))
-    verdict = report['paired']['red/badges_4']
-    assert code == 0 and verdict['passed'] and set(verdict['shares']) == {'waste', 'restock'}
-    assert verdict['shares']['restock']['mean'] == 0.8 and verdict['shares']['waste']['mean'] == 0.0
-    out = capsys.readouterr().out
-    assert 'rungs failed on their wasted or restock share alone' in out
-    assert ('red/badges_4: +0.80 points under restock on the mean of 23 paired seeds against the merge base '
-            'bbbbbbbb, standard error 0.00, median +0.80, within the 1.0 point limit') in out
-    code, _, report = _paired_gate(tmp_path / 'far', monkeypatch, base_waste=13.0, restock=(5.0, 8.0))
-    assert code == 1 and report['problems'] == [
-        'red/badges_4: +3.00 points under restock on the mean of 23 paired seeds against the merge base bbbbbbbb, '
-        'standard error 0.00, median +3.00, over the 1.0 point limit']
-    out = capsys.readouterr().out
-    assert '     7   5.00   8.00       +3.00' in out and '     7  13.00  13.00' not in out
-    assert out.count('frames under each goal over the 23 seeds') == 1
+    assert goals.index('collection_restock') < goals.index('collection_hunt')
+    assert '  collection_restock                1150      1840       +690' in goals
 
 
 def test_on_main_a_rung_up_on_waste_alone_fails_on_the_screen(tmp_path, monkeypatch, capsys):
