@@ -520,14 +520,18 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
                         else 'Catch another partner for the collection or a useful trade' if repeat_target
                         else 'Catch the missing Pokédex entry without risking a knockout')
     if snapshot.in_battle == 1 and snapshot.battle_type == 0 and snapshot.can_catch and useful and balls and safe and catch_attempts < (12 if required else 5):
+        ball_index = balls[-1][0] if known.get("catch_rate", 255) < 100 else balls[0][0]
         if enemy.hp <= enemy.max_hp * 0.35 or enemy.status or not moves:
-            ball_index = balls[-1][0] if known.get("catch_rate", 255) < 100 else balls[0][0]
             return Decision("item", ball_index, reason="Catch a missing species, a needed partner, or a stronger reserve")
         weakening = [(score, k) for score, k in moves if 0 < damage(me.moves[k], me, enemy) < enemy.hp * 0.8]
         if weakening:
             return Decision("fight", max(weakening)[1], reason="Weaken the target without an expected knockout")
         if required:
             return Decision('item', balls[0][0], reason='Catch the field-move partner without knocking it out')
+        # Every move would knock the capture out, so it gets a ball as it stands. The stance caught for it,
+        # and a knockout wins nothing. A level 100 Vileplume hunting Clefairy in Mt. Moon knocked out 26
+        # Geodude in a row that the PC would have kept, and the half hour achieved nothing.
+        return Decision('item', ball_index, reason='Catch the capture as it stands, since every move would knock it out')
     if snapshot.in_battle == 2 and not me.status & FROZEN and spent(me) and not hurts(me, enemy):
         # Nothing this battler has left can hurt the foe, such as Struggle into Agatha's Ghosts, so items
         # spent on it only lengthen a battle it cannot win. A battler that never had an attack, such as
