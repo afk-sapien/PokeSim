@@ -169,3 +169,10 @@ rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
 state_sha256 = "4b1565278c77e63e2e5a184610dc6ee084866fd49f96f21da6a3aa0599d6fc71"
 frames = [6259564, 6259564]
 expect = "passes"
+
+[[scenario]]
+name = "red-postgame-fly-indigo-20261126"
+rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
+state_sha256 = "ff7abec24bd0ede725e9451798f36a883dc5cadeacb07c2bda7243ee59bd76f8"
+frames = [2091198738, 2091198738]
+expect = "passes"
