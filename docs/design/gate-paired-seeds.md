@@ -1,6 +1,6 @@
 # Gate: paired seeds on a failing rung
 
-Status: approved by the lead on 2026-11-26 with the answers in section 7. Not built yet.
+Status: approved by the lead on 2026-11-26 with the answers in section 7. The paired stage is built (PR 1). The restock share is not built yet (PR 2).
 
 The ladder gate (`tools/stage_ladder.py gate`, `pokesim/replay/rung.py`) plays 30 game minutes from each of 59 rungs on goal seeds 7, 8 and 9. It fails a rung whose mean wasted share rises more than 2.0 points over `tools/ladder/gate-baseline.json`. This note proposes two changes: judge a rung that fails on waste on paired extra seeds, and charge the time a restock takes.
 
@@ -17,7 +17,7 @@ Each case took a hand run and a lead decision before a baseline moved.
 
 1. The 3-seed gate stays the first screen, unchanged. It took 228 s for 59 rungs at 10 jobs on the last preflight.
 2. A rung that fails only on its wasted share goes to a paired stage. A new stall, more errors or fewer milestones fail as now.
-3. The paired stage checks out the merge base with origin/main in a temporary worktree. It plays the rung there on seeds 7 to 29, and on the head on seeds 10 to 29, since the screen already played 7 to 9. Both trees use `gate-rung`, so each seed meets the same rolls on both until the first goal start they do not share.
+3. The paired stage checks out the merge base with origin/main in a temporary worktree. It plays the rung there on seeds 7 to 29, and on the head on seeds 10 to 29, since the screen already played 7 to 9. Both trees use `gate-rung`, so each seed meets the same rolls on both until the first goal start they do not share. On main the merge base is the head itself, so there the screen's verdict stands.
 4. It judges the mean paired difference over the 23 seeds against a 1.0-point limit. The gate report lists the 23 pairs, the mean, the standard error and the median, pass or fail. A paired failure also prints the per-goal frame sums on both trees, so the reviewer sees where the frames went.
 5. A rung that passes this way keeps its baseline. A baseline move stays a reviewed change.
 

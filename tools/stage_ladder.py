@@ -38,6 +38,12 @@ tools/ladder/gate-baseline.json. It exits 1 on more stalls than the baseline, mo
 milestones, or a wasted share more than two points higher. A rung that earns more story milestones
 passes while its wasted share is at most ten points higher, and the gate lists it under past_baseline,
 since its baseline then wants a reviewed rewrite.
+
+A rung whose one problem is that wasted share plays seeds 7 to 29 on the merge base with origin/main,
+checked out in a temporary worktree with its own environment, and on the head, whose three runs stand
+for their seeds. It passes when the head wastes at most one point more on the mean of the 23 pairs, and
+keeps its baseline. A paired failure prints the pairs and the frames under each goal on both trees. With
+more than five such rungs, or on main, where the merge base is the head, the screen's verdict stands.
 The story milestones are the ones the policy keeps in story order, ``progression.milestones`` in Red,
 Blue and Yellow and the checkpoints the Gold, Silver and Crystal story notes as it passes them. The gate
 counts the ones a rung earned in its window. ``--write-baseline`` stores the run there, for a pull
@@ -51,13 +57,17 @@ must stay outside the checkout or under data/.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import random
 import shutil
+import tempfile
 import subprocess
 import sys
 import time
@@ -67,9 +77,10 @@ sys.path.insert(0, str(ROOT))
 
 # Policy modules load after ``prepare``, once the cartridge has set the Gen I variant and the randomizer.
 # The gate's rung runner and its comparison live in pokesim.replay.rung, which the replay bisect shares.
-from pokesim.replay.rung import (GATE_FRAMES, GATE_QUIET, GATE_SEEDS, GATE_TIMEOUT, GATE_WASTE_POINTS, PIPELINE_BAR,
-                                 _bundle, _cartridges, agreement, compare, gate_rung, mean_result, past_baseline,
-                                 prepare, share)
+from pokesim.replay.rung import (GATE_FRAMES, GATE_PAIRED_POINTS, GATE_PAIRED_RUNGS, GATE_PAIRED_SEEDS, GATE_QUIET,
+                                 GATE_SEEDS, GATE_TIMEOUT, GATE_WASTE_POINTS, PIPELINE_BAR, _bundle, _cartridges,
+                                 agreement, compare, gate_rung, mean_result, paired, past_baseline, prepare, share,
+                                 waste_only)
 
 GEN1_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'post_game')
 GEN2_RUNGS = ('new_game', 'badges_2', 'badges_4', 'badges_6', 'badges_8', 'league_first', 'champion_first',
@@ -472,6 +483,125 @@ def attempt(folder, commit):
     return earlier + 1
 
 
+def _play(args, env, folder, ladder, rung, seed, python=sys.executable, script=Path(__file__).resolve()):
+    """Play one rung on one seed with ``gate-rung`` in its own process, and return its summary or its failure."""
+    folder.mkdir(parents=True, exist_ok=True)
+    command = ['nice', '-n', str(args.nice), str(python), str(script), 'gate-rung', str(ladder), rung, str(folder),
+               str(args.roms), '--frames', str(args.frames), '--quiet', str(args.quiet), '--battle-minutes',
+               str(args.battle_minutes), '--seed', str(seed)]
+    if args.data_root:
+        command += ['--data-root', str(args.data_root)]
+    with open(folder / 'log.txt', 'w', encoding='utf-8') as log:
+        try:
+            code = subprocess.run(command, env=env, stdout=log, stderr=subprocess.STDOUT, check=False,
+                                  timeout=GATE_TIMEOUT).returncode
+        except subprocess.TimeoutExpired:
+            code = f'no result in {GATE_TIMEOUT} seconds'
+    summary = folder / 'summary.json'
+    if code == 0 and summary.exists():
+        return dict(json.loads(summary.read_text(encoding='utf-8')), seed=seed)
+    return {'ladder': ladder.name, 'rung': rung, 'seed': seed, 'failed': f'exit {code}, see {folder / "log.txt"}'}
+
+
+def _merge_base():
+    """The merge base of HEAD with a fresh origin/main, or None outside a checkout or when HEAD is that
+    commit, as on main, since a tree paired with itself always passes."""
+    if not (ROOT / '.git').exists():
+        return None
+    subprocess.run(['git', '-C', str(ROOT), 'fetch', '--quiet', 'origin', 'main'], check=False)
+    head, base = (subprocess.run(['git', '-C', str(ROOT), *command], check=True, capture_output=True,
+                                 text=True).stdout.strip()
+                  for command in (['rev-parse', 'HEAD'], ['merge-base', 'HEAD', 'origin/main']))
+    return None if base == head else base
+
+
+@contextmanager
+def merge_base(commit):
+    """``commit`` checked out in a temporary worktree with an environment of its own, as (python, script).
+    The environment takes the acceleration extra when this one has it, as the image does. The worktree
+    goes when the paired stage ends."""
+    folder = Path(tempfile.mkdtemp(prefix='gate-base-'))
+    tree = folder / 'tree'
+    subprocess.run(['git', '-C', str(ROOT), 'worktree', 'add', '--quiet', '--detach', str(tree), commit], check=True)
+    try:
+        extras = ['--extra', 'acceleration'] if importlib.util.find_spec('numba') else []
+        # uv must build the tree's own .venv, never this environment.
+        env = {key: value for key, value in os.environ.items() if key not in ('VIRTUAL_ENV', 'UV_PROJECT_ENVIRONMENT')}
+        subprocess.run(['uv', 'sync', '--quiet', '--locked', *extras], cwd=tree, env=env, check=True)
+        yield tree / '.venv' / 'bin' / 'python', tree / 'tools' / 'stage_ladder.py'
+    finally:
+        subprocess.run(['git', '-C', str(ROOT), 'worktree', 'remove', '--force', str(tree)], check=False)
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def goal_frames(folders):
+    """The frames under each goal key over the runs in ``folders``, from each run's run.json."""
+    total = Counter()
+    for folder in folders:
+        for line, frames in json.loads((folder / 'run.json').read_text(encoding='utf-8'))['frames_by_goal'].items():
+            total[line.split(' ', 1)[0]] += frames
+    return dict(total)
+
+
+def pair(rungs, args, out, env, commit):
+    """Play each rung that failed on its wasted share alone on the paired seeds, on the merge base
+    ``commit`` and on the head, and return each rung's judgment by name. The head's screen runs stand for
+    their own seeds, and the merge base's runs go under OUT/merge-base."""
+    def folder(tree, result, seed):
+        return (out / 'merge-base' if tree == 'base' else out) / result['ladder'] / result['rung'] / f'seed-{seed}'
+
+    with merge_base(commit) as (python, script):
+        jobs = [(result, 'base', seed) for result in rungs for seed in GATE_PAIRED_SEEDS]
+        jobs += [(result, 'head', seed) for result in rungs for seed in GATE_PAIRED_SEEDS if seed not in result['seeds']]
+
+        def play(job):
+            result, tree, seed = job
+            where = (python, script) if tree == 'base' else ()
+            return _play(args, env, folder(tree, result, seed), args.root / result['ladder'], result['rung'], seed,
+                         *where)
+
+        with ThreadPoolExecutor(args.jobs) as pool:
+            played = list(zip(jobs, pool.map(play, jobs)))
+    verdicts = {}
+    for result in rungs:
+        runs = {'base': {}, 'head': {run['seed']: run for run in result['runs']}}
+        for (owner, tree, seed), run in played:
+            if owner is result:
+                runs[tree][seed] = run
+        name = f'{result["ladder"]}/{result["rung"]}'
+        failed = [f'seed {seed} on the {tree}: {run["failed"]}' for tree in runs for seed, run in runs[tree].items()
+                  if run.get('failed')]
+        if failed:
+            verdicts[name] = {'base': commit, 'passed': False, 'failed': ', '.join(failed)}
+            continue
+        verdict = dict(paired([(seed, runs['base'][seed]['waste'], runs['head'][seed]['waste'])
+                               for seed in GATE_PAIRED_SEEDS]), base=commit)
+        if not verdict['passed']:
+            verdict['goals'] = {tree: goal_frames(folder(tree, result, seed) for seed in GATE_PAIRED_SEEDS)
+                                for tree in runs}
+        verdicts[name] = verdict
+    return verdicts
+
+
+def _paired_lines(name, verdict, points=GATE_PAIRED_POINTS):
+    """What the gate prints for a rung judged on paired seeds: one line, and on a failure the pairs and the
+    frames under each goal on both trees, the goal the head spent most more on first."""
+    if 'pairs' not in verdict:
+        return [f'{name}: no paired judgment against the merge base {verdict["base"][:8]}, {verdict["failed"]}']
+    seeds = len(verdict['pairs'])
+    line = (f'{name}: {verdict["mean"]:+.2f} points wasted on the mean of {seeds} paired seeds against the merge '
+            f'base {verdict["base"][:8]}, standard error {verdict["error"]:.2f}, median {verdict["median"]:+.2f}')
+    if verdict['passed']:
+        return [f'{line}, within the {points:.1f} point limit']
+    lines = [f'{line}, over the {points:.1f} point limit', '  seed   base   head  difference']
+    lines += [f'  {seed:4d} {base:6.2f} {head:6.2f} {head - base:+11.2f}' for seed, base, head in verdict['pairs']]
+    base, head = verdict['goals']['base'], verdict['goals']['head']
+    lines.append(f'  frames under each goal over the {seeds} seeds: base, head, difference')
+    for key in sorted(set(base) | set(head), key=lambda key: base.get(key, 0) - head.get(key, 0)):
+        lines.append(f'  {key:<28} {base.get(key, 0):9d} {head.get(key, 0):9d} {head.get(key, 0) - base.get(key, 0):+10d}')
+    return lines
+
+
 def gate(args):
     if os.environ.get(GATE_HELD) != '1':
         # Take the heavy lock of the shared load gate, so no test or other batch runs beside the gate.
@@ -499,23 +629,7 @@ def gate(args):
 
     def play(job):
         ladder, rung, seed = job
-        folder = out / ladder.name / rung / f'seed-{seed}'
-        folder.mkdir(parents=True, exist_ok=True)
-        command = ['nice', '-n', str(args.nice), sys.executable, str(Path(__file__).resolve()), 'gate-rung',
-                   str(ladder), rung, str(folder), str(args.roms), '--frames', str(args.frames), '--quiet',
-                   str(args.quiet), '--battle-minutes', str(args.battle_minutes), '--seed', str(seed)]
-        if args.data_root:
-            command += ['--data-root', str(args.data_root)]
-        with open(folder / 'log.txt', 'w', encoding='utf-8') as log:
-            try:
-                code = subprocess.run(command, env=env, stdout=log, stderr=subprocess.STDOUT, check=False,
-                                      timeout=GATE_TIMEOUT).returncode
-            except subprocess.TimeoutExpired:
-                code = f'no result in {GATE_TIMEOUT} seconds'
-        summary = folder / 'summary.json'
-        if code == 0 and summary.exists():
-            return dict(json.loads(summary.read_text(encoding='utf-8')), seed=seed)
-        return {'ladder': ladder.name, 'rung': rung, 'seed': seed, 'failed': f'exit {code}, see {folder / "log.txt"}'}
+        return _play(args, env, out / ladder.name / rung / f'seed-{seed}', ladder, rung, seed)
 
     # The jobs keep each rung's seeds together, so a rung's line prints once its last seed is in.
     results, runs = [], []
@@ -528,12 +642,32 @@ def gate(args):
                 results.append(result)
                 runs = []
     problems = compare(results, baseline, args.waste_points)
+    wasteful = [] if args.write_baseline else waste_only(results, baseline, args.waste_points)
+    judged = {}
+    base = wasteful and len(wasteful) <= GATE_PAIRED_RUNGS and _merge_base()
+    if len(wasteful) > GATE_PAIRED_RUNGS:
+        print(f'{len(wasteful)} rungs failed on their wasted share alone, more than {GATE_PAIRED_RUNGS}, so none '
+              'plays paired seeds')
+    elif wasteful and not base:
+        print(f'{len(wasteful)} rungs failed on their wasted share alone, and this tree has no merge base with '
+              'origin/main apart from itself, so none plays paired seeds')
+    elif wasteful:
+        print(f'{len(wasteful)} rungs failed on their wasted share alone and play seeds {GATE_PAIRED_SEEDS[0]} to '
+              f'{GATE_PAIRED_SEEDS[-1]} on the merge base {base[:8]} and on the head', flush=True)
+        judged = pair(wasteful, args, out, env, base)
+        problems = compare([result for result in results if f'{result["ladder"]}/{result["rung"]}' not in judged],
+                           baseline, args.waste_points)
+        for name, verdict in judged.items():
+            lines = _paired_lines(name, verdict)
+            print('\n'.join(lines), flush=True)
+            if not verdict['passed']:
+                problems.append(lines[0])
     further = past_baseline(results, baseline)
     commit = _commit()
     report = {'commit': commit, 'attempt': attempt(args.root / 'gate', commit), 'frames': args.frames,
               'seeds': list(args.seeds), 'wall_seconds': round(time.monotonic() - began, 1),
               'baseline': str(baseline_path) if stored else None, 'problems': problems,
-              'past_baseline': further, 'results': results}
+              'past_baseline': further, 'paired': judged, 'results': results}
     out.mkdir(parents=True, exist_ok=True)
     (out / 'gate-report.json').write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
     stalls = [result for result in results if result.get('stall')]

@@ -1,4 +1,5 @@
 """The stage ladder: which rung a moment counts for, the stall loop, adopting a save, and fresh saves that replay."""
+import contextlib
 import gzip
 import json
 import os
@@ -320,6 +321,8 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
 
     monkeypatch.setattr(stage_ladder.subprocess, 'run', fake)
     monkeypatch.setattr(stage_ladder, 'GATE_BASELINE', root / 'gate-baseline.json')
+    # The paired stage has its own test. With no room for it, a rung up on waste alone fails on the screen.
+    monkeypatch.setattr(stage_ladder, 'GATE_PAIRED_RUNGS', 0)
     monkeypatch.delenv(stage_ladder.GATE_HELD, raising=False)
     monkeypatch.setenv('POKESIM_GEN1_VARIANT', 'yellow')
     args = ['gate', str(tmp_path / 'roms'), str(root), '--out', str(tmp_path / 'out')]
@@ -353,6 +356,113 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
     (root / 'gate-baseline.json').write_text(json.dumps(stored), encoding='utf-8')
     with pytest.raises(SystemExit, match='taken on seeds 7, not 7, 8, 9'):
         main(args)
+
+
+def test_the_paired_judgment_passes_a_mean_rise_of_at_most_one_point():
+    # The battle goal fix on blue/badges_4 moved the mean by +0.56 on 23 pairs, the first Mt. Moon
+    # version red/badges_6 by +1.65. These pairs give the same means.
+    harmless = [(seed, 20.0, 20.56) for seed in range(7, 30)]
+    verdict = stage_ladder.paired(harmless)
+    assert verdict['passed'] and verdict['mean'] == 0.56 and verdict['error'] == 0.0 and len(verdict['pairs']) == 23
+    costly = [(seed, 10.0, 13.45 if seed < 18 else 10.0) for seed in range(7, 30)]
+    verdict = stage_ladder.paired(costly)
+    assert not verdict['passed'] and verdict['mean'] == 1.65 and verdict['median'] == 0.0
+    assert verdict['error'] == 0.37
+    # A mean of exactly a point passes, as it prints.
+    assert stage_ladder.paired([(7, 10.0, 10.3), (8, 10.0, 11.7)])['passed']
+    assert not stage_ladder.paired([(7, 10.0, 10.3), (8, 10.0, 11.72)])['passed']
+
+
+def test_only_a_rung_up_on_waste_alone_goes_to_the_paired_stage():
+    baseline = {'gold/badges_2': {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']},
+                'gold/badges_4': {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']},
+                'gold/badges_6': {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']},
+                'gold/badges_8': {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']}}
+    results = [_result('badges_2', waste=12.5, story=['fog']), _result('badges_4', waste=12.5, errors=1, story=['fog']),
+               _result('badges_6', waste=11.0, story=['fog']), _result('badges_8', waste=25.0, story=['fog', 'storm'])]
+    # More errors fail as before, and a rung past its baseline keeps its own ten point limit.
+    assert [result['rung'] for result in stage_ladder.waste_only(results, baseline)] == ['badges_2']
+
+
+def _paired_gate(tmp_path, monkeypatch, base_waste, base='b' * 40):
+    """A gate over red/badges_2 and red/badges_4 that plays no game. The head wastes 10% on badges_2 and
+    13% on badges_4 on every seed, the merge base ``base`` ``base_waste`` on badges_4, and both baselines
+    are 10%."""
+    root = tmp_path / 'ladders'
+    _ladder(root, 'red', 1, '', ['badges_2', 'badges_4'])
+    rung = {'stall': None, 'stalls': 0, 'errors': 0, 'waste': 10.0, 'milestones': 0, 'story': []}
+    (root / 'gate-baseline.json').write_text(json.dumps({
+        'frames': stage_ladder.GATE_FRAMES, 'seeds': [7, 8, 9],
+        'rungs': {'red/badges_2': rung, 'red/badges_4': rung}}), encoding='utf-8')
+    calls = []
+
+    def fake(command, env, **_):
+        at = command.index('gate-rung')
+        rung, out, seed = command[at + 2], Path(command[at + 3]), int(command[command.index('--seed') + 1])
+        tree = 'base' if command[3] == 'base-python' else 'head'
+        calls.append((tree, rung, seed))
+        waste = 10.0 if rung == 'badges_2' else base_waste if tree == 'base' else 13.0
+        summary = dict(_result(rung, waste, ladder='red'), frames=stage_ladder.GATE_FRAMES)
+        (out / 'summary.json').write_text(json.dumps(summary), encoding='utf-8')
+        frames = {'collection_hunt partner PIKACHU': 100, 'collection_hunt quality PIKACHU': 20,
+                  'collection_restock': 50 if tree == 'base' else 80}
+        (out / 'run.json').write_text(json.dumps({'frames_by_goal': frames}), encoding='utf-8')
+        return SimpleNamespace(returncode=0)
+
+    @contextlib.contextmanager
+    def merge_base(commit):
+        assert commit == base
+        yield 'base-python', 'base-script'
+
+    monkeypatch.setattr(stage_ladder.subprocess, 'run', fake)
+    monkeypatch.setattr(stage_ladder, '_merge_base', lambda: base)
+    monkeypatch.setattr(stage_ladder, 'merge_base', merge_base)
+    monkeypatch.setattr(stage_ladder, 'GATE_BASELINE', root / 'gate-baseline.json')
+    monkeypatch.setenv(stage_ladder.GATE_HELD, '1')
+    out = tmp_path / 'out'
+    code = main(['gate', str(tmp_path / 'roms'), str(root), '--out', str(out)])
+    return code, calls, json.loads((out / 'gate-report.json').read_text(encoding='utf-8'))
+
+
+def test_a_rung_up_on_waste_alone_passes_on_paired_seeds_when_the_merge_base_wastes_nearly_as_much(
+        tmp_path, monkeypatch, capsys):
+    code, calls, report = _paired_gate(tmp_path, monkeypatch, base_waste=12.5)
+    assert code == 0 and report['problems'] == []
+    # The merge base plays all 23 seeds, the head the 20 its screen did not.
+    paired = [(tree, seed) for tree, rung, seed in calls if seed > 9 or tree == 'base']
+    assert sorted(seed for tree, seed in paired if tree == 'base') == list(range(7, 30))
+    assert sorted(seed for tree, seed in paired if tree == 'head') == list(range(10, 30))
+    assert all(rung == 'badges_4' for tree, rung, seed in calls if tree == 'base' or seed > 9)
+    verdict = report['paired']['red/badges_4']
+    assert verdict['passed'] and verdict['mean'] == 0.5 and verdict['base'] == 'b' * 40 and len(verdict['pairs']) == 23
+    assert set(report['paired']) == {'red/badges_4'}
+    out = capsys.readouterr().out
+    assert ('red/badges_4: +0.50 points wasted on the mean of 23 paired seeds against the merge base bbbbbbbb, '
+            'standard error 0.00, median +0.50, within the 1.0 point limit') in out
+    assert 'frames under each goal' not in out
+
+
+def test_a_paired_failure_prints_the_pairs_and_the_frames_under_each_goal(tmp_path, monkeypatch, capsys):
+    code, _, report = _paired_gate(tmp_path, monkeypatch, base_waste=11.5)
+    line = ('red/badges_4: +1.50 points wasted on the mean of 23 paired seeds against the merge base bbbbbbbb, '
+            'standard error 0.00, median +1.50, over the 1.0 point limit')
+    assert code == 1 and report['problems'] == [line]
+    assert report['paired']['red/badges_4']['goals'] == {
+        'base': {'collection_hunt': 2760, 'collection_restock': 1150},
+        'head': {'collection_hunt': 2760, 'collection_restock': 1840}}
+    out = capsys.readouterr().out
+    assert '     7  11.50  13.00       +1.50' in out and '    29  11.50  13.00       +1.50' in out
+    # The goal the head spent most more on comes first.
+    goals = out[out.index('frames under each goal over the 23 seeds'):]
+    assert goals.index('collection_restock') < goals.index('collection_hunt')
+    assert '  collection_restock                1150      1840       +690' in goals
+
+
+def test_on_main_a_rung_up_on_waste_alone_fails_on_the_screen(tmp_path, monkeypatch, capsys):
+    # The merge base of main with origin/main is main itself, and a tree paired with itself always passes.
+    code, calls, report = _paired_gate(tmp_path, monkeypatch, base_waste=13.0, base=None)
+    assert code == 1 and report['problems'] == ['red/badges_4: 13.0% wasted, 10.0% before'] and report['paired'] == {}
+    assert len(calls) == 6 and 'no merge base with origin/main apart from itself' in capsys.readouterr().out
 
 
 def _run(seed, waste, story=(), stall=None, errors=0):

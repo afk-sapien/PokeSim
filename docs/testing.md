@@ -218,6 +218,14 @@ alone can move a rung's wasted share by several points on a change that does not
 The baseline names the seeds it was taken on, and a gate on other seeds stops until `--write-baseline`
 rewrites it.
 
+A rung whose one problem is a wasted share more than two points up goes to a paired stage. The gate
+checks out the merge base with origin/main in a temporary worktree with its own environment, plays
+the rung there on seeds 7 to 29, and on the head on seeds 10 to 29. The rung passes when the head
+wastes at most one point more on the mean of the 23 pairs, and its baseline stays. A paired failure
+prints the pairs and the frames under each goal on both trees. With more than five such rungs, or
+on main, where the merge base is the head, the three-seed verdict stands. The pairs take about two
+minutes a rung. `docs/design/gate-paired-seeds.md` has the measurements behind the limit.
+
 The gate compares with the tracked `tools/ladder/gate-baseline.json`, so a branch compares with the
 baseline of the main it was branched from or last merged. `--write-baseline` rewrites that file, and
 the pull request that carries it names the behaviour change it accepts. A rung that gets worse goes on
