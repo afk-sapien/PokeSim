@@ -1,8 +1,10 @@
 """Story prerequisites and concrete short-term destinations."""
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from functools import lru_cache
 
 from .battle import replacement_slot
+from ..battle_power import battler, moveset_score
+from ..ram import PartyMon
 from ..planning.stance import HUNT, STORY, TRAIN
 from .team import readiness
 
@@ -257,18 +259,22 @@ def gym_goal(s, bit):
                    help=GYM_HELP.get(key, "Approach the gym leader and start the battle."))
 
 
+def partner_withdraw(name):
+    """The PC visit that brings a stored partner for field move ``name`` onto the team."""
+    pc = story.place(1, GAME, "party_pc")
+    targets = tuple((m, pc["x"], pc["y"]) for m, w in WORLD.items() if pc["named"] in w["name"] and w["width"] == pc["width"])
+    return Goal("party_" + name, "Bring a field-move partner onto the team",
+                "Use Bill’s PC to store a reserve and withdraw a compatible partner", targets, pc["face"], True)
+
+
 def teaching_goal(key, title, reason, s):
     move = {"teach_cut": 15, "teach_surf": 57, "teach_strength": 70}[key]
     if not any(move in SPECIES.get(p.species, {}).get("hms", [])
                and (0 in p.moves or replacement_slot(p, move) is not None) for p in s.party):
         # Every box counts: the PC can change boxes, and the gift Lapras is rarely in the open one.
         held = [species for _, species, _, _ in s.stored_pokemon] or [species for species, _ in s.boxed_pokemon]
-        stored = any(move in SPECIES.get(species, {}).get("hms", []) for species in held)
-        if stored:
-            pc = story.place(1, GAME, "party_pc")
-            targets = tuple((m, pc["x"], pc["y"]) for m, w in WORLD.items() if pc["named"] in w["name"] and w["width"] == pc["width"])
-            return Goal("party_" + key.removeprefix("teach_"), "Bring a field-move partner onto the team",
-                        "Use Bill’s PC to store a reserve and withdraw a compatible partner", targets, pc["face"], True)
+        if any(move in SPECIES.get(species, {}).get("hms", []) for species in held):
+            return partner_withdraw(key.removeprefix("teach_"))
         lapras = next((sid for sid, d in SPECIES.items() if d.get('name') == 'LAPRAS'), 0)
         # The worker gives one Lapras. A registered Lapras that is no longer held was traded or released.
         if (move in SPECIES.get(lapras, {}).get('hms', []) and SPECIES.get(lapras, {}).get('dex') not in s.owned
@@ -344,6 +350,69 @@ def flash_goal(s):
                     'Take Diglett’s Cave from Route 11 to Route 2 and talk to the aide in the gate. Answer yes.')
     reason = 'Teach HM05 to a partner, never the best fighter, to light Rock Tunnel'
     return Goal('teach_flash', 'Teach Flash to a partner', reason, ((s.map, s.x, s.y),), help=reason)
+
+
+FLY = 19
+
+
+@lru_cache(maxsize=1024)
+def fly_free(mon):
+    """True when ``mon``, a party member or a stored record, learns Fly at no cost to its battle moves.
+
+    That is into an empty slot, or over the move the teach replaces (battle.replacement_slot) when the
+    moveset scores no lower with Fly in its place (battle_power.moveset_score). Gen I Fly is a 70 power
+    move that spends two turns, so it seldom scores higher than what it replaces. Agility, Leer or
+    Whirlwind score nothing, and Fly over one of them costs nothing. A stored record's stats come from
+    its DVs and stat experience, as the PC computes them on the way out.
+    """
+    if FLY not in SPECIES.get(mon.species, {}).get('hms', []):
+        return False
+    fighter = mon if isinstance(mon, PartyMon) else battler(asdict(mon))
+    if fighter is None or FLY in fighter.moves:
+        return False
+    if 0 in fighter.moves:
+        return True
+    slot = replacement_slot(fighter, FLY)
+    return slot is not None and (moveset_score(fighter, fighter.moves[:slot] + (FLY,) + fighter.moves[slot + 1:])
+                                 >= moveset_score(fighter))
+
+
+def fly_learner(party):
+    """The party slot to teach Fly, or None.
+
+    An HM move cannot be forgotten in Gen I, so Fly holds a battle slot for the rest of the game. It
+    goes only to a member it costs no battle move (fly_free), and never to the ace. Of those the
+    lowest level learns it, the member the League leans on least.
+    """
+    ace = ace_slot(party, power)
+    return min((i for i, mon in enumerate(party) if i != ace and fly_free(mon)),
+               key=lambda i: (party[i].level, i), default=None)
+
+
+def fly_goal(s):
+    """HM02 from the girl in the Route 16 house and its teaching, for a run past the League, or None.
+
+    The learner is fly_learner's. With none in the party, the strongest stored Pokémon that Fly costs
+    no battle move is withdrawn (storage.field_partners) and takes the slot of the reserve the PC
+    deposits. With neither, the run goes without Fly rather than spend a League battler's move on it.
+    HM02 waits for a free bag entry, as the Bicycle does.
+    """
+    if any(FLY in mon.moves for mon in s.party):
+        return None
+    held = any(item == ITEMS['HM02'] and qty for item, qty in s.items)
+    if not held and (event_set(s.event_flags, 'EVENT_GOT_HM02') or len(s.items) >= BAG_SLOTS):
+        return None
+    learner = fly_learner(s.party)
+    if learner is None and not any(fly_free(mon) for mon in s.stored_details):
+        return None
+    if not held:
+        return step('fly', 'Visit the house on Route 16', 'The girl there gives HM02 so the team can fly to any visited town',
+                    'Take Route 16 west from Celadon by the north path, through the gate, to the house beyond it.',
+                    row=story.place(1, GAME, 'fly'))
+    if learner is None:
+        return partner_withdraw('fly')
+    reason = 'Teach HM02 to a partner, never the best fighter, to fly to any visited town'
+    return Goal('teach_fly', 'Teach Fly to a partner', reason, ((s.map, s.x, s.y),), help=reason)
 
 
 def bicycle_goal(s):

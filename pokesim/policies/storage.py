@@ -3,12 +3,23 @@ from dataclasses import dataclass, field
 
 from .menus import MenuDecision, select, tap
 from .collection import Collection
+from .progression import fly_free
 from .team import hunt_focus, release_rated, release_target, reserve_to_deposit
 from . import league_rotation
 from ..strategy_data import SPECIES
 
 
-FIELD_MOVE_GOALS = {'party_cut': 15, 'party_surf': 57, 'party_strength': 70}
+FIELD_MOVE_GOALS = {'party_cut': 15, 'party_fly': 19, 'party_surf': 57, 'party_strength': 70}
+
+
+def field_partners(snapshot, goal_key):
+    """(box, position, level) of each stored partner a field-move goal can withdraw. Fly takes only one
+    it costs no battle move (progression.fly_free), as fly_goal asked for."""
+    if goal_key == 'party_fly':
+        return [(mon.box, mon.position, mon.level) for mon in snapshot.stored_details if fly_free(mon)]
+    move = FIELD_MOVE_GOALS.get(goal_key)
+    return [(box, None, level) for box, species, level, _ in snapshot.stored_pokemon
+            if move in SPECIES.get(species, {}).get('hms', [])]
 
 @dataclass
 class StorageController:
@@ -73,10 +84,8 @@ class StorageController:
     @staticmethod
     def field_move_box(snapshot, goal_key):
         """Box holding the strongest stored partner for a field move, preferring the open box."""
-        move = FIELD_MOVE_GOALS.get(goal_key)
-        boxes = [(box == snapshot.active_box, level, box) for box, species, level, _ in snapshot.stored_pokemon
-                 if move in SPECIES.get(species, {}).get('hms', [])]
-        return max(boxes)[2] if move and boxes else None
+        boxes = [(box == snapshot.active_box, level, box) for box, _, level in field_partners(snapshot, goal_key)]
+        return max(boxes)[2] if goal_key in FIELD_MOVE_GOALS and boxes else None
 
     def target(self, snapshot, goal_key, project, preferences, collection=None):
         if goal_key == 'party_release':
@@ -104,6 +113,10 @@ class StorageController:
                 return partner['position'] if partner and partner.get('box') == snapshot.active_box and len(snapshot.party) < 6 else None
             return next((i for i, (species, level) in enumerate(snapshot.boxed_pokemon)
                          if species == project['parent']), None) if len(snapshot.party) < 6 else None
+        if goal_key == 'party_fly':
+            candidates = [(level, position) for box, position, level in field_partners(snapshot, goal_key)
+                          if box == snapshot.active_box]
+            return max(candidates)[1] if candidates and len(snapshot.party) < 6 else None
         move = FIELD_MOVE_GOALS.get(goal_key)
         candidates = [(level, i) for i, (species, level) in enumerate(snapshot.boxed_pokemon)
                       if (species == self.species if goal_key == 'party_upgrade'

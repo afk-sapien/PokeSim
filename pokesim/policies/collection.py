@@ -1164,9 +1164,9 @@ class Collection:
         project under way and the passage out of Victory Road have nothing to start. A new project with
         no first goal starts at once, so it ends on the next check as before.
         """
-        # The Bicycle fetch after the League goes before any new project, so the draw is not weighed
-        # against it. Drawn at every decision of the fetch, it cost about half a second each on red post_game.
-        if s.map in LEAGUE or not s.party or not s.owned or not event_set(s.event_flags,'EVENT_GOT_POKEDEX') or main.key.startswith(('heal','party_','teach_','restock','bike_voucher','bicycle')):
+        # The Bicycle and HM02 fetches after the League go before any new project, so the draw is not weighed
+        # against them. Drawn at every decision of the fetch, it cost about half a second each on red post_game.
+        if s.map in LEAGUE or not s.party or not s.owned or not event_set(s.event_flags,'EVENT_GOT_POKEDEX') or main.key.startswith(('heal','party_','teach_','restock','bike_voucher','bicycle','fly')):
             return None
         if not self.completed_champion:
             # The story comes first until the Champion is beaten. Seed 37 after Brock spent 244 of 300

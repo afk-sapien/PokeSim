@@ -94,6 +94,8 @@
   "places": [
     {"key": "party_pc", "named": "Pokecenter", "width": 14, "x": 13, "y": 4, "face": "up",
      "why": "Bill's PC stands at this tile in every Pokemon Center that is fourteen tiles wide."},
-    {"key": "lapras", "map": "SILPH_CO_7F", "object": "SILPH_WORKER_M1"}
+    {"key": "lapras", "map": "SILPH_CO_7F", "object": "SILPH_WORKER_M1"},
+    {"key": "fly", "map": "ROUTE_16_FLY_HOUSE", "object": "BRUNETTE_GIRL",
+     "why": "The girl in the house past the Route 16 gate gives HM02. A run fetches it after the League."}
   ]
 }
