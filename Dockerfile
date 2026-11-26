@@ -1,5 +1,5 @@
 FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
-FROM python:3.14-slim-trixie AS build
+FROM python:3.15-slim-trixie AS build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never UV_HTTP_RETRIES=10
 WORKDIR /app
@@ -21,7 +21,7 @@ ADD --checksum=sha256:${EMULATOR_SOURCE_SHA256} ${EMULATOR_SOURCE_URL} /emulator
 RUN uv sync --frozen --no-dev --no-editable --extra acceleration \
     && .venv/bin/python tools/bundle_dependency_sources.py /notices --emulator-source /emulator-source/pyboy-rs-source.tar.gz
 
-FROM python:3.14-slim-trixie
+FROM python:3.15-slim-trixie
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     DATA_DIR=/data ROM_PATH=/roms/pokered.gb PORT=8000 HOST=0.0.0.0 \
     SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy PATH=/app/.venv/bin:$PATH \
