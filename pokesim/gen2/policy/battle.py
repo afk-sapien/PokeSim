@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from ...planning.ledger import LEARN_KEPT
 from ...planning.stance import FLEE, STORY, Encounter, stance
 from ...runtime.policy import Action
+from pokecore.gen2.battle_power import CHARGING, HITS, NO_DIRECT_DAMAGE, fixed_damage, move_power
 from pokecore.gen2.screens import ScreenText, mask_roster
 from ..menus import Attack, Flee, Lead, Learn, Send, Throw
 from .reads import Battlers
@@ -29,6 +30,10 @@ REGULAR_BALLS = ('ULTRA BALL', 'GREAT BALL', 'POKé BALL', 'LURE BALL', 'FAST BA
                  'HEAVY BALL', 'LEVEL BALL', 'LOVE BALL', 'FRIEND BALL', 'MOON BALL')
 # The status byte of a paralyzed Pokémon.
 PARALYZED = 64
+# The status bits that count a sleeping Pokémon's turns.
+ASLEEP = 7
+# The friendship every opponent's Pokémon battles with, as the cartridge's LoadEnemyMon sets it.
+ENEMY_FRIENDSHIP = 70
 
 
 def transformed(player, mon):
@@ -41,6 +46,18 @@ def transformed(player, mon):
         return mon
     return replace(mon, species=player.species, moves=tuple(player.moves), pp=tuple(player.pp),
                    stats=(mon.stats[0],) + tuple(player.stats[1:]))
+
+
+def foe_attacker(snapshot, foe):
+    """The foe's battler ``foe`` as the user of its moves in move_score."""
+    return SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=foe.stats,
+                           status=foe.status, dvs=foe.dvs)
+
+
+def party_target(mon):
+    """Party Pokémon ``mon`` as the target of the foe's moves in move_score, as it stands now."""
+    return SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
+                           enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5], enemy_status=mon.status)
 
 
 class BattlePart:
@@ -62,7 +79,7 @@ class BattlePart:
             text = ScreenText('\n'.join(mask_roster(snapshot.tiles)))
         reads = self.reads
         battle, player, enemy = reads.battle, reads.player, reads.enemy
-        opponent = self.battle_target(snapshot) if self.collection.get('tower') else snapshot
+        opponent = self.battle_target(snapshot, measured=bool(self.collection.get('tower')))
         # The native capture routine restores transformed wild opponents as Ditto.
         catch_species = 132 if enemy.transformed else snapshot.enemy_species
         needed = self.needed_move(snapshot)
@@ -431,6 +448,11 @@ class BattlePart:
 
         While the trainer sends out the next Pokémon the enemy slot reads species 0, so there is no
         foe to judge yet. A Silver run asked between two of Koga's Pokémon and the check crashed.
+
+        Dream Eater lands only on a sleeping foe, so it counts while the foe sleeps, knows Rest or
+        faces a sleep move. Snore lands only from a sleeping user, so it counts while the user
+        sleeps, knows Rest or faces a foe with a sleep move. Counter, Mirror Coat and Bide return a
+        foe's hit, so they count while the foe knows an attack of the kind they return.
         """
         if snapshot.in_battle != 2 or snapshot.enemy_species not in self.data.species:
             return False
@@ -447,9 +469,26 @@ class BattlePart:
             # A Transformed battler has five PP for each borrowed move, so Struggle is never far off.
             # Only a healer that outlasts the foe gets this far, so the battlers were read for it.
             return False
-        return not any(pp and (self.move_score(move, mon, snapshot) > 0
-                               or self.data.moves.get(move, {}).get('effect') in BORROWED_MOVES)
-                       for mon in standing for move, pp in zip(mon.moves, mon.pp))
+        foe = battlers.enemy
+        known = [move for mon in standing for move in mon.moves] + list(foe.moves)
+        effect = {move: self.data.moves.get(move, {}).get('effect') for move in known}
+
+        def lulls(moves):
+            return any(effect[move] == 'EFFECT_SLEEP' for move in moves)
+        foe_sleeps = foe.status & ASLEEP or REST in foe.moves or any(lulls(mon.moves) for mon in standing)
+        hits = {self.data.moves[move]['type'] < 20 for move in foe.moves
+                if self.data.moves.get(move, {}).get('power') and effect[move] not in NO_DIRECT_DAMAGE}
+        returned = {'EFFECT_COUNTER': True in hits, 'EFFECT_MIRROR_COAT': False in hits, 'EFFECT_BIDE': bool(hits)}
+
+        def lands(mon, move):
+            if effect[move] == 'EFFECT_DREAM_EATER':
+                return foe_sleeps
+            if effect[move] == 'EFFECT_SNORE':
+                return mon.status & ASLEEP or REST in mon.moves or lulls(foe.moves)
+            if effect[move] in returned:
+                return returned[effect[move]]
+            return effect[move] in BORROWED_MOVES or self.move_score(move, mon, snapshot) > 0
+        return not any(pp and lands(mon, move) for mon in standing for move, pp in zip(mon.moves, mon.pp))
 
     def outlasts(self, snapshot, battlers, mon):
         """Whether ``mon`` wins back more HP each turn than the foe's best hit takes from it.
@@ -474,10 +513,8 @@ class BattlePart:
             if effect == 'EFFECT_HEAL':
                 return mon.max_hp / (3 if move == REST else 2)
             return mon.max_hp / 4
-        enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=stats)
-        target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
-            enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
-        hit = max((self.move_score(move, enemy, target) for move in foe.moves), default=0)
+        attacker, target = foe_attacker(snapshot, foe), party_target(mon)
+        hit = max((self.move_score(move, attacker, target) for move in foe.moves), default=0)
         return hit < max(heal(move, effect) for move, effect in heals)
 
     def move_choice(self, snapshot, mon, opponent, weaken):
@@ -544,16 +581,14 @@ class BattlePart:
         chance = gen2_throw(rate, multiplier, snapshot.enemy_hp, snapshot.enemy_max_hp, enemy.status)
         if chance >= THROW_BAR:
             return None
-        foe = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=enemy.stats)
+        foe = foe_attacker(snapshot, enemy)
         attacks = [move for move in enemy.moves if move]
         for slot, mon in enumerate(snapshot.party):
             if slot == active or mon.egg or mon.hp <= mon.max_hp // 2:
                 continue
             # A member the target knocks out in one hit weakens nothing. A level 40 Ursaring on Route 28
             # knocked out three members of level 26 or less in turn, and the run then left it anyway.
-            target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
-                                     enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
-            if max((self.move_score(move, foe, target) for move in attacks), default=0) >= mon.hp:
+            if max((self.move_score(move, foe, party_target(mon)) for move in attacks), default=0) >= mon.hp:
                 continue
             move = self.capture_move(snapshot, slot=slot)
             if move is not None and self.data.moves.get(mon.moves[move], {}).get('effect') != 'EFFECT_PARALYZE':
@@ -666,10 +701,15 @@ class BattlePart:
                 return False
         return True
 
-    def battle_target(self, snapshot):
+    def battle_target(self, snapshot, measured=True):
+        """The foe in battle as move_score's target. Unless ``measured``, as outside the Battle Tower,
+        move_score estimates its defenses from its species."""
         enemy = self.reads.enemy
-        return SimpleNamespace(enemy_species=snapshot.enemy_species, enemy_level=snapshot.enemy_level,
-            enemy_hp=snapshot.enemy_hp, enemy_defense=enemy.stats[2], enemy_special_defense=enemy.stats[5])
+        target = SimpleNamespace(enemy_species=snapshot.enemy_species, enemy_level=snapshot.enemy_level,
+                                 enemy_hp=snapshot.enemy_hp, enemy_status=enemy.status)
+        if measured:
+            target.enemy_defense, target.enemy_special_defense = enemy.stats[2], enemy.stats[5]
+        return target
 
     def level_lead(self, snapshot):
         """Move the highest-level Pokémon to the front when the lead lags well behind it."""
@@ -752,10 +792,8 @@ class BattlePart:
                                    for move in foe.moves):
             opponent = self.battle_target(snapshot)
             dealt = max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
-            enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=foe.stats)
-            target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
-                                     enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
-            received = max((self.move_score(move, enemy, target) for move in foe.moves), default=0)
+            attacker, target = foe_attacker(snapshot, foe), party_target(mon)
+            received = max((self.move_score(move, attacker, target) for move in foe.moves), default=0)
             if received and (not dealt or math.ceil(snapshot.enemy_hp / dealt) >= math.ceil(mon.hp / received)):
                 return fighter
         if mon.level >= snapshot.enemy_level + LEAD_MARGIN and mon.hp * 2 > mon.max_hp:
@@ -770,23 +808,21 @@ class BattlePart:
         if active >= len(snapshot.party):
             return None
         foe = self.reads.enemy
-        enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=foe.stats)
+        enemy = foe_attacker(snapshot, foe)
         moves = foe.moves
         opponent = self.battle_target(snapshot)
         rows = []
         for slot, mon in enumerate(snapshot.party):
             if not mon.hp or mon.egg:
                 continue
-            target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=mon.hp,
-                enemy_defense=mon.stats[2], enemy_special_defense=mon.stats[5])
-            received = max((self.move_score(move, enemy, target) for move in moves), default=0)
+            received = max((self.move_score(move, enemy, party_target(mon)) for move in moves), default=0)
             dealt = max((self.move_score(move, mon, opponent) for move, pp in zip(mon.moves, mon.pp) if pp), default=0)
             rows.append((slot, received / mon.hp, dealt, received))
         current = next((row for row in rows if row[0] == active), None)
         if current is None:
             return None
         healing = any(self.data.moves.get(move, {}).get('effect') in {'EFFECT_HEAL', 'EFFECT_MORNING_SUN',
-                      'EFFECT_MOONLIGHT', 'EFFECT_SYNTHESIS', 'EFFECT_REST'} for move in moves)
+                      'EFFECT_MOONLIGHT', 'EFFECT_SYNTHESIS'} for move in moves)
         if (healing and not foe.status and 92 not in snapshot.party[active].moves
                 and not {3, 9}.intersection(self.data.species[snapshot.enemy_species]['types'])
                 and current[2] * 2 < snapshot.enemy_hp):
@@ -834,46 +870,66 @@ class BattlePart:
         hp, maximum = player.hp, player.stats[0]
         if not 0 < hp < maximum * 0.55 or max((score for score, _ in options), default=0) >= snapshot.enemy_hp:
             return None
-        enemy = SimpleNamespace(species=snapshot.enemy_species, level=snapshot.enemy_level, stats=foe.stats)
         target = SimpleNamespace(enemy_species=mon.species, enemy_level=mon.level, enemy_hp=hp,
-            enemy_defense=player.stats[2], enemy_special_defense=player.stats[5])
-        damage = max((self.move_score(move, enemy, target) for move in foe.moves), default=0)
+            enemy_defense=player.stats[2], enemy_special_defense=player.stats[5], enemy_status=player.status)
+        attacker = foe_attacker(snapshot, foe)
+        damage = max((self.move_score(move, attacker, target) for move in foe.moves), default=0)
         return slot if damage < maximum / 2 else None
 
     def move_score(self, mid, mon, snapshot):
+        """The damage ``mon`` deals the target with move ``mid``, on average.
+
+        ``mon`` needs its species, level and stats, and its status, DVs and friendship count when it
+        has them. A stand-in for an opponent's Pokémon has the friendship all of them battle with.
+        ``snapshot`` is the target: its species and level, and its HP, defenses and status when known.
+        Dream Eater lands only on a sleeping target and Snore only from a sleeping user. Counter,
+        Mirror Coat and Bide deal no damage of their own. A one-hit knockout has no listed power,
+        fails on a higher-level target and gains 2 in 255 accuracy for each level the target is lower.
+        """
         move = self.data.moves.get(mid, {})
-        power = move.get('power', 0)
-        if not power:
+        effect = move.get('effect')
+        if not move.get('power') and effect != 'EFFECT_OHKO':
             return 0
-        kind = move['type']
+        if effect == 'EFFECT_DREAM_EATER':
+            if not getattr(snapshot, 'enemy_status', 0) & ASLEEP:
+                return 0
+        elif effect == 'EFFECT_SNORE':
+            if not getattr(mon, 'status', 0) & ASLEEP:
+                return 0
+        elif effect in NO_DIRECT_DAMAGE:
+            return 0
+        kind, power = move_power(self.data, move, getattr(mon, 'dvs', None),
+                                 getattr(mon, 'friendship', ENEMY_FRIENDSHIP))
         factor = 1
         for target_type in set(self.data.species.get(snapshot.enemy_species, {}).get('types', [])):
             factor *= self.data.matchups.get((kind, target_type), 1)
         if not factor:
             return 0
         accuracy = move.get('accuracy', 100) / 100
-        effect = move.get('effect')
-        if effect == 'EFFECT_STATIC_DAMAGE':
-            return power * accuracy
-        if effect == 'EFFECT_LEVEL_DAMAGE':
-            return mon.level * accuracy
-        if effect == 'EFFECT_SUPER_FANG':
-            return getattr(snapshot, 'enemy_hp', 0) / 2 * accuracy
+        level, hp = getattr(snapshot, 'enemy_level', mon.level), getattr(snapshot, 'enemy_hp', 0)
+        if effect == 'EFFECT_OHKO':
+            if level > mon.level:
+                return 0
+            accuracy = min(255, move.get('accuracy', 100) * 255 // 100 + 2 * (mon.level - level)) / 255
+        fixed = fixed_damage(effect, power, mon.level, hp)
+        if fixed is not None:
+            return fixed * accuracy
         attack = mon.stats[1 if kind < 20 else 4]
         if kind < 20 and getattr(mon, 'status', 0) & 16:
             attack /= 2
         enemy = self.data.species.get(snapshot.enemy_species, {}).get('stats', [50] * 6)
         defense = getattr(snapshot, 'enemy_defense' if kind < 20 else 'enemy_special_defense', None)
         if defense is None:
-            defense = (enemy[2 if kind < 20 else 5] + 8) * 2 * getattr(snapshot, 'enemy_level', mon.level) / 100 + 5
+            defense = (enemy[2 if kind < 20 else 5] + 8) * 2 * level / 100 + 5
+        if effect == 'EFFECT_SELFDESTRUCT':
+            # Selfdestruct and Explosion halve the target's defense.
+            defense /= 2
         stab = 1.5 if kind in self.data.species[mon.species]['types'] else 1
         score = ((2 * mon.level / 5 + 2) * power * attack / max(1, defense) / 50 + 2) * factor * stab * accuracy
-        if effect == 'EFFECT_MULTI_HIT':
-            score *= 3
-        if effect in {'EFFECT_DOUBLE_HIT', 'EFFECT_POISON_MULTI_HIT'}:
-            score *= 2
-        if move.get('effect') in {'EFFECT_EXPLOSION', 'EFFECT_SELFDESTRUCT'}:
+        score *= HITS.get(effect, 1)
+        if effect == 'EFFECT_SELFDESTRUCT':
             score *= 0.1
-        if move.get('effect') in {'EFFECT_RECHARGE', 'EFFECT_RAZOR_WIND', 'EFFECT_SOLARBEAM'}:
+        # A move that charges first, or one that must recharge after a hit that does not knock out.
+        if effect in CHARGING or effect == 'EFFECT_HYPER_BEAM' and score < hp:
             score *= 0.5
         return score

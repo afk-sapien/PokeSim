@@ -250,7 +250,7 @@ def test_battle_selects_an_available_move_after_disable(real_data):
     policy = Policy(real_data, starter='cyndaquil')
     mon = SimpleNamespace(species=156, level=25, egg=False, moves=(15, 43, 108, 52), pp=(30, 30, 20, 20), stats=(90, 60, 50, 70, 70, 60))
     snapshot = SimpleNamespace(text='Disabled!', tiles=('Disabled!',), party=[mon], in_battle=2,
-                               enemy_species=39, badges=0, owned=set(), can_catch=True, pockets={'balls': []})
+                               enemy_species=39, enemy_level=25, enemy_hp=60, badges=0, owned=set(), can_catch=True, pockets={'balls': []})
     values = {'wCurBattleMon': 0, 'wMenuCursorY': 4, 'wPlayerDisableCount': 72, 'wDisabledMove': 52}
     assert fight(policy, snapshot, SimpleNamespace(byte=lambda name: values.get(name, 0))).button == 'up'
 
@@ -261,7 +261,8 @@ def test_level_up_replacement_preserves_hm_moves(real_data):
     policy = Policy(real_data, starter='cyndaquil')
     mon = SimpleNamespace(species=156, level=25, egg=False, moves=(15, 43, 108, 52), pp=(30, 30, 20, 20), stats=(90, 60, 50, 70, 70, 60))
     snapshot = SimpleNamespace(text='Which move should be forgotten?\n▶CUT\nLEER\nSMOKESCREEN\nEMBER',
-                               tiles=(), party=[mon], in_battle=2, enemy_species=39, badges=0, owned=set(),
+                               tiles=(), party=[mon], in_battle=2, enemy_species=39, enemy_level=25, enemy_hp=60,
+                               badges=0, owned=set(),
                                can_catch=True, pockets={'balls': []})
     values = {'wCurBattleMon': 0, 'wMenuCursorY': 1}
     started = []
@@ -412,7 +413,7 @@ def test_pokedex_number_is_not_mistaken_for_a_tm_menu(real_data):
     policy = Policy(real_data)
     policy.needed_move = lambda snapshot: 57
     snapshot = SimpleNamespace(text='\n'.join(rows), tiles=rows, party=[], in_battle=1,
-                               enemy_species=161, owned=set(), can_catch=True,
+                               enemy_species=161, enemy_level=5, enemy_hp=20, owned=set(), can_catch=True,
                                pockets={'balls': [(1, 5)], 'key': []})
     action = fight(policy, snapshot, SimpleNamespace(byte=lambda name: 3))
     assert action.button == 'a'
@@ -454,7 +455,7 @@ def test_battle_transition_graphics_do_not_open_the_pack(real_data):
     policy = Policy(real_data)
     policy.needed_move = lambda snapshot: 57
     snapshot = SimpleNamespace(text='\n'.join(rows), tiles=rows, party=[], in_battle=2,
-                               enemy_species=161, owned=set(), can_catch=True,
+                               enemy_species=161, enemy_level=5, enemy_hp=20, owned=set(), can_catch=True,
                                pockets={'balls': [(1, 5)], 'key': []})
     action = fight(policy, snapshot, SimpleNamespace(byte=lambda name: 1))
     assert action.button == 'b' and action.gap >= 48
@@ -531,7 +532,7 @@ def test_battle_switch_submenu_without_a_shortcut_is_closed(real_data):
     from pokesim.gen2.policy import Policy
     rows = ('▷ MOPTAX', '│ SWITCH│', '│ STATS │', '│▶CANCEL│')
     snapshot = SimpleNamespace(text='\n'.join(rows), tiles=rows, party=[], in_battle=2,
-                               enemy_species=161, owned=set(), can_catch=True, pockets={'balls': [], 'key': []})
+                               enemy_species=161, enemy_level=5, enemy_hp=20, owned=set(), can_catch=True, pockets={'balls': [], 'key': []})
     policy = Policy(real_data)
     policy.needed_move = lambda snapshot: 57
     assert fight(policy, snapshot, SimpleNamespace(byte=lambda name: 0)).button == 'b'
@@ -542,7 +543,7 @@ def test_refused_switch_text_is_closed(real_data):
     policy = Policy(real_data)
     policy.needed_move = lambda snapshot: 57
     snapshot = SimpleNamespace(text='There is no will to battle!', tiles=(), party=[], in_battle=2,
-                               enemy_species=161, owned=set(), can_catch=True, pockets={'balls': []})
+                               enemy_species=161, enemy_level=5, enemy_hp=20, owned=set(), can_catch=True, pockets={'balls': []})
     assert fight(policy, snapshot, SimpleNamespace(byte=lambda name: 0)).button == 'b'
 
 
@@ -634,7 +635,8 @@ def test_fighting_type_move_is_not_the_fight_command_menu(real_data):
     mon = SimpleNamespace(species=157, level=100, egg=False, hp=300, moves=(15, 53, 70, 249),
                           pp=(30, 0, 12, 15), stats=(350, 250, 220, 280, 310, 260))
     snapshot = SimpleNamespace(text='TYPE/FIGHTING\nCUT\nFLAMETHROWER\nSTRENGTH\n▶ROCK SMASH',
-                               tiles=(), party=[mon], in_battle=1, enemy_species=74, badges=65535,
+                               tiles=(), party=[mon], in_battle=1, enemy_species=74, enemy_level=100, enemy_hp=250,
+                               badges=65535,
                                owned={74}, can_catch=True, pockets={'balls': []})
     mem = SimpleNamespace(byte=lambda name: 4 if name == 'wMenuCursorY' else 0)
     assert fight(policy, snapshot, mem).button == 'a'
@@ -821,7 +823,8 @@ def test_ditto_capture_intent_survives_transform_into_an_owned_species(real_data
     policy.remedy = lambda *args, **kwargs: False
     policy.collection['prerequisites'] = [132]
     snapshot = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
-        in_battle=1, enemy_species=157, owned={132, 157}, can_catch=True, badges=65535, money=10000,
+        in_battle=1, enemy_species=157, enemy_level=40, enemy_hp=100, owned={132, 157}, can_catch=True,
+        badges=65535, money=10000,
         pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
     mem = SimpleNamespace(byte=lambda name: 8 if name == 'wEnemySubStatus5' else 1, read=lambda name, size: bytes(size))
     assert fight(policy, snapshot, mem).button == ('Throw', real_data.items['POKE_BALL'])
@@ -836,7 +839,7 @@ def test_trapped_partner_does_not_retry_an_impossible_switch(real_data, field, v
     policy.remedy = lambda *args, **kwargs: False
     mons = tuple(SimpleNamespace(species=sid, hp=50, egg=False, moves=(15,), pp=(30,)) for sid in (160, 118))
     snapshot = SimpleNamespace(party=mons, stored=(), text='FIGHT', tiles=(),
-        map=real_data.map_ids['SILVER_CAVE_ROOM_2'], in_battle=1, enemy_species=200,
+        map=real_data.map_ids['SILVER_CAVE_ROOM_2'], in_battle=1, enemy_species=200, enemy_level=45, enemy_hp=120,
         owned={200}, pockets={'balls': ()})
     mem = SimpleNamespace(byte=lambda name: value if name == field else int(name in {'wMenuCursorX', 'wMenuCursorY'}))
     assert fight(policy, snapshot, mem).button == ('Attack', 0)
@@ -943,7 +946,8 @@ def test_last_balls_are_available_for_one_time_encounters(real_data, species, th
     policy.capture_move = lambda *args: None
     policy.remedy = lambda *args, **kwargs: False
     snapshot = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=real_data.map_ids['ROUTE_36'],
-        in_battle=1, enemy_species=species, owned=set(), can_catch=True, badges=4, money=0,
+        in_battle=1, enemy_species=species, enemy_level=40, enemy_hp=100, owned=set(), can_catch=True, badges=4,
+        money=0,
         pockets={'balls': [(real_data.items['POKE_BALL'], 1)]})
     button = fight(policy, snapshot, SimpleNamespace(byte=lambda name: 1)).button
     assert button == (('Throw', real_data.items['POKE_BALL']) if throw else 'a')
@@ -2006,7 +2010,8 @@ def test_tower_switches_away_from_a_lethal_fighting_matchup(real_data):
     party = []
     for species, moves in [(248, (89, 157, 37, 242)), (249, (105, 92, 89, 70)), (196, (94, 247, 44, 36))]:
         stats = calculated_stats(real_data.species[species]['stats'], 70, (8,) * 5, (5000,) * 5)
-        party.append(SimpleNamespace(species=species, level=70, moves=moves, pp=(10,) * 4, hp=stats[0], stats=stats, egg=False))
+        party.append(SimpleNamespace(species=species, level=70, moves=moves, pp=(10,) * 4, hp=stats[0], stats=stats, egg=False,
+                                     status=0))
     snapshot = SimpleNamespace(enemy_species=68, enemy_level=70, enemy_hp=230, party=party)
     stats = {'wEnemyMonMaxHP': 230, 'wEnemyMonAttack': 250, 'wEnemyMonDefense': 170,
              'wEnemyMonSpeed': 140, 'wEnemyMonSpclAtk': 110, 'wEnemyMonSpclDef': 160}
@@ -2042,9 +2047,9 @@ def test_tower_uses_poison_against_counter_and_recovery(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data)
     attacker = SimpleNamespace(species=248, level=70, moves=(89, 157, 37, 242), pp=(10,) * 4,
-        hp=268, stats=(268, 250, 205, 150, 190, 190), egg=False)
+        hp=268, stats=(268, 250, 205, 150, 190, 190), egg=False, status=0)
     lugia = SimpleNamespace(species=249, level=70, moves=(105, 92, 89, 70), pp=(20, 10, 10, 15),
-        hp=245, stats=(245, 143, 205, 170, 145, 234), egg=False)
+        hp=245, stats=(245, 143, 205, 170, 145, 234), egg=False, status=0)
     snapshot = SimpleNamespace(enemy_species=242, enemy_level=70, enemy_hp=495, party=(attacker, lugia))
     stats = {'wEnemyMonMaxHP': 495, 'wEnemyMonAttack': 77, 'wEnemyMonDefense': 80,
              'wEnemyMonSpeed': 143, 'wEnemyMonSpclAtk': 166, 'wEnemyMonSpclDef': 250}

@@ -3,6 +3,7 @@ from itertools import combinations
 from types import SimpleNamespace
 
 from .menus import Give, Lead, Take, Teach, choose
+from pokecore.gen2.battle_power import CHARGING, HITS, NO_DIRECT_DAMAGE, fixed_damage, move_power
 from pokecore.gen2.ram import Memory, calculated_stats
 from ..planning.ledger import FIELD_MOVES
 from ..planning.monitor import STAND_DOWNS, STOOD_DOWN, Backoff
@@ -15,21 +16,32 @@ MACHINES = ((70, 'HM04'), (57, 'HM03'), (19, 'HM02'), (94, 'TM29'), (89, 'TM26')
 
 
 def attack_value(data, mon, mid):
-    move = data.moves.get(mid, {})
-    power = move.get('power', 0)
-    if not power:
+    """How hard move ``mid`` hits for ``mon`` against an opponent of its own level, or 0 for a move
+    that deals no direct damage on its own.
+
+    The opponent has Battle Power's reference 3L + 10 HP, so a move that ignores the stats scores its
+    damage on the same scale as Seismic Toss, which deals the level and scores 250. Counter, Mirror
+    Coat, Bide, Dream Eater and Snore hit only after the foe acts or while someone sleeps, which a
+    team pick cannot know.
+    """
+    move = data.moves.get(mid)
+    if not move:
         return 0
-    kind = move['type']
-    attack = mon.stats[1 if kind < 20 else 4]
-    stab = 1.5 if kind in data.species[mon.species]['types'] else 1
-    score = power * attack / mon.level * stab * move.get('accuracy', 100) / 100
-    if move.get('effect') == 'EFFECT_STATIC_DAMAGE':
-        score = power * 250 / mon.level
-    if move.get('effect') == 'EFFECT_LEVEL_DAMAGE':
-        score = 250
-    if move.get('effect') in {'EFFECT_EXPLOSION', 'EFFECT_SELFDESTRUCT'}:
+    effect = move['effect']
+    if effect in NO_DIRECT_DAMAGE or not move['power'] and effect != 'EFFECT_OHKO':
+        return 0
+    kind, power = move_power(data, move, getattr(mon, 'dvs', None), getattr(mon, 'friendship', 0))
+    accuracy = move['accuracy'] / 100
+    fixed = fixed_damage(effect, power, mon.level, 3 * mon.level + 10)
+    if fixed is not None:
+        score = fixed * 250 / mon.level * accuracy
+    else:
+        attack = mon.stats[1 if kind < 20 else 4]
+        stab = 1.5 if kind in data.species[mon.species]['types'] else 1
+        score = power * attack / mon.level * stab * accuracy * HITS.get(effect, 1)
+    if effect == 'EFFECT_SELFDESTRUCT':
         score *= 0.1
-    if move.get('effect') in {'EFFECT_RECHARGE', 'EFFECT_RAZOR_WIND', 'EFFECT_SOLARBEAM', 'EFFECT_FLY', 'EFFECT_DIG'}:
+    if effect in CHARGING or effect == 'EFFECT_HYPER_BEAM':
         score *= 0.6
     return score
 
@@ -47,7 +59,8 @@ def forecast(mon, cap):
     for _ in range(2):
         species = next((evo['species'] for evo in data.species[species]['evolutions']
                         if evo['method'] == 'level' and int(evo['requirements'][0]) <= cap), species)
-    return SimpleNamespace(data=data, species=species, level=cap, moves=mon.moves,
+    return SimpleNamespace(data=data, species=species, level=cap, moves=mon.moves, dvs=mon.dvs,
+        friendship=getattr(mon, 'friendship', 0),
         stats=calculated_stats(data.species[species]['stats'], cap, mon.dvs, mon.stat_exp))
 
 

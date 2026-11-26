@@ -35,6 +35,8 @@ are unchanged (`pokecore.regions`). `gen2.clear_region_cache()` drops them.
 Also in `pokecore.gen2`:
 
 - `battle_power(mon, data)` and `hidden_power(data, dvs)` rate a decoded Pokemon from the game tables.
+  In `pokecore.gen2.battle_power`, `move_power(data, move, dvs, friendship)` is the type and power a
+  move hits with, and `fixed_damage(effect, power, level, hp)` the damage of one that ignores the stats.
 - `offspring`, `retrieval_cost`, `branch_parents`, `ancestors` and `level_credit` apply the Day Care and evolution-line rules.
   `families`, `single_source`, `lines`, `breeding_stock`, `egg_lines`, `free_slots` and `descendants_wanted`
   find the families only the Day Care can copy and whether another hatchling is wanted.

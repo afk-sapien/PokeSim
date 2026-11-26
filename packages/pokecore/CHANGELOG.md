@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `pokecore.gen2.battle_power.move_power(data, move, dvs, friendship)` gives the type and power
+  a move hits with: Hidden Power's from the DVs, Return's and Frustration's from the friendship,
+  and the average for Magnitude, Present and Reversal.
+- `pokecore.gen2.battle_power.fixed_damage(effect, power, level, hp)` gives the damage of a move that
+  ignores the stats, such as Seismic Toss, Psywave, Super Fang or a one-hit knockout, and None
+  for any other move. `battle_power` uses both.
+
 ## 0.12.4
 
 ### Added

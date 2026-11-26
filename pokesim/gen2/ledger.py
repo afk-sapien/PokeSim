@@ -26,7 +26,8 @@ HEAL_LINE = 0.6
 # (planning/boss.py): hits per use as the battle scores them, the self-KO moves, and level and set damage.
 EFFECTS = boss.Effects(
     hits={'EFFECT_MULTI_HIT': 3, 'EFFECT_DOUBLE_HIT': 2, 'EFFECT_POISON_MULTI_HIT': 2},
-    self_ko=frozenset({'EFFECT_SELFDESTRUCT', 'EFFECT_EXPLOSION'}),
+    # Explosion shares Selfdestruct's effect.
+    self_ko=frozenset({'EFFECT_SELFDESTRUCT'}),
     level=frozenset({'EFFECT_LEVEL_DAMAGE', 'EFFECT_PSYWAVE'}),
     fixed={'EFFECT_STATIC_DAMAGE': 0})
 # Distinct entries each Gen 2 pocket holds.

@@ -7,6 +7,7 @@ A name the fake does not answer reads as zero.
 """
 from types import SimpleNamespace
 
+from pokecore.dvs import hp_dv
 from pokecore.gen2.state import FACING
 from pokecore.state import GEN2_SCREENS, POCKETS
 
@@ -35,6 +36,12 @@ def _read(mem, kind, name, *args):
         return bytes(args[0]) if kind == 'read' else 0
 
 
+def _dvs(raw):
+    """The (HP, Attack, Defense, Speed, Special) DVs of a battler's two DV bytes ``raw``."""
+    attack, defense, speed, special = raw[0] >> 4, raw[0] & 15, raw[1] >> 4, raw[1] & 15
+    return hp_dv(attack, defense, speed, special), attack, defense, speed, special
+
+
 def _side(mem, struct, substatus, disable_count, disabled, last):
     byte = lambda name: _read(mem, 'byte', name)
     word = lambda name: _read(mem, 'word', name)
@@ -44,7 +51,7 @@ def _side(mem, struct, substatus, disable_count, disabled, last):
         moves=lambda: tuple(read(struct + 'Moves', 4)), pp=lambda: tuple(value & 63 for value in read(struct + 'PP', 4)),
         hp=lambda: word(struct + 'HP'), status=lambda: byte(struct + 'Status'),
         stats=lambda: tuple(word(struct + stat) for stat in STATS), shown_dvs=lambda: read(struct + 'DVs', 2),
-        transformed=lambda: bool(byte(substatus) & 8), holds_foe=lambda: bool(byte(substatus) & 128),
+        dvs=lambda: _dvs(read(struct + 'DVs', 2)), transformed=lambda: bool(byte(substatus) & 8), holds_foe=lambda: bool(byte(substatus) & 128),
         disabled_move=lambda: byte(disabled) if byte(disable_count) else None, last_move=lambda: byte(last))
 
 
