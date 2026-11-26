@@ -218,6 +218,12 @@ alone can move a rung's wasted share by several points on a change that does not
 The baseline names the seeds it was taken on, and a gate on other seeds stops until `--write-baseline`
 rewrites it.
 
+The report also keeps three shares for each rung that nothing judges: the frames under restock, heal
+and PC goals over all frames. A restock that buys one ball counts as progress, so a long walk to a
+far shop never shows as waste and only the restock share sees it. Each gate line shows that share and
+its move from the baseline, for the reviewer to read. None of the three is judged, since each moves
+more from seed to seed than the one-point paired limit.
+
 A rung whose one problem is a wasted share more than two points up goes to a paired stage. The gate
 checks out the merge base with origin/main in a temporary worktree with its own environment, plays
 the rung there on seeds 7 to 29, and on the head on seeds 10 to 29. The rung passes when the head

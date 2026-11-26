@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from pokesim.replay.rung import shares
 from tools import stage_ladder
 from tools.stage_ladder import GEN1_LORELEI, main, reached
 
@@ -243,9 +244,9 @@ def test_check_fails_on_a_rung_whose_save_reads_as_another_stage(tmp_path, monke
     assert main(['check', str(roms), str(tmp_path / 'ladders')]) == 1
 
 
-def _result(rung, waste=10.0, errors=0, stall=None, ladder='gold', story=None):
-    result = {'ladder': ladder, 'rung': rung, 'waste': waste, 'errors': errors,
-              'stall': stall and {'reason': stall, 'bundle': 'stalls/stall-00010m'}}
+def _result(rung, waste=10.0, errors=0, stall=None, ladder='gold', story=None, restock=5.0):
+    result = {'ladder': ladder, 'rung': rung, 'waste': waste, 'restock': restock, 'heal': 2.0, 'pc': 1.0,
+              'errors': errors, 'stall': stall and {'reason': stall, 'bundle': 'stalls/stall-00010m'}}
     if story is not None:
         result['story'] = list(story)
     return result
@@ -340,7 +341,7 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
     assert stored['frames'] == stage_ladder.GATE_FRAMES and stored['seeds'] == [7, 8, 9] and set(stored['rungs']) == \
         {'red/new_game', 'red/badges_2', 'red-randomized/badges_4'}
     assert stored['rungs']['red/new_game'] == {'stall': None, 'stalls': 0, 'errors': 0, 'waste': 10.0,
-                                               'milestones': 0, 'story': []}
+                                               'restock': 5.0, 'milestones': 0, 'story': []}
     assert main(args) == 0
     stored['rungs']['red-randomized/badges_4']['waste'] = 20.0
     (root / 'gate-baseline.json').write_text(json.dumps(stored), encoding='utf-8')
@@ -384,13 +385,35 @@ def test_only_a_rung_up_on_waste_alone_goes_to_the_paired_stage():
     assert [result['rung'] for result in stage_ladder.waste_only(results, baseline)] == ['badges_2']
 
 
+def test_a_restock_rise_shows_on_the_gate_line_and_fails_nothing():
+    # Restock moves more from seed to seed than the paired limit, so the reviewer sees it and nothing judges it.
+    base = {'gold/badges_6': {'stall': None, 'errors': 0, 'waste': 10.0, 'restock': 5.0, 'story': ['fog']}}
+    risen = _result('badges_6', restock=45.0, story=['fog'])
+    assert stage_ladder.compare([risen], base) == [] and stage_ladder.waste_only([risen], base) == []
+    assert stage_ladder._gate_line(risen, base['gold/badges_6']).startswith(
+        'gold/badges_6                   10.0% wasted ( +0.0), 45.0% restock (+40.0), 0 errors')
+    # A baseline from before the restock share shows the share alone.
+    older = {'stall': None, 'errors': 0, 'waste': 10.0, 'story': ['fog']}
+    assert ', 45.0% restock, 0 errors' in stage_ladder._gate_line(risen, older)
+
+
+def test_the_shares_of_a_run_count_restock_heal_and_pc_goals_by_their_key():
+    frames = {'restock Buy 5 Poke Balls': 300, 'buy_balls Restock adventure supplies': 100,
+              'sell_supplies Sell spare items': 50, 'heal Pokemon Center': 200, 'party_box Box a spare': 40,
+              'collection_hatch_pc Take an egg': 10, 'collection_hunt quality PIKACHU': 300}
+    result = {'frames': 1000, 'wasted': {'collection_hunt quality PIKACHU': 125}, 'frames_by_goal': frames}
+    assert shares(result) == {'waste': 12.5, 'restock': 45.0, 'heal': 20.0, 'pc': 5.0}
+    assert shares({'frames': 0, 'wasted': {}, 'frames_by_goal': {}}) == {'waste': 0.0, 'restock': 0.0, 'heal': 0.0,
+                                                                          'pc': 0.0}
+
+
 def _paired_gate(tmp_path, monkeypatch, base_waste, base='b' * 40):
     """A gate over red/badges_2 and red/badges_4 that plays no game. The head wastes 10% on badges_2 and
     13% on badges_4 on every seed, the merge base ``base`` ``base_waste`` on badges_4, and both baselines
     are 10%."""
     root = tmp_path / 'ladders'
     _ladder(root, 'red', 1, '', ['badges_2', 'badges_4'])
-    rung = {'stall': None, 'stalls': 0, 'errors': 0, 'waste': 10.0, 'milestones': 0, 'story': []}
+    rung = {'stall': None, 'stalls': 0, 'errors': 0, 'waste': 10.0, 'restock': 5.0, 'milestones': 0, 'story': []}
     (root / 'gate-baseline.json').write_text(json.dumps({
         'frames': stage_ladder.GATE_FRAMES, 'seeds': [7, 8, 9],
         'rungs': {'red/badges_2': rung, 'red/badges_4': rung}}), encoding='utf-8')
@@ -517,7 +540,7 @@ def test_the_tracked_baseline_is_the_default_and_names_every_rung_once():
         allowed = stage_ladder.RANDOMIZED_RUNGS if ladder.endswith('-randomized') else \
             rungs['2' if ladder.split('-')[0] in ('gold', 'silver', 'crystal') else '1']
         assert stage in allowed, name
-        assert set(rung) == {'stall', 'stalls', 'errors', 'waste', 'milestones', 'story'}, name
+        assert set(rung) == {'stall', 'stalls', 'errors', 'waste', 'restock', 'milestones', 'story'}, name
         assert 0 <= rung['waste'] <= 100 and 0 <= rung['stalls'] <= len(stored['seeds']), name
         assert all(isinstance(key, str) for key in rung.get('story', [])), name
 
