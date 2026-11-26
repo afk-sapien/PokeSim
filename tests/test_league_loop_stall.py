@@ -3,7 +3,7 @@ from pokesim.policies.collection import Collection
 from pokesim.policies.team import reserve_to_deposit
 from pokesim.strategy_data import MAPS
 from test_collection import sid, state
-from test_strategy import mon
+from test_strategy import flags, mon
 
 CAVE = MAPS['DIGLETTS_CAVE']
 
@@ -32,6 +32,40 @@ def test_a_rematch_that_only_walks_is_still_given_up_after_two_minutes():
     c = rematch()
     for frame in range(0, 7500, 120):
         c.observe(state(frame=frame, map=CAVE, hall_of_fame_count=250))
+    assert c.project is None
+    assert 'No encounter' in c.history[-1]
+
+
+def walk_back_after_agatha(blackout):
+    """A rematch that saw Route 23, Victory Road 3F and its switch on the way to Agatha loses there, then
+    walks 90 seconds of Route 23, 90 seconds of Victory Road 3F, pushes the boulder onto the switch the
+    game had cleared, and walks 90 seconds more."""
+    c = rematch()
+    off = flags('EVENT_GOT_POKEDEX')
+    on = flags('EVENT_GOT_POKEDEX', 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1')
+    c.project_maps = [CAVE, MAPS['ROUTE_23'], MAPS['VICTORY_ROAD_3F'], MAPS['AGATHAS_ROOM']]
+    c.project_flags = list(on)
+    frame = 0
+    if blackout:
+        for frame in range(120, 600, 120):
+            c.observe(state(frame=frame, map=MAPS['AGATHAS_ROOM'], in_battle=2, hall_of_fame_count=250,
+                            event_flags=off, party=(mon(hp=0, max_hp=100, level=40),)))
+    for place, now in (('ROUTE_23', off), ('VICTORY_ROAD_3F', off), ('VICTORY_ROAD_3F', on)):
+        for _ in range(45):
+            frame += 120
+            c.observe(state(frame=frame, map=MAPS[place], event_flags=now, hall_of_fame_count=250))
+    return c
+
+
+def test_after_a_blackout_the_walk_back_is_a_new_route_with_new_switches():
+    c = walk_back_after_agatha(blackout=True)
+    assert c.project is not None
+    # The count started again at the switch.
+    assert c.idle_frames <= 45 * 120
+
+
+def test_without_a_blackout_seen_maps_and_switches_are_not_a_new_route():
+    c = walk_back_after_agatha(blackout=False)
     assert c.project is None
     assert 'No encounter' in c.history[-1]
 

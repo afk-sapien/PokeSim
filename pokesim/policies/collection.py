@@ -884,6 +884,14 @@ class Collection:
             if event_set(s.event_flags, flag):
                 self.dojo_choice = chosen
         self.director.forget_expired(self.clock)
+        if self.project and s.all_fainted:
+            # A blackout sends the party back to where it last healed, and the game has undone switches on
+            # the way, such as Victory Road's boulders. The walk back starts the project's route over, so
+            # its maps and flags are new again. A Red rematch that lost to Agatha walked back from Pallet
+            # Town and pushed every boulder again, but it had seen each map and flag before Agatha, so it
+            # was given up in Victory Road with no new route in two minutes.
+            self.project_maps = [s.map]
+            self.project_flags = list(s.event_flags)
         idle = CONTINUE
         if self.project and (not suspended or self.project.rules.own_clock):
             project = self.project
