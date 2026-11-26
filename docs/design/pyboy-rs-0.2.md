@@ -134,7 +134,7 @@ The pin PR retakes it: one gate run of `5db7dacc` on seeds 7, 8 and 9 with `--wr
 1. One image runs every worker. Trade peers in one deploy share its container, and a remote peer gets JSON, never a state. So no worker mixes versions within a deploy.
 2. The upgrade moves saves one way. The first save under 0.2.0 has the new format.
 3. An older app refuses a 0.2.0 checkpoint cleanly, "Unsupported checkpoint emulator or state format". A rollback restores the cold backup taken before the upgrade.
-4. Image trial of the pin commit on the newest cold backup: (pending).
+4. The image trial ran the pin commit `359c15f4` for 30 minutes on the newest cold backup, with the 8 live runs. All 8 loaded their 0.1.9 saves, kept running with 0 restarts, 0 errors and 0 problems, earned progress events, and wrote checkpoints in the new format. The same backup under 0.1.9 (`da777ecc`) also ran all 8 with 0 problems. Progress events over the 30 minutes came to 1577 on 0.2.0 and 1447 on 0.1.9.
 
 ## 7. Speed and memory
 
