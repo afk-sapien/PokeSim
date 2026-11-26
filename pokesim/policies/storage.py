@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 from .menus import MenuDecision, select, tap
 from .collection import Collection
-from .progression import fly_free
+from .progression import fly_free, spent_items
 from .team import hunt_focus, release_rated, release_target, reserve_to_deposit
 from . import league_rotation
 from ..strategy_data import SPECIES
@@ -151,6 +151,10 @@ class StorageController:
 
     def step(self, snapshot, screen, kind, goal_key, project, preferences, collection=None):
         if kind == 'pc_root':
+            spent = spent_items(snapshot) if goal_key == 'bag_room' else ()
+            if spent:
+                return MenuDecision(tap('b'), 'Store a key item whose use is over to make room in the bag',
+                                    request=('deposit_item', spent[0]))
             return MenuDecision(select(screen, 0) if goal_key.startswith('party_') else tap('b'))
         if kind == 'change_box':
             target = self.box_target(snapshot, goal_key, project, preferences, collection)

@@ -4,8 +4,9 @@ from collections import Counter
 from dataclasses import asdict
 from functools import partial
 
-from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositPokemon, FieldMove, LearnMove, ReleasePokemon,
-                                    ReorderParty, RunAway, SellItem, SwitchPokemon, UseItem, WithdrawPokemon, item_kind)
+from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositItem, DepositPokemon, FieldMove, LearnMove,
+                                    ReleasePokemon, ReorderParty, RunAway, SellItem, SwitchPokemon, UseItem, WithdrawPokemon,
+                                    item_kind)
 
 from ..runtime.policy import Action, Policy
 from ..planning.ledger import box_wanted
@@ -132,8 +133,8 @@ GOAL_KINDS = (('heal', 'heal'), ('party_collection', 'collection'), ('party_leag
               ('hideout_elevator', 'passage'), ('collect_', 'collection'), ('catch_', 'catch'))
 # An item ball the goal picks up this many steps away comes before a heal, so the trip does not return for it.
 BALL_STEPS = 4
-# The storage visits that make room for catches, which a stall sets aside under their own key.
-ROOM_GOALS = frozenset(('party_release', 'party_box'))
+# The storage visits that make room for catches or a wanted item, which a stall sets aside under their own key.
+ROOM_GOALS = frozenset(('party_release', 'party_box', 'bag_room'))
 
 
 def goal_kind(key):
@@ -571,18 +572,20 @@ class StrategicPolicy(Policy):
         # The story, the collection plan, the project under way and the errands under way are candidates.
         # Collection projects only start once the Champion is beaten, so the story and a project never
         # meet: the story is the pick until then and inside the League, and the plan placeholder after.
+        # A stall sets the visit that stores spent key items aside, and the fetch it served then waits.
+        room = not self._room_parked('bag_room')
         if self.collection.completed_champion and s.map not in LEAGUE:
             # A run that reached the League without the Bicycle fetches it before planning the next project,
             # once the passage has taken it south of Victory Road. Against a project under way the errand and
             # the project took turns at every decision. HM02 Fly comes next, as in Gold, Silver and Crystal.
-            bike = None if self.collection.project else bicycle_goal(s) or fly_goal(s)
+            bike = None if self.collection.project else bicycle_goal(s, room) or fly_goal(s, room)
             if bike and self.north_of_victory_road(s):
                 bike = None
             base = bike or Goal('collect_plan', 'Plan the next adventure project',
                                 'Choose a collecting, evolution, training, or exploration objective')
             choice = Ballot(base, goal_candidate(base, self.collection), source='story' if bike else 'plan')
         else:
-            base = story_goal(s, self.starter, self.fossil) if s.started else self.goal
+            base = story_goal(s, self.starter, self.fossil, room) if s.started else self.goal
             choice = Ballot(base, goal_candidate(base, self.collection), source='story' if s.started else 'current')
             # Training for the next boss is the enabler the story goal needs.
             trained = boss_training(s, base, self.losses)
@@ -1510,6 +1513,8 @@ class StrategicPolicy(Policy):
             machine, key = SellItem(*args), ('sell', s.map, args[0])
         elif operation == 'deposit':
             machine, key = DepositPokemon(*args), ('deposit', individual(s.party[args[0]]))
+        elif operation == 'deposit_item':
+            machine, key = DepositItem(*args), ('deposit_item', *args)
         elif operation == 'withdraw':
             machine, key = WithdrawPokemon(*args), ('withdraw', s.active_box, *args, len(s.party))
         elif operation == 'change_box':

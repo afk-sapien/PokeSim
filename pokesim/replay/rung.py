@@ -248,8 +248,9 @@ def _goal_events(key, previous, current, cards=None):
     # gains no item. A Yellow restock after the Silph Scope sold one item at the Lavender Mart on the way
     # to the tower. The entry and the cash can change on different reads, so either one counts. In Gold,
     # Silver and Crystal a run with no ball and less cash than one costs sells its least valuable item under
-    # its own goal, and the ball it buys next waits on that sale.
-    if key in ('restock', 'sell_supplies') and previous is not None and current is not None and not found \
+    # its own goal, and the ball it buys next waits on that sale. A Red, Blue or Yellow PC visit that stores
+    # spent key items (bag_room) frees entries the same way, for the Bicycle or HM02 it waits on.
+    if key in ('restock', 'sell_supplies', 'bag_room') and previous is not None and current is not None and not found \
             and getattr(current, 'valid', True) and getattr(previous, 'valid', True):
         freed = len(previous.items) - len(current.items)
         if freed > 0 or getattr(current, 'money', 0) > getattr(previous, 'money', 0):
