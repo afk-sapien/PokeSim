@@ -1,4 +1,4 @@
-"""An errand under way stays the goal on the walking, warp and menu steps between overworld decisions.
+"""An errand under way stays the goal on the walking, warp, menu and battle steps between overworld decisions.
 
 In red-randomized the steps between decisions ran under the story pick, so the goal flipped between
 restock and the story goal at every warp, and the mart purchases were credited to the story goal.
@@ -40,8 +40,19 @@ def test_a_walking_step_keeps_the_errand_under_way():
     assert walk(restocking()) is RESTOCK
 
 
-def test_a_battle_runs_under_the_pick_not_the_errand():
-    assert walk(restocking(), in_battle=1).key != 'restock'
+def test_a_battle_on_the_way_is_decided_under_the_pick_and_keeps_the_errand():
+    # Blue's restock walk through Victory Road changed goal twice in every wild battle.
+    policy = restocking()
+    decided = []
+    step = policy._step
+
+    def recorded(ctx):
+        actions = step(ctx)
+        decided.append(policy.goal)
+        return actions
+    policy._step = recorded
+    assert walk(policy, in_battle=1) is RESTOCK
+    assert decided and decided[0].key != 'restock'
 
 
 def test_without_an_errand_the_walking_step_keeps_the_pick():

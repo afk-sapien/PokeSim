@@ -473,13 +473,13 @@ class StrategicPolicy(Policy):
             # A detour the walk ran is the goal, with the goal behind it next. The step's commit can still
             # name another goal behind its pick.
             self.goal, self.next_goal = self.detour.ran
-        if (ballot is not None and self.trip.goal is not None and not self.decided and self.goal is self.pick
-                and not ctx.snapshot.in_battle):
+        if ballot is not None and self.trip.goal is not None and not self.decided and self.goal is self.pick:
             # An errand under way is the goal until the next overworld decision ends it. Otherwise each
-            # walking, warp, dialogue and menu step on the way ran under the pick behind it. The step has
-            # already decided under that pick, so menus read the same goal as before. It is offered again
-            # as it was picked, so a reserve swap is still the enabler of the goal it serves and a lift
-            # exit is still forced.
+            # walking, warp, dialogue, menu and battle step on the way ran under the pick behind it. A
+            # restock walk through Victory Road changed goal twice in every wild battle, 121 times in 60
+            # game minutes. The step has already decided under that pick, so menus and battles read the
+            # same goal as before. It is offered again as it was picked, so a reserve swap is still the
+            # enabler of the goal it serves and a lift exit is still forced.
             self.goal = self.trip.resume(ballot)
         if ballot is not None:
             # Only the offer the step ends with writes, so an offer a later site overrides leaves nothing.
