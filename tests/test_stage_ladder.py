@@ -438,14 +438,14 @@ def test_a_rung_up_on_waste_alone_passes_on_paired_seeds_when_the_merge_base_was
     assert set(report['paired']) == {'red/badges_4'}
     out = capsys.readouterr().out
     assert ('red/badges_4: +0.50 points wasted on the mean of 23 paired seeds against the merge base bbbbbbbb, '
-            'standard error 0.00, median +0.50, passes at 1') in out
+            'standard error 0.00, median +0.50, within the 1.0 point limit') in out
     assert 'frames under each goal' not in out
 
 
 def test_a_paired_failure_prints_the_pairs_and_the_frames_under_each_goal(tmp_path, monkeypatch, capsys):
     code, _, report = _paired_gate(tmp_path, monkeypatch, base_waste=11.5)
     line = ('red/badges_4: +1.50 points wasted on the mean of 23 paired seeds against the merge base bbbbbbbb, '
-            'standard error 0.00, median +1.50, more than 1')
+            'standard error 0.00, median +1.50, over the 1.0 point limit')
     assert code == 1 and report['problems'] == [line]
     assert report['paired']['red/badges_4']['goals'] == {
         'base': {'collection_hunt': 2760, 'collection_restock': 1150},

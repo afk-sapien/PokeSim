@@ -592,8 +592,8 @@ def _paired_lines(name, verdict, points=GATE_PAIRED_POINTS):
     line = (f'{name}: {verdict["mean"]:+.2f} points wasted on the mean of {seeds} paired seeds against the merge '
             f'base {verdict["base"][:8]}, standard error {verdict["error"]:.2f}, median {verdict["median"]:+.2f}')
     if verdict['passed']:
-        return [f'{line}, passes at {points:g}']
-    lines = [f'{line}, more than {points:g}', '  seed   base   head  difference']
+        return [f'{line}, within the {points:.1f} point limit']
+    lines = [f'{line}, over the {points:.1f} point limit', '  seed   base   head  difference']
     lines += [f'  {seed:4d} {base:6.2f} {head:6.2f} {head - base:+11.2f}' for seed, base, head in verdict['pairs']]
     base, head = verdict['goals']['base'], verdict['goals']['head']
     lines.append(f'  frames under each goal over the {seeds} seeds: base, head, difference')
