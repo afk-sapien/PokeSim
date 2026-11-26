@@ -1,5 +1,8 @@
 """Gen I bag room: a wanted fetch into a full bag first stores key items whose use is over in the PC."""
 from pokecore.shortcuts import DepositItem
+from pokesim.planning.monitor import hold_key
+from pokesim.policies import kinds
+from pokesim.policies.collection import Collection
 from pokesim.policies.progression import LAPRAS_DEX, SPENT_KEY_ITEMS, bicycle_goal, fly_goal, spent_items
 from pokesim.policies.storage import StorageController
 from pokesim.policies.strategic import ROOM_GOALS, StrategicPolicy
@@ -61,6 +64,23 @@ def test_the_bicycle_and_its_voucher_make_as_many_entries_as_they_need():
     assert bicycle_goal(snap(items=bag(TICKET, kinds=19), event_flags=SAILED)).key == 'bag_room'
     assert bicycle_goal(snap(items=bag(TICKET), event_flags=SAILED)) is None
     assert bicycle_goal(snap(items=bag(TICKET, kinds=18), event_flags=SAILED)).key == 'bike_voucher'
+
+
+def test_a_gift_into_a_full_bag_waits_on_a_visit_that_stores_a_spent_key_item():
+    # A Red run after the League walked to each Fishing Guru with a full bag and was turned away.
+    projects = {'collect_rod': {'method': 'rod', 'item': 'GOOD_ROD', 'map': 140, 'room': 'FUCHSIA_GOOD_ROD_HOUSE'},
+                'collect_amber': {'method': 'amber', 'item': 'OLD_AMBER', 'map': 104},
+                'collect_coins': {'method': 'prize', 'species': 137, 'map': 0},
+                'collect_pickup': {'method': 'return_fossil', 'map': 166, 'item': 'OLD_AMBER', 'event_return': 'fossil'}}
+    for key, project in projects.items():
+        collection = Collection()
+        goal = lambda s: kinds.rules(project['method']).step(kinds.View(collection, s), project)
+        assert goal(snap(party=PARTY, items=bag(TICKET), event_flags=SAILED)).key == 'bag_room'
+        assert goal(snap(party=PARTY, items=bag(TICKET, kinds=19), event_flags=SAILED)).key == key
+        # Nothing spent to store, so the gift waits, and so it does once a stall set the visit aside.
+        assert goal(snap(party=PARTY, items=bag(TICKET))) is None
+        collection.director.monitor.stand_down(hold_key('bag_room'), collection.clock)
+        assert goal(snap(party=PARTY, items=bag(TICKET), event_flags=SAILED)) is None
 
 
 def test_the_pc_stores_the_first_spent_item_and_no_other_goal_stores_any():
