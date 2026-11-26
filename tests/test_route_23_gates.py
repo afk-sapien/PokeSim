@@ -25,18 +25,24 @@ def test_a_missing_badge_closes_its_row_and_earning_it_opens_the_road():
 
 
 def test_the_indigo_plateau_shop_is_not_a_restock_plan_without_every_badge():
-    # A full bag with no Poké Balls could only buy more Max Potions, which only Indigo Plateau sells.
+    # A full bag with no Poké Balls and no cure or Revive a first ball could take the entry of could only
+    # buy more Max Potions, which only Indigo Plateau sells.
     junk = tuple((ITEMS[name], 1) for name in ('MOON_STONE', 'DOME_FOSSIL', 'S_S_TICKET', 'HM01', 'MAX_ETHER', 'LIFT_KEY',
-                                               'SILPH_SCOPE', 'ELIXER', 'ESCAPE_ROPE', 'POKE_FLUTE', 'CARD_KEY', 'PARLYZ_HEAL',
+                                               'SILPH_SCOPE', 'ELIXER', 'ESCAPE_ROPE', 'POKE_FLUTE', 'CARD_KEY', 'ETHER',
                                                'MAX_POTION', 'PROTEIN', 'HM03', 'HM04', 'HP_UP', 'CARBOS', 'RARE_CANDY'))
     goal = Goal('secret_key', 'Unlock the Cinnabar gym', 'Explore the mansion')
     options = dict(requested_goal=goal.key, healing=False, in_league=False, has_pokedex=True)
     state = snap(map=ROUTE_23, x=13, y=57, money=3890, badges=63, party=(mon(level=60),), items=junk,
                  event_flags=flags('EVENT_GOT_POKEDEX'))
     assert ShoppingController().plan(state, goal, None, **options).goal is goal
+    # With every badge the shop is a plan from north of Victory Road's southern entrance, and from south
+    # of it no restock crosses the road to shop.
     champion = snap(map=ROUTE_23, x=13, y=57, money=3890, badges=255, party=(mon(level=60),), items=junk,
                     event_flags=flags('EVENT_GOT_POKEDEX'))
-    plan = ShoppingController().plan(champion, goal, None, **options).goal
+    assert ShoppingController().plan(champion, goal, None, **options).goal is goal
+    north = snap(map=ROUTE_23, x=18, y=30, money=3890, badges=255, party=(mon(level=60),), items=junk,
+                 event_flags=flags('EVENT_GOT_POKEDEX'))
+    plan = ShoppingController().plan(north, goal, None, **options).goal
     assert plan.key == 'restock' and plan.targets == ((MAPS['INDIGO_PLATEAU_LOBBY'], 2, 5),)
 
 

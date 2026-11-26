@@ -1,5 +1,6 @@
 """Shop interaction state, independent of the strategic policy's PC and battle state."""
 from dataclasses import dataclass, replace
+from functools import cache
 from typing import ClassVar
 
 from ..planning.errand import Errand
@@ -33,6 +34,14 @@ DUNGEONS = {m for m, w in WORLD.items() if 'Pokecenter' not in w['name'] and w['
     'PokemonTower', 'PokemonMansion', 'RocketHideout', 'SilphCo', 'SSAnne', 'ViridianForest'))}
 # Bag entries a dungeon's story items need, the Lift Key and the Silph Scope in the Rocket Hideout.
 DUNGEON_KEY_SLOTS = 2
+VICTORY_ROAD = frozenset(MAPS[f'VICTORY_ROAD_{floor}F'] for floor in (1, 2, 3))
+RESTORES = frozenset(HEALING)
+BALL_KINDS = frozenset(BALLS)
+SPARE_CURES = frozenset(CURES) - RESTORES
+# The kinds a first restore or ball takes the entry of in a bag with no room, cheapest first. A restore
+# outranks a cure, and a ball a cure or a Revive. A ball takes no restore, since a bag with none
+# restocks for one.
+OUTRANKS = {RESTORES: SPARE_CURES, BALL_KINDS: SPARE_CURES | {ITEMS['REVIVE']}}
 
 
 def hunting(project):
@@ -47,18 +56,80 @@ def unfunded(snapshot, balls):
     return snapshot.money - cash_reserve(snapshot) < (BALL_RESERVE - balls) * PRICES[ITEMS['POKE_BALL']]
 
 
+def fits(snapshot, entries):
+    """Whether ``entries`` new kinds leave the bag room for a story item: an entry free, or a full bag the
+    ledger could still sell an entry from."""
+    size = len(snapshot.items) + entries
+    if size != 20:
+        return size < 20
+    after = replace(snapshot, items=snapshot.items + ((ITEMS['FULL_HEAL'], 1),) * entries)
+    return first_sale(after, 'items', 'sale') is not None
+
+
+def holds(snapshot, supply):
+    return any(qty and item in supply for item, qty in snapshot.items)
+
+
+def supply_sale(snapshot, supply):
+    """The bag index of the entry a bag with none of ``supply`` and no room sells so a first one fits, or
+    None: the cheapest kind it outranks (OUTRANKS)."""
+    spare = [(PRICES.get(item, 0), index) for index, (item, qty) in enumerate(snapshot.items)
+             if qty and item in OUTRANKS[supply]]
+    if not spare or holds(snapshot, supply) or fits(snapshot, 1):
+        return None
+    index = min(spare)[1]
+    after = replace(snapshot, items=snapshot.items[:index] + snapshot.items[index + 1:])
+    return index if fits(after, 1) else None
+
+
+def supply_room(snapshot, supply):
+    """Whether a bag with none of ``supply``, the restores or the balls, takes a first one past the 18
+    entries a new kind needs.
+
+    A restock for 0 medicine goes on until it buys a restore. A Red run left Viridian, which sells none,
+    with 19 entries, and only the Indigo Plateau lobby, whose limit is 20, could sell it one. The run
+    walked Victory Road to the lobby. A Red Clefairy hunt threw its last ball in Mt. Moon with 19
+    entries, and the lobby was its only counter too. The first one fills the bag while the ledger could
+    still sell an entry for a story item, or after the kind it outranks is sold for it (supply_sale)."""
+    return not holds(snapshot, supply) and (fits(snapshot, 1) or supply_sale(snapshot, supply) is not None)
+
+
 def cure_room(snapshot):
     """Whether a bag with no cure takes one past the 18 entries a new kind needs.
 
     With no cure a status sends the party to a Pokémon Center (ledger.battle_room). A Yellow run reached
     Route 15 with 19 entries and no cure, and walked to Fuchsia four times for poison. The cure may fill
-    the bag only while the ledger could still sell an entry for a story item."""
-    if len(snapshot.items) >= 20 or any(qty and item in CURES and item not in HEALING for item, qty in snapshot.items):
+    the bag only while the ledger could still sell an entry for a story item. A restore and a ball
+    outrank a cure, so a bag without them keeps an entry for each."""
+    if len(snapshot.items) >= 20 or holds(snapshot, SPARE_CURES):
         return False
-    if len(snapshot.items) < 19:
+    return fits(snapshot, 1 + supply_room(snapshot, RESTORES) + supply_room(snapshot, BALL_KINDS))
+
+
+def plateau_side(snapshot):
+    """Whether the run stands north of Victory Road's southern entrance: in the road, on the Indigo
+    Plateau, or on the strip of Route 23 between them. No restock crosses the road to shop. A Red run
+    at Viridian with no medicine walked the road to the lobby for 30 minutes."""
+    if snapshot.map in VICTORY_ROAD or snapshot.map == MAPS['INDIGO_PLATEAU']:
         return True
-    after = replace(snapshot, items=snapshot.items + ((ITEMS['FULL_HEAL'], 1),))
-    return first_sale(after, 'items', 'sale') is not None
+    return snapshot.map == MAPS['ROUTE_23'] and (snapshot.x, snapshot.y) in plateau_strip()
+
+
+@cache
+def plateau_strip():
+    """The Route 23 squares a walk from Victory Road's 2F exit reaches without a warp."""
+    world = WORLD[MAPS['ROUTE_23']]
+    passable = set(world['passable'])
+    start = next((x, y) for x, y, target, _ in world['warps'] if target == MAPS['VICTORY_ROAD_2F'])
+    seen, frontier = {start}, [start]
+    while frontier:
+        x, y = frontier.pop()
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if ((nx, ny) not in seen and 0 <= nx < world['width'] and 0 <= ny < world['height']
+                    and world['tiles'][ny][nx] in passable):
+                seen.add((nx, ny))
+                frontier.append((nx, ny))
+    return frozenset(seen)
 
 
 def entry_fee(snapshot, goal_key):
@@ -101,7 +172,8 @@ class ShoppingController(Errand):
                              shop == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=True,
                              legendary=legendary_project(project), reserve=cash_reserve(snapshot),
                              hunt_reserve=funds_needed(snapshot) if hunting(project) else None,
-                             cure_room=cure_room(snapshot))
+                             cure_room=cure_room(snapshot), restore_room=supply_room(snapshot, RESTORES),
+                             ball_room=supply_room(snapshot, BALL_KINDS))
 
     @staticmethod
     def fund_index(snapshot):
@@ -176,8 +248,10 @@ class ShoppingController(Errand):
         for map_id, world in WORLD.items():
             if snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY'] and map_id != snapshot.map:
                 continue
-            if map_id == MAPS['INDIGO_PLATEAU_LOBBY'] and map_id != snapshot.map and snapshot.badges != 255:
-                # Route 23 turns back anyone without every badge, so this shop cannot be a plan yet.
+            if map_id == MAPS['INDIGO_PLATEAU_LOBBY'] and map_id != snapshot.map and not (
+                    snapshot.badges == 255 and plateau_side(snapshot)):
+                # Route 23 turns back anyone without every badge, so this shop cannot be a plan yet, and
+                # from south of Victory Road the walk would cross the road to shop.
                 continue
             stock = DATA['marts'].get(world['name'], [])
             if map_id != snapshot.map and not legendary:
@@ -186,6 +260,11 @@ class ShoppingController(Errand):
                 clerk = next((obj for obj in world['objects'] if obj[2] == 'SPRITE_CLERK'), None)
                 if clerk and clerk[0] == 0:
                     targets.append((map_id, 2, clerk[1]))
+        if held is not None and held not in targets:
+            # The trip ends at the shop it picked once that counter has nothing left for the bag. A Red
+            # run came into Viridian Mart with a full bag, sold a TM there and, since Viridian sells no
+            # restore, walked on to Pewter for one.
+            targets = []
         if targets and reach is not None:
             # The trip picks its shop when it starts, from those a walk reaches, and keeps it. North of
             # Victory Road with its boulders off their switches, a restock chose the southern marts and
@@ -214,8 +293,14 @@ class ShoppingController(Errand):
                                 if self.raising_funds(snapshot) else
                                 'Sell surplus items, or a limited TM only when the bag is full, to make room for story items',
                                 request=('sell', item, self._sale_quantity(snapshot, item)))
-        self.selling = False
         item = self.item_for(snapshot, stock, goal_key, project)
+        for supply in (BALL_KINDS, RESTORES):
+            index = supply_sale(snapshot, supply)
+            if index is not None and item in supply:
+                spare, qty = snapshot.items[index]
+                return MenuDecision(tap('b'), 'Sell a cure or a Revive to make room for a first ball or restore, '
+                                    'which outranks it', request=('sell', spare, min(qty, TRADE_LIMIT)))
+        self.selling = False
         prepared = item is None and legendary_project(project) and ITEMS['ULTRA_BALL'] in stock
         request = ('buy', item, self._buy_quantity(snapshot, stock, goal_key, project, item)) if item else None
         return MenuDecision(tap('b'), 'Restock balls and medicine while keeping a cash reserve', bool(prepared),
