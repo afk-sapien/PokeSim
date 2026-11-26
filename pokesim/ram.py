@@ -339,6 +339,25 @@ def end_damaged_nicknames(mem, party, last_party):
     return bool(repaired)
 
 
+def start_wild_battle(mem, snap, last):
+    """At the first read of a wild battle, point the enemy's party slot back at the first slot.
+
+    A Pokémon sent to a box leaves its level in that byte, and in a wild battle the enemy's
+    Metronome or Mirror Move then adds 1 to a byte of the current box (pokecore.repairs). ``last``
+    is the snapshot read before ``snap``. No snapshot field reads the byte, so nothing is read again.
+    """
+    if snap.in_battle != 1 or last is not None and last.in_battle == 1:
+        return
+    try:
+        stale = repairs.reset_wild_enemy_party_pos(mem)
+    except TypeError:
+        # Only a stand-in without real memory, as in unit tests, cannot be read by address.
+        return
+    if stale is not None:
+        logging.getLogger('pokesim.emu').info(
+            'Set the wild enemy party slot from %d, a box level, to 0 before the first move', stale)
+
+
 def read_stored_pokemon(mem):
     return _read_storage(mem)[1]
 

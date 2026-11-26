@@ -1,6 +1,8 @@
 """Named repairs of damaged Gen I memory."""
-from pokecore.gen1 import W_PARTY_COUNT, W_PARTY_NICKS
-from pokecore.repairs import NAME_END, repair_party_nicknames
+import pytest
+
+from pokecore.gen1 import W_IS_IN_BATTLE, W_PARTY_COUNT, W_PARTY_NICKS
+from pokecore.repairs import NAME_END, W_ENEMY_MON_PARTY_POS, repair_party_nicknames, reset_wild_enemy_party_pos
 from pokecore.yellow import address
 
 # A traded nickname, WETFUND, then the 0x55 text command where the terminator belonged, then LL.
@@ -41,3 +43,32 @@ def test_only_the_party_count_of_nicknames_is_read_and_at_most_six():
     memory[W_PARTY_NICKS + 6 * 11] = 0x01
     assert repair_party_nicknames(memory) == [1, 2, 3, 4, 5]
     assert memory[W_PARTY_NICKS + 6 * 11] == 0x01
+
+
+def battle(locate, in_battle, party_pos):
+    memory = bytearray(0x10000)
+    memory[locate(W_IS_IN_BATTLE)] = in_battle
+    memory[locate(W_ENEMY_MON_PARTY_POS)] = party_pos
+    return memory
+
+
+@pytest.mark.parametrize('version, at', [(None, 0xCFE8), ('red', 0xCFE8), ('blue', 0xCFE8), ('yellow', 0xCFE7)])
+def test_a_box_level_left_in_the_enemy_party_slot_is_reset_in_a_wild_battle(version, at):
+    locate = address if version == 'yellow' else (lambda red: red)
+    # A level 34 Pokémon sent to a box after a catch with a full party.
+    memory = battle(locate, 1, 0x22)
+    before = bytes(memory)
+    assert locate(W_ENEMY_MON_PARTY_POS) == at
+    assert reset_wild_enemy_party_pos(memory, version=version) == 0x22
+    assert [i for i, (old, new) in enumerate(zip(before, memory)) if old != new] == [at]
+    assert memory[at] == 0
+    assert reset_wild_enemy_party_pos(memory, version=version) is None
+
+
+@pytest.mark.parametrize('in_battle, party_pos', [(0, 0x22), (2, 0x22), (0xFF, 0x22), (1, 5), (1, 0)])
+def test_the_enemy_party_slot_is_kept_outside_a_wild_battle_or_inside_the_party(in_battle, party_pos):
+    # A trainer battle sets the slot itself, and 0 to 5 index the six enemy party slots.
+    memory = battle(lambda red: red, in_battle, party_pos)
+    before = bytes(memory)
+    assert reset_wild_enemy_party_pos(memory) is None
+    assert bytes(memory) == before

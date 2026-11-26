@@ -549,6 +549,12 @@ exclusive lock.
   naming screen can never type but a trade can copy in. It returns the party slots
   it changed, and an empty list when nothing needed it. `version='yellow'` repairs
   raw Yellow memory.
+- `reset_wild_enemy_party_pos(memory, *, version=None)` sets `wEnemyMonPartyPos`
+  to 0 in a wild battle when it is 6 or more, and returns the value it held, or
+  None when it writes nothing. The byte is also `wEnemyMonBoxLevel`, so a Pokémon
+  sent to a box leaves its level there, and the cartridge's wild battle PP and
+  defrost writes then land in box memory. `version='yellow'` reads raw Yellow
+  memory.
 
 ## Trusted resets
 

@@ -103,3 +103,26 @@ def test_the_party_is_read_again_after_a_nickname_repair(monkeypatch):
     emu.frame = 100
     emu._observe()
     assert emu.snapshot == repaired
+
+
+def test_a_box_level_in_the_enemy_party_slot_is_reset_when_a_wild_battle_starts(monkeypatch):
+    from pokecore.repairs import W_ENEMY_MON_PARTY_POS
+    from pokesim.ram import W_IS_IN_BATTLE
+    emu, observe = observer(monkeypatch)
+    memory = emu.pb.memory = bytearray(0x10000)
+    # A catch with a full party sent a level 34 Pokémon to a box.
+    memory[W_ENEMY_MON_PARTY_POS] = 0x22
+    observe(snap(frame=100))
+    assert memory[W_ENEMY_MON_PARTY_POS] == 0x22
+    memory[W_IS_IN_BATTLE] = 1
+    observe(snap(frame=130, in_battle=1))
+    assert memory[W_ENEMY_MON_PARTY_POS] == 0
+    # Only the first read of the battle writes, so a catch later in it keeps the level it stores.
+    memory[W_ENEMY_MON_PARTY_POS] = 0x22
+    observe(snap(frame=160, in_battle=1))
+    assert memory[W_ENEMY_MON_PARTY_POS] == 0x22
+    memory[W_IS_IN_BATTLE] = 0
+    observe(snap(frame=190))
+    memory[W_IS_IN_BATTLE] = 1
+    observe(snap(frame=220, in_battle=1))
+    assert memory[W_ENEMY_MON_PARTY_POS] == 0

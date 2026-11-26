@@ -28,8 +28,8 @@ class Gen1Adapter:
             variant = 'yellow' if self.yellow else 'red'
             raise ValueError(f'This cartridge needs {VARIANT_ENV}={variant} before pokesim is imported')
         self.version = 'yellow' if self.yellow else 'blue' if sha1 == BLUE_SHA1 else 'red'
-        # The party the last read decoded.
-        self.party = None
+        # The snapshot the last read decoded, since the start or the last load.
+        self.last = None
 
     def boot(self, run, rom, trace=None, fair_wild_dvs=None):
         from pokecore.emulator import Emulator as CoreEmulator
@@ -66,12 +66,13 @@ class Gen1Adapter:
         pass
 
     def read(self, run):
-        from .ram import end_damaged_nicknames, read_snapshot
+        from .ram import end_damaged_nicknames, read_snapshot, start_wild_battle
         snap = read_snapshot(run.pb.memory, run.frame)
         # As the application's observe step does (Emulator._observe_snapshot).
-        if end_damaged_nicknames(run.pb.memory, snap.party, self.party):
+        if end_damaged_nicknames(run.pb.memory, snap.party, self.last and self.last.party):
             snap = read_snapshot(run.pb.memory, run.frame)
-        self.party = snap.party
+        start_wild_battle(run.pb.memory, snap, self.last)
+        self.last = snap
         return snap
 
     def options(self, pb):
@@ -90,6 +91,8 @@ class Gen1Adapter:
     def after_load(self, run, metadata, first):
         from .events import RunMemory
         run.memory = RunMemory.from_dict(metadata['run_memory'])
+        # The application's load forgets its last snapshot too.
+        self.last = None
 
     def manifest_fields(self, run):
         return {'policy_name': 'strategic', 'run_memory': run.memory}
