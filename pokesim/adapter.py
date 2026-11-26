@@ -36,8 +36,11 @@ class Gen1Adapter:
 
         from .randomized import rom_stream
         from .runtime import trace as runtime_trace
+        from .investment import use_cartridge
         from .yellow import open_emulator
         self.rom = rom
+        # The PC rates copies with this cartridge's TMs, which ROM_PATH may not name.
+        use_cartridge(rom)
         run.game = self.version
         # A randomized run (RANDOMIZER set) plays the patched cartridge, as the managed worker does.
         run.pb = open_emulator(rom_stream(rom), default=CoreEmulator, yellow=self.yellow, window='null',

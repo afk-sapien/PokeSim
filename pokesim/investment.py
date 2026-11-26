@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 from functools import lru_cache
+from pathlib import Path
 
 from pokecore.dvs import dv_probabilities
 
@@ -59,33 +60,53 @@ def _pool():
 TAUGHT_HMS = frozenset({15, 57, 70})
 
 
-def rom_configured():
-    """Whether this run names a cartridge: ROM_PATH is set, or its default path holds a file."""
+_cartridge = None
+
+
+def use_cartridge(path):
+    """Read the TMs from the cartridge this process's run booted, not from ROM_PATH. A scenario picks
+    its cartridge by hash, so ROM_PATH can name another version. A new path drops the pool read from
+    the last one."""
+    global _cartridge
+    path = Path(path)
+    if path != _cartridge:
+        _cartridge = path
+        _pool.cache_clear()
+
+
+def cartridge_path():
+    """The run's cartridge (use_cartridge), or ROM_PATH in a process that booted none, such as an
+    adventure worker or the app, which set ROM_PATH to the adventure's or library's cartridge."""
     from . import config
-    return bool(os.environ.get('ROM_PATH')) or config.ROM_PATH.is_file()
+    return _cartridge or config.ROM_PATH
+
+
+def rom_configured():
+    """Whether this run names a cartridge: it booted one, ROM_PATH is set, or its default path holds a file."""
+    from . import config
+    return _cartridge is not None or bool(os.environ.get('ROM_PATH')) or config.ROM_PATH.is_file()
 
 
 def cartridge_machines():
-    """(TM item to move id, TM items per internal species id) from the cartridge at ROM_PATH.
+    """(TM item to move id, TM items per internal species id) from the run's cartridge (cartridge_path).
 
     Empty when no cartridge is configured, as in CI, or when it is not a Gen I cartridge PokeSim reads,
     since the bot then teaches no TM either. A configured Gen I cartridge whose TMs cannot be read
     raises RatingUnavailable, because a pool without them would re-rank every copy in the PC."""
-    from . import config
     from .catches import TRACKED
     from .game_data import current_variant
     from .yellow import YELLOW_SHA1
     if not rom_configured():
         return {}, {}
     try:
-        rom = config.ROM_PATH.read_bytes()
+        rom = cartridge_path().read_bytes()
     except OSError as error:
-        raise RatingUnavailable(f'The cartridge at ROM_PATH could not be read ({error.strerror or error}).') from error
+        raise RatingUnavailable(f'The cartridge could not be read ({error.strerror or error}).') from error
     sha1 = hashlib.sha1(rom).hexdigest()
     if sha1 not in TRACKED:
         return {}, {}
     if (sha1 == YELLOW_SHA1) != (current_variant() == 'yellow'):
-        raise RatingUnavailable('The cartridge at ROM_PATH is another version than the game data loaded.')
+        raise RatingUnavailable('The cartridge is another version than the game data loaded.')
     from .tm_shop import cartridge_data
     try:
         return cartridge_data(rom)
