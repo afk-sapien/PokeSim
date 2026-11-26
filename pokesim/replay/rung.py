@@ -206,6 +206,7 @@ def _goal_events(key, previous, current, cards=None):
     before and after, or None where the run has no Pokégear."""
     from pokesim.planning.monitor import ProgressEvent
     from pokesim.planning.progress import _held, events
+    from pokesim.policies.storage import FIELD_MOVE_GOALS
     found = events(previous, current)
     # A Pokémon let go frees a slot. The tree under test may predate that event, so the audit reads it
     # here too and every tree it compares is measured the same way.
@@ -262,8 +263,11 @@ def _goal_events(key, previous, current, cards=None):
         found.append(ProgressEvent('deposit', len(previous.party) - len(current.party)))
     # A PC visit that swaps the trainee into the party keeps the held count, so no other event shows it,
     # yet it is the whole of the preparation goal. A goal cut short between the deposit and the withdrawal
-    # leaves two spans, so each half of the swap counts.
-    if key == 'collection_train_pc' and previous is not None and current is not None and not found \
+    # leaves two spans, so each half of the swap counts. A Red, Blue or Yellow visit that brings a stored
+    # field-move partner into the party is the same swap, and the teach waits on it. A Yellow run past the
+    # League withdrew a stored flier to teach it Fly, and all 5,112 frames of that visit read as wasted.
+    if (key == 'collection_train_pc' or key in FIELD_MOVE_GOALS) and previous is not None and current is not None \
+            and not found \
             and getattr(current, 'valid', True) and getattr(previous, 'valid', True) and previous.party and current.party:
         before, after = Counter(map(_identity, previous.party)), Counter(map(_identity, current.party))
         moved = sum((after - before).values()) or sum((before - after).values())
