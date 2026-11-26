@@ -379,6 +379,32 @@ def test_an_empty_plan_is_not_drawn_again_until_the_game_changes():
     assert c.director.select.call_count == 2
 
 
+def test_an_empty_plan_drawn_beside_a_blocked_move_is_drawn_again_when_the_block_ends():
+    """A live postgame run's walk stood down in a dead end on Route 13 with the only way out blocked, so the
+    plan found no route to any project. Nothing in the game changed after the block ended, so the plan stayed
+    idle, and the run walked in and out of dead ends for hours."""
+    from unittest.mock import Mock
+    c = Collection()
+    c.completed_champion = True
+    nav = Navigator()
+    nav.distance_lookup = Mock(return_value=lambda targets: 0 if targets else None)
+    c.director.select = Mock(return_value=None)
+    s = state(map=MAPS['ROUTE_13'], money=100000, frame=1000)
+    c.observe(s)
+    main = Goal('collect_plan', 'Plan', 'Plan')
+    nav.blocked[((MAPS['ROUTE_13'], 27, 8), 'left')] = 4000
+    nav.blocked[((MAPS['ROUTE_13'], 26, 8), 'left')] = 900
+    at = lambda frame: c.choose(replace(s, frame=frame), nav, random.Random(1), main)
+    assert at(1000) is None and at(3999) is None
+    assert c.director.select.call_count == 1
+    assert at(4000) is None
+    assert c.director.select.call_count == 2
+    # Drawn with no move blocked, the empty plan waits for the game to change, as a new block only cuts routes.
+    nav.blocked[((MAPS['ROUTE_13'], 27, 8), 'left')] = 5000
+    assert at(4500) is None and at(6000) is None
+    assert c.director.select.call_count == 2
+
+
 def test_moving_between_familiar_maps_cannot_extend_a_failed_expedition():
     c = Collection()
     c.project = {'method': 'grass', 'species': sid(132), 'key': 'ditto'}

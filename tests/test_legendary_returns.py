@@ -155,7 +155,7 @@ def test_owned_legendary_return_is_planned_and_finished_by_receipt(monkeypatch):
         p for p in projects.values() if p.get('legendary_return')))
     nav = Mock()
     nav.distance_lookup.return_value = lambda _: 20
-    nav.visits = []
+    nav.visits, nav.blocked = [], {}
     s = state(owned=frozenset({150}))
     c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
     assert c.project['legendary_return'] and c.project['repeat']
@@ -184,7 +184,7 @@ def test_refused_legendary_return_closes_until_the_next_milestone(tracking, monk
         (p for p in projects.values() if p.get('legendary_return')), None))
     nav = Mock()
     nav.distance_lookup.return_value = lambda _: 20
-    nav.visits = []
+    nav.visits, nav.blocked = [], {}
     plan = state(owned=frozenset({150}))
     c.choose(plan, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
     assert c.project['legendary_return']
