@@ -49,6 +49,12 @@ GATE_TIMEOUT = 1800
 GATE_PAIRED_SEEDS = tuple(range(7, 30))
 GATE_PAIRED_POINTS = 1.0
 GATE_PAIRED_RUNGS = 5
+# A restock that walks a long way and buys one ball counts as progress, so the wasted share never sees its
+# time. The gate keeps the share of frames under restock, heal and PC goals for each rung and judges none:
+# their spread from seed to seed on main is above the paired limit (docs/design/gate-paired-seeds.md).
+RESTOCK_GOALS = frozenset({'restock', 'buy_balls', 'sell_supplies'})
+PC_GOALS = frozenset({'party_box', 'party_upgrade', 'collection_box', 'collection_release'})
+SUPPORT = ('restock', 'heal', 'pc')
 # The share of decide pipeline decisions a rung agrees on before a switch, from the decide pipeline design.
 PIPELINE_BAR = 0.95
 # Gold, Silver and Crystal also note their last Bug-Catching Contest and Battle Tower visit and the Bicycle
@@ -545,8 +551,7 @@ def gate_rung(args):
                                seed=args.seed, reseed_goals=True, lead_in=0, randomizer=code, fair_wild_dvs=None)
     result = run_one(audit, watch)
     summary = {'ladder': args.ladder.name, 'rung': args.rung, 'seed': args.seed, 'randomizer': code,
-               'frames': result['frames'], 'errors': result['errors'], 'stall': watch.stall,
-               'waste': round(100 * sum(result['wasted'].values()) / max(result['frames'], 1), 2),
+               'frames': result['frames'], 'errors': result['errors'], 'stall': watch.stall, **shares(result),
                'story': result['story']}
     if result.get('pipeline') is not None:
         summary['pipeline'] = result['pipeline']
@@ -555,9 +560,9 @@ def gate_rung(args):
 
 
 def mean_result(runs):
-    """One rung's gate result from its runs on several seeds: the mean errors, story milestones and wasted
-    share, how many runs stalled and the first stall, and every milestone a run earned, in the order the
-    runs earned them. A failed run fails the rung."""
+    """One rung's gate result from its runs on several seeds: the mean errors, story milestones, wasted share
+    and restock, heal and PC shares, how many runs stalled and the first stall, and every milestone a run
+    earned, in the order the runs earned them. A failed run fails the rung."""
     first = runs[0]
     failed = [run for run in runs if run.get('failed')]
     if failed:
@@ -571,8 +576,10 @@ def mean_result(runs):
               'seeds': [run['seed'] for run in runs], 'frames': sum(run['frames'] for run in runs),
               'errors': _mean(run['errors'] for run in runs), 'stall': stalled[0] if stalled else None,
               'stalls': len(stalled), 'waste': _mean(run['waste'] for run in runs),
+              **{kind: _mean(run[kind] for run in runs) for kind in SUPPORT},
               'milestones': _mean(len(run.get('story', [])) for run in runs), 'story': story,
-              'runs': [{key: run.get(key) for key in ('seed', 'errors', 'stall', 'waste', 'story')} for run in runs]}
+              'runs': [{key: run.get(key) for key in ('seed', 'errors', 'stall', 'waste', *SUPPORT, 'story')}
+                       for run in runs]}
     pipelines = [run['pipeline'] for run in runs if run.get('pipeline')]
     if len(pipelines) == len(runs):
         result['pipeline'] = {field: sum(pipeline[field] for pipeline in pipelines)
@@ -642,6 +649,23 @@ def waste_only(results, baseline, points=GATE_WASTE_POINTS):
     judges again. A rung past the baseline's story milestones keeps its own limit and is not among them."""
     return [result for result in results
             if compare([result], baseline, points) and not compare([result], baseline, float('inf'))]
+
+
+def shares(result):
+    """A run's wasted share and its restock, heal and PC shares, in percent of its frames, from its audit
+    result. A PC visit is a box or party swap, a release from storage, or a Gen II collection step at the PC."""
+    under = Counter()
+    for line, frames in result['frames_by_goal'].items():
+        key = line.split(' ', 1)[0]
+        if key in RESTOCK_GOALS:
+            under['restock'] += frames
+        elif key == 'heal':
+            under['heal'] += frames
+        elif key in PC_GOALS or (key.startswith('collection_') and key.endswith('_pc')):
+            under['pc'] += frames
+    whole = max(result['frames'], 1)
+    return {'waste': round(100 * sum(result['wasted'].values()) / whole, 2),
+            **{kind: round(100 * under[kind] / whole, 2) for kind in SUPPORT}}
 
 
 def paired(pairs, points=GATE_PAIRED_POINTS):

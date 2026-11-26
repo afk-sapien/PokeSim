@@ -37,7 +37,10 @@ how many stalled and the mean errors, story milestones and wasted share with the
 tools/ladder/gate-baseline.json. It exits 1 on more stalls than the baseline, more errors, fewer story
 milestones, or a wasted share more than two points higher. A rung that earns more story milestones
 passes while its wasted share is at most ten points higher, and the gate lists it under past_baseline,
-since its baseline then wants a reviewed rewrite.
+since its baseline then wants a reviewed rewrite. The report also keeps each rung's share of frames under
+restock, heal and PC goals, and each gate line shows the restock share and its move from the baseline.
+A long walk that buys one ball counts as progress and never as waste, so only that share sees it. None of
+the three is judged, since each moves more from seed to seed than the paired limit.
 
 A rung whose one problem is that wasted share plays seeds 7 to 29 on the merge base with origin/main,
 checked out in a temporary worktree with its own environment, and on the head, whose three runs stand
@@ -459,6 +462,10 @@ def _gate_line(result, base):
     if result.get('failed'):
         return f'{name:<30} failed: {result["failed"]}'
     change = f'{result["waste"] - base["waste"]:+5.1f}' if base else '  new'
+    restock = ''
+    if 'restock' in result:
+        moved = f' ({result["restock"] - base["restock"]:+.1f})' if base and 'restock' in base else ''
+        restock = f', {result["restock"]:.1f}% restock{moved}'
     seeds = len(result.get('seeds', ()))
     stall = (f', stall: {result["stall"]["reason"]}' + (f' ({result["stalls"]} of {seeds} seeds)' if seeds else '')
              if result['stall'] else '')
@@ -468,7 +475,8 @@ def _gate_line(result, base):
     agrees = (f', pipeline agrees {share(pipeline["agreed"], pipeline["decisions"]):.1f}% of '
               f'{pipeline["decisions"]} decisions, {share(pipeline["frames_agreed"], pipeline["frames"]):.1f}% '
               'of frames' if pipeline else '')
-    return f'{name:<30} {result["waste"]:5.1f}% wasted ({change}), {result["errors"]:g} errors{story}{stall}{agrees}'
+    return (f'{name:<30} {result["waste"]:5.1f}% wasted ({change}){restock}, {result["errors"]:g} errors{story}{stall}'
+            f'{agrees}')
 
 
 def attempt(folder, commit):
@@ -686,8 +694,8 @@ def gate(args):
             return 1
         rungs = {f'{result["ladder"]}/{result["rung"]}': {
             'stall': result['stall'] and result['stall']['reason'], 'stalls': result['stalls'],
-            'errors': result['errors'], 'waste': result['waste'], 'milestones': result['milestones'],
-            'story': result['story']} for result in results}
+            'errors': result['errors'], 'waste': result['waste'], 'restock': result['restock'],
+            'milestones': result['milestones'], 'story': result['story']} for result in results}
         baseline_path.write_text(json.dumps({'commit': report['commit'], 'attempt': report['attempt'],
                                              'taken': time.strftime('%Y-%m-%d'), 'frames': args.frames,
                                              'seeds': list(args.seeds), 'rungs': rungs}, indent=1) + '\n',

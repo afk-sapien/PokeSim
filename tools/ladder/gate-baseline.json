@@ -2,6 +2,8 @@
  "commit": "5db7dacc",
  "attempt": 1,
  "taken": "2026-11-25",
+ "restock_commit": "98438034",
+ "restock_taken": "2026-11-26",
  "frames": 108000,
  "seeds": [
   7,
@@ -14,6 +16,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 2.6,
+   "restock": 5.87,
    "milestones": 3.0,
    "story": [
     "starter",
@@ -26,6 +29,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 6.08,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -34,6 +38,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 12.92,
+   "restock": 10.07,
    "milestones": 0.0,
    "story": []
   },
@@ -42,6 +47,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 8.77,
+   "restock": 8.46,
    "milestones": 0.0,
    "story": []
   },
@@ -50,6 +56,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.51,
+   "restock": 80.24,
    "milestones": 0.0,
    "story": []
   },
@@ -58,6 +65,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -66,6 +74,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 3.97,
+   "restock": 1.89,
    "milestones": 0.0,
    "story": []
   },
@@ -74,6 +83,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 3.39,
+   "restock": 7.27,
    "milestones": 2.67,
    "story": [
     "starter",
@@ -86,6 +96,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.86,
+   "restock": 13.85,
    "milestones": 0.67,
    "story": [
     "cut"
@@ -96,6 +107,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 5.18,
+   "restock": 1.16,
    "milestones": 0.0,
    "story": []
   },
@@ -104,6 +116,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 6.25,
    "milestones": 0.0,
    "story": []
   },
@@ -112,6 +125,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -120,6 +134,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.35,
+   "restock": 0.97,
    "milestones": 0.0,
    "story": []
   },
@@ -128,6 +143,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 1.05,
+   "restock": 0.0,
    "milestones": 2.0,
    "story": [
     "kanto",
@@ -139,6 +155,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 3.0,
    "story": [
     "surge",
@@ -151,6 +168,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.66,
+   "restock": 5.39,
    "milestones": 0.33,
    "story": [
     "red"
@@ -161,6 +179,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.95,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -169,6 +188,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 2.13,
+   "restock": 3.51,
    "milestones": 3.0,
    "story": [
     "starter",
@@ -181,6 +201,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 6.23,
    "milestones": 0.67,
    "story": [
     "cut"
@@ -191,6 +212,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.68,
    "milestones": 0.0,
    "story": []
   },
@@ -199,6 +221,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 6.31,
    "milestones": 0.0,
    "story": []
   },
@@ -207,6 +230,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -215,6 +239,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -223,6 +248,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 1.01,
+   "restock": 0.0,
    "milestones": 3.33,
    "story": [
     "kanto",
@@ -236,6 +262,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 3.0,
    "story": [
     "surge",
@@ -248,6 +275,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 6.08,
    "milestones": 0.67,
    "story": [
     "red"
@@ -258,6 +286,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.7,
+   "restock": 0.92,
    "milestones": 0.0,
    "story": []
   },
@@ -266,6 +295,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 2.87,
+   "restock": 2.85,
    "milestones": 3.0,
    "story": [
     "starter",
@@ -278,6 +308,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 9.04,
+   "restock": 6.11,
    "milestones": 0.0,
    "story": []
   },
@@ -286,6 +317,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -294,6 +326,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -302,6 +335,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 2.6,
+   "restock": 5.87,
    "milestones": 3.0,
    "story": [
     "starter",
@@ -314,6 +348,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 4.12,
+   "restock": 2.42,
    "milestones": 0.0,
    "story": []
   },
@@ -322,6 +357,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 13.53,
+   "restock": 7.75,
    "milestones": 0.0,
    "story": []
   },
@@ -330,6 +366,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 8.91,
+   "restock": 17.23,
    "milestones": 0.0,
    "story": []
   },
@@ -338,6 +375,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.06,
+   "restock": 97.16,
    "milestones": 0.0,
    "story": []
   },
@@ -346,6 +384,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -354,6 +393,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 2.28,
+   "restock": 22.61,
    "milestones": 0.0,
    "story": []
   },
@@ -362,6 +402,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 1.28,
+   "restock": 5.94,
    "milestones": 3.0,
    "story": [
     "starter",
@@ -374,6 +415,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 13.74,
+   "restock": 16.7,
    "milestones": 0.0,
    "story": []
   },
@@ -382,6 +424,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.06,
+   "restock": 89.58,
    "milestones": 0.0,
    "story": []
   },
@@ -390,6 +433,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -398,6 +442,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 3.58,
+   "restock": 2.73,
    "milestones": 2.67,
    "story": [
     "starter",
@@ -410,6 +455,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.8,
    "milestones": 0.33,
    "story": [
     "cut"
@@ -420,6 +466,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 3.57,
+   "restock": 7.05,
    "milestones": 0.0,
    "story": []
   },
@@ -428,6 +475,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 10.31,
    "milestones": 0.0,
    "story": []
   },
@@ -436,6 +484,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.07,
+   "restock": 39.66,
    "milestones": 0.0,
    "story": []
   },
@@ -444,6 +493,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.31,
    "milestones": 0.0,
    "story": []
   },
@@ -452,6 +502,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 1.01,
+   "restock": 0.0,
    "milestones": 3.0,
    "story": [
     "kanto",
@@ -464,6 +515,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 3.0,
    "story": [
     "surge",
@@ -476,6 +528,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 3.96,
    "milestones": 0.67,
    "story": [
     "red"
@@ -486,6 +539,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -494,6 +548,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 1.21,
+   "restock": 4.91,
    "milestones": 3.0,
    "story": [
     "starter",
@@ -506,6 +561,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 4.99,
+   "restock": 0.49,
    "milestones": 0.0,
    "story": []
   },
@@ -514,6 +570,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 13.07,
+   "restock": 12.88,
    "milestones": 0.0,
    "story": []
   },
@@ -522,6 +579,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 9.59,
+   "restock": 17.36,
    "milestones": 0.0,
    "story": []
   },
@@ -530,6 +588,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.06,
+   "restock": 83.61,
    "milestones": 0.0,
    "story": []
   },
@@ -538,6 +597,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
+   "restock": 0.0,
    "milestones": 0.0,
    "story": []
   },
@@ -546,6 +606,7 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 1.86,
+   "restock": 2.39,
    "milestones": 0.0,
    "story": []
   }
