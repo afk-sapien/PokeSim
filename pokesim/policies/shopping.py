@@ -251,6 +251,11 @@ class ShoppingController(Errand):
                 clerk = next((obj for obj in world['objects'] if obj[2] == 'SPRITE_CLERK'), None)
                 if clerk and clerk[0] == 0:
                     targets.append((map_id, 2, clerk[1]))
+        if held is not None and held not in targets:
+            # The trip ends at the shop it picked once that counter has nothing left for the bag. A Red
+            # run came into Viridian Mart with a full bag, sold a TM there and, since Viridian sells no
+            # restore, walked on to Pewter for one.
+            targets = []
         if targets and reach is not None:
             # The trip picks its shop when it starts, from those a walk reaches, and keeps it. North of
             # Victory Road with its boulders off their switches, a restock chose the southern marts and

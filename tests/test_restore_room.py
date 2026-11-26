@@ -48,6 +48,16 @@ def test_a_viridian_restock_with_no_medicine_and_19_entries_goes_to_a_restore_ma
     assert ShoppingController().step(mart('PEWTER_MART', LEFT), GOAL.key, None).request == ('buy', ITEMS['POTION'], 3)
 
 
+def test_a_trip_that_picked_viridian_mart_ends_there():
+    # The bag came in full, so the trip picked the nearest counter to sell at. Once it sold, Viridian
+    # Mart had nothing left for the bag, and the trip ended there rather than walking on to Pewter.
+    came = viridian(CAME)
+    shop = ShoppingController()
+    assert shop.plan(came, GOAL, None, **OPTIONS, reach=reach(came)).goal.targets == (counter(MAPS['VIRIDIAN_MART']),)
+    sold = mart('VIRIDIAN_MART', CAME[:-2] + CAME[-1:])
+    assert shop.plan(sold, GOAL, None, **OPTIONS, reach=reach(sold)).goal is GOAL and not shop.restocking
+
+
 def test_a_restore_outranks_a_cure_for_the_last_entry():
     # The bag sold TM27 at the counter, and the entry it freed is the restore's, not an Antidote's.
     sold = mart('VIRIDIAN_MART', CAME[:-2] + CAME[-1:])
