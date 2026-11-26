@@ -28,6 +28,8 @@ class Gen1Adapter:
             variant = 'yellow' if self.yellow else 'red'
             raise ValueError(f'This cartridge needs {VARIANT_ENV}={variant} before pokesim is imported')
         self.version = 'yellow' if self.yellow else 'blue' if sha1 == BLUE_SHA1 else 'red'
+        # The party the last read decoded.
+        self.party = None
 
     def boot(self, run, rom, trace=None, fair_wild_dvs=None):
         from pokecore.emulator import Emulator as CoreEmulator
@@ -64,8 +66,13 @@ class Gen1Adapter:
         pass
 
     def read(self, run):
-        from .ram import read_snapshot
-        return read_snapshot(run.pb.memory, run.frame)
+        from .ram import end_damaged_nicknames, read_snapshot
+        snap = read_snapshot(run.pb.memory, run.frame)
+        # As the application's observe step does (Emulator._observe_snapshot).
+        if end_damaged_nicknames(run.pb.memory, snap.party, self.party):
+            snap = read_snapshot(run.pb.memory, run.frame)
+        self.party = snap.party
+        return snap
 
     def options(self, pb):
         from .runtime.game_loop import write_gen1_options

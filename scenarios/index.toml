@@ -126,3 +126,10 @@ rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
 state_sha256 = "0a85bd54f734d00e2a910cb9c70814ce8b5a15a922c57720d373537928ffdc3c"
 frames = [571417878, 571417878]
 expect = "passes"
+
+[[scenario]]
+name = "red-route12-nickname-text-command-20261125"
+rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
+state_sha256 = "872c05a8dae9c5b2c5038d699381a54173e0009e52447c44c542a39b3f0e24b5"
+frames = [2002794562, 2002794562]
+expect = "passes"

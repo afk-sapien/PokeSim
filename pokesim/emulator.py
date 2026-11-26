@@ -29,7 +29,7 @@ from .palettes import PALETTES, recolor, validate_palette
 from .planning import pin
 from .policies import make_policy
 from .policies.team import storage_headroom
-from .ram import SPECIES_NAMES, Snapshot, read_snapshot, repair_party_nicknames
+from .ram import SPECIES_NAMES, Snapshot, end_damaged_nicknames, read_snapshot
 from .runtime.game_loop import Decider, GameLoop, gen1_options, write_gen1_options
 from .runtime.policy import BUTTONS, Action
 from .runtime import battle_clock, capture, trace
@@ -352,8 +352,6 @@ class Emulator(EmulatorBase):
         self.play_clock.restore(metadata.get("play_clock") if metadata else None)
         # A League gift, legendary return or event return delivered after this save is not in it, so its claim opens again.
         rewards.rewound(self.store, metadata)
-        if repaired := repair_party_nicknames(self.pb.memory):
-            log.warning('Ended the damaged nicknames of party slots %s at their first text command', repaired)
         self.snapshot = read_snapshot(self.pb.memory, self.frame)
         if self.snapshot.started:
             self.play_clock.seed(self.snapshot.playtime_seconds)
@@ -501,6 +499,9 @@ class Emulator(EmulatorBase):
 
     def _observe_snapshot(self):
         snap = read_snapshot(self.pb.memory, self.frame)
+        # A text command in a party nickname makes every action through the party menu fail.
+        if end_damaged_nicknames(self.pb.memory, snap.party, self.prev_snapshot and self.prev_snapshot.party):
+            snap = read_snapshot(self.pb.memory, self.frame)
         if snap.started:
             self.play_clock.seed(snap.playtime_seconds)
             self._enforce_options()
