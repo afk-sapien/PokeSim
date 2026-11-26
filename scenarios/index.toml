@@ -139,7 +139,7 @@ name = "red-mt-moon-b2f-clefairy-quiet-20261125"
 rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
 state_sha256 = "0a85bd54f734d00e2a910cb9c70814ce8b5a15a922c57720d373537928ffdc3c"
 frames = [571417878, 571417878]
-expect = "stuck"
+expect = "passes"
 
 [[scenario]]
 name = "yellow-victory-road-storage-churn-20261125"
