@@ -53,7 +53,7 @@ Measured on 2026-11-26 on main f58ab17c, seeds 7 to 29, on seven rungs. The stan
 
 4. Main at f58ab17c carries a long restock trip that #716 added, a walk through Victory Road to the Indigo Plateau lobby, on the four Gen I badges_8 rungs and on red/post_game. So the red/post_game and blue/badges_8 restock spreads include it. On red/badges_6, silver/badges_8 and gold/badges_8 the gate's seeds 7 to 9 read the same before #716 and after, and their paired errors, 1.6 to 4.2, are still above the limit.
 
-So under the rule in section 7, none of the three is judged. The gate report keeps all three for each rung and each run. Each gate line shows the restock share and its move from the baseline. The baseline keeps a restock field for that line only, as information. It was taken after #716, so the rungs the loop touches read high there until the fix retakes the field. The waste values did not change.
+So under the rule in section 7, none of the three is judged. The gate report keeps all three for each rung and each run. Each gate line shows the restock share and its move from the baseline. The baseline keeps a restock field for that line only, as information. It was taken after #716, so the rungs that trip touches read high there until a fix retakes the field. The waste values did not change.
 
 The path to a judged restock share, if wanted later, ties to the full paired pass in section 5 item 1. A 23-seed spread on main for each of the 41 rungs where restock is not zero gives each rung its own limit, for example three paired errors. That is about 2 hours a pass and belongs in the local nightly, not in a pull request's gate.
 
