@@ -154,3 +154,11 @@ rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
 state_sha256 = "433e705bfbd344e2f99ea07680addd6e12b840604cd93ff850ec37618a86527c"
 frames = [2090974756, 2090974756]
 expect = "passes"
+
+[[scenario]]
+name = "blue-plateau-restock-reach-20261126"
+rom_sha1 = "d7037c83e1ae5b39bde3c30787637ba1d4c48ce2"
+state_sha256 = "6a3a1af0286cf644b09cfbdea5afc7fc1a008e1f7aec7b771b6ea26ad1ce8729"
+frames = [5400960, 5400960]
+expect = "passes"
+issue = 716

@@ -1019,7 +1019,8 @@ class StrategicPolicy(Policy):
         supplies = self.shop.plan(s, goal, self.collection.project, requested_goal=self.goal.key,
                                   healing=self.heal.latched, in_league=in_league,
                                   has_pokedex=self.completed.get('pokedex', False),
-                                  completed_champion=self.collection.completed_champion)
+                                  completed_champion=self.collection.completed_champion,
+                                  reach=partial(self.nav.open_target, s))
         if supplies.goal is not goal:
             # The shop plans a restock only for supplies the goal cannot go on without. What the plan
             # writes on the project is written only when the step ends with it running (decide pipeline
