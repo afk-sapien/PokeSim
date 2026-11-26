@@ -357,6 +357,8 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
     ball_count = sum(counts.get(i, 0) for i in BALLS)
     heal_count = sum(counts.get(i, 0) for i in HEALING)
     heal_target = 3
+    # Money a ball leaves untouched, past the cash reserve.
+    kept = 0
     if league:
         # The League kit is sized for its rooms with money kept for a second run (planning/boss.py kit),
         # the same rule Gold, Silver and Crystal shop by.
@@ -365,17 +367,22 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
         strong = sorted((ITEMS[name] for name in ("HYPER_POTION", "MAX_POTION", "FULL_RESTORE") if ITEMS[name] in stock),
                         key=lambda item: PRICES[item])
         revives = counts.get(ITEMS["REVIVE"], 0) + counts.get(ITEMS["MAX_REVIVE"], 0)
-        restores, extra = boss.kit(heal_count, revives, money - reserve,
-                                   PRICES[strong[0] if strong else ITEMS["HYPER_POTION"]], PRICES[ITEMS["REVIVE"]])
+        prices = PRICES[strong[0] if strong else ITEMS["HYPER_POTION"]], PRICES[ITEMS["REVIVE"]]
+        restores, extra = boss.kit(heal_count, revives, money - reserve, *prices)
         heal_target = heal_count + restores
         desired[ITEMS["REVIVE"]] = counts.get(ITEMS["REVIVE"], 0) + extra
         # Freeze never thaws, and Lance's Dragonair can stall forever against a frozen last partner.
         desired[ITEMS["FULL_HEAL"]] = 3
+        # A ball spends only what the whole kit, with the share it keeps for a second run, leaves over.
+        # With 9,587, the purse a Red run reached the lobby with, and an empty bag, the counter sold one
+        # Max Potion, one Revive and four Ultra Balls, no Full Heal, and left 787.
+        kept = boss.kit_floor(heal_count, revives, *prices)
     elif ITEMS["ANTIDOTE"] not in stock:
         # Fuchsia, Saffron and Cinnabar sell no Antidote, so their cure is a Full Heal.
         desired[ITEMS["FULL_HEAL"]] = max(0, 2 - counts.get(ITEMS["ANTIDOTE"], 0))
-    order = sorted(stock, key=lambda item: (item not in strong, strong.index(item) if item in strong else 0,
-                                            item != ITEMS["REVIVE"])) if league else stock
+    # The League's counter sells the kit first: strong restores, then Revives, then Full Heals.
+    kit = (*strong, ITEMS["REVIVE"], ITEMS["FULL_HEAL"]) if league else ()
+    order = sorted(stock, key=lambda item: kit.index(item) if item in kit else len(kit)) if league else stock
     for item in order:
         target = desired.get(item, 0)
         if item in BALLS:
@@ -389,7 +396,7 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
         if counts.get(item, 0) >= target or (len(items) >= (20 if league else 18) and item not in counts
                                              and not first):
             continue
-        if 0 < PRICES.get(item, 0) <= money - reserve:
+        if 0 < PRICES.get(item, 0) <= money - reserve - (kept if item in BALLS else 0):
             return item
     return None
 

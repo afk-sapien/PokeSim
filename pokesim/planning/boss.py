@@ -13,6 +13,7 @@ asks one ``Gate`` per policy. The HP and PP a Pokémon needs are the readiness o
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Callable, Mapping
 
@@ -202,6 +203,14 @@ def kit(restores, revives, spare, restore_price, revive_price):
     budget -= buy * restore_price
     extra = max(0, min(KIT_REVIVES - revives, int(budget // revive_price))) if revive_price else 0
     return buy, extra
+
+
+def kit_floor(restores, revives, restore_price, revive_price):
+    """The spare money with which ``kit`` buys the whole kit, with ``restores`` and ``revives`` already in
+    the bag. Anything else bought at the League's counter leaves this much, so the share kept for a second
+    run stays kept."""
+    held = min(restores, ROOMS) * restore_price + min(revives, KIT_REVIVES) * revive_price
+    return max(0, math.ceil((ROOMS * restore_price + KIT_REVIVES * revive_price) / KIT_SHARE) - held)
 
 
 @dataclass(frozen=True)

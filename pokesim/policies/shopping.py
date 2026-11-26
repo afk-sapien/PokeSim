@@ -228,12 +228,13 @@ class ShoppingController(Errand):
         elif balls >= ball_reserve and medicine and not bag_full:
             self.restocking = False
         if snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY']:
-            counts = dict(snapshot.items)
             # The League kit is for a walk into the League's rooms, so a PC or heal visit leaves it alone.
             # A Red run after the League stopped at the lobby PC to deposit, bought the kit first and gave
             # it the bag's last free entry, and the Fishing Gurus then had no room for their rods.
-            kit = requested_goal in LEAGUE_TRIP and (medicine < 10 or counts.get(ITEMS['REVIVE'], 0) < 5
-                                                    or counts.get(ITEMS['FULL_HEAL'], 0) < 3)
+            # A walk in stocks whatever the counter sells, the kit boss.kit sizes for the purse. The kit
+            # stops at five restores and two Revives, so a check for 10 and 5 held on every walk in.
+            kit = requested_goal in LEAGUE_TRIP and self.item_for(
+                snapshot, DATA['marts'][WORLD[snapshot.map]['name']], requested_goal, project) is not None
             # A full bag still needs the clerk to sell from it. Without it, a trip planned outside for the
             # full bag ended at the lobby door, which saw nothing to buy and sent the player back out.
             self.restocking = bag_full or balls < ball_reserve or kit
