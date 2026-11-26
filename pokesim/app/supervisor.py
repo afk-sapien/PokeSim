@@ -267,31 +267,50 @@ class Supervisor:
         return settings
 
     def viewer(self, aid):
-        """Return a read-only worker for a stopped adventure, launching one from its newest save."""
+        """Return a read-only worker for a stopped adventure, launching one from its newest save.
+
+        A new view reads the registry before it takes the adventure's lock, never while it holds it.
+        A backup holds the registry's lock while it waits for this lock to stop and start the
+        adventure, so a view that waited for the registry here left both waiting for good.
+        """
         with self._lock(aid):
-            if self.closed.is_set():
-                raise Refused('PokeSim is shutting down')
-            with self.guard:
-                entry = self.viewers.get(aid)
-                running = aid in self.children
-            if running:
-                raise AdventureRunning('This adventure is running')
-            if entry and entry[0].url and entry[0].process.poll() is None:
-                entry[1] = time.monotonic()
-                return entry[0]
+            view = self._live_view(aid)
+        if view is not None:
+            return view
+        adventure = self.registry.adventure(aid)
+        settings = self._settings(aid, adventure)
+        with self._lock(aid):
+            # A start or another view may have come in while the registry was read.
+            view = self._live_view(aid)
+            if view is not None:
+                return view
             self.close_viewer(aid)
-            adventure = self.registry.adventure(aid)
             data = self.registry.root / 'adventures' / aid
             if not (data / 'pokesim.sqlite').is_file() or next((data / 'states').glob('auto-*.state'), None) is None:
                 raise Refused('This adventure has no save to show yet')
             bootstrap = dict(protocol=1, adventure_id=aid, generation=identifier(),
-                             token=secrets.token_urlsafe(32), settings=self._settings(aid, adventure),
+                             token=secrets.token_urlsafe(32), settings=settings,
                              adventure_name=adventure['name'], frozen=True)
             child = self.child_factory(bootstrap)
             child.start()
             with self.guard:
                 self.viewers[aid] = [child, time.monotonic()]
             return child
+
+    def _live_view(self, aid):
+        """The adventure's stopped view while its worker still runs, else None. The caller holds the
+        adventure's lock. Refused while PokeSim shuts down or the adventure's own worker runs."""
+        if self.closed.is_set():
+            raise Refused('PokeSim is shutting down')
+        with self.guard:
+            entry = self.viewers.get(aid)
+            running = aid in self.children
+        if running:
+            raise AdventureRunning('This adventure is running')
+        if entry and entry[0].url and entry[0].process.poll() is None:
+            entry[1] = time.monotonic()
+            return entry[0]
+        return None
 
     def close_viewer(self, aid):
         with self.guard:

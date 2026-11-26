@@ -75,6 +75,78 @@ def test_queued_start_waits_until_backup_finishes_copying(tmp_path, monkeypatch)
         manager.close()
 
 
+def test_a_stopped_view_asked_for_during_a_backup_never_wedges_it(tmp_path, monkeypatch):
+    """A page asks for the stopped view of an adventure a backup has just stopped.
+
+    The backup holds the registry's lock until it has started the worker again, which takes the
+    adventure's lock. A view that took the adventure's lock and then waited for the registry left the
+    two waiting on each other, and every start, stop, backup and monitor pass waited behind them.
+    """
+    import pokesim.app.backup as backup
+    from pokesim.app.supervisor import AdventureRunning
+    copying = threading.Event()
+    asking = threading.Event()
+    outcomes = {}
+
+    class QuietChild(FakeChild):
+        def request(self, method, path, body=None, **kwargs):
+            return {}
+
+    manager = Manager(tmp_path, child_factory=QuietChild)
+    manager.registry.add_rom('rom', 'sha1', 'red')
+    aid = manager.registry.create('Red', 'rom', {'starter': 'random'}, identifier())['id']
+    manager.registry.request_lifecycle(aid, 'start', identifier())
+    monkeypatch.setattr(manager.assets, 'rom_path', lambda rid: tmp_path / 'fixture.gb')
+    monkeypatch.setattr(manager.assets, 'prepare', lambda report: tmp_path)
+    monkeypatch.setattr(manager.assets, 'install_portraits', lambda raw: 0)
+    (tmp_path / 'fixture.gb').write_bytes(b'fake')
+    original_copy = backup.shutil.copytree
+
+    def copytree(source, destination, *args, **kwargs):
+        if source.name == 'adventures':
+            copying.set()
+            # The copy goes on once the view has asked the registry for the adventure.
+            assert asking.wait(5)
+        return original_copy(source, destination, *args, **kwargs)
+
+    read = manager.registry.adventure
+
+    def adventure(key):
+        if threading.current_thread().name == 'view-request':
+            asking.set()
+        return read(key)
+
+    monkeypatch.setattr(backup.shutil, 'copytree', copytree)
+    monkeypatch.setattr(manager.registry, 'adventure', adventure)
+
+    def run(name, call):
+        try:
+            outcomes[name] = call()
+        except BaseException as error:
+            outcomes[name] = error
+
+    saving = threading.Thread(target=run, args=('backup', lambda: create_backup(manager)), daemon=True)
+    viewing = threading.Thread(target=run, args=('view', lambda: manager.supervisor.viewer(aid)),
+                               name='view-request', daemon=True)
+    try:
+        manager.supervisor.start(aid)
+        saving.start()
+        assert copying.wait(5)
+        # The backup has stopped the worker, so the page finds the adventure stopped and asks for its view.
+        viewing.start()
+        saving.join(5)
+        viewing.join(5)
+        assert not saving.is_alive() and not viewing.is_alive(), 'the backup and the view wait on each other'
+        assert isinstance(outcomes['backup'], dict), outcomes['backup']
+        # The worker is back before the view reads the registry, so the page asks again once it runs.
+        assert isinstance(outcomes['view'], AdventureRunning), outcomes['view']
+        assert manager.registry.adventure(aid)['state'] == 'running'
+    finally:
+        # A wedged pair keeps the registry's lock for good, and closing the registry would wait for it.
+        if not saving.is_alive() and not viewing.is_alive():
+            manager.close()
+
+
 @pytest.mark.parametrize('auth,state,expected', [
     ('none', {'paused': True, 'manual_mode': False}, 'pause'),
     ('none', {'paused': True, 'manual_mode': True}, 'take_control'),
