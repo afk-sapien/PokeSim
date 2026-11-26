@@ -1,4 +1,5 @@
 """Bounded collecting expeditions and evolution projects for a continuing adventure."""
+import math
 import random
 from collections import Counter
 from dataclasses import asdict
@@ -555,8 +556,9 @@ class Collection:
         # every catch with the unpriced estimate.
         self.wild = None
         # What the game looked like when the last plan found nothing to do. The plan is not drawn
-        # again until something in it changes.
+        # again until something in it changes, or until the frame the first move blocked at that draw is free.
         self.idle_token = None
+        self.idle_until = math.inf
         self.report = {}
         self.report_key = None
         self.eevee_choice = 134
@@ -1174,7 +1176,7 @@ class Collection:
             goal = self.goal(s)
             return None if goal is None else (goal, None, None)
         token = self.plan_token(s)
-        if token == self.idle_token:
+        if token == self.idle_token and s.frame < self.idle_until:
             return None
         skipped = None if self.pin is None else {}
         offered = self.offers(s, nav, rng, skipped)
@@ -1200,8 +1202,11 @@ class Collection:
         else:
             project = self.director.select(options, projects, pinned=pinned)
         if project is None:
-            # Nothing to do until the game changes, so the plan is not drawn again until then.
+            # Nothing to do until the game changes, so the plan is not drawn again until then. A blocked move
+            # cuts every route through it until the block ends, so a draw made while one stood is drawn again
+            # when the first ends. A block made later only cuts routes, so it cannot turn up a project.
             self.idle_token = token
+            self.idle_until = min((until for until in nav.blocked.values() if until > s.frame), default=math.inf)
             return None
         # The offers draw builds a new dict for each project, so these fields are written on it only.
         # A catch is progress that gives the budget back, so a hunt's budget covers its first catch.

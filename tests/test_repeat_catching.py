@@ -57,7 +57,7 @@ def test_known_species_are_proposed_as_repeat_expeditions(monkeypatch):
         captured.extend((option, projects[option.key]) for option in options)
         return next(project for project in projects.values() if project.get('repeat'))
     monkeypatch.setattr(c.director, 'select', select)
-    nav = SimpleNamespace(distance_lookup=lambda *args: lambda points: 10, can_surf=True, visits={}, path=[])
+    nav = SimpleNamespace(distance_lookup=lambda *args: lambda points: 10, can_surf=True, visits={}, path=[], blocked={})
     s = state(map=MAPS['ROUTE_1'], owned=frozenset(range(1, 152)), money=50000)
     c.choose(s, nav, random.Random(1), Goal('collect_plan', '', ''))
     assert c.project['species'] == target and c.project['repeat']
@@ -98,7 +98,7 @@ def test_peer_requests_take_priority_over_routine_repeat_hunts(monkeypatch):
         captured.extend(hunts)
         return AdventureDirector.select(hunts, projects)
     monkeypatch.setattr(c.director, 'select', select)
-    nav = SimpleNamespace(distance_lookup=lambda *args: lambda points: 10, can_surf=True, visits={}, path=[])
+    nav = SimpleNamespace(distance_lookup=lambda *args: lambda points: 10, can_surf=True, visits={}, path=[], blocked={})
     c.choose(state(map=MAPS['ROUTE_1'], owned=frozenset(range(1, 152)), money=50000),
              nav, random.Random(1), Goal('collect_plan', '', ''))
     assert c.project['species'] == sid(69) and c.project['needed_capture']
@@ -150,7 +150,7 @@ def test_a_species_with_its_needed_copy_searches_spent_is_not_hunted_for_a_peer(
             captured.extend(projects[option.key] for option in options if projects[option.key]['method'] == 'grass')
             return None
         monkeypatch.setattr(c.director, 'select', select)
-        nav = SimpleNamespace(distance_lookup=lambda *args: lambda points: 10, can_surf=True, visits={}, path=[])
+        nav = SimpleNamespace(distance_lookup=lambda *args: lambda points: 10, can_surf=True, visits={}, path=[], blocked={})
         c.choose(state(map=MAPS['ROUTE_1'], owned=frozenset(range(1, 152)), money=50000),
                  nav, random.Random(1), Goal('collect_plan', '', ''))
         return [project for project in captured if project['species'] == sid(69)]
