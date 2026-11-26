@@ -137,6 +137,30 @@ def test_a_run_that_trades_goals_back_and_forth_fails_its_replay(tmp_path, monke
     assert play(Scenario(name='pc', folder=tmp_path, checkpoint=checkpoint))['failure'] == failure
 
 
+@pytest.mark.parametrize('every, failure', [(None, 'restock held for 20 game minutes in one stretch'), (10, None)])
+def test_a_goal_held_past_its_limit_fails_the_replay(tmp_path, monkeypatch, every, failure):
+    # A Blue restock walked toward marts past the shut Victory Road gates for 50 game minutes, and its
+    # battles kept the quiet check passing. A restock that ends and comes back later starts its clock again.
+    import pokesim.scenarios as scenarios
+    checkpoint = tmp_path / 'start.state'
+    checkpoint.with_suffix('.json').write_text(json.dumps({'generation': 2, 'rom_sha1': 'f' * 40}))
+    snapshot = SimpleNamespace(in_battle=0, enemy_species=0, started=False, map_name='Route 23', party=[])
+    policy = SimpleNamespace(goal=SimpleNamespace(key='restock'), flees={}, recoveries=0, details=lambda: {})
+    run = SimpleNamespace(generation=2, frame=0, policy=policy, read=lambda: snapshot, stop=lambda: None)
+
+    def step(snapshot):
+        run.frame += MINUTE
+        if every and run.frame // MINUTE % every == 0:
+            policy.goal.key = 'train_league' if policy.goal.key == 'restock' else 'restock'
+    run.step = step
+    watch = SimpleNamespace(observe=lambda snapshot: ([], True), marks=lambda snapshot: [], loop=None,
+                            battle_clock=lambda snapshot, since, frame: None, hopeless=lambda snapshot: False)
+    monkeypatch.setattr(scenarios, 'open_run', lambda scenario, rom: (run, watch))
+    scenario = Scenario(name='walk', folder=tmp_path, checkpoint=checkpoint, budget_game_minutes=60,
+                        max_goal_game_minutes={'restock': 20})
+    assert play(scenario)['failure'] == failure
+
+
 def test_a_scenario_idles_its_frames_before_the_first_decision(tmp_path, monkeypatch):
     # An idle plays the same save on another stream of in-game luck. The budget starts after it.
     import pokesim.scenarios as scenarios

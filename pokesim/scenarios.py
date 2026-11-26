@@ -383,6 +383,10 @@ class Scenario:
     # quiet check. That loop made 160 to 195 changes a game hour, and no replay that passed made more
     # than 84 in any 60 game minutes, so 120 fails the loop and keeps the margin. None leaves it unchecked.
     max_goal_switches_per_hour: int | None = 120
+    # Game minutes a goal may hold in one stretch, by goal key. A restock is short upkeep. A Blue run north
+    # of the shut Victory Road gates held one for 50 game minutes on its way to marts it could not reach,
+    # and the battles on the road kept the quiet check passing. A goal not named here is unchecked.
+    max_goal_game_minutes: dict = field(default_factory=dict)
 
     @classmethod
     def load(cls, folder):
@@ -793,18 +797,18 @@ class GoalChurn:
     """How often the running goal changes: per game hour of the run, and the most in any 60 game minutes."""
 
     def __init__(self, start):
-        self.start, self.key, self.seen = start, None, False
+        self.start, self.key, self.seen, self.since = start, None, False, start
         self.recent, self.hours, self.worst = deque(), Counter(), 0
 
     def look(self, policy, frame):
         """Note the policy's goal at ``frame`` and return the changes in the last 60 game minutes. The
-        first goal seen is no change."""
+        first goal seen is no change. ``since`` is the frame the goal took over."""
         key = getattr(getattr(policy, 'goal', None), 'key', None)
         if key != self.key:
             if self.seen:
                 self.recent.append(frame)
                 self.hours[(frame - self.start) // HOUR] += 1
-            self.key, self.seen = key, True
+            self.key, self.seen, self.since = key, True, frame
         while self.recent and self.recent[0] <= frame - HOUR:
             self.recent.popleft()
         self.worst = max(self.worst, len(self.recent))
@@ -898,6 +902,10 @@ def play(scenario, rom=None, progress=None):
             switches = churn.look(run.policy, run.frame)
             if churn_limit is not None and switches > churn_limit:
                 failure = f'{switches} goal changes in 60 game minutes, more than {churn_limit}'
+                break
+            held = scenario.max_goal_game_minutes.get(churn.key)
+            if held is not None and run.frame - churn.since >= held * MINUTE:
+                failure = f'{churn.key} held for {held} game minutes in one stretch'
                 break
             battle_frame = watch.battle_clock(snapshot, battle_frame, run.frame)
             worst = max(worst, run.frame - progress_frame)
