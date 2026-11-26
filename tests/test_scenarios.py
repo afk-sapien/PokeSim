@@ -137,6 +137,32 @@ def test_a_run_that_trades_goals_back_and_forth_fails_its_replay(tmp_path, monke
     assert play(Scenario(name='pc', folder=tmp_path, checkpoint=checkpoint))['failure'] == failure
 
 
+def test_a_scenario_idles_its_frames_before_the_first_decision(tmp_path, monkeypatch):
+    # An idle plays the same save on another stream of in-game luck. The budget starts after it.
+    import pokesim.scenarios as scenarios
+    (tmp_path / 'start.json').write_text(json.dumps({'generation': 2, 'rom_sha1': 'f' * 40}))
+    (tmp_path / 'scenario.json').write_text('{"idle_frames": 5, "budget_game_minutes": 1}', encoding='utf-8')
+    scenario = Scenario.load(tmp_path)
+    assert scenario.idle_frames == 5 and Scenario(name='plain', folder=tmp_path, checkpoint=tmp_path).idle_frames == 0
+    snapshot = SimpleNamespace(in_battle=0, enemy_species=0, started=False, map_name='Route 36', party=[])
+    policy = SimpleNamespace(goal=SimpleNamespace(key='train_pc'), flees={}, recoveries=0, details=lambda: {})
+    run = SimpleNamespace(generation=2, frame=0, policy=policy, read=lambda: snapshot, stop=lambda: None)
+    seen = []
+
+    def tick(frames):
+        seen.append(('idle', frames))
+        run.frame += frames
+
+    def step(snapshot):
+        seen.append(('step', run.frame))
+        run.frame += MINUTE
+    run.tick, run.step = tick, step
+    watch = SimpleNamespace(observe=lambda snapshot: ([], True), marks=lambda snapshot: [], loop=None,
+                            battle_clock=lambda snapshot, since, frame: None, hopeless=lambda snapshot: False)
+    monkeypatch.setattr(scenarios, 'open_run', lambda scenario, rom: (run, watch))
+    assert play(scenario)['passed'] and seen == [('idle', 5), ('step', 5)]
+
+
 def _replay(folder):
     # A scenario that raises fails its own test. Raising here would error the shared fixture and every scenario with it.
     try:

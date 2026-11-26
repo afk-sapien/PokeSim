@@ -367,6 +367,11 @@ class Scenario:
     then: str | None = None
     fallback: Path | None = None      # an unedited save the second reload goes to, as the League entry save is
     seed: int = 7
+    # Frames to idle once the save loads, before the first decision. The game's own random numbers follow
+    # the frame and the divider timer, so an idle plays the same save on another stream of in-game luck.
+    # When a change lands the plain replay on a later stall its capture was not about, the scenario idles
+    # to a trajectory that still tests its capture, and the later stall gets a scenario of its own.
+    idle_frames: int = 0
     # Trainer ids of linked adventures whose Pokémon the run may release (trade/partners.py). A live
     # adventure learns them from its trades and the coordinator. A scenario has neither, so it names them.
     trade_partners: list = field(default_factory=list)
@@ -842,6 +847,7 @@ def play(scenario, rom=None, progress=None):
     if variant is not None and variant != current_variant():
         return _play_elsewhere(scenario, rom, variant)
     run, watch = open_run(scenario, rom)
+    run.tick(scenario.idle_frames)
     read = run.read
     try:
         start = progress_frame = run.frame
