@@ -77,3 +77,29 @@ def test_real_release_after_invalid_write_is_still_recorded(monkeypatch):
     releases = [event for call in emu._handle_events.call_args_list
                 for event in call.args[0] if event.type == 'release']
     assert len(releases) == 1
+
+
+def test_party_nicknames_are_checked_whenever_the_party_changes(monkeypatch):
+    emu, observe = observer(monkeypatch)
+    checks = []
+    monkeypatch.setattr('pokesim.ram.repair_party_nicknames', lambda memory: checks.append(memory) or [])
+    before = snap(frame=100)
+    observe(before)
+    # The decoded party is the same object while its bytes stay the same, so it is not checked again.
+    observe(replace(before, frame=130))
+    assert len(checks) == 1
+    # A withdraw brings a stored nickname into the party.
+    observe(replace(before, frame=160, party=before.party + (PartyMon(0x65, 150, 180, 58, 'PIXEL'),)))
+    assert len(checks) == 2
+
+
+def test_the_party_is_read_again_after_a_nickname_repair(monkeypatch):
+    emu, _ = observer(monkeypatch)
+    damaged = snap(frame=100)
+    repaired = replace(damaged, party=(replace(damaged.party[0], nick='BULB'),))
+    reads = iter((damaged, repaired))
+    monkeypatch.setattr('pokesim.emulator.read_snapshot', lambda *args: next(reads))
+    monkeypatch.setattr('pokesim.ram.repair_party_nicknames', lambda memory: [0])
+    emu.frame = 100
+    emu._observe()
+    assert emu.snapshot == repaired

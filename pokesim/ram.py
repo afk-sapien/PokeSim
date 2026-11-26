@@ -5,6 +5,8 @@ against the community RAM map and verified in-emulator (see tests/).
 """
 from __future__ import annotations
 
+import logging
+
 from pokecore.gen1 import (
     W_TILEMAP as W_TILEMAP,
     W_ENEMY_SPECIES2 as W_ENEMY_SPECIES2,
@@ -318,6 +320,23 @@ def repair_party_nicknames(mem):
         # Only a stand-in without real memory, as in unit tests, cannot be read by address.
         return []
     return repairs.repair_party_nicknames(mem)
+
+
+def end_damaged_nicknames(mem, party, last_party):
+    """Repair the party nicknames when the party has changed, and say whether one was damaged.
+
+    A save can hold a damaged nickname, and in play a stored nickname's terminator has risen to a
+    text command and come into the party on a withdraw. The decoded party is the same object while
+    its bytes stay the same, so ``party`` is checked unless it is ``last_party``, the party read
+    before it. After a repair the caller reads its snapshot again.
+    """
+    if party is last_party:
+        return False
+    repaired = repair_party_nicknames(mem)
+    if repaired:
+        logging.getLogger('pokesim.emu').warning(
+            'Ended the damaged nicknames of party slots %s at their first text command', repaired)
+    return bool(repaired)
 
 
 def read_stored_pokemon(mem):
