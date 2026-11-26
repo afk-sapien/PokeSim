@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import re
+import statistics
 import sys
 
 from pokecore.gen1 import H_RANDOM_ADD, H_RANDOM_SUB
@@ -41,6 +42,13 @@ GATE_QUIET = 20
 GATE_WASTE_POINTS = 2.0
 GATE_FURTHER_POINTS = 10.0
 GATE_TIMEOUT = 1800
+# Three seeds move a rung's wasted share by about three points when a change only adds or renames a goal
+# start, since the goals reseed from there. So a rung that fails on its wasted share alone plays seeds 7 to
+# 29 on the merge base and the head, and passes when the head wastes at most a point more on the mean of
+# the 23 pairs (docs/design/gate-paired-seeds.md). More than five such rungs fail without the pairs.
+GATE_PAIRED_SEEDS = tuple(range(7, 30))
+GATE_PAIRED_POINTS = 1.0
+GATE_PAIRED_RUNGS = 5
 # The share of decide pipeline decisions a rung agrees on before a switch, from the decide pipeline design.
 PIPELINE_BAR = 0.95
 # Gold, Silver and Crystal also note their last Bug-Catching Contest and Battle Tower visit and the Bicycle
@@ -627,6 +635,24 @@ def compare(results, baseline, points=GATE_WASTE_POINTS, further=GATE_FURTHER_PO
                 past = f', more than {further:g} points up past the baseline to {result["story"][-1]}' if ahead else ''
                 problems.append(f'{name}: {result["waste"]:.1f}% wasted, {base["waste"]:.1f}% before{past}')
     return problems
+
+
+def waste_only(results, baseline, points=GATE_WASTE_POINTS):
+    """The results whose one problem is a wasted share up by more than ``points``, which the paired stage
+    judges again. A rung past the baseline's story milestones keeps its own limit and is not among them."""
+    return [result for result in results
+            if compare([result], baseline, points) and not compare([result], baseline, float('inf'))]
+
+
+def paired(pairs, points=GATE_PAIRED_POINTS):
+    """The judgment on one rung's paired seeds, given as (seed, base waste, head waste): the mean, standard
+    error and median of the head's difference in points, and whether the mean rose by at most ``points``.
+    The mean is judged as it prints, to two places."""
+    differences = [head - base for _, base, head in pairs]
+    mean = round(statistics.fmean(differences), 2)
+    error = statistics.stdev(differences) / len(differences) ** 0.5 if len(differences) > 1 else 0.0
+    return {'pairs': [list(pair) for pair in pairs], 'mean': mean, 'error': round(error, 2),
+            'median': round(statistics.median(differences), 2), 'passed': mean <= points}
 
 
 def agreement(results, bar=PIPELINE_BAR):
