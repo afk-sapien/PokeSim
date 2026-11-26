@@ -45,16 +45,17 @@ def test_a_hunt_or_journey_still_catches_what_the_collection_wants(kind):
     assert battle(kind, owned=frozenset({1}), items=()).kind == 'run'
 
 
-@pytest.mark.parametrize('kind', [STORY, HUNT])
-def test_a_wanted_capture_that_every_move_would_knock_out_gets_a_ball(kind):
-    # The PC would keep this owned Pidgey, and each of the lead's attacks would knock it out. The stance
-    # catches what the run wants, so the battle throws a ball rather than knock the capture out.
+def test_a_capture_that_every_move_would_knock_out_gets_a_ball_on_a_hunt_or_when_missing():
+    # The PC would keep this owned Pidgey, and each of the lead's attacks would knock it out. A hunt throws a
+    # ball rather than knock the capture out. A story walk fights it for the experience.
     s = state(**{'in_battle': 1, **OWNED})
-    decision = choose_battle(s, s.party[0], PIDGEY, 0, kind=kind, keeps=lambda: True)
-    assert decision.kind == 'item'
+    assert choose_battle(s, s.party[0], PIDGEY, 0, collect_missing=True, kind=HUNT, keeps=lambda: True).kind == 'item'
+    assert choose_battle(s, s.party[0], PIDGEY, 0, collect_missing=True, kind=STORY, keeps=lambda: True).kind == 'fight'
     # The same Pidgey with no keep is run from on a hunt and fought on the story.
-    assert choose_battle(s, s.party[0], PIDGEY, 0, kind=kind, keeps=lambda: False).kind == (
-        'run' if kind == HUNT else 'fight')
+    assert choose_battle(s, s.party[0], PIDGEY, 0, collect_missing=True, kind=HUNT, keeps=lambda: False).kind == 'run'
+    assert choose_battle(s, s.party[0], PIDGEY, 0, collect_missing=True, kind=STORY, keeps=lambda: False).kind == 'fight'
+    # A Pidgey the Pokédex lacks is a collection target, so a story walk throws at it as it stands too.
+    assert battle(STORY, owned=frozenset({1})).kind == 'item'
 
 
 def test_story_goal_runs_once_the_walk_budget_is_spent():
