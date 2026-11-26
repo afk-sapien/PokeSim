@@ -16,11 +16,27 @@ def test_runtime_check_passes():
     check_runtime()
 
 
-def test_backend_is_pyboy_rs_with_the_legacy_state_format():
+def test_backend_is_pyboy_rs_with_a_format_15_body_and_its_own_section():
     provenance = runtime_provenance()
     assert provenance['backend'] == 'pyboy-rs'
-    assert provenance['state_format'] == 'pyboy-format-15'
-    assert provenance['version'].startswith('0.1.')
+    assert provenance['state_format'] == 'pyboy-format-15+pyboy-rs-3'
+    assert provenance['version'].startswith('0.2.')
+
+
+def test_checkpoints_from_pyboy_rs_0_1_still_restore():
+    """pyboy-rs 0.1.9 and older label their states pyboy-format-15, with nothing after the body."""
+    with boot() as first:
+        first.tick(30)
+        raw = first.save()
+        body = first.state_body(raw)
+        assert raw.startswith(body) and raw[len(body):len(body) + 4] == b'PBRS'
+        checkpoint = first.checkpoint()
+        checkpoint['emulator'] = {**checkpoint['emulator'], 'version': '0.1.9', 'state_format': 'pyboy-format-15'}
+        checkpoint.pop('execution', None)
+        checkpoint.update(format=1, state=body)
+    with boot() as second:
+        second.restore_checkpoint(checkpoint, match='state_format')
+        assert second.state_body(second.save()) == body
 
 
 def test_core_checkpoint_carries_the_legacy_tag_and_round_trips():

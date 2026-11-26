@@ -15,8 +15,14 @@ from pokecore.errors import CoreCapabilityError
 from test_rtc import ClockBackend, NoRtcBackend, machine, rtc_file
 
 
+# The state format pyboy-rs 0.2 writes and the formats it loads, so the metadata tests need no emulator.
+# test_the_stand_in_formats_are_the_installed_backends holds them to the real ones when it is installed.
+FORMATS = ("pyboy-format-15+pyboy-rs-3",
+           frozenset({"pyboy-format-15"} | {f"pyboy-format-15+pyboy-rs-{section}" for section in (1, 2, 3)}))
+
+
 def provenance(**changes):
-    base = {"backend": "pyboy-rs", "version": "0.1.1", "state_format": state.STATE_FORMAT,
+    base = {"backend": "pyboy-rs", "version": "0.1.1", "state_format": FORMATS[0],
             "native_sha256": "a" * 64, "binding_sha256": "b" * 64}
     return {**base, **changes}
 
@@ -30,7 +36,13 @@ def require_rtc():
 
 @pytest.fixture
 def runtime(monkeypatch):
+    monkeypatch.setattr(state, "backend_formats", lambda: FORMATS)
     monkeypatch.setattr(state, "runtime_provenance", lambda: provenance())
+
+
+def test_the_stand_in_formats_are_the_installed_backends():
+    pytest.importorskip("pyboy_rs")
+    assert state.backend_formats() == FORMATS
 
 
 # Runtime comparison
@@ -334,6 +346,7 @@ def test_press_waits_for_the_next_tick_and_checkpoint_carries_it(monkeypatch):
     emulator.press("a")
     assert backend.events == [] and emulator.pending_inputs == (("a", True),)
     assert emulator.save() == b"\x00\x00"  # A raw save between press and tick misses the press.
+    monkeypatch.setattr(state, "backend_formats", lambda: FORMATS)
     monkeypatch.setattr(state, "runtime_provenance", lambda: provenance())
     assert emulator.checkpoint()["pending_inputs"] == (("a", True),)
     emulator.tick(2)

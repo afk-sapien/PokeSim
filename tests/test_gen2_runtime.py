@@ -1738,12 +1738,14 @@ def test_checkpoint_clock_export_preserves_elapsed_days(real_data):
         state = io.BytesIO()
         pb.save_state(state)
         raw = state.getvalue()
-        changed = advance(raw, 48)
-        assert raw[:-48] == changed[:-48]
-        assert raw[-40:] == changed[-40:]
+        changed = advance(raw, 48, rom)
+        # Only the base timestamp near the end of the format 15 body changes. A section after the body stays.
+        base = len(pb.state_body(raw)) - 48
+        assert raw[:base] == changed[:base]
+        assert raw[base + 8:] == changed[base + 8:]
         clock = checkpoint_clock(rom, changed)
         assert len(clock) == 10
-        assert struct.unpack('d', clock[:8])[0] == struct.unpack('d', raw[-48:-40])[0] - 48 * 3600
+        assert struct.unpack('d', clock[:8])[0] == struct.unpack('d', raw[base:base + 8])[0] - 48 * 3600
     finally:
         pb.stop(save=False)
 

@@ -12,8 +12,8 @@ COPY packages/pokecore/src ./packages/pokecore/src
 COPY tools/bundle_dependency_sources.py ./tools/bundle_dependency_sources.py
 # The corresponding pyboy-rs source archive is a release asset next to its wheels. The checksum is
 # required: an empty value fails the build instead of skipping verification.
-ARG EMULATOR_SOURCE_URL=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.9/pyboy_rs-0.1.9.tar.gz
-ARG EMULATOR_SOURCE_SHA256=755a2ae7c5c53842077f70ef1a5de07bac5282a9e739580946c6ce0fa02d7637
+ARG EMULATOR_SOURCE_URL=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.2.0/pyboy_rs-0.2.0.tar.gz
+ARG EMULATOR_SOURCE_SHA256=385262be4134d58a024d821b848931e7ba5f9416218d1ea80027b763988bc85a
 ADD --checksum=sha256:${EMULATOR_SOURCE_SHA256} ${EMULATOR_SOURCE_URL} /emulator-source/pyboy-rs-source.tar.gz
 # The locked dependencies are release wheels, so this stage needs no compiler or Rust toolchain.
 # The acceleration extra compiles route searches with numba. Its lock markers only select it where

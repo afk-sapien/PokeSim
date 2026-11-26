@@ -184,6 +184,12 @@ reloads an autosave. The second reload goes to the unedited `--fallback` save, a
 application restarts a League attempt from its entry save. `show` prints the party, bag and
 place a scenario starts from.
 
+A scenario's `idle_frames` (default 0) idles that many frames once the save loads, before the first
+decision. The game's own random numbers follow the frame and the divider timer, so an idle plays the
+same save on another stream of in-game luck. When an emulator or bot change lands a scenario's plain
+replay on a later stall its capture was not about, the scenario idles to a trajectory that still tests
+its capture, and the later stall is captured as a scenario of its own.
+
 ## Stage ladder
 
 A stage ladder is a set of scenarios, one for each stage of a game, so a change can be replayed at

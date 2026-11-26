@@ -31,6 +31,12 @@ Raw `save` and `load` keep PyBoy format-15 compatibility. They exclude pending
 controller operations and keep the caller's current pending queue. A failed
 state load leaves the machine unchanged.
 
+pyboy-rs 0.2 and later save a format-15 body followed by a section of their
+own, and name the format `pyboy-format-15+pyboy-rs-3`. PyBoy 2.7.0 loads the
+body and leaves the section unread. pyboy-rs 0.1.9 refuses the whole state, and
+its own states load here. `state_body(state)` returns the body alone. Compare
+bodies, never whole states, across builds.
+
 `checkpoint` and `restore_checkpoint` also keep pending inputs and frame counts
 and validate the ROM, settings and native build. Manifests identify pyboy-rs
 with its version, state format and native extension and binding hashes.
@@ -39,7 +45,8 @@ with its version, state format and native extension and binding hashes.
 version and the state format, so a wheel rebuilt in CI or built for another
 operating system restores checkpoints of the same version. `match="exact"` also
 requires the identical binary and binding hashes. `match="state_format"`
-accepts any version of the same backend and format.
+accepts any version of the same backend whose format the installed backend
+loads, which includes the plain `pyboy-format-15` of pyboy-rs 0.1.
 
 `checkpoint()`, `checkpoint_metadata()` and `retag_checkpoint()` keep
 `pyboy_version: "2.7.0"` beside the `emulator` record exactly when PyBoy 2.7.0

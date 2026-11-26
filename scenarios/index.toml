@@ -133,3 +133,17 @@ rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
 state_sha256 = "872c05a8dae9c5b2c5038d699381a54173e0009e52447c44c542a39b3f0e24b5"
 frames = [2002794562, 2002794562]
 expect = "passes"
+
+[[scenario]]
+name = "red-mt-moon-b2f-clefairy-quiet-20261125"
+rom_sha1 = "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
+state_sha256 = "0a85bd54f734d00e2a910cb9c70814ce8b5a15a922c57720d373537928ffdc3c"
+frames = [571417878, 571417878]
+expect = "stuck"
+
+[[scenario]]
+name = "yellow-victory-road-storage-churn-20261125"
+rom_sha1 = "cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1"
+state_sha256 = "84791ee6c52a81b13538bdd8867209b47ba7e6d30459b0fa936090f265e2cde1"
+frames = [441793842, 441793842]
+expect = "stuck"

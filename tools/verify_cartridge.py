@@ -608,15 +608,23 @@ def gen2_probe(args):
 
 # gen2-clock: simulate elapsed cartridge clock time in an isolated format 15 checkpoint.
 
-def advance(raw, hours):
+def advance(raw, hours, rom):
+    """``raw`` with the cartridge clock's base timestamp moved ``hours`` back. ``rom`` is the cartridge it plays."""
     if raw[0] != 15 or len(raw) < 100000:
         raise ValueError('Clock simulation requires a format 15 checkpoint')
     if not math.isfinite(hours) or not 0 < hours <= 24 * 7:
         raise ValueError('Advance the clock by at most seven days per simulation step')
-    # On an MBC3 clock cartridge the format 15 state ends with the base timestamp (the .rtc file's
+    # On an MBC3 clock cartridge the format 15 body ends with the base timestamp (the .rtc file's
     # first eight bytes), the halt and carry bytes, two joypad bytes, then 36 serial-port bytes.
     # Verified against PyBoy RS state writer and Core's export_rtc on Gold, Silver and Crystal.
-    offset = len(raw) - 48
+    # pyboy-rs 0.2 and later save a section of their own after the body, and only an emulator of the
+    # same cartridge knows where the body ends.
+    from pokecore.gen2.clock import boot
+    emulator = boot(rom, sound=False)
+    try:
+        offset = len(emulator.state_body(raw)) - 48
+    finally:
+        emulator.stop(save=False)
     epoch = struct.unpack_from('d', raw, offset)[0]
     if not math.isfinite(epoch) or not 946684800 <= epoch <= 4102444800 or raw[offset + 8] > 1 or raw[offset + 9] > 1:
         raise ValueError('The checkpoint does not have the expected RTC timestamp')
@@ -627,7 +635,7 @@ def advance(raw, hours):
 
 def gen2_clock(args):
     raw = args.source.read_bytes()
-    result = advance(raw, args.hours)
+    result = advance(raw, args.hours, args.rom.read_bytes())
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(result)
     metadata = args.source.with_suffix('.policy.json')
@@ -818,6 +826,7 @@ def main(argv=None):
     sub.add_argument('source', type=Path)
     sub.add_argument('output', type=Path)
     sub.add_argument('--hours', type=float, required=True)
+    sub.add_argument('--rom', type=Path, required=True, help='the cartridge the checkpoint plays')
 
     sub = command('gen2-save', gen2_save, 'Verify a late-campaign portable save after dismissing the ending credits.')
     sub.add_argument('rom', type=Path)
