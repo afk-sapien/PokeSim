@@ -119,6 +119,15 @@ def test_a_pc_swap_that_brings_the_trainee_into_the_party_is_progress_for_its_pr
     assert [event.kind for event in _goal_events('collection_train_pc', full, deposited)] == ['trainee']
 
 
+def test_a_pc_swap_that_brings_a_field_move_partner_into_the_party_is_progress_for_the_teach():
+    pikachu, pidgeot, golem = _mon('Pikachu'), _mon('Pidgeot'), _mon('Golem')
+    before, after = _snapshot([pikachu, golem], [pidgeot]), _snapshot([pikachu, pidgeot], [golem])
+    assert [event.kind for event in _goal_events('party_fly', before, after)] == ['trainee']
+    assert [event.kind for event in _goal_events('party_surf', before, after)] == ['trainee']
+    # A visit that withdraws nothing gains nothing.
+    assert _goal_events('party_fly', before, before) == []
+
+
 def test_a_pc_visit_that_changes_the_current_box_is_progress():
     # With the current box full no catch fits, and the change to a box with room holds the same Pokémon.
     party = [_mon('Typhlosion')]

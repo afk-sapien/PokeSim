@@ -133,8 +133,10 @@ class Detour(Errand):
         """The press on the walk to ``main_goal`` that starts or follows a detour, or None to walk on."""
         pos = (s.map, s.x, s.y)
         # The Bicycle fetch is an errand too. After the League it was the one goal that let detours back in,
-        # and partner training on the way stretched one walk to Cerulean to five times its length.
-        errands = ('heal', 'restock', 'train_', 'catch_', 'party_', 'teach_', 'league', 'collect_', 'bike_voucher', 'bicycle')
+        # and partner training on the way stretched one walk to Cerulean to five times its length. The HM02
+        # fetch from the Route 16 house is one as well.
+        errands = ('heal', 'restock', 'train_', 'catch_', 'party_', 'teach_', 'league', 'collect_', 'bike_voucher', 'bicycle',
+                   'fly')
         if policy.heal.latched or main_goal.key.startswith(errands) or s.map in MANSION_MAPS | VICTORY_MAPS:
             self.excursion = None
             return None

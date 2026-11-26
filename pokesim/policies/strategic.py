@@ -18,7 +18,7 @@ from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
 from .move_development import hm_upgrade, move_name
 from .progression import (BOSS_TABLE, FLASH, GAME_STARTERS, STARTERS, YELLOW, Goal, bicycle_goal, boss_training,
-                          flash_learner, healing_goal, journey, milestones, power, story_goal)
+                          flash_learner, fly_goal, fly_learner, healing_goal, journey, milestones, power, story_goal)
 from ..planning.losses import Losses, ace_slot
 from . import training
 from .menus import select, tap
@@ -574,8 +574,8 @@ class StrategicPolicy(Policy):
         if self.collection.completed_champion and s.map not in LEAGUE:
             # A run that reached the League without the Bicycle fetches it before planning the next project,
             # once the passage has taken it south of Victory Road. Against a project under way the errand and
-            # the project took turns at every decision.
-            bike = None if self.collection.project else bicycle_goal(s)
+            # the project took turns at every decision. HM02 Fly comes next, as in Gold, Silver and Crystal.
+            bike = None if self.collection.project else bicycle_goal(s) or fly_goal(s)
             if bike and self.north_of_victory_road(s):
                 bike = None
             base = bike or Goal('collect_plan', 'Plan the next adventure project',
@@ -1201,12 +1201,13 @@ class StrategicPolicy(Policy):
                     return action
             self.reason = "Explore for a partner that can learn the required field move"
             return self._recover(s)
-        if goal.key == 'teach_flash':
-            target = flash_learner(s.party)
-            action = target is not None and self._use_item(s, ITEMS['HM05'], target)
+        if goal.key in ('teach_flash', 'teach_fly'):
+            hm, target = (('HM05', flash_learner(s.party)) if goal.key == 'teach_flash'
+                          else ('HM02', fly_learner(s.party)))
+            action = target is not None and self._use_item(s, ITEMS[hm], target)
             if action:
                 return action
-            self.reason = 'Teach Flash once the HM can be used'
+            self.reason = f'Teach {MOVES[HM_ITEM_MOVES[ITEMS[hm]]]["name"].title()} once the HM can be used'
             return self._recover(s)
         if (WORLD.get(s.map, {}).get('name', '').endswith('Gym') or in_league) and not goal.key.startswith(('heal', 'restock', 'collect_', 'train_', 'catch_', 'party_', 'teach_')):
             target = self.readiness.get('lead', 0)
