@@ -419,6 +419,16 @@ def test_gen2_buys_the_league_kit_before_the_first_room(gen2):
     assert ledger.supplies(training, back) == [('potions', ('HYPER_POTION',), 2)]
 
 
+def test_gen2_ranks_the_league_kit_ahead_of_ultra_balls_before_the_first_hall_of_fame(gen2):
+    # A Silver run with a legendary still wanted at 8 badges bought Ultra Balls ahead of the League kit.
+    from pokesim.gen2 import ledger
+    policy = league_policy(gen2, 'snorlax')
+    lobby = league_snapshot(gen2, (gen2_mon(180, (15, 15, 30, 20)),), money=30000, room='INDIGO_PLATEAU_POKECENTER_1F')
+    lobby.can_catch = True
+    rows = [row[0] for row in ledger.supplies(policy, lobby)]
+    assert rows[0] == 'balls' and rows[-1] == 'ultras' and 'potions' in rows
+
+
 def test_gen2_uses_league_items_between_rooms(gen2):
     from pokesim.gen2.menus import Remedy, UseOn
     policy = league_policy(gen2)
