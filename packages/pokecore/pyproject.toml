@@ -13,7 +13,7 @@ license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 dependencies = []
 
 [project.optional-dependencies]
-emulator = ["pyboy-rs>=0.1.7,<0.2", "pillow>=10,<14"]
+emulator = ["pyboy-rs>=0.2,<0.3", "pillow>=10,<14"]
 # ruff runs from the PokeSim workspace root, at the one version its CI pins.
 dev = ["pytest>=8,<10"]
 

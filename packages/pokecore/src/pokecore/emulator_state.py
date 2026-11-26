@@ -4,8 +4,23 @@ import hashlib
 from importlib.metadata import distribution
 from pathlib import Path
 
-STATE_FORMAT = "pyboy-format-15"
+# A PyBoy 2.7.0 format 15 state. PyBoy and pyboy-rs 0.1.9 and older save it with nothing after it.
+# pyboy-rs 0.2 and later save a section of their own after that body, and name the format with a plus
+# sign and the section, so an older build that requires this exact name refuses their checkpoints.
+LEGACY_STATE_FORMAT = "pyboy-format-15"
 LEGACY_PYBOY_VERSION = "2.7.0"
+
+
+@lru_cache(maxsize=1)
+def backend_formats():
+    """The state format the installed pyboy-rs writes, and every format it loads, as it names them."""
+    from pyboy_rs import execution
+    return execution.STATE_FORMAT, frozenset(execution.STATE_FORMATS)
+
+
+def _body(state_format):
+    """The PyBoy format of a state's body, the part before any pyboy-rs section."""
+    return str(state_format or "").partition("+")[0]
 
 
 @lru_cache(maxsize=1)
@@ -21,7 +36,7 @@ def _runtime_provenance():
         component = wrapper.with_name(name)
         if component.exists():
             binding.update(component.read_bytes())
-    return {"backend": "pyboy-rs", "version": installed.version, "state_format": STATE_FORMAT,
+    return {"backend": "pyboy-rs", "version": installed.version, "state_format": backend_formats()[0],
             "native_sha256": hashlib.sha256(Path(native[0]).read_bytes()).hexdigest(),
             "binding_sha256": binding.hexdigest()}
 
@@ -35,7 +50,7 @@ def validate_runtime(metadata, *, exact=False, version=False):
 
     exact compares the full provenance, including the compiled binary hashes, which change
     with every rebuild and platform. version requires the same backend version without the
-    hashes. The default checks only the backend and state format.
+    hashes. The default checks only the backend and that the installed backend loads the state format.
     """
     source = metadata.get("emulator")
     if source is None:
@@ -46,7 +61,7 @@ def validate_runtime(metadata, *, exact=False, version=False):
         raise ValueError("Checkpoint requires explicit emulator provenance")
     if not isinstance(source, dict):
         raise ValueError("Invalid emulator provenance")
-    if source.get("backend") != "pyboy-rs" or source.get("state_format") != STATE_FORMAT:
+    if source.get("backend") != "pyboy-rs" or source.get("state_format") not in backend_formats()[1]:
         raise ValueError("Unsupported checkpoint emulator or state format")
     current = runtime_provenance() if exact or version else None
     if version and source.get("version") != current["version"]:
@@ -59,10 +74,11 @@ def validate_runtime(metadata, *, exact=False, version=False):
 def _legacy_fields(metadata):
     """The PyBoy 2.7.0 version tag, only when a PyBoy 2.7.0 build could load these states.
 
-    PyBoy RS writes and reads PyBoy 2.7.0 format-15 states. A clock lock is the exception:
-    PyBoy 2.7.0 has no lock, so a checkpoint saved while locked is not tagged.
+    pyboy-rs writes a PyBoy 2.7.0 format 15 body, and PyBoy 2.7.0 loads it and leaves any pyboy-rs
+    section after it unread. A clock lock is the exception: PyBoy 2.7.0 has no lock, so a checkpoint
+    saved while locked is not tagged.
     """
-    if runtime_provenance()["state_format"] != STATE_FORMAT:
+    if _body(runtime_provenance()["state_format"]) != LEGACY_STATE_FORMAT:
         return {}
     if metadata.get("rtc_clock") is not None:
         return {}
@@ -88,10 +104,10 @@ def retag_checkpoint(metadata):
     result = dict(metadata)
     result.pop("pyboy_version", None)
     result["emulator"] = current
-    # Keep the PyBoy 2.7.0 tag when the source lineage and the new output are both format 15,
+    # Keep the PyBoy 2.7.0 tag when the source lineage and the new output both have a format 15 body,
     # so a downgrade to an application that still requires it can load the checkpoint.
     legacy_source = (previous.get("backend") == "pyboy" and previous.get("version") == LEGACY_PYBOY_VERSION) \
-        or (previous.get("backend") == "pyboy-rs" and previous.get("state_format") == STATE_FORMAT)
+        or (previous.get("backend") == "pyboy-rs" and _body(previous.get("state_format")) == LEGACY_STATE_FORMAT)
     if legacy_source:
         result.update(_legacy_fields(metadata))
     if previous != current:

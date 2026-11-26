@@ -16,7 +16,7 @@ from test_rtc import ClockBackend, NoRtcBackend, machine, rtc_file
 
 
 def provenance(**changes):
-    base = {"backend": "pyboy-rs", "version": "0.1.1", "state_format": state.STATE_FORMAT,
+    base = {"backend": "pyboy-rs", "version": "0.1.1", "state_format": state.backend_formats()[0],
             "native_sha256": "a" * 64, "binding_sha256": "b" * 64}
     return {**base, **changes}
 

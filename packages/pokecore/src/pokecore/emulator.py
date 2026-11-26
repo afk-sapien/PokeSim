@@ -442,6 +442,15 @@ class Emulator:
     def save_state(self, stream):
         stream.write(self.save())
 
+    def state_body(self, state):
+        """The PyBoy format 15 part of a raw state of this cartridge, without any pyboy-rs section after it.
+
+        Two builds that emulate the same way save the same body, so compare bodies, never whole
+        states, across builds or with PyBoy.
+        """
+        self._ensure_open()
+        return self._backend.state_body(bytes(state))
+
     def load(self, state):
         """Load raw format-15 hardware state, preserving caller-queued inputs.
 
