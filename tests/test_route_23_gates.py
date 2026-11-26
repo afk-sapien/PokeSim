@@ -34,9 +34,14 @@ def test_the_indigo_plateau_shop_is_not_a_restock_plan_without_every_badge():
     state = snap(map=ROUTE_23, x=13, y=57, money=3890, badges=63, party=(mon(level=60),), items=junk,
                  event_flags=flags('EVENT_GOT_POKEDEX'))
     assert ShoppingController().plan(state, goal, None, **options).goal is goal
+    # With every badge the shop is a plan from north of Victory Road's southern entrance, and from south
+    # of it no restock crosses the road to shop.
     champion = snap(map=ROUTE_23, x=13, y=57, money=3890, badges=255, party=(mon(level=60),), items=junk,
                     event_flags=flags('EVENT_GOT_POKEDEX'))
-    plan = ShoppingController().plan(champion, goal, None, **options).goal
+    assert ShoppingController().plan(champion, goal, None, **options).goal is goal
+    north = snap(map=ROUTE_23, x=18, y=30, money=3890, badges=255, party=(mon(level=60),), items=junk,
+                 event_flags=flags('EVENT_GOT_POKEDEX'))
+    plan = ShoppingController().plan(north, goal, None, **options).goal
     assert plan.key == 'restock' and plan.targets == ((MAPS['INDIGO_PLATEAU_LOBBY'], 2, 5),)
 
 
