@@ -24,6 +24,7 @@ from pokesim.play_clock import PlayClock
 
 HYDRO_PUMP, WATERFALL, REST, GROWL, PECK, SURF, TRANSFORM = 56, 127, 156, 45, 64, 57, 144
 SPLASH, SYNTHESIS, TAIL_WHIP = 150, 235, 39
+COUNTER, HYPNOSIS, BIDE, DREAM_EATER, SNORE, MIRROR_COAT = 68, 95, 117, 138, 173, 243
 DITTO, GYARADOS, HOPPIP, POLIWRATH = 132, 130, 187, 62
 
 
@@ -44,7 +45,13 @@ DATA = SimpleNamespace(
            REST: dict(move('Rest', 0, 24, 10), effect='EFFECT_HEAL'), GROWL: move('Growl', 0, 0, 40), PECK: move('Peck', 35, 2, 35),
            SURF: move('Surf', 95, 21, 15), TRANSFORM: dict(move('Transform', 0, 0, 10), effect='EFFECT_TRANSFORM'),
            SPLASH: dict(move('Splash', 0, 0, 40), effect='EFFECT_SPLASH'), TAIL_WHIP: move('Tail Whip', 0, 0, 30),
-           SYNTHESIS: dict(move('Synthesis', 0, 22, 5), effect='EFFECT_SYNTHESIS')},
+           SYNTHESIS: dict(move('Synthesis', 0, 22, 5), effect='EFFECT_SYNTHESIS'),
+           COUNTER: dict(move('Counter', 1, 1, 20), effect='EFFECT_COUNTER'),
+           MIRROR_COAT: dict(move('Mirror Coat', 1, 24, 20), effect='EFFECT_MIRROR_COAT'),
+           BIDE: dict(move('Bide', 0, 0, 10), effect='EFFECT_BIDE'),
+           HYPNOSIS: dict(move('Hypnosis', 0, 24, 20), effect='EFFECT_SLEEP'),
+           DREAM_EATER: dict(move('Dream Eater', 100, 24, 15), effect='EFFECT_DREAM_EATER'),
+           SNORE: dict(move('Snore', 40, 0, 15), effect='EFFECT_SNORE')},
     matchups={(21, 21): 0.5, (21, 22): 0.5}, items={'MAX_ELIXER': 1, 'ELIXER': 2}, map_ids={'INDIGO_PLATEAU_POKECENTER_1F': 7, 'ROUTE_23': 3})
 
 
@@ -108,12 +115,13 @@ def test_a_party_with_nothing_but_rest_and_growl_cannot_end_the_battle(data, mon
     assert not hopeless(lance((fainted, mon(134, 100, 359, (HYDRO_PUMP, GROWL, 0, 0), (0, 34, 0, 0)))))
 
 
-def battlers(transformed=False, moves=(SURF, 0, 0, 0), pp=(5, 0, 0, 0), enemy=(WATERFALL, 0, 0, 0)):
+def battlers(transformed=False, moves=(SURF, 0, 0, 0), pp=(5, 0, 0, 0), enemy=(WATERFALL, 0, 0, 0), status=0):
     """Both sides' battlers as pokecore reads them, the player's Gyarados optionally Transformed.
 
-    Every stat reads 150, and the foe knows ``enemy`` moves."""
+    Every stat reads 150, and the foe knows ``enemy`` moves and has ``status``."""
     player = replace(NO_MON, species=GYARADOS, moves=moves, pp=pp, stats=(150,) * 6, transformed=transformed)
-    return SimpleNamespace(player=player, enemy=replace(NO_MON, species=GYARADOS, moves=enemy, stats=(150,) * 6))
+    return SimpleNamespace(player=player, enemy=replace(NO_MON, species=GYARADOS, moves=enemy, stats=(150,) * 6,
+                                                         status=status))
 
 
 def ditto(pp=10):
@@ -176,6 +184,41 @@ def test_no_foe_is_judged_while_the_trainer_sends_out_the_next(data, monkeypatch
     assert Policy.hopeless_battle(fake, between)
     between.enemy_species = 0
     assert not Policy.hopeless_battle(fake, between)
+
+
+def healer(fourth, heal=REST, status=0, first=HYDRO_PUMP, first_pp=0):
+    """Vaporeon with its attacks spent, ``heal`` and ``fourth`` left to use."""
+    vaporeon = mon(134, 100, 359, (first, WATERFALL, heal, fourth), (first_pp, 0, 5, 15))
+    vaporeon.status = status
+    return vaporeon
+
+
+def test_a_move_that_needs_sleep_or_a_hit_counts_only_while_it_can_land(data, monkeypatch):
+    # Dream Eater lists 100 power and Counter 1, so they once always counted as attacks, though
+    # Dream Eater fails on a foe awake and Counter on one with only special attacks.
+    fake = policy(data)
+    fake.memory = object()
+    fainted = mon(84, 20, 0, (PECK, GROWL, 0, 0), (35, 40, 0, 0))
+
+    def hopeless(sides, last):
+        patch_battlers(monkeypatch, sides)
+        return Policy.hopeless_battle(fake, lance((fainted, last)))
+    assert hopeless(battlers(), healer(DREAM_EATER))
+    assert not hopeless(battlers(status=2), healer(DREAM_EATER))
+    assert not hopeless(battlers(enemy=(WATERFALL, REST, 0, 0)), healer(DREAM_EATER))
+    assert not hopeless(battlers(), healer(DREAM_EATER, first=HYPNOSIS))
+    # Snore lands only while its user sleeps, which Rest brings about.
+    assert hopeless(battlers(), healer(SNORE, heal=SYNTHESIS))
+    assert not hopeless(battlers(), healer(SNORE))
+    assert not hopeless(battlers(), healer(SNORE, heal=SYNTHESIS, status=3))
+    assert not hopeless(battlers(enemy=(WATERFALL, HYPNOSIS, 0, 0)), healer(SNORE, heal=SYNTHESIS))
+    # Counter returns a physical hit, Mirror Coat a special one and Bide either.
+    assert hopeless(battlers(), healer(COUNTER))
+    assert not hopeless(battlers(enemy=(WATERFALL, PECK, 0, 0)), healer(COUNTER))
+    assert not hopeless(battlers(), healer(MIRROR_COAT))
+    assert hopeless(battlers(enemy=(PECK, 0, 0, 0)), healer(MIRROR_COAT))
+    assert not hopeless(battlers(), healer(BIDE))
+    assert hopeless(battlers(enemy=(GROWL, 0, 0, 0)), healer(BIDE))
 
 
 def test_a_transformed_battler_takes_the_foes_species_moves_and_pp():

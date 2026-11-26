@@ -34,6 +34,42 @@ def hidden_power(data, dvs):
     return kind, (5 * high + (special & 3)) // 2 + 31
 
 
+def move_power(data, move, dvs, friendship):
+    """The type and power ``move`` hits with.
+
+    Hidden Power takes both from the DVs, or keeps its listed ones without them. Return and
+    Frustration take their power from the friendship, as the cartridge's HappinessPower does, and a
+    move whose listed power is a placeholder has its average.
+    """
+    effect = move['effect']
+    if effect == 'EFFECT_HIDDEN_POWER' and dvs is not None:
+        return hidden_power(data, dvs)
+    if effect == 'EFFECT_RETURN':
+        return move['type'], max(1, friendship * 10 // 25)
+    if effect == 'EFFECT_FRUSTRATION':
+        return move['type'], max(1, (255 - friendship) * 10 // 25)
+    return move['type'], AVERAGE_POWER.get(effect, move['power'])
+
+
+def fixed_damage(effect, power, level, hp):
+    """The damage of a move that ignores the stats, or None for a move that uses them.
+
+    ``level`` is the user's and ``hp`` the target's. Psywave deals its average and a one-hit
+    knockout the target's HP.
+    """
+    if effect == 'EFFECT_STATIC_DAMAGE':
+        return float(power)
+    if effect == 'EFFECT_LEVEL_DAMAGE':
+        return float(level)
+    if effect == 'EFFECT_PSYWAVE':
+        return level * 0.75
+    if effect == 'EFFECT_SUPER_FANG':
+        return float(max(1, hp // 2))
+    if effect == 'EFFECT_OHKO':
+        return float(hp)
+    return None
+
+
 def _valid(mon, data):
     moves, dvs, training = mon.get('moves'), mon.get('dvs'), mon.get('stat_exp')
     level = mon.get('level')
@@ -51,26 +87,14 @@ def _damage(data, move, species, friendship, stats, dvs, level, target_type, hp,
     effect = move['effect']
     if not move['power'] or effect in NO_DIRECT_DAMAGE:
         return 0.0
-    kind, power = move['type'], AVERAGE_POWER.get(effect, move['power'])
-    if effect == 'EFFECT_HIDDEN_POWER':
-        kind, power = hidden_power(data, dvs)
-    elif effect == 'EFFECT_RETURN':
-        power = max(1, friendship * 10 // 25)
-    elif effect == 'EFFECT_FRUSTRATION':
-        power = max(1, (255 - friendship) * 10 // 25)
+    kind, power = move_power(data, move, dvs, friendship)
     factor = data.matchups.get((kind, target_type), 1)
     if not factor:
         return 0.0
-    if effect == 'EFFECT_STATIC_DAMAGE':
-        return float(power)
-    if effect == 'EFFECT_LEVEL_DAMAGE':
-        return float(level)
-    if effect == 'EFFECT_PSYWAVE':
-        return level * 0.75
-    if effect == 'EFFECT_SUPER_FANG':
-        return float(max(1, hp // 2))
-    if effect == 'EFFECT_OHKO':
-        return float(hp)  # The reference opponent is never above the user's level.
+    # The reference opponent is never above the user's level, so a one-hit knockout can land.
+    fixed = fixed_damage(effect, power, level, hp)
+    if fixed is not None:
+        return fixed
     physical = kind < 20
     attack = stats[1] if physical else stats[4]
     target = max(1, defense // 2 if effect == 'EFFECT_SELFDESTRUCT' else defense)

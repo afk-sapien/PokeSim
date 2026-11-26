@@ -123,8 +123,8 @@ def test_a_refused_lugia_return_closes_until_the_next_milestone(world, monkeypat
     # The PC already holds a better Lugia, so the battle refuses the catch.
     monkeypatch.setattr(release, 'keeps_another', lambda *args, **kwargs: False)
     battle = SimpleNamespace(party=(), stored=(), text='FIGHT', tiles=(), map=data.map_ids['WHIRL_ISLAND_LUGIA_CHAMBER'],
-        in_battle=1, enemy_species=249, owned={249}, can_catch=True, badges=65535, money=10000,
-        pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
+        in_battle=1, enemy_species=249, enemy_level=40, enemy_hp=150, owned={249}, can_catch=True, badges=65535,
+        money=10000, pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
     mem = SimpleNamespace(byte=lambda name: 0, read=lambda name, size: b'\xff' * size)
     assert fight(policy, battle, mem).button != ('Throw', data.items['ULTRA_BALL'])
     assert policy.declined == {249} and 249 not in policy.returned

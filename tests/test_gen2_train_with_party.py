@@ -89,7 +89,8 @@ def foe(policy, *effects):
     """The wild foe's moves as the battle reads them: one move of each effect in ``effects``."""
     moves = tuple(next(mid for mid, entry in policy.data.moves.items() if entry.get('effect') == effect)
                   for effect in effects)
-    policy.reads = SimpleNamespace(enemy=SimpleNamespace(moves=moves, stats=(100, 50, 50, 50, 50, 50)))
+    policy.reads = SimpleNamespace(enemy=SimpleNamespace(moves=moves, stats=(100, 50, 50, 50, 50, 50), status=0,
+                                                         dvs=(0, 0, 0, 0, 0)))
 
 
 def test_a_trainee_leading_the_walk_switches_out_of_a_close_battle(data):
