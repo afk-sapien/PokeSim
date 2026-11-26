@@ -106,7 +106,8 @@ def open_row(s, key):
                  and not all(event_set(s.event_flags, flag) for flag in row["done_when"].get("flags", ()))), None)
 
 
-def story_goal(snapshot, starter="bulbasaur", fossil="HELIX_FOSSIL"):
+def story_goal(snapshot, starter="bulbasaur", fossil="HELIX_FOSSIL", room=True):
+    """The next story step. ``room`` off leaves out the PC visit that makes bag room (bicycle_goal)."""
     flags = snapshot.event_flags
     has = lambda name: any(item == ITEMS[name] and qty for item, qty in snapshot.items)
     if not event_set(flags, "EVENT_FOLLOWED_OAK_INTO_LAB") and not snapshot.party:
@@ -123,7 +124,7 @@ def story_goal(snapshot, starter="bulbasaur", fossil="HELIX_FOSSIL"):
         return step("parcel", "Collect Oak’s parcel", "The Viridian clerk has a delivery for Oak")
     if not snapshot.badges & 1:
         return step("boulder", "Challenge Brock", "Earn the Boulder Badge to continue east")
-    return campaign_goal(snapshot, fossil)
+    return campaign_goal(snapshot, fossil, room)
 
 
 GYMS = (
@@ -259,12 +260,17 @@ def gym_goal(s, bit):
                    help=GYM_HELP.get(key, "Approach the gym leader and start the battle."))
 
 
-def partner_withdraw(name):
-    """The PC visit that brings a stored partner for field move ``name`` onto the team."""
+def pc_visit(key, title, reason):
+    """Goal ``key`` at the PC of any Pokémon Center."""
     pc = story.place(1, GAME, "party_pc")
     targets = tuple((m, pc["x"], pc["y"]) for m, w in WORLD.items() if pc["named"] in w["name"] and w["width"] == pc["width"])
-    return Goal("party_" + name, "Bring a field-move partner onto the team",
-                "Use Bill’s PC to store a reserve and withdraw a compatible partner", targets, pc["face"], True)
+    return Goal(key, title, reason, targets, pc["face"], True)
+
+
+def partner_withdraw(name):
+    """The PC visit that brings a stored partner for field move ``name`` onto the team."""
+    return pc_visit("party_" + name, "Bring a field-move partner onto the team",
+                    "Use Bill’s PC to store a reserve and withdraw a compatible partner")
 
 
 def teaching_goal(key, title, reason, s):
@@ -314,6 +320,39 @@ AIDE_REQUIREMENT = 10
 ROCK_TUNNEL_ROAD = frozenset(MAPS[name] for name in ('ROUTE_10', 'ROCK_TUNNEL_POKECENTER', 'ROCK_TUNNEL_1F', 'ROCK_TUNNEL_B1F'))
 # The bag's distinct entries.
 BAG_SLOTS = 20
+LAPRAS_DEX = 131
+# The key items whose use is over once these facts hold: event flags set, and Pokédex numbers owned.
+# Nothing else in the game reads them after that. Every other key item keeps a use: an HM teaches
+# again, the Bicycle, the rods, the Coin Case, the Itemfinder and the Exp. All have no last use, the
+# Silph Scope still unmasks the Pokémon Tower ghosts for a catch, and the lab revives a fossil at any time.
+SPENT_KEY_ITEMS = {
+    # Once the S.S. Anne has sailed, the sailor at the dock turns everyone back, ticket or not.
+    'S_S_TICKET': (('EVENT_SS_ANNE_LEFT',), ()),
+    # Only the hideout's lift reads it, and the boss it leads to does not return.
+    'LIFT_KEY': (('EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI',), ()),
+    # Silph Co.'s doors stay open once opened. The rescued worker's Lapras gift waits behind one of them.
+    'CARD_KEY': (('EVENT_BEAT_SILPH_CO_GIOVANNI',), (LAPRAS_DEX,)),
+    # Only the Cinnabar Gym's door reads it.
+    'SECRET_KEY': (('EVENT_BEAT_BLAINE',), ()),
+    # Only the two sleeping Snorlax read it.
+    'POKE_FLUTE': (('EVENT_BEAT_ROUTE12_SNORLAX', 'EVENT_BEAT_ROUTE16_SNORLAX'), ()),
+}
+
+
+def spent_items(s):
+    """The bag's key items whose use is over (SPENT_KEY_ITEMS), in that table's order."""
+    bag = {item for item, qty in s.items if qty}
+    return tuple(ITEMS[name] for name, (flags, owned) in SPENT_KEY_ITEMS.items() if ITEMS[name] in bag
+                 and all(event_set(s.event_flags, flag) for flag in flags) and all(dex in s.owned for dex in owned))
+
+
+def bag_room(s, needed):
+    """The PC visit that stores spent key items until the bag has ``needed`` free entries, or None when
+    storing every one of them would still leave too few and the item waits. Nothing is tossed, and the
+    item PC gives each one back."""
+    if len(s.items) + needed - BAG_SLOTS > len(spent_items(s)):
+        return None
+    return pc_visit('bag_room', 'Make room in the bag', 'Store key items whose use is over in the PC to make room')
 
 
 def flash_learner(party):
@@ -389,22 +428,24 @@ def fly_learner(party):
                key=lambda i: (party[i].level, i), default=None)
 
 
-def fly_goal(s):
+def fly_goal(s, room=True):
     """HM02 from the girl in the Route 16 house and its teaching, for a run past the League, or None.
 
     The learner is fly_learner's. With none in the party, the strongest stored Pokémon that Fly costs
     no battle move is withdrawn (storage.field_partners) and takes the slot of the reserve the PC
     deposits. With neither, the run goes without Fly rather than spend a League battler's move on it.
-    HM02 waits for a free bag entry, as the Bicycle does.
+    A full bag makes an entry for HM02 first (bag_room), and ``room`` is as in bicycle_goal.
     """
     if any(FLY in mon.moves for mon in s.party):
         return None
     held = any(item == ITEMS['HM02'] and qty for item, qty in s.items)
-    if not held and (event_set(s.event_flags, 'EVENT_GOT_HM02') or len(s.items) >= BAG_SLOTS):
+    if not held and event_set(s.event_flags, 'EVENT_GOT_HM02'):
         return None
     learner = fly_learner(s.party)
     if learner is None and not any(fly_free(mon) for mon in s.stored_details):
         return None
+    if not held and len(s.items) >= BAG_SLOTS:
+        return bag_room(s, 1) if room else None
     if not held:
         return step('fly', 'Visit the house on Route 16', 'The girl there gives HM02 so the team can fly to any visited town',
                     'Take Route 16 west from Celadon by the north path, through the gate, to the house beyond it.',
@@ -415,13 +456,15 @@ def fly_goal(s):
     return Goal('teach_fly', 'Teach Fly to a partner', reason, ((s.map, s.x, s.y),), help=reason)
 
 
-def bicycle_goal(s):
+def bicycle_goal(s, room=True):
     """The Bike Voucher from the Fan Club chairman, then the Bicycle for it in Cerulean, or None once owned.
 
     A stored voucher is the only way to lose it, and the bike shop wants it in the bag, so a run with the
     voucher flag but no voucher goes without the Bicycle rather than wait for one that never comes back.
     Both gifts are refused into a full bag, and the shop hands over the Bicycle before it takes the voucher,
-    so the voucher waits for two free entries and the Bicycle for one. Until then the run goes on foot.
+    so the voucher wants two free entries and the Bicycle one. A fuller bag stores spent key items to make
+    them (bag_room) unless ``room`` is off, as after a stall set that visit aside. Without the room the run
+    goes on foot.
     """
     has = lambda name: any(item == ITEMS[name] and qty for item, qty in s.items)
     if has('BICYCLE') or event_set(s.event_flags, 'EVENT_GOT_BICYCLE'):
@@ -429,16 +472,18 @@ def bicycle_goal(s):
     free = BAG_SLOTS - len(s.items)
     if has('BIKE_VOUCHER'):
         if free < 1:
-            return None
+            return bag_room(s, 1) if room else None
         return step('bicycle', 'Collect the Bicycle', 'Trade the Bike Voucher at the Cerulean bike shop',
                     'Talk to the clerk at the Cerulean bike shop with the voucher in the bag.')
-    if event_set(s.event_flags, 'EVENT_GOT_BIKE_VOUCHER') or free < 2:
+    if event_set(s.event_flags, 'EVENT_GOT_BIKE_VOUCHER'):
         return None
+    if free < 2:
+        return bag_room(s, 2) if room else None
     return step('bike_voucher', 'Hear out the Fan Club chairman', 'He gives a Bike Voucher to anyone who listens',
                 'Talk to the chairman at the back of the Vermilion Fan Club and answer yes.')
 
 
-def campaign_goal(s, fossil="HELIX_FOSSIL"):
+def campaign_goal(s, fossil="HELIX_FOSSIL", room=True):
     done = lambda name: event_set(s.event_flags, name)
     has = lambda name: any(item == ITEMS[name] and qty for item, qty in s.items)
     knows = lambda move: any(move in p.moves for p in s.party)
@@ -470,7 +515,7 @@ def campaign_goal(s, fossil="HELIX_FOSSIL"):
     if not s.badges & 8:
         # Vermilion's Fan Club and Cerulean's bike shop both lie on the road from Route 2 to Rock Tunnel.
         # A run already past the tunnel gets the Bicycle after the League instead of walking back.
-        errand = flash_goal(s) or (None if past_rock_tunnel(s) else bicycle_goal(s))
+        errand = flash_goal(s) or (None if past_rock_tunnel(s) else bicycle_goal(s, room))
         if errand is not None:
             return errand
         return replace(gym_goal(s, 8), help="Reach Lavender through Rock Tunnel, then go west through the Route 8 underground path to Celadon. Use Cut at Erika’s gym. " + GYM_HELP["rainbow"])
