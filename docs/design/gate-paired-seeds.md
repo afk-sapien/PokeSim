@@ -1,6 +1,6 @@
 # Gate: paired seeds on a failing rung
 
-Status: approved by the lead on 2026-11-26 with the answers in section 7. The paired stage is built (PR 1). The restock share is not built yet (PR 2).
+Status: approved by the lead on 2026-11-26 with the answers in section 7. The paired stage is built (PR 1). The restock, heal and PC shares are built, with restock judged (PR 2).
 
 The ladder gate (`tools/stage_ladder.py gate`, `pokesim/replay/rung.py`) plays 30 game minutes from each of 59 rungs on goal seeds 7, 8 and 9. It fails a rung whose mean wasted share rises more than 2.0 points over `tools/ladder/gate-baseline.json`. This note proposes two changes: judge a rung that fails on waste on paired extra seeds, and charge the time a restock takes.
 
