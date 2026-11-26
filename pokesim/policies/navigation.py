@@ -483,6 +483,25 @@ class Navigator:
 
     def open_route(self, snapshot, targets):
         """Find a route that needs no additional puzzle switches on any floor."""
+        navigation = self._opened(snapshot)
+        direction = navigation.route((snapshot.map, snapshot.x, snapshot.y), targets, snapshot.frame)
+        if direction is not None:
+            self.path = deque(navigation.path)
+            self.target = navigation.target
+        return direction
+
+    def open_target(self, snapshot, targets):
+        """The nearest of ``targets`` that a route needing no additional puzzle switch reaches, or None.
+        This navigator's own path stays as it is."""
+        pos = (snapshot.map, snapshot.x, snapshot.y)
+        if pos in targets:
+            return pos
+        navigation = self._opened(snapshot)
+        navigation.route(pos, targets, snapshot.frame)
+        return navigation.path[-1][2] if navigation.path else None
+
+    def _opened(self, snapshot):
+        """The navigator that counts no puzzle switch beyond those set, on this one's graph."""
         if self._open_navigation is None:
             self._open_navigation = Navigator()
         navigation = self._open_navigation
@@ -497,11 +516,7 @@ class Navigator:
         navigation.live_positions = self.live_positions
         navigation.edges = self.edges
         navigation.blocked = self.blocked
-        direction = navigation.route((snapshot.map, snapshot.x, snapshot.y), targets, snapshot.frame)
-        if direction is not None:
-            self.path = deque(navigation.path)
-            self.target = navigation.target
-        return direction
+        return navigation
 
     @staticmethod
     def _tile(world, x, y):

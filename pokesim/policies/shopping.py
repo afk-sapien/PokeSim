@@ -86,12 +86,17 @@ class ShoppingController(Errand):
         self.selling = False
 
     @staticmethod
-    def item_for(snapshot, stock, goal_key, project):
-        if goal_key == 'collect_stone' and project and snapshot.map == MAPS['CELADON_MART_4F']:
+    def item_for(snapshot, stock, goal_key, project, shop=None):
+        """The next item to buy from ``stock`` at ``shop``, the current map by default. A shop is judged
+        as its counter judges it, so a plan made outside the Indigo Plateau lobby buys the League kit
+        there. Judged as an ordinary mart, the lobby drew a run from the plateau to a counter that sold
+        it nothing the cash reserve allowed."""
+        shop = snapshot.map if shop is None else shop
+        if goal_key == 'collect_stone' and project and shop == MAPS['CELADON_MART_4F']:
             item = ITEMS[project['evolution']['requirement']]
             return item if item in stock and not dict(snapshot.items).get(item) and snapshot.money >= 2500 and len(snapshot.items) < 20 else None
         return shopping_item(snapshot.items, stock, snapshot.money,
-                             snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=True,
+                             shop == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=True,
                              legendary=legendary_project(project), reserve=cash_reserve(snapshot),
                              hunt_reserve=funds_needed(snapshot) if hunting(project) else None,
                              cure_room=cure_room(snapshot))
@@ -114,7 +119,10 @@ class ShoppingController(Errand):
         """Bag slot the resource ledger sells first to free an entry for story items, or None."""
         return first_sale(snapshot, 'items', 'sale')
 
-    def plan(self, snapshot, goal, project, *, requested_goal, healing, in_league, has_pokedex, completed_champion=False):
+    def plan(self, snapshot, goal, project, *, requested_goal, healing, in_league, has_pokedex, completed_champion=False,
+             reach=None):
+        """``reach`` returns the nearest of the shop squares it is given that the open story reaches, or
+        None. Without it every shop counts as reached."""
         fee = entry_fee(snapshot, goal.key)
         self.fund_target = fee + CASH_RESERVE if fee and snapshot.money < fee else 0
         if self.fund_target and not healing and not in_league and has_pokedex and self.fund_index(snapshot) is not None:
@@ -171,10 +179,16 @@ class ShoppingController(Errand):
             stock = DATA['marts'].get(world['name'], [])
             if map_id != snapshot.map and not legendary:
                 stock = [item for item in stock if item in BALLS or item in HEALING or item == ITEMS['REVIVE']]
-            if bag_full or self.item_for(snapshot, stock, requested_goal, project) is not None:
+            if bag_full or self.item_for(snapshot, stock, requested_goal, project, map_id) is not None:
                 clerk = next((obj for obj in world['objects'] if obj[2] == 'SPRITE_CLERK'), None)
                 if clerk and clerk[0] == 0:
                     targets.append((map_id, 2, clerk[1]))
+        if targets and reach is not None:
+            # A shop with no route through the puzzle gates open now is no plan. North of Victory Road
+            # with its boulders off their switches, a restock chose the southern marts and wandered the
+            # road for 50 minutes.
+            nearest = reach(tuple(targets))
+            targets = [nearest] if nearest is not None else []
         if targets:
             return SupplyPlan(Goal('restock', 'Restock supplies',
                                    'Buy useful balls and medicine with a cash reserve', tuple(targets), 'left', True))
