@@ -177,6 +177,8 @@ def cartridge(monkeypatch, tmp_path):
         else:
             monkeypatch.setenv('ROM_PATH', str(path))
         monkeypatch.setattr(config, 'ROM_PATH', path)
+        # A run booted earlier in this process would stand in for ROM_PATH.
+        monkeypatch.setattr(investment, '_cartridge', None)
         investment._pool.cache_clear()
     yield point
     investment._pool.cache_clear()
@@ -215,7 +217,7 @@ def test_a_configured_cartridge_that_cannot_be_read_rates_and_releases_nothing(c
     assert len(errors) == 1 and 'will not rate or release' in errors[0].getMessage()
     assert investment.rating_problem() == ('The cartridge TM move table could not be verified.'
                                            if failure == 'unverified' else
-                                           'The cartridge at ROM_PATH could not be read (No such file or directory).')
+                                           'The cartridge could not be read (No such file or directory).')
     # No HMs-only pool stands in: nothing is scored, and the PC releases nothing and keeps no new spare.
     copy = {'species': internal(16), 'dvs': (0, 4, 4, 4, 4)}
     assert investment.potential_power(copy) is None and investment.rarity(copy) is None
@@ -233,6 +235,26 @@ def test_a_configured_cartridge_that_cannot_be_read_rates_and_releases_nothing(c
     assert investment.automatic_trade_protected({'species': internal(16), 'dvs': [0, 2, 2, 2, 2], 'level': 5}, [])
     # The failure is found once, not read again on every rating.
     assert len([record for record in caplog.records if record.levelno == logging.ERROR]) == 1
+
+
+def test_a_run_rates_with_the_tms_of_the_cartridge_it_booted_not_rom_path(cartridge, tmp_path, monkeypatch):
+    """A scenario picks its cartridge by hash, so ROM_PATH can name a file the run never plays."""
+    import hashlib
+    from pokesim import catches, investment, policies  # noqa: F401  (tm_shop imports through the policies package)
+    from pokesim import tm_shop
+    from pokesim.rarity import RatingUnavailable
+    cartridge(tmp_path / 'other' / 'pokered.gb')
+    with pytest.raises(RatingUnavailable):
+        investment.families()
+    booted = tmp_path / 'booted.gb'
+    booted.write_bytes(b'the cartridge the run booted')
+    monkeypatch.setattr(catches, 'TRACKED', catches.TRACKED | {hashlib.sha1(booted.read_bytes()).hexdigest()})
+    item, thunderbolt, pikachu = min(tm_shop.LIMITED), 85, internal(25)
+    monkeypatch.setattr(tm_shop, 'cartridge_data', lambda data: ({item: thunderbolt}, {pikachu: [item]}))
+    # Booting drops the pool the failed read left, so the next rating reads the booted cartridge.
+    investment.use_cartridge(booted)
+    assert investment.families() is not None and investment.rating_problem() is None
+    assert thunderbolt in investment.taught_machines()[pikachu]
 
 
 def test_a_copy_scores_as_its_best_final_form():

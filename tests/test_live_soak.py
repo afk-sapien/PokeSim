@@ -405,6 +405,7 @@ def test_the_judge_rates_a_gen1_copy_with_the_tms_of_its_adventures_cartridge(mo
         pytest.skip('needs a clean Red or Blue cartridge at ROM_PATH')
     # The runner process loads no cartridge, and HMs-only weights rate this Nidoran F three times too rare.
     dvs = [15, 0, 15, 15, 15]
+    monkeypatch.setattr(investment, '_cartridge', None)
     investment._pool.cache_clear()
     real = investment.dex_rarity(29, dvs)
     monkeypatch.setattr(investment, 'cartridge_machines', lambda: ({}, {}))
