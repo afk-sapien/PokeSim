@@ -98,8 +98,16 @@ def test_collection_keeps_a_ditto_after_the_pokedex_is_complete(real_data):
     assert 132 in prerequisites(policy, state)
     assert prerequisites(policy, state) is prerequisites(policy, state)
     # A Ditto left at the Day Care is still held.
-    state.daycare = (mon(132, 'Genderless'), None)
-    assert 132 not in prerequisites(policy, state)
+    from dataclasses import replace
+    from pokecore.gen2.ram import Mon
+    ditto = Mon(132, 'DITTO', 30, 90, 90, 0, 0, (144, 0, 0, 0), (10, 0, 0, 0), (10, 0, 0, 0),
+                (90, 50, 50, 50, 50, 50), 30000, (10,) * 5, (0,) * 5, 4321, 70)
+    state.daycare = (ditto, None)
+    held = prerequisites(policy, state)
+    assert 132 not in held
+    # The cartridge adds experience to each parent on every step, and the kept answer outlasts it.
+    state.daycare = (replace(ditto, experience=30001), None)
+    assert prerequisites(policy, state) is held
     assert 132 not in prerequisites(policy, snapshot((mon(132, 'Genderless'),)))
 
 
