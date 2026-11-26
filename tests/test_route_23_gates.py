@@ -25,9 +25,10 @@ def test_a_missing_badge_closes_its_row_and_earning_it_opens_the_road():
 
 
 def test_the_indigo_plateau_shop_is_not_a_restock_plan_without_every_badge():
-    # A full bag with no Poké Balls could only buy more Max Potions, which only Indigo Plateau sells.
+    # A full bag with no Poké Balls and no cure or Revive a first ball could take the entry of could only
+    # buy more Max Potions, which only Indigo Plateau sells.
     junk = tuple((ITEMS[name], 1) for name in ('MOON_STONE', 'DOME_FOSSIL', 'S_S_TICKET', 'HM01', 'MAX_ETHER', 'LIFT_KEY',
-                                               'SILPH_SCOPE', 'ELIXER', 'ESCAPE_ROPE', 'POKE_FLUTE', 'CARD_KEY', 'PARLYZ_HEAL',
+                                               'SILPH_SCOPE', 'ELIXER', 'ESCAPE_ROPE', 'POKE_FLUTE', 'CARD_KEY', 'ETHER',
                                                'MAX_POTION', 'PROTEIN', 'HM03', 'HM04', 'HP_UP', 'CARBOS', 'RARE_CANDY'))
     goal = Goal('secret_key', 'Unlock the Cinnabar gym', 'Explore the mansion')
     options = dict(requested_goal=goal.key, healing=False, in_league=False, has_pokedex=True)

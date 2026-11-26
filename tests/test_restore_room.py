@@ -7,7 +7,7 @@ whose limit is 20, could, and the run walked Victory Road to it for 30 minutes.
 from dataclasses import replace
 
 from pokesim.policies.progression import Goal
-from pokesim.policies.shopping import ShoppingController, cure_room, plateau_side, restore_room
+from pokesim.policies.shopping import BALL_KINDS, RESTORES, ShoppingController, cure_room, plateau_side, supply_room
 from pokesim.strategy_data import DATA, ITEMS, MAPS
 from test_events import snap
 from test_restock_reach import counter, reach
@@ -38,7 +38,7 @@ def mart(name, items):
 
 def test_a_viridian_restock_with_no_medicine_and_19_entries_goes_to_a_restore_mart_and_not_the_lobby():
     s = viridian(LEFT)
-    assert len(s.items) == 19 and restore_room(s)
+    assert len(s.items) == 19 and supply_room(s, RESTORES)
     targets = ShoppingController(restocking=True).plan(s, GOAL, None, **OPTIONS).goal.targets
     assert counter(LOBBY) not in targets and counter(MAPS['PEWTER_MART']) in targets
     # Viridian Mart sells no restore, so the trip goes on to the nearest mart that does.
@@ -62,7 +62,7 @@ def test_a_restore_outranks_a_cure_for_the_last_entry():
     # The bag sold TM27 at the counter, and the entry it freed is the restore's, not an Antidote's.
     sold = mart('VIRIDIAN_MART', CAME[:-2] + CAME[-1:])
     assert ShoppingController().step(mart('VIRIDIAN_MART', CAME), GOAL.key, None).request == ('sell', 227, 1)
-    assert restore_room(sold) and not cure_room(sold)
+    assert supply_room(sold, RESTORES) and not cure_room(sold)
     assert ShoppingController().step(sold, GOAL.key, None).request is None
     held = replace(sold, items=sold.items[:-1] + ((ITEMS['POTION'], 3),))
     assert cure_room(held)
@@ -81,6 +81,24 @@ def test_a_bag_with_no_room_sells_its_cure_for_a_first_restore():
     # With the restore held the cure is not bought back, and a mart with no restore sells nothing.
     assert shop.step(mart('PEWTER_MART', locked[:-1] + ((ITEMS['POTION'], 3),)), GOAL.key, None).request is None
     assert shop.step(mart('VIRIDIAN_MART', locked), GOAL.key, None).request is None
+
+
+def test_a_hunt_with_no_ball_and_no_room_restocks_at_an_ordinary_mart_and_sells_its_revive():
+    # A Red Clefairy hunt threw its last ball in Mt. Moon with 19 entries and nothing the ledger sells.
+    # Only the lobby could add a ball, and the trip would cross Victory Road to shop.
+    names = ('S_S_TICKET', 'HM01', 'HM05', 'LIFT_KEY', 'SILPH_SCOPE', 'POKE_FLUTE', 'CARD_KEY', 'HM03', 'HM04',
+             'SECRET_KEY', 'OLD_ROD', 'SUPER_ROD', 'GOOD_ROD', 'MOON_STONE', 'REVIVE', 'MASTER_BALL', 'MAX_ELIXER',
+             'ELIXER', 'MAX_POTION')
+    spent = tuple((ITEMS[name], 1) for name in names)
+    s = viridian(spent, map=MAPS['MT_MOON_B2F'], x=6, y=7)
+    assert supply_room(s, BALL_KINDS) and not supply_room(s, RESTORES)
+    plan = ShoppingController().plan(s, GOAL, None, **OPTIONS, reach=reach(s)).goal
+    assert plan.key == 'restock' and len(plan.targets) == 1 and plan.targets[0][0] != LOBBY
+    shop = ShoppingController()
+    at = mart('CERULEAN_MART', spent)
+    assert shop.step(at, GOAL.key, None).request == ('sell', ITEMS['REVIVE'], 1)
+    sold = mart('CERULEAN_MART', tuple(row for row in spent if row[0] != ITEMS['REVIVE']))
+    assert shop.step(sold, GOAL.key, None).request == ('buy', ITEMS['POKE_BALL'], 15)
 
 
 def test_the_plateau_side_is_the_road_the_plateau_and_the_route_23_strip_between_them():

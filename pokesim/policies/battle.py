@@ -329,11 +329,11 @@ def healing_item(items, mon, incoming=0):
 
 
 def shopping_item(items, stock, money, league=False, collecting=False, legendary=False, reserve=300,
-                  hunt_reserve=None, cure_room=False, restore_room=False):
+                  hunt_reserve=None, cure_room=False, restore_room=False, ball_room=False):
     """The next item to buy, or None. ``hunt_reserve``, during a hunt, is the money kept back while
-    the ball stock grows past the collecting 15 toward HUNT_STOCK. ``cure_room`` and ``restore_room``
-    let a first cure and a first restore into a bag past the 18 entries a new kind needs
-    (shopping.cure_room, shopping.restore_room)."""
+    the ball stock grows past the collecting 15 toward HUNT_STOCK. ``cure_room``, ``restore_room`` and
+    ``ball_room`` let a first cure, restore and ball into a bag past the 18 entries a new kind needs
+    (shopping.cure_room, shopping.supply_room)."""
     counts = dict(items)
     if legendary and not counts.get(ITEMS['MASTER_BALL']):
         if ITEMS['ULTRA_BALL'] not in stock:
@@ -384,7 +384,8 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
                 target = max(target, HUNT_STOCK - ball_count + counts.get(item, 0))
         if item in HEALING:
             target = max(0, heal_target - heal_count + counts.get(item, 0))
-        first = (cure_room and item in CURES and item not in HEALING) or (restore_room and item in HEALING)
+        first = ((cure_room and item in CURES and item not in HEALING) or (restore_room and item in HEALING)
+                 or (ball_room and item in BALLS))
         if counts.get(item, 0) >= target or (len(items) >= (20 if league else 18) and item not in counts
                                              and not first):
             continue

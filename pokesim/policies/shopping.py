@@ -35,6 +35,13 @@ DUNGEONS = {m for m, w in WORLD.items() if 'Pokecenter' not in w['name'] and w['
 # Bag entries a dungeon's story items need, the Lift Key and the Silph Scope in the Rocket Hideout.
 DUNGEON_KEY_SLOTS = 2
 VICTORY_ROAD = frozenset(MAPS[f'VICTORY_ROAD_{floor}F'] for floor in (1, 2, 3))
+RESTORES = frozenset(HEALING)
+BALL_KINDS = frozenset(BALLS)
+SPARE_CURES = frozenset(CURES) - RESTORES
+# The kinds a first restore or ball takes the entry of in a bag with no room, cheapest first. A restore
+# outranks a cure, and a ball a cure or a Revive. A ball takes no restore, since a bag with none
+# restocks for one.
+OUTRANKS = {RESTORES: SPARE_CURES, BALL_KINDS: SPARE_CURES | {ITEMS['REVIVE']}}
 
 
 def hunting(project):
@@ -59,31 +66,32 @@ def fits(snapshot, entries):
     return first_sale(after, 'items', 'sale') is not None
 
 
-def holds_restore(snapshot):
-    return any(qty and item in HEALING for item, qty in snapshot.items)
+def holds(snapshot, supply):
+    return any(qty and item in supply for item, qty in snapshot.items)
 
 
-def restore_sale(snapshot):
-    """The bag index of the cure a bag with no restore and no room sells so a first restore fits, or None.
-
-    A restore outranks a cure for an entry, so the cheapest cure goes."""
-    cures = [(PRICES.get(item, 0), index) for index, (item, qty) in enumerate(snapshot.items)
-             if qty and item in CURES and item not in HEALING]
-    if not cures or holds_restore(snapshot) or fits(snapshot, 1):
+def supply_sale(snapshot, supply):
+    """The bag index of the entry a bag with none of ``supply`` and no room sells so a first one fits, or
+    None: the cheapest kind it outranks (OUTRANKS)."""
+    spare = [(PRICES.get(item, 0), index) for index, (item, qty) in enumerate(snapshot.items)
+             if qty and item in OUTRANKS[supply]]
+    if not spare or holds(snapshot, supply) or fits(snapshot, 1):
         return None
-    index = min(cures)[1]
+    index = min(spare)[1]
     after = replace(snapshot, items=snapshot.items[:index] + snapshot.items[index + 1:])
     return index if fits(after, 1) else None
 
 
-def restore_room(snapshot):
-    """Whether a bag with no restore takes one past the 18 entries a new kind needs.
+def supply_room(snapshot, supply):
+    """Whether a bag with none of ``supply``, the restores or the balls, takes a first one past the 18
+    entries a new kind needs.
 
     A restock for 0 medicine goes on until it buys a restore. A Red run left Viridian, which sells none,
     with 19 entries, and only the Indigo Plateau lobby, whose limit is 20, could sell it one. The run
-    walked Victory Road to the lobby. The restore fills the bag while the ledger could still sell an
-    entry for a story item, or after a cure is sold for it (restore_sale)."""
-    return not holds_restore(snapshot) and (fits(snapshot, 1) or restore_sale(snapshot) is not None)
+    walked Victory Road to the lobby. A Red Clefairy hunt threw its last ball in Mt. Moon with 19
+    entries, and the lobby was its only counter too. The first one fills the bag while the ledger could
+    still sell an entry for a story item, or after the kind it outranks is sold for it (supply_sale)."""
+    return not holds(snapshot, supply) and (fits(snapshot, 1) or supply_sale(snapshot, supply) is not None)
 
 
 def cure_room(snapshot):
@@ -91,11 +99,11 @@ def cure_room(snapshot):
 
     With no cure a status sends the party to a Pokémon Center (ledger.battle_room). A Yellow run reached
     Route 15 with 19 entries and no cure, and walked to Fuchsia four times for poison. The cure may fill
-    the bag only while the ledger could still sell an entry for a story item. A restore outranks a cure,
-    so a bag with neither keeps an entry for the restore."""
-    if len(snapshot.items) >= 20 or any(qty and item in CURES and item not in HEALING for item, qty in snapshot.items):
+    the bag only while the ledger could still sell an entry for a story item. A restore and a ball
+    outrank a cure, so a bag without them keeps an entry for each."""
+    if len(snapshot.items) >= 20 or holds(snapshot, SPARE_CURES):
         return False
-    return fits(snapshot, 2 if restore_room(snapshot) else 1)
+    return fits(snapshot, 1 + supply_room(snapshot, RESTORES) + supply_room(snapshot, BALL_KINDS))
 
 
 def plateau_side(snapshot):
@@ -164,7 +172,8 @@ class ShoppingController(Errand):
                              shop == MAPS['INDIGO_PLATEAU_LOBBY'], collecting=True,
                              legendary=legendary_project(project), reserve=cash_reserve(snapshot),
                              hunt_reserve=funds_needed(snapshot) if hunting(project) else None,
-                             cure_room=cure_room(snapshot), restore_room=restore_room(snapshot))
+                             cure_room=cure_room(snapshot), restore_room=supply_room(snapshot, RESTORES),
+                             ball_room=supply_room(snapshot, BALL_KINDS))
 
     @staticmethod
     def fund_index(snapshot):
@@ -284,13 +293,14 @@ class ShoppingController(Errand):
                                 if self.raising_funds(snapshot) else
                                 'Sell surplus items, or a limited TM only when the bag is full, to make room for story items',
                                 request=('sell', item, self._sale_quantity(snapshot, item)))
-        index = restore_sale(snapshot)
-        if index is not None and self.item_for(snapshot, stock, goal_key, project) in HEALING:
-            item, qty = snapshot.items[index]
-            return MenuDecision(tap('b'), 'Sell a cure to make room for a first restore, which outranks it',
-                                request=('sell', item, min(qty, TRADE_LIMIT)))
-        self.selling = False
         item = self.item_for(snapshot, stock, goal_key, project)
+        for supply in (BALL_KINDS, RESTORES):
+            index = supply_sale(snapshot, supply)
+            if index is not None and item in supply:
+                spare, qty = snapshot.items[index]
+                return MenuDecision(tap('b'), 'Sell a cure or a Revive to make room for a first ball or restore, '
+                                    'which outranks it', request=('sell', spare, min(qty, TRADE_LIMIT)))
+        self.selling = False
         prepared = item is None and legendary_project(project) and ITEMS['ULTRA_BALL'] in stock
         request = ('buy', item, self._buy_quantity(snapshot, stock, goal_key, project, item)) if item else None
         return MenuDecision(tap('b'), 'Restock balls and medicine while keeping a cash reserve', bool(prepared),
