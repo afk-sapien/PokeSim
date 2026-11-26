@@ -21,6 +21,7 @@ from .move_development import hm_upgrade, move_name
 from .progression import (BOSS_TABLE, FLASH, GAME_STARTERS, STARTERS, YELLOW, Goal, bicycle_goal, boss_training,
                           flash_learner, fly_goal, fly_learner, healing_goal, journey, milestones, power, story_goal)
 from ..planning.losses import Losses, ace_slot
+from . import flight
 from . import training
 from .menus import select, tap
 from .errands import EXPLORATION_CHANCE, Detour, Heal
@@ -329,6 +330,8 @@ class StrategicPolicy(Policy):
         self.supply_attempts = set()
         # The dark map Flash was last offered in, so it is offered once per map entered. Never saved.
         self.flash_map = None
+        # Flights landed and the town of the last, for the scenario watch. Never saved.
+        self.flights, self.flown = 0, None
         # The HM teach last scored, and the party and HMs it was scored for.
         self.hm_token = None
         self.hm_option = None
@@ -1376,6 +1379,9 @@ class StrategicPolicy(Policy):
                 direction = (self.nav.open_route(s, goal.targets)
                              if s.map == MAPS['ROUTE_23'] and goal.targets else None)
                 if direction is None:
+                    flight = self._fly(s, goal)
+                    if flight:
+                        return flight
                     direction = self.nav.guided(pos, goal.targets, s.frame, self.rng, curiosity) if goal.targets else None
             self.mode = "following objective"
             path = self.mansion.path if s.map in MANSION_MAPS else self.nav.path
@@ -1861,6 +1867,27 @@ class StrategicPolicy(Policy):
                 if failure:
                     self.reason = failure
         return self._start_shortcut(s, FieldMove(move, target), ('field', move, pos, direction), purpose, done)
+
+    def _fly(self, s, goal):
+        """Fly to a visited town when the walk on from its landing is shorter by more than the flight costs.
+
+        A Kanto Marathon under way is run on foot, so it never flies. A refused flight is not tried again
+        from here for a while, and the walk goes on.
+        """
+        project = self.collection.project or {}
+        if project.get('method') == 'marathon' and project.get('checkpoint'):
+            return None
+        town = flight.destination(self.nav, s, goal.targets)
+        if town is None:
+            return None
+        name = flight.TOWN_NAMES[town]
+
+        def done(result, machine):
+            if result.completed:
+                self.flights += 1
+                self.flown = name
+        return self._start_shortcut(s, FieldMove('FLY', flight.flyer(s), name), ('field', 'FLY', name, (s.map, s.x, s.y)),
+                                    f'Fly to {name.replace("_", " ").title()}, nearer the goal', done)
 
     def _flash(self, s):
         """Light a dark Rock Tunnel with Flash so viewers can see it, once per map entered.

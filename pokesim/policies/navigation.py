@@ -812,6 +812,28 @@ class Navigator:
 
         return nearest
 
+    def nearest_start(self, starts, goals, frame, limit=60000):
+        """(steps, start) for the start nearest ``goals``, the first on a tie, from one search that leaves
+        every start at once. None when no start reaches a goal."""
+        goals = frozenset(goals)
+        neighbors = self._search_neighbors(frame)
+        origin = {}
+        queue = deque()
+        for start in starts:
+            if start not in origin:
+                origin[start] = (0, start)
+                queue.append(start)
+        while queue and len(origin) < limit:
+            source = queue.popleft()
+            if source in goals:
+                return origin[source]
+            depth, start = origin[source]
+            for _, target in neighbors(source):
+                if target not in origin:
+                    origin[target] = (depth + 1, start)
+                    queue.append(target)
+        return None
+
     def route(self, pos, goals, frame, limit=60000):
         goals = frozenset(goals)
         if pos in goals:
