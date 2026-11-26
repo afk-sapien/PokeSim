@@ -1,6 +1,7 @@
 """Directed navigation with observed actions, static geometry, and temporary obstacles."""
 from collections import deque
 from copy import deepcopy
+from dataclasses import replace
 from itertools import count
 import os
 
@@ -9,7 +10,7 @@ from pokecore.gen1 import sprite_tile
 from ..mapfacts.gen1 import SHUT, SWAPS
 from ..mapfacts.gen1_hand import HAND
 from ..planning.conditions import AnyOf, Badge, Event, Item
-from ..strategy_data import DATA, ITEMS, MAPS, WORLD, event_set
+from ..strategy_data import DATA, EVENTS, ITEMS, MAPS, WORLD, event_set
 from . import gates
 
 DIRS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
@@ -491,14 +492,32 @@ class Navigator:
         return direction
 
     def open_target(self, snapshot, targets):
-        """The nearest of ``targets`` that a route needing no additional puzzle switch reaches, or None.
-        This navigator's own path stays as it is."""
+        """The nearest of ``targets`` a walk reaches past the boulder gates the run can open, or None.
+        This navigator's own path stays as it is.
+
+        A gate is open once its switch is set. With Strength it also counts as open once the walk
+        reaches its switch, where the puzzle policies push a boulder on the way. Each Victory Road
+        puzzle is solved from the south, so a run south of the road reaches the Plateau, and from the
+        Plateau no switch and no southern mart is in reach."""
         pos = (snapshot.map, snapshot.x, snapshot.y)
         if pos in targets:
             return pos
-        navigation = self._opened(snapshot)
-        navigation.route(pos, targets, snapshot.frame)
-        return navigation.path[-1][2] if navigation.path else None
+        strength = any(70 in mon.moves for mon in snapshot.party)
+        while True:
+            navigation = self._opened(snapshot)
+            navigation.route(pos, targets, snapshot.frame)
+            if navigation.path:
+                return navigation.path[-1][2]
+            nearest = navigation.distance_lookup(pos, snapshot.frame)
+            reached = [flag for name, flag, x, y in gates.BOULDER_SWITCHES
+                       if strength and not event_set(snapshot.event_flags, flag)
+                       and nearest(((MAPS[name], x, y),)) is not None]
+            if not reached:
+                return None
+            flags = bytearray(snapshot.event_flags)
+            for flag in reached:
+                flags[EVENTS[flag] // 8] |= 1 << (EVENTS[flag] % 8)
+            snapshot = replace(snapshot, event_flags=bytes(flags))
 
     def _opened(self, snapshot):
         """The navigator that counts no puzzle switch beyond those set, on this one's graph."""

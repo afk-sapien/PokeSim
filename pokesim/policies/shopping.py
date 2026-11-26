@@ -81,6 +81,8 @@ class ShoppingController(Errand):
     selling: bool = False
     restocking: bool = False
     fund_target: int = 0
+    # The counter square a restock trip under way walks to, kept while each plan offers that trip.
+    shop: tuple | None = None
 
     def leave_menu(self):
         self.selling = False
@@ -121,8 +123,9 @@ class ShoppingController(Errand):
 
     def plan(self, snapshot, goal, project, *, requested_goal, healing, in_league, has_pokedex, completed_champion=False,
              reach=None):
-        """``reach`` returns the nearest of the shop squares it is given that the open story reaches, or
-        None. Without it every shop counts as reached."""
+        """``reach`` returns the nearest of the shop squares it is given that a walk reaches, or None.
+        Without it every shop counts as reached."""
+        held, self.shop = self.shop, None
         fee = entry_fee(snapshot, goal.key)
         self.fund_target = fee + CASH_RESERVE if fee and snapshot.money < fee else 0
         if self.fund_target and not healing and not in_league and has_pokedex and self.fund_index(snapshot) is not None:
@@ -184,11 +187,11 @@ class ShoppingController(Errand):
                 if clerk and clerk[0] == 0:
                     targets.append((map_id, 2, clerk[1]))
         if targets and reach is not None:
-            # A shop with no route through the puzzle gates open now is no plan. North of Victory Road
-            # with its boulders off their switches, a restock chose the southern marts and wandered the
-            # road for 50 minutes.
-            nearest = reach(tuple(targets))
-            targets = [nearest] if nearest is not None else []
+            # The trip picks its shop when it starts, from those a walk reaches, and keeps it. North of
+            # Victory Road with its boulders off their switches, a restock chose the southern marts and
+            # wandered the road for 50 minutes.
+            self.shop = held if held in targets else reach(tuple(targets))
+            targets = [self.shop] if self.shop is not None else []
         if targets:
             return SupplyPlan(Goal('restock', 'Restock supplies',
                                    'Buy useful balls and medicine with a cash reserve', tuple(targets), 'left', True))

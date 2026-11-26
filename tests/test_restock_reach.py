@@ -1,4 +1,5 @@
-"""A restock plans only a shop the open story reaches, and judges each shop as its counter does."""
+"""A restock plans only a shop a walk reaches, keeps it for the trip, and judges each shop as its counter
+does."""
 from dataclasses import replace
 from functools import partial
 
@@ -48,6 +49,26 @@ def test_a_restock_plans_no_shop_beyond_the_shut_victory_road_gates():
     opened = replace(s, event_flags=flags('EVENT_GOT_POKEDEX', *SWITCHES))
     plan = ShoppingController().plan(opened, GOAL, None, **OPTIONS, reach=reach(opened)).goal
     assert plan.key == 'restock' and plan.targets == (counter(MAPS['VIRIDIAN_MART']),)
+
+
+def test_a_walk_from_the_south_opens_the_victory_road_gates_on_the_way():
+    # A Red run at Mt. Moon with every switch off could buy only at the lobby. The puzzle policies push
+    # each boulder onto its switch on the way north, so with Strength the walk reaches the lobby.
+    lobby = (counter(LOBBY),)
+    s = plateau(map=MAPS['VICTORY_ROAD_1F'], x=9, y=16)
+    assert reach(s)(lobby) == counter(LOBBY)
+    weak = replace(s, party=(mon(level=60, moves=(57, 15, 0, 0)),))
+    assert reach(weak)(lobby) is None
+
+
+def test_a_restock_trip_keeps_the_shop_it_picked():
+    s = plateau(money=894, items=((ITEMS['POKE_BALL'], 7),), event_flags=flags('EVENT_GOT_POKEDEX', *SWITCHES))
+    shop = ShoppingController()
+    picked = shop.plan(s, GOAL, None, **OPTIONS, reach=lambda targets: targets[-1]).goal.targets
+
+    def unasked(targets):
+        raise AssertionError('the trip asked for a shop again')
+    assert len(picked) == 1 and shop.plan(s, GOAL, None, **OPTIONS, reach=unasked).goal.targets == picked
 
 
 def test_the_plateau_judges_the_lobby_as_its_counter_does():
