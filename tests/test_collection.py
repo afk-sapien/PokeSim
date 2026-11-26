@@ -3,7 +3,8 @@ import random
 
 import pytest
 
-from pokesim.policies.collection import Collection, DATA, EVOS, dex
+from pokesim.policies.collection import COINS_PRICE, Collection, DATA, EVOS, dex
+from pokesim.policies.ledger import funds_needed
 from pokesim.policies.battle import choose_battle, needs_healing
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
@@ -221,6 +222,18 @@ def test_coin_project_stages_and_cash_reserve():
     assert c.goal(s).key=='collect_prize'
     c.remaining=100
     assert c.goal(replace(s,coins=0,money=9000)) is None
+    assert c.remaining==0
+
+
+def test_coin_purchase_never_takes_the_purse_under_the_rematch_floor():
+    c=Collection()
+    c.project={'method':'prize','species':sid(137),'key':'prize'}
+    s=state(items=((ITEMS['COIN_CASE'],1),),coins=0)
+    floor=funds_needed(s)
+    assert floor > 10000
+    assert c.goal(replace(s,money=floor+COINS_PRICE)).key=='collect_coins'
+    c.remaining=100
+    assert c.goal(replace(s,money=floor+COINS_PRICE-1)) is None
     assert c.remaining==0
 
 

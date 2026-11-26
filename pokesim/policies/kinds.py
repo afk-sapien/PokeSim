@@ -443,7 +443,11 @@ class Prize(Kind):
                                           'CELADON_DINER', 'GYM_GUIDE'))
         cost = c.PORYGON_COINS.get(collection.version, 9999)
         if s.coins < cost:
-            if s.money < 10000:
+            # No purchase takes the purse under funds_needed, the floor a League rematch for prize money
+            # waits on. Buying down to a fixed 10,000 left 9,587 of a 12,300 floor, and the rematch it
+            # then made urgent came before new Pokédex entries.
+            from .ledger import funds_needed
+            if s.money - c.COINS_PRICE < funds_needed(s):
                 collection.remaining = 0
                 return None
             return at('collect_coins', 'Save coins for Porygon', f'{s.coins} of {cost} coins saved', 'GAME_CORNER', 5, 8, 'up')
