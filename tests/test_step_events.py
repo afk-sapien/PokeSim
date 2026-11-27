@@ -459,13 +459,13 @@ def test_a_store_takes_the_observed_rows_of_another_and_leaves_the_rest(tmp_path
         claims.put(db, 'mew', '1', claims.OPEN, frame=90)
         claims.put(db, 'league', 'won-1', claims.DELIVERED, frame=30)
     with source.reading() as db:
-        carried = rows(db)
+        carried = rows(db, 1)
     source.close()
     # No wall-clock time rides along, so two runs of one save carry the same rows.
     assert 'started_at' not in carried['kv'][STEPS]
     assert not [row for row in carried['claims'] if 'ts' in row]
     run = Store(tmp_path / 'run')
-    put_rows(run, carried)
+    put_rows(run, carried, 1)
     assert run.get(STEPS)['total'] == 4321
     assert run.get(events.KEY) == {'eevee': {'next_at': 5000}}
     assert run.get('boss_losses') is None
@@ -473,7 +473,38 @@ def test_a_store_takes_the_observed_rows_of_another_and_leaves_the_rest(tmp_path
         assert [(row['source'], row['key'], row['state']) for row in claims.rows(db, 'legendary')
                 + claims.rows(db, 'mew')] == [('legendary', '144', 'delivered'), ('mew', '1', 'open')]
         assert claims.rows(db, 'league') == []
-        assert rows(db) == carried
+        assert rows(db, 1) == carried
+    run.close()
+
+
+def test_a_gold_silver_or_crystal_save_carries_its_own_rows_and_no_mew_claim(tmp_path):
+    from pokesim.state import claims
+    from pokesim.store_observe import put_rows, rows
+    source = Store(tmp_path / 'adventure')
+    source.set(STEPS, {'total': 4321, 'available': True, 'started_at': 1.5})
+    source.set('gen2-champion-shop-v1', {'RARE_CANDY': {'next_at': 5000, 'purchased': 0}})
+    source.set('gen2-legendary-returns-v1', {'next_at': 9000})
+    source.set('gen2-event-returns-v1', {'clocks': {}})
+    source.set('gen2-legendary-retry-notices-v1', {'243': 1})
+    source.set('pokedex-milestones-v1', {'level_100': [1]})
+    source.set(events.KEY, {'eevee': {'next_at': 5000}})
+    with source.transaction() as db:
+        claims.put(db, 'legendary', '243', claims.DELIVERED, frame=60, species=243)
+        claims.put(db, 'event', 'sudowoodo', claims.OPEN, frame=70, species=185)
+        claims.put(db, 'mew', '1', claims.OPEN, frame=90)
+    with source.reading() as db:
+        carried = rows(db, 2)
+    source.close()
+    # A headless Gold, Silver or Crystal run keeps no Pokédex goals and earns no League reward, which
+    # alone opens its Mew claims, so neither rides along. Nor does a Red, Blue or Yellow key.
+    assert sorted(carried['kv']) == ['cartridge-steps-v1', 'gen2-champion-shop-v1', 'gen2-event-returns-v1',
+                                     'gen2-legendary-retry-notices-v1', 'gen2-legendary-returns-v1']
+    assert [(row['source'], row['key']) for row in carried['claims']] == [('legendary', '243'),
+                                                                          ('event', 'sudowoodo')]
+    run = Store(tmp_path / 'run')
+    put_rows(run, carried, 2)
+    with run.reading() as db:
+        assert rows(db, 2) == carried
     run.close()
 
 

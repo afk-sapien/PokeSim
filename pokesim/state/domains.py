@@ -13,8 +13,8 @@ transaction. A key that only one generation keeps names only that generation.
 ``policy_reads`` marks the keys a policy decision can read: through what ``Store.attach`` hands the
 policy, through a value an emulator sets on the policy, or because the key decides whether and how
 the policy steps. ``cached`` marks the keys ``Store.get`` may keep for the rest of one observation.
-``carried`` marks the keys a headless save carries in its manifest for that generation, the ones
-its observe step reads (``store_observe.rows``).
+``carried`` names the generations whose headless saves carry the key in their manifest, the ones
+whose observe step reads it (``store_observe.rows``).
 
 tests/test_state_domains.py fails on a kv key the package uses that is not declared here. A new
 ledger needs one line below.
@@ -44,7 +44,7 @@ class Domain:
     generations: tuple = (1, 2)
     policy_reads: bool = False
     cached: bool = False
-    carried: bool = False
+    carried: tuple = ()
     kind: str = KEY
 
 
@@ -75,7 +75,8 @@ DOMAINS = (
     Domain('league-rewards-v1', 'pokesim.rewards', RESETS_ON_RESTART, policy_reads=True),
     Domain('play_clock', 'pokesim.emulator', RESETS_ON_RESTART),
     Domain('capture-statistics-v1', 'pokesim.catches', RESETS_ON_RESTART),
-    Domain('pokedex-milestones-v1', 'pokesim.milestones', RESETS_ON_RESTART, cached=True, carried=True),
+    # A headless Gold, Silver or Crystal run keeps no Pokédex goals, so its saves leave them out.
+    Domain('pokedex-milestones-v1', 'pokesim.milestones', RESETS_ON_RESTART, cached=True, carried=GEN1),
     Domain('adventure-records-v1', 'pokesim.adventure_records', RESETS_ON_RESTART),
     _prefix('trade_offer:', 'pokesim.trade.preferences', RESETS_ON_RESTART, policy_reads=True),
     Domain('shiny-statistics-v1', 'pokesim.shiny', RESETS_ON_RESTART, GEN1, cached=True),
@@ -94,9 +95,9 @@ DOMAINS = (
     # its partners through that move.
     Domain('league-partners-v1', 'pokesim.league_partners', RESETS_ON_RESTART, GEN1),
     Domain('mew-returns-v1', 'pokesim.mew_returns', RESETS_ON_RESTART, GEN1, policy_reads=True, cached=True,
-           carried=True),
+           carried=GEN1),
     # The Mew gift's marker. The Pokedex of the new game sets it again once Mew is owned.
-    Domain('pokesim-mew-v1', 'pokesim.runtime.reward_delivery', RESETS_ON_RESTART, GEN1, cached=True, carried=True),
+    Domain('pokesim-mew-v1', 'pokesim.runtime.reward_delivery', RESETS_ON_RESTART, GEN1, cached=True, carried=GEN1),
 
     # Reset by both restarts, so the new game's stall counts and goal times start empty.
     # A reload keeps the ladder's counts, so reloading cannot start the climb again.
@@ -133,14 +134,14 @@ DOMAINS = (
     Domain('adventure-seed-v1', 'pokesim.seeds', RESETS_ON_RESTART, policy_reads=True),
 
     # Walking, returns and the Champion shops.
-    Domain('cartridge-steps-v1', 'pokesim.gen2.steps', SURVIVES, policy_reads=True, cached=True, carried=True),
-    Domain('step-events-v1', 'pokesim.step_events', SURVIVES, GEN1, cached=True, carried=True),
-    Domain('legendary-returns-v1', 'pokesim.legendary_returns', SURVIVES, GEN1, cached=True, carried=True),
-    Domain('champion-shop-v1', 'pokesim.champion_shop', SURVIVES, GEN1, policy_reads=True, carried=True),
-    Domain('gen2-champion-shop-v1', 'pokesim.gen2.champion_shop', SURVIVES, GEN2, policy_reads=True),
-    Domain('gen2-legendary-returns-v1', 'pokesim.gen2.returns', SURVIVES, GEN2, policy_reads=True),
-    Domain('gen2-event-returns-v1', 'pokesim.gen2.returns', SURVIVES, GEN2, policy_reads=True),
-    Domain('gen2-legendary-retry-notices-v1', 'pokesim.gen2.legendary', SURVIVES, GEN2),
+    Domain('cartridge-steps-v1', 'pokesim.gen2.steps', SURVIVES, policy_reads=True, cached=True, carried=(1, 2)),
+    Domain('step-events-v1', 'pokesim.step_events', SURVIVES, GEN1, cached=True, carried=GEN1),
+    Domain('legendary-returns-v1', 'pokesim.legendary_returns', SURVIVES, GEN1, cached=True, carried=GEN1),
+    Domain('champion-shop-v1', 'pokesim.champion_shop', SURVIVES, GEN1, policy_reads=True, carried=GEN1),
+    Domain('gen2-champion-shop-v1', 'pokesim.gen2.champion_shop', SURVIVES, GEN2, policy_reads=True, carried=GEN2),
+    Domain('gen2-legendary-returns-v1', 'pokesim.gen2.returns', SURVIVES, GEN2, policy_reads=True, carried=GEN2),
+    Domain('gen2-event-returns-v1', 'pokesim.gen2.returns', SURVIVES, GEN2, policy_reads=True, carried=GEN2),
+    Domain('gen2-legendary-retry-notices-v1', 'pokesim.gen2.legendary', SURVIVES, GEN2, carried=GEN2),
 
     # Lifetime tallies, and markers of one-time moves.
     Domain('activity-ledger-v1', 'pokesim.activity_ledger', SURVIVES),
@@ -186,7 +187,7 @@ def restarted(generation):
 
 def carried(generation):
     """The kv domains a headless save of this generation carries."""
-    return tuple(domain for domain in DOMAINS if domain.carried and generation in domain.generations)
+    return tuple(domain for domain in DOMAINS if generation in domain.carried)
 
 
 def find(key):

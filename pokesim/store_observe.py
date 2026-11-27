@@ -84,32 +84,35 @@ def observe(host, snap, now, *, returns=True):
     return events, snap, restored
 
 
-def rows(db):
-    """The rows ``observe`` reads, from an adventure's database handle, as a headless checkpoint
-    carries them: each kv value by key and the return claims, oldest first. The League rewards stay
-    out, since a headless run earns none.
+def rows(db, generation):
+    """The rows a headless run of ``generation`` observes (``observe`` here, or gen2/store_observe.py),
+    from an adventure's database handle, as a headless checkpoint carries them: each kv value by key
+    and the return claims, oldest first. The League rewards stay out, since a headless run earns
+    none. So do the Gold, Silver and Crystal Mew claims, which only a League reward opens.
 
     Wall-clock times stay out too, so two runs of one save write the same manifest and trace the
     same game: when the step count began and when each claim last changed. Play reads neither."""
     from .legendary_returns import STEPS
     from .return_claims import EVENT, MEW, SOURCE
     from .state import claims, domains, kv
-    values = {domain.key: kv.get(db, domain.key) for domain in domains.carried(1) if kv.exists(db, domain.key)}
+    values = {domain.key: kv.get(db, domain.key) for domain in domains.carried(generation)
+              if kv.exists(db, domain.key)}
     if STEPS in values:
         values[STEPS] = {name: value for name, value in values[STEPS].items() if name != 'started_at'}
+    sources = (SOURCE, EVENT, MEW) if generation == 1 else (SOURCE, EVENT)
     return {'kv': values, 'claims': [{field: row[field] for field in claims.FIELDS if field != 'ts'}
-                                     for source in (SOURCE, EVENT, MEW) for row in claims.rows(db, source)]}
+                                     for source in sources for row in claims.rows(db, source)]}
 
 
-def put_rows(store, carried):
-    """Write the rows a checkpoint carries (``rows``) into ``store``, in one transaction. Each claim
-    takes the load's time, as a claim written then would."""
+def put_rows(store, carried, generation):
+    """Write the rows a checkpoint of ``generation`` carries (``rows``) into ``store``, in one
+    transaction. Each claim takes the load's time, as a claim written then would."""
     import time
 
     from .state import claims, domains, kv
     now = time.time()
     with store.transaction() as db:
-        for domain in domains.carried(1):
+        for domain in domains.carried(generation):
             if domain.key in carried['kv']:
                 kv.put(db, domain.key, carried['kv'][domain.key])
         db.executemany(f'INSERT OR REPLACE INTO claims({", ".join(claims.FIELDS)}) '
