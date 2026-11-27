@@ -1107,7 +1107,7 @@ class Collection:
         evos = []
         for p in s.party:
             for e in EVOS.get(p.species,[]):
-                if dex(e['species']) not in s.owned:
+                if dex(e['species']) not in s.owned and dex(p.species) not in REFUSES_EVOLUTION:
                     evos.append({'from':p.nick or name(p.species),'to':name(e['species']), 'method':e['method'],
                                  'requirement':e['requirement'],'level':p.level})
         return {'phase':'Pokédex expeditions' if self.completed_champion else 'Adventure in progress',
@@ -1484,7 +1484,10 @@ class Collection:
                 continue
             # Prefer missing evolutions before a general level milestone for this partner. A stone
             # counts too: a Weepinbell was being trained to level 100 with Victreebel unregistered.
-            if any(evo['method'] != 'trade' and dex(evo['species']) not in s.owned for evo in EVOS.get(sid, [])):
+            # A Pokémon that refuses to evolve counts as fully evolved: Yellow's Pikachu stayed at level
+            # 44 while Raichu was unregistered, since no evolve goal takes it either.
+            if dex(sid) not in REFUSES_EVOLUTION and any(evo['method'] != 'trade' and dex(evo['species']) not in s.owned
+                                                         for evo in EVOS.get(sid, [])):
                 continue
             investment = training_investment(mon, individuals, hunt_available=sid in huntable,
                                              searches=self.quality_searches.get(str(sid), 0))

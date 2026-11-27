@@ -3,7 +3,7 @@ import random
 from dataclasses import replace
 from unittest.mock import Mock
 
-from pokesim.policies import training
+from pokesim.policies import collection as collection_module, training
 from pokesim.policies.collection import Collection
 from pokesim.policies.navigation import Navigator
 from pokesim.policies.progression import Goal
@@ -130,6 +130,35 @@ def test_ready_nearby_partners_train_before_distant_boxed_partners():
     scores = {p['parent']: option.score for option, p in captured if p['method'] == 'train'}
     assert sid(113) in scores and sid(115) not in scores
     assert c.remaining == training.TRAINING_BUDGET
+
+
+def train_parents(c, s):
+    nav = Navigator()
+    nav.visits = {(m, 0, 0): 1 for m in WORLD}
+    nav.distance_lookup = Mock(return_value=lambda targets: 20 if targets else None)
+    captured = []
+
+    def select(options, projects):
+        captured.extend(projects[option.key] for option in options)
+        return None
+    c.director.select = select
+    c.observe(s)
+    c.choose(s, nav, random.Random(1), Goal('collect_plan', 'Plan', 'Plan'))
+    return {p['parent'] for p in captured if p['method'] == 'train'}
+
+
+def test_a_pokemon_that_refuses_to_evolve_trains_as_if_fully_evolved(monkeypatch):
+    # Yellow's Pikachu refuses the Thunder Stone, so with Raichu unregistered it was never trained either.
+    pikachu = sid(25)
+    s = state(map=MAPS['ROUTE_1'], money=100000, hall_of_fame_count=1, owned=frozenset(range(1, 152)) - {26},
+              party=(mon(species=pikachu, level=44, nick='PIKACHU'), mon(species=sid(113), level=65)),
+              items=tuple((ITEMS[item], 10) for item in ('POKE_BALL', 'OLD_ROD', 'GOOD_ROD', 'SUPER_ROD')))
+    assert pikachu not in train_parents(Collection(), s), 'a Pikachu that can evolve waits for Raichu'
+    assert [e['to'] for e in Collection().describe(s)['evolutions']] == ['Raichu']
+    monkeypatch.setattr(collection_module, 'REFUSES_EVOLUTION', {25})
+    assert pikachu in train_parents(Collection(), s)
+    # Nor does the dashboard list an evolution that never comes.
+    assert Collection().describe(s)['evolutions'] == []
 
 
 def test_productive_sessions_can_heal_repeatedly_without_spending_training_budget():
