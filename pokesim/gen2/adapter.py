@@ -123,8 +123,14 @@ class Gen2Adapter:
     def after_load(self, run, metadata, first):
         from pokecore.gen2.clock import follow_game_time
 
+        from ..store_observe import put_rows
         from .legendary import Recovery
         run.legendary_recovery = Recovery.loaded(metadata, run.frame)
+        # The run's store starts with the rows its first save carries, as a Red, Blue or Yellow run's
+        # does. An application reload keeps its adventure's rows, so a later load keeps the run's.
+        if first and metadata.get('store_rows'):
+            put_rows(run.store, metadata['store_rows'], 2)
+            run.steps.read()
         # Gen II reads a clock earlier than its saved time as a reset, so a load resumes at the
         # furthest reading, as the runtime does.
         readings = [value for value in (metadata.get('rtc_elapsed'), run.clock) if isinstance(value, (int, float))]
@@ -137,7 +143,11 @@ class Gen2Adapter:
             run.policy.menu = None
 
     def manifest_fields(self, run):
-        return {'generation': 2, 'pb': run.pb, 'history': run.history, 'legendary_recovery': run.legendary_recovery}
+        from ..store_observe import rows
+        with run.store.reading() as db:
+            carried = rows(db, 2)
+        return {'generation': 2, 'pb': run.pb, 'history': run.history, 'legendary_recovery': run.legendary_recovery,
+                'store_rows': carried}
 
     def before_save(self, pb):
         # The clock is rebased on the host clock, as the runtime does, so a copy opened with an unlocked

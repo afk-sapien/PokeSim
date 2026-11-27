@@ -154,13 +154,14 @@ def test_adopt_keeps_an_existing_save_compressed(tmp_path):
         main(['adopt', str(ladder), 'red', str(source)])
 
 
-def test_adopt_with_an_adventure_carries_the_rows_a_headless_run_observes(tmp_path):
+@pytest.mark.parametrize('game, generation', [('red', 1), ('crystal', 2)])
+def test_adopt_with_an_adventure_carries_the_rows_a_headless_run_observes(tmp_path, game, generation):
     from pokesim.legendary_returns import STEPS
     from pokesim.state import claims
     from pokesim.store import Store
-    ladder = tmp_path / 'red-deep'
+    ladder = tmp_path / f'{game}-deep'
     ladder.mkdir()
-    (ladder / 'ladder.json').write_text(json.dumps({'game': 'red', 'generation': 1, 'rom_sha1': 'abc',
+    (ladder / 'ladder.json').write_text(json.dumps({'game': game, 'generation': generation, 'rom_sha1': 'abc',
                                                     'randomizer': ''}), encoding='utf-8')
     source = tmp_path / 'auto.state'
     source.write_bytes(b'\0' * 1000)

@@ -13,8 +13,12 @@ class StepTracker:
     def __init__(self, store, data, clock=time.monotonic):
         """``clock`` gives the seconds the writes are spaced by. A headless run counts them on its frames."""
         self.store, self.data, self.clock = store, data, clock
-        self.value = store.get(STEPS) or {'total': 0, 'started_at': time.time(), 'available': True}
+        self.read()
         self.last_flush = 0
+
+    def read(self):
+        """Take the walked steps the store holds, at the start or after a load put a save's rows in it."""
+        self.value = self.store.get(STEPS) or {'total': 0, 'started_at': time.time(), 'available': True}
 
     def attach(self, pb):
         pb.hook_register(*step_hook(pb.memory, self.data), self.completed, pb)

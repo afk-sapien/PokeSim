@@ -2,7 +2,8 @@
 
   snapshot  play one fresh game headless and keep a save the first time it reaches each rung
   adopt     keep an existing checkpoint as a rung, so a covered stage needs no fresh run, and with
-            --adventure the walked steps, returns, offers and Pokédex goals of a Gen I adventure's store
+            --adventure the walked steps, returns and offers of the adventure's store, and a Gen I one's
+            Pokédex goals
   show      list the rungs a ladder folder holds and the ones it still lacks
   check     read each rung's save with pokecore and fail when its stage is not the rung's
   gate      play a short batch from every rung and fail on a new stall, an error or more waste
@@ -345,13 +346,11 @@ def adopt(args):
     if target.exists() and not args.force:
         raise SystemExit(f'{target} exists. Pass --force to replace it.')
     if args.adventure:
-        if ladder['generation'] != 1:
-            raise SystemExit('Only a Red, Blue or Yellow rung carries its adventure rows')
         from pokesim.state import schema
         from pokesim.store_observe import rows
         db = schema.connect(args.adventure / 'pokesim.sqlite', read_only=True)
         try:
-            manifest = dict(manifest, store_rows=rows(db))
+            manifest = dict(manifest, store_rows=rows(db, ladder['generation']))
         finally:
             db.close()
     with open_state(args.checkpoint) as source:
@@ -752,8 +751,8 @@ def main(argv=None):
     adopting.add_argument('checkpoint', type=Path)
     adopting.add_argument('--force', action='store_true')
     adopting.add_argument('--adventure', type=Path,
-                          help="a Red, Blue or Yellow adventure's folder, whose walked steps, returns, Champion "
-                               "counter offers and Pokédex goals the rung's run starts with")
+                          help="an adventure's folder, whose walked steps, returns and Champion counter offers "
+                               "the rung's run starts with, and for Red, Blue or Yellow its Pokédex goals")
     adopting.set_defaults(action=adopt)
     showing = commands.add_parser('show', help='list the ladders under a folder')
     showing.add_argument('root', type=Path, nargs='?', default=ROOT / 'data' / 'ladder')

@@ -37,7 +37,7 @@ def checkpoint_manifest(policy, *, rom_sha1, frame, generation=1, pb=None, polic
         manifest['reward_id'] = store.get('custom-reward-barrier-v1')
     if legendary_recovery is not None:
         manifest['legendary_recovery'] = legendary_recovery.state_dict()
-    # A headless Red, Blue or Yellow run's store rows (store_observe.rows), which its first load takes.
+    # A headless run's store rows (store_observe.rows), which its first load takes.
     if store_rows is not None:
         manifest['store_rows'] = store_rows
     if generation == 2:
