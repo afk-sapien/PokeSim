@@ -40,12 +40,15 @@ def status(store):
 
 
 class StepTracker:
-    def __init__(self, store, rom_sha1):
+    def __init__(self, store, rom_sha1, clock=time.monotonic):
+        """``clock`` reads the seconds that pace the flushes. A headless run counts them on its own
+        frames, so a rerun flushes on the same steps."""
         self.store = store
         self.rom_sha1 = rom_sha1
         self.supported = rom_sha1 in TRACKED
         self.value = store.get(STEPS) or {'total': 0, 'started_at': time.time()}
         self.value['available'] = self.supported
+        self.clock = clock
         self.last_flush = 0
         self.flush(force=True)
 
@@ -66,7 +69,7 @@ class StepTracker:
             self.flush(force=True)
 
     def flush(self, *, force=False):
-        now = time.monotonic()
+        now = self.clock()
         if force or now - self.last_flush >= 30:
             self.store.set(STEPS, self.value)
             self.last_flush = now

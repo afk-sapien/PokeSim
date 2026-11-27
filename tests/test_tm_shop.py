@@ -356,6 +356,7 @@ def test_headless_run_sells_at_the_counter_as_the_application_does(purchase_fixt
     emu.policy.tm_plan = plan
     memory, resumed = emu.pb.memory, []
     run = SimpleNamespace(policy=emu.policy, pb=emu.pb, frame=before.frame, resume=resumed.append,
+                          store=emu.store, step_tracker=SimpleNamespace(flush=lambda **_: None),
                           manifest=lambda: {'policy_state': emu.policy.state_dict(), 'run_memory': {}})
     Gen1Adapter.after_step(object.__new__(Gen1Adapter), run, before)
     # The same bytes as the application's sale, past the position the fixture stands on.
@@ -369,7 +370,8 @@ def test_headless_run_leaves_the_counter_alone_without_a_trip_or_a_sale(purchase
     from pokesim.adapter import Gen1Adapter
     emu, before, *_ = purchase_fixture
     untouched, resumed = bytes(emu.pb.memory), []
-    run = SimpleNamespace(policy=emu.policy, pb=emu.pb, frame=before.frame, resume=resumed.append, manifest=dict)
+    run = SimpleNamespace(policy=emu.policy, pb=emu.pb, frame=before.frame, resume=resumed.append, manifest=dict,
+                          store=emu.store, step_tracker=SimpleNamespace(flush=lambda **_: None))
     monkeypatch.setattr(tm_purchase, 'read_snapshot', lambda *_: replace(before, money=0))
     Gen1Adapter.after_step(object.__new__(Gen1Adapter), run, before)
     emu.policy.tm_plan = None

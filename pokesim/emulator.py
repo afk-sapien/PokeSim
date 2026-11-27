@@ -359,36 +359,13 @@ class Emulator(EmulatorBase):
         # every earlier League win as new on the next win, and pay each gift out again.
         rewards.initialize(self.store, getattr(self, 'mem', RunMemory()).championships)
 
-    def _decline_returns(self):
-        """Close the returned legendaries the battle refused to catch."""
-        from .legendary_returns import decline
-        collection = getattr(self.policy, 'collection', None)
-        declined = getattr(collection, 'declined_returns', None)
-        if isinstance(declined, set):
-            for number in declined:
-                decline(self.store, number)
-            collection.declined_returns = set()
-
-    def _keeps_another(self, snapshot):
-        """Whether the PC would keep one more copy of a dex number, rated with no DVs as the battle
-        rates a wild copy with its own (collection.improves), or None when the policy has no PC."""
-        rating = getattr(self.policy, 'catch_rating', None)
-        if rating is None:
-            return None
-        from .policies.collection import improves
-        from .strategy_data import SPECIES
-
-        def keeps(number):
-            species = next(sid for sid, row in SPECIES.items() if row['dex'] == number)
-            return improves(snapshot, species, (), rating(snapshot))
-        return keeps
-
     def _reset_transient(self, *, clear_observation=False):
         """Discard queued input and recovery timers without erasing durable progress."""
         self.policy.on_restore()
         if hasattr(self.policy, 'collection') and hasattr(self, 'store'):
             from .legendary_returns import claims
-            self._decline_returns()
+            from .store_observe import decline_returns
+            decline_returns(self.store, self.policy)
             ready, closed = claims(self.store)
             self.policy.collection.returned_legendaries = ready
             self.policy.collection.closed_legendaries = closed
@@ -535,46 +512,14 @@ class Emulator(EmulatorBase):
         self.pending = [ev for ev in new if ev.still is not None]
         events += [ev for ev in new if ev.still is None]
         self._release_journal(events, snap)
-        restored_legendary = False
-        if (self.rom_sha1 in config.GEN1_ROM_SHA1 and not self.manual_mode
-                and not self.store.get('trade_hold')):
-            from .legendary_returns import observe as returns_observe, claims
-            if hasattr(self, 'step_tracker'):
-                self.step_tracker.flush()
-            from . import mew_returns
-            mew_returns.observe(self.store, snap)
-            from . import champion_shop
-            champion_shop.observe(self.store, snap)
-            if hasattr(self.policy, 'shop_offers'):
-                self.policy.shop_offers = champion_shop.ready(self.store)
-            return_events, restored_legendary = returns_observe(self.store, snap, self.pb.memory)
-            events += return_events
-            from . import step_events
-            activity_events, activity_changed = step_events.observe(self.store, snap, self.pb.memory,
-                                                                    self._keeps_another(snap))
-            events += activity_events
-            restored_legendary |= activity_changed or bool(activity_events)
-            if hasattr(self.policy, 'collection'):
-                self.policy.collection.returned_events = step_events.available(self.store)
-            if restored_legendary:
-                snap = read_snapshot(self.pb.memory, self.frame)
-            self._decline_returns()
-            ready, closed = claims(self.store)
-            if hasattr(self.policy, 'collection'):
-                self.policy.collection.returned_legendaries = ready
-                self.policy.collection.closed_legendaries = closed
-            recovery_events, recovered = self.legendary_recovery.observe(
-                snap, self.pb.memory, self.play_clock.frames, repeat=ready, blocked=closed)
-            restored_legendary |= recovered
-            events += recovery_events
-            if restored_legendary:
-                snap = read_snapshot(self.pb.memory, self.frame)
-                self.prev_snapshot = snap
-        if hasattr(self, 'milestones'):
-            self.milestones.observe(snap)
-            if hasattr(self.policy, 'collection'):
-                from .milestones import status as milestone_status
-                self.policy.collection.milestones = milestone_status(self.store)
+        from . import store_observe
+        returns = (self.rom_sha1 in config.GEN1_ROM_SHA1 and not self.manual_mode
+                   and not self.store.get('trade_hold'))
+        store_events, snap, restored_legendary = store_observe.observe(self, snap, self.play_clock.frames,
+                                                                       returns=returns)
+        events += store_events
+        if restored_legendary:
+            self.prev_snapshot = snap
         if hasattr(self, 'statistics'):
             self.statistics.observe(snap, self.pb.memory, clock=self.play_clock.status())
         if hasattr(self, 'goal_time') and snap.valid and snap.started:
