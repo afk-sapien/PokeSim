@@ -399,7 +399,7 @@ def peer_wanted(policy, snapshot, species):
 
 def hunt_wanted(policy, snapshot):
     """``wanted`` for the Pokédex hunt, as a function of the species. A copy only linked adventures ask
-    for is hunted while one more fits without a kept copy going for it (release.supply_room). Once
+    for is hunted while one more fits without a rated copy going for it (release.supply_room). Once
     copies kept for trade filled the boxes, each such catch released another kept copy, and that
     copy's own hunt opened next. A Crystal run caught and released Slowpoke, Weedle and Goldeen twice
     each that way in under an hour. The PC is rated once, and only when such a copy comes up. Each

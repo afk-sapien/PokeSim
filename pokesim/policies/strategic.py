@@ -218,6 +218,7 @@ class StrategicPolicy(Policy):
         # The best fighter level that lost to each boss. Store.attach keeps it in the adventure's store.
         self.losses = Losses()
         self.collection.trade_preferences = lambda: self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
+        self.collection.pc_rated = lambda snapshot: self.pc_rated(snapshot)
         # Always the adventure-choices stream, so a run with no seed still replays the same choices.
         choices = random.Random(f'{seed}:adventure-choices')
         self.fossil = choices.choice(('HELIX_FOSSIL', 'DOME_FOSSIL'))

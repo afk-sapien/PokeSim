@@ -566,6 +566,8 @@ class Collection:
         self.eevee_choice = 134
         self.dojo_choice = 106
         self.trade_preferences = lambda: {}
+        # The PC as the next release rates it. The policy hands its own pc_rated, the battle's rating.
+        self.pc_rated = self.demand_rated
         self.history = []
         self.completed_champion = False
         self.league_appearances = {}
@@ -606,6 +608,11 @@ class Collection:
 
     def demand(self):
         return self.peer_demand if self.clock < self.demand_until else {}
+
+    def demand_rated(self, s):
+        """The PC rated with the peers' demand and no plans or trade settings, for a Collection with no policy."""
+        from .team import release_rated
+        return release_rated(s, demand=self.demand())
 
     def set_demand(self, requests, clock=None):
         """Keep the partners other adventures ask for until DEMAND_FRAMES pass on the clock that
@@ -1308,6 +1315,19 @@ class Collection:
                 leaves[key] = leaves_wild(s.party, s.items, sid, source['level'], source['map'])
             return leaves[key]
 
+        room = {}
+
+        def peer_room():
+            # Whether one more copy for a linked adventure fits with no rated copy going for it
+            # (pcvalue.supply_room). Otherwise the battle runs from nearly every copy the hunt meets
+            # (improves), as Gold's did. Rated once a peer's copy comes up, and kept for the draw.
+            if not room:
+                from .. import pcvalue
+                from .team import storage_headroom
+                room[True] = not hasattr(s, 'box_counts') or pcvalue.supply_room(
+                    self.pc_rated(s), storage_headroom(s), getattr(s, 'active_box', None))
+            return room[True]
+
         held_individuals = [asdict(mon) for mon in s.party] + s.storage_entries()
         # A quality hunt is valued by the species' best copy as the PC rates it (investment.rarity).
         best_tails = {}
@@ -1376,7 +1396,7 @@ class Collection:
                     project.update(repeat=True, initial_count=held_count(s, sid), catch_goal=1)
                 if mode in REPEATABLE:
                     project['needed_capture'] = (dex(sid) not in s.owned
-                                                 or held_count(s, sid) < self.demand().get(dex(sid), 0))
+                                                 or held_count(s, sid) < self.demand().get(dex(sid), 0) and peer_room())
                 if mode in REPEATABLE and dex(sid) in s.owned:
                     project.update(repeat=True, initial_count=held_count(s, sid),
                                    catch_goal=1 if project['needed_capture'] else 3,
