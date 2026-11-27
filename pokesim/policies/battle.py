@@ -568,25 +568,25 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
             # experience, while throws at a copy of an owned species only lengthen the walk and spend balls.
             # A missing entry is a collection target, which throws as it stands on any goal (above).
             return Decision('item', ball_index, reason='Catch the capture as it stands, since every move would knock it out')
-    if snapshot.in_battle == 2 and not me.status & FROZEN and spent(me) and not hurts(me, enemy):
-        # Nothing this battler has left can hurt the foe, such as Struggle into Agatha's Ghosts, so items
-        # spent on it only lengthen a battle it cannot win. A battler that never had an attack, such as
-        # an early Kakuna, keeps the usual path. A partner that can hurt the foe and take its
-        # next hit comes in, below the usual bar of twice that hit. No switch brings back a battler that
-        # cannot hurt the foe, so this one skips the wait between switches.
+    if snapshot.in_battle and not me.status & FROZEN and not hurts(me, enemy):
+        # Every turn this battler stays in deals the foe nothing, such as Sandslash's Normal moves into
+        # Agatha's Gengar. The partner that hurts the foe most comes in, whatever its HP against the foe's
+        # next hit. No switch brings back a battler that cannot hurt the foe, so this one skips the wait
+        # between switches.
         partners = []
         for i, mon in enumerate(snapshot.party):
             if i == active or mon.hp <= 0 or mon.status & ASLEEP_OR_FROZEN or not hurts(mon, enemy):
                 continue
-            threat = max((damage(mid, enemy, mon) for mid in enemy.moves if mid), default=mon.max_hp * 0.2)
             offense = ranked_moves(mon, enemy)
-            if mon.hp > threat:
-                partners.append(((offense[0][0] if offense else 0) / max(1, threat), mon.hp, i))
+            partners.append((offense[0][0] if offense else 0, mon.hp, i))
         if partners:
-            return Decision("switch", max(partners)[2], reason="Nothing left here can hurt the foe, so bring in a partner who can")
-        if foe_never_attacks(enemy, me):
-            return lose_attempt(snapshot, enemy, active, slot)
-        return Decision("fight", slot, reason="Nothing left here can hurt the foe, so spend no items keeping it in")
+            return Decision("switch", max(partners)[2], reason="Nothing here can hurt the foe, so bring in the partner who hurts it most")
+        if snapshot.in_battle == 2 and spent(me):
+            # Items spent on a spent battler only lengthen a battle it cannot win. A battler that never
+            # had an attack, such as an early Kakuna, keeps the usual path.
+            if foe_never_attacks(enemy, me):
+                return lose_attempt(snapshot, enemy, active, slot)
+            return Decision("fight", slot, reason="Nothing left here can hurt the foe, so spend no items keeping it in")
     item_index = healing_item(snapshot.items, me, incoming)
     if item_index is not None:
         return Decision("item", item_index, active, "Recover HP or cure status before attacking")
