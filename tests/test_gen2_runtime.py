@@ -510,6 +510,37 @@ def test_leaf_stone_evolves_a_peer_request_when_the_only_copy_is_a_kept_veteran(
     assert {row[4] for row in projects(policy, snapshot, 'day', {103: 2})} == {45}
 
 
+def test_a_stone_for_a_peer_goes_only_to_a_copy_that_could_travel_once_evolved(real_data):
+    from pokesim.gen2.item_sources import item_needs
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.training import journey, projects
+    stone = real_data.items['THUNDERSTONE']
+
+    def mon(species, box, stat_exp, level=100):
+        return SimpleNamespace(species=species, egg=False, level=level, experience=1000000, friendship=70,
+                               box=box, trainer_id=1, dvs=(9, 9, 9, 9, 9), shiny=False, held_item=0,
+                               stat_exp=(stat_exp,) * 5, position=0, moves=())
+    # Peers ask for Raichu, and the only Raichu here is a veteran automatic trading keeps. So is the
+    # Pikachu, whose stat experience stays through evolution, so its Raichu could never travel either.
+    raichu, pikachu = mon(26, 3, 65535), mon(25, 4, 65535)
+    snapshot = SimpleNamespace(items=[(stone, 1)], party=(), stored=(raichu, pikachu), owned=frozenset({25, 26}))
+    assert not projects(SimpleNamespace(data=real_data), snapshot, 'day', {26: 2})
+    assert item_needs(_item_policy(real_data, {26: 2}), SimpleNamespace(**{**vars(snapshot), 'items': ()})) == {}
+    # A Pikachu that could travel gets the stone, and the bag lacks one until it is there.
+    fresh = mon(25, 4, 0, level=20)
+    snapshot.stored = (raichu, fresh)
+    assert [(row[4], row[5]) for row in projects(SimpleNamespace(data=real_data), snapshot, 'day', {26: 2})] == [(26, stone)]
+    assert item_needs(_item_policy(real_data, {26: 2}), SimpleNamespace(**{**vars(snapshot), 'items': ()})) == {stone: 1}
+    # A stone project kept from before is dropped once its trainee's Raichu could not travel.
+    policy = SimpleNamespace(data=real_data, demand={26: 2}, monitor_tables={}, clock=0, decisions=0,
+                             collection={'training': {'identity': [1, [9, 9, 9, 9, 9]], 'species': 25,
+                                                      'target': 26, 'item': stone}})
+    snapshot.stored = (raichu, pikachu)
+    snapshot.map, snapshot.x, snapshot.y = real_data.map_ids['GOLDENROD_CITY'], 1, 1
+    assert journey(policy, snapshot, SimpleNamespace(byte=lambda name: 1), Goal) is None
+    assert policy.collection['training'] is None
+
+
 def test_real_move_and_machine_names_do_not_shift_at_alias_constants(real_data):
     assert real_data.moves[19]['name'] == 'Fly'
     assert real_data.items['HM02'] == real_data.items['HM_FLY'] == 244
