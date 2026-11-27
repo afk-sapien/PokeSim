@@ -187,3 +187,16 @@ def test_the_running_goal_is_the_activity_then_the_target_then_training():
     assert kinds.running(collection_of(target, training)) == (kinds.HUNT, target)
     rules, record = kinds.running(collection_of(target, training, MARATHON))
     assert rules is kinds.activity(MARATHON) and record is MARATHON
+
+
+def test_a_clock_wait_in_the_label_keeps_a_training_goal_fighting():
+    from dataclasses import replace
+    from pokesim.gen2.collection import labelled
+    from pokesim.gen2.policy.state import Goal
+    from pokesim.planning.stance import FIGHT, TRAIN, Encounter, stance
+    goal = Goal('collection_train', 'Train Pidgey', 'ROUTE_29', 10, 8, 'up', kind=TRAIN)
+    waited = labelled(goal, 'the night window opens')
+    assert waited == replace(goal, label='Train Pidgey while the night window opens')
+    # Once the walk's HP or PP is spent a story goal flees wild battles, and a training goal still fights them.
+    spent = SimpleNamespace(reserve=lambda *args: SimpleNamespace(ok=False))
+    assert stance(waited.kind, Encounter(wild=True), spent, waited) is FIGHT

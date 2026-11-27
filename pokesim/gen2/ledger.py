@@ -492,7 +492,7 @@ def tidy_goal(policy, snapshot, Goal, item):
     spare = plan[0].detail
     policy.collection['tidy_item'] = spare
     goal = policy.storage_goal(snapshot)
-    return Goal('collection_tidy', f'Store {data.item_names.get(spare, "a spare item")} in the PC to make room', goal.map_name, goal.x, goal.y, goal.face)
+    return replace(goal, key='collection_tidy', label=f'Store {data.item_names.get(spare, "a spare item")} in the PC to make room')
 
 
 # Money the shop leaves alone. With Day Care fees owed, the fees and a margin for the walk back stay.

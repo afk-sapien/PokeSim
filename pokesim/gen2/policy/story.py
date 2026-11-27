@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
 from ... import story as facts
 from ..navigation import DIRS
@@ -500,7 +501,7 @@ class StoryPart:
             if self.no_room(snapshot):
                 return None
             goal = self.storage_goal(snapshot)
-            return Goal('collection_box', f'Make room for {name}', goal.map_name, goal.x, goal.y, goal.face)
+            return replace(goal, key='collection_box', label=f'Make room for {name}')
         master = self.data.items['MASTER_BALL']
         # The Master Ball stays reserved for legendaries, and a battle without a ball only knocks it out.
         return False if any(item != master and count for item, count in snapshot.pockets['balls']) else None

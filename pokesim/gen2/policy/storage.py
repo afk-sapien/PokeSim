@@ -1,6 +1,8 @@
 """Rate the PC and choose what the Generation II policy releases or stores."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 from pokecore.gen2.state import trainer_id
 from ..menus import Release
 from ..navigation import field_moves
@@ -124,8 +126,7 @@ class StoragePart:
         goal = self.storage_goal(snapshot)
         if goal.key != 'storage':
             return None
-        return Goal('collection_release', 'Make room in storage',
-                    goal.map_name, goal.x, goal.y, goal.face)
+        return replace(goal, key='collection_release', label='Make room in storage')
 
     def storage_goal(self, snapshot):
         region = self.travel_region(snapshot)

@@ -17,6 +17,7 @@ Every source stands down when it cannot progress, so an exhausted or unreachable
 walked to forever.
 """
 from collections import Counter
+from dataclasses import replace
 
 from ..planning.decide import NO_CALL
 from .facts import facts
@@ -222,8 +223,7 @@ def phones(policy, snapshot, mem, Goal):
         # doorway. A Pokémon Center's ground floor has service, so wait there by the PC, a spot
         # every town has. The emulator takes standing there for the wait it is (policy.idle).
         spot = policy.storage_goal(snapshot)
-        return Goal('collection_phone_wait', f'Wait by the phone for {trainer} to find a {stone}',
-                    spot.map_name, spot.x, spot.y, spot.face)
+        return replace(spot, key='collection_phone_wait', label=f'Wait by the phone for {trainer} to find a {stone}')
     return None
 
 

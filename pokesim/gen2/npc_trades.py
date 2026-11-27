@@ -4,7 +4,7 @@ Core owns the trade table (pret data/events/npc_trades.asm) and the rule for whi
 person accepts. Each trade's index is also its bit in wTradeFlags, and engine/events/npc_trade.asm
 sets that bit before the trade animation, so a set bit means the trade has happened on this cartridge.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .facts import facts
 from .menus import ChangeBox, Storage, choose, tracked
@@ -114,8 +114,7 @@ def journey(policy, snapshot, mem, Goal):
         policy.collection['phase'] = 'trading'
         if mon.box is not None:
             goal = policy.storage_goal(snapshot)
-            return Goal('collection_npc_trade_pc', f'Bring {request} from storage for {trade.npc}’s trade',
-                        goal.map_name, goal.x, goal.y, goal.face)
+            return replace(goal, key='collection_npc_trade_pc', label=f'Bring {request} from storage for {trade.npc}’s trade')
         return policy.person(snapshot, 'collection_npc_trade', f'Trade {request} to {trade.npc} for {give}',
                              trade.map_name, trade.script)
     policy.collection.pop('npc_trade', None)

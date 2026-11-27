@@ -47,7 +47,7 @@ def room_for_gift(policy, snapshot, Goal):
     if len(snapshot.party) < 6:
         return None
     goal = policy.storage_goal(snapshot)
-    return Goal('collection_gift_room', 'Make room for a new partner', goal.map_name, goal.x, goal.y, goal.face)
+    return replace(goal, key='collection_gift_room', label='Make room for a new partner')
 
 
 # The goals besides the gift_ ones that take a gift at their spot. A full Items pocket turns each of
@@ -132,7 +132,7 @@ def legends(policy, snapshot, Goal, returned=frozenset()):
         if policy.no_room(snapshot):
             return None
         goal = policy.storage_goal(snapshot)
-        return Goal('collection_box', 'Make room for the legendary encounter', goal.map_name, goal.x, goal.y, goal.face)
+        return replace(goal, key='collection_box', label='Make room for the legendary encounter')
     if open_gift(policy, snapshot, 'gift_master_ball', 'EVENT_GOT_MASTER_BALL_FROM_ELM', 'ELMS_LAB'):
         return policy.person(snapshot, 'gift_master_ball', 'Receive Elm’s Master Ball', 'ELMS_LAB', 'ProfElmScript')
     if (data.game != 'crystal' and not snapshot.event('EVENT_RELEASED_THE_BEASTS')
@@ -597,8 +597,7 @@ def stones(policy, snapshot, Goal):
         policy.collection['stone_show'] = [species, flag]
         if mon.box is not None:
             goal = policy.storage_goal(snapshot)
-            return Goal('collection_stone_pc', 'Bring a Pokémon to show Bill’s grandfather',
-                        goal.map_name, goal.x, goal.y, goal.face)
+            return replace(goal, key='collection_stone_pc', label='Bring a Pokémon to show Bill’s grandfather')
         if (snapshot.map == policy.data.map_ids['BILLS_HOUSE']
                 and snapshot.event('EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1')):
             return Goal('stone_visit_again', 'Give Bill’s grandfather time for another visit', 'ROUTE_25', 47, 5)

@@ -1,4 +1,6 @@
 """Earn Sun Stones through the native Bug-Catching Contest."""
+from dataclasses import replace
+
 from ..shiny import shiny_bytes
 from .menus import choose
 from pokecore.gen2.ram import Memory
@@ -79,7 +81,7 @@ def journey(policy, snapshot, Goal, *, force=False):
             if policy.no_room(snapshot):
                 return None
             goal = policy.storage_goal(snapshot)
-            return Goal('collection_box', 'Make room for the Bug-Catching Contest', goal.map_name, goal.x, goal.y, goal.face)
+            return replace(goal, key='collection_box', label='Make room for the Bug-Catching Contest')
         state = policy.collection['contest'] = {'entered': False, 'started': policy.decisions}
     name = data.maps[snapshot.map]['constant']
     if running:

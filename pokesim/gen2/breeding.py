@@ -315,7 +315,7 @@ def hatching(policy, snapshot, Goal):
         return None
     state['hatch_fill'] = True
     goal = policy.storage_goal(snapshot)
-    return Goal('collection_hatch_pc', 'Bring eggs from storage to hatch', goal.map_name, goal.x, goal.y, goal.face)
+    return replace(goal, key='collection_hatch_pc', label='Bring eggs from storage to hatch')
 
 
 def hatch_walk(policy, snapshot):
@@ -369,7 +369,7 @@ def hatch_arrive(policy, snapshot):
 
 def pc_goal(policy, snapshot, Goal, label):
     goal = policy.storage_goal(snapshot)
-    return Goal('collection_breed_pc', label, goal.map_name, goal.x, goal.y, goal.face)
+    return replace(goal, key='collection_breed_pc', label=label)
 
 
 def arrive(policy, snapshot):

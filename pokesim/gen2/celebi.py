@@ -1,4 +1,5 @@
 """Optional GS Ball distribution followed by Crystal's original Celebi quest."""
+from dataclasses import replace
 import hashlib
 import io
 import time
@@ -81,7 +82,7 @@ def journey(policy, snapshot, Goal, returned=frozenset()):
             if policy.no_room(snapshot):
                 return None
             goal = policy.storage_goal(snapshot)
-            return Goal('collection_box', 'Make room for Celebi', goal.map_name, goal.x, goal.y, goal.face)
+            return replace(goal, key='collection_box', label='Make room for Celebi')
         return Goal('legend_celebi', 'Bring the GS Ball to the Ilex Forest shrine', 'ILEX_FOREST', 8, 23, 'up')
     if snapshot.event('EVENT_CAN_GIVE_GS_BALL_TO_KURT'):
         if snapshot.event('EVENT_GAVE_GS_BALL_TO_KURT') and mem.byte('wDailyFlags1') & 1:

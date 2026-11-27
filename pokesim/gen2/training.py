@@ -1,4 +1,6 @@
 """Raise collected partners through normal battles, held items and evolution."""
+from dataclasses import replace
+
 from .menus import ChangeBox, Give, PutAway, Release, Remedy, Storage, Take, Toss
 from pokecore.gen2.ram import calculated_stats, experience_at
 from ..planning.ledger import FIELD_MOVES
@@ -412,7 +414,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         if walk:
             return walk_goal(policy, snapshot, Goal, lambda: f'Walk to hatch the egg before {mon.name} joins', **spot)
         goal = policy.storage_goal(snapshot)
-        return Goal('collection_train_pc', f'Prepare {mon.name} for training', goal.map_name, goal.x, goal.y, goal.face)
+        return replace(goal, key='collection_train_pc', label=f'Prepare {mon.name} for training')
     if project['item']:
         return Goal('collection_evolve_item', f'Evolve {mon.name}', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     blocked = share_room(data, snapshot, mon)
@@ -443,7 +445,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             if holder:
                 state['share_holder'] = identity(holder)
                 goal = policy.storage_goal(snapshot)
-                return Goal('collection_train_pc', 'Retrieve Exp. Share from storage', goal.map_name, goal.x, goal.y, goal.face)
+                return replace(goal, key='collection_train_pc', label='Retrieve Exp. Share from storage')
             return None
         return Goal('collection_equip', f'Give Exp. Share to {mon.name}', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     state.pop('share_holder', None)

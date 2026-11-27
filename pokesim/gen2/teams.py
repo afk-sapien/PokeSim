@@ -6,6 +6,7 @@ put together, because a partner is gone or storage has no room left, stands down
 instead of pressing B at the PC forever.
 """
 from collections import Counter
+from dataclasses import replace
 
 from pokecore.identity import pokemon_identity
 
@@ -101,7 +102,7 @@ def assemble(policy, snapshot, wanted, Goal, label):
         forget(policy, pc_key(previous))
     collection['activity_team'] = wanted
     goal = policy.storage_goal(snapshot)
-    return Goal('collection_activity_team', label, goal.map_name, goal.x, goal.y, goal.face)
+    return replace(goal, key='collection_activity_team', label=label)
 
 
 def arrive(policy, snapshot):

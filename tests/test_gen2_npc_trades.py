@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.gen2 import npc_trades
+from pokesim.gen2.policy import Goal
 from pokesim.gen2.npc_trades import TRADES, Trade, candidate, completed, worth_trading
 
 
@@ -84,7 +85,7 @@ def test_journey_scans_the_party_and_boxes_again_only_when_they_change(monkeypat
     species = {n: {'name': n} for n in range(252)}
     data = SimpleNamespace(symbols={'wTradeFlags': [0, 0]}, game='gold', species=species)
     policy = SimpleNamespace(data=data, demand={}, collection={}, person=lambda snapshot, key, *rest: key,
-                             storage_goal=lambda snapshot: SimpleNamespace(map_name=0, x=0, y=0, face=0))
+                             storage_goal=lambda snapshot: Goal('storage', 'PC', 'GOLDENROD_POKECENTER_1F', 1, 1, 'up'))
     snapshot = SimpleNamespace(party=(mon(155), mon(69)), stored=(), owned=frozenset())
     mem, goal = SimpleNamespace(memory=b''), lambda key, *rest: key
     assert npc_trades.journey(policy, snapshot, mem, goal) == 'collection_npc_trade'
@@ -93,7 +94,7 @@ def test_journey_scans_the_party_and_boxes_again_only_when_they_change(monkeypat
     assert npc_trades.journey(policy, snapshot, mem, goal) == 'collection_npc_trade' and len(scanned) == 8
     # A Drowzee in a box makes Mike's trade the errand.
     snapshot.stored = (mon(96, box=0, position=0),)
-    assert npc_trades.journey(policy, snapshot, mem, goal) == 'collection_npc_trade_pc'
+    assert npc_trades.journey(policy, snapshot, mem, goal).key == 'collection_npc_trade_pc'
     assert policy.collection['npc_trade'] == 0 and len(scanned) == 14
 
 
