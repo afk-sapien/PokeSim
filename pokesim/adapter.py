@@ -134,14 +134,24 @@ class Gen1Adapter:
         pass
 
     def after_load(self, run, metadata, first):
+        from . import store_observe
         from .events import RunMemory
         run.memory = RunMemory.from_dict(metadata['run_memory'])
         run.legendary_recovery = recovery(metadata, run.frame)
+        # The run's store starts with the rows its first save carries. An application reload keeps
+        # its adventure's rows, so a later load keeps the run's.
+        if first and metadata.get('store_rows'):
+            store_observe.put_rows(run.store, metadata['store_rows'])
+            run.step_tracker.read()
         # The application's load forgets its last snapshot too.
         self.last = None
 
     def manifest_fields(self, run):
-        return {'policy_name': 'strategic', 'run_memory': run.memory, 'legendary_recovery': run.legendary_recovery}
+        from . import store_observe
+        with run.store.reading() as db:
+            carried = store_observe.rows(db)
+        return {'policy_name': 'strategic', 'run_memory': run.memory, 'legendary_recovery': run.legendary_recovery,
+                'store_rows': carried}
 
     def before_save(self, pb):
         pass

@@ -12,7 +12,7 @@ from .. import __version__, config
 
 
 def checkpoint_manifest(policy, *, rom_sha1, frame, generation=1, pb=None, policy_name=None, run_memory=None,
-                        play_clock=None, store=None, legendary_recovery=None, history=None):
+                        play_clock=None, store=None, legendary_recovery=None, history=None, store_rows=None):
     """The manifest for the game as it is now.
 
     Gen II saves with the clock locked to game time, so it passes the emulator ``pb``, the lock goes
@@ -37,6 +37,9 @@ def checkpoint_manifest(policy, *, rom_sha1, frame, generation=1, pb=None, polic
         manifest['reward_id'] = store.get('custom-reward-barrier-v1')
     if legendary_recovery is not None:
         manifest['legendary_recovery'] = legendary_recovery.state_dict()
+    # A headless Red, Blue or Yellow run's store rows (store_observe.rows), which its first load takes.
+    if store_rows is not None:
+        manifest['store_rows'] = store_rows
     if generation == 2:
         manifest.update(gen2_history=history, rtc_elapsed=clock_elapsed(pb),
                         settled=policy.menu is None and not getattr(policy, 'backing_out', False))

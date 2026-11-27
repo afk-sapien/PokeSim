@@ -197,7 +197,9 @@ every stage rather than only where a player once got stuck. `tools/stage_ladder.
 a fresh game headless and keeps a save the first time it reaches each rung. A stall on the way keeps
 a bundle under the ladder's `stalls/` folder, in the layout `capture` accepts, and the run goes back to
 the save from before it. `adopt` keeps an existing save as a rung, and `show` lists what each ladder
-holds.
+holds. With `--adventure`, a Red, Blue or Yellow rung also keeps that adventure's walked steps,
+returns, Champion counter offers and Pokédex goals, which the rung's run starts with. A headless Red,
+Blue or Yellow save carries its run's rows the same way, so a stall bundle replays with them.
 
 ```sh
 uv run --locked python tools/stage_ladder.py snapshot roms/pokered.gb data/ladder/red

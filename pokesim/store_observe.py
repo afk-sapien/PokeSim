@@ -82,3 +82,32 @@ def observe(host, snap, now, *, returns=True):
             from .milestones import status
             collection.milestones = status(host.store)
     return events, snap, restored
+
+
+def _carried():
+    """The kv keys and the claim sources ``observe`` reads and writes. The League rewards stay out,
+    since a headless run earns none."""
+    from . import champion_shop, milestones, mew_returns, return_claims, step_events
+    from .legendary_returns import KEY, STEPS
+    keys = (STEPS, step_events.KEY, mew_returns.KEY, 'pokesim-mew-v1', champion_shop.KEY, KEY, milestones.KEY)
+    return keys, (return_claims.SOURCE, return_claims.EVENT, return_claims.MEW)
+
+
+def rows(db):
+    """The rows ``observe`` reads, from an adventure's database handle, as a headless checkpoint
+    carries them: each kv value by key and the return claims, oldest first."""
+    from .state import claims, kv
+    keys, sources = _carried()
+    values = {key: kv.get(db, key) for key in keys if kv.exists(db, key)}
+    return {'kv': values, 'claims': [row for source in sources for row in claims.rows(db, source)]}
+
+
+def put_rows(store, carried):
+    """Write the rows a checkpoint carries (``rows``) into ``store``, in one transaction."""
+    from .state import claims, kv
+    with store.transaction() as db:
+        for key, value in carried['kv'].items():
+            kv.put(db, key, value)
+        db.executemany(f'INSERT OR REPLACE INTO claims({", ".join(claims.FIELDS)}) '
+                       f'VALUES ({", ".join("?" * len(claims.FIELDS))})',
+                       [tuple(row[field] for field in claims.FIELDS) for row in carried['claims']])
