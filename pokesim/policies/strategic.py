@@ -210,6 +210,8 @@ class StrategicPolicy(Policy):
         # The best fighter level that lost to each boss. Store.attach keeps it in the adventure's store.
         self.losses = Losses()
         self.collection.trade_preferences = lambda: self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
+        # The host attaches the TM tables after the policy is made, so the collection reads them each time.
+        self.collection.machines = lambda: (self.tm_moves, self.tm_compatible)
         # Always the adventure-choices stream, so a run with no seed still replays the same choices.
         choices = random.Random(f'{seed}:adventure-choices')
         self.fossil = choices.choice(('HELIX_FOSSIL', 'DOME_FOSSIL'))

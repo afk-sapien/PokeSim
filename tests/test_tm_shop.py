@@ -434,6 +434,44 @@ def test_reset_keeps_verified_cartridge_capability_but_discards_shopping_plan(sh
     policy.reset()
     assert (policy.tm_moves, policy.tm_compatible) == shop_data
     assert policy.tm_plan is None
+    # The collection reads the tables the host attached, for the ground TM fetch.
+    assert policy.collection.machines() == shop_data
+
+
+def test_a_ground_tm_is_fetched_only_when_its_move_clears_the_teach_bar():
+    from pokesim.planning import values
+    from pokesim.planning.arbiter import Tier
+    from pokesim.policies import kinds
+    from pokesim.policies.collection import candidate, ground_tms
+    from pokesim.policies.kinds import View
+    from pokesim.strategy_data import DATA
+    starmie = live(partner(moves=[57, 105, 33, 0]))
+    moves, compatible = {214: 59}, {starmie.species: {214}}
+    # The Pokémon Mansion's Blizzard ball, still on the ground.
+    ball = DATA['toggle_objects'].index([MAPS['POKEMON_MANSION_B1F'], 4])
+    s = state(party=(starmie,), hall_of_fame_count=1, hidden_objects=bytes(32))
+    [project] = ground_tms(s, moves, compatible)
+    assert project == {'method': 'ground_tm', 'item': 214, 'map': MAPS['POKEMON_MANSION_B1F'], 'object': 4,
+                       'fragment': 'TEXT_POKEMONMANSIONB1F_TM_BLIZZARD', **{
+                           key: tm_shop.projected_upgrade(starmie, 214, moves, compatible)[key]
+                           for key in ('before', 'after')}}
+    # Worth the move, as a purchase is.
+    option = candidate({**project, 'key': 'blizzard'}, 10, {}, False, set())
+    assert option.tier == Tier.UPGRADE and option.value == values.move_gain(project['before'], project['after'])
+    rules = kinds.rules('ground_tm')
+    assert rules.label(project) == 'TM14 Blizzard'
+    assert not rules.owned(View(None, s), project)
+    hidden = bytearray(32)
+    hidden[ball // 8] |= 1 << (ball % 8)
+    gone = replace(s, hidden_objects=bytes(hidden))
+    held = replace(s, items=((214, 1),))
+    # Picked up, in the bag or taught at once, the fetch is done and is not offered again.
+    assert rules.owned(View(None, gone), project) and rules.owned(View(None, held), project)
+    assert ground_tms(gone, moves, compatible) == [] and ground_tms(held, moves, compatible) == []
+    # No fetch for a partner that cannot learn it, a move under the bar, or a run with no TM tables.
+    assert ground_tms(s, moves, {}) == []
+    assert ground_tms(replace(s, party=(live(partner(moves=[57, 105, 59, 0])),)), moves, compatible) == []
+    assert ground_tms(s, {}, {}) == []
 
 
 def test_greedy_projection_can_prefer_level_50_over_level_100():
