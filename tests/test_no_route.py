@@ -177,6 +177,37 @@ def test_the_champion_ceremony_is_the_game_s_walk_and_keeps_the_won_rematch():
     assert not NoRoute(policy.collection.director.progress, FRAMES).attempts()
 
 
+def test_a_gen1_route_only_timed_blocks_close_keeps_the_project():
+    """Red stood a League rematch down after two failed steps on a Celadon street closed every way out for
+    340 frames, and stood down six projects in a row beside the Fighting Dojo's balls. Timed blocks run out
+    by themselves, so the walk records its short wait and keeps the project. A route that stays missing
+    once they run out still stands the project down."""
+    from pokesim.policies.navigation import DIRS
+    from pokesim.policies.progression import Goal
+    from pokesim.policies.strategic import StrategicPolicy
+    from pokesim.strategy_data import MAPS
+    from test_collection import state
+
+    def walk(here):
+        policy = StrategicPolicy(42)
+        lobby = (MAPS['INDIGO_PLATEAU_LOBBY'], 8, 10)
+        policy.goal = Goal('collect_rematch', 'Return for a League rematch', 'Reach the lobby', (lobby,))
+        project = {'method': 'rematch', 'key': '0:rematch:0:', 'hof_count': 1}
+        policy.collection.project = project
+        policy.collection.completed_champion = True
+        # Every step from here failed twice lately, so each side waits 600 frames.
+        for direction in DIRS:
+            policy.nav.blocked[(here, direction)] = 1600
+        policy._overworld(state(map=here[0], x=here[1], y=here[2], frame=1000), bytearray(65536))
+        attempts = NoRoute(policy.collection.director.progress, FRAMES).attempts()
+        return policy.mode, len(attempts), policy.collection.project == project
+
+    # Below the lobby door, the way in comes back when the blocks run out.
+    assert walk((MAPS['INDIGO_PLATEAU'], 10, 6)) == ('no route', 1, True)
+    # From Pallet Town, this party has no way to the Plateau after the blocks either.
+    assert walk((MAPS['PALLET_TOWN'], 5, 5)) == ('no route', 1, False)
+
+
 def test_a_target_that_keeps_failing_waits_longer_each_time():
     record = NoRoute({}, FRAMES)
     first = record.record('olivine', 'OLIVINE_CITY', [(5, 6)], 0)

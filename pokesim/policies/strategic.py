@@ -2012,11 +2012,17 @@ class StrategicPolicy(Policy):
 
         Nothing reloads. A reload replayed the same missing route after a full stall timeout and fed the
         stall watchdog. A collection project stands down as well, so the director picks another one.
+
+        When only timed blocks close the way (Navigator.closed_for_now), the pickup and the project stay,
+        and the attempt's own short wait covers the blocks. On Red, two failed steps on a Celadon street
+        stood a League rematch down, and steps that kept failing beside the Fighting Dojo's balls stood
+        down six projects in a row, one for each goal the director tried next.
         """
         self.unreachable().record(goal.key, self._place(goal), goal.targets, self.clock, snapshot.map)
-        if goal.key == 'collect_pickup':
+        lasting = not self.nav.closed_for_now((snapshot.map, snapshot.x, snapshot.y), goal.targets, snapshot.frame)
+        if lasting and goal.key == 'collect_pickup':
             self.pickups.defer(self.clock, 'No route to the pickup')
-        elif goal.key.startswith('collect_') and self.collection.project:
+        elif lasting and goal.key.startswith('collect_') and self.collection.project:
             self.collection.abandon(f'No route to {goal.title}')
         self.nav.path.clear()
         self.mode = 'no route'
