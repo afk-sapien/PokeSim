@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from pokecore.gen2.maps import ICE
+from pokecore.gen2.ram import Memory
+
 from ...runtime.policy import Action, Hold
 from ..menus import Register, registered
 from ..navigation import DIRS, HeldWalk
@@ -222,22 +225,28 @@ class NavigationPart:
         return self.walk(snapshot, memory, [step]) if step else None
 
     def walk(self, snapshot, memory, path):
+        entry = self.data.maps[snapshot.map]
+        grid = self.nav.collision(snapshot, memory)
+        # The game holds the d-pad to a slide's direction until the player stops (CheckStandingOnIce), so a
+        # press read mid-slide does nothing but outlast the stop and walk on from there. The walk waits.
+        if (grid[snapshot.y * entry['width'] + snapshot.x] in ICE
+                and Memory(memory, self.data).byte('wPlayerTurningDirection') not in (0, 0xF0)):
+            return Action(None, 0, 8)
         # A Tower preparation walks outside a decision, with memory of its own.
         reads = getattr(self, 'reads', None)
         if reads is None or reads.memory is not memory:
             reads = Reads(memory, self.data.game)
         surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
         dx, dy = DIRS[path[0]]
-        entry = self.data.maps[snapshot.map]
         nx, ny = snapshot.x + dx, snapshot.y + dy
         cut_tree = (0 <= nx < entry['width'] and 0 <= ny < entry['height']
-                    and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in (0x12, 0x1A))
+                    and grid[ny * entry['width'] + nx] in (0x12, 0x1A))
         # The screen state is read last, only for a step onto water.
         water = (surf and 0 <= nx < entry['width'] and 0 <= ny < entry['height']
-                 and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in self.WATER
+                 and grid[ny * entry['width'] + nx] in self.WATER
                  and reads.ui.movement_state not in (4, 8))
         obstacle = (surf and 0 <= nx < entry['width'] and 0 <= ny < entry['height']
-                    and self.nav.collision(snapshot, memory)[ny * entry['width'] + nx] in ((0x24, 0x2C, 0x33) if path[0] == 'up' else (0x24, 0x2C)))
+                    and grid[ny * entry['width'] + nx] in ((0x24, 0x2C, 0x33) if path[0] == 'up' else (0x24, 0x2C)))
         if cut_tree or water or obstacle or (nx, ny) in {(x, y) for _, x, y in snapshot.objects}:
             key = (snapshot.map, snapshot.x + dx, snapshot.y + dy)
             if self.interaction == key and reads.ui.facing == path[0]:
