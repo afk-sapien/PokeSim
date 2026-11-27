@@ -445,11 +445,18 @@ class Remedy(CoreTask):
 class Lead(CoreTask):
     slot: int
     identity: tuple
+    species: int | None = None
 
     def finished(self, snapshot):
         # Follow the Pokémon rather than its old slot, which a deposit or trade may have moved.
         wanted = (self.identity[0], tuple(self.identity[1]))
         slots = [i for i, mon in enumerate(snapshot.party) if (mon.trainer_id, tuple(mon.dvs)) == wanted]
+        # Two party members can share a trainer and DVs, and the first of them must not stand for the
+        # other, or a lead that is already in front hides the one that is not. The species tells them apart.
+        if self.species is None and self.slot in slots:
+            self.species = getattr(snapshot.party[self.slot], 'species', None)
+        if self.species is not None:
+            slots = [i for i in slots if getattr(snapshot.party[i], 'species', None) == self.species]
         if slots:
             self.slot = slots[0]
         return not slots or self.slot == 0

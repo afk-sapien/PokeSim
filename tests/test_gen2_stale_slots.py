@@ -74,6 +74,16 @@ def test_lead_follows_its_pokemon_after_the_party_shifts():
     assert Lead(4, (7, [7, 7, 7, 7, 7])).finished(screen([mon(1, (1, 1, 1, 1, 1))]))
 
 
+def test_lead_tells_two_pokemon_with_the_same_trainer_and_dvs_apart():
+    def twin(species):
+        return SimpleNamespace(trainer_id=7, dvs=(8, 15, 10, 10, 10), species=species)
+
+    menu = Lead(2, (7, (8, 15, 10, 10, 10)))
+    assert not menu.finished(screen([twin(112), twin(1), twin(101)]))
+    assert menu.slot == 2
+    assert menu.finished(screen([twin(101), twin(112), twin(1)]))
+
+
 def test_trade_preparation_drops_a_half_finished_policy_menu(monkeypatch):
     from pokesim.gen2 import preparation
     policy = SimpleNamespace(menu=Give(EXP_SHARE, 5, phase='exit'))
