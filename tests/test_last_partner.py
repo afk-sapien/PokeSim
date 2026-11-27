@@ -1,5 +1,5 @@
 """The last partner standing fights on instead of trying to switch to itself."""
-from pokesim.policies.battle import Decision
+from pokesim.policies.battle import W_ENEMY_MON, Decision
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.screen import Screen, W_PLAYER_MON_NUMBER
 from test_events import snap
@@ -30,6 +30,20 @@ def test_a_switch_aimed_at_a_fainted_or_active_partner_is_dropped():
         memory = party_menu(2)
         assert policy._dispatch(state, Screen(memory), 'party', memory)[0].button == 'b'
         assert policy.intent is None
+
+
+def test_a_fainted_battler_is_replaced_by_a_partner_that_can_hurt_the_foe():
+    # Against Agatha's Gengar the replacement went by HP alone, so Kangaskhan's Normal moves came in.
+    policy = StrategicPolicy(7)
+    recorder = Recorder.on(policy)
+    tackle, night_shade = 33, 101
+    kangaskhan = mon(hp=200, max_hp=200, types=(0, 0), moves=(tackle, 0, 0, 0), pp=(35, 0, 0, 0))
+    haunter = mon(hp=40, types=(8, 3), moves=(night_shade, 0, 0, 0), pp=(15, 0, 0, 0))
+    state = snap(party=(mon(hp=0), kangaskhan, haunter), in_battle=2)
+    memory = party_menu(0)
+    memory[W_ENEMY_MON + 2], memory[W_ENEMY_MON + 5], memory[W_ENEMY_MON + 6] = 129, 8, 3
+    policy._dispatch(state, Screen(memory), 'party', memory)
+    assert recorder.last.kind == 'switch_pokemon' and recorder.last.slot == 2
 
 
 def test_a_healthy_reserve_is_still_chosen():
