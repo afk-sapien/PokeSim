@@ -290,6 +290,55 @@ def test_a_refused_step_stands_the_spare_down():
     assert 'unequip' not in policy.collection and not standing_down(policy, ledger.unequip_key(berry))
 
 
+def kept_units():
+    """The storage-ledger policy with the policy's kept answer (StoragePart.storage_units) and real refusals."""
+    from pokesim.gen2.facts import Facts
+    from pokesim.gen2.policy.menus import MenuPart
+    from pokesim.gen2.policy.storage import StoragePart
+    from pokesim.pcvalue import VisitTeam
+
+    class Kept(StoragePart, MenuPart, Policy):
+        def __init__(self):
+            Policy.__init__(self)
+            self.allowed = lambda task, view: MenuPart.allowed(self, task, view)
+            self.blocked, self.sp, self.memory = {}, 1, None
+            self.visit_team, self.facts, self.trade_partners = VisitTeam(), Facts(), frozenset
+            self.release_cache = (None, None)
+    return Kept()
+
+
+def test_a_kept_release_pick_drops_a_release_the_game_then_refused():
+    policy = kept_units()
+    plain = mon(1)
+    view = snapshot([BEST, plain], PARTY)
+    assert policy.storage_units(view)[1].detail == plain
+    policy.blocked[policy.task_key(Release(0, 1, ledger.member(plain)))] = policy.clock + 10**6
+    assert policy.storage_units(view) == (None, None)
+
+
+def test_a_refused_withdrawal_moves_the_kept_pick_past_the_stood_down_spare():
+    policy = kept_units()
+    berry = mon(3, held_item=BERRY)
+    other = mon(4, held_item=BERRY, dvs=(1, 1, 1, 1, 1))
+    view = snapshot([BEST, berry, other], PARTY)
+    first = policy.storage_target(view)
+    assert first.action == 'unequip'
+    policy.blocked[policy.task_key(Storage('WITHDRAW', first.detail.position, len(PARTY)))] = 10**6
+    assert ledger.release_step(policy, view) == 'wait'
+    second, fresh = policy.storage_target(view), ledger.storage_unit(policy, view)
+    assert (second.action, second.detail) == (fresh.action, fresh.detail) != ('unequip', first.detail)
+
+
+def test_a_full_balls_pocket_moves_the_kept_pick_off_a_ball_holder():
+    BALL = 5
+    policy = kept_units()
+    policy.data.item_attributes[BALL] = {'price': 200, 'pocket': 'BALL'}
+    view = snapshot([BEST, mon(3, held_item=BALL)], PARTY)
+    assert policy.storage_units(view)[0].action == 'unequip'
+    view.pockets['balls'] = tuple((100 + i, 1) for i in range(ledger.POCKET_SLOTS['balls']))
+    assert policy.storage_units(view)[0].action == 'release'
+
+
 def test_a_wanted_item_never_leaves_with_its_holder():
     # The Everstone is a breeding item and this is the only one, so its holder is offered only with the
     # item taken off first.

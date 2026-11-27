@@ -49,3 +49,23 @@ def test_the_tower_lead_and_the_level_lead_do_not_swap_forever(crystal):
     # Outside a prepared challenge the highest level still leads.
     policy.collection.pop('tower')
     assert policy.level_lead(reordered) == Lead(1, (1, (1, 2, 3, 4, 5)))
+
+
+def test_a_lead_swap_the_game_refused_gives_way_to_the_next_preparation(crystal):
+    from pokesim.gen2.policy import Goal, Policy
+    from pokesim.gen2.tower import journey
+    policy = Policy(crystal, seed=1, starter='cyndaquil')
+    policy.memory, policy.clock, policy.sp = None, 1000, 1
+    high, strong, third = mon(1, 70, (150, 90, 90, 90, 90, 90)), mon(2, 55, (200, 160, 160, 160, 160, 160)), \
+        mon(3, 60, (150, 90, 90, 90, 90, 90))
+    team = [high, strong, third]
+    policy.collection['tower'] = {'team': [key(row) for row in team], 'original': [key(row) for row in team],
+                                  'cap': 70, 'entered': False, 'returning': False, 'trained': True,
+                                  'preparation_center': True, 'previous_training': None}
+    # The game refused the swap a moment ago, so menu_step would refuse it again until the wait ends.
+    swap = Lead(1, (2, (1, 2, 3, 4, 5)))
+    policy.blocked[policy.task_key(swap)] = policy.clock + 3600
+    assert journey(policy, view(crystal, team), Goal).key == 'tower_enter'
+    assert policy.menu is None
+    policy.clock += 3600
+    assert journey(policy, view(crystal, team), Goal).key == 'tower_lead' and policy.menu == swap

@@ -66,6 +66,16 @@ def test_gen2_power_ignores_condition_and_rejects_unknown_snapshots():
     assert battle_power({**base, 'moves': [68]}, DATA) == 0
 
 
+def test_every_one_hit_knockout_scores_alike_whatever_power_it_lists():
+    # The cartridge lists Guillotine at power 0 and Horn Drill and Fissure at 1.
+    ohko = Data(**{**vars(DATA), 'moves': {
+        **DATA.moves, 12: move('GUILLOTINE', 'EFFECT_OHKO', 0, 'NORMAL', 30),
+        32: move('HORN_DRILL', 'EFFECT_OHKO', 1, 'NORMAL', 30)}})
+    guillotine = battle_power(meganium(moves=[12]), ohko)
+    assert guillotine > 0
+    assert guillotine == battle_power(meganium(moves=[32]), ohko)
+
+
 def test_gen2_power_uses_split_specials_coverage_and_recovery():
     solar = meganium(moves=[76])
     assert battle_power(meganium(moves=[76, 231]), DATA) > battle_power(solar, DATA)
