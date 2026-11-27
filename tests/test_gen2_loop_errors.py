@@ -21,7 +21,9 @@ def emu(monkeypatch):
     emu.preparation, emu.paused, emu.manual_mode = None, False, False
     emu.fatal_error, emu.stopping = None, False
     emu.pb, emu.steps, emu.policy = Mock(), Mock(), Mock(backing_out=False)
-    emu._read, emu._tick, emu._autosave, emu._report_missed_shiny = Mock(), Mock(), Mock(), Mock()
+    # The snapshot is out of battle, so a gap is waited out in full.
+    emu._read = Mock(return_value=Mock(in_battle=False))
+    emu._tick, emu._autosave, emu._report_missed_shiny = Mock(), Mock(), Mock()
     emu._report_marathon = Mock()
     emu.play_clock = Mock(frames=0)
     return emu
