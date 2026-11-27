@@ -348,6 +348,16 @@ def test_the_league_kit_spends_half_the_spare_money():
     assert (bag, money) == (2, 3600)
 
 
+def test_the_kit_floor_is_the_spare_money_that_buys_the_whole_kit():
+    for restores, revives in ((0, 0), (3, 1), (5, 2)):
+        floor = boss.kit_floor(restores, revives, 2500, 1500)
+        assert boss.kit(restores, revives, floor, 2500, 1500) == (5 - restores, 2 - revives)
+        if restores < 5:
+            assert boss.kit(restores, revives, floor - 1, 2500, 1500) != (5 - restores, 2 - revives)
+    # Once the kit is in the bag, the floor is the share it keeps for a second run.
+    assert boss.kit_floor(5, 2, 2500, 1500) == 5 * 2500 + 2 * 1500
+
+
 HYPER = boss.Medicine(16, boss.RESTORE, 200)
 SUPER = boss.Medicine(17, boss.RESTORE, 50)
 FULL = boss.Medicine(14, boss.RESTORE)
