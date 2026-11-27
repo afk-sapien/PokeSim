@@ -1276,6 +1276,21 @@ def test_choose_move_steps_without_a_port():
     assert action.completed and game.move_num == 1
 
 
+def test_a_gen2_press_waits_for_a_still_screen_unless_the_caller_reads_an_input_wait():
+    game = Game2(battle=1, screen='battle_menu')
+    ready = ChooseMove(1, version='crystal')
+    first = ready.step(game.memory, {'input_wait': True})
+    assert first in ('a', 'b', 'up', 'down', 'left', 'right')
+    # The first observation has no tilemap to match, so without the read the press is held.
+    held = ChooseMove(1, version='crystal')
+    assert held.step(game.memory) is None
+    # A tile that changed holds it again, until the read says the game waits for a button.
+    game.put('wTilemap', [0x80])
+    assert held.step(game.memory) is None
+    game.put('wTilemap', [0x81])
+    assert held.step(game.memory, {'input_wait': True}) == first
+
+
 def test_run_away_and_trainer_refusal():
     game = Game2(battle=1, screen='battle_menu')
     result = run_away(game.port())

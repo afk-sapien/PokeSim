@@ -7,8 +7,10 @@ the ``tick`` it passes in. So a test and the application play the same frames.
 
 Both generations ask their policy the same way, with a ``PolicyContext`` (runtime/policy.py). What
 differs is two settings of the ``Decider``: Red, Blue and Yellow write the options byte before every
-decision, and Gold, Silver and Crystal wait 16 frames after a press where Gen I waits 2. This module
-loads no game code, so a Gen II worker never reads Gen I game data.
+decision, and Gold, Silver and Crystal wait 16 frames after a press where Gen I waits 2. In a battle
+a gap ends early once the game waits for a button again (Core's ``input_wait``), unless it is a wait
+with no press that began while the game already waited.
+This module loads no game code, so a Gen II worker never reads Gen I game data.
 """
 from __future__ import annotations
 
@@ -27,13 +29,18 @@ GEN2_WAIT = 16
 HOLD_CHECK = 4
 
 
-def play(pb, action, tick, wait=GEN1_WAIT):
+def play(pb, action, tick, wait=GEN1_WAIT, ready=None):
     """Press, hold, release and wait out one action. ``tick`` advances the emulator and the host's
     frame count, and ``wait`` is the gap of an action that names none. The button comes up even when a
     tick fails, so a crash never leaves it held.
 
     An action with a ``stop`` (runtime/policy.py ``Hold``) is held in steps of ``HOLD_CHECK`` frames
-    and released at the first step after which ``stop(frames held)`` is true."""
+    and released at the first step after which ``stop(frames held)`` is true.
+
+    ``ready``, when given, ends the gap at the first frame ``ready()`` is true, the game waiting for a
+    button again. Each check follows a frame, so the game sees the release first. A gap with no press
+    that starts while the game already waits is waited out, since a shortcut counts its waits and
+    would otherwise spend them in a frame each."""
     if action.button:
         pb.button_press(action.button)
     try:
@@ -51,7 +58,14 @@ def play(pb, action, tick, wait=GEN1_WAIT):
     finally:
         if action.button:
             pb.button_release(action.button)
-    tick(wait if action.gap is None else action.gap)
+    gap = wait if action.gap is None else action.gap
+    if ready is None or not action.button and ready():
+        tick(gap)
+        return
+    for _ in range(gap):
+        tick(1)
+        if ready():
+            break
 
 
 def gen1_options(value):
@@ -96,15 +110,21 @@ class GameLoop:
     """
 
     def __init__(self, host, decider, tick, guards=None, autosave=None, ready=None):
+        # Core's check reads both generations' waits, so the import stays here, where a game is played.
+        from pokecore.shortcuts.waits import input_wait
         self.host, self.decider, self.tick = host, decider, tick
         self.guards, self.autosave, self.ready = guards, autosave, ready
         self.pending = []
+        self.battle = False
+        self.input_wait = input_wait
         self.cadence = Cadence(config.AUTOSAVE_SECONDS * FRAMES_PER_SECOND, host.frame)
 
     def decide(self, snapshot, policy=None):
-        """Ask ``policy``, the host's own by default, for the next actions and queue them."""
+        """Ask ``policy``, the host's own by default, for the next actions and queue them. In a battle
+        the gap after each press ends once the game waits for a button again."""
         pb = self.host.pb
         policy = policy or self.host.policy
+        self.battle = bool(getattr(snapshot, 'in_battle', False))
         self.pending = self.decider.ask(policy, snapshot, pb)
         tracer = getattr(self.host, 'tracer', None)
         if tracer is not None:
@@ -115,7 +135,7 @@ class GameLoop:
     def act(self):
         """Play the next queued action, then autosave and run the guards when they are due."""
         action = self.pending.pop(0)
-        play(self.host.pb, action, self.tick, self.decider.wait)
+        play(self.host.pb, action, self.tick, self.decider.wait, self.waiting if self.battle else None)
         frame = self.host.frame
         if self.autosave and (self.ready is None or self.ready()) and self.cadence.due(frame):
             self.autosave()
@@ -125,6 +145,12 @@ class GameLoop:
                 self.host.guard_frame = frame + GUARD_FRAMES
                 self.guards()
         return action
+
+    def waiting(self):
+        """True while the game waits for a button: a text prompt or a menu's input loop."""
+        pb = self.host.pb
+        sp = stack_pointer(pb)
+        return sp is not None and self.input_wait(pb.memory, sp)
 
     def step(self, snapshot):
         """One decision and every action it asked for, as a headless run plays it."""
