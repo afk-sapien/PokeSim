@@ -178,7 +178,7 @@ def test_gold_silver_and_crystal_pc_lists_get_the_stack_pointer(monkeypatch):
         pc_list = False
 
     monkeypatch.setattr(menus, 'current_screen', lambda memory, version: 'bills_pc')
-    snap = SimpleNamespace(data=SimpleNamespace(game='gold'))
+    snap = SimpleNamespace(data=SimpleNamespace(game='gold'), in_battle=False)
     mem = SimpleNamespace(memory=bytearray(0x10000), sp=0xDF00)
     assert Task().step(snap, mem) == 'a' and Battle().step(snap, mem) == 'a'
     mem.sp = None

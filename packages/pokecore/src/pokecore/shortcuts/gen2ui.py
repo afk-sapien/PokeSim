@@ -389,6 +389,12 @@ def cont_wait(memory, sp):
     """
     if not 0xC000 <= sp < 0xE000:
         return False
+    returns = cont_returns(memory)
+    return any(memory[p] + 256 * memory[p + 1] in returns for p in range(sp, min(sp + 80, 0xDFFF), 2))
+
+
+def cont_returns(memory):
+    """The return addresses of every home bank call to PromptButton, empty when it is not found."""
     header = bytes(memory[0x134:0x150])
     if header not in _CONT_CACHE:
         home = bytes(memory[0:0x4000])
@@ -398,8 +404,7 @@ def cont_wait(memory, sp):
             call = found[0].group()[10:13]
             returns = frozenset(match.end() for match in re.finditer(re.escape(call), home))
         _CONT_CACHE[header] = returns
-    returns = _CONT_CACHE[header]
-    return any(memory[p] + 256 * memory[p + 1] in returns for p in range(sp, min(sp + 80, 0xDFFF), 2))
+    return _CONT_CACHE[header]
 
 
 def fly_destination(view):

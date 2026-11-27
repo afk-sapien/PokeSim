@@ -238,7 +238,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 0.0,
+   "waste": 3.99,
    "restock": 6.31,
    "milestones": 0.0,
    "story": []
@@ -605,7 +605,7 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 4.99,
+   "waste": 8.49,
    "restock": 0.49,
    "milestones": 0.0,
    "story": []

@@ -1985,7 +1985,7 @@ def test_box_change_opens_the_pc_and_runs_the_core_shortcut(monkeypatch, version
     screens = iter(['overworld', 'pc'])
     monkeypatch.setattr(menus, 'current_screen', lambda memory, version: next(screens))
     menu = menus.ChangeBox(3)
-    snapshot = SimpleNamespace(active_box=0, data=SimpleNamespace(game=version))
+    snapshot = SimpleNamespace(active_box=0, data=SimpleNamespace(game=version), in_battle=False)
     mem = SimpleNamespace(memory=None)
     assert menu.step(snapshot, mem) == 'a'
     monkeypatch.setattr(menus.CoreChangeBox, 'step', lambda self, memory, ui: 'down')
