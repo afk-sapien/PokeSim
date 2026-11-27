@@ -1531,7 +1531,8 @@ class StrategicPolicy(Policy):
         return self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
 
     def _shopping_item(self, snapshot, stock):
-        return self.shop.item_for(snapshot, stock, self.goal.key, self.collection.project)
+        return self.shop.item_for(snapshot, stock, self.goal.key, self.collection.project,
+                                  league_trip=self.shop.league_trip)
 
     def _release_target(self, snapshot):
         # A release that just failed is skipped until its retry time, so another spare goes first

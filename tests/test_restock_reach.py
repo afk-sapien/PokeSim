@@ -106,28 +106,48 @@ def test_the_lobby_stocks_the_league_kit_only_for_a_walk_into_the_league():
     assert ShoppingController().plan(short, deposit, None, **{**OPTIONS, 'requested_goal': deposit.key}).goal.key == 'restock'
 
 
-def counter_walk(s):
-    """What the lobby counter sells one at a time, and the money it leaves."""
+BALL_NAMES = {'ULTRA_BALL', 'GREAT_BALL', 'POKE_BALL'}
+
+
+def counter_walk(s, goal_key='league_lorelei'):
+    """What the lobby counter sells one at a time for a visit toward ``goal_key``, and the state it leaves."""
     stock, bought = DATA['marts']['IndigoPlateauLobby'], []
-    while (item := ShoppingController.item_for(s, stock, 'restock', None)) is not None:
+    while (item := ShoppingController.item_for(s, stock, goal_key, None)) is not None:
         bought.append(next(name for name, value in ITEMS.items() if value == item))
         counts = dict(s.items)
         counts[item] = counts.get(item, 0) + 1
         s = replace(s, items=tuple(counts.items()), money=s.money - PRICES[item])
-    return bought, s.money
+    return bought, s
 
 
 def test_the_lobby_counter_sells_the_league_kit_before_any_ball():
     # With 9,587 the counter sold one Max Potion, one Revive and four Ultra Balls, and no Full Heal.
     s = plateau(map=LOBBY, x=7, y=11, money=9587, items=((ITEMS['POKE_BALL'], 3),))
     bought, left = counter_walk(s)
-    assert bought == ['MAX_POTION', 'REVIVE', 'FULL_HEAL', 'FULL_HEAL', 'FULL_HEAL'] and left == 3787
+    assert bought == ['MAX_POTION', 'REVIVE', 'FULL_HEAL', 'FULL_HEAL', 'FULL_HEAL'] and left.money == 3787
     # A ball spends only what the whole kit and the share it keeps for a second run leave over.
     rich = replace(s, money=40000)
     bought, left = counter_walk(rich)
     assert bought[:10] == ['MAX_POTION'] * 5 + ['REVIVE'] * 2 + ['FULL_HEAL'] * 3
     assert bought[10:] and set(bought[10:]) <= {'ULTRA_BALL', 'GREAT_BALL'}
-    assert left - cash_reserve(rich) >= boss.kit_floor(5, 2, PRICES[ITEMS['MAX_POTION']], PRICES[ITEMS['REVIVE']])
+    floor = boss.kit_floor(5, 2, PRICES[ITEMS['MAX_POTION']], PRICES[ITEMS['REVIVE']])
+    assert left.money - cash_reserve(rich) >= floor
+    # Any other visit buys balls there as an ordinary mart does, after the kit.
+    bought, left = counter_walk(s, 'party_collection_space')
+    assert bought[:5] == ['MAX_POTION', 'REVIVE', 'FULL_HEAL', 'FULL_HEAL', 'FULL_HEAL']
+    assert bought[5:] and set(bought[5:]) <= BALL_NAMES
+
+
+def test_the_counter_keeps_the_kit_money_from_balls_only_on_a_walk_into_the_league():
+    # The counter's goal is the restock, so it reads the walk the plan served. North of Victory Road the
+    # lobby is the only counter a walk reaches, and a deposit there still needs its balls.
+    _, kitted = counter_walk(plateau(map=LOBBY, x=7, y=11, money=9587, items=((ITEMS['POKE_BALL'], 3),)))
+    for key, buys_ball in (('league_lorelei', False), ('party_collection_space', True)):
+        shop = ShoppingController()
+        shop.plan(kitted, Goal(key, key, key), None, **{**OPTIONS, 'requested_goal': key})
+        request = shop.step(kitted, 'restock', None).request
+        names = {value: name for name, value in ITEMS.items()}
+        assert (request is not None and names[request[1]] in BALL_NAMES) is buys_ball
 
 
 def test_a_walk_into_the_league_stocks_only_what_the_counter_sells():

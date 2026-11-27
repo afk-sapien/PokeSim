@@ -329,11 +329,12 @@ def healing_item(items, mon, incoming=0):
 
 
 def shopping_item(items, stock, money, league=False, collecting=False, legendary=False, reserve=300,
-                  hunt_reserve=None, cure_room=False, restore_room=False, ball_room=False):
+                  hunt_reserve=None, cure_room=False, restore_room=False, ball_room=False, league_trip=False):
     """The next item to buy, or None. ``hunt_reserve``, during a hunt, is the money kept back while
     the ball stock grows past the collecting 15 toward HUNT_STOCK. ``cure_room``, ``restore_room`` and
     ``ball_room`` let a first cure, restore and ball into a bag past the 18 entries a new kind needs
-    (shopping.cure_room, shopping.supply_room)."""
+    (shopping.cure_room, shopping.supply_room). ``league_trip``, at the League's counter, is a walk
+    into its rooms, and a ball there spends only what the League kit leaves over."""
     counts = dict(items)
     if legendary and not counts.get(ITEMS['MASTER_BALL']):
         if ITEMS['ULTRA_BALL'] not in stock:
@@ -373,10 +374,11 @@ def shopping_item(items, stock, money, league=False, collecting=False, legendary
         desired[ITEMS["REVIVE"]] = counts.get(ITEMS["REVIVE"], 0) + extra
         # Freeze never thaws, and Lance's Dragonair can stall forever against a frozen last partner.
         desired[ITEMS["FULL_HEAL"]] = 3
-        # A ball spends only what the whole kit, with the share it keeps for a second run, leaves over.
-        # With 9,587, the purse a Red run reached the lobby with, and an empty bag, the counter sold one
-        # Max Potion, one Revive and four Ultra Balls, no Full Heal, and left 787.
-        kept = boss.kit_floor(heal_count, revives, *prices)
+        # On a walk into the League a ball spends only what the whole kit, with the share it keeps for a
+        # second run, leaves over. With 9,587, the purse a Red run reached the lobby with, the counter sold
+        # one Max Potion, one Revive and four Ultra Balls, no Full Heal, and left 787. Any other visit buys
+        # balls as an ordinary mart does: north of Victory Road the lobby is the only counter a walk reaches.
+        kept = boss.kit_floor(heal_count, revives, *prices) if league_trip else 0
     elif ITEMS["ANTIDOTE"] not in stock:
         # Fuchsia, Saffron and Cinnabar sell no Antidote, so their cure is a Full Heal.
         desired[ITEMS["FULL_HEAL"]] = max(0, 2 - counts.get(ITEMS["ANTIDOTE"], 0))
