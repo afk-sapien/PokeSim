@@ -514,6 +514,8 @@ class Gen1Watch(PlannerMarks):
         self.counts, self.rising = None, {}
         # The map at the last look and whether it was dark, for the flash mark.
         self.dark = None
+        # Flights the policy had counted at the last look, for the fly mark.
+        self.flights_seen = getattr(self.run.policy, 'flights', 0)
         self.reset_marks()
 
     def race_checkpoint(self):
@@ -528,7 +530,15 @@ class Gen1Watch(PlannerMarks):
     def marks(self, snapshot=None):
         """What the planner just did, as (kind, detail, title): a returned walking event completed, one
         more copy another adventure asked for, Flash lighting a cave, a Pokédex entry or a stand-down."""
-        return self.store_marks(snapshot) + self.flash_marks(snapshot) + self.shared_marks(snapshot)
+        return self.store_marks(snapshot) + self.flash_marks(snapshot) + self.fly_marks() + self.shared_marks(snapshot)
+
+    def fly_marks(self):
+        """A flight landing (fly), with the town as its detail, once per flight the policy counts."""
+        flights, town = getattr(self.run.policy, 'flights', 0), getattr(self.run.policy, 'flown', None)
+        # A reload starts the policy's count again, so any change to a nonzero count is a new flight.
+        found = [('fly', town, f'Flew to {town}')] if flights and flights != self.flights_seen else []
+        self.flights_seen = flights
+        return found
 
     def flash_marks(self, snapshot):
         """Flash lighting Rock Tunnel (flash): the snapshot's ``dark`` turns off on the map it was on at
