@@ -1,11 +1,12 @@
-"""A battler with nothing left that can hurt the foe hands over to a partner who can, or spends no items."""
-from pokesim.policies.battle import HOPELESS, choose_battle, hurts
-from pokesim.strategy_data import ITEMS
+"""A battler that cannot hurt the foe hands over to the partner who hurts it most, or spends no items."""
+from pokesim.policies.battle import HOPELESS, choose_battle, damage, hurts, ranked_moves
+from pokesim.strategy_data import ITEMS, MOVES
 from test_events import snap
 from test_strategy import mon
 
 TACKLE, RAZOR_LEAF, POISONPOWDER, TOXIC = 33, 75, 77, 92
 THUNDERBOLT, EARTHQUAKE, HYPNOSIS, DREAM_EATER, CONFUSE_RAY, NIGHT_SHADE, PECK = 85, 89, 95, 138, 109, 101, 64
+MOVE = {move['name']: mid for mid, move in MOVES.items()}
 BAG = ((ITEMS['FULL_RESTORE'], 10), (ITEMS['HYPER_POTION'], 5))
 
 
@@ -48,19 +49,56 @@ def test_a_battler_that_cannot_hurt_the_foe_hands_over_below_the_usual_bar():
         assert decision.kind == 'switch' and decision.index in (1, 2), decision
 
 
-def test_a_battler_that_never_had_an_attack_keeps_the_usual_path():
-    # A trainer's Weedle against a Kakuna with only Harden: switching it out changed which Pokémon
-    # gained levels and sent a Cut hunt down another route.
+def test_the_partner_that_hurts_the_foe_most_comes_in_whatever_its_hp():
+    # Yellow's Sandslash against Agatha's Gengar with PP left in all four Normal moves: it stayed in for
+    # 5 to 9 turns that dealt nothing, while Haunter could hit for its level.
+    sandslash = mon(species=97, level=72, hp=210, max_hp=220, types=(4, 4), attack=180,
+                    moves=tuple(MOVE[name] for name in ('SCRATCH', 'STRENGTH', 'CUT', 'SLASH')), pp=(35, 15, 30, 20))
+    kangaskhan = mon(species=2, level=70, hp=230, max_hp=240, types=(0, 0), attack=160,
+                     moves=(MOVE['BODY_SLAM'], MOVE['MEGA_PUNCH'], 0, 0), pp=(15, 20, 0, 0))
+    haunter = mon(species=147, level=53, hp=20, max_hp=140, types=(8, 3), special=120,
+                  moves=(MOVE['LICK'], CONFUSE_RAY, NIGHT_SHADE, HYPNOSIS), pp=(30, 10, 15, 20))
+    muk = mon(species=136, level=45, hp=230, max_hp=240, types=(3, 3), attack=70,
+              moves=(MOVE['SLUDGE'], MOVE['BODY_SLAM'], 0, 0), pp=(20, 15, 0, 0))
+    party = (sandslash, kangaskhan, haunter, muk)
+    foe = gengar()
+    assert all(damage(mid, sandslash, foe) == 0 for mid in sandslash.moves) and not hurts(kangaskhan, foe)
+    assert haunter.hp < max(damage(mid, foe, haunter) for mid in foe.moves), 'Night Shade knocks Haunter out'
+    assert ranked_moves(haunter, foe)[0][0] > ranked_moves(muk, foe)[0][0] > 0
+    for can_switch in (True, False):
+        decision = choose_battle(snap(party=party, in_battle=2, items=BAG), sandslash, foe, 0, can_switch=can_switch)
+        assert (decision.kind, decision.index) == ('switch', 2), decision
+    # The same holds in a wild battle with nothing to catch.
+    assert choose_battle(snap(party=party, in_battle=1, items=BAG), sandslash, foe, 0).index == 2
+
+
+def test_an_attack_that_deals_nothing_never_outranks_one_that_deals_damage():
+    # Normal moves into a Ghost score below any attack that lands. Bite is Normal in Gen I.
+    foe = gengar()
+    for moves in (('SLASH', 'EARTHQUAKE'), ('SCRATCH', 'SAND_ATTACK', 'DIG'), ('BODY_SLAM', 'BITE', 'LEER', 'THUNDERBOLT'),
+                  ('TACKLE', 'GROWL', 'VINE_WHIP')):
+        attacker = mon(level=60, hp=180, max_hp=180, attack=150, special=120,
+                       moves=tuple(MOVE[name] for name in moves) + (0,) * (4 - len(moves)),
+                       pp=(10,) * len(moves) + (0,) * (4 - len(moves)))
+        best = ranked_moves(attacker, foe)[0][1]
+        assert damage(attacker.moves[best], attacker, foe) > 0, moves
+
+
+def test_a_battler_that_never_had_an_attack_hands_over_too():
+    # A trainer's Weedle against a Kakuna with only Harden, which cannot end the battle by itself.
     harden, poison_sting, string_shot = 106, 40, 81
     kakuna = mon(species=113, level=6, hp=20, max_hp=22, types=(7, 3), moves=(harden, 0, 0, 0), pp=(30, 0, 0, 0))
     weedle = mon(species=112, level=10, hp=30, max_hp=30, types=(7, 3), moves=(poison_sting, string_shot, 0, 0), pp=(35, 40, 0, 0))
     squirtle = mon(species=177, level=12, hp=33, max_hp=33, types=(21, 21), moves=(TACKLE, 0, 0, 0), pp=(35, 0, 0, 0))
     state = snap(party=(kakuna, squirtle), in_battle=2, items=BAG)
-    assert not choose_battle(state, kakuna, weedle, 0).reason.startswith('Nothing left here'), 'Kakuna is not spent'
+    assert (choose_battle(state, kakuna, weedle, 0).kind, choose_battle(state, kakuna, weedle, 0).index) == ('switch', 1)
+    # With nobody to hand over to, a battler that is not spent keeps the usual path and its items.
+    alone = snap(party=(kakuna,), in_battle=2, items=BAG)
+    assert not choose_battle(alone, kakuna, weedle, 0).reason.startswith('Nothing left here'), 'Kakuna is not spent'
 
 
 def test_with_no_partner_to_hand_over_to_no_item_is_spent_on_it():
-    party = (spent_venusaur(), mon(hp=30, moves=(PECK, 0, 0, 0), pp=(35, 0, 0, 0)), spent_venusaur(211))
+    party = (spent_venusaur(), mon(hp=30, moves=(TACKLE, 0, 0, 0), pp=(35, 0, 0, 0)), spent_venusaur(211))
     decision = choose_battle(snap(party=party, in_battle=2, items=BAG), party[0], gengar(), 0)
     assert decision.kind == 'fight', decision
     # A battler that can still hurt the foe is healed as before.
