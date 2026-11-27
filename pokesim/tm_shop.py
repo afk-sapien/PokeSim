@@ -4,7 +4,7 @@ import hashlib
 from .battle_power import battle_power, best_replacement, moveset_score
 from .policies.battle import HM_MOVES
 from .policies.collection import champion
-from .strategy_data import MAPS, MOVES, SPECIES, WORLD
+from .strategy_data import MAPS, MOVES, SPECIES, WORLD, event_set
 
 # The twelve renewable cartridge TMs keep their original shops and prices.
 RENEWABLE = {1, 2, 5, 7, 9, 15, 17, 23, 32, 33, 37, 50}
@@ -119,10 +119,14 @@ def choose(snapshot, moves, compatible, *, owned, skip=()):
 # label names the move, as TEXT_SILPHCO10F_TM_EARTHQUAKE does.
 GROUND = tuple((m, index, obj[4]) for m, world in WORLD.items() for index, obj in enumerate(world.get('objects', ()))
                if obj[2] == 'SPRITE_POKE_BALL' and '_TM_' in obj[4])
+# The S.S. Anne sails once its captain is helped and never docks again, so a ball left on board is gone.
+SHIP = frozenset(m for name, m in MAPS.items() if name.startswith('SS_ANNE'))
 
 
 def on_ground(snapshot, place):
     """Whether the ball at ``place``, a plan's ``ground`` (map, object index, text label), is still there."""
+    if place[0] in SHIP and event_set(snapshot.event_flags, 'EVENT_SS_ANNE_LEFT'):
+        return False
     # The pickups module reaches this one through the ledger, so it is read here, when first needed.
     from .policies.pickups import Pickups
     return Pickups.hidden(snapshot, {'map': place[0], 'object': place[1]}) is False

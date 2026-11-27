@@ -487,6 +487,16 @@ def test_a_ground_tm_is_fetched_where_a_purchase_is_made_when_its_move_clears_th
     assert taught.key == 'teach_tm' and action[0] == PRESS and policy.tm_plan is None
 
 
+def test_a_ball_left_on_the_ss_anne_is_gone_once_the_ship_sails():
+    from test_strategy import flags
+    place = (MAPS['SS_ANNE_B1F_ROOMS'], 9, 'TEXT_SSANNEB1FROOMS_TM_REST')
+    docked = shopper(hidden_objects=bytes(32))
+    sailed = replace(docked, event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_SS_ANNE_LEFT'))
+    assert tm_shop.on_ground(docked, place) and not tm_shop.on_ground(sailed, place)
+    # A ball on land stays there after the ship sails.
+    assert tm_shop.on_ground(sailed, (MAPS['POKEMON_MANSION_B1F'], 4, 'TEXT_POKEMONMANSIONB1F_TM_BLIZZARD'))
+
+
 def test_the_watch_marks_a_move_a_party_member_learns():
     from pokesim.events import RunMemory
     from pokesim.scenarios import Gen1Watch, matches
