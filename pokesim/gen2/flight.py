@@ -2,13 +2,20 @@
 
 Fly only works outside, on town and route maps. Indoors, in a cave or in a gate with no walking route
 to the goal, the policy first walks to the nearest outside place it can reach, then flies from there.
+
+The comparison is Kanto's too (policies.flight.pick). Here the costs are region hops on the walking
+route, so a walk of fewer than MINIMUM_HOPS is never flown and a landing must save more than FLIGHT_HOPS.
 """
 from collections import deque
 from dataclasses import replace
 
 from pokecore.gen2.maps import OUTSIDE, flyer
 
+from ..policies.flight import pick
 from .menus import Fly
+
+MINIMUM_HOPS = 6
+FLIGHT_HOPS = 4
 
 
 def shortcut(policy, snapshot, mem, destination):
@@ -33,18 +40,17 @@ def shortcut(policy, snapshot, mem, destination):
         selected = cache[1]
     else:
         route = nav.regions.route(snapshot, destination, targets, cut=cut, surf=surf)
-        choices = []
-        # No walking route (a returned Sudowoodo blocking Route 36, say) still leaves the Fly points.
-        if route is None or len(route) >= 6:
+
+        def rests():
             for index, point in destinations(data, snapshot.map, visited):
                 mid = point['map']
                 if mid == snapshot.map:
                     continue
                 landing = replace(snapshot, map=mid, x=point['x'], y=point['y'])
                 remainder = nav.regions.route(landing, destination, targets, cut=cut, surf=surf)
-                if remainder is not None and (route is None or len(remainder) + 4 < len(route)):
-                    choices.append((len(remainder), index, mid))
-        selected = min(choices)[1:] if choices else None
+                yield None if remainder is None else len(remainder), (index, mid)
+        # No walking route (a returned Sudowoodo blocking Route 36, say) still leaves the Fly points.
+        selected = pick(None if route is None else len(route), rests(), MINIMUM_HOPS, FLIGHT_HOPS)
         nav.flight_cache = token, selected
     return Fly(slot, selected[0], snapshot.map, selected[1]) if selected else None
 
