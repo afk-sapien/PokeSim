@@ -112,8 +112,8 @@ def held_rose(previous, snapshot):
 
 
 def collected(previous, snapshot, rarity, demand):
-    """True when a Gold, Silver or Crystal run hatched an egg, caught a better copy or caught a copy
-    for a linked adventure since the ``previous`` snapshot.
+    """True when a Gold, Silver or Crystal run hatched an egg, caught a better copy, caught a copy
+    for a linked adventure or evolved one for it (evolved_for_peer) since the ``previous`` snapshot.
 
     A finished run with every entry and a level 100 team spends its play on these, and none is a new
     best (Supervisor.progressed), so the stall alert fired every hour between League wins while the
@@ -140,9 +140,9 @@ def collected(previous, snapshot, rarity, demand):
     before = [mon for mon in (*previous.party, *previous.stored) if not mon.egg] if hatched else None
     if hatched and hatched - {key(mon) for mon in before}:
         return True
-    # A catch adds a Pokémon, so most looks end here.
+    # A catch adds a Pokémon, so most looks end here. An evolution keeps the count.
     if len(snapshot.party) + len(snapshot.stored) <= len(previous.party) + len(previous.stored):
-        return False
+        return evolved_for_peer(previous, snapshot, demand)
     before = before or [mon for mon in (*previous.party, *previous.stored) if not mon.egg]
     known = {(mon.species, key(mon)) for mon in before}
     new = [mon for mon in (*snapshot.party, *snapshot.stored)
@@ -157,6 +157,31 @@ def collected(previous, snapshot, rarity, demand):
             best[mon.species] = min(rarity(mon), best.get(mon.species, 1.0))
     return any(demand.get(mon.species) and counts[mon.species] < demand[mon.species] + 1
                or mon.species in best and rarity(mon) * RARITY_STEP <= best[mon.species] for mon in new)
+
+
+def evolved_for_peer(previous, snapshot, demand):
+    """True when a party Pokémon evolved since ``previous`` into a species in ``demand``, the evolved
+    copy could travel to a linked adventure (training.could_travel) and no copy of that species held
+    before could.
+
+    An evolution keeps the held count, so the catch rules never see it. A Crystal run past the League
+    whose stones went only to spare copies for its peers counted none of them, and the gate stopped it
+    as stalled after 20 game minutes. A second copy of a species that could already travel gives a
+    peer nothing, and nor does a veteran, which automatic trading keeps. With stones for any copy, the
+    same run evolved a level 100 Pikachu, and Nidorino and Poliwhirl twice each. An evolution keeps
+    the party slot, the trainer and the DVs.
+    """
+    if not demand:
+        return False
+    evolved = [after for before, after in zip(previous.party, snapshot.party)
+               if after.species != before.species and demand.get(after.species) and not after.egg and not before.egg
+               and before.trainer_id == after.trainer_id and tuple(before.dvs or ()) == tuple(after.dvs or ())]
+    if not evolved:
+        return False
+    from .gen2.training import could_travel
+    return any(could_travel(mon) and not any(could_travel(old) for old in (*previous.party, *previous.stored)
+                                             if old.species == mon.species and not old.egg)
+               for mon in evolved)
 
 
 # Losses to one boss within LOSS_GAME_MINUTES that make a loss loop (LossLoop).
