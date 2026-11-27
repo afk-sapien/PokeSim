@@ -921,11 +921,12 @@ def create_app(manager, shutdown=lambda: None):
 
     @app.get('/health/live')
     def live():
-        return {'ok': not manager.closing, 'application_id': manager.registry.setting('application_id')}
+        return {'ok': not manager.closing, 'application_id': manager.registry.application_id}
 
+    # Neither check takes the registry's lock, which a backup holds until its archive is written.
     @app.get('/health/ready')
     def ready():
-        body = {'ok': not manager.closing, 'adventures': len(manager.registry.adventures())}
+        body = {'ok': not manager.closing}
         problems = [] if manager.closing else manager.loop_problems()
         if problems:
             # A dead or frozen background loop means games stop being restarted or traded, so
@@ -2146,7 +2147,7 @@ def main(argv=None):
         # Commands on this machine connect to local_url. PUBLIC_URL can name a published container
         # port or a proxy, which this process does not listen on.
         identity = {'url': public_url, 'local_url': f'http://{browser_host}:{actual_port}',
-                    'application_id': manager.registry.setting('application_id')}
+                    'application_id': manager.registry.application_id}
         CheckpointStore.atomic_write(manager.root / 'manager.json', json.dumps(identity).encode())
         manager.bootstrap_admin(os.environ.get('POKESIM_ADMIN_USER', '').strip(), os.environ.get('POKESIM_ADMIN_PASSWORD', ''))
         manager.issue_cli_token()

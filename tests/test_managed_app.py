@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import threading
 import time
 from types import SimpleNamespace
 
@@ -38,10 +39,35 @@ def test_readiness_names_a_frozen_monitor_and_a_dead_loop(client):
         monitor.beat()
         response = client.get('/health/ready')
         assert response.status_code == 503
-        assert response.json() == {'ok': False, 'adventures': 0, 'problems': ['library-watchdog stopped']}
+        assert response.json() == {'ok': False, 'problems': ['library-watchdog stopped']}
     finally:
         monitor.thread = None
         manager.watchdog.loop = None
+
+
+def test_health_answers_while_a_backup_holds_the_registry(client):
+    client, manager = client
+    application = manager.registry.setting('application_id')
+    answers = {}
+
+    def ask():
+        answers['live'] = client.get('/health/live')
+        answers['ready'] = client.get('/health/ready')
+
+    # A backup holds the maintenance lock and the registry's lock while it copies and zips the library.
+    with manager.maintenance, manager.registry.lock:
+        manager.suspended = True
+        try:
+            asking = threading.Thread(target=ask, daemon=True)
+            asking.start()
+            asking.join(3)
+            answered = not asking.is_alive()
+        finally:
+            manager.suspended = False
+    asking.join(10)
+    assert answered, 'the health checks waited for the backup'
+    assert answers['live'].json() == {'ok': True, 'application_id': application}
+    assert answers['ready'].status_code == 200 and answers['ready'].json()['ok'] is True
 
 
 def login(client, manager):
@@ -53,7 +79,7 @@ def login(client, manager):
 def test_keyless_library_retains_request_boundaries(client):
     client, manager = client
     assert client.get('/').status_code == 200
-    assert client.get('/health/ready').json()['adventures'] == 0
+    assert client.get('/health/ready').json() == {'ok': True}
     assert client.get('/api/v1/adventures').json() == {'adventures': [], 'attention': {'enabled': True, 'problems': []}}
     assert not (manager.root / 'owner.token').exists()
     assert 'Owner key' not in client.get('/').text

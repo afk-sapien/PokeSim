@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from collections import deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from contextlib import nullcontext
 import json
 import logging
 import os
@@ -529,7 +528,10 @@ class Supervisor:
     def stop(self, aid, preserve_desired=False, only_if_stopped=False):
         """Stop the adventure's worker. With `only_if_stopped`, stop it only while the owner still
         wants it stopped, read under the lock a Start takes, and return None when they started it."""
-        with (nullcontext() if self.closed.is_set() else self.admission), self._lock(aid):
+        # A shutdown takes admission too. A backup holds it while it stops each worker under the
+        # adventure's lock and then the registry's, so a shutdown stop that held the next adventure's
+        # lock first would wait on the backup while the backup waited on it.
+        with self.admission, self._lock(aid):
             row = self.registry.adventure(aid)
             if only_if_stopped:
                 if row['desired_state'] != 'stopped':
