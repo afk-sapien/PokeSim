@@ -37,7 +37,8 @@ def _moveset_score(species, level, types, attack, physical_defense, speed, speci
         for mid in moves:
             move = MOVES.get(mid, {})
             effect = move.get('effect')
-            if not move.get('power') or effect in ('OHKO_EFFECT', 'COUNTER_EFFECT', 'BIDE_EFFECT'):
+            # Not the data power: Night Shade's is 0 though it deals the user's level, and damage() knows that.
+            if not move or effect in ('OHKO_EFFECT', 'COUNTER_EFFECT', 'BIDE_EFFECT'):
                 continue
             connected = damage(mid, mon, enemy)
             value = min(hp, connected) * min(255, move['accuracy'] * 255 // 100) / 256
