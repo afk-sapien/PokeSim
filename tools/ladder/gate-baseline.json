@@ -78,6 +78,15 @@
    "milestones": 0.0,
    "story": []
   },
+  "blue-deep/post_game": {
+   "stall": null,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 1.49,
+   "restock": 1.03,
+   "milestones": 0.0,
+   "story": []
+  },
   "crystal/new_game": {
    "stall": null,
    "stalls": 0,
@@ -552,6 +561,15 @@
    "milestones": 0.0,
    "story": []
   },
+  "silver-deep/post_game": {
+   "stall": null,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 0.0,
+   "restock": 0.0,
+   "milestones": 0.0,
+   "story": []
+  },
   "yellow/new_game": {
    "stall": null,
    "stalls": 0,
@@ -616,6 +634,15 @@
    "errors": 0.0,
    "waste": 1.86,
    "restock": 1.89,
+   "milestones": 0.0,
+   "story": []
+  },
+  "yellow-deep/post_game": {
+   "stall": null,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 8.02,
+   "restock": 1.73,
    "milestones": 0.0,
    "story": []
   }
