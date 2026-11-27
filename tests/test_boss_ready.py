@@ -348,6 +348,16 @@ def test_the_league_kit_spends_half_the_spare_money():
     assert (bag, money) == (2, 3600)
 
 
+def test_the_kit_floor_is_the_spare_money_that_buys_the_whole_kit():
+    for restores, revives in ((0, 0), (3, 1), (5, 2)):
+        floor = boss.kit_floor(restores, revives, 2500, 1500)
+        assert boss.kit(restores, revives, floor, 2500, 1500) == (5 - restores, 2 - revives)
+        if restores < 5:
+            assert boss.kit(restores, revives, floor - 1, 2500, 1500) != (5 - restores, 2 - revives)
+    # Once the kit is in the bag, the floor is the share it keeps for a second run.
+    assert boss.kit_floor(5, 2, 2500, 1500) == 5 * 2500 + 2 * 1500
+
+
 HYPER = boss.Medicine(16, boss.RESTORE, 200)
 SUPER = boss.Medicine(17, boss.RESTORE, 50)
 FULL = boss.Medicine(14, boss.RESTORE)
@@ -417,6 +427,16 @@ def test_gen2_buys_the_league_kit_before_the_first_room(gen2):
     training = league_policy(gen2, 'collection_train')
     back = league_snapshot(gen2, lobby.party, money=7133, room='INDIGO_PLATEAU_POKECENTER_1F')
     assert ledger.supplies(training, back) == [('potions', ('HYPER_POTION',), 2)]
+
+
+def test_gen2_ranks_the_league_kit_ahead_of_ultra_balls_before_the_first_hall_of_fame(gen2):
+    # A Silver run with a legendary still wanted at 8 badges bought Ultra Balls ahead of the League kit.
+    from pokesim.gen2 import ledger
+    policy = league_policy(gen2, 'snorlax')
+    lobby = league_snapshot(gen2, (gen2_mon(180, (15, 15, 30, 20)),), money=30000, room='INDIGO_PLATEAU_POKECENTER_1F')
+    lobby.can_catch = True
+    rows = [row[0] for row in ledger.supplies(policy, lobby)]
+    assert rows[0] == 'balls' and rows[-1] == 'ultras' and 'potions' in rows
 
 
 def test_gen2_uses_league_items_between_rooms(gen2):

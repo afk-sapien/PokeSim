@@ -300,6 +300,8 @@ def gift_species(version):
 
 # Porygon's Game Corner price. Blue sells it cheaper, Red and Yellow ask 9999 coins.
 PORYGON_COINS = {'red': 9999, 'blue': 6500, 'yellow': 9999}
+# The Celadon Game Corner clerk sells 50 coins for 1000 a time.
+COINS_PRICE = 1000
 SNORLAX = next(sid for sid, row in SPECIES.items() if row['dex'] == 143)
 # The Route 12 Snorlax, woken with the Poké Flute. Walking reopens it after the first battle.
 SNORLAX_SOURCE = {'map': MAPS['ROUTE_12'], 'method': 'static', 'fragment': 'SNORLAX',

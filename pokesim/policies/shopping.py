@@ -156,16 +156,20 @@ class ShoppingController(Errand):
     fund_target: int = 0
     # The counter square a restock trip under way walks to, kept while each plan offers that trip.
     shop: tuple | None = None
+    # The goal the last plan served is a walk into the League's rooms. The counter sees only the restock,
+    # so it reads this to keep the League kit's money from balls.
+    league_trip: bool = False
 
     def leave_menu(self):
         self.selling = False
 
     @staticmethod
-    def item_for(snapshot, stock, goal_key, project, shop=None):
+    def item_for(snapshot, stock, goal_key, project, shop=None, league_trip=None):
         """The next item to buy from ``stock`` at ``shop``, the current map by default. A shop is judged
         as its counter judges it, so a plan made outside the Indigo Plateau lobby buys the League kit
         there. Judged as an ordinary mart, the lobby drew a run from the plateau to a counter that sold
-        it nothing the cash reserve allowed."""
+        it nothing the cash reserve allowed. ``league_trip``, whether ``goal_key`` walks into the League
+        by default, keeps the kit's money from balls at the lobby."""
         shop = snapshot.map if shop is None else shop
         if goal_key == 'collect_stone' and project and shop == MAPS['CELADON_MART_4F']:
             item = ITEMS[project['evolution']['requirement']]
@@ -175,7 +179,8 @@ class ShoppingController(Errand):
                              legendary=legendary_project(project), reserve=cash_reserve(snapshot),
                              hunt_reserve=funds_needed(snapshot) if hunting(project) else None,
                              cure_room=cure_room(snapshot), restore_room=supply_room(snapshot, RESTORES),
-                             ball_room=supply_room(snapshot, BALL_KINDS))
+                             ball_room=supply_room(snapshot, BALL_KINDS),
+                             league_trip=goal_key in LEAGUE_TRIP if league_trip is None else league_trip)
 
     @staticmethod
     def fund_index(snapshot):
@@ -200,6 +205,7 @@ class ShoppingController(Errand):
         """``reach`` returns the nearest of the shop squares it is given that a walk reaches, or None.
         Without it every shop counts as reached."""
         held, self.shop = self.shop, None
+        self.league_trip = requested_goal in LEAGUE_TRIP
         fee = entry_fee(snapshot, goal.key)
         self.fund_target = fee + CASH_RESERVE if fee and snapshot.money < fee else 0
         if self.fund_target and not healing and not in_league and has_pokedex and self.fund_index(snapshot) is not None:
@@ -228,12 +234,13 @@ class ShoppingController(Errand):
         elif balls >= ball_reserve and medicine and not bag_full:
             self.restocking = False
         if snapshot.map == MAPS['INDIGO_PLATEAU_LOBBY']:
-            counts = dict(snapshot.items)
             # The League kit is for a walk into the League's rooms, so a PC or heal visit leaves it alone.
             # A Red run after the League stopped at the lobby PC to deposit, bought the kit first and gave
             # it the bag's last free entry, and the Fishing Gurus then had no room for their rods.
-            kit = requested_goal in LEAGUE_TRIP and (medicine < 10 or counts.get(ITEMS['REVIVE'], 0) < 5
-                                                    or counts.get(ITEMS['FULL_HEAL'], 0) < 3)
+            # A walk in stocks whatever the counter sells, the kit boss.kit sizes for the purse. The kit
+            # stops at five restores and two Revives, so a check for 10 and 5 held on every walk in.
+            kit = requested_goal in LEAGUE_TRIP and self.item_for(
+                snapshot, DATA['marts'][WORLD[snapshot.map]['name']], requested_goal, project) is not None
             # A full bag still needs the clerk to sell from it. Without it, a trip planned outside for the
             # full bag ended at the lobby door, which saw nothing to buy and sent the player back out.
             self.restocking = bag_full or balls < ball_reserve or kit
@@ -299,7 +306,7 @@ class ShoppingController(Errand):
                                 if self.raising_funds(snapshot) else
                                 'Sell surplus items, or a limited TM only when the bag is full, to make room for story items',
                                 request=('sell', item, self._sale_quantity(snapshot, item)))
-        item = self.item_for(snapshot, stock, goal_key, project)
+        item = self.item_for(snapshot, stock, goal_key, project, league_trip=self.league_trip)
         for supply in (BALL_KINDS, RESTORES):
             index = supply_sale(snapshot, supply)
             if index is not None and item in supply:
@@ -322,7 +329,7 @@ class ShoppingController(Errand):
             if item not in dict(snapshot.items):
                 items += ((item, quantity),)
             after = replace(snapshot, items=items, money=snapshot.money - price * quantity)
-            if self.item_for(after, stock, goal_key, project) != item:
+            if self.item_for(after, stock, goal_key, project, league_trip=self.league_trip) != item:
                 break
             quantity += 1
         return quantity

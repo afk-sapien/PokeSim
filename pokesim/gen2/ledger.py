@@ -633,8 +633,12 @@ def supplies(policy, snapshot):
             revives = sum(inventory.get(data.items[name], 0) for name in ('REVIVE', 'MAX_REVIVE'))
             restores, extra = boss.kit(count, revives, snapshot.money - held_money(data, snapshot),
                                        price(data, 'HYPER_POTION'), price(data, 'REVIVE'))
-            rows += [row for row in (('potions', ('HYPER_POTION',), restores), ('revives', ('REVIVE',), extra)) if row[2]]
-            return rows
+            kit = [row for row in (('potions', ('HYPER_POTION',), restores), ('revives', ('REVIVE',), extra)) if row[2]]
+            if snapshot.hall_of_fame_count:
+                return rows + kit
+            # Before the first Hall of Fame the kit ranks ahead of the Ultra Ball row, behind the ball floor:
+            # a legendary waits for the League, which is the story's next step.
+            return [row for row in rows if row[0] != 'ultras'] + kit + [row for row in rows if row[0] == 'ultras']
         if count < POTION_LOW:
             rows.append(('potions', POTIONS, POTION_FULL - count))
         revives = inventory.get(data.items['REVIVE'], 0)
