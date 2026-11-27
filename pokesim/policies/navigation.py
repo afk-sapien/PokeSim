@@ -834,6 +834,13 @@ class Navigator:
                     queue.append(target)
         return None
 
+    def closed_for_now(self, pos, goals, frame):
+        """Whether only timed blocks close the way from ``pos`` to ``goals``, so a route exists once every
+        block in force has run out. A block (observe) only steers the walk around a step that failed twice,
+        such as a person standing in the way."""
+        ends = [until for until in self.blocked.values() if until > frame]
+        return bool(ends) and self.nearest_start((pos,), goals, max(ends)) is not None
+
     def route(self, pos, goals, frame, limit=60000):
         goals = frozenset(goals)
         if pos in goals:
