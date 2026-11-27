@@ -247,3 +247,79 @@ def test_backup_and_import_stage_inside_the_library_not_tmp(tmp_path, monkeypatc
     with pytest.raises(Exception):
         migration_module.import_archive(manager, tmp_path / 'missing.zip')
     assert all(entry is not None for entry in staged)
+
+
+def test_a_shutdown_during_a_backup_waits_for_it_instead_of_wedging(tmp_path, monkeypatch):
+    """A shutdown lands while a backup is stopping the workers.
+
+    The backup holds the registry's lock and stops each worker under its adventure's lock. A
+    shutdown stop that took the next adventure's lock and then waited for the registry left the two
+    waiting on each other, so neither the backup nor the shutdown ever finished.
+    """
+    stopping = threading.Event()
+    release_stop = threading.Event()
+    asking = threading.Event()
+    outcomes = {}
+
+    class SlowChild(FakeChild):
+        blocked = []
+
+        def request(self, method, path, body=None, **kwargs):
+            return {}
+
+        def stop(self, timeout=None):
+            # The first worker the backup stops takes its time.
+            if not SlowChild.blocked:
+                SlowChild.blocked.append(self)
+                stopping.set()
+                assert release_stop.wait(10)
+            super().stop(timeout)
+
+    manager = Manager(tmp_path, child_factory=SlowChild)
+    manager.registry.add_rom('rom', 'sha1', 'red')
+    ids = []
+    for name in ('Red', 'Blue'):
+        aid = manager.registry.create(name, 'rom', {'starter': 'random'}, identifier())['id']
+        manager.registry.request_lifecycle(aid, 'start', identifier())
+        ids.append(aid)
+    monkeypatch.setattr(manager.assets, 'rom_path', lambda rid: tmp_path / 'fixture.gb')
+    monkeypatch.setattr(manager.assets, 'prepare', lambda report: tmp_path)
+    monkeypatch.setattr(manager.assets, 'install_portraits', lambda raw: 0)
+    (tmp_path / 'fixture.gb').write_bytes(b'fake')
+    read = manager.registry.adventure
+
+    def adventure(key):
+        if key == ids[1] and threading.current_thread().name != 'backup':
+            asking.set()
+        return read(key)
+
+    def run(name, call):
+        try:
+            outcomes[name] = call()
+        except BaseException as error:
+            outcomes[name] = error
+
+    saving = threading.Thread(target=run, args=('backup', lambda: create_backup(manager)), name='backup',
+                              daemon=True)
+    closing = threading.Thread(target=run, args=('close', manager.supervisor.close), name='closing', daemon=True)
+    try:
+        for aid in ids:
+            manager.supervisor.start(aid)
+        monkeypatch.setattr(manager.registry, 'adventure', adventure)
+        saving.start()
+        assert stopping.wait(5)
+        closing.start()
+        # Give the shutdown's stop of the second adventure the time to reach the registry.
+        asking.wait(2)
+        release_stop.set()
+        saving.join(5)
+        closing.join(5)
+        assert not saving.is_alive() and not closing.is_alive(), 'the backup and the shutdown wait on each other'
+        assert isinstance(outcomes['backup'], dict), outcomes['backup']
+        assert outcomes['close'] == [], outcomes['close']
+        assert all(not manager.supervisor.children.get(aid) for aid in ids)
+    finally:
+        release_stop.set()
+        # A wedged pair keeps the registry's lock for good, and closing the registry would wait for it.
+        if not saving.is_alive() and not closing.is_alive():
+            manager.close()

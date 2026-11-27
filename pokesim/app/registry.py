@@ -104,6 +104,8 @@ class Registry:
             self.db.execute(f'PRAGMA user_version={SCHEMA}')
         if self.setting('application_id') is None:
             self.set_setting('application_id', identifier())
+        # It never changes, so the health checks read it without waiting for the lock a backup holds.
+        self.application_id = self.setting('application_id')
         self._migrate_adventure_speeds()
 
     def _keep_before_migration(self):
