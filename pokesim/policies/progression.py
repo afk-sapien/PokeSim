@@ -227,15 +227,23 @@ def evolve_level(target, species):
 
 
 def boss_training(s, goal, losses):
-    """Training before the boss or story goal ``goal`` (planning/league.training), or None once the team is ready."""
+    """Training before the boss or story goal ``goal`` (planning/league.training), or None once the team is ready.
+
+    A story goal also trains on the ground of the last boss won, and the walk takes the nearer ground it
+    reaches. The next boss's ground can lie past the story goal: Koga's Route 15 is behind the Snorlax the
+    Poké Flute wakes, which needs the Silph Scope from Giovanni. A Red run that lost to him in the Rocket
+    Hideout found no route to Route 15 and stood down until the stall watch fired."""
     plan = league.training(BOSS_TABLE, s, getattr(goal, 'key', None), s.map, power, losses,
                            lambda bit: readiness(s, bit)['score'])
     if plan is None:
         return None
     row, level = plan.row, plan.verdict.target
     if row is None:
+        last = next((r for r in reversed(BOSS_TABLE.rows) if league.won(r, s)), None)
+        grounds = (plan.where, *((last.training,) if last else ()))
+        names = dict.fromkeys(name for where in grounds for name in ((where,) if isinstance(where, str) else where))
         return training_goal(goal.key, "Train before another try",
-                             f"Train the best fighter to level {level} after a loss on the way to: {goal.title}", plan.where)
+                             f"Train the best fighter to level {level} after a loss on the way to: {goal.title}", tuple(names))
     if plan.verdict.reason == LOSS:
         return training_goal(row.key, f"Prepare for {row.name}",
                              f"Train the best fighter to level {level} after a loss to {row.name}", plan.where)
