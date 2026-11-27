@@ -397,6 +397,15 @@
    "milestones": 0.0,
    "story": []
   },
+  "red-deep/post_game": {
+   "stall": null,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 4.06,
+   "restock": 0.0,
+   "milestones": 0.0,
+   "story": []
+  },
   "red-randomized/new_game": {
    "stall": null,
    "stalls": 0,
