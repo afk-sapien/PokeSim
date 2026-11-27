@@ -73,6 +73,9 @@ class Child:
         self.process = None
         self.usage = None
         self.url = None
+        # One client per worker, set with the url. Building one took about 5 ms, and the monitor alone
+        # sends a few requests to each worker every few seconds.
+        self.client = None
         self.logs = deque(maxlen=100)
         self.command = command or ([sys.executable, '--worker'] if getattr(sys, 'frozen', False)
                                    else [sys.executable, '-m', 'pokesim.runtime.worker'])
@@ -110,6 +113,7 @@ class Child:
                     or message.get('host') != '127.0.0.1'
                     or type(message.get('port')) is not int or not 1 <= message['port'] <= 65535):
                 raise Refused(message.get('error') or 'Invalid worker readiness response')
+            self.client = httpx.Client(trust_env=False)
             self.url = f"http://127.0.0.1:{message['port']}"
             return self
         except BaseException:
@@ -160,26 +164,29 @@ class Child:
     def request(self, method, path, data=None, timeout=20, headers=None):
         if not self.url or self.process.poll() is not None:
             raise Refused('Adventure worker is not running')
-        with httpx.Client(trust_env=False, timeout=timeout) as client:
-            response = client.request(method, self.url + path, json=data,
-                                      headers={**(headers or {}), 'Authorization': 'Bearer ' + self.token})
-            if response.is_error:
-                try:
-                    detail = response.json().get('detail', response.text[:300])
-                except ValueError:
-                    detail = response.text[:300]
-                raise WorkerError(str(detail), response.status_code)
-            return response.json()
+        response = self.client.request(method, self.url + path, json=data, timeout=timeout,
+                                       headers={**(headers or {}), 'Authorization': 'Bearer ' + self.token})
+        if response.is_error:
+            try:
+                detail = response.json().get('detail', response.text[:300])
+            except ValueError:
+                detail = response.text[:300]
+            raise WorkerError(str(detail), response.status_code)
+        return response.json()
 
     def stop(self, timeout=50):
         if self.process is None:
             return
-        if self.process.poll() is None:
-            if self.url:
-                try:
-                    self.request('POST', '/internal/shutdown', {}, timeout=2)
-                except (OSError, RuntimeError, httpx.HTTPError):
-                    pass
+        running = self.process.poll() is None
+        if running and self.url:
+            try:
+                self.request('POST', '/internal/shutdown', {}, timeout=2)
+            except (OSError, RuntimeError, httpx.HTTPError):
+                pass
+        if self.client is not None:
+            # A worker that exited by itself has its connections closed here too.
+            self.client.close()
+        if running:
             if self.process.stdin:
                 try:
                     self.process.stdin.close()

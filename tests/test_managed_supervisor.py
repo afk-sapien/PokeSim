@@ -472,6 +472,25 @@ def test_a_worker_that_survives_a_kill_fails_its_stop_with_a_runtime_error(tmp_p
         child.stop(timeout=0.1)
     assert child.process.signals == ['terminate', 'kill']
 
+
+def test_a_worker_keeps_one_client_and_closes_it_even_after_exiting_by_itself(tmp_path):
+    from types import SimpleNamespace
+    from pokesim.app.supervisor import Child
+    sent, closed = [], []
+    response = SimpleNamespace(is_error=False, json=lambda: {'ok': True})
+    client = SimpleNamespace(request=lambda *args, **kwargs: sent.append(args[1]) or response,
+                             close=lambda: closed.append(True))
+    bootstrap = {'token': 't', 'generation': 1, 'adventure_id': 'a', 'settings': {'data_dir': str(tmp_path)}}
+    child = Child(bootstrap)
+    child.process = SimpleNamespace(poll=lambda: None, returncode=0)
+    child.client, child.url = client, 'http://127.0.0.1:1'
+    child.request('GET', '/api/summary')
+    child.request('GET', '/api/summary')
+    assert sent == ['http://127.0.0.1:1/api/summary'] * 2
+    child.process = SimpleNamespace(poll=lambda: 0, returncode=0)
+    child.stop()
+    assert closed == [True]
+
 def run_monitor_once(supervisor, aid, child, requests):
     child.request = requests
     child.pace = SimpleNamespace(observe=lambda value: None)

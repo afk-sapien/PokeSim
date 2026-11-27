@@ -1561,6 +1561,16 @@ def test_breeding_pair_search_is_reused_until_the_collection_changes(real_data, 
     assert [row[0] for row in breeding.pairings(policy, snapshot)] == [172] and len(calls) == 3
     snapshot.stored = ()
     assert breeding.pairings(policy, snapshot) == [] and len(calls) == 3
+    # The cartridge adds experience to each Day Care parent on every step, and the kept search outlasts it.
+    from dataclasses import replace
+    from pokecore.gen2.ram import Mon
+    parent = Mon(25, 'PIKACHU', 20, 50, 50, 0, 0, (33, 0, 0, 0), (35, 0, 0, 0), (35, 0, 0, 0),
+                 (50, 30, 30, 30, 30, 30), 8000, (0, 2, 4, 6, 8), (0,) * 5, 1, 70, data=real_data)
+    snapshot.daycare = (parent, None)
+    searched = breeding.pairings(policy, snapshot)
+    assert [row[0] for row in searched] == [172] and len(calls) == 4
+    snapshot.daycare = (replace(parent, experience=8001), None)
+    assert breeding.pairings(policy, snapshot) is searched and len(calls) == 4
 
 
 def breeding_mons():
@@ -2222,8 +2232,9 @@ def test_idle_collection_says_which_time_of_day_it_needs(real_data):
     original = collection.wanted
     collection.wanted = lambda policy, snapshot, species: species != collection.LAPRAS
     try:
-        assert collection.waiting_label(policy, snapshot, mem, 'day') == 'Walk the grass while Zubat waits for night'
-        assert collection.waiting_label(policy, snapshot, mem, 'night') == 'Walk the grass until a trade or a return brings new collection work'
+        day, night = (collection.named_wait(policy, snapshot, mem, time) for time in ('day', 'night'))
+        assert collection.waiting_label(snapshot, day) == 'Walk the grass while Zubat waits for night'
+        assert collection.waiting_label(snapshot, night) == 'Walk the grass until a trade or a return brings new collection work'
     finally:
         collection.wanted = original
 
