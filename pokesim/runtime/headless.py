@@ -135,3 +135,7 @@ class HeadlessRun(runtime_trace.HeadlessPins):
         if self.tracer is not None:
             self.tracer.close()
         self.pb.stop(save=False)
+        # A Red, Blue or Yellow run's own store (adapter.py).
+        if getattr(self, 'store_dir', None) is not None:
+            self.store.close()
+            self.store_dir.cleanup()

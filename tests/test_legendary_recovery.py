@@ -178,6 +178,18 @@ def test_exhausted_capture_returns_run_instead_of_fight_menu_loop(condition):
     assert decision.kind == 'run'
 
 
+def test_a_headless_load_counts_an_application_wait_on_the_run_frames():
+    from pokesim.adapter import recovery
+    # The application counted Mewtwo's wait on its PlayClock and saved with 30000 frames of it left.
+    saved = {'pending': {'150': 50000}, 'attempts': {'150': 1}, 'clock': LegendaryRecovery.CLOCK}
+    assert recovery({'legendary_recovery': saved, 'play_clock': {'frames': 20000}}, 7).pending == {'150': 30007}
+    # A headless checkpoint counts its waits on the run's frames already.
+    assert recovery({'legendary_recovery': saved}, 7).pending == {'150': 50000}
+    # A save from before the clock key holds the frames left, and the first observe counts them on.
+    old = {'pending': {'150': 30000}, 'attempts': {'150': 1}}
+    assert recovery({'legendary_recovery': old, 'play_clock': {'frames': 20000}}, 7).pending == {'150': 30000}
+
+
 def test_incidental_legendary_is_protected_without_a_collection_project():
     me = mon(level=100, hp=300, max_hp=300, moves=(89,), pp=(10,))
     enemy = mon(species=sid(144), level=50, hp=100, max_hp=100)

@@ -434,17 +434,17 @@ def test_the_pc_rating_leaves_returns_that_are_not_encounters_alone(world):
     assert not any(row.title.startswith('Skipped') for row in rows)
 
 
-def test_the_emulator_rates_a_returning_copy_as_the_pc_would_keep_it():
+def test_the_observer_rates_a_returning_copy_as_the_pc_would_keep_it():
     from types import SimpleNamespace
-    from pokesim.emulator import Emulator
+    from pokesim.store_observe import keeps_another
     from test_duplicates import snapshot as boxed, stored
     held = boxed([stored(0, dvs=(0, 8, 8, 8, 8))])
-    assert Emulator._keeps_another(SimpleNamespace(policy=SimpleNamespace()), held) is None
+    assert keeps_another(SimpleNamespace(), held) is None
     policy = SimpleNamespace(catch_rating=lambda s: None)
     # Bulbasaur is held with common DVs, so a copy rated with none is a spare until the dex misses it.
-    assert Emulator._keeps_another(SimpleNamespace(policy=policy), held)(1) is False
+    assert keeps_another(policy, held)(1) is False
     missing = replace(held, owned=frozenset())
-    assert Emulator._keeps_another(SimpleNamespace(policy=policy), missing)(1) is True
+    assert keeps_another(policy, missing)(1) is True
 
 
 def test_caught_snorlax_closes_the_return_after_leaving_route_12(world):

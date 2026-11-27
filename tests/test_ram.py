@@ -1,6 +1,15 @@
 """Repairs to Gen I party memory."""
 
 
+def headless(memory, tmp_path):
+    """A stand-in headless run over ``memory``, with the store and retries a read observes into."""
+    from types import SimpleNamespace
+    from pokesim.legendary import LegendaryRecovery
+    from pokesim.store import Store
+    return SimpleNamespace(pb=SimpleNamespace(memory=memory), frame=0, store=Store(tmp_path),
+                           policy=SimpleNamespace(), legendary_recovery=LegendaryRecovery())
+
+
 def test_a_party_nickname_with_a_text_command_ends_there():
     from pokesim.ram import W_PARTY_COUNT, W_PARTY_NICKS, repair_party_nicknames
     memory = bytearray(0x10000)
@@ -16,8 +25,7 @@ def test_a_party_nickname_with_a_text_command_ends_there():
     assert repair_party_nicknames(memory) == []
 
 
-def test_a_headless_read_ends_a_damaged_nickname_that_comes_into_the_party():
-    from types import SimpleNamespace
+def test_a_headless_read_ends_a_damaged_nickname_that_comes_into_the_party(tmp_path):
     from pokesim.adapter import Gen1Adapter
     from pokesim.ram import W_PARTY_COUNT, W_PARTY_NICKS
     damaged = bytes([0x96, 0x84, 0x93, 0x85, 0x94, 0x8D, 0x83, 0x51, 0x8B, 0x8B, 0x50])
@@ -26,7 +34,7 @@ def test_a_headless_read_ends_a_damaged_nickname_that_comes_into_the_party():
     memory[W_PARTY_NICKS:W_PARTY_NICKS + 11] = damaged
     adapter = Gen1Adapter.__new__(Gen1Adapter)
     adapter.last = None
-    run = SimpleNamespace(pb=SimpleNamespace(memory=memory), frame=0)
+    run = headless(memory, tmp_path)
     assert [mon.nick for mon in adapter.read(run).party] == ['WETFUND']
     # A withdraw brings a stored nickname whose terminator rose to a text command into the party.
     memory[W_PARTY_COUNT] = 2
@@ -35,15 +43,14 @@ def test_a_headless_read_ends_a_damaged_nickname_that_comes_into_the_party():
     assert memory[W_PARTY_NICKS + 11 + 7] == 0x50
 
 
-def test_a_headless_read_resets_a_box_level_in_the_enemy_party_slot_when_a_wild_battle_starts():
-    from types import SimpleNamespace
+def test_a_headless_read_resets_a_box_level_in_the_enemy_party_slot_when_a_wild_battle_starts(tmp_path):
     from pokecore.repairs import W_ENEMY_MON_PARTY_POS
     from pokesim.adapter import Gen1Adapter
     from pokesim.ram import W_IS_IN_BATTLE
     memory = bytearray(0x10000)
     adapter = Gen1Adapter.__new__(Gen1Adapter)
     adapter.last = None
-    run = SimpleNamespace(pb=SimpleNamespace(memory=memory), frame=0)
+    run = headless(memory, tmp_path)
     # A catch with a full party sent a level 34 Pokémon to a box.
     memory[W_ENEMY_MON_PARTY_POS] = 0x22
     adapter.read(run)
@@ -67,8 +74,7 @@ def test_a_headless_read_resets_a_box_level_in_the_enemy_party_slot_when_a_wild_
     assert memory[W_ENEMY_MON_PARTY_POS] == 0
 
 
-def test_yellow_resets_the_enemy_party_slot_at_its_shifted_address():
-    from types import SimpleNamespace
+def test_yellow_resets_the_enemy_party_slot_at_its_shifted_address(tmp_path):
     from pokecore.yellow import RedLayoutMemory
     from pokesim.adapter import Gen1Adapter
     # The Yellow emulator gives the app this Red-layout view of its memory.
@@ -78,6 +84,6 @@ def test_yellow_resets_the_enemy_party_slot_at_its_shifted_address():
     before = bytes(raw)
     adapter = Gen1Adapter.__new__(Gen1Adapter)
     adapter.last = None
-    adapter.read(SimpleNamespace(pb=SimpleNamespace(memory=RedLayoutMemory(raw)), frame=0))
+    adapter.read(headless(RedLayoutMemory(raw), tmp_path))
     assert [i for i, (old, new) in enumerate(zip(before, raw)) if old != new] == [0xCFE7]
     assert raw[0xCFE7] == 0

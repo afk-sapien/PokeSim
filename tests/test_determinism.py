@@ -85,6 +85,20 @@ def play(start, folder, event):
         run.stop()
 
 
+def test_a_red_run_keeps_its_own_store_and_removes_it_when_it_stops():
+    from pokesim.legendary_returns import STEPS
+    run, read = headless(1, cartridge(1))
+    folder = Path(run.store_dir.name)
+    try:
+        while run.frame < 2000:
+            run.step(read())
+        assert run.store.get(STEPS)['available']
+        assert 'legendary_recovery' in run.manifest()
+    finally:
+        run.stop()
+    assert not folder.exists()
+
+
 @pytest.mark.parametrize('event', ['none', 'reload', 'demand'])
 def test_two_runs_of_one_checkpoint_and_seed_record_the_same_trace(start, tmp_path, event):
     heads = [play(start, tmp_path / name, event) for name in ('first', 'second')]

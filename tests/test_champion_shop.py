@@ -126,6 +126,30 @@ def test_candy_bundle_and_offer_are_one_recoverable_purchase(purchase_fixture, m
     assert recover_storage(emu.store) is None
 
 
+def test_a_headless_supply_sale_spends_the_offer_in_the_run_store(purchase_fixture, monkeypatch):
+    from types import SimpleNamespace
+    from pokesim.adapter import Gen1Adapter
+    from pokesim.ram import W_BAG_ITEMS
+    emu, before, *_ = purchase_fixture
+    item = ITEMS['RARE_CANDY']
+    emu.store.set(STEPS, {'total': 0, 'available': True})
+    shop.observe(emu.store, before)
+    emu.store.set(STEPS, {'total': 1000000, 'available': True})
+    emu.policy.tm_plan = {'item': item, 'target': 0, 'signature': shop.signature(before.party[0]),
+                          'supply': True, 'quantity': 5}
+    monkeypatch.setattr(tm_purchase, 'read_snapshot', lambda *_: before)
+    resumed = []
+    run = SimpleNamespace(policy=emu.policy, pb=emu.pb, frame=before.frame, store=emu.store,
+                          step_tracker=SimpleNamespace(flush=lambda **_: None), resume=resumed.append,
+                          manifest=lambda: {'policy_state': {}, 'run_memory': {}})
+    Gen1Adapter.after_step(object.__new__(Gen1Adapter), run, before)
+    offset = W_BAG_ITEMS + len(before.items) * 2
+    assert emu.pb.memory[offset:offset + 3] == bytes((item, 5, 255)) and resumed
+    # The run's own store spends the offer, so the next one waits its million steps.
+    assert item not in shop.ready(emu.store)
+    assert shop.status(emu.store)['offers'][1]['remaining'] == 1000000
+
+
 def test_pp_up_menu_is_distinct_from_battle_and_move_replacement():
     from pokesim.screen import Screen
     from test_strategy import menu
