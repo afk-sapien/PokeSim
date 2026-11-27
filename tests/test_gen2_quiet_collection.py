@@ -13,9 +13,9 @@ def rarity(mon):
     return RARITY.get(tuple(mon.dvs), 1.0)
 
 
-def mon(species, dvs, trainer=1, egg=False):
+def mon(species, dvs, trainer=1, egg=False, stat_exp=(0,) * 5):
     return SimpleNamespace(species=species, trainer_id=trainer, dvs=dvs, egg=egg, experience=1000, level=50,
-                           nick='MON', friendship=0 if egg else 70)
+                           nick='MON', friendship=0 if egg else 70, shiny=False, stat_exp=stat_exp)
 
 
 def look(party=(), stored=(), **fields):
@@ -64,6 +64,34 @@ def test_a_catch_for_a_linked_adventure_counts_until_each_has_a_copy():
     assert collected(one, two, demand)
     assert not collected(two, three, demand)
     assert not collected(one, two)
+
+
+NIDORINA, NIDOQUEEN = 30, 31
+VETERAN = (30000, 30000, 30000, 30000, 30000)
+
+
+def test_an_evolution_counts_once_for_a_linked_adventure_that_no_copy_could_travel_to():
+    demand = {NIDOQUEEN: 1}
+    # The team's own Nidoqueen is a veteran, which automatic trading keeps.
+    kept = [mon(NIDOQUEEN, RARE, trainer=7, stat_exp=VETERAN)]
+    spare = mon(NIDOQUEEN, FAIR, trainer=2)
+    assert collected(look([TEAM, mon(NIDORINA, FAIR, trainer=2)], kept), look([TEAM, spare], kept), demand)
+    # An evolution no linked adventure wants is churn.
+    assert not collected(look([TEAM, mon(NIDORINA, FAIR, trainer=2)], kept), look([TEAM, spare], kept))
+
+
+def test_a_repeat_evolution_or_a_veterans_gives_a_linked_adventure_nothing():
+    demand = {NIDOQUEEN: 1}
+    kept = [mon(NIDOQUEEN, RARE, trainer=7, stat_exp=VETERAN)]
+    spare = mon(NIDOQUEEN, FAIR, trainer=2)
+    # A second copy of a species that one copy could already travel as.
+    for held in ([*kept, spare], kept):
+        party = [TEAM] if spare in held else [TEAM, spare]
+        assert not collected(look([*party, mon(NIDORINA, COMMON, trainer=3)], held),
+                             look([*party, mon(NIDOQUEEN, COMMON, trainer=3)], held), demand)
+    # A trained copy keeps its stat experience when it evolves, so it still stays.
+    assert not collected(look([TEAM, mon(NIDORINA, FAIR, trainer=2, stat_exp=VETERAN)], kept),
+                         look([TEAM, mon(NIDOQUEEN, FAIR, trainer=2, stat_exp=VETERAN)], kept), demand)
 
 
 def test_a_box_read_twice_or_a_moved_pokemon_adds_nothing():

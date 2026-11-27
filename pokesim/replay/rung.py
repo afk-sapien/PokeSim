@@ -199,7 +199,7 @@ def _stand_downs(run, seen):
     return [last['key']] if last['status'] == 'deferred' else []
 
 
-def _goal_events(key, previous, current, cards=None):
+def _goal_events(key, previous, current, cards=None, demand=None):
     """The progress events of ``current`` for goal ``key``. Any goal also progresses on experience. A level
     can take many battles, and a training detour fights its battles while the policy reports the goal it
     detoured from, so a span that gained experience was not wasted. ``cards`` is the run's Pokégear cards
@@ -207,6 +207,7 @@ def _goal_events(key, previous, current, cards=None):
     from pokesim.planning.monitor import ProgressEvent
     from pokesim.planning.progress import _held, events
     from pokesim.policies.storage import FIELD_MOVE_GOALS
+    from pokesim.stalls import evolved_for_peer
     found = events(previous, current)
     # A Pokémon let go frees a slot. The tree under test may predate that event, so the audit reads it
     # here too and every tree it compares is measured the same way.
@@ -257,8 +258,10 @@ def _goal_events(key, previous, current, cards=None):
             found.append(ProgressEvent('sold', max(freed, 0)))
     # A gift for a full party waits on a deposit, which keeps the held count, so no other event shows it,
     # yet it is the whole of the goal. In Red's postgame a better Dugtrio copy filled the party, and the
-    # Eevee gift then waited on a deposit at the Vermilion Pokémon Center.
-    if key == 'party_collection_space' and previous is not None and current is not None and not found \
+    # Eevee gift then waited on a deposit at the Vermilion Pokémon Center. Gold, Silver and Crystal offer
+    # a peer only boxed Pokémon, so storing a party copy for one is the whole of its goal the same way.
+    if key in ('party_collection_space', 'collection_peer_store') and previous is not None and current is not None \
+            and not found \
             and getattr(current, 'valid', True) and getattr(previous, 'valid', True) \
             and len(current.party) < len(previous.party):
         found.append(ProgressEvent('deposit', len(previous.party) - len(current.party)))
@@ -274,6 +277,13 @@ def _goal_events(key, previous, current, cards=None):
         moved = sum((after - before).values()) or sum((before - after).values())
         if moved:
             found.append(ProgressEvent('trainee', moved))
+    # An evolution keeps the held count, so no other event shows one that makes a copy a linked adventure
+    # wants (stalls.evolved_for_peer), yet it is the whole of a stone's goal. ``demand`` is the run's peer
+    # demand. A Crystal run past the League whose stones went only to spare copies made nine of them, and
+    # 19,920 frames of its stone goals on one seed read as wasted.
+    if demand and previous is not None and current is not None and not found and getattr(current, 'valid', True) \
+            and getattr(previous, 'valid', True) and evolved_for_peer(previous, current, demand):
+        found.append(ProgressEvent('evolution', 1))
     # The Pokégear and each of its cards are story steps of their own, yet only wPokegearFlags holds them,
     # so no other event shows them. ``cards`` holds that byte before and after. The story fetches the Radio
     # Card before it boards the S.S. Aqua, and all 5,544 frames of a Gold run's Radio Card span read as wasted.
@@ -401,7 +411,7 @@ def run_one(args, watch=None):
         key = goal.key if goal is not None else 'none'
         line, title = row(key, describe(goal))
         titles.setdefault(line, title)
-        found = _goal_events(key, snapshot, current, (cards, cards_now))
+        found = _goal_events(key, snapshot, current, (cards, cards_now), getattr(run.policy, 'demand', None))
         if span is None or span[0] != line:
             fighting = bool(getattr(snapshot, 'in_battle', 0))
             if paused is not None and paused[0] == line:
