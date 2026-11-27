@@ -2748,6 +2748,23 @@ def test_phone_waits_and_full_phone_lists_stand_down_instead_of_looping(real_dat
     assert 'phone:LEAF_STONE' in fresh.monitor_tables['stood_down']
 
 
+def test_a_short_turn_at_another_item_step_keeps_the_first_steps_count():
+    from pokesim.gen2.item_sources import GAP, REGISTER_DECISIONS, _limited
+    policy = SimpleNamespace(collection={}, decisions=0)
+    limited = False
+    for decision in range(REGISTER_DECISIONS + 3):
+        policy.decisions = decision
+        if decision == 3000:
+            _limited(policy, 'pickup:MOON_STONE', 8000)
+            continue
+        limited = _limited(policy, 'register:LEAF_STONE', REGISTER_DECISIONS) or limited
+    assert limited, 'one decision away, far under the gap, started the count over'
+    # A step left alone past the gap drops out, since it would start over anyway.
+    policy.decisions += GAP + 1
+    _limited(policy, 'register:LEAF_STONE', REGISTER_DECISIONS)
+    assert list(policy.collection['item_sources']) == ['register:LEAF_STONE']
+
+
 def test_a_phone_wait_keeps_its_budget_through_other_work_and_stands_down_for_no_call(real_data):
     """A Crystal wait by the phone sat in a Pokémon Center for hours: a rematch the caller asked for
     started its count over, and so did every reload."""

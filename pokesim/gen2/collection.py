@@ -735,10 +735,30 @@ def _differs(slot, now, before):
     return now != before
 
 
+class _Entries(dict):
+    """The entries a build set, or removed with _MISSING, in a table other rungs write as well: a monitor
+    table or the milestones. They land one by one, so what another rung wrote there since stays."""
+
+
+def _entries(now, before):
+    return _Entries({key: now.get(key, _MISSING) for key in now.keys() | before.keys()
+                     if now.get(key, _MISSING) != before.get(key, _MISSING)})
+
+
+def _land(table, entries):
+    for key, value in entries.items():
+        if value is _MISSING:
+            table.pop(key, None)
+        else:
+            table[key] = value
+
+
 def _set(policy, slot, value):
     """Set ``slot`` to ``value``, the object itself, or remove it for _MISSING."""
     if slot == 'menu':
         policy.menu = None if value is _MISSING else value
+    elif isinstance(value, _Entries):
+        _land(policy.completed if slot == 'completed' else policy.monitor_tables.setdefault(slot[1], {}), value)
     elif isinstance(slot, tuple):
         table = policy.collection if slot[0] == 'collection' else policy.monitor_tables
         if value is _MISSING:
@@ -769,7 +789,8 @@ def draft(policy, build):
     A build replaces a value it changes and never edits one the state held before it (tests/conftest.py
     checks this), so a one-level copy puts the old state back exactly. A collection field is written when
     it holds another object, and so is the menu task. A monitor table or the milestones, which a build adds
-    to in place, are written when they no longer equal their copy. A goal or menu task that holds an object
+    to in place, are written when they no longer equal their copy, as the entries that changed, so a
+    stand-down another rung landed after the build stays. A goal or menu task that holds an object
     the build wrote holds the one ``write`` lands. A build that fails puts nothing back.
     """
     collection, menu, completed = dict(policy.collection), getattr(policy, 'menu', None), getattr(policy, 'completed', None)
@@ -781,12 +802,16 @@ def draft(policy, build):
                                     ('monitor', policy.monitor_tables, tables, operator.eq)):
         for key in now.keys() | before.keys():
             if not same(value := now.get(key, _MISSING), old := before.get(key, _MISSING)):
-                writes[kind, key], undo[kind, key] = value, old
+                # A table the build made, as the monitor makes one when it is first read, is new entries too.
+                table = kind == 'monitor' and isinstance(value, dict) and (old is _MISSING or isinstance(old, dict))
+                writes[kind, key] = _entries(value, {} if old is _MISSING else old) if table else value
+                undo[kind, key] = old
     if getattr(policy, 'menu', None) is not menu:
         writes['menu'], undo['menu'] = policy.menu, menu
     if (value := getattr(policy, 'completed', None)) != completed:
-        # The milestones dict is cleared in place when it is put back, so its writes are a copy.
-        writes['completed'], undo['completed'] = dict(value) if isinstance(value, dict) else value, completed
+        # The milestones dict is cleared in place when it is put back, so its writes are its changed entries.
+        both = isinstance(value, dict) and isinstance(completed, dict)
+        writes['completed'], undo['completed'] = _entries(value, completed) if both else value, completed
     write(policy, undo)
     return result, writes
 

@@ -33,6 +33,21 @@ def test_an_ice_heal_is_preferred_and_a_wild_battle_is_left_without_options():
     assert choose_battle(snap(party=party, in_battle=2, items=()), party[0], mon(level=5), 0).kind == 'fight'
 
 
+def test_a_frozen_catcher_is_never_told_to_use_a_move():
+    from pokesim.strategy_data import SPECIES
+    from test_strategy import flags
+    pidgey = next(i for i, row in SPECIES.items() if row['dex'] == 16)
+    # Only Growl, so neither side can end the battle while the catcher stays frozen.
+    foe = mon(species=pidgey, level=20, hp=60, max_hp=60, moves=(45,), pp=(40,))
+    state = lambda me: snap(party=(me,), in_battle=1, battle_type=0, owned=frozenset({1}),  # noqa: E731
+                            event_flags=flags('EVENT_GOT_POKEDEX'), items=((ITEMS['POKE_BALL'], 10),))
+    sleeper = mon(status=FROZEN, hp=200, max_hp=200, moves=(79, 33, 0, 0), pp=(15, 35, 0, 0))
+    gentle = mon(status=FROZEN, hp=200, max_hp=200, level=10, attack=10, moves=(33, 0, 0, 0), pp=(35, 0, 0, 0))
+    for me in (sleeper, gentle):
+        decision = choose_battle(state(me), me, foe, 0, collect_missing=True)
+        assert decision.kind != 'fight', decision.reason
+
+
 def test_the_league_shopping_list_includes_a_cure_for_freeze():
     from pokesim.policies.battle import shopping_item
     stock = [ITEMS[name] for name in ('ULTRA_BALL', 'GREAT_BALL', 'FULL_RESTORE', 'MAX_POTION', 'FULL_HEAL', 'REVIVE', 'MAX_REPEL')]

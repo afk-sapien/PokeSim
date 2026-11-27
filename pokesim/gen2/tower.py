@@ -288,10 +288,10 @@ def journey(policy, snapshot, Goal):
                 and dict(snapshot.items).get(policy.data.items['TM06'])):
             weakest = min((move for move in mon.moves if move not in protected),
                           key=lambda move: attack_value(policy.data, mon, move), default=None)
-            if weakest is not None:
-                if policy.menu is None:
-                    policy.menu = Teach(92, slot, replace_move=weakest)
-                return Goal('tower_toxic', 'Prepare Toxic for opponents that withstand direct attacks', name, snapshot.x, snapshot.y)
+            goal = weakest is not None and prepare(policy, snapshot, Teach(92, slot, replace_move=weakest), Goal, name,
+                                                   'tower_toxic', 'Prepare Toxic for opponents that withstand direct attacks')
+            if goal:
+                return goal
     for slot, mon in enumerate(snapshot.party):
         for move in upgrades(policy.data, mon, dict(snapshot.items)):
             kind = policy.data.moves[move]['type']
@@ -305,38 +305,53 @@ def journey(policy, snapshot, Goal):
                     options.append((gain, slot, move, weakest))
     if options:
         _, slot, move, weakest = max(options)
-        if policy.menu is None:
-            policy.menu = Teach(move, slot, replace_move=weakest)
-        return Goal('tower_move', 'Prepare attacks for the Tower opponents', name, snapshot.x, snapshot.y)
+        goal = prepare(policy, snapshot, Teach(move, slot, replace_move=weakest), Goal, name,
+                       'tower_move', 'Prepare attacks for the Tower opponents')
+        if goal:
+            return goal
     lead = max(range(len(snapshot.party)), key=lambda slot: sum(snapshot.party[slot].stats)
                * (1.3 if {92, 105} <= set(snapshot.party[slot].moves) else 1))
     if lead:
         mon = snapshot.party[lead]
-        if policy.menu is None:
-            policy.menu = Lead(lead, (mon.trainer_id, mon.dvs))
-        return Goal('tower_lead', 'Lead with the strongest Tower partner', name, snapshot.x, snapshot.y)
+        goal = prepare(policy, snapshot, Lead(lead, (mon.trainer_id, mon.dvs)), Goal, name,
+                       'tower_lead', 'Lead with the strongest Tower partner')
+        if goal:
+            return goal
     leftovers = policy.data.items['LEFTOVERS']
     if dict(snapshot.items).get(leftovers) and not any(mon.held_item == leftovers for mon in snapshot.party):
-        if policy.menu is None:
-            policy.menu = Take(0) if snapshot.party[0].held_item else Give(leftovers, 0)
-        return Goal('tower_leftovers', 'Equip Leftovers for the Tower challenge', name, snapshot.x, snapshot.y)
+        goal = prepare(policy, snapshot, Take(0) if snapshot.party[0].held_item else Give(leftovers, 0), Goal, name,
+                       'tower_leftovers', 'Equip Leftovers for the Tower challenge')
+        if goal:
+            return goal
     berry = policy.data.items['PRZCUREBERRY']
     if dict(snapshot.items).get(berry) and not any(mon.held_item == berry for mon in snapshot.party):
         candidates = [slot for slot, mon in enumerate(snapshot.party)
                       if mon.held_item in {0, policy.data.items['EXP_SHARE']} and 105 not in mon.moves]
         if candidates:
             slot = max(candidates, key=lambda slot: snapshot.party[slot].stats[1])
-            if policy.menu is None:
-                policy.menu = Take(slot) if snapshot.party[slot].held_item else Give(berry, slot)
-            return Goal('tower_berry', 'Equip a paralysis-curing berry for the Tower', name, snapshot.x, snapshot.y)
+            goal = prepare(policy, snapshot, Take(slot) if snapshot.party[slot].held_item else Give(berry, slot), Goal,
+                           name, 'tower_berry', 'Equip a paralysis-curing berry for the Tower')
+            if goal:
+                return goal
     items = set()
     for slot, mon in enumerate(snapshot.party):
         if mon.held_item and mon.held_item in items:
-            if policy.menu is None:
-                policy.menu = Take(slot)
-            return Goal('tower_items', 'Remove a duplicate held item for the Battle Tower', name, snapshot.x, snapshot.y)
+            goal = prepare(policy, snapshot, Take(slot), Goal, name,
+                           'tower_items', 'Remove a duplicate held item for the Battle Tower')
+            if goal:
+                return goal
         items.add(mon.held_item)
     return Goal('tower_enter', 'Enter the Battle Tower challenge', 'BATTLE_TOWER_1F', 7, 7, 'up')
+
+
+def prepare(policy, snapshot, task, Goal, name, key, label):
+    """The preparation goal that runs ``task``, or None while the game refuses it (MenuPart.allowed), so
+    the next preparation goes first instead of the refused task being set again every decision."""
+    if not policy.allowed(task, snapshot):
+        return None
+    if policy.menu is None:
+        policy.menu = task
+    return Goal(key, label, name, snapshot.x, snapshot.y)
 
 
 def control(policy, snapshot, mem):

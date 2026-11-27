@@ -67,6 +67,35 @@ def test_a_new_object_is_a_write_even_when_equal(no_deep_copy):
     assert p.collection['order'] is order
 
 
+def test_a_picked_rung_keeps_the_stand_down_a_later_rung_landed():
+    from pokesim.gen2.collection import ERRAND_FRAMES, Rungs
+    from pokesim.gen2.standdown import stand_down, standing_down
+    from pokesim.planning import values
+    from pokesim.planning.arbiter import Tier
+    p = SimpleNamespace(data=SimpleNamespace(map_ids={'HERE': 1}), nav=SimpleNamespace(walk=lambda snapshot, target: []),
+                        collection={'target': None}, monitor_tables={}, menu=None, completed={}, decisions=10, clock=10)
+    rungs = Rungs(p, SimpleNamespace(map=1))
+
+    def sources():
+        # One source stalled and the rung offers the next, as item_sources does.
+        stand_down(p, 'source:a')
+        p.completed['source_tried'] = True
+        return SimpleNamespace(key='next-source', label='next', map_name='HERE', x=1, y=1, face=None)
+
+    def store():
+        # This errand stalled and offers nothing, so its stand-down lands at once.
+        stand_down(p, 'store:b')
+        p.completed['store_tried'] = True
+
+    rungs.offer('sources', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, sources)
+    rungs.offer('store', Tier.PROGRESS, values.NEW_ENTRY, ERRAND_FRAMES, store)
+    pick = rungs.decision().pick
+    assert pick.source == 'sources'
+    pick.commit()
+    assert standing_down(p, 'source:a') and standing_down(p, 'store:b')
+    assert p.completed == {'source_tried': True, 'store_tried': True}
+
+
 def test_a_table_the_build_makes_is_a_write(no_deep_copy):
     p = policy()
     # The monitor makes a missing table as it reads, as standing_down does.
