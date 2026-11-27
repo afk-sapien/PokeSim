@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 
 from pokecore.dvs import hp_dv
 
+from ..planning.boss import fighting
 from ..planning.stance import FLEE, HUNT, STORY, TRAVEL, Encounter, stance
 from ..planning.throws import THROW_BAR, gen1_throw
 from ..ram import PartyMon
@@ -328,6 +329,24 @@ def healing_item(items, mon, incoming=0):
     return min(choices)[1] if choices else None
 
 
+def fighter_revive(snapshot, active):
+    """(The bag index of a Revive, the strongest fainted fighter) when no fighter but ``active`` stands, or None.
+
+    A fighter is a member the League kit is spent on (planning/boss.fighting). Between League rooms
+    boss.treatment revives a fainted one, but inside a room nothing did, so the low members fell one by
+    one with Revives still in the bag. 13 of 14 Blue League blackouts on seeds 7 to 16 held one. A Revive
+    is used before a Max Revive, as between rooms.
+    """
+    party = snapshot.party
+    fighters = fighting(party)
+    if any(i != active and party[i].hp > 0 for i in fighters):
+        return None
+    fainted = [(party[i].level, i) for i in fighters if party[i].hp <= 0]
+    revive = next((i for name in ("REVIVE", "MAX_REVIVE") for i, (item, qty) in enumerate(snapshot.items)
+                   if item == ITEMS[name] and qty > 0), None)
+    return (revive, max(fainted)[1]) if fainted and revive is not None else None
+
+
 def shopping_item(items, stock, money, league=False, collecting=False, legendary=False, reserve=300,
                   hunt_reserve=None, cure_room=False, restore_room=False, ball_room=False, league_trip=False):
     """The next item to buy, or None. ``hunt_reserve``, during a hunt, is the money kept back while
@@ -587,6 +606,10 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
             return Decision("run", reason="Leave a battle that a frozen Pokémon cannot finish")
         if foe_never_attacks(enemy, me):
             return lose_attempt(snapshot, enemy, active, slot)
+    revive = fighter_revive(snapshot, active) if snapshot.in_battle == 2 else None
+    if revive is not None and me.hp <= incoming * 2 and not (moves and damage(me.moves[slot], me, enemy) >= enemy.hp):
+        # Only when this battler falls within two of the foe's hits, and its attack would not end the foe.
+        return Decision("item", *revive, "Revive a fighter, since no other fighter stands and this one falls soon")
     candidates = []
     unsafe_moves = any(mid and pp and not damage_division_safe(mid, me, enemy)
                        for mid, pp in zip(me.moves, me.pp))
