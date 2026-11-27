@@ -246,35 +246,21 @@ class Emulator(EmulatorBase):
         self.tracker.attach(pb)
         self.activity.attach(pb)
         self.steps.attach(pb)
-        self.store_stock = StoreStock(self.data, champion=self._champion_catalogue, on_bought=self.activity.bought)
+        from . import store_observe
+        self.store_stock = StoreStock(self.data, champion=lambda: store_observe.catalogue(self),
+                                      on_bought=self.activity.bought)
         self.store_stock.attach(pb)
         return pb
 
-    def _champion_catalogue(self):
-        """The planned Champion shop item for the clerk who opens the BUY list."""
-        from . import champion_shop
-        plan = self.policy.collection.get(champion_shop.PLAN)
-        return champion_shop.catalogue(self.data, plan, champion_shop.ready(self.store, self.data, self.steps.value))
-
     def _champion_shop(self, snapshot):
-        """Start the walking countdowns, share ready offers and record landed purchases."""
-        from . import champion_shop
-        champion_shop.observe(self.store, snapshot, self.steps.value)
-        stock = getattr(self, 'store_stock', None)
-        purchases = list(stock.purchases) if stock else []
-        if stock:
-            stock.purchases.clear()
-        for item, count, price in purchases:
-            champion_shop.consume(self.store, self.data, item, self.steps.value)
-            plan = self.policy.collection.get(champion_shop.PLAN)
-            if plan and plan['item'] == item:
-                plan['bought'] = True
+        """Observe the Champion counter (store_observe.shop) and journal the purchases that landed."""
+        from . import champion_shop, store_observe
+        for item, count, price in store_observe.shop(self, snapshot):
             name = champion_shop.label(self.data, item)
             self._event(Event('item', f'Bought {f"{count} × " if count > 1 else ""}{name}',
                               f'Spent ₽{price * count:,} at the Goldenrod Dept. Store Champion counter. '
                               'The purchase went through the cartridge BUY menu into the bag.', priority=3,
                               progress='item', needed=False), snapshot)
-        self.policy.shop_offers = champion_shop.ready(self.store, self.data, self.steps.value)
 
     def _remember_clock(self, elapsed):
         """Store the running clock's reading, so no restart, reload or trade can go back before it.
@@ -539,37 +525,17 @@ class Emulator(EmulatorBase):
         self.game_clock = game_clock(self.pb.memory, self.data)
         self.tracker.observe(snapshot)
         from .steps import observe_mew
-        self.steps.flush()
         self._champion_shop(snapshot)
         self.statistics.observe(snapshot)
         if hasattr(self, 'goal_time'):
             from ..goal_time import gen2_view
             self.goal_time.observe(*gen2_view(self.policy), self.frame)
         if not self.store.get('trade_hold') and not self.preparation and not self.manual_mode:
-            from . import returns
-            from .legendary import first_notice
-            walking = self.steps.value
-            notices, changed = returns.observe(self.store, snapshot, self.pb.memory, walking)
-            from .release import keeps_another
-            activity, reopened = returns.observe_events(self.store, snapshot, self.pb.memory, walking,
-                                                        lambda dex: keeps_another(self.policy, snapshot, dex))
-            declined = getattr(self.policy, 'declined', None)
-            if isinstance(declined, set):
-                for dex in declined:
-                    returns.decline(self.store, dex)
-                self.policy.declined = set()
-            ready, closed = returns.claims(self.store)
-            self.policy.returned = ready | returns.returned_events(self.store)
-            for event in notices + activity:
+            from . import store_observe
+            events, changed = store_observe.observe(self, snapshot, self.play_clock.frames)
+            for event in events:
                 self._event(event, snapshot)
-            for species in self.legendary_recovery.observe(snapshot, self.pb.memory, self.play_clock.frames,
-                                                           repeat=ready, blocked=closed):
-                changed = True
-                if not first_notice(self.store, species, self.legendary_recovery.attempts.get(str(species), 0)):
-                    continue
-                self._event(Event('legendary_retry', f'{self.data.species[species]["name"]} can be encountered again',
-                    'The encounter ended without a catch. Used supplies and adventure progress are preserved.'), snapshot)
-            if changed or reopened:
+            if changed:
                 snapshot = self.snapshot = self._read()
         if snapshot.map not in self.history['maps']:
             self.history['maps'].append(snapshot.map)

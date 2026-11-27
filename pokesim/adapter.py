@@ -13,17 +13,6 @@ def fair_key(seed):
     return hashlib.sha256(f'fair-wild-dvs {seed}'.encode()).digest()
 
 
-def recovery(metadata, frame):
-    """The legendary retries a checkpoint carries, each wait counted on the run's frames. An
-    application save counts them on its PlayClock, so each wait keeps the frames it had left."""
-    from .legendary import LegendaryRecovery
-    retries = LegendaryRecovery(metadata.get('legendary_recovery'))
-    clock = (metadata.get('play_clock') or {}).get('frames')
-    if retries.on_clock and clock is not None:
-        retries.pending = {key: at - clock + frame for key, at in retries.pending.items()}
-    return retries
-
-
 class Gen1Adapter:
     generation = 1
     settings = GEN1
@@ -74,17 +63,10 @@ class Gen1Adapter:
         and the Pokédex goals the application keeps in its adventure's (store_observe.py). The policy
         is not attached to it, so losses, trades and League marks stay as a run without an adventure
         keeps them."""
-        import tempfile
-        from pathlib import Path
-
         from .legendary import LegendaryRecovery
         from .legendary_returns import StepTracker
         from .milestones import MilestoneTracker
-        from .store import Store
-        run.store_dir = tempfile.TemporaryDirectory(prefix='pokesim-run-')
-        run.store = Store(Path(run.store_dir.name))
-        # The claims count on the run's frames, as the application's on its PlayClock.
-        run.store.clock = lambda: run.frame
+        run.open_store()
         # After the trace, which must know every hook.
         run.step_tracker = StepTracker(run.store, self.sha1, clock=lambda: run.frame / 60)
         run.step_tracker.attach(run.pb)
@@ -136,8 +118,9 @@ class Gen1Adapter:
     def after_load(self, run, metadata, first):
         from . import store_observe
         from .events import RunMemory
+        from .legendary import LegendaryRecovery
         run.memory = RunMemory.from_dict(metadata['run_memory'])
-        run.legendary_recovery = recovery(metadata, run.frame)
+        run.legendary_recovery = LegendaryRecovery.loaded(metadata, run.frame)
         # The run's store starts with the rows its first save carries. An application reload keeps
         # its adventure's rows, so a later load keeps the run's.
         if first and metadata.get('store_rows'):

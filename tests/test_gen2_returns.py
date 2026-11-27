@@ -299,6 +299,29 @@ def test_recovery_restarts_the_gs_ball_quest_after_a_first_celebi_miss(world, mo
     assert recovery.observe(snap, world.memory, 0) == [] and '251' not in recovery.pending
 
 
+def test_a_headless_run_reopens_returns_and_retries_from_its_own_store(world):
+    from pokesim.gen2 import store_observe
+    from pokesim.gen2.legendary import Recovery
+    snap = world.snapshot
+    for flag in ('EVENT_FOUGHT_LUGIA', 'EVENT_WHIRL_ISLAND_LUGIA_CHAMBER_LUGIA'):
+        world.flag(flag)
+    snap.owned = {249}
+    # An application save counted Ho-Oh's wait on its PlayClock with 30000 frames of it left.
+    saved = {'pending': {'250': 50000}, 'attempts': {'250': 1}, 'clock': Recovery.CLOCK}
+    retries = Recovery.loaded({'legendary_recovery': saved, 'play_clock': {'frames': 20000}}, 7)
+    assert retries.pending == {'250': 30007}
+    policy = SimpleNamespace(declined=set())
+    run = SimpleNamespace(store=world.store, policy=policy, pb=SimpleNamespace(memory=world.memory), data=world.data,
+                          steps=SimpleNamespace(value={'total': 0, 'available': True}), legendary_recovery=retries)
+    world.walk(0)
+    assert store_observe.observe(run, snap, 7) == ([], False)
+    # The walked steps the run's store keeps bring Lugia back, as an adventure's do.
+    run.steps.value['total'] = 100
+    events, changed = store_observe.observe(run, snap, 7)
+    assert changed and [event.title for event in events] == ['Lugia has returned!']
+    assert 249 in policy.returned and not world.event('EVENT_FOUGHT_LUGIA')
+
+
 def test_a_reload_does_not_repeat_return_or_retry_notices(world):
     from pokesim.gen2.legendary import Recovery, first_notice
     from pokesim.gen2.returns import observe

@@ -115,6 +115,17 @@ class LegendaryRetries:
         self.attempts = deepcopy(state.get('attempts', {}))
         self.on_clock = state.get('clock') == self.CLOCK
 
+    @classmethod
+    def loaded(cls, metadata, frame):
+        """The retries a checkpoint's ``metadata`` carries, each wait counted on a headless run's frames,
+        the run being at ``frame``. An application save counts them on its PlayClock, so each wait keeps
+        the frames it had left."""
+        retries = cls(metadata.get('legendary_recovery'))
+        clock = (metadata.get('play_clock') or {}).get('frames')
+        if retries.on_clock and clock is not None:
+            retries.pending = {key: at - clock + frame for key, at in retries.pending.items()}
+        return retries
+
     def state_dict(self):
         state = {'pending': self.pending, 'attempts': self.attempts}
         return deepcopy({**state, 'clock': self.CLOCK} if self.on_clock else state)
