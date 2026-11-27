@@ -72,6 +72,11 @@ class HeadlessRun(runtime_trace.HeadlessPins):
             self.frame = metadata.get('frame', 0)
         with open_state(path) as stream:
             self.pb.load_state(stream)
+        self.resume(metadata, reseed=reseed, first=first)
+        return metadata
+
+    def resume(self, metadata, reseed=False, first=False):
+        """Take the policy and run memory a load's ``metadata`` carries, after the load itself."""
         for button in BUTTONS:
             self.pb.button_release(button)
         # The load clears the pin and discards in-flight actions, as in the application.
@@ -79,7 +84,6 @@ class HeadlessRun(runtime_trace.HeadlessPins):
         if reseed:
             self.policy.rng.seed(self.seed)
         self.adapter.after_load(self, metadata, first)
-        return metadata
 
     def reload(self, path):
         """Go back to a checkpoint as the application's guards do, idling a moment so the trouble differs."""

@@ -345,6 +345,51 @@ def test_purchase_rechecks_safe_point_and_current_recipient(purchase_fixture, mo
     assert bought(emu.store, item) == 0
 
 
+def test_headless_run_sells_at_the_counter_as_the_application_does(purchase_fixture):
+    import json
+    from pokesim.adapter import Gen1Adapter
+    from pokesim.ram import W_CUR_MAP, W_X, W_Y
+    emu, before, item, sold, _ = purchase_fixture
+    plan = emu.policy.tm_plan
+    tm_purchase.purchase(emu)
+    # The application's sale ends the trip, so the headless sale starts from the same one.
+    emu.policy.tm_plan = plan
+    memory, resumed = emu.pb.memory, []
+    run = SimpleNamespace(policy=emu.policy, pb=emu.pb, frame=before.frame, resume=resumed.append,
+                          manifest=lambda: {'policy_state': emu.policy.state_dict(), 'run_memory': {}})
+    Gen1Adapter.after_step(object.__new__(Gen1Adapter), run, before)
+    # The same bytes as the application's sale, past the position the fixture stands on.
+    memory[W_CUR_MAP] = memory[W_X] = memory[W_Y] = 0
+    assert memory == sold
+    # The policy takes back its own state through JSON, as from the sale's save.
+    assert resumed == [json.loads(json.dumps(run.manifest()))]
+
+
+def test_headless_run_leaves_the_counter_alone_without_a_trip_or_a_sale(purchase_fixture, monkeypatch):
+    from pokesim.adapter import Gen1Adapter
+    emu, before, *_ = purchase_fixture
+    untouched, resumed = bytes(emu.pb.memory), []
+    run = SimpleNamespace(policy=emu.policy, pb=emu.pb, frame=before.frame, resume=resumed.append, manifest=dict)
+    monkeypatch.setattr(tm_purchase, 'read_snapshot', lambda *_: replace(before, money=0))
+    Gen1Adapter.after_step(object.__new__(Gen1Adapter), run, before)
+    emu.policy.tm_plan = None
+    Gen1Adapter.after_step(object.__new__(Gen1Adapter), run, before)
+    assert bytes(emu.pb.memory) == untouched and not resumed
+
+
+def test_headless_policy_reads_the_cartridge_tm_tables(monkeypatch, shop_data, tmp_path):
+    from pokesim.adapter import Gen1Adapter
+    from pokesim.planning import cost
+    rom = tmp_path / 'cartridge.gb'
+    rom.write_bytes(b'cartridge')
+    monkeypatch.setattr(cost, 'wild_odds', lambda *_: {})
+    monkeypatch.setattr(tm_shop, 'cartridge_data', lambda raw: shop_data if raw == b'cartridge' else ({}, {}))
+    adapter = object.__new__(Gen1Adapter)
+    adapter.rom, adapter.version = rom, 'red'
+    policy = adapter.new_policy(None, 1)
+    assert (policy.tm_moves, policy.tm_compatible) == shop_data
+
+
 def test_future_natural_move_is_saved_and_trip_survives_local_recovery(shop_data):
     pikachu = live(partner('PIKACHU', level=35, moves=[84, 0, 0, 0]))
     assert tm_shop.improvement(pikachu, 225, {225: 87}, {pikachu.species: {225}}) is None
