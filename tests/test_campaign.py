@@ -97,6 +97,20 @@ def test_a_detour_never_jumps_a_ledge():
     assert choices - {'left'}
 
 
+def test_a_detour_never_steps_back_to_the_tile_just_left():
+    # On this Route 22 tile the wall is above and a ledge below, so the only side step is the one back.
+    # Back and forth three times read as a movement cycle, which blocked the way on for 1,800 frames.
+    nav = Navigator()
+    here, there = (MAPS['ROUTE_22'], 12, 12), (MAPS['ROUTE_22'], 11, 12)
+    target = (MAPS['ROUTE_22'], 2, 12)
+    rng = random.Random(3)
+    choices = set()
+    for _ in range(50):
+        assert nav.route(here, [target], 0) == 'left'
+        choices.add(nav.guided(there, [target], 0, rng, 1.0))
+    assert choices == {'left'}
+
+
 def test_snapshot_reads_saffron_gate_unlock():
     memory = bytearray(65536)
     memory[W_STATUS_FLAGS1] = 64

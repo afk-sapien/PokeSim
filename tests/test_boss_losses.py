@@ -1,4 +1,5 @@
 """A loss to a boss raises the level the best fighter trains to before the next try, in both generations."""
+from dataclasses import replace
 from types import SimpleNamespace
 
 from pokesim.planning.losses import Losses, best_level
@@ -10,7 +11,7 @@ from pokesim.runtime.supervision import Supervisor
 from pokesim.store import Store
 from pokesim.strategy_data import MAPS
 from test_events import snap
-from test_strategy import mon
+from test_strategy import flags, mon
 
 TACKLE, HARDEN = 33, 106
 
@@ -157,6 +158,40 @@ def test_a_gen1_stall_reload_in_a_rival_battle_counts_against_the_goal_under_way
                                              enemy_level=20, party=(mon(level=18, hp=30),))
     Emulator._unstick(game, 0, 'battle never ended')
     assert other.losses.levels() == {}
+
+
+def test_a_gen1_story_loss_also_trains_where_the_last_boss_won_trained():
+    # A Red run lost to Giovanni in the Rocket Hideout with four badges. Koga's Route 15, the next
+    # boss's ground, lies past the Snorlax the Poké Flute wakes, and the flute needs the Silph Scope
+    # Giovanni holds. The walk found no route there, stood down four times and the stall watch fired.
+    losses = Losses()
+    losses.note('rocket_boss', 32)
+    goal = SimpleNamespace(key='rocket_boss', title='Defeat Giovanni in the Rocket Hideout')
+    s = snap(map=MAPS['ROCKET_HIDEOUT_B4F'], badges=15, party=(mon(level=30),))
+    training = boss_training(s, goal, losses)
+    assert training.key == 'train_rocket_boss' and 'level 34' in training.reason
+    # Erika's Route 7 is in reach, so the walk takes it while Route 15 is closed.
+    assert {target[0] for target in training.targets} == {MAPS['ROUTE_15'], MAPS['ROUTE_7']}
+    # With no boss won yet, only the next boss's ground is left.
+    s = snap(map=MAPS['VIRIDIAN_CITY'], badges=0, party=(mon(level=6),))
+    losses.note('parcel', 6)
+    training = boss_training(s, SimpleNamespace(key='parcel', title='Collect Oak’s parcel'), losses)
+    assert {target[0] for target in training.targets} == {MAPS['ROUTE_2'], MAPS['VIRIDIAN_FOREST']}
+
+
+def test_a_gen1_story_loss_holds_on_the_steps_back_to_its_boss():
+    # A Red run lost to Giovanni and blacked out. The ride back down the Rocket Hideout lift is a story
+    # step of its own, and with no loss of its own it rode down, found the training on B4F, rode up and
+    # down again for 51,206 frames of a gate rung.
+    losses = Losses()
+    losses.note('rocket_boss', 32)
+    ride = SimpleNamespace(key='hideout_elevator', title='Take the lift to Giovanni’s floor')
+    s = snap(map=MAPS['ROCKET_HIDEOUT_ELEVATOR'], badges=15, party=(mon(level=30),), event_flags=flags())
+    training = boss_training(s, ride, losses)
+    assert training.key == 'train_rocket_boss' and 'level 34' in training.reason
+    # Once Giovanni is beaten the loss is behind the run, so the ride back for the Silph Scope trains for nothing.
+    s = replace(s, event_flags=flags('EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI'))
+    assert boss_training(s, ride, losses) is None
 
 
 def test_a_gen1_loss_to_the_rival_in_oaks_lab_is_no_loss():
