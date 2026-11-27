@@ -451,7 +451,7 @@ def test_a_store_takes_the_observed_rows_of_another_and_leaves_the_rest(tmp_path
     from pokesim.state import claims
     from pokesim.store_observe import put_rows, rows
     source = Store(tmp_path / 'adventure')
-    source.set(STEPS, {'total': 4321, 'available': True})
+    source.set(STEPS, {'total': 4321, 'available': True, 'started_at': 1.5})
     source.set(events.KEY, {'eevee': {'next_at': 5000}})
     source.set('boss_losses', {'brock': 2})
     with source.transaction() as db:
@@ -461,6 +461,9 @@ def test_a_store_takes_the_observed_rows_of_another_and_leaves_the_rest(tmp_path
     with source.reading() as db:
         carried = rows(db)
     source.close()
+    # No wall-clock time rides along, so two runs of one save carry the same rows.
+    assert 'started_at' not in carried['kv'][STEPS]
+    assert not [row for row in carried['claims'] if 'ts' in row]
     run = Store(tmp_path / 'run')
     put_rows(run, carried)
     assert run.get(STEPS)['total'] == 4321

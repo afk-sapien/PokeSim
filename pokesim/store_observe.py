@@ -84,30 +84,35 @@ def observe(host, snap, now, *, returns=True):
     return events, snap, restored
 
 
-def _carried():
-    """The kv keys and the claim sources ``observe`` reads and writes. The League rewards stay out,
-    since a headless run earns none."""
-    from . import champion_shop, milestones, mew_returns, return_claims, step_events
-    from .legendary_returns import KEY, STEPS
-    keys = (STEPS, step_events.KEY, mew_returns.KEY, 'pokesim-mew-v1', champion_shop.KEY, KEY, milestones.KEY)
-    return keys, (return_claims.SOURCE, return_claims.EVENT, return_claims.MEW)
-
-
 def rows(db):
     """The rows ``observe`` reads, from an adventure's database handle, as a headless checkpoint
-    carries them: each kv value by key and the return claims, oldest first."""
-    from .state import claims, kv
-    keys, sources = _carried()
-    values = {key: kv.get(db, key) for key in keys if kv.exists(db, key)}
-    return {'kv': values, 'claims': [row for source in sources for row in claims.rows(db, source)]}
+    carries them: each kv value by key and the return claims, oldest first. The League rewards stay
+    out, since a headless run earns none.
+
+    Wall-clock times stay out too, so two runs of one save write the same manifest and trace the
+    same game: when the step count began and when each claim last changed. Play reads neither."""
+    from .legendary_returns import STEPS
+    from .return_claims import EVENT, MEW, SOURCE
+    from .state import claims, domains, kv
+    values = {domain.key: kv.get(db, domain.key) for domain in domains.carried(1) if kv.exists(db, domain.key)}
+    if STEPS in values:
+        values[STEPS] = {name: value for name, value in values[STEPS].items() if name != 'started_at'}
+    return {'kv': values, 'claims': [{field: row[field] for field in claims.FIELDS if field != 'ts'}
+                                     for source in (SOURCE, EVENT, MEW) for row in claims.rows(db, source)]}
 
 
 def put_rows(store, carried):
-    """Write the rows a checkpoint carries (``rows``) into ``store``, in one transaction."""
-    from .state import claims, kv
+    """Write the rows a checkpoint carries (``rows``) into ``store``, in one transaction. Each claim
+    takes the load's time, as a claim written then would."""
+    import time
+
+    from .state import claims, domains, kv
+    now = time.time()
     with store.transaction() as db:
-        for key, value in carried['kv'].items():
-            kv.put(db, key, value)
+        for domain in domains.carried(1):
+            if domain.key in carried['kv']:
+                kv.put(db, domain.key, carried['kv'][domain.key])
         db.executemany(f'INSERT OR REPLACE INTO claims({", ".join(claims.FIELDS)}) '
                        f'VALUES ({", ".join("?" * len(claims.FIELDS))})',
-                       [tuple(row[field] for field in claims.FIELDS) for row in carried['claims']])
+                       [tuple(now if field == 'ts' else row[field] for field in claims.FIELDS)
+                        for row in carried['claims']])
