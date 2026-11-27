@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import functools
 import json
 import os
 import logging
@@ -24,6 +25,19 @@ TRADE_KEY_RETRY_SECONDS = 30
 # evolutions, hatches, key items, the Elite Four and similar. It keeps its screenshot and save forever.
 MILESTONE_PRIORITY = 4
 ATTACHMENT_ROUND = 500
+
+
+def kept(read):
+    """``read(store)``, reused until the database changes (Store._kept).
+
+    For a reader of the database and the fixed config alone, whose value no caller changes. The
+    emulator asks for these on every step, and the database changes on few of them.
+    """
+    @functools.wraps(read)
+    def reader(store):
+        return store._kept(reader, lambda db: read(store))
+    return reader
+
 
 class Store:
     def __init__(self, data_dir: Path, *, read_only=False):

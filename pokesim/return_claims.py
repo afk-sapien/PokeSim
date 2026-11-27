@@ -18,6 +18,7 @@ delivery finds the same Mew in the PC or writes it again.
 """
 from . import config
 from .state import claims as ledger
+from .store import kept
 
 SOURCE = 'legendary'
 EVENT = 'event'
@@ -70,13 +71,14 @@ def decline(store, dex):
             ledger.put(db, SOURCE, str(dex), ledger.DECLINED, frame=frame(store), species=dex, reasons=REFUSED)
 
 
+@kept
 def claims(store):
     """The dex numbers whose return waits in the cartridge, and those closed until the next milestone."""
     with store.reading() as db:
         found = ledger.rows(db, SOURCE)
-    ready = {int(row['key']) for row in found if row['state'] == ledger.DELIVERED}
-    closed = {int(row['key']) for row in found if row['state'] in (ledger.CONSUMED, ledger.DECLINED)}
-    return (ready if getattr(config, 'LEGENDARY_RETURN_STEPS', 1000000) else set()), closed
+    ready = frozenset(int(row['key']) for row in found if row['state'] == ledger.DELIVERED)
+    closed = frozenset(int(row['key']) for row in found if row['state'] in (ledger.CONSUMED, ledger.DECLINED))
+    return (ready if getattr(config, 'LEGENDARY_RETURN_STEPS', 1000000) else frozenset()), closed
 
 
 def adopt(db):

@@ -121,3 +121,26 @@ def test_trade_settings_and_league_marks_are_read_again_only_after_a_change(tmp_
     assert set(store.trade_preferences()) == {'b'}
     assert len(store.league_marks(2)) == 2 and store.league_marks(2) == rewards.marks(store.db, 2)
     store.close()
+
+
+def test_step_readers_are_read_again_only_after_a_change(tmp_path):
+    """Both observe blocks ask for these on every step, and the database changes on few."""
+    from pokesim import champion_shop, milestones, return_claims, step_events
+    from pokesim.gen2 import returns
+    from pokesim.state import claims, kv
+    store = Store(tmp_path)
+    readers = (champion_shop.ready, step_events.available, return_claims.claims, milestones.status,
+               returns.returned_events)
+    first = [read(store) for read in readers]
+    queries = []
+    store.db.set_trace_callback(queries.append)
+    assert [read(store) for read in readers] == first
+    assert [q for q in queries if not q.startswith('PRAGMA')] == []
+    with store.transaction() as db:
+        claims.put(db, return_claims.SOURCE, '150', claims.DELIVERED, frame=1, species=150)
+        kv.put(db, milestones.KEY, {**milestones.empty(), 'perfect_groups': {'1:150': 1}})
+    assert return_claims.claims(store) == ({150}, frozenset())
+    assert 'perfect_groups' not in milestones.apply({}, store)['milestones']
+    assert milestones.status(store)['perfect_groups'] == {'1:150': 1}
+    assert milestones.status(store)['perfect_found'] == 1
+    store.close()

@@ -6,6 +6,7 @@ import time
 from . import progress
 from .state import kv
 from .shiny import is_shiny, status as shiny_status
+from .store import kept
 from pokecore.dvs import is_perfect  # noqa: F401  (re-exported)
 from .game_data import load
 from .pokemon import dv_rating
@@ -53,6 +54,7 @@ def empty():
             'perfect_groups': {}, 'perfect_catches': 0, 'shiny_species': []}
 
 
+@kept
 def status(store):
     value = {**empty(), **(store.get(KEY) or {})}
     value['high_quality_species'] = sorted(set(value['high_quality_species']) | set(value['perfect_species']))
@@ -156,9 +158,8 @@ class MilestoneTracker:
 
 
 def apply(payload, store):
-    value = status(store)
     # Keep internal identity groups out of the public API.
-    value.pop('perfect_groups')
+    value = {key: row for key, row in status(store).items() if key != 'perfect_groups'}
     party = [dict(mon, shiny=is_shiny(mon), perfect_dvs=is_perfect(mon), **dv_rating(mon)) for mon in payload.get('party', ())]
     storage = payload.get('storage')
     boxed = [dict(mon, shiny=is_shiny(mon), perfect_dvs=is_perfect(mon), **dv_rating(mon)) for mon in (storage or {}).get('pokemon', ())]
