@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.gen2.data import GameData
+from pokesim.gen2.policy import Goal
 from pokesim.runtime.supervision import REFUSED_SHORTCUT
 
 
@@ -242,7 +243,7 @@ def test_without_exp_share_a_levelling_plan_trains_the_partner_in_the_lead(data,
     trainee = mon(94, box=3, level=30)
     eggs = [mon(175, box=2, position=i, egg=True, level=5, dvs=(i,) * 5) for i in range(3)]
     state = snapshot([lead()], [trainee, *eggs])
-    storage = SimpleNamespace(map_name='GOLDENROD_POKECENTER_1F', x=1, y=1, face='up')
+    storage = Goal('storage', 'PC', 'GOLDENROD_POKECENTER_1F', 1, 1, 'up')
     policy = SimpleNamespace(data=data, collection={}, monitor_tables={}, demand={}, decisions=1000, clock=1000,
                              storage_goal=lambda snapshot: storage,
                              release_target=lambda snapshot: None, no_room=lambda snapshot: False)
@@ -352,7 +353,7 @@ def full_bag(data, *, share=True):
 
 
 def pc_goal(snapshot):
-    return SimpleNamespace(map_name='GOLDENROD_POKECENTER_1F', x=1, y=1, face='up')
+    return Goal('storage', 'PC', 'GOLDENROD_POKECENTER_1F', 1, 1, 'up')
 
 
 def kept_bag(data, *, share=True):

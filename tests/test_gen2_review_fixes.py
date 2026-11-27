@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from pokesim.gen2.policy import Goal
 from pokesim.runtime.policy import PolicyContext
 from pokesim.runtime.supervision import REFUSED_SHORTCUT
 from pokesim.stalls import StallWatch
@@ -337,7 +338,7 @@ def test_npc_trade_waits_while_the_party_and_every_box_are_full(monkeypatch):
     monkeypatch.setattr(npc_trades, 'flags', lambda memory, data: 0)
     data = SimpleNamespace(symbols={'wTradeFlags': (0, 0)}, game='gold',
                            species={69: {'name': 'Bellsprout'}, 95: {'name': 'Onix'}})
-    storage = SimpleNamespace(map_name='VIOLET_POKECENTER_1F', x=1, y=1, face='up')
+    storage = Goal('storage', 'PC', 'VIOLET_POKECENTER_1F', 1, 1, 'up')
     policy = SimpleNamespace(data=data, collection={}, monitor_tables={}, demand={}, decisions=1, clock=1,
                              storage_goal=lambda snapshot: storage,
                              person=lambda snapshot, key, *args: SimpleNamespace(key=key))

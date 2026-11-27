@@ -1,6 +1,6 @@
 """Run an isolated Gen II policy scenario and retain failure evidence."""
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 import time
@@ -110,7 +110,7 @@ def main(argv=None, prog=None):
                 return collection.journey(policy, snapshot, mem, Goal)
             if args.focus in {'encounter', 'headbutt', 'rock smash'} and not snapshot.can_catch:
                 goal = policy.storage_goal(snapshot)
-                return Goal('collection_box', 'Make room for the encounter target', goal.map_name, goal.x, goal.y, goal.face)
+                return replace(goal, key='collection_box', label='Make room for the encounter target')
             if snapshot.map == data.map_ids['POKECENTER_2F']:
                 return Goal('return_from_cable', 'Return downstairs after the Cable Club', 'POKECENTER_2F', 0, 7)
             if task:

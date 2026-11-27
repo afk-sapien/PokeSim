@@ -130,7 +130,7 @@ class Activity(Kind):
             pg.finish(policy)
             return False
         from .collection import while_waiting
-        return while_waiting(policy, snapshot, mem, goal, Goal)
+        return while_waiting(policy, snapshot, mem, goal)
 
 
 class Quality(Activity):

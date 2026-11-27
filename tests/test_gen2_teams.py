@@ -6,6 +6,7 @@ import pytest
 
 from pokesim.gen2.data import GameData
 from pokesim.gen2.menus import ChangeBox, Release, Storage
+from pokesim.gen2.policy import Goal
 from pokesim.gen2.standdown import STAND_DOWN, standing_down, team_key
 from pokesim.gen2.teams import BLOCKED_LIMIT, arrive, assemble, assembled, key
 
@@ -35,14 +36,10 @@ class Policy:
         self.goal = SimpleNamespace(key='collection_activity_team')
 
     def storage_goal(self, _):
-        return SimpleNamespace(map_name='OLIVINE_POKECENTER_1F', x=9, y=2, face='up')
+        return Goal('storage', 'PC', 'OLIVINE_POKECENTER_1F', 9, 2, 'up')
 
     def release_target(self, _):
         return self.spare
-
-
-def Goal(key, label, map_name, x, y, face=None):
-    return SimpleNamespace(key=key, label=label, map_name=map_name)
 
 
 def test_twins_sharing_an_identity_are_counted_copy_for_copy():

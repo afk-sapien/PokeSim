@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokesim.gen2.data import GameData
+from pokesim.gen2.policy import Goal
 
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
@@ -42,7 +43,7 @@ def snapshot(stored, *, owned=None, boxes=(5,) * 14):
 
 
 def planner(data, demand):
-    storage = SimpleNamespace(map_name='GOLDENROD_POKECENTER_1F', x=1, y=1, face='up')
+    storage = Goal('storage', 'PC', 'GOLDENROD_POKECENTER_1F', 1, 1, 'up')
     return SimpleNamespace(data=data, collection={}, monitor_tables={}, clock=0, demand=demand,
                            storage_goal=lambda snapshot: storage)
 

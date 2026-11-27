@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from pokesim.gen2 import ledger, training
 from pokesim.gen2.menus import PutAway, Toss
+from pokesim.gen2.policy import Goal
 from pokesim.planning.ledger import Shortfall
 
 
@@ -66,11 +67,7 @@ class Policy:
         return task not in self.blocked
 
     def storage_goal(self, snapshot):
-        return SimpleNamespace(map_name='GOLDENROD_POKECENTER_1F', x=3, y=1, face='up')
-
-
-def Goal(*args):
-    return SimpleNamespace(key=args[0], label=args[1], map_name=args[2])
+        return Goal('storage', 'PC', 'GOLDENROD_POKECENTER_1F', 3, 1, 'up')
 
 
 def test_a_full_bag_walks_to_the_pc_before_the_swap():

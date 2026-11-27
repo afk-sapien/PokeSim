@@ -2660,7 +2660,7 @@ def test_a_peer_requested_evolution_is_boxed_so_it_can_be_offered(real_data):
     party = (mon(250, 0), mon(103, 1), mon(65, 2), mon(68, 3, stat_exp=30000), mon(160, 4), mon(130, 5))
     snapshot = SimpleNamespace(party=party, stored=(), box_counts=[20, 3] + [0] * 12, active_box=0,
                                map=real_data.map_ids['VIOLET_POKECENTER_1F'], x=3, y=3)
-    goal = SimpleNamespace(map_name='VIOLET_POKECENTER_1F', x=1, y=1, face='up')
+    goal = Goal('storage', 'PC', 'VIOLET_POKECENTER_1F', 1, 1, 'up')
     policy = SimpleNamespace(data=real_data, demand={103: 2, 250: 1}, decisions=0, clock=0, monitor_tables={},
                              storage_goal=lambda s: goal,
                              collection={'training': {'identity': [1005, [5, 8, 9, 10, 11]]}})

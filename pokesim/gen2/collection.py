@@ -90,20 +90,21 @@ def waiting_label(snapshot, wait):
     return f'{doing} until a trade or a return brings new collection work'
 
 
-def while_waiting(policy, snapshot, mem, goal, Goal):
+def while_waiting(policy, snapshot, mem, goal):
     """Name the clock wait in the label of the work that runs while it accrues, such as breeding,
     hatching and training. The wait itself is passive and never changes which goal runs."""
     if goal is None or mem is None or not hasattr(mem, 'byte'):
         return goal
     current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
-    return labelled(goal, named_wait(policy, snapshot, mem, current_time), Goal)
+    return labelled(goal, named_wait(policy, snapshot, mem, current_time))
 
 
-def labelled(goal, wait, Goal):
-    """``goal`` with the named clock wait in its label, or ``goal`` itself when nothing is named."""
+def labelled(goal, wait):
+    """``goal`` with the named clock wait in its label, or ``goal`` itself when nothing is named. Only the
+    label changes, so a training goal keeps its kind and still fights its wild battles (planning/stance.py)."""
     if goal is None or not wait:
         return goal
-    return Goal(goal.key, f'{goal.label} while {wait}', goal.map_name, goal.x, goal.y, goal.face)
+    return replace(goal, label=f'{goal.label} while {wait}')
 
 
 def tree_score(x, y, trainer_id):
@@ -352,8 +353,7 @@ def peer_store(policy, snapshot, Goal):
         return None
     mon = snapshot.party[peer_store_slots(policy, snapshot)[0]]
     goal = policy.storage_goal(snapshot)
-    return Goal('collection_peer_store', f'Store {mon.name} where a peer trade can reach it',
-                goal.map_name, goal.x, goal.y, goal.face)
+    return replace(goal, key='collection_peer_store', label=f'Store {mon.name} where a peer trade can reach it')
 
 
 def peer_store_arrive(policy, snapshot):
@@ -1008,7 +1008,7 @@ def holds(policy, snapshot, mem, Goal):
     if (not snapshot.can_catch or box_switch(policy, snapshot) is not None) and not policy.in_league(snapshot):
         if any(count < 20 for count in snapshot.box_counts):
             goal = policy.storage_goal(snapshot)
-            return Goal('collection_box', 'Make room for new catches', goal.map_name, goal.x, goal.y, goal.face)
+            return replace(goal, key='collection_box', label='Make room for new catches')
     if state.get('funding') is not None:
         goal = funding_run(policy, snapshot, Goal)
         if state.get('funding') is not None:
@@ -1203,7 +1203,7 @@ def journey(policy, snapshot, mem, Goal):
         policy.ladder_rung = policy.ladder_pick = None
         if rungs.passive:
             name, passive = rungs.passive[0]
-            goal = labelled(passive, named, Goal)
+            goal = labelled(passive, named)
             return _alone(policy, goal, name, Tier.FILLER, 0.0, ERRAND_FRAMES)
         eggs = any(mon.egg for mon in snapshot.party)
         # Carried eggs hatch on this walk, so only a walk without them is idle.
@@ -1218,7 +1218,7 @@ def journey(policy, snapshot, mem, Goal):
     policy.ladder_rung, policy.ladder_pick = pick.source, pick.candidate.key
     goal = pick.goal
     if pick.source in {'breed', 'hatching', 'training'}:
-        goal = labelled(goal, named, Goal)
+        goal = labelled(goal, named)
     policy.collection_offers = [replace(offered, goal=goal, commit=None) if offered is pick
                                 else replace(offered, commit=None) for offered in rungs.offers]
     policy.collection_pinned, policy.collection_goal = rungs.pinned_key, goal
