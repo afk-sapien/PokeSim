@@ -10,7 +10,12 @@ MOVES = {1: {'name': 'TACKLE', 'power': 40, 'type': 0, 'accuracy': 100, 'effect'
          2: {'name': 'SPLASHY', 'power': 80, 'type': 21, 'accuracy': 90, 'effect': 'NO_ADDITIONAL_EFFECT'},
          3: {'name': 'SEISMIC_TOSS', 'power': 1, 'type': 1, 'accuracy': 100, 'effect': 'SPECIAL_DAMAGE_EFFECT'},
          4: {'name': 'GROWL', 'power': 0, 'type': 0, 'accuracy': 100, 'effect': 'ATTACK_DOWN1_EFFECT'},
-         5: {'name': 'SLEEPY', 'power': 0, 'type': 0, 'accuracy': 75, 'effect': 'SLEEP_EFFECT'}}
+         5: {'name': 'SLEEPY', 'power': 0, 'type': 0, 'accuracy': 75, 'effect': 'SLEEP_EFFECT'},
+         6: {'name': 'NIGHT_SHADE', 'power': 0, 'type': 8, 'accuracy': 100, 'effect': 'SPECIAL_DAMAGE_EFFECT'},
+         7: {'name': 'SONICBOOM', 'power': 1, 'type': 0, 'accuracy': 90, 'effect': 'SPECIAL_DAMAGE_EFFECT'},
+         8: {'name': 'DRAGON_RAGE', 'power': 1, 'type': 26, 'accuracy': 100, 'effect': 'SPECIAL_DAMAGE_EFFECT'},
+         9: {'name': 'SUPER_FANG', 'power': 1, 'type': 0, 'accuracy': 90, 'effect': 'SUPER_FANG_EFFECT'},
+         10: {'name': 'PSYWAVE', 'power': 1, 'type': 24, 'accuracy': 80, 'effect': 'SPECIAL_DAMAGE_EFFECT'}}
 MATCHUPS = {(21, 0): 2.0, (0, 21): 0.5}
 
 
@@ -51,6 +56,23 @@ def test_battle_power_and_replacement():
     assert power.best_replacement(battler, 2, protected=(1, 4)) is None
     with_utility = power.moveset_score(battler, (1, 5))
     assert with_utility == pytest.approx(power.moveset_score(battler, (1,)) * 1.08)
+
+
+def test_night_shade_deals_the_level_though_its_data_power_is_0():
+    power = BattlePower(SPECIES, MOVES, MATCHUPS)
+    battler = power.battler({'species': 1, 'level': 30, 'dvs': [8] * 5, 'stat_exp': [100] * 5, 'moves': [6]})
+    assert power.damage(6, battler, battler) == 30.0
+    assert power.moveset_score(battler, (6,)) == power.moveset_score(battler, (3,)) > 0
+
+
+def test_every_fixed_damage_move_scores_the_damage_it_deals():
+    power = BattlePower(SPECIES, MOVES, MATCHUPS)
+    battler = power.battler({'species': 1, 'level': 30, 'dvs': [8] * 5, 'stat_exp': [100] * 5, 'moves': [1]})
+    enemy = Battler(1, 50, 50, 30, types=(0, 0), defense=40, special=40)
+    expected = {3: 30.0, 6: 30.0, 7: 20.0, 8: 40.0, 9: 25.0, 10: 22.5}
+    assert {mid: power.damage(mid, battler, enemy) for mid in expected} == expected
+    for mid in expected:
+        assert power.moveset_score(battler, (mid,)) > 0, mid
 
 
 def test_dv_flags():

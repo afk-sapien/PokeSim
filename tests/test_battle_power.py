@@ -59,6 +59,25 @@ def test_coverage_and_recovery_help_but_duplicate_moves_do_not_stack():
     assert moveset_score(mon, (153,)) < moveset_score(mon, (57,))
 
 
+def test_night_shade_scores_its_level_damage_though_its_data_power_is_0():
+    haunter = battler(partner('HAUNTER', level=50, moves=[101, 0, 0, 0]))
+    assert moveset_score(haunter, (101,)) > moveset_score(haunter, (122,))
+    # Psywave hits for three quarters of the level on average and misses more, so it adds nothing here.
+    assert moveset_score(haunter, (101, 149)) == moveset_score(haunter, (101,))
+
+
+def test_every_fixed_damage_move_scores_the_damage_it_deals():
+    from pokesim.policies.battle import damage
+    from pokesim.strategy_data import MOVES
+    mon = battler(partner('RATICATE', level=50))
+    hp = 3 * mon.level + 10
+    enemy = replace(mon, species=0, hp=hp, max_hp=hp, types=(20, 20))
+    for name in ('NIGHT_SHADE', 'SEISMIC_TOSS', 'DRAGON_RAGE', 'SONICBOOM', 'SUPER_FANG', 'PSYWAVE'):
+        mid = next(k for k, move in MOVES.items() if move['name'] == name)
+        assert damage(mid, mon, enemy) > 0, name
+        assert moveset_score(mon, (mid,)) > 0, name
+
+
 def test_move_learning_considers_special_stat_and_keeps_hms():
     mon = replace(battler(partner()), moves=(57, 33, 70, 105))
     assert replacement_slot(mon, 94) == 1

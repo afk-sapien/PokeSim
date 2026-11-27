@@ -11,6 +11,11 @@
   ignores the stats, such as Seismic Toss, Psywave, Super Fang or a one-hit knockout, and None
   for any other move. `battle_power` uses both.
 
+### Fixed
+
+- Gen I `BattlePower.damage` and `moveset_score` count Night Shade as the user's level in
+  damage. Its data power is 0, so both scored it as a move that does nothing.
+
 ## 0.12.4
 
 ### Added

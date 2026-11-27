@@ -122,11 +122,14 @@ class BattlePower:
     def damage(self, move_id, attacker, defender) -> float:
         """Expected connected-hit damage before accuracy, including common special moves."""
         move = self.moves.get(move_id)
-        if not move or not move['power']:
+        if not move:
             return 0.0
         name, effect = move['name'], move['effect']
+        # Night Shade's data power is 0, so the level-damage case comes before the power check.
         if name in ('SEISMIC_TOSS', 'NIGHT_SHADE'):
             return float(attacker.level)
+        if not move['power']:
+            return 0.0
         factor = self.effectiveness(move['type'], defender.types)
         if not factor:
             return 0.0
@@ -184,7 +187,8 @@ class BattlePower:
             for mid in moves:
                 move = self.moves.get(mid, {})
                 effect = move.get('effect')
-                if not move.get('power') or effect in ('OHKO_EFFECT', 'COUNTER_EFFECT', 'BIDE_EFFECT'):
+                # Not the data power: Night Shade's is 0 though it deals the user's level, and damage() knows that.
+                if not move or effect in ('OHKO_EFFECT', 'COUNTER_EFFECT', 'BIDE_EFFECT'):
                     continue
                 connected = self.damage(mid, mon, enemy)
                 value = min(hp, connected) * min(255, move['accuracy'] * 255 // 100) / 256
