@@ -901,14 +901,18 @@ class Navigator:
 
     def guided(self, pos, goals, frame, rng, curiosity=0.12):
         """Follow the objective with occasional short, novelty-weighted detours."""
+        behind = next((p for p, _, q in self.path if q == pos), None)
         forward = self.route(pos, goals, frame)
         if forward is None or curiosity <= 0 or rng.random() >= curiosity:
             return forward
         # Stay on this map during detours, avoiding accidental exits and warp loops. A detour takes one
         # plain step. A ledge jump lands two tiles away and cannot be walked back, and on Route 22 one
-        # sent a League return around the whole route again and again until it gave up.
+        # sent a League return around the whole route again and again until it gave up. A step back to
+        # the tile the walk just left is no detour either. On a Route 22 ledge row it was the only side
+        # step, and three of them back and forth read as a movement cycle, which blocked the way on for
+        # 1,800 frames, so a League return jumped the ledge and gave the rematch up.
         options = [(dr, q) for dr, q in self.neighbors(pos, frame)
-                   if q[0] == pos[0] and dr != forward and abs(q[1] - pos[1]) + abs(q[2] - pos[2]) == 1]
+                   if q[0] == pos[0] and dr != forward and q != behind and abs(q[1] - pos[1]) + abs(q[2] - pos[2]) == 1]
         if not options:
             return forward
         ahead = next((q for _, _, q in list(self.path)[6:12] if q[0] == pos[0]), None)
