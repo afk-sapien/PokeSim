@@ -12,9 +12,15 @@ class StoragePart:
 
     def storage_units(self, snapshot):
         """The ledger's next box unit and the next one that can go straight from the box. Kept until
-        storage or the plans change."""
+        storage, the bag, the plans, a refused step or a stand-down changes."""
         from ..ledger import storage_unit
-        key = (self.rating_key(snapshot), snapshot.pockets.get('items', ()),
+        from ..standdown import monitor
+        # A release the game refused (allowed) and a spare whose unequip stood down leave the answer,
+        # and an item comes off only into a free entry of its own pocket.
+        tracker = monitor(self)
+        refused = frozenset(key for key, until in self.blocked.items() if until > self.clock)
+        stood = frozenset(key for key in tracker.stood_down() if tracker.standing_down(key, self.clock))
+        key = (self.rating_key(snapshot), tuple(sorted(snapshot.pockets.items())), refused, stood,
                tuple(self.collection.get('prerequisites', ())), self.decisions // 600)
         if self.release_cache[0] != key:
             self.release_cache = (key, (storage_unit(self, snapshot), storage_unit(self, snapshot, direct=True)))

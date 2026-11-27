@@ -1561,6 +1561,16 @@ def test_breeding_pair_search_is_reused_until_the_collection_changes(real_data, 
     assert [row[0] for row in breeding.pairings(policy, snapshot)] == [172] and len(calls) == 3
     snapshot.stored = ()
     assert breeding.pairings(policy, snapshot) == [] and len(calls) == 3
+    # The cartridge adds experience to each Day Care parent on every step, and the kept search outlasts it.
+    from dataclasses import replace
+    from pokecore.gen2.ram import Mon
+    parent = Mon(25, 'PIKACHU', 20, 50, 50, 0, 0, (33, 0, 0, 0), (35, 0, 0, 0), (35, 0, 0, 0),
+                 (50, 30, 30, 30, 30, 30), 8000, (0, 2, 4, 6, 8), (0,) * 5, 1, 70, data=real_data)
+    snapshot.daycare = (parent, None)
+    searched = breeding.pairings(policy, snapshot)
+    assert [row[0] for row in searched] == [172] and len(calls) == 4
+    snapshot.daycare = (replace(parent, experience=8001), None)
+    assert breeding.pairings(policy, snapshot) is searched and len(calls) == 4
 
 
 def breeding_mons():
@@ -2222,8 +2232,9 @@ def test_idle_collection_says_which_time_of_day_it_needs(real_data):
     original = collection.wanted
     collection.wanted = lambda policy, snapshot, species: species != collection.LAPRAS
     try:
-        assert collection.waiting_label(policy, snapshot, mem, 'day') == 'Walk the grass while Zubat waits for night'
-        assert collection.waiting_label(policy, snapshot, mem, 'night') == 'Walk the grass until a trade or a return brings new collection work'
+        day, night = (collection.named_wait(policy, snapshot, mem, time) for time in ('day', 'night'))
+        assert collection.waiting_label(snapshot, day) == 'Walk the grass while Zubat waits for night'
+        assert collection.waiting_label(snapshot, night) == 'Walk the grass until a trade or a return brings new collection work'
     finally:
         collection.wanted = original
 
@@ -2735,6 +2746,23 @@ def test_phone_waits_and_full_phone_lists_stand_down_instead_of_looping(real_dat
     fresh = _item_policy(real_data, {103: 1})
     assert item_sources.phones(fresh, snapshot, full, Goal) is None
     assert 'phone:LEAF_STONE' in fresh.monitor_tables['stood_down']
+
+
+def test_a_short_turn_at_another_item_step_keeps_the_first_steps_count():
+    from pokesim.gen2.item_sources import GAP, REGISTER_DECISIONS, _limited
+    policy = SimpleNamespace(collection={}, decisions=0)
+    limited = False
+    for decision in range(REGISTER_DECISIONS + 3):
+        policy.decisions = decision
+        if decision == 3000:
+            _limited(policy, 'pickup:MOON_STONE', 8000)
+            continue
+        limited = _limited(policy, 'register:LEAF_STONE', REGISTER_DECISIONS) or limited
+    assert limited, 'one decision away, far under the gap, started the count over'
+    # A step left alone past the gap drops out, since it would start over anyway.
+    policy.decisions += GAP + 1
+    _limited(policy, 'register:LEAF_STONE', REGISTER_DECISIONS)
+    assert list(policy.collection['item_sources']) == ['register:LEAF_STONE']
 
 
 def test_a_phone_wait_keeps_its_budget_through_other_work_and_stands_down_for_no_call(real_data):

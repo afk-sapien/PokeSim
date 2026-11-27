@@ -80,8 +80,7 @@ class BattlePart:
         reads = self.reads
         battle, player, enemy = reads.battle, reads.player, reads.enemy
         opponent = self.battle_target(snapshot, measured=bool(self.collection.get('tower')))
-        # The native capture routine restores transformed wild opponents as Ditto.
-        catch_species = 132 if enemy.transformed else snapshot.enemy_species
+        catch_species = self.wild_species(snapshot)
         needed = self.needed_move(snapshot)
         partner = (not any(needed in self.data.species[mon.species]['machines'] for mon in snapshot.party if not mon.egg)
                    and needed in self.data.species.get(catch_species, {}).get('machines', []))
@@ -106,11 +105,11 @@ class BattlePart:
         # A peer's request, a postgame better-DV hunt and a returned Pokémon catch an owned species only
         # when the PC would keep the copy (release.keeps_another, the one catch rule). A missing entry,
         # a field-move partner, a shiny, a missing Unown letter and an item carrier keep their own rules.
-        from ..postgame import quality_species, wild_dvs
+        from ..postgame import quality_species
         from ..release import keeps_another
         upgrade = (snapshot.in_battle == 1 and catch_species in snapshot.owned and not (partner or shiny or own_rule)
                    and bool(requested or catch_species == quality_species(self) or catch_species in self.returned)
-                   and keeps_another(self, snapshot, catch_species, dvs=wild_dvs(enemy.shown_dvs)))
+                   and keeps_another(self, snapshot, catch_species, dvs=enemy.dvs))
         from ..quests import LEGEND_TRIPS
         from ..release import LEGENDARY_DEX
         if upgrade and getattr(self.goal, 'key', None) in LEGEND_TRIPS and catch_species not in LEGENDARY_DEX:
@@ -127,7 +126,7 @@ class BattlePart:
                  and snapshot.can_catch and any(self.data.item_names.get(item, '').casefold() in
                     {label.casefold() for label in self.ball_labels(snapshot)} for item, count in snapshot.pockets['balls'] if count))
         from ..ledger import spare_throw
-        if catch and not partner and not shiny and not spare_throw(self.data, snapshot, snapshot.enemy_species):
+        if catch and not partner and not shiny and not spare_throw(self.data, snapshot, catch_species):
             catch = False
         from ..collection import box_switch
         if catch and upgrade and catch_species not in LEGENDARY_DEX and box_switch(self, snapshot) is not None:
@@ -138,7 +137,8 @@ class BattlePart:
             # The last free slot is kept for an upgrade. Any other catch takes it only when a release can
             # follow, and a missing entry refused asks the owner for help (boxes_full).
             from ..release import reserve_allows
-            catch = reserve_allows(self, snapshot, catch_species, lambda: wild_dvs(enemy.shown_dvs))
+            # A transformed Ditto shows its copy's DVs, and a catch keeps its own (enemy.dvs).
+            catch = reserve_allows(self, snapshot, catch_species, lambda: enemy.dvs)
             self.boxes_full = not catch and catch_species not in snapshot.owned
         elif catch:
             self.boxes_full = False
@@ -147,7 +147,7 @@ class BattlePart:
         self.shiny_missed = (self.shiny_miss_reason(snapshot)
                              if shiny and not catch and not snapshot.bug_contest else None)
         weaken = self.capture_move(snapshot) if catch else None
-        roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
+        roaming = self.roamer(snapshot)
         trapped = battle.trapped
         # Scripted trap, red Gyarados, Celebi and Suicune battles forbid escape even without Mean Look.
         can_escape = not trapped and battle.battle_type not in {7, 9, 11, 12}
@@ -194,7 +194,7 @@ class BattlePart:
             # unguarded: a switch costs a sleep turn that a ball would use better.
             static = self.static_legend(snapshot)
             sleepable = static and not enemy.status and 'safeguard' not in battle.enemy_screens
-            if (catch and not roaming and not trapped and (partner or shiny or snapshot.enemy_species in {245, 249, 250, 251})
+            if (catch and not roaming and not trapped and (partner or shiny or catch_species in {245, 249, 250, 251})
                     and weaken is None and (sleepable if static else snapshot.enemy_hp > snapshot.enemy_max_hp // 2)):
                 candidates = [(self.capture_move(snapshot, slot=i), i)
                               for i, mon in enumerate(snapshot.party)
@@ -237,7 +237,7 @@ class BattlePart:
                 return Action(None, 0, 24)
             self.learning = False
             if (roaming and not catch and can_escape and snapshot.in_battle == 1
-                    and (snapshot.enemy_species not in snapshot.owned or snapshot.enemy_species in self.returned)):
+                    and (catch_species not in snapshot.owned or catch_species in self.returned)):
                 # A fainted roaming beast never returns, so leave it for a visit with room and balls.
                 action = self.battle_task(Flee(), snapshot, mem)
                 if action:
@@ -291,6 +291,17 @@ class BattlePart:
             return Action('a', 8, 40)
         return Action('a', 8, 24)
 
+    def wild_species(self, snapshot):
+        """The species a throw catches. The native capture routine restores a transformed wild
+        opponent as Ditto, whatever it copied, so a Ditto that copied a legendary lead is no legendary.
+        Outside a decision there are no reads, and the shown species stands."""
+        return 132 if self.reads and self.reads.enemy.transformed else snapshot.enemy_species
+
+    def roamer(self, snapshot):
+        """The wild opponent is a roaming beast: Raikou, Entei, and Suicune outside Crystal."""
+        species = self.wild_species(snapshot)
+        return species in {243, 244} or species == 245 and self.data.game != 'crystal'
+
     @staticmethod
     def wild_shiny(snapshot):
         """The wild opponent is shiny. Trainers' Pokémon and a Ditto's borrowed look never count."""
@@ -306,7 +317,8 @@ class BattlePart:
 
     def static_legend(self, snapshot):
         """Lugia, Ho-Oh and Crystal's Tin Tower Suicune: catch rate 3, met once at a fixed spot."""
-        return snapshot.enemy_species in {249, 250} or snapshot.enemy_species == 245 and self.data.game == 'crystal'
+        species = self.wild_species(snapshot)
+        return species in {249, 250} or species == 245 and self.data.game == 'crystal'
 
     def static_capture_move(self, snapshot, mon, pp):
         """Sleep first, then chip a sleeping legendary to half HP without the risk of a KO.
@@ -546,7 +558,7 @@ class BattlePart:
     def ball_labels(self, snapshot):
         from ..quests import beasts_roaming, static_wanted
         master = ()
-        if snapshot.enemy_species in {243, 244, 245, 249, 250, 251}:
+        if self.wild_species(snapshot) in {243, 244, 245, 249, 250, 251}:
             master = ('MASTER BALL',)
             # A static legend waits for its own room, so the roaming beasts keep the Master Ball.
             if self.static_legend(snapshot) and beasts_roaming(self, snapshot):
@@ -555,8 +567,7 @@ class BattlePart:
             # A shiny may have the Master Ball once every other ball is spent, as it may never be seen
             # again, but not while a legend still to catch needs it.
             master = ('MASTER BALL',)
-        roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
-        return master + REGULAR_BALLS if roaming else REGULAR_BALLS + master
+        return master + REGULAR_BALLS if self.roamer(snapshot) else REGULAR_BALLS + master
 
     def long_odds(self, snapshot, species, active, *, escape):
         """What a catch does when its battler cannot weaken the target and the next throw is under
@@ -611,7 +622,7 @@ class BattlePart:
         disabled = self.reads.player.disabled_move if slot is None or slot == active else None
         pp = tuple(0 if move == disabled else count for move, count in zip(mon.moves, mon.pp))
         enemy = self.reads.enemy
-        roaming = snapshot.enemy_species in {243, 244} or snapshot.enemy_species == 245 and self.data.game != 'crystal'
+        roaming = self.roamer(snapshot)
         if roaming and mon.stats[3] // (4 if mon.status & 64 else 1) <= enemy.stats[3]:
             return None
         if roaming:

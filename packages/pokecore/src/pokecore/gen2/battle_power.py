@@ -85,7 +85,8 @@ def _valid(mon, data):
 
 def _damage(data, move, species, friendship, stats, dvs, level, target_type, hp, defense):
     effect = move['effect']
-    if not move['power'] or effect in NO_DIRECT_DAMAGE:
+    # The cartridge lists Guillotine at power 0, so a one-hit knockout is let through by its effect.
+    if effect in NO_DIRECT_DAMAGE or not move['power'] and effect != 'EFFECT_OHKO':
         return 0.0
     kind, power = move_power(data, move, dvs, friendship)
     factor = data.matchups.get((kind, target_type), 1)

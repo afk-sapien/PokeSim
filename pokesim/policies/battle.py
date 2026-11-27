@@ -479,6 +479,8 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     capture_limit = float('inf') if shiny else LEGENDARY_THROWS if legendary else 5 if repeat_target else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)
     wild = snapshot.in_battle == 1 and snapshot.battle_type == 0
+    # A frozen battler never acts, so the catch rules below give it no move to use.
+    frozen = me.status & FROZEN
     exhausted = catch_spent(snapshot, catch_attempts, capture_limit)
     if legendary and legendary_retreat(snapshot, catch_attempts, missing_species or repeat_target):
         return Decision('run', reason='Retreat and prepare another legendary attempt with balls and storage space')
@@ -502,7 +504,7 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
             return Decision('item',healing,active,'Keep the catcher healthy while preserving the wild Pokémon')
         # What choose_battle tries here, leaves_wild predicts before a hunt travels.
         status_moves = [(MOVES[mid]['accuracy'],i) for i,(mid,pp) in enumerate(zip(me.moves,me.pp))
-                        if pp and calming(mid, enemy)]
+                        if pp and calming(mid, enemy) and not frozen]
         if not enemy.status and status_moves and (me.hp > incoming or me.speed > enemy.speed):
             return Decision('fight',max(status_moves)[1],reason='Use sleep or paralysis to help the catch')
         if can_switch and not enemy.status and not status_moves:
@@ -511,7 +513,7 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
                         and p.hp > max((damage(mid,enemy,p) for mid in enemy.moves),default=0)]
             if catchers:
                 return Decision('switch',max(catchers)[1],reason='Bring in a healthy catcher with sleep or paralysis')
-        weakening = [(score,i) for score,i in moves if gentle_hit(me.moves[i], me, enemy)]
+        weakening = [(score,i) for score,i in moves if gentle_hit(me.moves[i], me, enemy) and not frozen]
         if not legendary and not shiny and enemy.hp > enemy.max_hp*0.4 and weakening and not enemy.status:
             return Decision('fight',max(weakening)[1],reason='Use a gentle attack with a margin for critical damage')
         one_time = known.get('dex') == 143 or known.get('dex') in (100, 101) and snapshot.map == MAPS['POWER_PLANT']
@@ -534,7 +536,8 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
         ball_index, ball = balls[-1] if known.get("catch_rate", 255) < 100 else balls[0]
         if enemy.hp <= enemy.max_hp * 0.35 or enemy.status or not moves:
             return Decision("item", ball_index, reason="Catch a missing species, a needed partner, or a stronger reserve")
-        weakening = [(score, k) for score, k in moves if 0 < damage(me.moves[k], me, enemy) < enemy.hp * 0.8]
+        weakening = [(score, k) for score, k in moves
+                     if 0 < damage(me.moves[k], me, enemy) < enemy.hp * 0.8 and not frozen]
         if weakening:
             return Decision("fight", max(weakening)[1], reason="Weaken the target without an expected knockout")
         if required:

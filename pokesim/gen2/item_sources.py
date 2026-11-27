@@ -112,10 +112,12 @@ def _limited(policy, key, limit):
     start, last = state.get(key) or (policy.decisions, policy.decisions)
     if policy.decisions - last > GAP:
         start = policy.decisions
+    # Other steps keep their counts, short of a gap that would start them again anyway.
+    others = {name: row for name, row in state.items() if name != key and policy.decisions - row[1] <= GAP}
     if policy.decisions - start > limit:
-        policy.collection['item_sources'] = {name: row for name, row in state.items() if name != key}
+        policy.collection['item_sources'] = others
         return True
-    policy.collection['item_sources'] = {key: [start, policy.decisions]}
+    policy.collection['item_sources'] = {**others, key: [start, policy.decisions]}
     return False
 
 

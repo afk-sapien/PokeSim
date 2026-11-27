@@ -74,14 +74,17 @@ def waiting(policy, snapshot, mem, current_time):
 
 def named_wait(policy, snapshot, mem, current_time):
     """The clock wait worth naming in a label, or None."""
-    candidate = waiting(policy, snapshot, mem, current_time)
+    return wait_name(waiting(policy, snapshot, mem, current_time))
+
+
+def wait_name(candidate):
+    """What the clock wait ``waiting`` gave waits for, or None when there is none or it is worth nothing."""
     return candidate.goal if candidate is not None and candidate.value > 0 else None
 
 
-def waiting_label(policy, snapshot, mem, current_time):
-    """Say what the idle walk does and what it waits for."""
+def waiting_label(snapshot, wait):
+    """Say what the idle walk does and what it waits for, given the named clock wait or None."""
     doing = 'Walk the eggs to hatching' if any(mon.egg for mon in snapshot.party) else 'Walk the grass'
-    wait = named_wait(policy, snapshot, mem, current_time)
     if wait:
         return f'{doing} while {wait}'
     return f'{doing} until a trade or a return brings new collection work'
@@ -93,8 +96,12 @@ def while_waiting(policy, snapshot, mem, goal, Goal):
     if goal is None or mem is None or not hasattr(mem, 'byte'):
         return goal
     current_time = ('morning', 'day', 'night')[min(2, mem.byte('wTimeOfDay'))]
-    wait = named_wait(policy, snapshot, mem, current_time)
-    if not wait:
+    return labelled(goal, named_wait(policy, snapshot, mem, current_time), Goal)
+
+
+def labelled(goal, wait, Goal):
+    """``goal`` with the named clock wait in its label, or ``goal`` itself when nothing is named."""
+    if goal is None or not wait:
         return goal
     return Goal(goal.key, f'{goal.label} while {wait}', goal.map_name, goal.x, goal.y, goal.face)
 
@@ -475,7 +482,8 @@ def prerequisites(policy, snapshot):
     Called several times per step, so the answer is kept in the facts until the dex or a held copy
     changes. Callers only read it.
     """
-    inputs = (snapshot.owned, snapshot.party, snapshot.stored, getattr(snapshot, 'daycare', ()))
+    from .breeding import in_care
+    inputs = (snapshot.owned, snapshot.party, snapshot.stored, in_care(snapshot))
     return facts(policy).answer('prerequisites', inputs, lambda: frozenset(_prerequisites(policy.data, snapshot)))
 
 
@@ -727,10 +735,30 @@ def _differs(slot, now, before):
     return now != before
 
 
+class _Entries(dict):
+    """The entries a build set, or removed with _MISSING, in a table other rungs write as well: a monitor
+    table or the milestones. They land one by one, so what another rung wrote there since stays."""
+
+
+def _entries(now, before):
+    return _Entries({key: now.get(key, _MISSING) for key in now.keys() | before.keys()
+                     if now.get(key, _MISSING) != before.get(key, _MISSING)})
+
+
+def _land(table, entries):
+    for key, value in entries.items():
+        if value is _MISSING:
+            table.pop(key, None)
+        else:
+            table[key] = value
+
+
 def _set(policy, slot, value):
     """Set ``slot`` to ``value``, the object itself, or remove it for _MISSING."""
     if slot == 'menu':
         policy.menu = None if value is _MISSING else value
+    elif isinstance(value, _Entries):
+        _land(policy.completed if slot == 'completed' else policy.monitor_tables.setdefault(slot[1], {}), value)
     elif isinstance(slot, tuple):
         table = policy.collection if slot[0] == 'collection' else policy.monitor_tables
         if value is _MISSING:
@@ -761,7 +789,8 @@ def draft(policy, build):
     A build replaces a value it changes and never edits one the state held before it (tests/conftest.py
     checks this), so a one-level copy puts the old state back exactly. A collection field is written when
     it holds another object, and so is the menu task. A monitor table or the milestones, which a build adds
-    to in place, are written when they no longer equal their copy. A goal or menu task that holds an object
+    to in place, are written when they no longer equal their copy, as the entries that changed, so a
+    stand-down another rung landed after the build stays. A goal or menu task that holds an object
     the build wrote holds the one ``write`` lands. A build that fails puts nothing back.
     """
     collection, menu, completed = dict(policy.collection), getattr(policy, 'menu', None), getattr(policy, 'completed', None)
@@ -773,12 +802,16 @@ def draft(policy, build):
                                     ('monitor', policy.monitor_tables, tables, operator.eq)):
         for key in now.keys() | before.keys():
             if not same(value := now.get(key, _MISSING), old := before.get(key, _MISSING)):
-                writes[kind, key], undo[kind, key] = value, old
+                # A table the build made, as the monitor makes one when it is first read, is new entries too.
+                table = kind == 'monitor' and isinstance(value, dict) and (old is _MISSING or isinstance(old, dict))
+                writes[kind, key] = _entries(value, {} if old is _MISSING else old) if table else value
+                undo[kind, key] = old
     if getattr(policy, 'menu', None) is not menu:
         writes['menu'], undo['menu'] = policy.menu, menu
     if (value := getattr(policy, 'completed', None)) != completed:
-        # The milestones dict is cleared in place when it is put back, so its writes are a copy.
-        writes['completed'], undo['completed'] = dict(value) if isinstance(value, dict) else value, completed
+        # The milestones dict is cleared in place when it is put back, so its writes are its changed entries.
+        both = isinstance(value, dict) and isinstance(completed, dict)
+        writes['completed'], undo['completed'] = _entries(value, completed) if both else value, completed
     write(policy, undo)
     return result, writes
 
@@ -1146,6 +1179,8 @@ def journey(policy, snapshot, mem, Goal):
         # A repeat challenge earns nothing new, so it is filler.
         offer('tower', Tier.FILLER, values.SMALL, TOWER_FRAMES, lambda: tower(policy, snapshot, Goal))
     wait = waiting(policy, snapshot, mem, current_time) if hasattr(mem, 'byte') else None
+    # The labels below name this wait, so the clock wait is worked out once a decision.
+    named = wait_name(wait)
     policy.ladder_offers = rungs.candidates + ([wait] if wait is not None else [])
     policy.ladder_decision = getattr(policy, 'decisions', None)
     policy.ladder_labels = rungs.labels
@@ -1168,14 +1203,14 @@ def journey(policy, snapshot, mem, Goal):
         policy.ladder_rung = policy.ladder_pick = None
         if rungs.passive:
             name, passive = rungs.passive[0]
-            goal = while_waiting(policy, snapshot, mem, passive, Goal)
+            goal = labelled(passive, named, Goal)
             return _alone(policy, goal, name, Tier.FILLER, 0.0, ERRAND_FRAMES)
         eggs = any(mon.egg for mon in snapshot.party)
         # Carried eggs hatch on this walk, so only a walk without them is idle.
         state['phase'] = 'hatching' if eggs else 'waiting'
         # Nothing else is useful until the cartridge clock opens a window or a trade brings new work.
         # The plan is rebuilt every step, so clock-gated work starts as soon as its window opens.
-        goal = patrol(policy, snapshot, Goal, waiting_label(policy, snapshot, mem, current_time))
+        goal = patrol(policy, snapshot, Goal, waiting_label(snapshot, named))
         return _alone(policy, goal, 'collection', Tier.FILLER, 0.0, ERRAND_FRAMES)
     # The step reads the menu task and the collection the pick wrote right after this, so they land now and
     # the step's ballot carries the offers without their writes.
@@ -1183,7 +1218,7 @@ def journey(policy, snapshot, mem, Goal):
     policy.ladder_rung, policy.ladder_pick = pick.source, pick.candidate.key
     goal = pick.goal
     if pick.source in {'breed', 'hatching', 'training'}:
-        goal = while_waiting(policy, snapshot, mem, goal, Goal)
+        goal = labelled(goal, named, Goal)
     policy.collection_offers = [replace(offered, goal=goal, commit=None) if offered is pick
                                 else replace(offered, commit=None) for offered in rungs.offers]
     policy.collection_pinned, policy.collection_goal = rungs.pinned_key, goal
