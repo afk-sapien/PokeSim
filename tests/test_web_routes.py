@@ -26,7 +26,7 @@ def app(tmp_path, **kwargs):
                'ts': 1000, 'playtime': '1:02', 'priority': 4, 'type': 'catch',
                'shot': '42.png', 'state': None}]
     store = SimpleNamespace(shots=shots, event=lambda _: events[0], events=lambda **_: events, get=lambda _: None,
-                            trade_preferences=lambda: {})
+                            trade_preferences=lambda: {}, _kept=lambda _reader, read: read(None))
     return create_app(SimpleNamespace(status=lambda: {}), store, **kwargs)
 
 
