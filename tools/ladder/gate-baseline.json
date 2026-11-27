@@ -299,6 +299,15 @@
    "milestones": 0.0,
    "story": []
   },
+  "gold-deep/post_game": {
+   "stall": null,
+   "stalls": 0,
+   "errors": 0.0,
+   "waste": 22.4,
+   "restock": 3.66,
+   "milestones": 0.0,
+   "story": []
+  },
   "gold-randomized/new_game": {
    "stall": null,
    "stalls": 0,

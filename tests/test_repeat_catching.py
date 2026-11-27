@@ -159,6 +159,50 @@ def test_a_species_with_its_needed_copy_searches_spent_is_not_hunted_for_a_peer(
     assert hunts(3) == []
 
 
+def test_a_copy_for_a_peer_is_hunted_only_while_its_battles_would_keep_the_worst_copy(monkeypatch):
+    from pokesim.policies.collection import improves
+    from pokesim.policies.strategic import StrategicPolicy
+    from test_duplicates import stored
+    policy = StrategicPolicy(1)
+    c = policy.collection
+    c.completed_champion = True
+    c.set_demand({69: 2})
+    monkeypatch.setattr(c, 'sources', lambda: {sid(69): [{'method': 'grass', 'map': MAPS['ROUTE_1'], 'level': 3}]})
+    monkeypatch.setattr(c, 'available', lambda s, source: True)
+    # One Bellsprout, and eleven spare Pidgeys with the best DVs.
+    copies = [stored(0, species=sid(69), level=10), *(stored(1 + i, species=sid(16), level=30, dvs=(15,) * 5)
+                                                       for i in range(12))]
+
+    def view(boxes):
+        return state(map=MAPS['ROUTE_1'], owned=frozenset(range(1, 152)), money=50000, box_counts=boxes,
+                     hall_of_fame_count=1, stored_details=tuple(copies),
+                     stored_pokemon=tuple((p.box, p.species, p.level, p.nick) for p in copies))
+
+    def hunted(s):
+        captured = []
+
+        def select(options, projects):
+            captured.extend(projects[option.key] for option in options if projects[option.key]['method'] == 'grass')
+            return None
+        monkeypatch.setattr(c.director, 'select', select)
+        nav = SimpleNamespace(distance_lookup=lambda *args: lambda points: 10, can_surf=True, visits={}, path=[],
+                              blocked={})
+        # The empty draw before is not kept, so the plan is drawn again.
+        c.idle_token = None
+        c.choose(s, nav, random.Random(1), Goal('collect_plan', '', ''))
+        return [project['needed_capture'] for project in captured if project['species'] == sid(69)]
+
+    # With one free slot, the visit a catch brings releases ten of the Pidgeys, each rarer than nearly
+    # every wild Bellsprout, so the battle runs from the worst one (pcvalue.pushes_out). The hunt for the
+    # peer's copy waits too, and only a routine repeat hunt is offered.
+    full = view((20,) * 11 + (19,))
+    assert not improves(full, sid(69), (0,) * 5, policy.catch_rating(full))
+    assert hunted(full) == [False]
+    roomy = view((10,) * 12)
+    assert improves(roomy, sid(69), (0,) * 5, policy.catch_rating(roomy))
+    assert hunted(roomy) == [True]
+
+
 def test_demand_keeps_needed_copies_without_blocking_all_duplicate_cleanup():
     from pokesim.policies.strategic import StrategicPolicy
     from test_duplicates import snapshot, stored

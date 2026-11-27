@@ -261,9 +261,16 @@ def keeps_another(policy, snapshot, dex, level=5, dvs=None):
 
 
 def supply_room(policy, snapshot):
-    """Whether one more copy for a linked adventure fits without a kept copy going for it: the boxes
-    keep their reserve, or the PC visit the catch brings releases only spares and the owner's
-    requests. A copy kept for a plan or for trade that went would only be caught again.
+    """Whether one more copy for a linked adventure fits without a rated copy going for it: the boxes
+    keep their reserve, or the PC visit the catch brings releases only copies that may go for the
+    worst wild copy (pcvalue.may_go_for, the rule the battle asks too). A copy kept for a plan or for
+    trade that went would only be caught again.
+
+    A rated spare that went would make the battle refuse each wild copy commoner than it (the battle
+    asks pcvalue.pushes_out), and a wild copy is that rare only the spare's rarity of the time. A deep
+    Gold save with 5 free slots fished Route 34 for Magikarp, Krabby and Staryu for a linked adventure
+    and ran from 26 of the 27 it met, since the visit would release a Pidgeotto and a Zubat of rarity
+    0.014.
 
     The room is counted once the hunt's own trip has boxed what peer_store boxes, its trainee included,
     since a picked hunt drops the training. Counted before, a Gold run withdrew a Kakuna to train, which
@@ -272,19 +279,14 @@ def supply_room(policy, snapshot):
 
     The answer is kept in the facts while the rating, the free slots and the open box hold. pc_rated
     hands back the same rated list until rating_key changes, and only pcvalue.rate writes its rows."""
+    from .. import pcvalue
     from .collection import peer_store_slots
     if not hasattr(snapshot, 'box_counts'):
         return True
     rated = policy.pc_rated(snapshot) if hasattr(policy, 'pc_rated') else release_rated(policy, snapshot)
     boxed = len(peer_store_slots(policy, snapshot, trainee=False)) if len(getattr(snapshot, 'party', ())) > 1 else 0
     free, box = headroom(snapshot) - boxed, getattr(snapshot, 'active_box', None)
-    return facts(policy).answer('supply room', (rated, free, box), lambda: _supply_room(rated, free, box))
-
-
-def _supply_room(rated, free, box):
-    from ..pcvalue import catch_visit, releases, requested
-    needed = catch_visit(free, len(requested(rated)))
-    return not any(row.status == 'kept' and not row.entry.requested for row in releases(rated, needed, box))
+    return facts(policy).answer('supply room', (rated, free, box), lambda: pcvalue.supply_room(rated, free, box))
 
 
 def hatch_worth(policy, snapshot):

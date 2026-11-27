@@ -490,20 +490,32 @@ def verdict(rows, *, missing=False, needed=0, active_box=None):
     return found
 
 
+def may_go_for(row, rarity):
+    """Whether the PC visit a catch brings may release ``row``, of any species, for a new copy of
+    ``rarity``: an owner's request, which goes whatever is caught, a copy with no DVs to rate, or
+    one at least as common as the new copy. The battle asks it with the wild copy's rarity
+    (pushes_out), and a hunt with 1, the worst a wild copy may be, before it meets one (supply_room).
+    So a hunt never opens for a copy its battles would run from."""
+    return bool(row.entry.requested) or row.rarity is None or rarity is None or row.rarity >= rarity
+
+
+def supply_room(rated, headroom, active_box=None):
+    """Whether one more copy for a linked adventure fits in a PC rated as ``rated``, with ``headroom``
+    free box slots: the boxes keep their reserve, or the visit the catch brings (catch_visit) releases
+    only copies that may go for the worst wild copy (may_go_for). A rated copy that went would make the
+    battle run from each wild copy commoner than it, and a wild copy is that rare only the held copy's
+    rarity of the time. Both gens' hunts ask it before they open a hunt for a peer's copy."""
+    needed = catch_visit(headroom, len(requested(rated)))
+    return all(may_go_for(row, 1) for row in releases(rated, needed, active_box))
+
+
 def pushes_out(rows, needed, active_box=None):
     """Whether the visit ``releases`` would make with the new copy last in ``rows`` takes that copy
-    or one rarer than it, of any species. The owner's requests go whatever is caught, so they do
-    not count."""
+    or one it may not go for (may_go_for)."""
     if needed <= 0:
         return False
     new = rows[-1]
-    for row in releases(rows, needed, active_box):
-        if row is new:
-            return True
-        if (not row.entry.requested and row.rarity is not None and new.rarity is not None
-                and row.rarity < new.rarity):
-            return True
-    return False
+    return any(row is new or not may_go_for(row, new.rarity) for row in releases(rows, needed, active_box))
 
 
 REFUSED = ('Keep', 'In the party', 'Team member', 'Egg')

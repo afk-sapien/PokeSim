@@ -268,9 +268,9 @@ def test_a_return_the_pc_would_release_is_not_kept(monkeypatch):
     assert not keeps_another(policy, snapshot([mon(185, dvs=(3,) * 5)]), 185)
 
 
-def test_a_copy_for_trade_is_hunted_only_while_no_kept_copy_would_go_for_it(monkeypatch):
+def test_a_copy_for_trade_is_hunted_only_while_no_rated_copy_would_go_for_it(monkeypatch):
     from pokesim.gen2.collection import hunt_wanted, wanted
-    from pokesim.gen2.release import supply_room
+    from pokesim.gen2.release import keeps_another, supply_room
     monkeypatch.setattr('pokecore.gen2.breeding.breeding_stock', lambda data, species: set())
     names = {16: 'Pidgey', 19: 'Rattata', 79: 'Slowpoke'}
     policy = SimpleNamespace(data=SimpleNamespace(species={dex: {'name': name} for dex, name in names.items()},
@@ -292,9 +292,14 @@ def test_a_copy_for_trade_is_hunted_only_while_no_kept_copy_would_go_for_it(monk
     assert wanted(policy, full, 79) and not hunted(79)
     # A missing entry is hunted all the same.
     assert hunted(80)
-    # With eleven spares to go first, or room left in the boxes, the copy for trade is hunted.
+    # With eleven rated spares to go first, the battle would run from a Slowpoke commoner than them,
+    # since the visit would release a copy rarer than it (pcvalue.pushes_out). So the hunt waits too.
     spares_first = view([*pidgeys, *rattatas])
-    assert supply_room(policy, spares_first) and hunt_wanted(policy, spares_first)(79)
+    assert not keeps_another(policy, spares_first, 79, dvs=(0,) * 5)
+    assert not supply_room(policy, spares_first) and not hunt_wanted(policy, spares_first)(79)
+    # Spares with no DVs to rate never push out a rarer copy, and room left in the boxes needs no visit.
+    unrated = view([*pidgeys, *(mon(19, position=2 + index, dvs=()) for index in range(12))])
+    assert supply_room(policy, unrated) and hunt_wanted(policy, unrated)(79)
     roomy = view([*pidgeys, *rattatas[:2]], boxes=(10,) * 14)
     assert supply_room(policy, roomy) and hunt_wanted(policy, roomy)(79)
 
@@ -332,6 +337,7 @@ def test_a_copy_for_trade_counts_the_room_left_once_the_hunt_boxes_the_trainee(m
 
 
 def test_supply_room_is_counted_again_only_when_the_rating_or_the_free_slots_change(monkeypatch):
+    from pokesim import pcvalue
     from pokesim.gen2 import release
     monkeypatch.setattr('pokecore.gen2.breeding.breeding_stock', lambda data, species: set())
     names = {16: 'Pidgey', 19: 'Rattata', 79: 'Slowpoke'}
@@ -346,8 +352,8 @@ def test_supply_room_is_counted_again_only_when_the_rating_or_the_free_slots_cha
     # pc_rated hands back the one rated list it keeps until the rating changes.
     kept = release.release_rated(policy, view())
     policy.pc_rated = lambda snapshot: kept
-    asked, count = [], release._supply_room
-    monkeypatch.setattr(release, '_supply_room', lambda *args: asked.append(args[1:]) or count(*args))
+    asked, count = [], pcvalue.supply_room
+    monkeypatch.setattr(pcvalue, 'supply_room', lambda *args: asked.append(args[1:]) or count(*args))
     full = view()
     assert not release.supply_room(policy, full) and not release.supply_room(policy, view())
     assert len(asked) == 1
