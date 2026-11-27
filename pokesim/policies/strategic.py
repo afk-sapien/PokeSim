@@ -1285,16 +1285,19 @@ class StrategicPolicy(Policy):
             task, direction = self.boulders.switch_push(s, self.nav) if not at_goal else (None, None)
             if direction:
                 return push(direction)
-            if goal.key.startswith('collect_') and not at_goal and not direction:
+            north_maps = LEAGUE | {MAPS['INDIGO_PLATEAU'], MAPS['INDIGO_PLATEAU_LOBBY']}
+            southbound = goal.key == 'collect_passage' or bool(goal.targets) and all(
+                m not in VICTORY_MAPS | north_maps and (m != MAPS['ROUTE_23'] or y >= 40)
+                for m, x, y in goal.targets)
+            # Any trip south takes the ladders a collection trip takes, a purchase at the Celadon
+            # counter as well. Without them a purchase trip dropped through the third floor's hole
+            # and found no way on from the second floor.
+            if (southbound or goal.key.startswith('collect_')) and not at_goal and not direction:
                 # Reach a puzzle from its accessible ladder instead of repeatedly
                 # following an optimistic route through another floor's closed gate.
                 targets = (((MAPS['VICTORY_ROAD_3F'], 23, 7), (MAPS['VICTORY_ROAD_3F'], 27, 15))
                            if s.map == MAPS['VICTORY_ROAD_2F'] else
                            ((MAPS['VICTORY_ROAD_2F'], 22, 16),) if s.map == MAPS['VICTORY_ROAD_3F'] else ())
-                north_maps = LEAGUE | {MAPS['INDIGO_PLATEAU'], MAPS['INDIGO_PLATEAU_LOBBY']}
-                southbound = goal.key == 'collect_passage' or bool(goal.targets) and all(
-                    m not in VICTORY_MAPS | north_maps and (m != MAPS['ROUTE_23'] or y >= 40)
-                    for m, x, y in goal.targets)
                 if southbound:
                     # Once a switch opens the next pocket, continue toward the
                     # southern exit instead of returning through a solved section.
