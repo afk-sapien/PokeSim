@@ -84,7 +84,7 @@ def _item_needs(policy, snapshot, demand):
                 continue
             species = evo['species']
             if (species in owned and species not in needed
-                    and not requested(data, snapshot, demand, species, item=True)):
+                    and not requested(data, snapshot, demand, species, source=mon)):
                 continue
             item = data.items.get(evo['requirements'][0])
             if item is not None:

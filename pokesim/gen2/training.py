@@ -210,11 +210,12 @@ def happiness_levels(friendship):
     return levels
 
 
-def requested(data, snapshot, demand, species, *, item=False):
+def requested(data, snapshot, demand, species, *, source=None):
     """Whether cable demand wants another evolved copy of a family with no wild source.
 
-    An evolution stone makes a copy for a peer even when the family has a wild source, if no copy
-    here could travel: automatic trading keeps a trained partner, so a single veteran never leaves.
+    An item evolution of ``source`` makes a copy for a peer even when the family has a wild source,
+    if no copy here could travel: automatic trading keeps a trained partner, so a single veteran
+    never leaves. The new copy must be able to travel itself, or it is one more veteran.
     """
     from pokecore.gen2.breeding import single_source
     copies = [mon for mon in snapshot.party + snapshot.stored if mon.species == species and not mon.egg]
@@ -222,7 +223,8 @@ def requested(data, snapshot, demand, species, *, item=False):
         return False
     if species in single_source(data) and len(copies) <= demand[species]:
         return True
-    return item and not any(spare_copy(data, mon) for mon in copies)
+    return (source is not None and could_travel(source)
+            and not any(spare_copy(data, mon) for mon in copies))
 
 
 def could_travel(mon):
@@ -262,7 +264,8 @@ def projects(policy, snapshot, current_time, demand=None):
             continue
         for evo in data.species[mon.species]['evolutions']:
             if (evo['species'] in snapshot.owned and evo['species'] not in needed
-                    and not requested(data, snapshot, demand, evo['species'], item=evo['method'] == 'item')
+                    and not requested(data, snapshot, demand, evo['species'],
+                                      source=mon if evo['method'] == 'item' else None)
                     or evo['method'] == 'trade'):
                 continue
             if mon.level == 100 and evo['method'] != 'item':
@@ -340,9 +343,11 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     from .collection import prerequisites
     demand = getattr(policy, 'demand', {})
     if (project and not project.get('terminal') and project['target'] in snapshot.owned
-            and project['target'] not in prerequisites(policy, snapshot)
-            and not requested(data, snapshot, demand, project['target'], item=bool(project.get('item')))):
-        state['training'] = project = None
+            and project['target'] not in prerequisites(policy, snapshot)):
+        source = next((mon for mon in snapshot.party + snapshot.stored
+                       if identity(mon) == project['identity']), None) if project.get('item') else None
+        if not requested(data, snapshot, demand, project['target'], source=source):
+            state['training'] = project = None
     if project and standing_down(policy, train_key(project['identity'])):
         state['training'] = project = None
     # A full party with every box full and nothing to release cannot swap anyone in at the PC, so

@@ -221,7 +221,7 @@ def _targets(policy, snapshot):
                 continue
             species = evo['species']
             if (species in owned and species not in needed
-                    and not requested(data, snapshot, demand, species, item=True)):
+                    and not requested(data, snapshot, demand, species, source=mon)):
                 continue
             # A partner already holding its trade item needs no other.
             if evo['method'] == 'trade' and getattr(mon, 'held_item', 0) == data.items[name]:
