@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+import pytest
+
 from pokesim.policies.navigation import DIRS, Navigator
 from pokesim.policies.strategic import StrategicPolicy
 from pokesim.strategy_data import MAPS, WORLD
@@ -119,6 +121,29 @@ def test_open_upper_switch_continues_to_western_ladder_for_southern_expedition()
     policy.collection.pick = lambda *args: (goal, None, None)
     policy.pickups.pick = lambda *args: None
     policy._overworld(s, fake_mem({}))
+    assert policy.nav._open_navigation.path[-1][2] == (MAPS['VICTORY_ROAD_2F'], 1, 1)
+
+
+@pytest.mark.parametrize('key', ['collect_static', 'buy_tm'])
+def test_a_trip_south_from_the_plateau_takes_the_western_ladder_whatever_its_goal(key):
+    # A Blue run with every switch set came back down from the Plateau to buy a TM in Celadon.
+    # The purchase trip dropped through the hole instead and found no way on from the second floor.
+    from pokesim.policies.progression import Goal
+    from pokesim.tm_shop import COUNTER
+    from test_screen import fake_mem
+    from test_travel import trainer, prepare_navigation
+    s = trainer(map=MAPS['VICTORY_ROAD_3F'], x=27, y=7,
+                event_flags=flags('EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1', 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2',
+                                  'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1', 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2'))
+    policy = StrategicPolicy(0)
+    prepare_navigation(policy, s)
+    goal = Goal(key, 'Head south', '', (COUNTER,))
+    # The pick runs after the Champion falls, so the goal it is handed is the plan placeholder.
+    policy.goal = Goal('collect_plan', 'Plan', 'Plan')
+    policy.collection.pick = lambda *args: (goal, None, None)
+    policy.pickups.pick = lambda *args: None
+    policy._overworld(s, fake_mem({}))
+    assert policy.goal.key == key
     assert policy.nav._open_navigation.path[-1][2] == (MAPS['VICTORY_ROAD_2F'], 1, 1)
 
 
