@@ -1,4 +1,5 @@
 """tools/deploy_host.sh refuses a commit that would drop the deployed one or downgrade the live data."""
+import hashlib
 import os
 import subprocess
 import time
@@ -184,3 +185,79 @@ def test_an_unknown_deployed_commit_is_refused(tmp_path, repo):
     result = deploy(tmp_path, repo, 'f' * 40, 1, shas['main'])
     assert result.returncode == 1
     assert 'which this clone does not have' in result.stderr
+
+
+def deploy_to_host(tmp_path, repo, shas, **faults):
+    """Deploys the main commit past every gate to a host folder here. The fake ssh runs the host step in
+    this shell, and the fake docker logs each call, writes the backup archive and fails what ``faults``
+    names: FAIL_BACKUP for the archive, FAIL_UP for every start."""
+    import json
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir(exist_ok=True)
+    calls = tmp_path / 'calls'
+    (bin_dir / 'ssh').write_text(
+        '#!/bin/sh\necho "ssh $*" >> "$CALLS"\nwhile [ "$1" = -o ]; do shift 2; done\nshift\n'
+        f'case $# in\n  1) cat >/dev/null ;;\n  4) cat >/dev/null; printf "%s\\n%s\\n" {shas["base"]} 1 ;;\n'
+        '  *) exec "$@" ;;\nesac\n')
+    (bin_dir / 'gh').write_text('#!/bin/sh\necho success\n')
+    (bin_dir / 'docker').write_text(
+        '#!/bin/sh\necho "docker $*" >> "$CALLS"\n'
+        'case "$1 $2" in\n  "image inspect") echo sha256:built; exit 0 ;;\n'
+        '  "compose up") [ -z "${FAIL_UP:-}" ]; exit ;;\nesac\n'
+        'if [ "$1" = run ] && echo " $* " | grep -q " alpine tar "; then\n'
+        '  [ -z "${FAIL_BACKUP:-}" ] || exit 1\n  while [ "$1" != czf ]; do shift; done\n'
+        '  echo data | gzip > "$2"\nfi\nexit 0\n')
+    for tool in ('ssh', 'gh', 'docker'):
+        (bin_dir / tool).chmod(0o755)
+    host = tmp_path / 'host'
+    (host / 'backups').mkdir(parents=True)
+    (host / 'compose.yaml').write_text('services: {}\n')
+    (host / '.env').write_text('POKESIM_IMAGE=pokesim:old\n')
+    sha = shas['main']
+    reports = tmp_path / 'reports'
+    trial = passing_trial(sha, compose_sha256=hashlib.sha256(b'services: {}\n').hexdigest())
+    for kind, body in (('smoke', {'commit': sha, 'passed': True}), ('image-trial', trial)):
+        (reports / kind).mkdir(parents=True)
+        (reports / kind / f'{sha}.json').write_text(json.dumps(body))
+    env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}', 'DEPLOY_HOST': 'host',
+           'DEPLOY_DIR': str(host), 'LIVE_SOAK_REPORTS': str(reports), 'MIN_FREE_GB': '0', 'CALLS': str(calls),
+           **{name: '1' for name, on in faults.items() if on}}
+    result = subprocess.run(['sh', str(SCRIPT), sha], cwd=repo, env=env, capture_output=True, text=True)
+    return result, host, calls.read_text().splitlines()
+
+
+def test_a_clean_deploy_switches_the_image_and_logs_it(tmp_path, repo):
+    repo, shas = repo
+    result, host, calls = deploy_to_host(tmp_path, repo, shas)
+    assert result.returncode == 0, result.stderr
+    assert f'POKESIM_IMAGE=pokesim:0.7.0.dev0-local-{shas["main"][:7]}' in (host / '.env').read_text()
+    assert 'deployed, backup backups/pre-local-' in (host / 'deploy.log').read_text()
+    assert not (host / 'deploy.lock').exists()
+
+
+def test_a_failed_backup_starts_the_old_image_again(tmp_path, repo):
+    repo, shas = repo
+    result, host, calls = deploy_to_host(tmp_path, repo, shas, FAIL_BACKUP=True)
+    assert result.returncode == 1
+    stop = calls.index('docker compose stop -t 120')
+    assert 'docker compose up -d --wait' in calls[stop:], 'the app was left stopped'
+    assert (host / '.env').read_text() == 'POKESIM_IMAGE=pokesim:old\n'
+    assert 'was not written, pokesim:old runs again' in (host / 'deploy.log').read_text()
+
+
+def test_a_failed_restart_says_the_app_is_down(tmp_path, repo):
+    repo, shas = repo
+    result, host, calls = deploy_to_host(tmp_path, repo, shas, FAIL_UP=True)
+    assert result.returncode == 1
+    log = (host / 'deploy.log').read_text()
+    assert 'pokesim:old did not come back up, the app is down' in log
+    assert 'runs again' not in log and 'rolled back' not in log
+    assert (host / '.env').read_text() == 'POKESIM_IMAGE=pokesim:old\n'
+
+
+def test_every_ssh_call_fails_rather_than_asks_for_a_password(tmp_path, repo):
+    repo, shas = repo
+    result, host, calls = deploy_to_host(tmp_path, repo, shas)
+    ssh = [call for call in calls if call.startswith('ssh ')]
+    assert len(ssh) == 3
+    assert all(call.startswith('ssh -o BatchMode=yes ') for call in ssh), ssh
