@@ -124,6 +124,8 @@ DOMAINS = (
     Domain('pc_deadlock_logged', 'pokesim.pcvalue', SURVIVES),
     Domain('boss_losses', 'pokesim.planning.losses', SURVIVES, policy_reads=True),
     Domain('boss_aces', 'pokesim.planning.losses', SURVIVES, policy_reads=True),
+    # A new game has had no wipe, and a reload keeps the one that lost.
+    Domain('league_wipe', 'pokesim.planning.losses', RESETS_ON_RESTART, GEN1, policy_reads=True),
     Domain('fair-wild-dvs-v1', 'pokesim.fair_dvs', SURVIVES),
     # The seed every bot choice is drawn from. A restart draws a new one for the new game.
     Domain('adventure-seed-v1', 'pokesim.seeds', RESETS_ON_RESTART, policy_reads=True),

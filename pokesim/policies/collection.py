@@ -29,7 +29,7 @@ from ..planning.conditions import Can, Count, Item, Requirements, feasible
 from ..planning.ledger import MONEY, Need
 from ..planning.monitor import CONTINUE, ProgressEvent
 from ..planning.goals import Abandon, GoalRun
-from . import kinds, training, marathon, league_rotation
+from . import kinds, training, marathon, league_rotation, league_wipe
 from .. import progress_events
 from ..shiny import is_shiny
 from ..milestones import is_perfect, level_credit
@@ -183,7 +183,8 @@ def candidate(project, travel, tails, short, owned, wild=None):
     """
     method, sid = project['method'], project.get('species')
     tier = Tier.PROGRESS
-    if method == 'rematch':
+    if method == 'rematch' or method == 'train' and project.get('league_bar'):
+        # Training toward the room that wiped the team holds the place of the rematch it waits for.
         tier = Tier.UPKEEP if short else Tier.FILLER
         value = values.rematch(short)
     elif method == 'marathon':
@@ -398,6 +399,7 @@ DEFERRED = decide.Failure(decide.NOT_NOW, 'it waits for a new move, party member
 SEARCHED = decide.Failure(decide.NOT_NOW, 'its searches for a better copy are spent')
 NEEDED_SEARCHED = decide.Failure(decide.NOT_NOW, 'its searches for a copy another adventure needs are spent')
 TRAINS_FIRST = decide.Failure(decide.NOT_NOW, 'a Pokémon in the party trains first')
+LEAGUE_WAITS = decide.Failure(decide.NOT_NOW, 'the team grows toward the room that wiped it first')
 
 
 def needs(found):
@@ -566,6 +568,8 @@ class Collection:
         self.eevee_choice = 134
         self.dojo_choice = 106
         self.trade_preferences = lambda: {}
+        # The last postgame League wipe's record, which strategic.py reads from the losses.
+        self.league_wipe = lambda: None
         self.history = []
         self.completed_champion = False
         self.league_appearances = {}
@@ -1464,13 +1468,21 @@ class Collection:
         for mon in individuals:
             if exchange or mon['box'] is None:
                 reachable_best[mon['species']] = max(reachable_best.get(mon['species'], -1), potential_power(mon) or -1)
+        # While a League wipe holds the rematch, a party member under the room's bar trains toward it,
+        # in the rematch's place, whatever the Pokédex would make it wait for. The rematch waits only while
+        # such a train is on offer, so a team with no way to grow is never held out of the League.
+        wipe = self.league_wipe()
+        bar = wipe['bar'] if self.completed_champion and league_wipe.closed(wipe, s.party) else None
+        grows = False
         for mon in individuals:
             sid, level, box = mon['species'], mon['level'], mon.get('box')
             family = training_family(sid)
             key = identity(mon)
+            # The party copy is the one that meets the League, so it trains even when a stored copy is better.
+            league = bar is not None and box is None and level < bar
             if counts[sid] <= self.demand().get(dex(sid), 0):
                 continue
-            if (potential_power(mon) or -1) < reachable_best.get(sid, -1):
+            if not league and (potential_power(mon) or -1) < reachable_best.get(sid, -1):
                 continue
             if level >= 100 or preferences.get(key, {}).get('state') == 'offered':
                 continue
@@ -1481,6 +1493,15 @@ class Collection:
             if box is not None and not partner_exchange_possible(s):
                 continue
             if not can_train(mon):
+                continue
+            if league:
+                offered = len(candidates)
+                add({**reference, 'method': 'train', 'parent': sid, 'family': family,
+                     'trainee_key': key, 'box': box, 'initial_level': level,
+                     'target_level': min(bar, level - level % 10 + 10), 'league_bar': bar,
+                     'investment_priority': 0, 'investment_reason': 'The League room that wiped the team',
+                     'perfect_partner': is_perfect(mon), 'mastery_needed': False})
+                grows = grows or len(candidates) > offered
                 continue
             # Prefer missing evolutions before a general level milestone for this partner. A stone
             # counts too: a Weepinbell was being trained to level 100 with Victreebel unregistered.
@@ -1504,7 +1525,10 @@ class Collection:
             add(marathon.candidate())
         from .ledger import funds_short
         short = funds_short(s)
-        add({'method':'rematch','hof_count':s.hall_of_fame_count})
+        if not grows:
+            add({'method':'rematch','hof_count':s.hall_of_fame_count})
+        else:
+            skip({'method':'rematch','hof_count':s.hall_of_fame_count}, LEAGUE_WAITS)
         porygon = next(sid for sid,mon in SPECIES.items() if mon['dex']==137)
         if 137 not in s.owned and (s.money >= 20000 or s.coins >= PORYGON_COINS.get(self.version, 9999)):
             add({'method':'prize','species':porygon,'map':MAPS['GAME_CORNER_PRIZE_ROOM']})

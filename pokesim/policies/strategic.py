@@ -18,8 +18,10 @@ from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
 from .move_development import hm_upgrade, move_name
-from .progression import (BOSS_TABLE, FLASH, GAME_STARTERS, STARTERS, YELLOW, Goal, bicycle_goal, boss_training,
-                          flash_learner, fly_goal, fly_learner, healing_goal, journey, milestones, power, story_goal)
+from .progression import (BOSS_TABLE, FLASH, GAME_STARTERS, LEAGUE_ROOMS, STARTERS, YELLOW, Goal, bicycle_goal,
+                          boss_training, flash_learner, fly_goal, fly_learner, healing_goal, journey, milestones, power,
+                          story_goal)
+from . import league_wipe
 from ..planning.losses import Losses, ace_slot
 from . import flight
 from . import training
@@ -210,6 +212,9 @@ class StrategicPolicy(Policy):
         # The best fighter level that lost to each boss. Store.attach keeps it in the adventure's store.
         self.losses = Losses()
         self.collection.trade_preferences = lambda: self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
+        self.collection.league_wipe = lambda: self.losses.wipe()
+        # The highest foe level met in each League room, the bar a wipe there sets (league_wipe.py).
+        self.league_met = {}
         # Always the adventure-choices stream, so a run with no seed still replays the same choices.
         choices = random.Random(f'{seed}:adventure-choices')
         self.fossil = choices.choice(('HELIX_FOSSIL', 'DOME_FOSSIL'))
@@ -514,9 +519,13 @@ class StrategicPolicy(Policy):
                                                  and not needs_healing(s.party)
                                                  and (bool(s.in_battle) or kind == 'overworld' and pos in self.goal.targets)))
         self.pickups.observe(s, self.clock)
+        if s.in_battle and s.map in LEAGUE_ROOMS:
+            self.league_met[s.map] = max(self.league_met.get(s.map, 0), s.enemy_level)
         if s.in_battle and s.party and not any(p.hp for p in s.party):
             self.note_boss_loss(s)
         if self.collection.completed_champion and s.map == MAPS['HALL_OF_FAME']:
+            # A win clears the last wipe, so the next rematch waits on nothing.
+            self.losses.note_wipe(None)
             # The game forces the ceremony, so it is the only offer.
             ceremony = Goal('collect_ceremony','Celebrate the Champion victory','Finish the ceremony and continue the saved adventure')
             self.goal = Ballot(ceremony, goal_candidate(ceremony, self.collection, 'ceremony'), site='ceremony').goal
@@ -929,6 +938,15 @@ class StrategicPolicy(Policy):
         if s.map == MAPS['OAKS_LAB']:
             return
         league.note_loss(BOSS_TABLE, self.losses, getattr(self.goal, 'key', None), s.map, s, power)
+        if self.collection.completed_champion and s.map in LEAGUE_ROOMS:
+            # A postgame wipe holds the League until the team changes (league_wipe.py), so the rematch
+            # under way ends here rather than walking back in as it lost. The hold is the wipe's alone,
+            # so the rematch takes no stand-down of its own.
+            bar = max(self.league_met.get(s.map, 0), s.enemy_level)
+            self.losses.note_wipe(league_wipe.record(s.party, s.map, bar, s.enemy_species))
+            project = self.collection.project
+            if project and project['method'] == 'rematch':
+                self.collection.abandon('The League wiped the team, which grows before it goes back', stand_down=False)
 
     def _boss_check(self, s, goal, in_league):
         """The boss check before ``goal`` (planning/league.check), shared with Gold, Silver and Crystal."""

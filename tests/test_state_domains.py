@@ -421,7 +421,7 @@ def test_the_lives_are_what_each_restart_does():
             'supervisor-best-v1', 'supervisor-monitor-v1'}
     assert keys(domains.RESETS_ON_RESTART, 1) == both | {
         'shiny-statistics-v1', 'league-partners-v2', 'league-partners-v1', 'mew-returns-v1', 'pokesim-mew-v1',
-        'playtime-milestones-v1'}
+        'playtime-milestones-v1', 'league_wipe'}
     assert keys(domains.RESETS_ON_RESTART, 2) == both | {
         'gen2-shiny-statistics-v1', 'gen2-mythical-gift-v1', 'gen2-gs-ball-distribution-v1',
         'gen2-league-partners-v1', 'gen2-mew-returns-v1', 'gen2-clock-v1'}

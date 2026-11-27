@@ -17,6 +17,8 @@ from __future__ import annotations
 
 KEY = 'boss_losses'
 ACES = 'boss_aces'
+# The last postgame League wipe in Red, Blue and Yellow (policies/league_wipe.py), until a win.
+WIPE = 'league_wipe'
 # Goal keys an older version kept losses under, by the key that names the same boss now. Red, Blue
 # and Yellow trained for Brock under 'train_brock' before every gym trained under 'train_' and its key.
 RENAMED = {'train_brock': 'train_boulder'}
@@ -89,6 +91,15 @@ class Losses:
     def aces(self):
         """The best foe level seen in a loss to each boss with no ace of its own in a table."""
         return self._read(ACES)
+
+    def wipe(self):
+        """The last postgame League wipe's record, or None since a win."""
+        return (self.memory.get(WIPE) if self.store is None else self.store.get(WIPE)) or None
+
+    def note_wipe(self, record):
+        """Keep ``record`` as the last wipe, or None after a win, writing only a change."""
+        if record != self.wipe():
+            self._write(WIPE, record)
 
     def note(self, key, level, ace=None):
         aces = self.aces()
