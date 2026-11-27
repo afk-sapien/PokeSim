@@ -50,6 +50,37 @@ def test_an_old_owner_cannot_take_the_adventure_back_by_transfer(quiet, people, 
     assert manager.registry.adventure(green)['owner_id'] == people.bob['id']
 
 
+class First:
+    """`offers.guard`, running `change` before the first enter, as a transfer that holds the guard
+    while a request waits on it would."""
+
+    def __init__(self, guard, change):
+        self.guard, self.change = guard, change
+
+    def __enter__(self):
+        change, self.change = self.change, None
+        if change is not None:
+            change()
+        return self.guard.__enter__()
+
+    def __exit__(self, *error):
+        return self.guard.__exit__(*error)
+
+
+def test_an_old_owner_cannot_remove_a_grant_once_the_adventure_moved(quiet, people, monkeypatch):  # noqa: F811
+    manager = quiet.manager
+    admin = manager.actor_for(people.admin)
+    carol = quiet.user('carol')
+    manager.auth.grant(people.red, carol['id'], 'player', people.alice['id'])
+    alice = quiet.login('alice')
+    monkeypatch.setattr(manager.offers, 'guard', First(manager.offers.guard, lambda: ownership.transfer(
+        manager, people.red, people.bob['id'], admin)))
+    removed = alice.delete(f"/api/v1/adventures/{people.red}/grants/{carol['id']}")
+    assert removed.status_code == 403, removed.text
+    assert manager.registry.adventure(people.red)['owner_id'] == people.bob['id']
+    assert manager.auth.grants_for(carol['id']).get(people.red) == 'player'
+
+
 def test_a_demoted_admin_cannot_promote_themselves_back(quiet, people, meanwhile):  # noqa: F811
     manager = quiet.manager
     carol = quiet.user('carol', 'admin')

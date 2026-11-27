@@ -30,6 +30,7 @@ CARTRIDGES = (
 
 
 # The shelf in Settings has one slot per game PokeSim plays or is about to play, in this order.
+CARTRIDGE_LIMIT = 2 * 1024 * 1024    # The largest Gen I and Gen II cartridge.
 SLOTS = ('red', 'blue', 'yellow', 'gold', 'silver', 'crystal')
 SLOT_TITLES = {version: f'Pokémon {version.capitalize()}' for version in SLOTS}
 SLOT_GENERATIONS = {'red': 1, 'blue': 1, 'yellow': 1, 'gold': 2, 'silver': 2, 'crystal': 2}
@@ -86,9 +87,14 @@ def unpack(raw):
             with zipfile.ZipFile(io.BytesIO(raw)) as archive:
                 entries = [entry for entry in archive.infolist() if not entry.is_dir()
                            and PurePosixPath(entry.filename).suffix.lower() in {'.gb', '.gbc'}]
-                if len(entries) != 1 or entries[0].file_size > 2 * 1024 * 1024:
+                if len(entries) != 1 or entries[0].file_size > CARTRIDGE_LIMIT:
                     raise ValueError('Choose a ZIP containing exactly one supported cartridge')
-                raw = archive.read(entries[0])
+                # `read()` would inflate the whole entry before it checks the size the header
+                # claims, so a small forged upload could fill memory. A bounded read stops there.
+                with archive.open(entries[0]) as entry:
+                    raw = entry.read(CARTRIDGE_LIMIT + 1)
+                if len(raw) > CARTRIDGE_LIMIT:
+                    raise ValueError('Choose a ZIP containing exactly one supported cartridge')
         except (zipfile.BadZipFile, RuntimeError, NotImplementedError) as error:
             raise ValueError('Choose an intact, unencrypted ROM ZIP') from error
     if identify(raw) is None:

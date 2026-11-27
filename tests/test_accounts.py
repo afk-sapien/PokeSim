@@ -783,6 +783,24 @@ def test_proxy_headers_count_only_from_the_trusted_proxy_with_its_secret():
         ProxyAuth('Remote-User', 'short', '198.51.100.5/32', gateways=set())
 
 
+def test_a_proxy_user_the_proxy_stops_naming_is_signed_out_despite_the_cookie(library):
+    """The session cookie a proxy login gets only holds its CSRF token. It used to sign the user in
+    on its own, so an admin the proxy dropped from every group stayed an admin for 14 days."""
+    manager = library.manager
+    manager.proxy = ProxyAuth('Remote-User', 's' * 20, '198.51.100.5/32', groups_header='Remote-Groups',
+                              default_role='', member_group='pokesim', gateways=set())
+    sent = {'Remote-User': 'carol', 'Remote-Groups': 'pokesim-admins', ProxyAuth.SECRET_HEADER: 's' * 20}
+    browser = TestClient(library.app, client=('198.51.100.5', 50000), headers=sent)
+    assert browser.get('/api/v1/session').json()['role'] == 'admin'
+    assert browser.cookies.get(manager_module.SESSION_COOKIE)
+    assert browser.get('/api/v1/users').status_code == 200
+    browser.headers['Remote-Groups'] = 'friends'
+    assert browser.get('/api/v1/session').json()['authenticated'] is False
+    assert browser.get('/api/v1/users').status_code in {401, 403}
+    del browser.headers['Remote-User']
+    assert browser.get('/api/v1/users').status_code in {401, 403}
+
+
 class Provider:
     """A tiny OpenID provider: discovery, keys, and a token endpoint that signs what it is told."""
 

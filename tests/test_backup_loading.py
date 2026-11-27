@@ -62,6 +62,17 @@ def test_load_backup_copy_preserves_source_and_settings_and_retries(saved_librar
     assert listed['size_bytes'] == Path(backup['path']).stat().st_size
 
 
+def test_a_backup_that_fails_mid_write_leaves_no_partial_archive(saved_library, monkeypatch):
+    manager = saved_library[0]
+
+    def full_disk(*_, **__):
+        raise OSError(28, 'No space left on device')
+    monkeypatch.setattr(zipfile.ZipFile, 'write', full_disk)
+    with pytest.raises(OSError, match='No space left'):
+        create_backup(manager)
+    assert not list((manager.root / 'backups').glob('*.pending'))
+
+
 def test_upload_backup_and_reject_invalid_archives_without_artifacts(saved_library):
     manager, client, headers, original, backup = saved_library
     data = Path(backup['path']).read_bytes()

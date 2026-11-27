@@ -1251,6 +1251,16 @@ def test_manual_trade_ignores_offers_locks_and_last_copies(setup):
     assert not c.manual_waiting()
 
 
+def test_a_queued_trade_that_leaves_the_queue_mid_read_still_reports(setup, monkeypatch):
+    """The status read the queue twice, so a trade that started in between raised ValueError."""
+    c = setup.coordinator
+    entry = c.enqueue_manual(manual_request(setup))
+    read = c._manual_entries
+    reads = iter([read(), [{**item, 'state': 'starting'} for item in read()]])
+    monkeypatch.setattr(c, '_manual_entries', lambda: next(reads, None) or read())
+    assert c.manual_status(entry['id'])['position'] == 1
+
+
 def test_manual_trade_is_idempotent_and_rejects_hard_limits_with_a_reason(setup):
     c = setup.coordinator
     data = manual_request(setup)

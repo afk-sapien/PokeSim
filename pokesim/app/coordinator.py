@@ -1617,21 +1617,24 @@ class Coordinator:
         return last
 
     def manual_status(self, mid):
-        entry = next((entry for entry in self._manual_entries() if entry['id'] == mid), None)
+        entries = self._manual_entries()
+        entry = next((entry for entry in entries if entry['id'] == mid), None)
         if entry is None:
             raise NotFound('Manual trade not found')
-        return self._manual_public(entry)
+        return self._manual_public(entry, entries)
 
     def manual_statuses(self):
-        return {'trades': [self._manual_public(entry) for entry in reversed(self._manual_entries())]}
+        entries = self._manual_entries()
+        return {'trades': [self._manual_public(entry, entries) for entry in reversed(entries)]}
 
-    def _manual_public(self, entry):
+    def _manual_public(self, entry, entries):
+        """`entries` is the queue `entry` was read from. A second read could already miss it."""
         result = {key: entry[key] for key in ('id', 'left_id', 'right_id', 'left_key', 'right_key',
                                               'state', 'error', 'created_at', 'updated_at')}
         result.update(position=None, phase=None, decision=None, failure_reason=None, display=None,
                       preparation={}, cancellable=False)
         if entry['state'] == 'queued':
-            waiting = [item['id'] for item in self._manual_entries() if item['state'] == 'queued']
+            waiting = [item['id'] for item in entries if item['state'] == 'queued']
             result.update(position=waiting.index(entry['id']) + 1, cancellable=True)
         elif entry['state'] == 'starting':
             result.update(phase='checking', cancellable=not entry.get('cancel_requested'))
