@@ -289,7 +289,8 @@ def test_catalog_describes_every_command_with_matching_arguments():
     described = {command['name']: command for command in describe()}
     json.dumps(described)
     commands = [name for name in shortcuts.__all__ if name.islower() and name not in (
-        'continue_ready', 'current_screen', 'describe', 'drive', 'item_kind', 'item_names', 'list_box', 'list_items',
+        'continue_ready', 'current_screen', 'describe', 'drive', 'input_wait', 'item_kind', 'item_names', 'list_box',
+        'list_items',
         'list_moves', 'list_party', 'move_names', 'result_schema', 'run', 'tm_number')]
     assert sorted(commands) == sorted(described)
     legacy = {'item_id', 'party_slot'}
