@@ -99,6 +99,19 @@ def test_a_red_run_keeps_its_own_store_and_removes_it_when_it_stops():
     assert not folder.exists()
 
 
+def test_a_crystal_run_keeps_its_own_store_and_removes_it_when_it_stops():
+    run, read = headless(2, cartridge(2))
+    folder = Path(run.store_dir.name)
+    try:
+        while run.frame < 2000:
+            run.step(read())
+        assert run.steps.store is run.store
+        assert 'legendary_recovery' in run.manifest()
+    finally:
+        run.stop()
+    assert not folder.exists()
+
+
 def test_a_red_run_starts_with_the_rows_its_save_carries_and_keeps_its_own_on_a_reload(tmp_path):
     from pokesim.legendary_returns import STEPS
     from pokesim.state import claims

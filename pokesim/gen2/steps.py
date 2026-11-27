@@ -10,8 +10,9 @@ RETURNS = 'gen2-mew-returns-v1'
 
 
 class StepTracker:
-    def __init__(self, store, data):
-        self.store, self.data = store, data
+    def __init__(self, store, data, clock=time.monotonic):
+        """``clock`` gives the seconds the writes are spaced by. A headless run counts them on its frames."""
+        self.store, self.data, self.clock = store, data, clock
         self.value = store.get(STEPS) or {'total': 0, 'started_at': time.time(), 'available': True}
         self.last_flush = 0
 
@@ -23,7 +24,7 @@ class StepTracker:
             self.value['total'] += 1
 
     def flush(self, *, force=False):
-        now = time.monotonic()
+        now = self.clock()
         if force or now - self.last_flush >= 30:
             self.store.set(STEPS, self.value)
             self.last_flush = now

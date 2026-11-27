@@ -1,5 +1,6 @@
 """Gold, Silver and Crystal's part of a run (runtime/adapter.py): the clock, the League count, the Mart
-stock, the options byte and the recovery a headless run starts when the screen stops changing."""
+stock, the options byte, the recovery a headless run starts when the screen stops changing and the run's
+own store."""
 from __future__ import annotations
 
 from .. import config
@@ -51,29 +52,34 @@ class Gen2Adapter:
 
         from ..randomized import rom_stream
         from ..runtime import trace as trace_module
+        from . import store_observe
         from .store_stock import StoreStock
         run.game = self.game
         run.data = self.data = cartridge_game_data(rom, self.game, self.data_root)
         # A randomized run (RANDOMIZER set) plays the patched cartridge, as the managed worker does.
         run.pb = boot(rom_stream(rom), sound=False)
-        # Before the Mart stock registers its hooks, so the trace knows them.
+        # Before the step count and the Mart stock register their hooks, so the trace knows them.
         run.tracer = trace_module.for_run(trace, 2, run.pb, run.seed)
         run.pb.set_emulation_speed(0)
         follow_game_time(run.pb)
-        StoreStock(self.data, champion=lambda: self.champion_catalogue(run)).attach(run.pb)
+        self._open_store(run)
+        # The clerk lists the planned Champion counter item, as the runtime adds it. Without it every
+        # visit ended "This mart does not sell that item" and stood down.
+        run.store_stock = StoreStock(self.data, champion=lambda: store_observe.catalogue(run))
+        run.store_stock.attach(run.pb)
         run.history = new_history()
         run.clock = None
 
-    def champion_catalogue(self, run):
-        """The planned Champion shop item for the clerk who opens the BUY list, as the runtime adds it.
-
-        Without it a replay's clerk never listed the planned TM or supply, so every Champion shop
-        visit ended "This mart does not sell that item" and stood down. Capped offers need the
-        adventure store, so only the ones the policy already holds are offered.
-        """
-        from . import champion_shop
-        plan = run.policy.collection.get(champion_shop.PLAN)
-        return champion_shop.catalogue(self.data, plan, run.policy.shop_offers)
+    def _open_store(self, run):
+        """A store of the run's own, for the walked steps, the returns and the Champion counter's offers
+        the application keeps in its adventure's (store_observe.py). The policy is not attached to it, so
+        losses, trades and League marks stay as a run without an adventure keeps them."""
+        from .legendary import Recovery
+        from .steps import StepTracker
+        run.open_store()
+        run.steps = StepTracker(run.store, self.data, clock=lambda: run.frame / 60)
+        run.steps.attach(run.pb)
+        run.legendary_recovery = Recovery()
 
     def new_policy(self, run, seed):
         from .policy import Policy
@@ -88,8 +94,16 @@ class Gen2Adapter:
     def read(self, run):
         from pokecore.gen2.ram import read_snapshot
 
+        from . import store_observe
         from .emulator import count_league
-        return count_league(run.history, self.data, read_snapshot(run.pb.memory, self.data, run.frame), observe=True)
+        snapshot = count_league(run.history, self.data, read_snapshot(run.pb.memory, self.data, run.frame), observe=True)
+        if snapshot.valid and snapshot.started:
+            # Before the decision, as the application observes before its next one. The run's frames
+            # stand in for the PlayClock, as for the goals' stand-downs.
+            store_observe.shop(run, snapshot)
+            if store_observe.observe(run, snapshot, run.frame)[1]:
+                snapshot = count_league(run.history, self.data, read_snapshot(run.pb.memory, self.data, run.frame))
+        return snapshot
 
     def options(self, pb):
         write_options(pb, self.data)
@@ -108,6 +122,9 @@ class Gen2Adapter:
 
     def after_load(self, run, metadata, first):
         from pokecore.gen2.clock import follow_game_time
+
+        from .legendary import Recovery
+        run.legendary_recovery = Recovery.loaded(metadata, run.frame)
         # Gen II reads a clock earlier than its saved time as a reset, so a load resumes at the
         # furthest reading, as the runtime does.
         readings = [value for value in (metadata.get('rtc_elapsed'), run.clock) if isinstance(value, (int, float))]
@@ -120,7 +137,7 @@ class Gen2Adapter:
             run.policy.menu = None
 
     def manifest_fields(self, run):
-        return {'generation': 2, 'pb': run.pb, 'history': run.history}
+        return {'generation': 2, 'pb': run.pb, 'history': run.history, 'legendary_recovery': run.legendary_recovery}
 
     def before_save(self, pb):
         # The clock is rebased on the host clock, as the runtime does, so a copy opened with an unlocked

@@ -6,8 +6,9 @@ them writes replays in the others and in the application. The cartridge picks it
 
 A Gen II run keeps the parts of the runtime that decide where the run goes: the clock locked to game
 time, the League count past the cartridge's cap, the Mart stock and the recovery the guards start when
-the screen stops changing. Rewards, statistics, trades and notifications stay out, since they need an
-adventure store.
+the screen stops changing. Like a Red, Blue or Yellow run, it also keeps the walked steps, the returns,
+the Champion counter's offers and the legendary retries in a store of its own (``open_store``).
+Rewards, statistics, trades and notifications stay out.
 """
 from __future__ import annotations
 
@@ -94,6 +95,16 @@ class HeadlessRun(runtime_trace.HeadlessPins):
         # generator picks the idle, and otherwise the reload stream does, so a rerun idles the same.
         self.tick(1 + self.rng.randrange(RELOAD_IDLE) if self.rng else reload_idle(self.seed, frame))
 
+    def open_store(self):
+        """A store of the run's own, in a folder ``stop`` removes. Its claims count on the run's frames,
+        as an adventure's on its PlayClock."""
+        import tempfile
+
+        from ..store import Store
+        self.store_dir = tempfile.TemporaryDirectory(prefix='pokesim-run-')
+        self.store = Store(Path(self.store_dir.name))
+        self.store.clock = lambda: self.frame
+
     def manifest(self):
         """The manifest a checkpoint of this moment carries."""
         return checkpoint_manifest(self.policy, rom_sha1=self.rom_sha1, frame=self.frame,
@@ -135,7 +146,6 @@ class HeadlessRun(runtime_trace.HeadlessPins):
         if self.tracer is not None:
             self.tracer.close()
         self.pb.stop(save=False)
-        # A Red, Blue or Yellow run's own store (adapter.py).
         if getattr(self, 'store_dir', None) is not None:
             self.store.close()
             self.store_dir.cleanup()

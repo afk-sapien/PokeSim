@@ -179,7 +179,7 @@ def test_exhausted_capture_returns_run_instead_of_fight_menu_loop(condition):
 
 
 def test_a_headless_load_counts_an_application_wait_on_the_run_frames():
-    from pokesim.adapter import recovery
+    recovery = LegendaryRecovery.loaded
     # The application counted Mewtwo's wait on its PlayClock and saved with 30000 frames of it left.
     saved = {'pending': {'150': 50000}, 'attempts': {'150': 1}, 'clock': LegendaryRecovery.CLOCK}
     assert recovery({'legendary_recovery': saved, 'play_clock': {'frames': 20000}}, 7).pending == {'150': 30007}
