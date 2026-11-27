@@ -73,7 +73,7 @@ class Child:
         self.process = None
         self.usage = None
         self.url = None
-        # One client per worker, set with the url. Building one took about 9 ms, and the monitor alone
+        # One client per worker, set with the url. Building one took about 5 ms, and the monitor alone
         # sends a few requests to each worker every few seconds.
         self.client = None
         self.logs = deque(maxlen=100)
@@ -177,13 +177,16 @@ class Child:
     def stop(self, timeout=50):
         if self.process is None:
             return
-        if self.process.poll() is None:
-            if self.url:
-                try:
-                    self.request('POST', '/internal/shutdown', {}, timeout=2)
-                except (OSError, RuntimeError, httpx.HTTPError):
-                    pass
-                self.client.close()
+        running = self.process.poll() is None
+        if running and self.url:
+            try:
+                self.request('POST', '/internal/shutdown', {}, timeout=2)
+            except (OSError, RuntimeError, httpx.HTTPError):
+                pass
+        if self.client is not None:
+            # A worker that exited by itself has its connections closed here too.
+            self.client.close()
+        if running:
             if self.process.stdin:
                 try:
                     self.process.stdin.close()
