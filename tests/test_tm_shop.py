@@ -436,6 +436,83 @@ def test_reset_keeps_verified_cartridge_capability_but_discards_shopping_plan(sh
     assert policy.tm_plan is None
 
 
+def test_a_ground_tm_is_fetched_where_a_purchase_is_made_when_its_move_clears_the_teach_bar():
+    from pokesim.planning import values
+    from pokesim.planning.arbiter import Tier
+    from pokesim.strategy_data import DATA
+    starmie = live(partner(moves=[57, 105, 33, 0]))
+    moves, compatible = {214: 59}, {starmie.species: {214}}
+    # The Pokémon Mansion's Blizzard ball, still on the ground. The counter sells TM14 too, and the purse
+    # covers it.
+    place = (MAPS['POKEMON_MANSION_B1F'], 4, 'TEXT_POKEMONMANSIONB1F_TM_BLIZZARD')
+    ball = DATA['toggle_objects'].index(list(place[:2]))
+    s = shopper(party=(starmie,), hidden_objects=bytes(32))
+    assert tm_shop.choose(s, moves, compatible, owned=False)['item'] == 214
+    plan = tm_shop.ground(s, moves, compatible)
+    upgrade = tm_shop.projected_upgrade(starmie, 214, moves, compatible)
+    assert plan == {'item': 214, 'target': 0, 'signature': tm_shop.signature(starmie),
+                    'before': upgrade['before'], 'after': upgrade['after'], 'ground': place}
+    # It is free, so an empty purse still fetches it.
+    broke = replace(s, money=0)
+    assert tm_shop.ground(broke, moves, compatible) == plan and tm_shop.valid_plan(broke, plan, moves, compatible)
+    hidden = bytearray(32)
+    hidden[ball // 8] |= 1 << (ball % 8)
+    gone = replace(s, hidden_objects=bytes(hidden))
+    held = replace(gone, items=((214, 1),))
+    # Picked up, it is in the bag and the teach takes it from there. A ball gone some other way ends it.
+    assert tm_shop.ground(gone, moves, compatible) is None and tm_shop.ground(held, moves, compatible) is None
+    assert tm_shop.valid_plan(held, plan, moves, compatible) and not tm_shop.valid_plan(gone, plan, moves, compatible)
+    # No fetch for a partner that cannot learn it, a move under the bar, a full bag, a TM standing down, or a
+    # run with no TM tables.
+    assert tm_shop.ground(s, moves, {}) is None
+    assert tm_shop.ground(replace(s, party=(live(partner(moves=[57, 105, 59, 0])),)), moves, compatible) is None
+    full = replace(s, items=tuple((item, 1) for item in range(1, tm_shop.PURCHASE_BAG_LIMIT + 1)))
+    assert tm_shop.ground(full, moves, compatible) is None
+    assert tm_shop.ground(s, moves, compatible, skip={214}) is None
+    assert tm_shop.ground(s, {}, {}) is None
+    # The policy offers it where it offers a purchase, before the purchase, as an upgrade worth the move.
+    policy = StrategicPolicy(1)
+    policy.tm_moves, policy.tm_compatible = moves, compatible
+    goal = Goal('collect_plan', 'Plan', 'Choose a project')
+    fetch, action = policy._tm_development(s, goal, False)
+    assert (fetch.key, fetch.interact, action, policy.tm_plan) == ('fetch_tm', True, None, plan)
+    assert {target[0] for target in fetch.targets} == {place[0]}
+    candidate = policy.purchase_candidate(plan)
+    assert (candidate.key, candidate.tier, candidate.value) == (
+        'fetch_tm', Tier.UPGRADE, values.move_gain(plan['before'], plan['after']))
+    # The trip goes on until the TM is in the bag, and then it is taught.
+    assert policy._tm_development(s, goal, False)[0].key == 'fetch_tm'
+    Recorder.on(policy)
+    taught, action = policy._tm_development(held, goal, False)
+    assert taught.key == 'teach_tm' and action[0] == PRESS and policy.tm_plan is None
+
+
+def test_a_ball_left_on_the_ss_anne_is_gone_once_the_ship_sails():
+    from test_strategy import flags
+    place = (MAPS['SS_ANNE_B1F_ROOMS'], 9, 'TEXT_SSANNEB1FROOMS_TM_REST')
+    docked = shopper(hidden_objects=bytes(32))
+    sailed = replace(docked, event_flags=flags('EVENT_GOT_POKEDEX', 'EVENT_SS_ANNE_LEFT'))
+    assert tm_shop.on_ground(docked, place) and not tm_shop.on_ground(sailed, place)
+    # A ball on land stays there after the ship sails.
+    assert tm_shop.on_ground(sailed, (MAPS['POKEMON_MANSION_B1F'], 4, 'TEXT_POKEMONMANSIONB1F_TM_BLIZZARD'))
+
+
+def test_the_watch_marks_a_move_a_party_member_learns():
+    from pokesim.events import RunMemory
+    from pokesim.scenarios import Gen1Watch, matches
+    watch = Gen1Watch(SimpleNamespace(memory=RunMemory(), policy=SimpleNamespace(collection={})))
+    sandslash, kangaskhan = live(partner('SANDSLASH', moves=[10, 70, 15, 163])), live(partner('KANGASKHAN'))
+    look = lambda *party: watch.learned_marks(state(party=party))  # noqa: E731
+    assert look(sandslash, kangaskhan) == []
+    taught = replace(sandslash, moves=(10, 70, 89, 163))
+    [(kind, detail, _)] = look(taught, kangaskhan)
+    assert (kind, detail) == ('learned', 'EARTHQUAKE') and matches('learned:EARTHQUAKE', kind, detail)
+    assert look(taught, kangaskhan) == []
+    # A new member brings its moves, and a swap moves them, so neither is a move learned.
+    assert look(taught, kangaskhan, live(partner('STARMIE'))) == []
+    assert look(live(partner('STARMIE')), taught, kangaskhan) == []
+
+
 def test_greedy_projection_can_prefer_level_50_over_level_100():
     low = live(partner('STARMIE', level=50))
     high = live(partner('BUTTERFREE', level=100))

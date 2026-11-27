@@ -516,6 +516,8 @@ class Gen1Watch(PlannerMarks):
         self.dark = None
         # Flights the policy had counted at the last look, for the fly mark.
         self.flights_seen = getattr(self.run.policy, 'flights', 0)
+        # Each party member's species and moves at the last look, for the learned mark.
+        self.party_moves = None
         self.reset_marks()
 
     def race_checkpoint(self):
@@ -530,7 +532,27 @@ class Gen1Watch(PlannerMarks):
     def marks(self, snapshot=None):
         """What the planner just did, as (kind, detail, title): a returned walking event completed, one
         more copy another adventure asked for, Flash lighting a cave, a Pokédex entry or a stand-down."""
-        return self.store_marks(snapshot) + self.flash_marks(snapshot) + self.fly_marks() + self.shared_marks(snapshot)
+        return (self.store_marks(snapshot) + self.flash_marks(snapshot) + self.fly_marks() + self.learned_marks(snapshot)
+                + self.shared_marks(snapshot))
+
+    def learned_marks(self, snapshot):
+        """A party member learning a move (learned), with the move's name as its detail, as a TM, an HM
+        or a level up teaches it. A party that changed since the last look (a catch, a swap, a deposit)
+        is only looked at again, since its new members bring their moves with them."""
+        if snapshot is None or not snapshot.valid or not snapshot.started:
+            return []
+        from .strategy_data import MOVES
+        party = [(mon.species, frozenset(move for move in getattr(mon, 'moves', ()) if move))
+                 for mon in getattr(snapshot, 'party', ())]
+        before, self.party_moves = self.party_moves, party
+        if before is None or [species for species, _ in before] != [species for species, _ in party]:
+            return []
+        found = []
+        for (species, had), (_, moves) in zip(before, party):
+            for move in sorted(moves - had):
+                name = MOVES.get(move, {}).get('name', str(move))
+                found.append(('learned', name, f'Pokémon #{species} learned {name}'))
+        return found
 
     def fly_marks(self):
         """A flight landing (fly), with the town as its detail, once per flight the policy counts."""
