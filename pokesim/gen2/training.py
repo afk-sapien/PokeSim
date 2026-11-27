@@ -225,10 +225,15 @@ def requested(data, snapshot, demand, species, *, item=False):
     return item and not any(spare_copy(data, mon) for mon in copies)
 
 
+def could_travel(mon):
+    """Whether nothing lasting keeps this copy from automatic trading. Its shine, its DVs and its
+    stat experience stay through evolution and the PC, as the rules of trading._kept read them."""
+    return not mon.shiny and tuple(mon.dvs) != (15,) * 5 and sum(mon.stat_exp) < 20000
+
+
 def spare_copy(data, mon):
     """Whether automatic trading could offer this copy, the rules of trading._kept that a snapshot shows."""
-    return (mon.box is not None and not mon.shiny and tuple(mon.dvs) != (15,) * 5
-            and mon.held_item != data.items['EXP_SHARE'] and sum(mon.stat_exp) < 20000)
+    return mon.box is not None and mon.held_item != data.items['EXP_SHARE'] and could_travel(mon)
 
 
 def stone_needed(data, snapshot, item, keep):

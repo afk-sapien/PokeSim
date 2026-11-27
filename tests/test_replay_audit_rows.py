@@ -119,6 +119,24 @@ def test_a_pc_swap_that_brings_the_trainee_into_the_party_is_progress_for_its_pr
     assert [event.kind for event in _goal_events('collection_train_pc', full, deposited)] == ['trainee']
 
 
+def test_an_evolution_or_a_store_for_a_linked_adventure_is_progress():
+    def gen2(species, trainer_id=1, stat_exp=(0,) * 5):
+        return SimpleNamespace(**vars(_mon(species, trainer_id)), egg=False, shiny=False, stat_exp=stat_exp)
+
+    vaporeon, eevee, evolved = gen2(134, trainer_id=7, stat_exp=(30000,) * 5), gen2(133, 2), gen2(134, 2)
+    before, after = _snapshot([vaporeon, eevee], []), _snapshot([vaporeon, evolved], [])
+    assert [event.kind for event in _goal_events('collection_evolve_item', before, after, demand={134: 1})] == \
+        ['evolution']
+    # One no linked adventure wants, or a second copy that could travel, is not.
+    assert _goal_events('collection_evolve_item', before, after) == []
+    assert _goal_events('collection_evolve_item', _snapshot([vaporeon, eevee], [gen2(134, 3)]),
+                        _snapshot([vaporeon, evolved], [gen2(134, 3)]), demand={134: 1}) == []
+    # Gold, Silver and Crystal offer a peer only boxed Pokémon, so the store is the goal.
+    stored = _snapshot([vaporeon], [evolved])
+    assert [event.kind for event in _goal_events('collection_peer_store', after, stored)] == ['deposit']
+    assert _goal_events('collection_peer_store', after, after) == []
+
+
 def test_a_pc_swap_that_brings_a_field_move_partner_into_the_party_is_progress_for_the_teach():
     pikachu, pidgeot, golem = _mon('Pikachu'), _mon('Pidgeot'), _mon('Golem')
     before, after = _snapshot([pikachu, golem], [pidgeot]), _snapshot([pikachu, pidgeot], [golem])
