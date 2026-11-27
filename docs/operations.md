@@ -278,8 +278,9 @@ on purpose. A rollback builds its image and needs no trial. It always refuses a 
 the candidate lacks and refuses when one of them is over a day old, so merge `main` in
 first, or pass `--behind-main` to deploy it anyway. Merge a PR that syncs `main` into a
 feature branch with a merge commit, never a squash, since a squash drops the ancestry this
-check reads and every `main` commit then looks missing. If the new image is not healthy or
-fails the smoke check, it restores `.env` and restarts the old image. Each backup has a
+check reads and every `main` commit then looks missing. If any step from the stop on fails, such
+as the backup, the new image's health or the smoke check, it restores `.env` and starts the old
+image again, and `deploy.log` says when that start failed too. Each backup has a
 json file beside it that names the image that wrote its data, the one running before the
 deploy. Restore a backup with that image or a newer one. It keeps the 5 newest backups and
 the images that wrote them. While it runs, `deploy.lock` in the app folder keeps

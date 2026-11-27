@@ -20,9 +20,9 @@
 # a commit with the same git tree. A deploy that is not a rollback also needs a passing image trial under
 # a day old, from tools/image_trial.py run, for the image the tag names now, and ships that image without
 # building it again. The host's compose.yaml must be the one the trial ran. A rollback builds its image
-# here and needs no trial. The script stops the app,
-# takes a cold backup of the folder, tests it with gzip -t, starts the new image with up --wait and runs
-# the smoke check. If any step after the backup fails, it puts .env back and restarts the old image.
+# here and needs no trial. The script stops the app, takes a cold backup of the folder, tests it with
+# gzip -t, starts the new image with up --wait and runs the smoke check. If any step from the stop on
+# fails, it puts .env back and starts the old image again, and the log says when that start failed too.
 # Beside each backup, a json file names the image that wrote its data, the one running before the
 # deploy, since only that image or a newer one can open it.
 # It keeps the 5 newest pre-*.tar.gz backups and the json files beside them, keeps the images that wrote
@@ -161,8 +161,8 @@ if os.environ['CHECK_FILE']:
 print('image ok, pokesim', m.version('pokesim'), 'pokecore', m.version('pokecore'))"
 
 # The host step holds the lock from the first check to the last prune.
-docker save "$TAG" | nice -n 10 gzip -1 | ssh "$HOST" 'gunzip | docker load' >/dev/null
-ssh "$HOST" sh -s -- "$DIR" "$SHA" "$TAG" "$MIN_FREE_GB" "$COMPOSE_SHA" <<'REMOTE'
+docker save "$TAG" | nice -n 10 gzip -1 | ssh -o BatchMode=yes "$HOST" 'gunzip | docker load' >/dev/null
+ssh -o BatchMode=yes "$HOST" sh -s -- "$DIR" "$SHA" "$TAG" "$MIN_FREE_GB" "$COMPOSE_SHA" <<'REMOTE'
 set -eu
 DIR=$1 SHA=$2 TAG=$3 MIN_FREE_GB=$4 COMPOSE_SHA=${5:-}
 SHORT=$(echo "$SHA" | cut -c1-7)
@@ -192,28 +192,30 @@ fi
 
 OLD=$(sed -n 's/^POKESIM_IMAGE=//p' .env)
 BACKUP=backups/pre-local-$SHORT-$TS.tar.gz
-docker compose stop -t 120
-docker run --rm -v "$DIR":/w -w /w alpine tar czf "$BACKUP" --exclude=./app/backups --exclude=./backups \
-  --exclude='./backup-20260921*' --exclude='./releases/preview-*' .
-if ! gzip -t "$BACKUP"; then
-  docker compose up -d --wait
-  log "failed: backup $BACKUP does not pass gzip -t, the old image runs again"
-  exit 1
-fi
-WRITER=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$OLD" || true)
-printf '{\n  "archive": "%s",\n  "writer_image": "%s",\n  "writer_revision": "%s",\n  "image": "%s",\n  "revision": "%s"\n}\n' \
-  "${BACKUP#backups/}" "$OLD" "$WRITER" "$TAG" "$SHA" > "${BACKUP%.tar.gz}.json"
 cp .env ".env.bak-$TS-pre-local-$SHORT"
 
-rollback() {
+# From the stop on, a failed step puts .env back and starts the old image again, so a failed deploy
+# never leaves the app stopped without saying so.
+restore() {
   cp ".env.bak-$TS-pre-local-$SHORT" .env
-  docker compose up -d --wait || true
-  log "failed: $1, rolled back to $OLD, backup $BACKUP"
+  if docker compose up -d --wait; then
+    log "failed: $1, $OLD runs again"
+  else
+    log "failed: $1, and $OLD did not come back up, the app is down"
+  fi
   exit 1
 }
-sed -i "s|^POKESIM_IMAGE=.*|POKESIM_IMAGE=$TAG|" .env
-docker compose up -d --wait || rollback "the new image did not become healthy"
-docker exec "$(docker compose ps -q pokesim)" pokesim smoke --data-dir /data || rollback "the smoke check failed"
+docker compose stop -t 120 || restore "the app did not stop"
+docker run --rm -v "$DIR":/w -w /w alpine tar czf "$BACKUP" --exclude=./app/backups --exclude=./backups \
+  --exclude='./backup-20260921*' --exclude='./releases/preview-*' . || restore "backup $BACKUP was not written"
+gzip -t "$BACKUP" || restore "backup $BACKUP does not pass gzip -t"
+WRITER=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$OLD" || true)
+printf '{\n  "archive": "%s",\n  "writer_image": "%s",\n  "writer_revision": "%s",\n  "image": "%s",\n  "revision": "%s"\n}\n' \
+  "${BACKUP#backups/}" "$OLD" "$WRITER" "$TAG" "$SHA" > "${BACKUP%.tar.gz}.json" \
+  || restore "the json beside backup $BACKUP was not written"
+sed -i "s|^POKESIM_IMAGE=.*|POKESIM_IMAGE=$TAG|" .env || restore "$TAG could not be set in .env"
+docker compose up -d --wait || restore "the new image did not become healthy, backup $BACKUP"
+docker exec "$(docker compose ps -q pokesim)" pokesim smoke --data-dir /data || restore "the smoke check failed, backup $BACKUP"
 log "deployed, backup $BACKUP"
 
 # Keep the 5 newest backups, the json files beside them and the images that wrote them.
