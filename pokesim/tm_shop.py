@@ -17,6 +17,12 @@ RESERVE = 20000
 # Leave one cartridge bag slot for story items and other pickups.
 PURCHASE_BAG_LIMIT = 19
 MIN_LEVEL = 50
+# A League win pays ₽29,799 in Red, Blue and Yellow, measured on 30 wins: 99 for each level of the
+# five rooms' last foes (56, 58, 60, 62 and 65).
+LEAGUE_PRIZE = 29799
+# A TM waits while a better one for the same partner and move slot is on sale and the purse would reach
+# it within this many League wins.
+SAVE_WINS = 1
 COUNTER = (MAPS['CELADON_MART_2F'], 6, 5)
 
 
@@ -84,7 +90,7 @@ def projected_upgrade(mon, item, moves, compatible):
     gain = after - before
     if gain <= max(1, before * 0.08):
         return None
-    return {'before': before, 'after': after, 'gain': gain, 'current_gain': current_gain}
+    return {'before': before, 'after': after, 'gain': gain, 'current_gain': current_gain, 'slot': slot}
 
 
 def choose(snapshot, moves, compatible, *, owned, skip=()):
@@ -92,21 +98,30 @@ def choose(snapshot, moves, compatible, *, owned, skip=()):
 
     ``skip`` lists the items left out, such as a purchase standing down. The plan carries the
     partner's battle power at level 100 ``before`` and ``after`` the move, which the move is worth.
+
+    A purchase saves for the best TM: it waits while a better TM for the same partner and move slot is
+    on sale and the purse would cover it within ``SAVE_WINS`` League wins.
     """
     if not champion(snapshot):
         return None
     bag = dict(snapshot.items)
-    options = []
+    options, best = [], {}
     for item in sorted(LIMITED):
         if bool(bag.get(item)) != owned or item in skip:
             continue
-        if not owned and (len(bag) >= PURCHASE_BAG_LIMIT or snapshot.money < PRICES[item] + RESERVE):
+        cost = 0 if owned else PRICES[item] + RESERVE
+        if not owned and (len(bag) >= PURCHASE_BAG_LIMIT or snapshot.money + SAVE_WINS * LEAGUE_PRIZE < cost):
             continue
         for index, mon in enumerate(snapshot.party):
             upgrade = projected_upgrade(mon, item, moves, compatible)
-            if upgrade is not None:
-                options.append((upgrade['gain'], upgrade['current_gain'], -PRICES[item], -index, -item,
-                                upgrade['before'], upgrade['after']))
+            if upgrade is None:
+                continue
+            key = index, upgrade['slot']
+            best[key] = max(best.get(key, 0), upgrade['gain'])
+            if snapshot.money >= cost:
+                options.append((key, (upgrade['gain'], upgrade['current_gain'], -PRICES[item], -index, -item,
+                                      upgrade['before'], upgrade['after'])))
+    options = [option for key, option in options if option[0] >= best[key]]
     if not options:
         return None
     _, _, _, index, item, before, after = max(options)

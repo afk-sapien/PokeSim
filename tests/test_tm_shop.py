@@ -483,3 +483,41 @@ def test_greedy_choice_reassesses_after_one_tm_is_taught():
     taught = replace(first, moves=(33, 94, 0, 0))
     after = replace(s, party=(taught, second), items=((229, 1),))
     assert tm_shop.choose(after, moves, compatible, owned=True)['target'] == 1
+
+
+THUNDERBOLT, THUNDER = 224, 225
+ELECTRIC = {THUNDERBOLT: 85, THUNDER: 87}
+# The Yellow post_game Haunter's Lick, Confuse Ray, Night Shade and Hypnosis.
+HAUNTER_MOVES = [122, 109, 101, 95]
+
+
+def test_a_purchase_saves_for_the_better_tm_for_the_same_slot_within_one_league_win(monkeypatch):
+    from pokesim.battle_power import best_replacement
+    from pokesim.policies.battle import HM_MOVES
+    s = shopper(party=(live(partner('HAUNTER', level=53, moves=HAUNTER_MOVES)),))
+    compatible = {s.party[0].species: {THUNDERBOLT, THUNDER}}
+    # Both replace the same move, and Thunderbolt gains more.
+    assert best_replacement(s.party[0], ELECTRIC[THUNDERBOLT], HM_MOVES) == best_replacement(
+        s.party[0], ELECTRIC[THUNDER], HM_MOVES)
+    bolt, thunder = (tm_shop.projected_upgrade(s.party[0], item, ELECTRIC, compatible) for item in (THUNDERBOLT, THUNDER))
+    assert bolt['gain'] > thunder['gain']
+    # Thunder is in reach and Thunderbolt is one League win away, ₽29,799, so the purse waits for Thunderbolt.
+    waiting = replace(s, money=tm_shop.PRICES[THUNDER] + tm_shop.RESERVE)
+    assert waiting.money + 29799 >= tm_shop.PRICES[THUNDERBOLT] + tm_shop.RESERVE
+    assert tm_shop.choose(waiting, ELECTRIC, compatible, owned=False) is None
+    ready = replace(s, money=tm_shop.PRICES[THUNDERBOLT] + tm_shop.RESERVE)
+    assert tm_shop.choose(ready, ELECTRIC, compatible, owned=False)['item'] == THUNDERBOLT
+    # A Thunderbolt standing down is not on sale, and past the bound in wins the cheaper TM is bought.
+    assert tm_shop.choose(waiting, ELECTRIC, compatible, owned=False, skip=(THUNDERBOLT,))['item'] == THUNDER
+    monkeypatch.setattr(tm_shop, 'SAVE_WINS', 0)
+    assert tm_shop.choose(waiting, ELECTRIC, compatible, owned=False)['item'] == THUNDER
+
+
+def test_a_better_tm_for_another_partner_does_not_hold_a_purchase():
+    haunter = live(partner('HAUNTER', level=53, moves=HAUNTER_MOVES))
+    gengar = live(partner('GENGAR', level=60, moves=HAUNTER_MOVES))
+    compatible = {haunter.species: {THUNDER}, gengar.species: {THUNDERBOLT}}
+    s = shopper(party=(haunter, gengar), money=tm_shop.PRICES[THUNDER] + tm_shop.RESERVE)
+    assert tm_shop.projected_upgrade(gengar, THUNDERBOLT, ELECTRIC, compatible)
+    plan = tm_shop.choose(s, ELECTRIC, compatible, owned=False)
+    assert (plan['item'], plan['target']) == (THUNDER, 0)
