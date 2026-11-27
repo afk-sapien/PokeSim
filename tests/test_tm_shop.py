@@ -434,44 +434,57 @@ def test_reset_keeps_verified_cartridge_capability_but_discards_shopping_plan(sh
     policy.reset()
     assert (policy.tm_moves, policy.tm_compatible) == shop_data
     assert policy.tm_plan is None
-    # The collection reads the tables the host attached, for the ground TM fetch.
-    assert policy.collection.machines() == shop_data
 
 
-def test_a_ground_tm_is_fetched_only_when_its_move_clears_the_teach_bar():
+def test_a_ground_tm_is_fetched_where_a_purchase_is_made_when_its_move_clears_the_teach_bar():
     from pokesim.planning import values
     from pokesim.planning.arbiter import Tier
-    from pokesim.policies import kinds
-    from pokesim.policies.collection import candidate, ground_tms
-    from pokesim.policies.kinds import View
     from pokesim.strategy_data import DATA
     starmie = live(partner(moves=[57, 105, 33, 0]))
     moves, compatible = {214: 59}, {starmie.species: {214}}
-    # The Pokémon Mansion's Blizzard ball, still on the ground.
-    ball = DATA['toggle_objects'].index([MAPS['POKEMON_MANSION_B1F'], 4])
-    s = state(party=(starmie,), hall_of_fame_count=1, hidden_objects=bytes(32))
-    [project] = ground_tms(s, moves, compatible)
-    assert project == {'method': 'ground_tm', 'item': 214, 'map': MAPS['POKEMON_MANSION_B1F'], 'object': 4,
-                       'fragment': 'TEXT_POKEMONMANSIONB1F_TM_BLIZZARD', **{
-                           key: tm_shop.projected_upgrade(starmie, 214, moves, compatible)[key]
-                           for key in ('before', 'after')}}
-    # Worth the move, as a purchase is.
-    option = candidate({**project, 'key': 'blizzard'}, 10, {}, False, set())
-    assert option.tier == Tier.UPGRADE and option.value == values.move_gain(project['before'], project['after'])
-    rules = kinds.rules('ground_tm')
-    assert rules.label(project) == 'TM14 Blizzard'
-    assert not rules.owned(View(None, s), project)
+    # The Pokémon Mansion's Blizzard ball, still on the ground. The counter sells TM14 too, and the purse
+    # covers it.
+    place = (MAPS['POKEMON_MANSION_B1F'], 4, 'TEXT_POKEMONMANSIONB1F_TM_BLIZZARD')
+    ball = DATA['toggle_objects'].index(list(place[:2]))
+    s = shopper(party=(starmie,), hidden_objects=bytes(32))
+    assert tm_shop.choose(s, moves, compatible, owned=False)['item'] == 214
+    plan = tm_shop.ground(s, moves, compatible)
+    upgrade = tm_shop.projected_upgrade(starmie, 214, moves, compatible)
+    assert plan == {'item': 214, 'target': 0, 'signature': tm_shop.signature(starmie),
+                    'before': upgrade['before'], 'after': upgrade['after'], 'ground': place}
+    # It is free, so an empty purse still fetches it.
+    broke = replace(s, money=0)
+    assert tm_shop.ground(broke, moves, compatible) == plan and tm_shop.valid_plan(broke, plan, moves, compatible)
     hidden = bytearray(32)
     hidden[ball // 8] |= 1 << (ball % 8)
     gone = replace(s, hidden_objects=bytes(hidden))
-    held = replace(s, items=((214, 1),))
-    # Picked up, in the bag or taught at once, the fetch is done and is not offered again.
-    assert rules.owned(View(None, gone), project) and rules.owned(View(None, held), project)
-    assert ground_tms(gone, moves, compatible) == [] and ground_tms(held, moves, compatible) == []
-    # No fetch for a partner that cannot learn it, a move under the bar, or a run with no TM tables.
-    assert ground_tms(s, moves, {}) == []
-    assert ground_tms(replace(s, party=(live(partner(moves=[57, 105, 59, 0])),)), moves, compatible) == []
-    assert ground_tms(s, {}, {}) == []
+    held = replace(gone, items=((214, 1),))
+    # Picked up, it is in the bag and the teach takes it from there. A ball gone some other way ends it.
+    assert tm_shop.ground(gone, moves, compatible) is None and tm_shop.ground(held, moves, compatible) is None
+    assert tm_shop.valid_plan(held, plan, moves, compatible) and not tm_shop.valid_plan(gone, plan, moves, compatible)
+    # No fetch for a partner that cannot learn it, a move under the bar, a full bag, a TM standing down, or a
+    # run with no TM tables.
+    assert tm_shop.ground(s, moves, {}) is None
+    assert tm_shop.ground(replace(s, party=(live(partner(moves=[57, 105, 59, 0])),)), moves, compatible) is None
+    full = replace(s, items=tuple((item, 1) for item in range(1, tm_shop.PURCHASE_BAG_LIMIT + 1)))
+    assert tm_shop.ground(full, moves, compatible) is None
+    assert tm_shop.ground(s, moves, compatible, skip={214}) is None
+    assert tm_shop.ground(s, {}, {}) is None
+    # The policy offers it where it offers a purchase, before the purchase, as an upgrade worth the move.
+    policy = StrategicPolicy(1)
+    policy.tm_moves, policy.tm_compatible = moves, compatible
+    goal = Goal('collect_plan', 'Plan', 'Choose a project')
+    fetch, action = policy._tm_development(s, goal, False)
+    assert (fetch.key, fetch.interact, action, policy.tm_plan) == ('fetch_tm', True, None, plan)
+    assert {target[0] for target in fetch.targets} == {place[0]}
+    candidate = policy.purchase_candidate(plan)
+    assert (candidate.key, candidate.tier, candidate.value) == (
+        'fetch_tm', Tier.UPGRADE, values.move_gain(plan['before'], plan['after']))
+    # The trip goes on until the TM is in the bag, and then it is taught.
+    assert policy._tm_development(s, goal, False)[0].key == 'fetch_tm'
+    Recorder.on(policy)
+    taught, action = policy._tm_development(held, goal, False)
+    assert taught.key == 'teach_tm' and action[0] == PRESS and policy.tm_plan is None
 
 
 def test_the_watch_marks_a_move_a_party_member_learns():

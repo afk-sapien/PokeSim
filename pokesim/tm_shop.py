@@ -4,7 +4,7 @@ import hashlib
 from .battle_power import battle_power, best_replacement, moveset_score
 from .policies.battle import HM_MOVES
 from .policies.collection import champion
-from .strategy_data import MAPS, MOVES, SPECIES
+from .strategy_data import MAPS, MOVES, SPECIES, WORLD
 
 # The twelve renewable cartridge TMs keep their original shops and prices.
 RENEWABLE = {1, 2, 5, 7, 9, 15, 17, 23, 32, 33, 37, 50}
@@ -115,6 +115,49 @@ def choose(snapshot, moves, compatible, *, owned, skip=()):
             'before': before, 'after': after}
 
 
+# Each ball on the ground that holds a TM, as (map, object index, text label), from the world data. The
+# label names the move, as TEXT_SILPHCO10F_TM_EARTHQUAKE does.
+GROUND = tuple((m, index, obj[4]) for m, world in WORLD.items() for index, obj in enumerate(world.get('objects', ()))
+               if obj[2] == 'SPRITE_POKE_BALL' and '_TM_' in obj[4])
+
+
+def on_ground(snapshot, place):
+    """Whether the ball at ``place``, a plan's ``ground`` (map, object index, text label), is still there."""
+    # The pickups module reaches this one through the ledger, so it is read here, when first needed.
+    from .policies.pickups import Pickups
+    return Pickups.hidden(snapshot, {'map': place[0], 'object': place[1]}) is False
+
+
+def ground(snapshot, moves, compatible, *, skip=()):
+    """The best TM a ball still on the ground holds, chosen as ``choose`` chooses a purchase, as its plan
+    with the ball's ``ground`` place (map, object index, text label), or None. The TM is free, so the
+    purse does not limit it, and the bag keeps the slot a purchase keeps."""
+    if not champion(snapshot):
+        return None
+    bag = dict(snapshot.items)
+    if len(bag) >= PURCHASE_BAG_LIMIT:
+        return None
+    by_name = {MOVES[mid]['name']: item for item, mid in moves.items()}
+    options = []
+    for place in GROUND:
+        move = place[2].removeprefix('TEXT_').partition('_TM_')[2]
+        # A few move names end in _M where the label does not, as PSYCHIC_M does.
+        item = by_name.get(move) or by_name.get(move + '_M')
+        if item is None or item in skip or bag.get(item) or not on_ground(snapshot, place):
+            continue
+        for index, mon in enumerate(snapshot.party):
+            upgrade = projected_upgrade(mon, item, moves, compatible)
+            if upgrade is not None:
+                options.append((upgrade['gain'], upgrade['current_gain'], -index, -item,
+                                upgrade['before'], upgrade['after'], place))
+    if not options:
+        return None
+    _, _, index, item, before, after, place = max(options)
+    index, item = -index, -item
+    return {'item': item, 'target': index, 'signature': signature(snapshot.party[index]),
+            'before': before, 'after': after, 'ground': place}
+
+
 def valid_plan(snapshot, plan, moves, compatible, offers=()):
     if plan and plan.get("supply"):
         from .champion_shop import valid_plan as valid_supply
@@ -122,10 +165,12 @@ def valid_plan(snapshot, plan, moves, compatible, offers=()):
     if not plan or not champion(snapshot):
         return False
     index, item = plan['target'], plan['item']
+    # A ball on the ground is free, and a purchase needs the price and the reserve.
+    reachable = len(snapshot.items) < PURCHASE_BAG_LIMIT and (
+        on_ground(snapshot, plan['ground']) if plan.get('ground') else snapshot.money >= PRICES[item] + RESERVE)
     return (0 <= index < len(snapshot.party) and signature(snapshot.party[index]) == plan['signature']
             and projected_upgrade(snapshot.party[index], item, moves, compatible) is not None
-            and (dict(snapshot.items).get(item) or len(snapshot.items) < PURCHASE_BAG_LIMIT
-                 and snapshot.money >= PRICES[item] + RESERVE))
+            and (dict(snapshot.items).get(item) or reachable))
 
 
 def label(item, moves):

@@ -195,9 +195,6 @@ def candidate(project, travel, tails, short, owned, wild=None):
     elif method == 'train':
         # A family with its level 100 credit gains nothing the Pokédex counts, so its training is filler.
         tier, value = Tier.FILLER, values.SMALL
-    elif method == 'ground_tm':
-        # Worth the move it gives, as a TM from the Champion counter is (StrategicPolicy.purchase_candidate).
-        tier, value = Tier.UPGRADE, values.move_gain(project['before'], project['after'])
     elif legendary_project(project):
         # A returned legendary the Pokédex already has is a repeat, not an entry.
         tier, value = (Tier.PROGRESS, values.NEW_ENTRY) if dex(sid) not in owned else (Tier.UPGRADE, values.SMALL)
@@ -479,37 +476,6 @@ def champion(s):
     return s.hall_of_fame_count > 0 or event_set(s.event_flags, 'EVENT_BEAT_CHAMPION_RIVAL') or s.map == MAPS['HALL_OF_FAME']
 
 
-# Each ball on the ground that holds a TM, as (map, object index, text label, move name), from the world
-# data. The label names the move, as TEXT_SILPHCO10F_TM_EARTHQUAKE does.
-GROUND_TMS = tuple((m, index, obj[4], obj[4].removeprefix('TEXT_').partition('_TM_')[2])
-                   for m, world in WORLD.items() for index, obj in enumerate(world.get('objects', ()))
-                   if obj[2] == 'SPRITE_POKE_BALL' and '_TM_' in obj[4])
-
-
-def ground_tms(s, moves, compatible):
-    """A fetch project for each TM a ball still on the ground holds that is not in the bag, when teaching
-    it would clear the teach bar for a party Pokémon (tm_shop.projected_upgrade). The project keeps the
-    best partner's battle power at level 100 ``before`` and ``after`` the move, which the move is worth.
-    ``moves`` and ``compatible`` are the cartridge's TM tables (tm_shop.cartridge_data)."""
-    from .. import tm_shop
-    from .pickups import Pickups
-    by_name = {MOVES[mid]['name']: item for item, mid in moves.items()}
-    bag = dict(s.items)
-    found = []
-    for m, index, fragment, move in GROUND_TMS:
-        # A few move names end in _M where the label does not, as PSYCHIC_M does.
-        item = by_name.get(move) or by_name.get(move + '_M')
-        if item is None or bag.get(item) or Pickups.hidden(s, {'map': m, 'object': index}) is not False:
-            continue
-        upgrades = [upgrade for mon in s.party
-                    if (upgrade := tm_shop.projected_upgrade(mon, item, moves, compatible)) is not None]
-        if upgrades:
-            best = max(upgrades, key=lambda upgrade: (upgrade['gain'], upgrade['current_gain']))
-            found.append({'method': 'ground_tm', 'item': item, 'map': m, 'object': index, 'fragment': fragment,
-                          'before': best['before'], 'after': best['after']})
-    return found
-
-
 def tiles(source):
     w = WORLD[source['map']]
     mode = source['method']
@@ -600,9 +566,6 @@ class Collection:
         self.eevee_choice = 134
         self.dojo_choice = 106
         self.trade_preferences = lambda: {}
-        # The cartridge's TM tables, (moves, compatible), which the policy attaches. Empty tables fetch no
-        # TM from the ground.
-        self.machines = lambda: ({}, {})
         self.history = []
         self.completed_champion = False
         self.league_appearances = {}
@@ -1569,8 +1532,6 @@ class Collection:
         if not bag.get(ITEMS['OLD_AMBER']) and 142 not in s.owned:
             if not event_set(s.event_flags,'EVENT_GOT_OLD_AMBER'):
                 add({'method':'amber','item':'OLD_AMBER','map':MAPS['MUSEUM_1F']})
-        for project in ground_tms(s, *self.machines()):
-            add(project)
         fossil = getattr(self, 'returned_events', {}).get('fossil')
         if fossil and not bag.get(ITEMS[fossil['item']]):
             add({'method': 'return_fossil', 'map': fossil['room'], 'item': fossil['item'],

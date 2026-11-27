@@ -14,7 +14,7 @@ from pokesim.policies.director import category
 from test_collection import sid
 
 METHODS = ('grass', 'surf', 'fish', 'safari', 'static', 'gift', 'trade', 'fossil', 'return_fossil', 'marathon',
-           'rematch', 'trainer', 'explore', 'prize', 'rod', 'amber', 'ground_tm', 'evolve', 'train')
+           'rematch', 'trainer', 'explore', 'prize', 'rod', 'amber', 'evolve', 'train')
 
 # One project of each kind, as the offers draw builds it, with a run field each kind writes.
 PROJECTS = [
@@ -42,8 +42,6 @@ PROJECTS = [
     {'method': 'prize', 'item': 'TM_23', 'key': 'prize'},
     {'method': 'rod', 'item': 'GOOD_ROD', 'map': 140, 'key': 'rod'},
     {'method': 'amber', 'map': 104, 'key': 'amber'},
-    {'method': 'ground_tm', 'item': 226, 'map': 234, 'object': 3, 'fragment': 'TEXT_SILPHCO10F_TM_EARTHQUAKE',
-     'before': 300.0, 'after': 360.0, 'key': '0:ground_tm:234:TEXT_SILPHCO10F_TM_EARTHQUAKE'},
     {'method': 'evolve', 'species': sid(26), 'parent': sid(25), 'evolution': {'method': 'item', 'requirement': 'THUNDER_STONE'},
      'key': 'raichu', 'initial_experience': 1000, 'box': None},
     {'method': 'train', 'parent': sid(113), 'family': [sid(113)], 'initial_level': 65, 'target_level': 70,
@@ -81,9 +79,6 @@ def old_category(project):
         return 'exploration'
     if method in ('rematch', 'rod'):
         return 'supplies'
-    if method == 'ground_tm':
-        # Newer than the switches, it counts with the TM purchase and teach.
-        return 'moves'
     return 'collection'
 
 

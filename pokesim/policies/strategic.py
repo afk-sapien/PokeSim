@@ -19,7 +19,8 @@ from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
 from .move_development import hm_upgrade, move_name
 from .progression import (BOSS_TABLE, FLASH, GAME_STARTERS, STARTERS, YELLOW, Goal, bicycle_goal, boss_training,
-                          flash_learner, fly_goal, fly_learner, healing_goal, journey, milestones, power, story_goal)
+                          flash_learner, fly_goal, fly_learner, healing_goal, journey, milestones, object_goal, power,
+                          story_goal)
 from ..planning.losses import Losses, ace_slot
 from . import flight
 from . import training
@@ -129,7 +130,8 @@ CENTER_MAPS = frozenset(center[0] for center in CENTERS)
 # The kind of a goal, by key prefix, in the order they are tried. Each kind's candidate is built once,
 # here, and the arbiter weighs it against the others. The first match wins.
 GOAL_KINDS = (('heal', 'heal'), ('party_collection', 'collection'), ('party_league', 'collection'),
-              ('party_', 'party'), ('teach_', 'moves'), ('buy_tm', 'moves'), ('restock', 'supplies'),
+              ('party_', 'party'), ('teach_', 'moves'), ('buy_tm', 'moves'), ('fetch_tm', 'moves'),
+              ('restock', 'supplies'),
               ('collect_plan', 'plan'), ('collect_pickup', 'pickup'), ('collect_passage', 'passage'),
               ('hideout_elevator', 'passage'), ('collect_', 'collection'), ('catch_', 'catch'))
 # An item ball the goal picks up this many steps away comes before a heal, so the trip does not return for it.
@@ -163,6 +165,11 @@ def goal_candidate(goal, collection, kind=None, inner=None):
         return Candidate(key, Tier.UPKEEP, values.SMALL, ERRAND_FRAMES, goal=kind)
     tier = Tier.PROGRESS if collection.completed_champion else Tier.STORY
     return Candidate(key, tier, values.NEW_ENTRY, EXPECTED_FRAMES['other'], goal=kind)
+
+
+def trip_key(plan):
+    """The goal key of the trip for the TM ``plan``: a fetch from the ball on the ground, or a purchase."""
+    return 'fetch_tm' if plan.get('ground') else 'buy_tm'
 
 
 def ball_at_hand(s, goal, nav):
@@ -210,8 +217,6 @@ class StrategicPolicy(Policy):
         # The best fighter level that lost to each boss. Store.attach keeps it in the adventure's store.
         self.losses = Losses()
         self.collection.trade_preferences = lambda: self.trade_preferences() if hasattr(self, 'trade_preferences') else {}
-        # The host attaches the TM tables after the policy is made, so the collection reads them each time.
-        self.collection.machines = lambda: (self.tm_moves, self.tm_compatible)
         # Always the adventure-choices stream, so a run with no seed still replays the same choices.
         choices = random.Random(f'{seed}:adventure-choices')
         self.fossil = choices.choice(('HELIX_FOSSIL', 'DOME_FOSSIL'))
@@ -1359,14 +1364,14 @@ class StrategicPolicy(Policy):
             else:
                 return wait()
         else:
-            if goal.key not in ("heal", "restock", "buy_tm"):
+            if goal.key not in ("heal", "restock", "buy_tm", "fetch_tm"):
                 social = None if goal.key.startswith(("collect_", "party_collection", "party_league")) else self.detour.act(self, s, mem, goal)
                 if social:
                     return social
                 social = None if goal.key == 'collect_pickup' or kinds.rules((self.collection.project or {}).get('method')).own_clock or legendary_project(self.collection.project) else self.detour.chat(self, s, mem)
                 if social:
                     return social
-            curiosity = 0 if goal.key in ("heal", "restock", "buy_tm", "collect_pickup", "collect_hunt") or kinds.rules((self.collection.project or {}).get('method')).own_clock or legendary_project(self.collection.project) else EXPLORATION_CHANCE
+            curiosity = 0 if goal.key in ("heal", "restock", "buy_tm", "fetch_tm", "collect_pickup", "collect_hunt") or kinds.rules((self.collection.project or {}).get('method')).own_clock or legendary_project(self.collection.project) else EXPLORATION_CHANCE
             # A goal whose walk found no route lately (_no_route) looks around instead of walking it again.
             waiting = self.no_route_waiting(goal)
             if waiting:
@@ -1645,14 +1650,17 @@ class StrategicPolicy(Policy):
             supplies = [(item, target) for item in (ITEMS['PP_UP'], ITEMS['RARE_CANDY'])
                         if bag.get(item) and (target := champion_shop.recipient(s, item)) is not None]
             owned = tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=True)
+            # A TM still on the ground is free, so it comes before one the counter sells.
             purchase = None if self.tm_plan else (
-                tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=False, skip=standing)
+                tm_shop.ground(s, self.tm_moves, self.tm_compatible, skip=standing)
+                or tm_shop.choose(s, self.tm_moves, self.tm_compatible, owned=False, skip=standing)
                 or champion_shop.choose(s, self.shop_offers, skip=standing))
             self.tm_token, self.tm_options = token, (supplies, owned, purchase)
         return self.tm_options
 
     def purchase_candidate(self, plan):
-        """The arbiter's candidate for a trip to the Champion counter to buy ``plan``.
+        """The arbiter's candidate for a trip to the Champion counter to buy ``plan``, or to the ball on
+        the ground that holds it.
 
         A TM is worth the move it gives: its share of a level 100 credit by the battle power it adds.
         Supplies are filler. Leaving a project under way costs the trip again, the walk back to it.
@@ -1661,8 +1669,8 @@ class StrategicPolicy(Policy):
         if plan.get('supply'):
             return Candidate('buy_tm', Tier.FILLER, values.SMALL, TM_TRIP_FRAMES, interrupt_frames=interrupt,
                              goal='moves')
-        return Candidate('buy_tm', Tier.UPGRADE, values.move_gain(plan['before'], plan['after']), TM_TRIP_FRAMES,
-                         interrupt_frames=interrupt, goal='moves')
+        return Candidate(trip_key(plan), Tier.UPGRADE, values.move_gain(plan['before'], plan['after']),
+                         TM_TRIP_FRAMES, interrupt_frames=interrupt, goal='moves')
 
     def teach_candidate(self, choice, upgrade):
         """The arbiter's candidate for teaching an owned HM, from ``hm_upgrade``.
@@ -1694,6 +1702,10 @@ class StrategicPolicy(Policy):
             name = f'{quantity} × {name}'
         purpose = ('Replenish useful supplies' if plan.get('supply')
                    else f'Improve {s.party[target].nick or s.party[target].name}')
+        if plan.get('ground'):
+            m, _, fragment = plan['ground']
+            return object_goal('fetch_tm', f'Collect {name}', f'{purpose} with the TM a ball on the ground holds',
+                               WORLD[m]['symbol'], fragment)
         return Goal('buy_tm', f'Buy {name}',
                     f'{purpose} at the Champion counter. '
                     f'Price ₽{price:,}, keeping ₽{tm_shop.RESERVE:,} for supplies',
@@ -1767,8 +1779,8 @@ class StrategicPolicy(Policy):
             if bag.get(self.tm_plan['item']):
                 return choice.goal, None
             # A trip under way is an errand, so only another errand's precondition stops it.
-            return choice.offer(self._buy_goal(s, self.tm_plan), choice.errand_candidate('buy_tm', 'moves'),
-                                site='tm_trip'), None
+            return choice.offer(self._buy_goal(s, self.tm_plan),
+                                choice.errand_candidate(trip_key(self.tm_plan), 'moves'), site='tm_trip'), None
         if purchase:
             # The trip starts only when the step ends with it running (decide pipeline rule A).
             return choice.offer(self._buy_goal(s, purchase), self.purchase_candidate(purchase), site='tm',

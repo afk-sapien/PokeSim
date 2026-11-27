@@ -475,28 +475,6 @@ class Amber(Kind):
                                       'MUSEUM_1F', 'SCIENTIST2'))
 
 
-class GroundTM(Kind):
-    """A TM a ball on the ground holds, fetched when its move would clear the teach bar for a fighter
-    (collection.ground_tms). Once it is in the bag, the TM teach takes it from there."""
-    kind = 'ground_tm'
-    category = 'moves'
-    about = 'pick up a TM a fighter would learn'
-    params = (ITEM, MAP)
-
-    def target(self, view, p):
-        return gift(view, object_goal('collect_tm', 'Collect ' + self.label(p), 'Teach its move to a fighter',
-                                      WORLD[p['map']]['symbol'], p['fragment']))
-
-    def owned(self, view, run):
-        # A gone ball counts too, so a TM taught at once still ends the fetch.
-        from .pickups import Pickups
-        return bool(dict(view.s.items).get(run['item'])) or bool(
-            Pickups.hidden(view.s, {'map': run['map'], 'object': run['object']}))
-
-    def label(self, run):
-        return f"TM{run['item'] - 200:02d} " + run['fragment'].partition('_TM_')[2].replace('_', ' ').title()
-
-
 class Partner(Kind):
     """A kind that works with one held Pokémon, the trainee, which may come out of a box first."""
 
@@ -585,7 +563,7 @@ class Train(Partner):
 
 RULES = {rules.kind: rules for rules in (
     Grass(), Surf(), Fish(), Safari(), Static(), Gift(), Trade(), Fossil(), ReturnFossil(), Marathon(),
-    Rematch(), Trainer(), Explore(), Prize(), Rod(), Amber(), GroundTM(), Evolve(), Train())}
+    Rematch(), Trainer(), Explore(), Prize(), Rod(), Amber(), Evolve(), Train())}
 OTHER = Kind()
 
 
