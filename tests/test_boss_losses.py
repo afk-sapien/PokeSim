@@ -159,6 +159,25 @@ def test_a_gen1_stall_reload_in_a_rival_battle_counts_against_the_goal_under_way
     assert other.losses.levels() == {}
 
 
+def test_a_gen1_story_loss_also_trains_where_the_last_boss_won_trained():
+    # A Red run lost to Giovanni in the Rocket Hideout with four badges. Koga's Route 15, the next
+    # boss's ground, lies past the Snorlax the Poké Flute wakes, and the flute needs the Silph Scope
+    # Giovanni holds. The walk found no route there, stood down four times and the stall watch fired.
+    losses = Losses()
+    losses.note('rocket_boss', 32)
+    goal = SimpleNamespace(key='rocket_boss', title='Defeat Giovanni in the Rocket Hideout')
+    s = snap(map=MAPS['ROCKET_HIDEOUT_B4F'], badges=15, party=(mon(level=30),))
+    training = boss_training(s, goal, losses)
+    assert training.key == 'train_rocket_boss' and 'level 34' in training.reason
+    # Erika's Route 7 is in reach, so the walk takes it while Route 15 is closed.
+    assert {target[0] for target in training.targets} == {MAPS['ROUTE_15'], MAPS['ROUTE_7']}
+    # With no boss won yet, only the next boss's ground is left.
+    s = snap(map=MAPS['VIRIDIAN_CITY'], badges=0, party=(mon(level=6),))
+    losses.note('parcel', 6)
+    training = boss_training(s, SimpleNamespace(key='parcel', title='Collect Oak’s parcel'), losses)
+    assert {target[0] for target in training.targets} == {MAPS['ROUTE_2'], MAPS['VIRIDIAN_FOREST']}
+
+
 def test_a_gen1_loss_to_the_rival_in_oaks_lab_is_no_loss():
     # The game lets the player lose the first rival fight and the story carries on, so the parcel
     # goal does not wait on a win the game never asks for.
