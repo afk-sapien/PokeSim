@@ -474,6 +474,22 @@ def test_a_ground_tm_is_fetched_only_when_its_move_clears_the_teach_bar():
     assert ground_tms(s, {}, {}) == []
 
 
+def test_the_watch_marks_a_move_a_party_member_learns():
+    from pokesim.events import RunMemory
+    from pokesim.scenarios import Gen1Watch, matches
+    watch = Gen1Watch(SimpleNamespace(memory=RunMemory(), policy=SimpleNamespace(collection={})))
+    sandslash, kangaskhan = live(partner('SANDSLASH', moves=[10, 70, 15, 163])), live(partner('KANGASKHAN'))
+    look = lambda *party: watch.learned_marks(state(party=party))  # noqa: E731
+    assert look(sandslash, kangaskhan) == []
+    taught = replace(sandslash, moves=(10, 70, 89, 163))
+    [(kind, detail, _)] = look(taught, kangaskhan)
+    assert (kind, detail) == ('learned', 'EARTHQUAKE') and matches('learned:EARTHQUAKE', kind, detail)
+    assert look(taught, kangaskhan) == []
+    # A new member brings its moves, and a swap moves them, so neither is a move learned.
+    assert look(taught, kangaskhan, live(partner('STARMIE'))) == []
+    assert look(live(partner('STARMIE')), taught, kangaskhan) == []
+
+
 def test_greedy_projection_can_prefer_level_50_over_level_100():
     low = live(partner('STARMIE', level=50))
     high = live(partner('BUTTERFREE', level=100))
