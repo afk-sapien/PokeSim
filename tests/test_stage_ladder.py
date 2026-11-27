@@ -154,6 +154,30 @@ def test_adopt_keeps_an_existing_save_compressed(tmp_path):
         main(['adopt', str(ladder), 'red', str(source)])
 
 
+def test_adopt_with_an_adventure_carries_the_rows_a_headless_run_observes(tmp_path):
+    from pokesim.legendary_returns import STEPS
+    from pokesim.state import claims
+    from pokesim.store import Store
+    ladder = tmp_path / 'red-deep'
+    ladder.mkdir()
+    (ladder / 'ladder.json').write_text(json.dumps({'game': 'red', 'generation': 1, 'rom_sha1': 'abc',
+                                                    'randomizer': ''}), encoding='utf-8')
+    source = tmp_path / 'auto.state'
+    source.write_bytes(b'\0' * 1000)
+    source.with_suffix('.json').write_text(json.dumps({'rom_sha1': 'abc', 'frame': 9}), encoding='utf-8')
+    adventure = Store(tmp_path / 'adventure')
+    adventure.set(STEPS, {'total': 4321, 'available': True})
+    adventure.set('boss_losses', {'brock': 2})
+    with adventure.transaction() as db:
+        claims.put(db, 'legendary', '144', claims.DELIVERED, frame=60, species=144)
+        claims.put(db, 'league', 'won-1', claims.DELIVERED, frame=30)
+    adventure.close()
+    assert main(['adopt', str(ladder), 'post_game', str(source), '--adventure', str(tmp_path / 'adventure')]) == 0
+    carried = json.loads(gzip.decompress((ladder / 'post_game' / 'start.json').read_bytes()))['store_rows']
+    assert carried['kv'] == {STEPS: {'total': 4321, 'available': True}}
+    assert [(row['source'], row['key']) for row in carried['claims']] == [('legendary', '144')]
+
+
 def test_ladders_stay_out_of_the_tracked_checkout():
     with pytest.raises(SystemExit, match='private game data'):
         main(['snapshot', str(RED_ROM), str(ROOT / 'tests' / 'ladder')])

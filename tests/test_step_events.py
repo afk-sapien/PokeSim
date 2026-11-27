@@ -447,6 +447,36 @@ def test_the_observer_rates_a_returning_copy_as_the_pc_would_keep_it():
     assert keeps_another(policy, missing)(1) is True
 
 
+def test_a_store_takes_the_observed_rows_of_another_and_leaves_the_rest(tmp_path):
+    from pokesim.state import claims
+    from pokesim.store_observe import put_rows, rows
+    source = Store(tmp_path / 'adventure')
+    source.set(STEPS, {'total': 4321, 'available': True, 'started_at': 1.5})
+    source.set(events.KEY, {'eevee': {'next_at': 5000}})
+    source.set('boss_losses', {'brock': 2})
+    with source.transaction() as db:
+        claims.put(db, 'legendary', '144', claims.DELIVERED, frame=60, species=144)
+        claims.put(db, 'mew', '1', claims.OPEN, frame=90)
+        claims.put(db, 'league', 'won-1', claims.DELIVERED, frame=30)
+    with source.reading() as db:
+        carried = rows(db)
+    source.close()
+    # No wall-clock time rides along, so two runs of one save carry the same rows.
+    assert 'started_at' not in carried['kv'][STEPS]
+    assert not [row for row in carried['claims'] if 'ts' in row]
+    run = Store(tmp_path / 'run')
+    put_rows(run, carried)
+    assert run.get(STEPS)['total'] == 4321
+    assert run.get(events.KEY) == {'eevee': {'next_at': 5000}}
+    assert run.get('boss_losses') is None
+    with run.reading() as db:
+        assert [(row['source'], row['key'], row['state']) for row in claims.rows(db, 'legendary')
+                + claims.rows(db, 'mew')] == [('legendary', '144', 'delivered'), ('mew', '1', 'open')]
+        assert claims.rows(db, 'league') == []
+        assert rows(db) == carried
+    run.close()
+
+
 def test_caught_snorlax_closes_the_return_after_leaving_route_12(world):
     store, snapshot, memory = world
     beaten, hidden = snorlax_open(world)

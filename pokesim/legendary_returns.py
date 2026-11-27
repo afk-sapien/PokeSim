@@ -46,11 +46,15 @@ class StepTracker:
         self.store = store
         self.rom_sha1 = rom_sha1
         self.supported = rom_sha1 in TRACKED
-        self.value = store.get(STEPS) or {'total': 0, 'started_at': time.time()}
-        self.value['available'] = self.supported
+        self.read()
         self.clock = clock
         self.last_flush = 0
         self.flush(force=True)
+
+    def read(self):
+        """Take the walked steps the store holds, at the start or after a load put a save's rows in it."""
+        self.value = self.store.get(STEPS) or {'total': 0, 'started_at': time.time()}
+        self.value['available'] = self.supported
 
     def attach(self, pb):
         if not self.supported:

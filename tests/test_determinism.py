@@ -99,6 +99,35 @@ def test_a_red_run_keeps_its_own_store_and_removes_it_when_it_stops():
     assert not folder.exists()
 
 
+def test_a_red_run_starts_with_the_rows_its_save_carries_and_keeps_its_own_on_a_reload(tmp_path):
+    from pokesim.legendary_returns import STEPS
+    from pokesim.state import claims
+    run, read = headless(1, cartridge(1))
+    checkpoint = tmp_path / 'start.state'
+    try:
+        while run.frame < 2000:
+            run.step(read())
+        run.store.set(STEPS, {'total': 4321, 'available': True})
+        run.step_tracker.read()
+        with run.store.transaction() as db:
+            claims.put(db, 'legendary', '144', claims.DELIVERED, frame=run.frame, species=144)
+        run.save(checkpoint)
+    finally:
+        run.stop()
+    run, read = headless(1, cartridge(1), checkpoint)
+    try:
+        assert run.step_tracker.value['total'] == 4321
+        with run.store.transaction() as db:
+            assert claims.get(db, 'legendary', '144')['state'] == claims.DELIVERED
+            claims.put(db, 'legendary', '144', claims.CONSUMED, frame=run.frame, species=144)
+        run.reload(checkpoint)
+        # An application reload keeps its adventure's rows, so the run's store keeps the spent claim.
+        with run.store.reading() as db:
+            assert claims.get(db, 'legendary', '144')['state'] == claims.CONSUMED
+    finally:
+        run.stop()
+
+
 @pytest.mark.parametrize('event', ['none', 'reload', 'demand'])
 def test_two_runs_of_one_checkpoint_and_seed_record_the_same_trace(start, tmp_path, event):
     heads = [play(start, tmp_path / name, event) for name in ('first', 'second')]
