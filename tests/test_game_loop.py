@@ -163,3 +163,58 @@ def test_gen2_asks_with_the_stack_pointer_and_never_writes_options():
     assert [a.button for a in Decider(lambda: 7200, wait=GEN2_WAIT).ask(policy, 'snapshot', pb)] == ['a']
     assert calls == [('snapshot', 0xDFF0, 7200)]
     assert bytes(pb.memory) == before
+
+
+def test_a_press_with_a_ready_check_ends_its_gap_at_the_first_frame_the_game_waits():
+    pb, ticks = Pad(), []
+    frames = iter([False, False, True])
+    play(pb, act('a', 8, 28), ticks.append, GEN2_WAIT, ready=lambda: next(frames))
+    assert pb.log == [('press', 'a'), ('release', 'a')] and ticks == [8, 1, 1, 1]
+    # A game that never waits again keeps the whole gap, one frame at a time.
+    ticks.clear()
+    play(pb, act('a', 8, 28), ticks.append, GEN2_WAIT, ready=lambda: False)
+    assert ticks == [8] + [1] * 28
+
+
+def test_a_wait_with_no_press_that_begins_with_the_game_waiting_keeps_its_whole_gap():
+    # A shortcut counts its waits, so a wait the game is already ready for still lasts its length.
+    ticks = []
+    play(Pad(), act(None, 0, 24), ticks.append, GEN2_WAIT, ready=lambda: True)
+    assert ticks == [0, 24]
+
+
+def test_a_wait_with_no_press_that_begins_busy_ends_once_the_game_waits():
+    ticks = []
+    frames = iter([False, False, False, True])
+    play(Pad(), act(None, 0, 24), ticks.append, GEN2_WAIT, ready=lambda: next(frames))
+    assert ticks == [0, 1, 1, 1]
+
+
+class Battle:
+    """A decider whose snapshot says whether a battle is on, with the same actions every decision."""
+    wait = GEN1_WAIT
+
+    def __init__(self, actions):
+        self.actions = actions
+
+    def ask(self, policy, snapshot, pb):
+        return list(self.actions)
+
+
+def test_only_a_battle_ends_a_press_gap_once_the_game_waits_for_a_button():
+    for in_battle, ticks in ((True, [8, 1, 1]), (False, [8, 30])):
+        host = Host()
+        loop = GameLoop(host, Battle([act('a', 8, 30)]), host.tick)
+        waits = iter([False, True])
+        loop.input_wait = lambda memory, sp: next(waits)
+        loop.step(SimpleNamespace(in_battle=in_battle))
+        assert [entry[1] for entry in host.pb.log if entry[0] == 'tick'] == ticks, in_battle
+
+
+def test_the_battle_ready_check_reads_the_live_stack_through_core():
+    host = Host()
+    loop = GameLoop(host, Battle([act('a', 8, 30)]), host.tick)
+    seen = []
+    loop.input_wait = lambda memory, sp: seen.append((memory is host.pb.memory, sp)) or True
+    loop.step(SimpleNamespace(in_battle=True))
+    assert seen == [(True, 0xDFF0)] and host.frame == 9

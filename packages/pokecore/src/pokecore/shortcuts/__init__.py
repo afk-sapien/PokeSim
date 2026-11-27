@@ -17,6 +17,7 @@ from .items import ItemKind, item_kind, item_names, move_names, tm_number
 from .machine import STOP_REASONS, Abort, Choose, Done, Shortcut, StopReason, drive, run
 from .queries import current_screen, list_box, list_items, list_moves, list_party
 from .screens import SCREENS, continue_ready
+from .waits import input_wait
 from .walk import Walk
 
 
@@ -147,7 +148,7 @@ __all__ = ['Abort', 'AdvanceDialogue', 'BuyItem', 'ChangeBox', 'Choose', 'Choose
            'Shortcut', 'ShowPartner', 'StopReason', 'SwitchPokemon', 'TakeItem', 'TossItem', 'UseItem', 'Walk',
            'WithdrawItem', 'WithdrawPokemon', 'advance_dialogue', 'buy_item', 'change_box', 'choose_move',
            'continue_ready', 'current_screen', 'day_care', 'delete_move', 'deposit_item', 'deposit_pokemon',
-           'describe', 'drive', 'give_item', 'item_kind', 'item_names', 'learn_move', 'list_box', 'list_items',
+           'describe', 'drive', 'give_item', 'input_wait', 'item_kind', 'item_names', 'learn_move', 'list_box', 'list_items',
            'list_moves', 'list_party', 'move_names', 'register_item', 'release_pokemon', 'reorder_party',
            'result_schema', 'run', 'run_away', 'sell_item', 'show_partner', 'switch_pokemon', 'take_item', 'tm_number', 'toss_item', 'tune_radio', 'use_field_move',
            'use_item', 'walk', 'withdraw_item', 'withdraw_pokemon']

@@ -448,8 +448,10 @@ also cover English Gold, Silver and Crystal.
 that runs it on a port.
 
 - `machine.step(memory, ui=None)` returns a button name, None to wait, or `Done`.
-  `ui` may carry `screen` (overrides `current_screen`), `continue_ready` (bool) and
-  `sp` (the CPU stack pointer, used to find the text wait routine). After a `Done`
+  `ui` may carry `screen` (overrides `current_screen`), `continue_ready` (bool),
+  `sp` (the CPU stack pointer, used to find the text wait routine) and `input_wait`
+  (bool, the caller's `input_wait` read). On Gold, Silver and Crystal a press waits
+  for two equal tilemaps in a row unless `input_wait` is true. After a `Done`
   every further call returns the same `Done`.
 - `Done` has `outcome`, `completed`, `settled`, `details` and `reason` (a `StopReason`).
   `done.stop_reason` fills in a reason when none was set and `done.can_continue` is
@@ -495,6 +497,10 @@ that runs it on a port.
   version=None)`, `list_moves(memory, slot, version=None)`, `list_box(memory,
   box=None, version=None)` and `current_screen(memory, version=None)`. Screen names
   are in `shortcuts.SCREENS`.
+- `input_wait(memory, sp)` is true while the game waits for a button it would read as
+  new: a continue-only text prompt or a menu's input loop, found from live stack words
+  in all six games, with every button up at the game's last joypad read. A caller can
+  press as soon as it is true, where a fixed gap would wait out the rest.
 - Before a game starts, the intro and title screens are `title` and the CONTINUE or
   NEW GAME menu is `main_menu`, in all six games. The play time flag tells them
   apart from a loaded game, because a soft reset can keep the last game in WRAM.

@@ -306,7 +306,8 @@ class Shortcut:
 
         Gen 2 menus drop a press that lands while they still draw or print, so on
         Gold, Silver and Crystal a button waits until two observations in a row show
-        the same tilemap (at most four waits).
+        the same tilemap (at most four waits), or until ``ui['input_wait']`` says the
+        game waits for a button.
         """
         if self._held is not None and self.result is None:
             self.obs = self.observe(memory, ui)
@@ -338,11 +339,15 @@ class Shortcut:
         return action
 
     def _settled_tiles(self):
-        """Gen 2: whether the tilemap matches the previous observation, ignoring the blinking text arrow."""
+        """Gen 2: whether the tilemap matches the previous observation, ignoring the blinking text arrow.
+
+        A game already waiting in a menu's input loop or at a text prompt reads a press at once,
+        so a caller's ``ui['input_wait']`` (from ``input_wait``) counts as settled too.
+        """
         tiles = bytearray(self.obs.memory.tiles)
         tiles[17 * 20 + 18] = 0
         settled, self._seen_tiles = tiles == self._seen_tiles, tiles
-        return settled
+        return settled or bool(self.obs.ui.get('input_wait'))
 
     def _advance(self, memory, ui):
         if self.result is not None:

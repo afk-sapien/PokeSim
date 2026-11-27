@@ -10,6 +10,14 @@
 - `pokecore.gen2.battle_power.fixed_damage(effect, power, level, hp)` gives the damage of a move that
   ignores the stats, such as Seismic Toss, Psywave, Super Fang or a one-hit knockout, and None
   for any other move. `battle_power` uses both.
+- `pokecore.shortcuts.input_wait(memory, sp)` is true while Red, Blue, Yellow, Gold, Silver or
+  Crystal waits for a button at a continue-only prompt or inside a menu's input loop, read
+  from live stack words. It is also false until the game's last joypad read saw every button
+  up, since a press before then would read as held, not new.
+- `pokecore.shortcuts.gen2ui.cont_returns(memory)` gives the return addresses of the home
+  bank calls to PromptButton, which `cont_wait` reads.
+- A Gen 2 shortcut machine takes `ui['input_wait']`, the caller's `input_wait` read. While it
+  is true a press goes at once, where it would wait for two equal tilemaps in a row.
 
 ### Fixed
 

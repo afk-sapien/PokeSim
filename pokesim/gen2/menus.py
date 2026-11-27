@@ -12,6 +12,7 @@ from pokecore.shortcuts import (BuyItem, ChangeBox as CoreChangeBox, ChooseMove,
                                     ReorderParty, RunAway, SellItem, SwitchPokemon, TakeItem, TossItem, UseItem,
                                     WithdrawPokemon, current_screen)
 from pokecore.shortcuts.machine import BACKABLE
+from pokecore.shortcuts.waits import input_wait
 from pokecore.state import read_registered_item
 
 from pokecore.textmatch import has_word
@@ -26,11 +27,15 @@ SLOT_MAX_STEPS = 12000
 PRE_GAME = ('title', 'main_menu')
 
 
-def core_ui(mem):
+def core_ui(mem, battle=False):
     """Observation hints for a Core machine. With the stack pointer, a Bill's PC list presses
-    A through the wait that a traded nickname holding <CONT> starts."""
+    A through the wait that a traded nickname holding <CONT> starts, and battle text presses A
+    once its prompt waits. In a battle a press also goes as soon as the game waits for a button,
+    where Core would wait for the screen to stay the same twice."""
     sp = getattr(mem, 'sp', None)
-    return None if sp is None else {'sp': sp}
+    if sp is None:
+        return None
+    return {'sp': sp, 'input_wait': input_wait(mem.memory, sp)} if battle else {'sp': sp}
 
 
 def menu_label(row):
@@ -187,7 +192,7 @@ class CoreTask:
     # Screens the machine starts from. None lets the machine open the menus itself.
     start = None
     leave = False
-    # Bill's PC tasks get the stack pointer. Other tasks, such as battle items, run without it for now.
+    # Bill's PC tasks and every task in a battle get the stack pointer. Other tasks run without it for now.
     pc_list = False
 
     def build(self, snapshot):
@@ -227,7 +232,8 @@ class CoreTask:
             machine = self.machine = self.build(snapshot)
             if machine is None:
                 return self.end(mem)
-        action = machine.step(mem.memory, core_ui(mem) if self.pc_list else None)
+        battle = bool(snapshot.in_battle)
+        action = machine.step(mem.memory, core_ui(mem, battle) if self.pc_list or battle else None)
         if isinstance(action, Done):
             self.result = action
             self.after(action)
