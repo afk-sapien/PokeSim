@@ -451,12 +451,15 @@ class AuthStore:
             if cached and now - cached[0] < SESSION_CACHE_SECONDS:
                 session = cached[1]
             else:
-                row = self.db.execute('''SELECT sessions.*, users.disabled FROM sessions JOIN users ON users.id = sessions.user_id
-                    WHERE id_hash=?''', (key,)).fetchone()
+                row = self.db.execute('''SELECT sessions.*, users.disabled, EXISTS (SELECT 1 FROM identities
+                    WHERE identities.user_id = sessions.user_id AND provider = 'proxy') AS proxied
+                    FROM sessions JOIN users ON users.id = sessions.user_id WHERE id_hash=?''', (key,)).fetchone()
                 session = None
                 if row is not None and not row['disabled']:
+                    # `proxied`: the user is one a login proxy made, so the proxy alone says who they are.
                     session = {'id_hash': key, 'user_id': row['user_id'], 'csrf_token': row['csrf_token'],
-                               'expires': row['expires'], 'last_seen': row['last_seen'], 'created_at': row['created_at']}
+                               'expires': row['expires'], 'last_seen': row['last_seen'], 'created_at': row['created_at'],
+                               'proxied': bool(row['proxied'])}
                 if len(self.cache) > 4096:
                     self.cache.clear()
                 self.cache[key] = (now, session)

@@ -361,6 +361,7 @@ def install(app, manager):
         from . import ownership
         # Under `guard`, so an offer the manager is making meanwhile is either refused or ended here.
         with manager.offers.guard:
+            still_owner(aid, request)
             auth.revoke_grant(aid, uid)
             ownership.unshare(manager, aid, uid, actor(request))
         manager.leases.forget(aid, uid)

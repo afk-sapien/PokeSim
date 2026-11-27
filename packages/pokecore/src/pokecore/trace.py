@@ -826,6 +826,9 @@ def verify(trace, emulator, state=None, *, states=None, check_emulator=True):
             elif kind == "input":
                 payload = record.get("payload") or {}
                 if record.get("source") == "clock":
+                    # The recorder only logs these, so a trace that names any other method is forged.
+                    if payload.get("call") not in CLOCK_CALLS:
+                        raise TraceError(f"record {record['index']} calls {payload.get('call')!r}, not a clock call")
                     getattr(emulator, payload["call"])(*_python_value(payload.get("args", [])),
                                                        **_python_value(payload.get("kwargs", {})))
             elif kind == "decide":

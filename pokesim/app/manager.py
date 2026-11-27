@@ -549,7 +549,9 @@ class Manager:
                 user = self.proxy_user(*named)
         if user is None:
             session = self.auth.session(request.cookies.get(SESSION_COOKIE))
-            user = session['user'] if session else None
+            # A proxy user's stored session only holds their CSRF token. Once the proxy stops naming
+            # them, say after they leave its groups, the cookie lets nobody in.
+            user = session['user'] if session and not session['proxied'] else None
         if user is None and self.cli_request(request):
             user = self.auth.user(self.auth.library_owner())
         if user is not None and user['disabled']:

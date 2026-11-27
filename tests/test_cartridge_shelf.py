@@ -1,6 +1,7 @@
 """The cartridge shelf API: one slot per game, placed by hash, removable only when unused."""
 import hashlib
 import io
+import struct
 import zipfile
 
 from fastapi.testclient import TestClient
@@ -82,6 +83,37 @@ def test_zip_upload_is_identified(client):
         archive.writestr('game.gbc', synthetic('crystal'))
     data = client.post('/api/v1/cartridges', content=buffer.getvalue(), headers=headers).json()
     assert data['version'] == 'crystal' and data['moved'] is False
+
+
+def test_a_zip_that_understates_its_cartridge_never_inflates_past_the_limit(monkeypatch):
+    """The header said 1 MB, so the size check passed, then the whole 64 MB entry was inflated at once.
+    Under the 4 MB upload cap that let one upload take about 4 GB."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+        with archive.open('game.gb', 'w') as entry:
+            for _ in range(64):
+                entry.write(bytes(1024 * 1024))
+    raw = bytearray(buffer.getvalue())
+    struct.pack_into('<I', raw, raw.find(b'PK\x03\x04') + 22, 1024 * 1024)
+    struct.pack_into('<I', raw, raw.find(b'PK\x01\x02') + 24, 1024 * 1024)
+    inflated = []
+    original = zipfile._get_decompressor
+
+    class Counting:
+        def __init__(self, inner):
+            self.inner = inner
+
+        def decompress(self, data, *limit):
+            out = self.inner.decompress(data, *limit)
+            inflated.append(len(out))
+            return out
+
+        def __getattr__(self, name):
+            return getattr(self.inner, name)
+    monkeypatch.setattr(zipfile, '_get_decompressor', lambda method: Counting(original(method)))
+    with pytest.raises(ValueError, match='intact'):
+        cartridges.unpack(bytes(raw))
+    assert inflated and sum(inflated) <= cartridges.CARTRIDGE_LIMIT + 64 * 1024
 
 
 def test_unknown_file_is_rejected_in_plain_words(client):

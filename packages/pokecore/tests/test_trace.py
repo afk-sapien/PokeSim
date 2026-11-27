@@ -124,6 +124,18 @@ def test_a_tampered_record_breaks_the_chain(recorded, tmp_path):
     assert main(['verify', str(broken), '--rom', str(demo_rom())]) == HARNESS
 
 
+def test_a_clock_input_replays_only_a_clock_call(recorded):
+    """Replay calls the method a clock input names, so a rechained trace could name any of them."""
+    records = [dict(item) for item in recorded.records]
+    records.insert(1, {'frame': records[0]['frame'], 'kind': 'input', 'source': 'clock',
+                       'payload': {'call': 'stop', 'args': [], 'kwargs': {}}})
+    for index, item in enumerate(records):
+        item['index'] = index
+    with machine() as game:
+        result = verify(rechained(recorded, records=records), game)
+        assert result.code == HARNESS and "'stop', not a clock call" in result.message, result.message
+
+
 def test_a_changed_write_value_diverges_at_the_next_digest(recorded):
     records = [dict(item) for item in recorded.records]
     write = next(item for item in records if item['kind'] == 'write' and 'address' in item)

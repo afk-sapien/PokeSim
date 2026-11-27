@@ -150,11 +150,15 @@ def _create_backup(manager):
             manifest = {'format': 1, 'id': bid, 'created_at': time.time(), 'files': files}
             (staging / 'backup.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
             pending = backups / (bid + '.pending')
-            with zipfile.ZipFile(pending, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in staging.rglob('*'):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(staging))
-            pending.replace(destination)
+            try:
+                with zipfile.ZipFile(pending, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+                    for path in staging.rglob('*'):
+                        if path.is_file():
+                            archive.write(path, path.relative_to(staging))
+                pending.replace(destination)
+            finally:
+                # A full disk stops the write part way, and nothing lists or removes a partial archive.
+                pending.unlink(missing_ok=True)
         return {'id': bid, 'path': str(destination), 'created_at': manifest['created_at']}
     finally:
         # create_backup lifts `suspended` once these are back, so no lease lands on a starting worker.
