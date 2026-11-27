@@ -318,7 +318,6 @@ class StrategicPolicy(Policy):
         # The note of the release last started, which the journal quotes once it lands.
         self.released_note = None
         self.pending_trade_key = None
-        self.goal_attempts = 0
         self.observed_map = None
         self.settle_until = 0
         self.recovery_until = 0

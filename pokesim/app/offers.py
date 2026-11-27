@@ -29,7 +29,6 @@ from .trade_builder import Gone, HardLimit, TradeBuilder, ViewOnlyError
 
 PENDING, ACCEPTED = 'pending', 'accepted'
 OPEN = (PENDING, ACCEPTED)
-STATUSES = ('pending', 'accepted', 'declined', 'withdrawn', 'expired', 'failed', 'completed')
 EXPIRE_SECONDS = 86400
 # An accepted offer whose trade is still in line after this long expires.
 ACCEPTED_EXPIRE = 6 * 3600

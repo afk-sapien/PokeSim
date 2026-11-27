@@ -28,14 +28,10 @@ class Settings:
     clock: bool
     # A second stall before new progress reloads after a park in Gen II (#547).
     reload_after_park: bool
-    # The game frames between the checks for work beside play, Gen II's rewards and Celebi, or None.
-    background_frames: int | None
 
 
-GEN1 = Settings(generation=1, wait=GEN1_WAIT, options_each_decision=True, clock=False, reload_after_park=False,
-                background_frames=None)
-GEN2 = Settings(generation=2, wait=GEN2_WAIT, options_each_decision=False, clock=True, reload_after_park=True,
-                background_frames=300)
+GEN1 = Settings(generation=1, wait=GEN1_WAIT, options_each_decision=True, clock=False, reload_after_park=False)
+GEN2 = Settings(generation=2, wait=GEN2_WAIT, options_each_decision=False, clock=True, reload_after_park=True)
 
 
 class GameAdapter(Protocol):

@@ -13,33 +13,6 @@ from pokecore.gen2.clock import export_clock, lock_clock, stop_with_clock
 from pokesim.capability import CoreCapabilityError
 
 
-class FakeClock:
-    def __init__(self):
-        self.calls = []
-        self.clock_locked = False
-
-    def clock_now(self):
-        return 123.0
-
-    def lock_clock(self, at, follow_frames=False):
-        self.calls.append(('lock', at, follow_frames))
-        self.clock_locked = True
-
-    def unlock_clock(self):
-        self.calls.append(('unlock',))
-        self.clock_locked = False
-
-    def set_rtc_timezero(self, value):
-        self.calls.append(('zero', value))
-
-    def export_rtc(self):
-        return bytes(10)
-
-    def stop(self, ram_file=None, rtc_file=None):
-        self.calls.append(('stop', ram_file, rtc_file))
-        rtc_file.write(bytes(10))
-
-
 def test_capability_error_is_the_backends_so_one_handler_reports_it():
     from pokecore.errors import CoreCapabilityError as BackendError
     assert issubclass(CoreCapabilityError, BackendError)
@@ -119,19 +92,6 @@ def test_source_info_never_lets_git_read_the_terminal(tmp_path, monkeypatch):
 
 
 # Game time: live adventures lock the cartridge clock to emulated frames and never let it go back.
-
-class FakeRtc(FakeClock):
-    def __init__(self, zero=1000.0, clock=1500.0):
-        super().__init__()
-        self.state = {'timezero': zero, 'clock': clock, 'locked': False, 'follow_frames': False}
-
-    def rtc_state(self):
-        return dict(self.state)
-
-    def lock_clock(self, at, follow_frames=False):
-        super().lock_clock(at, follow_frames)
-        self.state.update(clock=at, locked=True, follow_frames=follow_frames)
-
 
 class Store:
     def __init__(self, values=None):

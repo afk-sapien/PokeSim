@@ -127,10 +127,6 @@ CINNABAR_GYM_DOORS = tuple((Event(f'EVENT_CINNABAR_GYM_GATE{n}_UNLOCKED'), door)
 CLOSED_GATE_TILES = {False: (((0, 0), 24), ((1, 0), 24)), True: (((1, 0), 36), ((1, 1), 36))}
 
 
-def cinnabar_gate_open(flags, index):
-    return event_set(flags, CINNABAR_GYM_DOORS[index][0].flag)
-
-
 def cut_tree(tileset, tile):
     return (tileset == "OVERWORLD" and tile == 0x3D) or (tileset == "GYM" and tile == 0x50)
 

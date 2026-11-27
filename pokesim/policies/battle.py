@@ -428,7 +428,6 @@ class Decision:
     index: int = 0
     target: int = 0
     reason: str = ""
-    partner_key: str | None = None
     # A run the battle stance chose, which the policy counts as a flee attempt.
     stance: bool = False
     # A run from a catch nobody can weaken, which leaves its species for a new move, member or ball.

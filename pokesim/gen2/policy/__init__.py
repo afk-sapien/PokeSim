@@ -107,8 +107,6 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
         self.failure = None
         self.menu_ref, self.menu_steps = None, 0
         self.partner_move = None
-        self.last_position = None
-        self.same_position = 0
         self.interaction = None
         self.puzzle_cache = {}
         self.memory = None
