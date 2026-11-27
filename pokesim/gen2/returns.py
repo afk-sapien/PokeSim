@@ -12,6 +12,7 @@ import json
 from .. import config, return_claims
 from ..events import Event
 from ..state import claims as ledger, kv
+from ..store import kept
 from pokecore.gen2.ram import Memory
 from pokecore.gen2.resets import write_byte, write_flag
 
@@ -396,13 +397,15 @@ def open_activity(memory, data, key, flags):
     return changed
 
 
+@kept
 def returned_events(store):
     if not event_interval():
-        return set()
+        return frozenset()
     ready = return_claims.delivered(store)
     found = {dex for key, _, dex, _, _ in ACTIVITIES if key in ready}
     # A reopened trade makes its Pokémon worth trading for again. Gifts need no catch, so they stay out.
-    return found | {row['species'] for key, row in ready.items() if key.startswith('trade_') and row['species']}
+    return frozenset(found | {row['species'] for key, row in ready.items()
+                              if key.startswith('trade_') and row['species']})
 
 
 def status(store, data=None):

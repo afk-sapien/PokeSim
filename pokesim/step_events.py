@@ -13,6 +13,7 @@ from pokecore.resets import Flag, update_flags
 from . import config, return_claims
 from .events import Event
 from .state import claims as ledger, kv
+from .store import kept
 from .game_data import current_variant
 from .legendary_returns import STEPS
 from .ram import W_EVENT_FLAGS, W_TOGGLE_OBJECT_FLAGS
@@ -253,6 +254,7 @@ def population(snapshot, spec):
     return count
 
 
+@kept
 def available(store):
     """The activities whose flags wait cleared in the cartridge, with the Pokémon, room and item each gives."""
     if not getattr(config, 'EVENT_RETURN_STEPS', 100000):

@@ -2,6 +2,7 @@
 from .legendary_returns import STEPS
 from .policies.collection import EVOS, champion
 from .state import kv
+from .store import kept
 from .strategy_data import ITEMS, MOVES
 from .tm_shop import PURCHASE_BAG_LIMIT, RESERVE, signature
 
@@ -37,9 +38,11 @@ def status(store):
                 for item, quantity in OFFERS.items()]}
 
 
+@kept
 def ready(store):
     value = status(store)
-    return {row['item'] for row in value['offers'] if value['started'] and value['available'] and not row['remaining']}
+    return frozenset(row['item'] for row in value['offers']
+                     if value['started'] and value['available'] and not row['remaining'])
 
 
 def consume(db, item):
