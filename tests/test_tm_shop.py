@@ -492,13 +492,18 @@ HAUNTER_MOVES = [122, 109, 101, 95]
 
 
 def test_a_purchase_saves_for_the_better_tm_for_the_same_slot_within_one_league_win(monkeypatch):
+    from pokesim.battle_power import best_replacement
+    from pokesim.policies.battle import HM_MOVES
     s = shopper(party=(live(partner('HAUNTER', level=53, moves=HAUNTER_MOVES)),))
     compatible = {s.party[0].species: {THUNDERBOLT, THUNDER}}
+    # Both replace the same move, and Thunderbolt gains more.
+    assert best_replacement(s.party[0], ELECTRIC[THUNDERBOLT], HM_MOVES) == best_replacement(
+        s.party[0], ELECTRIC[THUNDER], HM_MOVES)
     bolt, thunder = (tm_shop.projected_upgrade(s.party[0], item, ELECTRIC, compatible) for item in (THUNDERBOLT, THUNDER))
-    assert bolt['slot'] == thunder['slot'] and bolt['gain'] > thunder['gain']
-    # Thunder is in reach and Thunderbolt is one League win away, so the purse waits for Thunderbolt.
+    assert bolt['gain'] > thunder['gain']
+    # Thunder is in reach and Thunderbolt is one League win away, ₽29,799, so the purse waits for Thunderbolt.
     waiting = replace(s, money=tm_shop.PRICES[THUNDER] + tm_shop.RESERVE)
-    assert waiting.money + tm_shop.LEAGUE_PRIZE >= tm_shop.PRICES[THUNDERBOLT] + tm_shop.RESERVE
+    assert waiting.money + 29799 >= tm_shop.PRICES[THUNDERBOLT] + tm_shop.RESERVE
     assert tm_shop.choose(waiting, ELECTRIC, compatible, owned=False) is None
     ready = replace(s, money=tm_shop.PRICES[THUNDERBOLT] + tm_shop.RESERVE)
     assert tm_shop.choose(ready, ELECTRIC, compatible, owned=False)['item'] == THUNDERBOLT
