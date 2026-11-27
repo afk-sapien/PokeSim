@@ -12,7 +12,8 @@ from ..runtime.policy import Action, Policy
 from ..planning.ledger import box_wanted
 from pokecore.textmatch import ScreenText
 from .battle import (BALLS, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
-                     enemy_dvs, field_cure, healing_item, needs_healing, ranked_moves, read_battler, replacement_slot, useful_capture)
+                     enemy_dvs, field_cure, healing_item, hurts, needs_healing, ranked_moves, read_battler, replacement_slot,
+                     useful_capture)
 from .navigation import DIRS, FACING, PAIR_COLLISIONS, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .pickups import Pickups
@@ -857,14 +858,16 @@ class StrategicPolicy(Policy):
                 return actions
             if not s.in_battle:
                 return tap("b")
-            alive = [(p.hp, i) for i, p in enumerate(s.party) if p.hp and i != active]
+            # A partner that can hurt the foe comes before one that cannot, then the most HP.
+            foe = read_battler(mem, W_ENEMY_MON)
+            alive = [(hurts(p, foe), p.hp, i) for i, p in enumerate(s.party) if p.hp and i != active]
             if not alive and s.party and s.party[active].hp:
                 # The last partner standing cannot switch to itself. The game answers
                 # "is already out!" and reopens this menu, so close it and fight on.
                 self.reason = "No other partner can battle, so keep fighting"
                 self.intent = None
                 return tap("b")
-            target = max(alive)[1] if alive else active
+            target = max(alive)[2] if alive else active
             actions = self._start_shortcut(s, SwitchPokemon(target), ('switch', target, self.battle_key, self.turns),
                                            'Replace the fainted active Pokémon')
             if actions:
