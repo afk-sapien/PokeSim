@@ -170,20 +170,22 @@ def test_an_open_clock_window_is_used_while_it_lasts(data, monkeypatch):
 
 
 def test_patrol_labels_say_what_the_walk_does_and_waits_for(data):
-    from pokesim.gen2.collection import waiting_label
+    from pokesim.gen2.collection import named_wait, waiting_label
     policy = expedition(data)
+
+    def label(state, mem):
+        return waiting_label(state, named_wait(policy, state, mem, 'day'))
+
     owned = set(range(1, 252))
-    assert (waiting_label(policy, snapshot([lead()], owned=owned), clock(), 'day')
-            == 'Walk the grass until a trade or a return brings new collection work')
+    assert label(snapshot([lead()], owned=owned), clock()) == 'Walk the grass until a trade or a return brings new collection work'
     eggs = snapshot([lead(), mon(175, box=None, egg=True)], owned=owned - {131})
-    assert waiting_label(policy, eggs, clock(), 'day') == 'Walk the eggs to hatching while Lapras waits for Friday'
+    assert label(eggs, clock()) == 'Walk the eggs to hatching while Lapras waits for Friday'
     # Contest days come first when the Sun Stone is still needed.
     contest = snapshot([lead()], owned=owned - {182, 192})
-    label = waiting_label(policy, contest, clock(day=1), 'day')
-    assert label == 'Walk the grass while the Bug-Catching Contest waits for Tuesday'
+    assert label(contest, clock(day=1)) == 'Walk the grass while the Bug-Catching Contest waits for Tuesday'
     entered = clock(day=2)
     entered.byte = lambda name: {'wCurDay': 2, 'wDailyFlags1': 2}.get(name, 0)
-    assert waiting_label(policy, contest, entered, 'day').endswith("waits for Thursday, as today's was entered")
+    assert label(contest, entered).endswith("waits for Thursday, as today's was entered")
 
 
 def test_full_boxes_with_nothing_to_release_wait_for_no_catch_and_free_the_league(data):
@@ -209,7 +211,7 @@ def test_full_boxes_with_nothing_to_release_wait_for_no_catch_and_free_the_leagu
     policy.storage_target = lambda snapshot: None
     assert clock_wait(policy, full, clock(), 'day') == 'Lapras waits for Friday'
     assert waiting(policy, full, clock(), 'day').value == 0 and named_wait(policy, full, clock(), 'day') is None
-    assert waiting_label(policy, full, clock(), 'day') == 'Walk the grass until a trade or a return brings new collection work'
+    assert waiting_label(full, None) == 'Walk the grass until a trade or a return brings new collection work'
     assert postgame_league(policy, full, clock(), 'day')
 
 

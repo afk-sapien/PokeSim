@@ -3,6 +3,7 @@
 Core holds the breeding rules (``pokecore.gen2.breeding``). This module plans the trips.
 """
 from copy import deepcopy
+from dataclasses import replace
 from itertools import combinations
 
 from pokecore.gen2.breeding import branch_parents, descendants_wanted, egg_lines, free_slots, offspring
@@ -94,6 +95,13 @@ def nursery(policy, snapshot, Goal):
     return Goal('collection_hatch', 'Walk with the eggs and the Day Care partners', 'GOLDENROD_CITY', x, y)
 
 
+def in_care(snapshot):
+    """The Day Care parents as a kept answer's key. The cartridge adds experience to each parent on
+    every step the player walks, and no answer keyed on them reads it, so the key leaves it out and the
+    answer lasts across the walk."""
+    return tuple(replace(mon, experience=0) if mon else None for mon in getattr(snapshot, 'daycare', ()))
+
+
 def pairings(policy, snapshot):
     """Every Day Care pair worth breeding, as (target, first boxed, second boxed, identities, species).
 
@@ -105,7 +113,8 @@ def pairings(policy, snapshot):
     data, parents = policy.data, snapshot.daycare
     room = free_slots(snapshot) >= 3
     unhatched = egg_lines(data, snapshot)
-    key = (snapshot.party, snapshot.stored, parents, frozenset(snapshot.owned), tuple(sorted(policy.demand.items())), room)
+    key = (snapshot.party, snapshot.stored, in_care(snapshot), frozenset(snapshot.owned),
+           tuple(sorted(policy.demand.items())), room)
     cached = getattr(policy, '_breeding_pairings', None)
     if cached is not None and cached[0] == key:
         return cached[1]
