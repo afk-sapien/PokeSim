@@ -226,15 +226,30 @@ def evolve_level(target, species):
     return None
 
 
+def story_loss(s, key, losses):
+    """The goal key whose loss bar the story goal ``key`` trains to: its own, or else that of the first story
+    step not yet done that a loss was noted on.
+
+    The way back to a boss is made of story steps of its own. A Red run that lost to Giovanni rode the
+    Rocket Hideout lift down to him, the step for the ride had no loss, and on B4F the loss turned the run
+    back into the lift for training. The two took turns for 51,206 frames of a gate rung."""
+    levels = losses.levels()
+    if key is None or not levels or key in levels or key in BOSS_TABLE.goals:
+        return key
+    return next((row['key'] for row in story.steps(1, GAME) if row['key'] in levels
+                 and row['key'] not in BOSS_TABLE.goals and open_row(s, row['key'])), key)
+
+
 def boss_training(s, goal, losses):
     """Training before the boss or story goal ``goal`` (planning/league.training), or None once the team is ready.
 
-    A story goal also trains on the ground of the last boss won, and the walk takes the nearer ground it
-    reaches. The next boss's ground can lie past the story goal: Koga's Route 15 is behind the Snorlax the
-    Poké Flute wakes, which needs the Silph Scope from Giovanni. A Red run that lost to him in the Rocket
-    Hideout found no route to Route 15 and stood down until the stall watch fired."""
-    plan = league.training(BOSS_TABLE, s, getattr(goal, 'key', None), s.map, power, losses,
-                           lambda bit: readiness(s, bit)['score'])
+    A story goal trains to the loss of the story step it leads up to (story_loss). It also trains on the
+    ground of the last boss won, and the walk takes the nearer ground it reaches. The next boss's ground can
+    lie past the story goal: Koga's Route 15 is behind the Snorlax the Poké Flute wakes, which needs the
+    Silph Scope from Giovanni. A Red run that lost to him in the Rocket Hideout found no route to Route 15
+    and stood down until the stall watch fired."""
+    key = story_loss(s, getattr(goal, 'key', None), losses)
+    plan = league.training(BOSS_TABLE, s, key, s.map, power, losses, lambda bit: readiness(s, bit)['score'])
     if plan is None:
         return None
     row, level = plan.row, plan.verdict.target
@@ -242,7 +257,7 @@ def boss_training(s, goal, losses):
         last = next((r for r in reversed(BOSS_TABLE.rows) if league.won(r, s)), None)
         grounds = (plan.where, *((last.training,) if last else ()))
         names = dict.fromkeys(name for where in grounds for name in ((where,) if isinstance(where, str) else where))
-        return training_goal(goal.key, "Train before another try",
+        return training_goal(key, "Train before another try",
                              f"Train the best fighter to level {level} after a loss on the way to: {goal.title}", tuple(names))
     if plan.verdict.reason == LOSS:
         return training_goal(row.key, f"Prepare for {row.name}",

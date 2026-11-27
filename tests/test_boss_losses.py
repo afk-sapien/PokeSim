@@ -1,4 +1,5 @@
 """A loss to a boss raises the level the best fighter trains to before the next try, in both generations."""
+from dataclasses import replace
 from types import SimpleNamespace
 
 from pokesim.planning.losses import Losses, best_level
@@ -10,7 +11,7 @@ from pokesim.runtime.supervision import Supervisor
 from pokesim.store import Store
 from pokesim.strategy_data import MAPS
 from test_events import snap
-from test_strategy import mon
+from test_strategy import flags, mon
 
 TACKLE, HARDEN = 33, 106
 
@@ -176,6 +177,21 @@ def test_a_gen1_story_loss_also_trains_where_the_last_boss_won_trained():
     losses.note('parcel', 6)
     training = boss_training(s, SimpleNamespace(key='parcel', title='Collect Oak’s parcel'), losses)
     assert {target[0] for target in training.targets} == {MAPS['ROUTE_2'], MAPS['VIRIDIAN_FOREST']}
+
+
+def test_a_gen1_story_loss_holds_on_the_steps_back_to_its_boss():
+    # A Red run lost to Giovanni and blacked out. The ride back down the Rocket Hideout lift is a story
+    # step of its own, and with no loss of its own it rode down, found the training on B4F, rode up and
+    # down again for 51,206 frames of a gate rung.
+    losses = Losses()
+    losses.note('rocket_boss', 32)
+    ride = SimpleNamespace(key='hideout_elevator', title='Take the lift to Giovanni’s floor')
+    s = snap(map=MAPS['ROCKET_HIDEOUT_ELEVATOR'], badges=15, party=(mon(level=30),), event_flags=flags())
+    training = boss_training(s, ride, losses)
+    assert training.key == 'train_rocket_boss' and 'level 34' in training.reason
+    # Once Giovanni is beaten the loss is behind the run, so the ride back for the Silph Scope trains for nothing.
+    s = replace(s, event_flags=flags('EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI'))
+    assert boss_training(s, ride, losses) is None
 
 
 def test_a_gen1_loss_to_the_rival_in_oaks_lab_is_no_loss():
