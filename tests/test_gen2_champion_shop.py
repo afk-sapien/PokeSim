@@ -202,6 +202,23 @@ def test_a_tm_on_the_ground_comes_before_the_counter_and_is_picked_up(real_data,
     assert shop.valid_plan(real_data, snap(real_data, [mon(154)], money=0, ground={flag}), plan, set())
 
 
+def test_a_tm_on_the_ground_waits_for_a_race_past_its_starting_line(real_data, on):
+    flag = 'EVENT_VICTORY_ROAD_TM_EARTHQUAKE'
+    snapshot = snap(real_data, [mon(154)], money=0, ground={flag})
+
+    def racer(checkpoint):
+        return policy_for(real_data, collection={'postgame': {'activity': {'kind': 'marathon', 'checkpoint': checkpoint}}})
+    # The ball keeps while the race clock runs, so the race goes on and no plan starts.
+    policy = racer(3)
+    assert shop.journey(policy, snapshot, None) is None and shop.PLAN not in policy.collection
+    # The walk to the starting line is not timed, so the ball is fetched first.
+    assert shop.journey(racer(0), snapshot, None).key == 'collection_fetch_tm'
+    # Once the race is over the next check plans it.
+    del policy.collection['postgame']
+    policy.decisions += shop.CHECK_DECISIONS
+    assert shop.journey(policy, snapshot, None).key == 'collection_fetch_tm'
+
+
 def test_the_watch_marks_a_move_learned_by_its_gen2_constant(real_data):
     from pokesim.scenarios import Gen2Watch, matches
     watch = Gen2Watch(SimpleNamespace(data=real_data, history={}, policy=SimpleNamespace(collection={})))

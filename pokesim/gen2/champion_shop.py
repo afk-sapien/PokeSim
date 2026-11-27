@@ -17,6 +17,7 @@ PP Up is priced but not planned yet: Core does not recognise the Gen II "raise P
 list, so the item could not be used after buying it.
 """
 from ..planning.ledger import FIELD_MOVES
+from .marathon import racing
 from .standdown import stand_down, standing_down
 
 KEY = 'gen2-champion-shop-v1'
@@ -419,6 +420,9 @@ def journey(policy, snapshot, Goal):
         state['champion_check'] = policy.decisions + CHECK_DECISIONS
         plan = choose(data, snapshot, offers)
         if plan is None or standing_down(policy, plan_key(plan['item'])):
+            return None
+        # A ball keeps and a race clock runs, so a race past its starting line finishes first.
+        if plan.get('ground') and racing(policy):
             return None
         plan.update(started=policy.decisions, tries=0, initial=dict(snapshot.items).get(plan['item'], 0))
         state[PLAN] = plan
