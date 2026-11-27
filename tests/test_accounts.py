@@ -118,6 +118,22 @@ def test_game_actions_deny_what_they_do_not_know():
     assert policy.game_action('DELETE', 'api/state') is None
 
 
+# Game reads whose query flags change what they return.
+READS_WITH_FLAGS = {'api/state': ('storage', 'view'), 'api/pokedex': ('version', 'view'),
+                    'api/events': ('limit', 'all', 'types', 'before'), 'api/shiny-log': ('before',),
+                    'api/audio': ('after',), 'feed.xml': ('types', 'all', 'limit', 'min_priority')}
+
+
+def test_a_query_flag_never_changes_who_may_read_the_game(library, people):
+    library.manager.auth.grant(people.blue, people.alice['id'], 'viewer', people.bob['id'])
+    viewer, stranger = library.login('alice'), library.browser()
+    for path, flags in READS_WITH_FLAGS.items():
+        assert policy.game_action('GET', path) == 'adventure.watch'
+        for query in ('', *(f'?{flag}=1' for flag in flags)):
+            assert viewer.get(f'/games/{people.blue}/{path}{query}').status_code == 200, (path, query)
+            assert stranger.get(f'/games/{people.blue}/{path}{query}').status_code == 401, (path, query)
+
+
 def test_play_settings_and_the_next_activity_need_their_roles():
     assert policy.ROUTE_ACTIONS[('PATCH', '/api/v1/adventures/{aid}/play')] == 'adventure.manage'
     assert policy.game_action('POST', 'api/control', 'pin_goal') == 'adventure.manage'

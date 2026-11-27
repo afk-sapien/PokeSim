@@ -14,7 +14,6 @@ from ..planning.ledger import FIELD_MOVES
 from .training import identity
 
 
-HAPPINESS_TO_EVOLVE = 220
 # Eggs carried at once while hatching the ones stored in the PC. The rest of the party stays free for
 # field moves, trainees and partners.
 HATCH_BATCH = 3

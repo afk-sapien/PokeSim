@@ -44,7 +44,6 @@ class Copy:
     trade_key: str | None = None
     trade_preference: str = 'auto'
     trade_ambiguous: bool = False
-    investment_protected: bool = False
 
     @property
     def label(self) -> str:
@@ -148,8 +147,7 @@ def normalise(instance: str, url: str, payload: dict, protected=(), demand=None,
                                nick=mon.get('nick', ''), name=mon.get('name', ''),
                                dvs=tuple(mon.get('dvs', ())), stat_exp=tuple(mon.get('stat_exp', ())),
                                trade_key=mon.get('trade_key'), trade_preference=mon.get('trade_preference', 'auto'),
-                               trade_ambiguous=mon.get('trade_ambiguous', False),
-                               investment_protected=(mon['box'], mon['position']) in investment_slots)
+                               trade_ambiguous=mon.get('trade_ambiguous', False))
     boxes = placed(stored)
     investment_slots = {(mon['box'], mon['position']) for mon in boxes
                         if mon['species'] not in off_limits and automatic_trade_protected(mon, party + boxes)}

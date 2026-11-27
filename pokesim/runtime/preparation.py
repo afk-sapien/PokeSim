@@ -23,7 +23,6 @@ from ..web.pokedex import live_status
 KEY = 'interaction_preparation'
 ACTIVE = {'travelling', 'storage', 'rendezvous'}
 CENTER = 89
-RENDEZVOUS = (CENTER, 11, 3)
 PC = (CENTER, 13, 4)
 # The field moves a sole holder keeps the party for. Flash is not one: a dark cave is walkable without it.
 FIELD_MOVES = (15, 19, 57, 70)

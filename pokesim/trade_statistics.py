@@ -53,11 +53,6 @@ def _outgoing(raw):
     return (2, struct[0]) if len(struct) == 48 else None
 
 
-def sent_species(raw):
-    outgoing = _outgoing(raw)
-    return outgoing[1] if outgoing else None
-
-
 def _managed(db, identity, raw, received, sent_list=None, received_list=None):
     outgoing = _outgoing(raw)
     if not isinstance(identity, str) or outgoing is None:

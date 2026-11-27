@@ -17,9 +17,6 @@ from .web import FRIENDSHIP_TIMES
 KINDS = ('wild', 'breed', 'evolve', 'gift', 'static', 'roamer', 'contest', 'swarm', 'prize', 'npc_trade',
          'league_reward', 'walking_reset', 'cable_trade', 'time_capsule', 'event')
 GAMES = frozenset({'gold', 'silver', 'crystal'})
-STATUS_LABELS = {'caught': 'Already registered', 'available': 'Possible in this run',
-                 'planned': 'Planned for this run', 'external': 'Needs another game',
-                 'unavailable': 'Out of reach for now'}
 
 
 @dataclass(frozen=True)

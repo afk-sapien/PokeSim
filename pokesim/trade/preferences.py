@@ -145,11 +145,6 @@ def answers(mon, key):
     return individual.same(identity(mon), key)
 
 
-def matching(rows, key):
-    """Rows answering to a stored key. A key from an older release matches on trainer and DVs."""
-    return [mon for mon in rows if answers(mon, key)]
-
-
 def find(rows, wanted, field='trade_key'):
     """pokecore.identity.find, where interchangeable twins share a key and the first of them answers."""
     exact = [row for row in rows if row.get(field) and row.get(field) == wanted]

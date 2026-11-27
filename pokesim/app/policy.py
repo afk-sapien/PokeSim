@@ -48,24 +48,6 @@ GAME_POSTS = {
     'api/pc/favor': 'adventure.manage',
     'api/export-save': 'adventure.own',
 }
-# Query flags that change what a game read returns, with the action each one needs. A flag
-# missing here makes the coverage test fail.
-GAME_QUERY_FLAGS = {
-    ('api/state', 'storage'): 'adventure.watch',
-    ('api/state', 'view'): 'adventure.watch',
-    ('api/pokedex', 'version'): 'adventure.watch',
-    ('api/pokedex', 'view'): 'adventure.watch',
-    ('api/events', 'limit'): 'adventure.watch',
-    ('api/events', 'all'): 'adventure.watch',
-    ('api/events', 'types'): 'adventure.watch',
-    ('api/events', 'before'): 'adventure.watch',
-    ('api/shiny-log', 'before'): 'adventure.watch',
-    ('api/audio', 'after'): 'adventure.watch',
-    ('feed.xml', 'types'): 'adventure.watch',
-    ('feed.xml', 'all'): 'adventure.watch',
-    ('feed.xml', 'limit'): 'adventure.watch',
-    ('feed.xml', 'min_priority'): 'adventure.watch',
-}
 GAME_PATTERNS = re.compile(r'(?:api/events|events)/[0-9]+|(?:sprites|sprites/shiny|shots|item-artwork)/[0-9]+\.png'
                            r'|static/[A-Za-z0-9_.-]+|static/fonts/[A-Za-z0-9_.-]+')
 
