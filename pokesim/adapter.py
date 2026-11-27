@@ -60,9 +60,13 @@ class Gen1Adapter:
     def new_policy(self, run, seed):
         from .planning.cost import wild_odds
         from .policies.strategic import StrategicPolicy
+        from .tm_shop import cartridge_data
         policy = StrategicPolicy(seed)
         policy.collection.version = self.version
         policy.collection.wild = wild_odds(self.rom, self.version)
+        # As the application's emulator attaches them. Without them the policy teaches no TM and the
+        # Champion counter sells nothing.
+        policy.tm_moves, policy.tm_compatible = cartridge_data(self.rom.read_bytes())
         return policy
 
     def start_fresh(self, run):
@@ -104,7 +108,21 @@ class Gen1Adapter:
         pass
 
     def after_step(self, run, snapshot):
-        pass
+        """The Champion counter sale the application makes once a trip stands at the counter
+        (runtime/tm_purchase.py). With no adventure store it keeps no ledger, journal or recoverable
+        save, and the policy takes back the state it had, as after the sale's load."""
+        import json
+
+        from .runtime.tm_purchase import at_counter, credit, sale
+        if not at_counter(run.policy, run.pb.memory):
+            return
+        found = sale(run.policy, run.pb.memory, run.frame, run.policy.shop_offers)
+        if found is None:
+            return
+        credit(run.pb.memory, *found)
+        # The application loads the sale from a save whose manifest it wrote as JSON a moment before.
+        run.resume(json.loads(json.dumps(run.manifest())))
+        run.policy.on_restore()
 
     def waiting(self, run, snapshot):
         return False

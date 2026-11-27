@@ -15,36 +15,61 @@ from . import trace
 from .reward_delivery import BARRIER, PENDING, recover_storage
 
 
+def at_counter(policy, memory):
+    """Whether a trip to buy the policy's plan has reached the counter. Most steps are during travel, so
+    this reads the map and position and decodes nothing else."""
+    return (bool(getattr(policy, 'tm_plan', None)) and policy.goal.key == 'buy_tm'
+            and (memory[W_CUR_MAP], memory[W_X], memory[W_Y]) == tm_shop.COUNTER)
+
+
+def sale(policy, memory, frame, offers):
+    """The sale the policy's plan makes now, as ``(before, item, quantity, price)``, or None. The player
+    stands still at the counter outside battles and menus, the plan is still worth it with the counter's
+    ready ``offers`` and the bag does not hold the item yet. The application and the headless run
+    (adapter.py) both sell through it."""
+    plan = policy.tm_plan
+    before = read_snapshot(memory, frame)
+    if (not before.valid or not before.started or before.in_battle or before.textbox or before.start_menu
+            or memory[W_WALK_COUNTER] or (before.map, before.x, before.y) != tm_shop.COUNTER
+            or getattr(getattr(policy, 'heal', None), 'latched', False)
+            or not tm_shop.valid_plan(before, plan, policy.tm_moves, policy.tm_compatible, offers)
+            or dict(before.items).get(plan['item'])):
+        return None
+    item = plan['item']
+    price = champion_shop.PRICES[item] if plan.get('supply') else tm_shop.PRICES[item]
+    return before, item, plan.get('quantity', 1), price
+
+
+def credit(memory, before, item, quantity, price):
+    """Write a sale into ``memory``: the price leaves the purse and the item takes the bag's next entry."""
+    digits = f'{before.money - price:06d}'
+    memory[W_MONEY:W_MONEY + 3] = bytes(int(digits[i:i + 2], 16) for i in (0, 2, 4))
+    offset = W_BAG_ITEMS + len(before.items) * 2
+    memory[offset:offset + 3] = bytes((item, quantity, 255))
+    memory[W_NUM_BAG_ITEMS] = len(before.items) + 1
+
+
 def purchase(emu):
     """Buy the policy's selected item only while standing at the Celadon counter."""
     policy = emu.policy
-    plan = getattr(policy, 'tm_plan', None)
-    # Most calls are during travel. Avoid decoding all storage until arrival.
-    mem = emu.pb.memory
-    if policy.goal.key != 'buy_tm' or (mem[W_CUR_MAP], mem[W_X], mem[W_Y]) != tm_shop.COUNTER:
+    if not at_counter(policy, emu.pb.memory):
         return None
     preparation = emu.store.get('interaction_preparation') or {}
-    if (not plan or not getattr(emu, 'isolated_ram', False) or emu.paused or emu.manual_mode
+    if (not getattr(emu, 'isolated_ram', False) or emu.paused or emu.manual_mode
             or getattr(emu, 'preparation', None) or emu.store.get('trade_hold')
             or preparation.get('phase') in {'travelling', 'storage', 'rendezvous', 'ready'}):
         return None
     if getattr(emu, 'step_tracker', None) is not None:
         emu.step_tracker.flush(force=True)
-    before = read_snapshot(emu.pb.memory, emu.frame)
-    if (not before.valid or not before.started or before.in_battle or before.textbox or before.start_menu
-            or emu.pb.memory[W_WALK_COUNTER] or (before.map, before.x, before.y) != tm_shop.COUNTER
-            or policy.goal.key != 'buy_tm' or getattr(getattr(policy, 'heal', None), 'latched', False)
-            or not tm_shop.valid_plan(before, plan, policy.tm_moves, policy.tm_compatible, champion_shop.ready(emu.store))):
+    found = sale(policy, emu.pb.memory, emu.frame, champion_shop.ready(emu.store))
+    if found is None:
         return None
-    item, target = plan['item'], plan['target']
-    if dict(before.items).get(item):
-        return None
+    before, item, quantity, price = found
+    plan = policy.tm_plan
+    target, supply = plan['target'], plan.get('supply', False)
     pending = emu.store.get(PENDING)
     if pending and pending.get('decision') == 'COMMIT' and pending.get('phase') != 'complete':
         raise ValueError('A previous custom transaction still needs recovery')
-    supply = plan.get('supply', False)
-    price = champion_shop.PRICES[item] if supply else tm_shop.PRICES[item]
-    quantity = plan.get('quantity', 1)
     expected = replace(before, money=before.money - price, items=before.items + ((item, quantity),))
     emu.snapshot = before
     emu._autosave()
@@ -56,11 +81,7 @@ def purchase(emu):
     clone = emu._boot()
     try:
         clone.load_state(io.BytesIO(state))
-        digits = f'{expected.money:06d}'
-        clone.memory[W_MONEY:W_MONEY + 3] = bytes(int(digits[i:i + 2], 16) for i in (0, 2, 4))
-        offset = W_BAG_ITEMS + len(before.items) * 2
-        clone.memory[offset:offset + 3] = bytes((item, quantity, 255))
-        clone.memory[W_NUM_BAG_ITEMS] = len(expected.items)
+        credit(clone.memory, before, item, quantity, price)
         if read_snapshot(clone.memory, emu.frame) != expected:
             raise ValueError('The Champion purchase changed unexpected gameplay state')
         output = io.BytesIO()
