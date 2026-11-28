@@ -123,6 +123,13 @@ def test_a_map_that_draws_grass_with_its_own_tile_still_trains_a_partner(name, x
     assert starts_an_excursion((STRONG, HIGH), odds, name, x, y) == 'HIGH'
 
 
+def test_the_safari_zone_trains_no_partner():
+    # The Safari Zone draws grass with the forest tile, but its battles pay no experience. A Yellow run
+    # trained there on its way to the Surf house.
+    odds = grass(40, base_exp=100, map_id=MAPS['SAFARI_ZONE_EAST'])
+    assert starts_an_excursion((STRONG, HIGH), odds, 'SAFARI_ZONE_EAST', 20, 12) is None
+
+
 def test_a_reload_keeps_the_wait_before_the_next_partner_training():
     # A reload used to clear the five game minute wait, so the run could start training again at once.
     # The wait counts on the play clock now, which a reload never sets back.
