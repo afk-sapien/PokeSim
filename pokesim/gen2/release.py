@@ -3,8 +3,13 @@
 Catch goals, one-time encounters and field-move errands all need a free box slot. Once every box
 is full the only way to make room is to release a Pokémon. This module turns a Gen II snapshot into
 pcvalue rows: Unown count by letter, Crystal's caught data marks gifts and events, breeding stock is
-capped stock and League rewards are found by their mark. A spare holding an item has it taken off
-first (ledger.py), the Exp. Share included, so no item is lost with the Pokémon.
+capped stock and League rewards are found by their mark.
+
+A release visit takes a held item off first when a party slot and a bag entry are free
+(ledger.box_units). Otherwise a spare holding an item no plan wants goes with it, and the item's price
+counts in what the release costs, as it does for a release straight from the box. A spare holding an
+item a plan wants, the Exp. Share included, goes with it only when a full party cannot take it off and
+the bag or another Pokémon keeps a copy, so the last copy never leaves.
 """
 from ..trade.preferences import identity, signature
 from .facts import facts
