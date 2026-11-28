@@ -143,6 +143,28 @@ def test_a_trade_the_receiver_would_release_is_skipped_and_its_pair_waits(setup,
     assert (right, 25) not in asked
 
 
+def test_the_keep_checks_ask_every_receiver_at_the_same_time(setup, monkeypatch):
+    import threading
+    from pokesim.app.coordinator import pair_key
+    left, right = setup.data['left_id'], setup.data['right_id']
+    c = setup.coordinator
+    # Two candidates with a small gain on both sides, so four receivers are asked.
+    together = threading.Barrier(4, timeout=5)
+    def ask(aid, operation, data=None, recovery=False):
+        if operation == 'would_keep':
+            together.wait()
+            return {'keep': data['dex'] != 25}
+        return original(aid, operation, data, recovery)
+    original = c._request
+    monkeypatch.setattr(c, '_request', ask)
+    inventories = {left: inventory(offer('spare', 25), offer('kept', 16, 30)), right: inventory(offer('new-right', 19))}
+    selected = selection(setup, monkeypatch, inventories)
+    assert not together.broken
+    # The answers are still read from the best candidate down.
+    assert 'kept' in selected.values()
+    assert pair_key(left, right, {'dex': 25}, {'dex': 19}) in c.refused_pairs
+
+
 def test_a_worker_that_cannot_answer_does_not_block_its_trade(setup, monkeypatch):
     left, right = setup.data['left_id'], setup.data['right_id']
     c = setup.coordinator
