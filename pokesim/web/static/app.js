@@ -122,7 +122,10 @@ let stateBusy = false
 let partySignature = ''
 let currentParty = []
 let eventFilter = 'highlights'
+const EVENT_PAGE = 8
 let eventRows = []
+// How many entries the viewer has loaded: the first page plus one more for each Load more.
+let eventWindow = EVENT_PAGE
 let eventGeneration = 0
 let eventBusy = false
 let moreAvailable = true
@@ -492,7 +495,7 @@ async function refreshEvents(append = false) {
   if (eventBusy) return
   eventBusy = true
   const generation = eventGeneration
-  const params = new URLSearchParams({limit: '8'})
+  const params = new URLSearchParams({limit: String(EVENT_PAGE)})
   if (eventFilter === 'all') params.set('all', '1')
   if (eventFilter === 'team') {
     params.set('types', 'catch,evolve,obtain,level,trade')
@@ -504,9 +507,21 @@ async function refreshEvents(append = false) {
     if (!response.ok) throw new Error('Could not open the journal')
     const rows = await response.json()
     if (generation !== eventGeneration) return
-    moreAvailable = append || !eventRows.length ? rows.length === 8 : moreAvailable
+    // A full newest page that ends above every shown entry may have skipped some between them, and
+    // Load more only reads below the oldest shown, so the journal starts again from that page.
+    const restart = !append && (!eventRows.length || rows.length === EVENT_PAGE && rows.at(-1).id > eventRows[0].id)
     if (append) eventRows = [...eventRows, ...rows.filter((row) => !eventRows.some((existing) => existing.id === row.id))]
-    else eventRows = [...rows, ...eventRows.filter((row) => !rows.some((existing) => existing.id === row.id))]
+    else if (restart) eventRows = rows
+    else {
+      // New entries push the oldest out, so an open tab holds only what its viewer loaded.
+      const merged = [...rows, ...eventRows.filter((row) => !rows.some((existing) => existing.id === row.id))]
+      eventRows = merged.slice(0, eventWindow)
+      if (merged.length > eventWindow) moreAvailable = true
+    }
+    if (append || restart) {
+      moreAvailable = rows.length === EVENT_PAGE
+      eventWindow = Math.max(EVENT_PAGE, eventRows.length)
+    }
     renderEvents()
   } catch (_) {
     if (!eventRows.length) $('#events').innerHTML = '<p class="journal-empty">The journal is taking a moment. We’ll try again shortly.</p>'
