@@ -3,7 +3,7 @@
 set -eu
 
 unsupported() {
-    printf '%s\n' "PokeSim 0.5 has no emulator build for this platform: $1." \
+    printf '%s\n' "PokeSim ${version} has no emulator build for this platform: $1." \
         'Supported: Linux x86-64 and ARM64 (glibc), macOS Intel and Apple Silicon, and Windows x64 (use install.ps1).' \
         'The Docker image (linux/amd64 and linux/arm64) is the alternative: see the Docker guide in the PokeSim documentation.' \
         'Nothing was installed. Do not run "pip install pokesim": that installs an unrelated project from PyPI.' \
@@ -12,6 +12,7 @@ unsupported() {
 }
 
 main() {
+    version=0.7.5
     platform=$(uname -s)
     if [ "$platform" != Linux ] && [ "$platform" != Darwin ]
     then
@@ -43,7 +44,6 @@ main() {
         printf '%s\n' 'Run this installer as your normal user, without sudo.' >&2
         exit 1
     fi
-    version=0.7.5
     package=${POKESIM_INSTALL_PACKAGE:-https://github.com/afk-sapien/PokeSim/releases/download/v${version}/pokesim-${version}-py3-none-any.whl}
     if command -v uv >/dev/null 2>&1
     then
@@ -71,7 +71,7 @@ main() {
     "$bin_dir/pokesim-desktop" --help >/dev/null
     printf '\n%s\n' 'PokeSim is installed. Start it with:'
     printf '  "%s/pokesim-desktop"\n' "$bin_dir"
-    printf '\n%s\n' 'Your browser will open the Library. Add your own Red, Blue, Gold, Silver or Crystal ROM in Settings, Game cartridges.'
+    printf '\n%s\n' 'Your browser will open the Library. Add your own Red, Blue, Yellow, Gold, Silver or Crystal ROM in Settings, Game cartridges.'
     printf '%s\n' 'For the short pokesim-desktop command, add the tool directory to PATH with:'
     printf '  "%s" tool update-shell\n' "$uv_bin"
     printf '%s\n' 'Then open a new terminal. Save and quit PokeSim before rerunning this installer to update.'
