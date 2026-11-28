@@ -2,7 +2,8 @@
 
 A recorded run is the gate's run of one rung, played by the commit's own ``gate-rung`` in the
 commit's own environment, with a trace recorder attached by ``shim.py``. Runs are kept under
-``<out>/<ladder>-<rung>/<sha12>[-pyboy-own]/<n>/`` and a finished one is used again.
+``<out>/<ladder>-<rung>/<sha12>[-pyboy-own]/<n>/`` and a finished one is used again for the same
+frame budget.
 
 A bisect first records each end twice. The two traces of one end must have the same head, or
 the rung does not replay the same way twice and nothing after that could be trusted. It then
@@ -112,13 +113,14 @@ def _trace_module():
 
 
 def record(options, rung, sha, n=1, pyboy=None):
-    """Play ``rung`` at commit ``sha`` with a recorder attached. Returns the Run, a finished one if kept."""
+    """Play ``rung`` at commit ``sha`` with a recorder attached. Returns the Run, a finished one if kept
+    with the same frame budget."""
     pyboy = pyboy or options.pyboy
     if pyboy not in (CURRENT, OWN):
         raise ValueError(f'pyboy is {CURRENT} or {OWN}, not {pyboy}')
     folder = run_folder(options, rung, sha, pyboy, n)
     kept = load(folder, sha)
-    if kept.ok:
+    if kept.ok and kept.replay.get('frames') == options.frames:
         return kept
     ladder, name = _split(rung)
     ladder_folder = Path(options.ladders) / ladder
