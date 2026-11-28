@@ -1210,6 +1210,45 @@ def test_time_capsule_preparation_heals_before_depositing_the_last_pokemon_that_
     assert controller.menu == Storage('DEPOSIT', 1, 2)
 
 
+def test_a_time_capsule_deposit_ahead_of_a_copy_followed_by_its_slot_moves_the_slot_up(real_data, monkeypatch):
+    # A copy picked by a stamped key is followed by its party slot. Chikorita cannot enter the Time
+    # Capsule, so it goes to the PC and Pikachu moves from slot 1 to slot 0.
+    from pokesim.gen2 import preparation, timecapsule
+    from pokesim.gen2.menus import Storage
+    monkeypatch.setattr(preparation, 'update_world', lambda *args: None)
+    monkeypatch.setattr(preparation, 'Memory', lambda *args: SimpleNamespace(
+        byte=lambda name: 4 if name == 'wPlayerDirection' else 0))
+    monkeypatch.setattr(timecapsule, 'compatible', lambda mon, data: mon.species != 152)
+    pikachu = SimpleNamespace(species=25, hp=40, egg=False, status=0, moves=(84,))
+    chikorita = SimpleNamespace(species=152, hp=30, egg=False, status=0, moves=(33,))
+
+    def selected(snapshot, preferences, key, copies=None, slot=None):
+        if snapshot.party[slot:slot + 1] != (pikachu,):
+            raise ValueError('The selected Pokémon left its party slot')
+        return 'party', slot, pikachu
+
+    monkeypatch.setattr(preparation, 'selected', selected)
+    center = real_data.map_ids['PEWTER_POKECENTER_1F']
+    policy = SimpleNamespace(in_league=lambda snapshot: False, mode=None,
+        walk=lambda snapshot, memory, path: SimpleNamespace(button='down'),
+        nav=SimpleNamespace(observe=lambda snapshot: None, collision=lambda *args: [],
+            toward=lambda snapshot, target, points, memory, surf=False: [] if target == center else ['walk'],
+            regions=SimpleNamespace(observe=lambda *args: None)))
+    emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}),
+                          store=SimpleNamespace(set=lambda *args: None))
+    state = {'started_frame': 0, 'trade_key': 'k', 'manual': True, 'time_capsule': True, 'slot': 1}
+    controller = preparation.Preparation(emu, state)
+    controller.center = (center, (9, 1))
+    snapshot = SimpleNamespace(in_battle=False, map=center, text='', tiles=[''] * 18, badges=0,
+                               party=(chikorita, pikachu), stored=(), active_box=0, box_counts=(5,) * 14)
+    assert controller.advance(snapshot).button == 'a'
+    assert controller.menu == Storage('DEPOSIT', 0, 2)
+    monkeypatch.setattr(Storage, 'step', lambda self, snapshot, mem: None)
+    snapshot.party = (pikachu,)
+    assert controller.advance(snapshot).button == 'down'
+    assert state['slot'] == 0 and policy.mode == 'Prepare the Cable Club exchange'
+
+
 def test_time_capsule_conversion_matches_retail_exchange(real_data):
     from pokesim.gen2.timecapsule_conversion import to_gen1, to_gen2
     old = bytes.fromhex('85002306001515ff9621000051a1001c0a0410061e052f065603d2a6f728230000110024000d001b0027000f')
