@@ -13,10 +13,7 @@ EVOLVES = {sid: row['species'] for sid, rows in EVOS.items() for row in rows if 
 def benefit(inv, incoming):
     """What ``incoming`` is worth to ``inv`` (trade/worth.py), as (points, reason)."""
     side = {**incoming.as_side(), 'arrived_dex': SPECIES[EVOLVES.get(incoming.species, incoming.species)]['dex']}
-    payload = {'owned': inv.owned, 'version': inv.version, 'party': list(inv.party),
-               'storage': {'pokemon': [{**copy.as_side(), 'trade_preference': copy.trade_preference}
-                                       for copy in inv.stored]}}
-    found = gain(payload, side)
+    found = gain(inv.pc, side)
     species = ' and '.join(DEX_NAMES[dex] for dex in found.new) or DEX_NAMES.get(side['arrived_dex'], incoming.label)
     return found.points, why(inv.instance.title(), species, found)
 
@@ -50,13 +47,17 @@ def listings(inv, allow_last_copies=False):
 
 def proposals(inventories, limit=12, allow_last_copies=False):
     live = [inv for inv in inventories if inv.started and inv.reachable]
+    listed = [offers(inv, allow_last_copies) for inv in live]
     candidates = []
     for i, us in enumerate(live):
-        for peer in live[i + 1:]:
-            for give in offers(us, allow_last_copies):
-                for take in offers(peer, allow_last_copies):
-                    mine, reason_mine = benefit(us, take)
-                    theirs, reason_theirs = benefit(peer, give)
+        for j, peer in enumerate(live[i + 1:], i + 1):
+            if not (listed[i] and listed[j]):
+                continue
+            # Each side's gain reads only the copy it receives, so each offer is rated once per pair.
+            gets = [(take, *benefit(us, take)) for take in listed[j]]
+            sends = [(give, *benefit(peer, give)) for give in listed[i]]
+            for give, theirs, reason_theirs in sends:
+                for take, mine, reason_mine in gets:
                     if not mine and not theirs:
                         continue
                     last_give = us.held[give.species] == 1

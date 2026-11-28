@@ -168,8 +168,22 @@ def test_publish_job_is_the_only_writer_and_never_runs_in_a_dry_run():
                or 'gh release' in part or 'docker login' in part]
     assert writers == ['publish']
     publish = next(part for part in jobs if part.startswith('publish:'))
-    assert 'if: ${{ inputs.dry_run != true }}' in publish
+    assert 'if: ${{ inputs.dry_run != true && ' in publish
     assert 'gate' in publish.split('needs:')[1].split('\n')[0]
+
+
+def test_a_publish_of_an_earlier_run_builds_nothing_and_rehearses_the_images_it_pushes():
+    jobs = load_workflow('release.yml')['jobs']
+    # The earlier run's images are the ones published, so this run's builds would go unused.
+    assert jobs['build']['if'] == '${{ !inputs.images_from_run }}'
+    for name in ('rehearse', 'publish'):
+        job = jobs[name]
+        # A skipped build must not skip the jobs after it, and any failure still stops them.
+        assert '!failure() && !cancelled()' in job['if'], name
+        download, = [step for step in job['steps'] if step.get('uses', '').startswith('actions/download-artifact@')]
+        assert download['with']['run-id'] == '${{ inputs.images_from_run || github.run_id }}', name
+        assert download['with']['github-token'] == '${{ secrets.GITHUB_TOKEN }}', name
+        assert job['permissions'] == {**job['permissions'], 'actions': 'read'}, name
 
 
 def test_publish_checks_come_from_the_dispatching_commit_and_guard_every_push():

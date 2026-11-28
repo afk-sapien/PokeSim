@@ -590,3 +590,26 @@ test('a view link never sees the release order select', async () => {
   await view.ready()
   assert.equal(view.element('#pc-favor-control').hidden, true)
 })
+
+test('a party change on a poll leaves the open box drawn and a change in that box redraws it', async () => {
+  const party = [mon(undefined, undefined, 80, {slot: 1, hp: 40, max_hp: 60})]
+  const boxed = [mon(1, 1, 20), mon(1, 2, 25)]
+  const view = pc(boxed, '?box=1', party)
+  await view.ready()
+  await view.settle()
+  assert.match(view.element('#pc-grid').innerHTML, /Lv. 20/)
+  view.element('#pc-grid').innerHTML = 'kept'
+  party[0].hp = 12
+  party[0].experience += 50
+  await view.refresh()
+  await view.settle()
+  assert.equal(view.element('#pc-grid').innerHTML, 'kept')
+  boxed[0].level = 21
+  await view.refresh()
+  await view.settle()
+  assert.match(view.element('#pc-grid').innerHTML, /Lv. 21/)
+  // The picker counts the party, so a new member still redraws it.
+  party.push(mon(undefined, undefined, 5, {slot: 2}))
+  await view.refresh()
+  assert.match(view.element('#box-picker').innerHTML, /2 \/ 6/)
+})

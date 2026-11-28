@@ -478,7 +478,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get("/api/pokedex/status")
     def pokedex_route(view: Literal['pc', 'dex', 'party'] | None = Query(None), values: bool = Query(True)):
-        payload = pokedex_status(plan=view not in ('pc', 'party'))
+        # The popup never draws a boxed Pokémon and the Pokédex only who holds each species.
+        payload = pokedex_status(plan=view not in ('pc', 'party'), records=view not in ('party', 'dex'))
         if view == 'party':
             # The Live page's popup draws one party member as the PC does, lock included, never the boxes.
             return fast_json({**{key: value for key, value in payload.items() if key not in ('plan', 'storage')},
@@ -524,7 +525,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
         return {**payload, 'storage': storage, 'pc_favor': store.pc_favor(),
                 'pc_deadlock': DEADLOCK if deadlock else None}
 
-    def pokedex_status(plan=True):
+    def pokedex_status(plan=True, records=True):
         status = emu.status()
         league_rewards = status.get('league_rewards', {}) if getattr(config, 'LEAGUE_REWARDS', False) else None
         if gen2:
@@ -533,7 +534,7 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
                                        league_rewards=league_rewards, plan=plan)
         else:
             payload = live_status(status.get("game"), (status.get("strategy") or {}).get("collection"),
-                                  league_rewards=league_rewards)
+                                  league_rewards=league_rewards, records=records)
         if gen2:
             from ..gen2.tracking import apply as achievements
             from ..gen2.league import apply as league_partners
@@ -547,15 +548,17 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
 
     @app.get('/api/trading')
     def trading_status():
-        payload = pokedex_status(plan=not gen2)
+        from . import trading
+        participant = getattr(app.state, 'participant', None)
+        if not gen2 and base_path and participant is not None:
+            # The library's broker reads this inventory, so the page shows the same one.
+            payload = participant.runtime.call(participant.inventory)
+        else:
+            payload = pokedex_status(plan=not gen2)
         if gen2:
             from ..gen2.trading import status
             return fast_json(slim_offers({**status(emu, payload, adventure_id), 'viewer_only': view_only()}))
-        from . import trading
         if base_path:
-            participant = getattr(app.state, 'participant', None)
-            if participant is not None:
-                payload = participant.runtime.call(participant.inventory)
             result = trading.unavailable(payload, adventure_id, 'Useful exchanges happen automatically with eligible adventures in this library.')
             result.update(connected=True, managed=True, trading={'managed': True, 'enabled': True})
             return slim_offers({**result, 'viewer_only': view_only(),
