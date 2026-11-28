@@ -196,6 +196,20 @@ def test_only_a_trade_still_in_line_can_be_cancelled(built):
     assert c.manual_status(third['id'])['state'] == 'queued'
 
 
+def test_a_request_id_returns_only_the_trade_it_queued_for_the_same_choice(built):
+    """Sending a request again returns its trade. Another choice under a trade's ID, as someone who only
+    saw that ID on a shared adventure could send, learns nothing about that trade."""
+    service, c = built.manager.builder, built.coordinator
+    left, right = built.data['left_id'], built.data['right_id']
+    choice = {'from_id': left, 'from_key': '0', 'to_id': right, 'to_key': '1'}
+    trade = service.create(choice)
+    assert service.create({**choice, 'request_id': trade['id']})['id'] == trade['id']
+    for other in ({'from_key': 'party-0'}, {'to_key': 'party-1'}, {'from_id': right, 'to_id': left}):
+        with pytest.raises(ValueError, match='already belongs to another trade'):
+            service.create({**choice, **other, 'request_id': trade['id']})
+    assert [row['id'] for row in c.manual_statuses()['trades']] == [trade['id']]
+
+
 def test_the_library_lists_every_trade_waiting_in_line(built):
     service, c = built.manager.builder, built.coordinator
     left, right = built.data['left_id'], built.data['right_id']

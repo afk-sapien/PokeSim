@@ -500,8 +500,11 @@ def _use(policy, snapshot, data, state, bag, Give, Teach, UseOn):
                          if signature(mon) == plan['signature'] and not mon.held_item), None)
             if slot is None:
                 slot = recipient_for_held(data, snapshot, name)
-            state.pop(PLAN, None)
-            return Give(plan['item'], slot) if slot is not None else None
+            task = Give(plan['item'], slot) if slot is not None else None
+            if task is None or policy.allowed(task, snapshot):
+                # A Give the game refused recently keeps the plan, so the item goes to the same partner later.
+                state.pop(PLAN, None)
+            return task
         if name is not None and name != 'RARE_CANDY':
             # Balls and Elixirs stay in the bag for later use.
             state.pop(PLAN, None)

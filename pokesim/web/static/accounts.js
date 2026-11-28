@@ -132,13 +132,18 @@
     const {adventures} = await call('/api/v1/adventures')
     return adventures.filter(row => row.access === 'owner' && !row.archived)
   }
+  let sharingShown = 0
   async function showSharing() {
     const aid = $('#share-adventure').value
+    const turn = ++sharingShown
     $('#share-details').hidden = !aid
     // A link shows only right after it is made, so a turned-off one never stays on screen.
     $('#share-made').hidden = true
     if (!aid) return
     const sharing = await call(`/api/v1/adventures/${aid}/sharing`)
+    // A newer load draws the panel, so a slow answer for an adventure chosen before never shows
+    // buttons that would change that one under the name of the one chosen now.
+    if (turn !== sharingShown) return
     const watching = new Set(sharing.grants.map(grant => grant.user_id))
     $('#share-watchers').replaceChildren(...sharing.grants.map(grant => {
       const name = grant.display_name || grant.username

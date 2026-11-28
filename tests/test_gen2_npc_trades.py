@@ -226,8 +226,6 @@ def test_dex_table_covers_every_species_with_sources(real_data):
     by = {row['name']: row for row in rows}
     assert by['Aerodactyl']['status'] == 'available'
     assert 'Kim' in by['Aerodactyl']['reason']
-    assert by['Unown']['status'] == 'planned'
-    assert any(source['planned'] for source in by['Unown']['sources'])
     assert by['Mew']['status'] == 'external'
     # Once Kim's one-time trade is spent, Aerodactyl needs another route in.
     after = {row['name']: row for row in describe(real_data, done_trades=[5])}

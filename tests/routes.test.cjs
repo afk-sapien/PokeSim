@@ -121,9 +121,10 @@ test('live speed changes persist only the current adventure setting', async () =
   const view = routes('/games/red-two', 'red-two')
   await view.api.setSpeed(4)
   const call = view.calls.at(-1)
-  assert.equal(call.path, '/api/v1/adventures/red-two')
+  // Its own route, which a manager may use as well as the owner.
+  assert.equal(call.path, '/api/v1/adventures/red-two/speed')
   assert.equal(call.options.method, 'PATCH')
-  assert.deepEqual(JSON.parse(call.options.body), {settings: {speed: 4}})
+  assert.deepEqual(JSON.parse(call.options.body), {speed: 4})
   assert.equal(call.options.headers['X-PokeSim-CSRF'], 'owner-csrf')
 })
 
@@ -138,11 +139,11 @@ test('standalone live speed uses its existing emulator control', async () => {
 test('live speed updates renew expired sessions without losing the selected speed', async () => {
   let attempts = 0
   const view = routes('/games/a', 'a', true, path => {
-    if (path === '/api/v1/adventures/a' && ++attempts === 1) {
+    if (path === '/api/v1/adventures/a/speed' && ++attempts === 1) {
       return {ok: false, status: 403, clone: () => ({json: async () => ({code: 'csrf_expired'})})}
     }
   })
   await view.api.setSpeed(16)
   assert.equal(attempts, 2)
-  assert.deepEqual(JSON.parse(view.calls.at(-1).options.body), {settings: {speed: 16}})
+  assert.deepEqual(JSON.parse(view.calls.at(-1).options.body), {speed: 16})
 })

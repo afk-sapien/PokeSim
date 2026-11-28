@@ -736,6 +736,32 @@ def test_postgame_restocking_reaches_a_mart_beyond_the_local_map_limit(real_data
     assert policy.shop.offer(policy, snapshot)[0].map_name == 'VIOLET_MART'
 
 
+def test_restocking_skips_medicine_a_full_items_pocket_cannot_take(real_data):
+    # The purchase shortcut refuses a pocket with no free entry, so a trip for medicine with 20 other
+    # items in the bag only repeated the refused purchase.
+    from pokesim.gen2.policy import Policy, Goal
+    policy = Policy(real_data)
+    policy.completed.update(ice_path=1)
+    hyper = real_data.items['HYPER_POTION']
+    mart = next(mid for mid, entry in real_data.maps.items() if any(hyper in shop['items'] for shop in entry['shops']))
+    policy.travel_region = lambda snapshot: real_data.maps[mart]['region']
+    policy.nav.walk = lambda snapshot, target: [(None, target, None, None)] * 6 if target == mart else None
+    policy.nav.regions.route = lambda snapshot, target, *args, **kwargs: [(None, (target, 0), None, 'warp')] * 6
+    policy.person = lambda snapshot, key, label, name, script: Goal(key, label, name, 1, 1)
+    medicine = {real_data.items[name] for name in ('FULL_RESTORE', 'MAX_POTION', 'HYPER_POTION', 'REVIVE')}
+    others = [item for item in real_data.items.values() if item not in medicine
+              and real_data.item_attributes.get(item, {}).get('pocket') == 'ITEM'][:20]
+    snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_ROOM_2'], party=(), money=20000, can_catch=False,
+        badges=65535, hall_of_fame_count=1, event=lambda name: True, owned=set())
+    snapshot.items = tuple((item, 1) for item in others[:19])
+    snapshot.pockets = {'items': snapshot.items, 'balls': ()}
+    goal, _ = policy.shop.offer(policy, snapshot)
+    assert goal is not None and goal.map_name == real_data.maps[mart]['constant']
+    snapshot.items = tuple((item, 1) for item in others)
+    snapshot.pockets = {'items': snapshot.items, 'balls': ()}
+    assert policy.shop.offer(policy, snapshot) == (None, None)
+
+
 def test_restock_does_not_walk_to_a_mart_through_ice_path(real_data):
     # Shopping is off inside Ice Path. The Blackthorn Mart is three maps from Route 44 through the
     # cave, nearer than Ecruteak's, but the trip was dropped at the cave mouth, the Radio Card goal
@@ -947,6 +973,55 @@ def test_catch_never_picks_a_move_the_foe_has_disabled(real_data):
     # Disable wears off, and Stun Spore is back.
     memory['wPlayerDisableCount'] = 0
     assert reading(policy, mem).capture_move(snapshot) == 1
+
+
+def test_false_swipe_never_weakens_a_ghost(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    # A Scyther with False Swipe and Leer. False Swipe is a Normal move, so a Ghost takes nothing from it.
+    lead = SimpleNamespace(species=123, level=30, status=0, moves=(206, 43, 0, 0), pp=(40, 30, 0, 0),
+        stats=(90, 70, 50, 70, 40, 50))
+    snapshot = SimpleNamespace(party=(lead,), enemy_species=92, enemy_hp=40, enemy_max_hp=40,
+        pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
+    mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: 40)
+    assert reading(policy, mem).capture_move(snapshot) is None
+    # A Rattata takes the swipe, so the Scyther still uses it there.
+    snapshot.enemy_species = 19
+    assert reading(policy, mem).capture_move(snapshot) == 0
+
+
+def test_a_paralyzed_lead_still_sleeps_a_beast_its_mean_look_holds(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    # Gengar outran Raikou and Mean Looked it, then Thundershock paralyzed it and quartered its speed.
+    lead = SimpleNamespace(species=94, level=40, status=64, moves=(212, 95, 101, 0),
+        pp=(4, 20, 15, 0), stats=(120, 60, 60, 110, 120, 80))
+    snapshot = SimpleNamespace(party=(lead,), enemy_species=243, enemy_hp=150, enemy_max_hp=150,
+        pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
+    memory = {'wEnemyMonSpeed': 97}
+    mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: memory.get(name, 0))
+    # Untrapped, the beast flees before the slower lead moves, so the lead throws.
+    assert reading(policy, mem).capture_move(snapshot) is None
+    # Trapped, the beast cannot flee, so the lead puts it to sleep.
+    memory['wPlayerSubStatus5'] = 128
+    assert reading(policy, mem).capture_move(snapshot) == 1
+
+
+def test_a_disabled_normal_move_does_not_save_the_low_pp_moves(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = started(Policy(real_data))
+    scores = {33: 30, 52: 40, 55: 35}
+    policy.move_score = lambda move, mon, target: scores[move]
+    # Tackle, Ember with 3 PP left and Water Gun, in a trainer battle.
+    mon = SimpleNamespace(moves=(33, 52, 55, 0), pp=(30, 3, 20, 0))
+    snapshot = SimpleNamespace(in_battle=2, enemy_hp=100)
+    memory = {}
+    mem = SimpleNamespace(byte=lambda name: memory.get(name, 0))
+    # Tackle can do the work, so the last Embers are kept.
+    assert reading(policy, mem).move_choice(snapshot, mon, None, None) == 2
+    # With Tackle disabled nothing Normal can, so Ember is used.
+    memory['wDisabledMove'], memory['wPlayerDisableCount'] = 33, 3
+    assert reading(policy, mem).move_choice(snapshot, mon, None, None) == 1
 
 
 def test_roamer_lead_is_the_cheapest_sleeper_that_outspeeds_the_beasts(real_data):
@@ -1208,6 +1283,45 @@ def test_time_capsule_preparation_heals_before_depositing_the_last_pokemon_that_
     spot['at'] = controller.center[1]
     assert controller.advance(snapshot).button == 'a'
     assert controller.menu == Storage('DEPOSIT', 1, 2)
+
+
+def test_a_time_capsule_deposit_ahead_of_a_copy_followed_by_its_slot_moves_the_slot_up(real_data, monkeypatch):
+    # A copy picked by a stamped key is followed by its party slot. Chikorita cannot enter the Time
+    # Capsule, so it goes to the PC and Pikachu moves from slot 1 to slot 0.
+    from pokesim.gen2 import preparation, timecapsule
+    from pokesim.gen2.menus import Storage
+    monkeypatch.setattr(preparation, 'update_world', lambda *args: None)
+    monkeypatch.setattr(preparation, 'Memory', lambda *args: SimpleNamespace(
+        byte=lambda name: 4 if name == 'wPlayerDirection' else 0))
+    monkeypatch.setattr(timecapsule, 'compatible', lambda mon, data: mon.species != 152)
+    pikachu = SimpleNamespace(species=25, hp=40, egg=False, status=0, moves=(84,))
+    chikorita = SimpleNamespace(species=152, hp=30, egg=False, status=0, moves=(33,))
+
+    def selected(snapshot, preferences, key, copies=None, slot=None):
+        if snapshot.party[slot:slot + 1] != (pikachu,):
+            raise ValueError('The selected Pokémon left its party slot')
+        return 'party', slot, pikachu
+
+    monkeypatch.setattr(preparation, 'selected', selected)
+    center = real_data.map_ids['PEWTER_POKECENTER_1F']
+    policy = SimpleNamespace(in_league=lambda snapshot: False, mode=None,
+        walk=lambda snapshot, memory, path: SimpleNamespace(button='down'),
+        nav=SimpleNamespace(observe=lambda snapshot: None, collision=lambda *args: [],
+            toward=lambda snapshot, target, points, memory, surf=False: [] if target == center else ['walk'],
+            regions=SimpleNamespace(observe=lambda *args: None)))
+    emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}),
+                          store=SimpleNamespace(set=lambda *args: None))
+    state = {'started_frame': 0, 'trade_key': 'k', 'manual': True, 'time_capsule': True, 'slot': 1}
+    controller = preparation.Preparation(emu, state)
+    controller.center = (center, (9, 1))
+    snapshot = SimpleNamespace(in_battle=False, map=center, text='', tiles=[''] * 18, badges=0,
+                               party=(chikorita, pikachu), stored=(), active_box=0, box_counts=(5,) * 14)
+    assert controller.advance(snapshot).button == 'a'
+    assert controller.menu == Storage('DEPOSIT', 0, 2)
+    monkeypatch.setattr(Storage, 'step', lambda self, snapshot, mem: None)
+    snapshot.party = (pikachu,)
+    assert controller.advance(snapshot).button == 'down'
+    assert state['slot'] == 0 and policy.mode == 'Prepare the Cable Club exchange'
 
 
 def test_time_capsule_conversion_matches_retail_exchange(real_data):
@@ -1698,6 +1812,24 @@ def test_encounter_search_can_leave_and_reenter_a_disconnected_map(real_data, mo
     goal = collection.hunt(policy, snapshot, Goal)
     assert (goal.key, goal.x, goal.y) == ('collection_hunt', 1, 1)
     assert state['target']['species'] == 125
+
+
+def test_a_hunt_with_no_reachable_tile_on_another_map_waits_where_the_player_stands(real_data, monkeypatch):
+    # The wait names the player's own map and tile. The target map paired with the player's x and y
+    # named a tile there that nothing chose.
+    from pokesim.gen2 import collection
+    from pokesim.gen2.policy import Goal
+    here, there = real_data.map_ids['ROUTE_29'], real_data.map_ids['ROUTE_10_NORTH']
+    state = {'target': {'map': there, 'species': 125, 'method': 'grass', 'time': 'day'}}
+    regions = SimpleNamespace(route=lambda *args, **kwargs: None, memberships=lambda *args, **kwargs: set(),
+                              between=lambda *args: False)
+    policy = SimpleNamespace(data=real_data, collection=state, memory=None, monitor_tables={}, clock=0,
+                             nav=SimpleNamespace(regions=regions, visits={}))
+    snapshot = SimpleNamespace(map=here, x=40, y=9)
+    monkeypatch.setattr(collection, 'encounter_points', lambda *args, **kwargs: [(1, 1, None)])
+    goal = collection.hunt(policy, snapshot, Goal)
+    assert (goal.key, goal.map_name, goal.x, goal.y) == ('collection_wait', 'ROUTE_29', 40, 9)
+    assert state['target'] is None
 
 
 def test_roamer_search_steps_toward_a_neighbour_of_the_beasts_route(real_data, monkeypatch):
@@ -2558,6 +2690,36 @@ def test_the_static_sleeper_keeps_the_lead_through_a_box_release(real_data, monk
     assert policy.level_lead(snapshot) is None
     policy.decisions += 1
     assert policy.level_lead(snapshot) == Lead(1, (100, (100, 0, 0, 0)))
+
+
+@pytest.mark.parametrize('quest', ['static', 'roam'])
+def test_a_refused_lead_reorder_hands_the_quest_on(real_data, quest):
+    """The legendary and roamer quests set a Lead the game had just refused, so it was refused again each
+    decision until the run failed. Now the quest goes on and the reorder waits (MenuPart.allowed)."""
+    from pokecore.gen2.ram import experience_at
+    from pokesim.gen2.menus import Lead
+    from pokesim.gen2.policy import Goal, Policy
+    from pokesim.gen2.quests import prepare_lead, static_lead
+    policy = Policy(real_data)
+
+    def mon(species, moves, stats):
+        return SimpleNamespace(species=species, level=100, moves=moves, pp=tuple(10 if m else 0 for m in moves),
+                               egg=False, box=None, stats=stats, trainer_id=species, dvs=(15,) * 5, stat_exp=(0,) * 5,
+                               experience=experience_at(100, real_data.species[species]['growth']),
+                               name=real_data.species[species]['name'], held_item=0, hp=stats[0])
+    # Only Gengar knows Hypnosis, and at level 100 it outruns Entei.
+    party = [mon(160, (57, 0, 0, 0), (363, 284, 272, 234, 238, 246)), mon(94, (95, 122, 0, 0), (323, 251, 240, 319, 393, 273))]
+    snapshot = SimpleNamespace(party=party, stored=[], map=real_data.map_ids['CHERRYGROVE_CITY'], x=1, y=1, active_box=0)
+
+    def lead():
+        if quest == 'static':
+            return static_lead(policy, snapshot, 249, Goal)
+        return prepare_lead(policy, snapshot, [{'species': 244, 'level': 40, 'map': 0}], Goal)
+    task = Lead(1, (94, (15,) * 5))
+    policy.blocked[task.key()] = policy.clock + 100
+    assert lead() is None and policy.menu is None
+    policy.blocked.clear()
+    assert lead().key == f'collection_{quest}_lead' and policy.menu == task
 
 
 def test_wild_carriers_are_hunted_for_the_kings_rock_once_the_bag_has_none(real_data):

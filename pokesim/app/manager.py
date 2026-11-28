@@ -773,7 +773,7 @@ def create_app(manager, shutdown=lambda: None):
         return JSONResponse({'detail': str(error)}, status_code=403)
 
     from .offers import Changed, LimitReached, NoLongerManaged, OwnerOnly
-    from .ownership import NoLongerOwner
+    from .ownership import NoLongerOwner, owned_by
 
     @app.exception_handler(NoLongerOwner)
     @app.exception_handler(NoLongerManaged)
@@ -994,17 +994,20 @@ def create_app(manager, shutdown=lambda: None):
     def listed(row, actor):
         return {**row, 'resources': manager.supervisor.resources(row['id']), 'access': policy.adventure_role(actor, row)}
 
+    def problems_for(actor, rows):
+        """The watchdog's problems `actor` may read. `rows` are the adventures they can see."""
+        attention = manager.watchdog.public()
+        if actor.admin:
+            return attention
+        # Library problems are for admins. A member sees those of adventures they can watch.
+        shown = {row['id'] for row in rows}
+        return {**attention, 'problems': [problem for problem in attention['problems'] if problem['adventure_id'] in shown]}
+
     @app.get('/api/v1/adventures')
     def adventures(request: Request):
         actor = request.state.actor
         rows = policy.visible_adventures(actor, manager.registry.adventures())
-        attention = manager.watchdog.public()
-        if not actor.admin:
-            # Library problems are for admins. A member sees those of adventures they can watch.
-            shown = {row['id'] for row in rows}
-            attention = {**attention, 'problems': [problem for problem in attention['problems']
-                                                   if problem['adventure_id'] in shown]}
-        return {'adventures': [listed(row, actor) for row in rows], 'attention': attention,
+        return {'adventures': [listed(row, actor) for row in rows], 'attention': problems_for(actor, rows),
                 **inbox_module.summary(manager, actor)}
 
     @app.get('/api/v1/adventures/{aid}')
@@ -1194,6 +1197,21 @@ def create_app(manager, shutdown=lambda: None):
         result['play_pending'] = await asyncio.to_thread(manager.supervisor.push_play, aid)
         return result
 
+    @app.patch('/api/v1/adventures/{aid}/speed')
+    async def edit_speed(aid: str, request: Request):
+        """Change the simulation speed, which a manager may as well as the owner. A running game gets it live."""
+        manager.check_available()
+        data = await json_body(request)
+        if set(data) != {'speed'}:
+            raise Conflict('Send the speed only')
+        adventure = manager.registry.adventure(aid)
+        if manager.coordinator.reserved(aid):
+            raise Conflict('Settings are frozen until the trade is resolved')
+        settings = manager.validate_adventure_settings({**adventure['settings'], 'speed': data['speed']})
+        result = manager.registry.update(aid, settings=settings)
+        result['pace_pending'] = await asyncio.to_thread(manager.supervisor.push_speed, aid)
+        return result
+
     @app.get('/api/v1/settings')
     def settings(request: Request):
         from ..nicknames import nickname_defaults, nickname_catalog
@@ -1262,8 +1280,9 @@ def create_app(manager, shutdown=lambda: None):
         return FileResponse(path, media_type='image/png')
 
     @app.get('/api/v1/watchdog')
-    def watchdog():
-        return manager.watchdog.public()
+    def watchdog(request: Request):
+        actor = request.state.actor
+        return problems_for(actor, policy.visible_adventures(actor, manager.registry.adventures()))
 
     @app.patch('/api/v1/watchdog')
     async def set_watchdog(request: Request):
@@ -1557,11 +1576,13 @@ def create_app(manager, shutdown=lambda: None):
         def write():
             if manager.builder.viewer_only(aid):
                 raise HTTPException(403, 'This adventure is view-only')
-            manager.registry.adventure(aid)
-            try:
-                trade_settings.update(manager.registry, aid, **data)
-            except ValueError as error:
-                raise HTTPException(400, str(error)) from error
+            # Ownership is read again under the guard a transfer holds, which resets these switches,
+            # so an old owner's request that was still sending its body cannot turn them back on.
+            with owned_by(manager, request.state.actor, (aid,)):
+                try:
+                    trade_settings.update(manager.registry, aid, **data)
+                except ValueError as error:
+                    raise HTTPException(400, str(error)) from error
             return auto_settings_public(aid)
         return await asyncio.to_thread(write)
 

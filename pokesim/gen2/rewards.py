@@ -61,7 +61,9 @@ class Gen2(Side):
         return Staged(after, (new.box, new.position), bool(new.shiny))
 
     def metadata(self, emu, before, championships):
-        return emu.store.checkpoint_metadata(emu._autosave())
+        # The autosave can refuse (backing out, a still screen, an invalid read), and then no gift is sent.
+        source = emu._autosave()
+        return emu.store.checkpoint_metadata(source) if source else None
 
     def deliver_mew(self, db, emu, number, **fields):
         from .steps import deliver

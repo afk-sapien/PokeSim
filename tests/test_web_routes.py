@@ -1,4 +1,5 @@
 from html.parser import HTMLParser
+from pathlib import Path
 from types import SimpleNamespace
 from xml.etree import ElementTree
 
@@ -17,6 +18,33 @@ class Links(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         self.urls.extend(value for key, value in attrs if key in {'src', 'href'} and value)
+
+
+class Nesting(HTMLParser):
+    """Each end tag that does not close the element open at that point, with its line."""
+    EMPTY = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'}
+
+    def __init__(self, text):
+        super().__init__()
+        self.open, self.stray = [], []
+        self.feed(text)
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in self.EMPTY:
+            self.open.append(tag)
+
+    def handle_endtag(self, tag):
+        if self.open and self.open[-1] == tag:
+            self.open.pop()
+        else:
+            self.stray.append((tag, self.getpos()[0]))
+
+
+@pytest.mark.parametrize('page', sorted(path.name for path in (Path(__file__).parents[1] / 'pokesim/web/static').glob('*.html')))
+def test_every_static_page_closes_what_it_opens(page):
+    # A browser drops a stray end tag without a word, so a broken page still looks whole.
+    nesting = Nesting((Path(__file__).parents[1] / 'pokesim/web/static' / page).read_text())
+    assert nesting.stray == [] and nesting.open == []
 
 
 def app(tmp_path, **kwargs):

@@ -526,6 +526,32 @@ def test_policy_returns_to_catch_returned_legendaries(data):
         assert goal.key == 'legend_suicune' and goal.kind == HUNT
 
 
+def test_the_rainbow_wing_waits_for_beasts_the_player_holds(data):
+    """Crystal's Tin Tower sage stands there to give the Rainbow Wing only while the party or a PC box
+    holds all three beasts with the player's trainer ID (pret BeastsCheck)."""
+    if data.game != 'crystal':
+        pytest.skip('Only Crystal gives the Rainbow Wing at the Tin Tower')
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.quests import legends
+
+    class Bus:
+        def __getitem__(self, key):
+            return (4660).to_bytes(2, 'big')  # Every read, wPlayerID among them, answers trainer ID 4660.
+
+    flags = {'EVENT_GOT_MASTER_BALL_FROM_ELM', 'EVENT_FOUGHT_SUICUNE'}
+    policy = SimpleNamespace(data=data, collection={}, returned=set(), decisions=0, memory=Bus(),
+                             person=lambda snapshot, key, label, map_name, script: Goal(key, label, map_name, 0, 0))
+    beasts = [SimpleNamespace(species=species, trainer_id=4660) for species in (243, 244, 245)]
+    snapshot = SimpleNamespace(owned={243, 244, 245, 249, 251}, can_catch=True, items=((data.items['SILVER_WING'], 1),),
+                               event=lambda name: name in flags, roamers=(), map=data.map_ids['NEW_BARK_TOWN'],
+                               party=beasts[:1], stored=beasts[1:], pockets={'balls': [(data.items['ULTRA_BALL'], 20)]})
+    assert legends(policy, snapshot, Goal).key == 'rainbow_wing'
+    # A Raikou that came in a trade has another trainer's ID, so the sage is not there to talk to.
+    beasts[0].trainer_id = 1
+    goal = legends(policy, snapshot, Goal)
+    assert goal is None or goal.key != 'rainbow_wing'
+
+
 def test_a_walking_return_of_an_owned_legendary_waits_behind_open_work(data, monkeypatch):
     """Issue #651: a Gold run went to each walking return of an owned legendary ahead of all other work,
     started the battle and fled at once, since the battle keeps such a return only for a better roll."""

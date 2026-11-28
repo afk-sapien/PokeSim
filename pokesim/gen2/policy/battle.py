@@ -543,7 +543,7 @@ class BattlePart:
         if snapshot.in_battle == 2 and not self.collection.get('tower'):
             normal_available = any(self.data.moves.get(move, {}).get('type') == 0 and mon.pp[index]
                                    and self.move_score(move, mon, opponent) > 0
-                                   for index, move in enumerate(mon.moves) if move)
+                                   for index, move in enumerate(mon.moves) if move and move != disabled)
             if normal_available:
                 options = [(score * (0.25 if mon.pp[index] <= 5
                                     and self.data.moves[mon.moves[index]]['type'] != 0 else 1), index)
@@ -623,7 +623,9 @@ class BattlePart:
         pp = tuple(0 if move == disabled else count for move, count in zip(mon.moves, mon.pp))
         enemy = self.reads.enemy
         roaming = self.roamer(snapshot)
-        if roaming and mon.stats[3] // (4 if mon.status & 64 else 1) <= enemy.stats[3]:
+        # A beast the lead's Mean Look holds cannot flee, so a lead slowed since then still puts it to sleep.
+        if (roaming and not self.reads.player.holds_foe
+                and mon.stats[3] // (4 if mon.status & 64 else 1) <= enemy.stats[3]):
             return None
         if roaming:
             # Beasts flee after a faster lead moves unless the lead has Mean Looked them or they sleep.
@@ -671,7 +673,8 @@ class BattlePart:
             for kind in set(types):
                 factor *= self.data.matchups.get((entry['type'], kind), 1)
             damage = (((2 * mon.level // 5 + 2) * entry['power'] * attack / max(1, defense)) / 50 + 2) * factor
-            if entry.get('effect') == 'EFFECT_FALSE_SWIPE' or 0 < damage * 2.5 < foe.hp:
+            # False Swipe is Normal, so a Ghost takes nothing from it either.
+            if damage > 0 and (entry.get('effect') == 'EFFECT_FALSE_SWIPE' or damage * 2.5 < foe.hp):
                 options.append((damage, index))
         return max(options)[1] if options else None
 

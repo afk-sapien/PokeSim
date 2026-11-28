@@ -29,6 +29,8 @@
 - `ReorderParty` is done only once the two whole party records trade places. Two catches that
   share species, trainer ID, DVs and nickname but differ in level read as already swapped, so
   the weaker one stayed in front.
+- `give_item(..., swap=True)` counts the pocket entry a last given copy frees, as the game takes
+  that item out before the old one comes back. It refused that swap into a full pocket.
 
 ## 0.12.4
 

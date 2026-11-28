@@ -240,9 +240,11 @@ class Shop(Errand):
                 for shop in entry['shops']:
                     if not policy.clerk_present(snapshot, entry, shop):
                         continue
+                    # The purchase shortcut refuses an item the bag has no entry for, so none is chosen.
                     item = next((data.items[name] for name in names
                                  if data.items[name] in shop['items']
-                                 and data.item_attributes[data.items[name]]['price'] <= snapshot.money - reserve), None)
+                                 and data.item_attributes[data.items[name]]['price'] <= snapshot.money - reserve
+                                 and ledger.fits(data, snapshot, data.items[name])), None)
                     if item:
                         goal = policy.person(snapshot, 'buy_balls', 'Restock adventure supplies', entry['constant'], shop['script'])
                         walk = nav.regions.route(snapshot, mid, [(goal.x, goal.y)], cut=cut, surf=surf)

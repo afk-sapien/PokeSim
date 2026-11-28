@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from pokesim.app import trade_settings
 from pokesim.app.coordinator import STALLED_TRAVEL_SECONDS, SUMMARY_SECONDS, Coordinator, travel_failures
 from pokesim.app.registry import Registry, identifier
 from pokesim.interactions.cable_metadata import ADAPTER_ID
@@ -1208,6 +1209,26 @@ def test_collection_demand_names_the_missing_species_a_peer_offers(setup):
     # Bellsprout can come by trade, so a store item waits. Nobody offers Exeggutor.
     assert setup.peers[right].collection_payload['supply'] == [69]
     assert setup.peers[right].collection_payload['peers'] == 1
+    assert setup.peers[left].collection_payload['supply'] == []
+
+
+def test_an_offer_no_automatic_trade_may_bring_is_no_supply(setup):
+    """A Gold run waiting on another owner's Starmie stopped buying its Water Stone, yet without
+    consent from both owners the two are never paired, so the Starmie never came either."""
+    c, registry = setup.coordinator, setup.registry
+    left, right = setup.data['left_id'], setup.data['right_id']
+    setup.peers[left].owned = [dex for dex in range(1, 152) if dex != 121]
+    setup.peers[right].dex = 121
+    registry.db.execute('UPDATE adventures SET owner_id=? WHERE id=?', ('c' * 32, right))
+    assert c.schedule_once() is None
+    assert setup.peers[left].collection_payload['supply'] == []
+    for aid in (left, right):
+        trade_settings.update(registry, aid, across_owners=True)
+    assert c.schedule_once()['phase'] == 'completed'
+    assert setup.peers[left].collection_payload['supply'] == [121]
+    # Nor does a game whose automatic trading is off.
+    trade_settings.update(registry, right, enabled=False)
+    c.schedule_once()
     assert setup.peers[left].collection_payload['supply'] == []
 
 

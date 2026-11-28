@@ -41,7 +41,7 @@ def snap(data, party=(), items=(), money=500000, champion=1, stored=(), ground=(
 
 def policy_for(data, **extra):
     state = SimpleNamespace(data=data, collection={}, monitor_tables={}, decisions=10000, clock=10000, goal=None, menu=None, shop_offers=set(),
-                            clerk_present=lambda *args: True,
+                            clerk_present=lambda *args: True, allowed=lambda task, snapshot: True,
                             person=lambda snap, key, label, place, script: SimpleNamespace(
                                 key=key, label=label, map=place, script=script))
     for name, value in extra.items():
@@ -270,6 +270,22 @@ def test_bought_supplies_are_used_or_given(real_data, on):
                                     'quantity': 1, 'bought': True}
     task = shop.use(policy, snap(real_data, party, [(leftovers, 1)]))
     assert type(task).__name__ == 'Give' and task.slot == 0 and shop.PLAN not in policy.collection
+
+
+def test_a_refused_give_keeps_the_bought_item_for_its_partner(real_data, on):
+    """The plan went as the Give was chosen, so a Give the game had just refused left the bought
+    Leftovers in the bag with no partner to give them to."""
+    leftovers = real_data.items['LEFTOVERS']
+    party = [mon(154), mon(18, level=60, moves=(17,))]
+    policy = policy_for(real_data, allowed=lambda task, snapshot: False)
+    plan = {'item': leftovers, 'target': 1, 'signature': shop.signature(party[1]), 'quantity': 1, 'bought': True}
+    policy.collection[shop.PLAN] = plan
+    task = shop.use(policy, snap(real_data, party, [(leftovers, 1)]))
+    assert type(task).__name__ == 'Give' and task.slot == 1 and policy.collection.get(shop.PLAN) == plan
+    # Once the game takes the Give again it goes to the same partner, and the plan is done.
+    policy.allowed = lambda task, snapshot: True
+    task = shop.use(policy, snap(real_data, party, [(leftovers, 1)]))
+    assert task.slot == 1 and shop.PLAN not in policy.collection
 
 
 def test_elixir_restores_a_partner_out_of_attacking_pp(real_data):
