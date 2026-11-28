@@ -11,7 +11,7 @@ from pokecore.gen2.breeding import branch_parents, descendants_wanted, egg_lines
 from .menus import ChangeBox, DayCare, Storage
 from .release import hatch_worth, keeps_hatch
 from ..planning.ledger import FIELD_MOVES
-from .training import identity
+from .training import identity, level_lead_slot
 
 
 # Eggs carried at once while hatching the ones stored in the PC. The rest of the party stays free for
@@ -272,7 +272,9 @@ def hatch_spares(policy, snapshot, *, trainee=True):
     Share holder and the legendary sleeper stay, or the next errand would fetch them straight back. An
     activity team is left out, because its errands run ahead of this one and a finished activity can
     leave its last team on record. With ``trainee`` False the training project's trainee may go too, as
-    it may once another rung's goal is picked over the training (collection.draft drops its writes).
+    it may once another rung's goal is picked over the training (collection.draft drops its writes),
+    from the lead as well when the level reorder would then move it out (training.level_lead_slot),
+    since training put it there.
     """
     from .release import _keys, _pair, plan_partners
     state, party = policy.collection, snapshot.party
@@ -280,8 +282,11 @@ def hatch_spares(policy, snapshot, *, trainee=True):
                 if not isinstance(key, str)}
     partners.update(pair for pair in map(_pair, (state.get('share_holder'), state.get('roam_lead'))) if pair)
     share = policy.data.items.get('EXP_SHARE')
-    slots = [i for i, mon in enumerate(party) if i and not mon.egg and not sole_field_move(party, i)
-             and mon.held_item != share and not partners.intersection(_keys(mon))]
+    pair = None if trainee else _pair((state.get('training') or {}).get('identity'))
+    trainee_leads = (pair is not None and bool(party) and pair in _keys(party[0])
+                     and level_lead_slot(party) is not None)
+    slots = [i for i, mon in enumerate(party) if (i or trainee_leads) and not mon.egg
+             and not sole_field_move(party, i) and mon.held_item != share and not partners.intersection(_keys(mon))]
     return sorted(slots, key=lambda i: (bool(FIELD_MOVES.intersection(party[i].moves)),
                                         bool(party[i].held_item), party[i].level))
 

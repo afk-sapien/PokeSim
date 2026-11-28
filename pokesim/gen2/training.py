@@ -226,6 +226,13 @@ def training_lead(policy, snapshot):
     return max(able, key=able.get)
 
 
+def level_lead_slot(party):
+    """The slot the level reorder (Policy.level_lead) moves to the front, the highest-level Pokémon once
+    the lead is more than 5 levels behind it, or None when the lead keeps its place."""
+    strongest = max((i for i, mon in enumerate(party) if not mon.egg), key=lambda i: party[i].level, default=0)
+    return strongest if strongest and party[strongest].level > party[0].level + 5 else None
+
+
 def happiness_levels(friendship):
     """Level ups needed to reach evolution friendship, using the cartridge's +5, +3 and +2 tiers."""
     levels = 0

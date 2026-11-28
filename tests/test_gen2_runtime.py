@@ -592,6 +592,14 @@ def test_a_stone_for_a_peer_sees_a_party_copy_the_peer_store_would_box(real_data
     boxed_clefable = SimpleNamespace(**{**vars(clefable), 'box': 12, 'position': 4})
     party, boxed = view((lead, clefable), (clefairy,)), view((lead,), (clefairy, boxed_clefable))
     assert projects(policy, party, 'day', {36: 1}) == projects(policy, boxed, 'day', {36: 1}) == []
+    # Training puts the Clefable in the lead. Once another goal drops the training, the level reorder
+    # moves the level 100 lead back in front and the peer store boxes the Clefable, so it counts too.
+    assert projects(policy, view((clefable, lead), (clefairy,)), 'day', {36: 1}) == []
+    # Within 5 levels of the rest the Clefable keeps the lead, the peer store keeps it, and the stone
+    # project starts.
+    close = SimpleNamespace(**{**vars(lead), 'level': 12})
+    assert [(row[4], row[5]) for row in projects(policy, view((clefable, close), (clefairy,)), 'day', {36: 1})] \
+        == [(36, stone)]
     # The kept answer follows the peer store: once a plan keeps the Clefable, the stone project starts.
     assert kept_projects(policy, party, 'day') == []
     policy.collection['roam_lead'] = [13132, [1, 12, 14, 14, 11]]
