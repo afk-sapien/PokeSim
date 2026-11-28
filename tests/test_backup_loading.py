@@ -73,6 +73,18 @@ def test_a_backup_that_fails_mid_write_leaves_no_partial_archive(saved_library, 
     assert not list((manager.root / 'backups').glob('*.pending'))
 
 
+def test_a_backup_too_large_to_restore_is_refused_with_its_size(saved_library, monkeypatch):
+    from pokesim.app import backup
+    from pokesim.app.errors import Conflict
+    manager = saved_library[0]
+    before = sorted((manager.root / 'backups').iterdir())
+    # Restore refuses an archive past MAX_EXPANDED, so a backup over it could never come back.
+    monkeypatch.setattr(backup, 'MAX_EXPANDED', 8 * backup.ENTRY_BLOCK)
+    with pytest.raises(Conflict, match=r'would expand to \d+\.\d KiB, over the 32\.0 KiB a restore accepts'):
+        create_backup(manager)
+    assert sorted((manager.root / 'backups').iterdir()) == before
+
+
 def test_upload_backup_and_reject_invalid_archives_without_artifacts(saved_library):
     manager, client, headers, original, backup = saved_library
     data = Path(backup['path']).read_bytes()

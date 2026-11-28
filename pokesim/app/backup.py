@@ -29,13 +29,27 @@ def file_checksum(path):
         return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
+def expanded_size(sizes):
+    """The room files of these sizes take once restored, at least one disk block each.
+
+    Many small or empty files then meet the same bound as a few large ones.
+    """
+    return sum(max(size, ENTRY_BLOCK) for size in sizes)
+
+
+def size_text(size):
+    for unit, scale in (('GiB', 1024**3), ('MiB', 1024**2)):
+        if size >= scale:
+            return f'{size / scale:.1f} {unit}'
+    return f'{size / 1024:.1f} KiB'
+
+
 def extract_archive(archive, destination, max_expanded=MAX_EXPANDED):
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive) as bundle:
-        # Each entry counts as at least one disk block, so many small or empty files meet the same
-        # bound as a few large ones, and nothing is written when the archive is over it.
-        if sum(max(info.file_size, ENTRY_BLOCK) for info in bundle.infolist()) > max_expanded:
+        # Nothing is written when the archive is over the bound.
+        if expanded_size(info.file_size for info in bundle.infolist()) > max_expanded:
             raise Conflict('Archive exceeds the expanded size limit')
         for info in bundle.infolist():
             relative = PurePosixPath(info.filename)
@@ -150,6 +164,11 @@ def _create_backup(manager):
                     files[path.relative_to(staging).as_posix()] = file_checksum(path)
             manifest = {'format': 1, 'id': bid, 'created_at': time.time(), 'files': files}
             (staging / 'backup.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+            # Restore refuses an archive past this bound, so a larger backup could never come back.
+            expanded = expanded_size(path.stat().st_size for path in staging.rglob('*') if path.is_file())
+            if expanded > MAX_EXPANDED:
+                raise Conflict(f'The backup would expand to {size_text(expanded)}, over the '
+                               f'{size_text(MAX_EXPANDED)} a restore accepts, so it could not be restored')
             pending = backups / (bid + '.pending')
             try:
                 with zipfile.ZipFile(pending, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
