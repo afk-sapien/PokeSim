@@ -32,10 +32,11 @@ def mon(species, level=100, moves=(70, 15, 29, 76), **extra):
                               'max_pp': (10,) * len(moves), 'box': None, 'position': 0, **extra})
 
 
-def snap(data, party=(), items=(), money=500000, champion=1, stored=()):
+def snap(data, party=(), items=(), money=500000, champion=1, stored=(), ground=()):
+    # Every TM ball is picked up except the ones whose flags ``ground`` names.
     return SimpleNamespace(party=tuple(party), stored=tuple(stored), items=list(items), money=money,
                            hall_of_fame_count=champion, in_battle=False, valid=True, started=True,
-                           pockets={'items': [], 'balls': []}, data=data)
+                           pockets={'items': [], 'balls': []}, data=data, event=lambda flag: flag not in ground)
 
 
 def policy_for(data, **extra):
@@ -166,6 +167,65 @@ def test_journey_and_arrive_buy_the_planned_tm_then_teach_it(real_data, on):
     assert shop.journey(policy, bought, None) is None and policy.collection[shop.PLAN]['bought']
     task = shop.use(policy, bought)
     assert type(task).__name__ == 'Teach' and task.move == shop.limited_tms(real_data)[tm] and task.slot == 0
+
+
+def test_ground_balls_hold_the_one_time_tms_once_each(real_data):
+    balls = shop.ground_balls(real_data)
+    assert len(balls) == 14 and len({event for _, _, event, _ in balls}) == 14
+    assert ('VICTORY_ROAD', 'VictoryRoadTMEarthquake', 'EVENT_VICTORY_ROAD_TM_EARTHQUAKE',
+            real_data.items['TM26']) in balls
+    # The contest's copy of the park shares the park ball's flag, and Rain Dance is sold again and again.
+    assert not any(place.endswith('_BUG_CONTEST') for place, *_ in balls)
+    assert real_data.items['TM18'] not in {item for *_, item in balls}
+
+
+def test_a_tm_on_the_ground_comes_before_the_counter_and_is_picked_up(real_data, on):
+    tm, flag = real_data.items['TM26'], 'EVENT_VICTORY_ROAD_TM_EARTHQUAKE'
+    policy = policy_for(real_data)
+    # The ball is free, so a purse the counter would turn away still plans it.
+    snapshot = snap(real_data, [mon(154)], money=0, ground={flag})
+    goal = shop.journey(policy, snapshot, None)
+    assert goal.key == 'collection_fetch_tm' and goal.map == 'VICTORY_ROAD'
+    assert goal.label == 'Collect TM26 Earthquake'
+    plan = policy.collection[shop.PLAN]
+    assert plan['item'] == tm and plan['ground'][2] == flag
+    # No clerk lists it, and the walk's own press at the ball picks it up.
+    assert shop.catalogue(real_data, plan, set()) == {}
+    policy.goal = goal
+    assert shop.arrive(policy, snapshot) is None
+    bought = snap(real_data, [mon(154)], [(tm, 1)], money=0)
+    assert shop.journey(policy, bought, None) is None and policy.collection[shop.PLAN]['bought']
+    task = shop.use(policy, bought)
+    assert type(task).__name__ == 'Teach' and task.move == shop.limited_tms(real_data)[tm] and task.slot == 0
+    # A ball another walk picked up, with the TM gone since, is no plan any more.
+    assert not shop.valid_plan(real_data, snap(real_data, [mon(154)]), plan, set())
+    assert shop.valid_plan(real_data, snap(real_data, [mon(154)], money=0, ground={flag}), plan, set())
+
+
+def test_a_tm_on_the_ground_waits_for_a_race_past_its_starting_line(real_data, on):
+    flag = 'EVENT_VICTORY_ROAD_TM_EARTHQUAKE'
+    snapshot = snap(real_data, [mon(154)], money=0, ground={flag})
+
+    def racer(checkpoint):
+        return policy_for(real_data, collection={'postgame': {'activity': {'kind': 'marathon', 'checkpoint': checkpoint}}})
+    # The ball keeps while the race clock runs, so the race goes on and no plan starts.
+    policy = racer(3)
+    assert shop.journey(policy, snapshot, None) is None and shop.PLAN not in policy.collection
+    # The walk to the starting line is not timed, so the ball is fetched first.
+    assert shop.journey(racer(0), snapshot, None).key == 'collection_fetch_tm'
+    # Once the race is over the next check plans it.
+    del policy.collection['postgame']
+    policy.decisions += shop.CHECK_DECISIONS
+    assert shop.journey(policy, snapshot, None).key == 'collection_fetch_tm'
+
+
+def test_the_watch_marks_a_move_learned_by_its_gen2_constant(real_data):
+    from pokesim.scenarios import Gen2Watch, matches
+    watch = Gen2Watch(SimpleNamespace(data=real_data, history={}, policy=SimpleNamespace(collection={})))
+    look = lambda *party: watch.learned_marks(snap(real_data, party))  # noqa: E731
+    assert look(mon(154), mon(18)) == []
+    [(kind, detail, _)] = look(mon(154, moves=(70, 15, 29, 89)), mon(18))
+    assert (kind, detail) == ('learned', 'EARTHQUAKE') and matches('learned:EARTHQUAKE', kind, detail)
 
 
 def test_a_purchase_that_never_lands_stands_down(real_data, on):

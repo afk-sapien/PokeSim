@@ -8,14 +8,16 @@ Candies once per 1,000,000 steps each, and the policy keeps ₽20,000 for ordina
 
 Only the one item the policy plans to buy is added to the clerk's BUY list, through the same
 StoreStock hooks as the extra evolution items, so the purchase runs the cartridge's own menus and
-TakeMoney. The cartridge is never changed. A TM is taught at once, Rare Candies are used on the
-partner they were bought for, Leftovers or a Lucky Egg is given to a partner with empty hands, and
-Elixirs restore moves out of PP in the Pokémon League.
+TakeMoney. The cartridge is never changed. A one-time TM still lying in a ball on the ground is free,
+so it comes before one the clerks sell, and the walk picks the ball up as Gen I does. A TM is taught
+at once, Rare Candies are used on the partner they were bought for, Leftovers or a Lucky Egg is
+given to a partner with empty hands, and Elixirs restore moves out of PP in the Pokémon League.
 
 PP Up is priced but not planned yet: Core does not recognise the Gen II "raise PP of which move"
 list, so the item could not be used after buying it.
 """
 from ..planning.ledger import FIELD_MOVES
+from .marathon import racing
 from .standdown import stand_down, standing_down
 
 KEY = 'gen2-champion-shop-v1'
@@ -65,6 +67,37 @@ def limited_tms(data):
         except AttributeError:
             pass
     return cached
+
+
+def ground_balls(data):
+    """Each ball on the ground that holds a one-time TM, as (map constant, object script, event flag,
+    item), from the map data. The flag names the move, as EVENT_ROUTE_27_TM_SOLARBEAM does. The
+    Bug-Catching Contest's copy of the National Park holds the park's own ball under the same flag, so
+    it is left out."""
+    cached = getattr(data, '_ground_tms', None)
+    if cached is None:
+        items = {move: item for item, move in limited_tms(data).items()}
+        moves = {move['constant']: mid for mid, move in data.moves.items()}
+        cached = []
+        for entry in data.maps.values():
+            if entry['constant'].endswith('_BUG_CONTEST'):
+                continue
+            for obj in entry['objects']:
+                move = moves.get(obj['event'].partition('_TM_')[2])
+                if obj['kind'] == 'OBJECTTYPE_ITEMBALL' and move in items:
+                    cached.append((entry['constant'], obj['script'], obj['event'], items[move]))
+        cached = tuple(cached)
+        try:
+            data._ground_tms = cached
+        except AttributeError:
+            pass
+    return cached
+
+
+def on_ground(snapshot, place):
+    """Whether the ball at ``place``, a plan's ``ground`` (map constant, object script, event flag), is
+    still there: picking it up sets its flag."""
+    return not snapshot.event(place[2])
 
 
 def tm_number(data, item):
@@ -149,7 +182,7 @@ def consume(store, data, item, walking):
 
 def catalogue(data, plan, offers):
     """{mart constant: {item: unit price}} the clerks add for the current plan."""
-    if not plan or plan.get('bought'):
+    if not plan or plan.get('bought') or plan.get('ground'):
         return {}
     item = plan['item']
     if supply_name(data, item) in OFFERS and item not in offers:
@@ -211,12 +244,27 @@ def best_tm(data, snapshot, *, owned):
     if not champion(snapshot):
         return None
     bag = dict(snapshot.items)
+    return _best(data, snapshot, [item for item in sorted(limited_tms(data)) if bool(bag.get(item)) == owned
+                                  and (owned or snapshot.money >= tm_price(data, item) + RESERVE)])
+
+
+def ground_tm(data, snapshot):
+    """Plan the largest gain from a one-time TM a ball on the ground still holds, as ``best_tm`` plans a
+    purchase, with the ball's ``ground`` place. The TM is free, so the purse does not limit it."""
+    if not champion(snapshot):
+        return None
+    bag = dict(snapshot.items)
+    places = {item: (place, script, event) for place, script, event, item in ground_balls(data)
+              if not bag.get(item) and not snapshot.event(event)}
+    plan = _best(data, snapshot, sorted(places))
+    return plan and {**plan, 'ground': places[plan['item']]}
+
+
+def _best(data, snapshot, items):
+    """The plan for the largest level 100 Battle Power gain one of ``items`` gives a partner, the cheaper
+    TM first on a tie, or None."""
     options = []
-    for item in sorted(limited_tms(data)):
-        if bool(bag.get(item)) != owned:
-            continue
-        if not owned and snapshot.money < tm_price(data, item) + RESERVE:
-            continue
+    for item in items:
         for index, mon in enumerate(snapshot.party):
             change = upgrade(data, mon, item)
             if change is not None:
@@ -319,12 +367,15 @@ def valid_plan(data, snapshot, plan, offers):
         return False
     elif recipient(data, snapshot, name) is None:
         return False
+    # A ball on the ground costs nothing, so it only has to be there still.
+    paid = on_ground(snapshot, plan['ground']) if plan.get('ground') else snapshot.money >= price + RESERVE
     return (not dict(snapshot.items).get(item) and room(data, snapshot, item)
-            and snapshot.money >= price + RESERVE and plan.get('quantity') == quantity(data, item))
+            and paid and plan.get('quantity') == quantity(data, item))
 
 
 def choose(data, snapshot, offers):
-    return best_tm(data, snapshot, owned=False) or best_supply(data, snapshot, offers)
+    # A TM still on the ground is free, so it comes before one the counter sells.
+    return ground_tm(data, snapshot) or best_tm(data, snapshot, owned=False) or best_supply(data, snapshot, offers)
 
 
 # The errand -------------------------------------------------------------------------------------
@@ -342,7 +393,8 @@ def _shop(data, mart):
 
 
 def journey(policy, snapshot, Goal):
-    """Walk to the Goldenrod clerk who sells the planned TM or supply."""
+    """Walk to the ball that holds the planned TM, or to the Goldenrod clerk who sells the planned TM
+    or supply."""
     state = policy.collection
     if not champion(snapshot):
         state.pop(PLAN, None)
@@ -369,8 +421,15 @@ def journey(policy, snapshot, Goal):
         plan = choose(data, snapshot, offers)
         if plan is None or standing_down(policy, plan_key(plan['item'])):
             return None
+        # A ball keeps and a race clock runs, so a race past its starting line finishes first.
+        if plan.get('ground') and racing(policy):
+            return None
         plan.update(started=policy.decisions, tries=0, initial=dict(snapshot.items).get(plan['item'], 0))
         state[PLAN] = plan
+    if plan.get('ground'):
+        # The walk's own press at a reached person goal picks the ball up, and arrive leaves it alone.
+        place, script, _ = plan['ground']
+        return policy.person(snapshot, 'collection_fetch_tm', f'Collect {label(data, plan["item"])}', place, script)
     marts = TM_MARTS if plan['item'] in limited_tms(data) else (SUPPLY_MART,)
     for mart in marts:
         entry, shop = _shop(data, mart)

@@ -456,7 +456,7 @@ def gen2_data_root(environ=None):
 
 
 class PlannerMarks:
-    """Marks both generations share: a Pokédex entry the run gained, and a stand-down.
+    """Marks both generations share: a Pokédex entry the run gained, a move learned and a stand-down.
 
     An entry counts once it holds on two snapshots in a row, as half-written RAM can show one for a
     frame. The same goal standing down more than three times in a row is a retry loop, which
@@ -467,10 +467,34 @@ class PlannerMarks:
         self.entries, self.unconfirmed = None, frozenset()
         self.stood = dict(self.stand_downs())
         self.streak, self.loop = (None, 0), None
+        # Each party member's species and moves at the last look, for the learned mark.
+        self.party_moves = None
 
     def stand_downs(self):
         """The planner's stand-down table, goal key to retry time."""
         raise NotImplementedError
+
+    def move_name(self, move):
+        """A move's name in upper case with underscores, as a scenario's ``learned:`` mark spells it."""
+        raise NotImplementedError
+
+    def learned_marks(self, snapshot):
+        """A party member learning a move (learned), with the move's name as its detail, as a TM, an HM
+        or a level up teaches it. A party that changed since the last look (a catch, a swap, a deposit)
+        is only looked at again, since its new members bring their moves with them."""
+        if snapshot is None or not snapshot.valid or not snapshot.started:
+            return []
+        party = [(mon.species, frozenset(move for move in getattr(mon, 'moves', ()) if move))
+                 for mon in getattr(snapshot, 'party', ())]
+        before, self.party_moves = self.party_moves, party
+        if before is None or [species for species, _ in before] != [species for species, _ in party]:
+            return []
+        found = []
+        for (species, had), (_, moves) in zip(before, party):
+            for move in sorted(moves - had):
+                name = self.move_name(move)
+                found.append(('learned', name, f'Pokémon #{species} learned {name}'))
+        return found
 
     def shared_marks(self, snapshot):
         found = []
@@ -516,8 +540,6 @@ class Gen1Watch(PlannerMarks):
         self.dark = None
         # Flights the policy had counted at the last look, for the fly mark.
         self.flights_seen = getattr(self.run.policy, 'flights', 0)
-        # Each party member's species and moves at the last look, for the learned mark.
-        self.party_moves = None
         self.reset_marks()
 
     def race_checkpoint(self):
@@ -535,24 +557,9 @@ class Gen1Watch(PlannerMarks):
         return (self.store_marks(snapshot) + self.flash_marks(snapshot) + self.fly_marks() + self.learned_marks(snapshot)
                 + self.shared_marks(snapshot))
 
-    def learned_marks(self, snapshot):
-        """A party member learning a move (learned), with the move's name as its detail, as a TM, an HM
-        or a level up teaches it. A party that changed since the last look (a catch, a swap, a deposit)
-        is only looked at again, since its new members bring their moves with them."""
-        if snapshot is None or not snapshot.valid or not snapshot.started:
-            return []
+    def move_name(self, move):
         from .strategy_data import MOVES
-        party = [(mon.species, frozenset(move for move in getattr(mon, 'moves', ()) if move))
-                 for mon in getattr(snapshot, 'party', ())]
-        before, self.party_moves = self.party_moves, party
-        if before is None or [species for species, _ in before] != [species for species, _ in party]:
-            return []
-        found = []
-        for (species, had), (_, moves) in zip(before, party):
-            for move in sorted(moves - had):
-                name = MOVES.get(move, {}).get('name', str(move))
-                found.append(('learned', name, f'Pokémon #{species} learned {name}'))
-        return found
+        return MOVES.get(move, {}).get('name', str(move))
 
     def fly_marks(self):
         """A flight landing (fly), with the town as its detail, once per flight the policy counts."""
@@ -670,7 +677,7 @@ class Gen2Watch(PlannerMarks):
 
     def marks(self, snapshot=None):
         """What the planner just did, as (kind, detail, title): a ladder pick, a timed hunt, a static
-        legendary battle, a Pokédex entry or a stand-down.
+        legendary battle, a move learned, a Pokédex entry or a stand-down.
 
         These are not progress. A scenario can wait for one, and the same goal standing down more than
         three times in a row is a retry loop, which ``loop`` names.
@@ -687,7 +694,10 @@ class Gen2Watch(PlannerMarks):
             name = self.run.data.species.get(timed[0], {}).get('name', timed[0])
             found.append(('timed_hunt', str(timed[0]), f'Hunting {name} in the {timed[1]}'))
         self.timed = timed
-        return found + self.shared_marks(snapshot)
+        return found + self.learned_marks(snapshot) + self.shared_marks(snapshot)
+
+    def move_name(self, move):
+        return self.run.data.moves.get(move, {}).get('constant', str(move))
 
     def legend_marks(self, snapshot):
         """Lugia, Ho-Oh or Crystal's Suicune met in its room: the script sets the fought flag as the
