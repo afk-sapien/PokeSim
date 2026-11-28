@@ -85,6 +85,30 @@ def test_gen1_a_missing_entry_waits_when_only_the_upgrade_slot_is_free():
     assert not policy.boxes_full and Emulator.help_request(SimpleNamespace(**{**vars(emulator), 'snapshot': roomy}), {}) is None
 
 
+def test_gen1_a_trainers_missing_species_never_asks_for_room():
+    from pokesim.emulator import Emulator
+    # The same full PC as above, but the missing species belongs to a trainer, so no ball can be thrown.
+    party = tuple(mon(level=50) for _ in range(6))
+    state = collection(party=party, stored_pokemon=(), box_counts=(20,) * 11 + (19,), active_box=11,
+                       boxed_pokemon=((sid(1), 50),) * 19, in_battle=2)
+    policy, mem = StrategicPolicy(7), wild()
+    enemy = mon(species=sid(25), types=(23, 23), level=30, hp=1, moves=(), pp=())
+    choose_battle(state, party[0], enemy, 0, collect_missing=True, keeps=policy._keeps(state, sid(25), mem),
+                  reserve=policy._reserve(state, sid(25), mem))
+    emulator = SimpleNamespace(paused=False, manual_mode=False, stall=None, loop_guard=None, policy=policy, snapshot=state,
+                               supervisor=Supervisor(), play_clock=SimpleNamespace(frames=0))
+    assert not policy.boxes_full and Emulator.help_request(emulator, {'action': 'battle'}) is None
+
+
+def test_gen1_a_trainers_copy_never_closes_a_legendary_return(refuse):
+    c = Collection()
+    c.returned_legendaries = {150}
+    s = postgame(party=(individual(100, 1),), in_battle=2)
+    refuse()
+    c.repeat_target(sid(150), 51, s, (15,) * 5)
+    assert c.returned_legendaries == {150} and not getattr(c, 'declined_returns', set())
+
+
 def test_an_incoming_trade_asks_verdict(refuse):
     policy = SimpleNamespace(pc_rated=lambda snapshot, extra=(): pcvalue.rate(list(extra)))
     game = SimpleNamespace(emu=SimpleNamespace(policy=policy, snapshot=SimpleNamespace(owned={16})))
