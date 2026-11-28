@@ -975,6 +975,55 @@ def test_catch_never_picks_a_move_the_foe_has_disabled(real_data):
     assert reading(policy, mem).capture_move(snapshot) == 1
 
 
+def test_false_swipe_never_weakens_a_ghost(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    # A Scyther with False Swipe and Leer. False Swipe is a Normal move, so a Ghost takes nothing from it.
+    lead = SimpleNamespace(species=123, level=30, status=0, moves=(206, 43, 0, 0), pp=(40, 30, 0, 0),
+        stats=(90, 70, 50, 70, 40, 50))
+    snapshot = SimpleNamespace(party=(lead,), enemy_species=92, enemy_hp=40, enemy_max_hp=40,
+        pockets={'balls': [(real_data.items['POKE_BALL'], 20)]})
+    mem = SimpleNamespace(byte=lambda name: 0, word=lambda name: 40)
+    assert reading(policy, mem).capture_move(snapshot) is None
+    # A Rattata takes the swipe, so the Scyther still uses it there.
+    snapshot.enemy_species = 19
+    assert reading(policy, mem).capture_move(snapshot) == 0
+
+
+def test_a_paralyzed_lead_still_sleeps_a_beast_its_mean_look_holds(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = Policy(real_data)
+    # Gengar outran Raikou and Mean Looked it, then Thundershock paralyzed it and quartered its speed.
+    lead = SimpleNamespace(species=94, level=40, status=64, moves=(212, 95, 101, 0),
+        pp=(4, 20, 15, 0), stats=(120, 60, 60, 110, 120, 80))
+    snapshot = SimpleNamespace(party=(lead,), enemy_species=243, enemy_hp=150, enemy_max_hp=150,
+        pockets={'balls': [(real_data.items['ULTRA_BALL'], 20)]})
+    memory = {'wEnemyMonSpeed': 97}
+    mem = SimpleNamespace(byte=lambda name: memory.get(name, 0), word=lambda name: memory.get(name, 0))
+    # Untrapped, the beast flees before the slower lead moves, so the lead throws.
+    assert reading(policy, mem).capture_move(snapshot) is None
+    # Trapped, the beast cannot flee, so the lead puts it to sleep.
+    memory['wPlayerSubStatus5'] = 128
+    assert reading(policy, mem).capture_move(snapshot) == 1
+
+
+def test_a_disabled_normal_move_does_not_save_the_low_pp_moves(real_data):
+    from pokesim.gen2.policy import Policy
+    policy = started(Policy(real_data))
+    scores = {33: 30, 52: 40, 55: 35}
+    policy.move_score = lambda move, mon, target: scores[move]
+    # Tackle, Ember with 3 PP left and Water Gun, in a trainer battle.
+    mon = SimpleNamespace(moves=(33, 52, 55, 0), pp=(30, 3, 20, 0))
+    snapshot = SimpleNamespace(in_battle=2, enemy_hp=100)
+    memory = {}
+    mem = SimpleNamespace(byte=lambda name: memory.get(name, 0))
+    # Tackle can do the work, so the last Embers are kept.
+    assert reading(policy, mem).move_choice(snapshot, mon, None, None) == 2
+    # With Tackle disabled nothing Normal can, so Ember is used.
+    memory['wDisabledMove'], memory['wPlayerDisableCount'] = 33, 3
+    assert reading(policy, mem).move_choice(snapshot, mon, None, None) == 1
+
+
 def test_roamer_lead_is_the_cheapest_sleeper_that_outspeeds_the_beasts(real_data):
     from pokesim.gen2.quests import roam_lead, roamer_speed
     from pokecore.gen2.ram import calculated_stats, experience_at
