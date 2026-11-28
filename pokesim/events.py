@@ -232,7 +232,8 @@ def diff(prev: Snapshot | None, cur: Snapshot, mem: RunMemory) -> list[Event]:
 
     # Ordinary ground pickups are useful journal milestones too. Object flags
     # distinguish them from shopping, PC withdrawals, and failed bag-full prompts.
-    if prev.map == cur.map and len(prev.hidden_objects) == len(cur.hidden_objects):
+    if (prev.map == cur.map and prev.hidden_objects != cur.hidden_objects
+            and len(prev.hidden_objects) == len(cur.hidden_objects)):
         for offset, (map_id, index) in enumerate(STRATEGY_DATA['toggle_objects']):
             byte, bit = offset // 8, 1 << (offset % 8)
             if (map_id != cur.map or map_id not in WORLD or index >= len(WORLD[map_id]['objects'])

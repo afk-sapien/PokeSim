@@ -105,7 +105,7 @@ def test_trade_settings_and_league_marks_are_read_again_only_after_a_change(tmp_
     first['a']['state'] = 'changed'
     assert store.trade_preferences() == {'a': {'state': 'never'}}
     assert store.league_marks(2) == store.league_marks(2) == frozenset()
-    assert sum('FROM kv WHERE substr' in q for q in queries) == 1
+    assert sum('FROM kv WHERE k >=' in q for q in queries) == 1
     assert sum('FROM claims' in q for q in queries) == 1
     store.set('trade_offer:b', {'state': 'first'})
     assert set(store.trade_preferences()) == {'a', 'b'}
@@ -120,6 +120,38 @@ def test_trade_settings_and_league_marks_are_read_again_only_after_a_change(tmp_
     external.close()
     assert set(store.trade_preferences()) == {'b'}
     assert len(store.league_marks(2)) == 2 and store.league_marks(2) == rewards.marks(store.db, 2)
+    store.close()
+
+
+def test_league_marks_read_only_the_delivered_claims_keys(tmp_path):
+    """Any write makes the next rating build the marks again, so a build reads one column, not whole rows."""
+    from pokesim import rewards
+    from pokesim.state import claims
+    store = Store(tmp_path)
+    with store.transaction():
+        claims.put(store.db, rewards.SOURCE, 'seed-1', claims.DELIVERED, seed='seed-1')
+        claims.put(store.db, rewards.SOURCE, 'seed-2', claims.OPEN, seed='seed-2')
+    queries = []
+    store.db.set_trace_callback(queries.append)
+    assert rewards.marks(store.db, 2) == frozenset({rewards.staged_mark('seed-1', 2)})
+    read = [q for q in queries if 'FROM claims' in q]
+    assert read and all(q.startswith('SELECT key FROM claims') for q in read)
+    store.close()
+
+
+def test_a_key_prefix_read_searches_the_key_index(tmp_path):
+    """Trade settings share the kv table with every other record, so a prefix read must not scan it."""
+    from pokesim.state import kv
+    store = Store(tmp_path)
+    for key in ('trade_offer', 'trade_offer:a', 'trade_offer:\U0010fffe', 'trade_offer;', 'trade_offes'):
+        store.set(key, {'state': 'never'})
+    queries = []
+    store.db.set_trace_callback(queries.append)
+    found = kv.starting(store.db, 'trade_offer:')
+    store.db.set_trace_callback(None)
+    assert [key for key, _ in found] == ['trade_offer:a', 'trade_offer:\U0010fffe']
+    plan = [row[-1] for row in store.db.execute('EXPLAIN QUERY PLAN ' + queries[-1])]
+    assert any('USING INDEX' in step for step in plan), plan
     store.close()
 
 

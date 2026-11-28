@@ -162,6 +162,26 @@ def test_ground_item_journal_requires_a_new_pickup_flag_and_does_not_repeat():
     assert not [event for event in diff(before, bought, memory) if event.type == 'item']
 
 
+def test_a_step_that_sets_no_object_flag_reads_no_toggle_table(monkeypatch):
+    # Walking and battles on one map leave the object flags as they were, so the whole toggle table
+    # is only read when a flag changed.
+    from pokesim import events
+    walks = []
+
+    class Walked(list):
+        def __iter__(self):
+            walks.append(1)
+            return super().__iter__()
+
+    monkeypatch.setitem(events.STRATEGY_DATA, 'toggle_objects', Walked(events.STRATEGY_DATA['toggle_objects']))
+    before = cave()
+    events.diff(before, replace(before, x=before.x + 1), events.RunMemory(seen_maps={before.map}))
+    assert not walks
+    index = next(i for i, obj in enumerate(WORLD[before.map]['objects']) if obj[4].endswith('FULL_HEAL'))
+    found = events.diff(before, hidden(before, index), events.RunMemory(seen_maps={before.map}))
+    assert walks and [event for event in found if event.title == 'Picked up Full Heal']
+
+
 def test_an_older_save_keeps_the_marathon_and_pickup_waits_it_had_left():
     """A save from before these waits moved to the PlayClock timed them on the collection's own frames."""
     from copy import deepcopy

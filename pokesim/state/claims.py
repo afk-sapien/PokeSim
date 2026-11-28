@@ -61,6 +61,11 @@ def rows(db, source, state=None):
     return [dict(zip(FIELDS, row)) for row in db.execute(query + ' ORDER BY rowid', values)]
 
 
+def keys(db, source, state):
+    """The keys of a source's claims in ``state``, in no set order."""
+    return [key for key, in db.execute('SELECT key FROM claims WHERE source=? AND state=?', (source, state))]
+
+
 def counts(db, source):
     """How many of a source's claims are in each state."""
     found = dict(db.execute('SELECT state, COUNT(*) FROM claims WHERE source=? GROUP BY state', (source,)).fetchall())

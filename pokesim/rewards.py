@@ -277,7 +277,7 @@ def marks(db, generation=1):
     This also finds rewards delivered before releases knew about them. A random trainer ID and DV pair
     matches another Pokémon about once in four billion.
     """
-    return frozenset(staged_mark(row['key'], generation) for row in claims.rows(db, SOURCE, claims.DELIVERED))
+    return frozenset(staged_mark(key, generation) for key in claims.keys(db, SOURCE, claims.DELIVERED))
 
 
 def status(store):
