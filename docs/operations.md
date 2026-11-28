@@ -285,8 +285,11 @@ first removes the database journals the new image left and puts the app folder b
 since the new image may have moved the data to a schema the old image refuses. Each backup has a
 json file beside it that names the image that wrote its data, the one running before the
 deploy. Restore a backup with that image or a newer one. It keeps the 5 newest backups and
-the images that wrote them. While it runs, `deploy.lock` in the app folder keeps
-the alert watch quiet for up to 15 minutes. Each deploy adds a line to `deploy.log`.
+the images that wrote them. One deploy at a time holds a lock on the app folder, so a second one
+is refused while it runs, and a deploy that reaches the host after another one changed the running
+commit is refused too, since its checks read the old commit. Run that one again. While it runs,
+`deploy.lock` in the app folder keeps the alert watch quiet for up to 15 minutes. Each deploy adds
+a line to `deploy.log`.
 
 ## Update and roll back
 

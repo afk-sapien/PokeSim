@@ -187,9 +187,12 @@ def test_an_unknown_deployed_commit_is_refused(tmp_path, repo):
     assert 'which this clone does not have' in result.stderr
 
 
-def deploy_to_host(tmp_path, repo, shas, **faults):
-    """Deploys the main commit past every gate to a host folder here. The fake ssh runs the host step in
-    this shell, and the fake docker logs each call, runs the alpine tar here and fails what ``faults``
+def fake_host(tmp_path, shas, running=None):
+    """Writes a host folder here and the fakes that a deploy of the main commit past every gate runs with,
+    and returns the deploy's environment and the folder. The fake ssh answers the checks' read with the
+    base commit on schema 1 and runs the host step in this shell. The fake docker logs each call, gives
+    ``running``, by default the base commit, as the revision of the image the host runs, runs the alpine
+    tar here, waits in compose stop until the file HOLD names exists, and fails what the environment
     names: FAIL_BACKUP for the archive, FAIL_UP for every start, FAIL_HEALTH for the new image's start and
     FAIL_SMOKE for the smoke check. The new image moves app/app.sqlite to schema 2, which the old one
     refuses to start on, and leaves a rollback journal, as a stop in the middle of a write does."""
@@ -204,7 +207,10 @@ def deploy_to_host(tmp_path, repo, shas, **faults):
     (bin_dir / 'gh').write_text('#!/bin/sh\necho success\n')
     (bin_dir / 'docker').write_text(
         '#!/bin/sh\necho "docker $*" >> "$CALLS"\n'
-        'case "$1 $2" in\n  "image inspect") echo sha256:built; exit 0 ;;\n'
+        'case "$1 $2" in\n'
+        '  "image inspect") if echo "$*" | grep -q revision; then echo "$RUNNING"; else echo sha256:built; fi\n'
+        '    exit 0 ;;\n'
+        '  "compose stop") [ -z "${HOLD:-}" ] || while [ ! -e "$HOLD" ]; do sleep 0.1; done; exit 0 ;;\n'
         '  "compose up") [ -z "${FAIL_UP:-}" ] || exit 1\n'
         '    if grep -qx POKESIM_IMAGE=pokesim:old .env; then [ "$(cat app/app.sqlite)" = 1 ]; exit; fi\n'
         '    echo 2 > app/app.sqlite; echo 2 > app/app.sqlite-journal; [ -z "${FAIL_HEALTH:-}" ]; exit ;;\nesac\n'
@@ -228,9 +234,16 @@ def deploy_to_host(tmp_path, repo, shas, **faults):
         (reports / kind / f'{sha}.json').write_text(json.dumps(body))
     env = {**os.environ, 'PATH': f'{bin_dir}{os.pathsep}{os.environ["PATH"]}', 'DEPLOY_HOST': 'host',
            'DEPLOY_DIR': str(host), 'LIVE_SOAK_REPORTS': str(reports), 'MIN_FREE_GB': '0', 'CALLS': str(calls),
-           **{name: '1' for name, on in faults.items() if on}}
-    result = subprocess.run(['sh', str(SCRIPT), sha], cwd=repo, env=env, capture_output=True, text=True)
-    return result, host, calls.read_text().splitlines()
+           'RUNNING': running or shas['base']}
+    return env, host
+
+
+def deploy_to_host(tmp_path, repo, shas, running=None, **faults):
+    """Deploys the main commit to a fake host, failing what ``faults`` names, see fake_host."""
+    env, host = fake_host(tmp_path, shas, running)
+    env.update({name: '1' for name, on in faults.items() if on})
+    result = subprocess.run(['sh', str(SCRIPT), shas['main']], cwd=repo, env=env, capture_output=True, text=True)
+    return result, host, (tmp_path / 'calls').read_text().splitlines()
 
 
 def test_a_clean_deploy_switches_the_image_and_logs_it(tmp_path, repo):
@@ -271,6 +284,41 @@ def test_a_failure_after_the_new_image_started_brings_back_data_the_old_image_op
     assert (host / 'app' / 'app.sqlite').read_text() == '1\n'
     # SQLite would play the new image's journal back into the old database.
     assert not (host / 'app' / 'app.sqlite-journal').exists()
+    assert (host / '.env').read_text() == 'POKESIM_IMAGE=pokesim:old\n'
+
+
+def test_a_second_deploy_is_refused_while_the_first_runs_however_long_it_takes(tmp_path, repo):
+    repo, shas = repo
+    env, host = fake_host(tmp_path, shas)
+    calls, release = tmp_path / 'calls', tmp_path / 'release'
+    command = ['sh', str(SCRIPT), shas['main']]
+    first = subprocess.Popen(command, cwd=repo, env={**env, 'HOLD': str(release)}, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True)
+    try:
+        deadline = time.monotonic() + 60
+        while not calls.exists() or 'docker compose stop -t 120' not in calls.read_text():
+            assert first.poll() is None and time.monotonic() < deadline, 'the first deploy never stopped the app'
+            time.sleep(0.05)
+        # The first deploy has held the host for 20 minutes by now.
+        then = time.time() - 20 * 60
+        os.utime(host / 'deploy.lock', (then, then))
+        second = subprocess.run(command, cwd=repo, env=env, capture_output=True, text=True)
+    finally:
+        release.touch()
+        out, err = first.communicate(timeout=60)
+    assert second.returncode == 1, second.stdout
+    assert 'another deploy is running' in second.stderr
+    assert first.returncode == 0, err
+    assert calls.read_text().count('docker compose stop') == 1
+
+
+def test_a_deploy_is_refused_when_the_host_changed_after_its_checks(tmp_path, repo):
+    """The checks read the base commit, then another deploy shipped the feature commit first."""
+    repo, shas = repo
+    result, host, calls = deploy_to_host(tmp_path, repo, shas, running=shas['feature'])
+    assert result.returncode == 1
+    assert f'refused: the host runs {shas["feature"]} now, not the {shas["base"]}' in (host / 'deploy.log').read_text()
+    assert 'docker compose stop -t 120' not in calls
     assert (host / '.env').read_text() == 'POKESIM_IMAGE=pokesim:old\n'
 
 

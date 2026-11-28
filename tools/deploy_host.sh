@@ -31,6 +31,8 @@
 # those backups and the running one, and removes every other pokesim, pokesim-local and
 # ghcr.io/afk-sapien/pokesim tag. Other images are never touched. A backup from before the json files
 # keeps the image it is named after and the one the backup before it is named after.
+# The host step holds a flock on DEPLOY_DIR, so a second deploy is refused while one runs. Under it, a
+# deploy is refused when the host no longer runs the commit its schema and ancestry checks read.
 # While it runs, DEPLOY_DIR/deploy.lock names the commit, so the alert watch stays quiet. Each deploy
 # appends one line to DEPLOY_DIR/deploy.log.
 set -eu
@@ -164,19 +166,30 @@ print('image ok, pokesim', m.version('pokesim'), 'pokecore', m.version('pokecore
 
 # The host step holds the lock from the first check to the last prune.
 docker save "$TAG" | nice -n 10 gzip -1 | ssh -o BatchMode=yes "$HOST" 'gunzip | docker load' >/dev/null
-ssh -o BatchMode=yes "$HOST" sh -s -- "$DIR" "$SHA" "$TAG" "$MIN_FREE_GB" "$COMPOSE_SHA" <<'REMOTE'
+ssh -o BatchMode=yes "$HOST" sh -s -- "$DIR" "$SHA" "$TAG" "$MIN_FREE_GB" "$DEPLOYED" "$COMPOSE_SHA" <<'REMOTE'
 set -eu
-DIR=$1 SHA=$2 TAG=$3 MIN_FREE_GB=$4 COMPOSE_SHA=${5:-}
+DIR=$1 SHA=$2 TAG=$3 MIN_FREE_GB=$4 DEPLOYED=${5:-} COMPOSE_SHA=${6:-}
 SHORT=$(echo "$SHA" | cut -c1-7)
 cd "$DIR"
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 log() { echo "$TS $SHA $TAG $1" >> deploy.log; echo "deploy: $1"; }
-if [ -e deploy.lock ] && [ -n "$(find deploy.lock -mmin -15)" ]; then
-  echo "deploy: another deploy holds $DIR/deploy.lock: $(cat deploy.lock)" >&2
+# A flock on the folder lets in one deploy at a time and lasts until it exits, however long it runs.
+# deploy.lock names its commit for the alert watch.
+exec 9<.
+if ! flock -n 9; then
+  echo "deploy: another deploy is running in $DIR: $(cat deploy.lock)" >&2
   exit 1
 fi
 echo "$SHA $TS" > deploy.lock
 trap 'rm -f "$DIR/deploy.lock"' EXIT
+# The schema and ancestry checks ran before the lock against the commit the host ran then. Another
+# deploy may have changed that commit and the data schema with it since, so the host must still run it.
+OLD=$(sed -n 's/^POKESIM_IMAGE=//p' .env)
+WRITER=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$OLD" || true)
+if [ "$WRITER" != "$DEPLOYED" ]; then
+  log "refused: the host runs $WRITER now, not the $DEPLOYED the checks read, so deploy again"
+  exit 1
+fi
 if [ -n "$COMPOSE_SHA" ] && [ "$(sha256sum compose.yaml | cut -d' ' -f1)" != "$COMPOSE_SHA" ]; then
   log "refused: compose.yaml is not the file the image trial ran"
   exit 1
@@ -192,7 +205,6 @@ if [ "$free_kb" -lt "$need_kb" ]; then
   exit 1
 fi
 
-OLD=$(sed -n 's/^POKESIM_IMAGE=//p' .env)
 BACKUP=backups/pre-local-$SHORT-$TS.tar.gz
 cp .env ".env.bak-$TS-pre-local-$SHORT"
 
@@ -221,7 +233,6 @@ docker compose stop -t 120 || restore "the app did not stop"
 docker run --rm -v "$DIR":/w -w /w alpine tar czf "$BACKUP" --exclude=./app/backups --exclude=./backups \
   --exclude='./backup-20260921*' --exclude='./releases/preview-*' . || restore "backup $BACKUP was not written"
 gzip -t "$BACKUP" || restore "backup $BACKUP does not pass gzip -t"
-WRITER=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$OLD" || true)
 printf '{\n  "archive": "%s",\n  "writer_image": "%s",\n  "writer_revision": "%s",\n  "image": "%s",\n  "revision": "%s"\n}\n' \
   "${BACKUP#backups/}" "$OLD" "$WRITER" "$TAG" "$SHA" > "${BACKUP%.tar.gz}.json" \
   || restore "the json beside backup $BACKUP was not written"
