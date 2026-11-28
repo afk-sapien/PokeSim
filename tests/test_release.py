@@ -185,13 +185,18 @@ def test_event_retention_removes_only_expired_event_attachments(store):
     recent_id = store.add_event(event, snap(), b'image', b'state')
     store.db.execute('UPDATE events SET ts = ? WHERE id = ?', (time.time() - 3 * 86400, old_id))
     store.db.commit()
+    # The emulator writes each entry's save again with its manifest, so rewinding can check the cartridge.
+    for eid in (old_id, recent_id):
+        store.write_checkpoint(b'state', metadata(), name=f'event-{eid}.state', compress=True)
     checkpoint = store.write_checkpoint(b'keep', metadata())
     assert store.prune_events(0) == 0
     assert store.prune_events(1) == 1
     assert store.event(old_id) is None
     assert not (store.shots / f'{old_id}.png').exists()
     assert not (store.states / f'event-{old_id}.state').exists()
+    assert not (store.states / f'event-{old_id}.json').exists()
     assert store.event(recent_id) is not None
+    assert (store.states / f'event-{recent_id}.json').exists()
     assert checkpoint.exists()
 
 
