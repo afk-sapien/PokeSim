@@ -31,13 +31,15 @@ def listen(emu, sequence):
 
 
 def capture(source, output, rom, game_data):
+    from pokesim.checkpoints import CheckpointStore
     from pokesim.state import schema
     output.mkdir(parents=True, mode=0o700, exist_ok=False)
     target = output / 'adventure'
     target.mkdir()
     (target / 'states').mkdir()
-    # Autosaves are immutable after their metadata has been published.
-    for state in sorted((source / 'states').glob('auto-*.state'), reverse=True):
+    # Autosaves are immutable after their metadata has been published. The newest comes first, in the
+    # order the runtime resumes them.
+    for state in reversed(CheckpointStore(source / 'states').autosaves()):
         try:
             metadata_raw = state.with_suffix('.json').read_bytes()
             metadata = json.loads(metadata_raw)
