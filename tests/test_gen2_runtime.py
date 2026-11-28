@@ -2692,6 +2692,36 @@ def test_the_static_sleeper_keeps_the_lead_through_a_box_release(real_data, monk
     assert policy.level_lead(snapshot) == Lead(1, (100, (100, 0, 0, 0)))
 
 
+@pytest.mark.parametrize('quest', ['static', 'roam'])
+def test_a_refused_lead_reorder_hands_the_quest_on(real_data, quest):
+    """The legendary and roamer quests set a Lead the game had just refused, so it was refused again each
+    decision until the run failed. Now the quest goes on and the reorder waits (MenuPart.allowed)."""
+    from pokecore.gen2.ram import experience_at
+    from pokesim.gen2.menus import Lead
+    from pokesim.gen2.policy import Goal, Policy
+    from pokesim.gen2.quests import prepare_lead, static_lead
+    policy = Policy(real_data)
+
+    def mon(species, moves, stats):
+        return SimpleNamespace(species=species, level=100, moves=moves, pp=tuple(10 if m else 0 for m in moves),
+                               egg=False, box=None, stats=stats, trainer_id=species, dvs=(15,) * 5, stat_exp=(0,) * 5,
+                               experience=experience_at(100, real_data.species[species]['growth']),
+                               name=real_data.species[species]['name'], held_item=0, hp=stats[0])
+    # Only Gengar knows Hypnosis, and at level 100 it outruns Entei.
+    party = [mon(160, (57, 0, 0, 0), (363, 284, 272, 234, 238, 246)), mon(94, (95, 122, 0, 0), (323, 251, 240, 319, 393, 273))]
+    snapshot = SimpleNamespace(party=party, stored=[], map=real_data.map_ids['CHERRYGROVE_CITY'], x=1, y=1, active_box=0)
+
+    def lead():
+        if quest == 'static':
+            return static_lead(policy, snapshot, 249, Goal)
+        return prepare_lead(policy, snapshot, [{'species': 244, 'level': 40, 'map': 0}], Goal)
+    task = Lead(1, (94, (15,) * 5))
+    policy.blocked[task.key()] = policy.clock + 100
+    assert lead() is None and policy.menu is None
+    policy.blocked.clear()
+    assert lead().key == f'collection_{quest}_lead' and policy.menu == task
+
+
 def test_wild_carriers_are_hunted_for_the_kings_rock_once_the_bag_has_none(real_data):
     from pokesim.gen2.collection import item_hunts, wanted
     rock, scale = real_data.items['KINGS_ROCK'], real_data.items['DRAGON_SCALE']

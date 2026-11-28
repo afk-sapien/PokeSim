@@ -313,8 +313,11 @@ def prepare_lead(policy, snapshot, wanted, Goal):
                         f'Bring {mon.name} to lead against the roaming beasts')
     slot = snapshot.party.index(mon)
     if slot:
+        lead = Lead(slot, (mon.trainer_id, mon.dvs))
+        if not policy.allowed(lead, snapshot):
+            return None  # A refused reorder is retried later, and the hunt goes on meanwhile.
         if policy.menu is None:
-            policy.menu = Lead(slot, (mon.trainer_id, mon.dvs))
+            policy.menu = lead
         return Goal('collection_roam_lead', f'Lead with {mon.name} to put the roaming beasts to sleep',
                     data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     return None
@@ -468,8 +471,11 @@ def static_lead(policy, snapshot, species, Goal):
                         f'Bring {mon.name} to put {data.species[species]["name"]} to sleep')
     slot = snapshot.party.index(mon)
     if slot:
+        lead = Lead(slot, (mon.trainer_id, mon.dvs))
+        if not policy.allowed(lead, snapshot):
+            return None  # A refused reorder is retried later, and the legendary is met meanwhile.
         if policy.menu is None:
-            policy.menu = Lead(slot, (mon.trainer_id, mon.dvs))
+            policy.menu = lead
         return Goal('collection_static_lead', f'Lead with {mon.name} to put {data.species[species]["name"]} to sleep',
                     data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
     return None
@@ -550,7 +556,7 @@ def roamers(policy, snapshot, Goal, returned=frozenset()):
 def arrive(policy, snapshot):
     if policy.goal.key == 'collection_release_rock':
         task = rock_smash_task(policy, snapshot)
-        if task is None:
+        if task is None or not policy.allowed(task, snapshot):
             stand_down(policy, RELEASE_ROCK_KEY)
             return 'b'
         policy.menu = task
@@ -568,7 +574,13 @@ def arrive(policy, snapshot):
         if len(snapshot.party) < 6:
             mon = next((mon for mon in snapshot.stored if mon.species == species and not mon.egg), None)
             if mon:
-                policy.menu = ChangeBox(mon.box) if mon.box != snapshot.active_box else Storage('WITHDRAW', mon.position, len(snapshot.party))
+                task = ChangeBox(mon.box) if mon.box != snapshot.active_box else Storage('WITHDRAW', mon.position, len(snapshot.party))
+                if not policy.allowed(task, snapshot):
+                    # A nickname in that box can stop the PC list, or the game refused the task, so
+                    # Bill's grandfather waits.
+                    stand_down(policy, gift_key('collection_stone_show', 'BILLS_HOUSE'))
+                    return 'b'
+                policy.menu = task
             return 'a'
     elif policy.goal.key != 'collection_gift_room':
         return None
@@ -577,7 +589,7 @@ def arrive(policy, snapshot):
         if box is None:
             # No box has room, so there is nothing to deposit into. The gift rungs wait for a release.
             return 'b'
-        policy.menu = ChangeBox(box)
+        task = ChangeBox(box)
     else:
         if len(snapshot.party) < 2:
             return 'b'
@@ -586,7 +598,10 @@ def arrive(policy, snapshot):
         slot = min(range(1, len(snapshot.party)), key=lambda i: (
             carried(policy, snapshot, snapshot.party[i]), sum(counts[move] == 1 for move in snapshot.party[i].moves if move in FIELD_MOVES), snapshot.party[i].egg,
             snapshot.party[i].held_item == policy.data.items['EXP_SHARE'], snapshot.party[i].level))
-        policy.menu = Storage('DEPOSIT', slot, len(snapshot.party))
+        task = Storage('DEPOSIT', slot, len(snapshot.party))
+    if not policy.allowed(task, snapshot):
+        return 'b'  # The game refused this task recently, so the visit waits to try it again.
+    policy.menu = task
     return 'a'
 
 

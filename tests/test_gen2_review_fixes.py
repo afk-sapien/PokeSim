@@ -225,6 +225,47 @@ def test_arriving_at_the_rock_without_rock_smash_stands_down(real_data):
     assert policy.menu is None and standing_down(policy, quests.RELEASE_ROCK_KEY)
 
 
+def menu_run(**fields):
+    """A run that refuses tasks by the policy's own rule (MenuPart.allowed), with no stack pointer."""
+    from pokesim.gen2.policy.menus import MenuPart
+    run = type('Run', (MenuPart,), {})()
+    run.__dict__.update(blocked={}, clock=1000, sp=None, menu=None, collection={}, monitor_tables={}, **fields)
+    return run
+
+
+@pytest.mark.parametrize('key', ['collection_release_rock', 'collection_stone_pc', 'collection_gift_room'])
+def test_a_quest_arrival_never_sets_a_task_the_game_refuses(key):
+    """The quest arrivals set their PC or field task without asking allowed(), so the game was asked again
+    at once, or Bill's PC list met a nickname that stops it."""
+    from pokesim.gen2 import quests
+    from pokesim.gen2.menus import FieldMove, Storage
+    from pokesim.gen2.standdown import standing_down
+
+    def mon(species, moves=(33, 0, 0, 0), box=None, position=0, nick=b'\x80\x50'):
+        return SimpleNamespace(species=species, moves=moves, egg=False, held_item=0, level=20, box=box,
+                               position=position, nick_bytes=nick)
+    run = menu_run(goal=SimpleNamespace(key=key), data=SimpleNamespace(items={'EXP_SHARE': 57}))
+    run.collection['stone_show'] = [108, 'EVENT_GOT_EVERSTONE_FROM_BILLS_GRANDPA']
+    snapshot = SimpleNamespace(party=[mon(74, (249, 0, 0, 0)), mon(16)], stored=[mon(108, box=0, position=3)],
+                               active_box=0, box_counts=(5,) * 14)
+    if key == 'collection_release_rock':
+        task, waits = FieldMove(0, 'ROCK SMASH'), quests.RELEASE_ROCK_KEY
+        run.blocked[task.key()] = run.clock + 100
+    elif key == 'collection_stone_pc':
+        # A traded Rattata's nickname holds a text command, so the PC list may stop before Lickitung.
+        task, waits = Storage('WITHDRAW', 3, 2), quests.gift_key('collection_stone_show', 'BILLS_HOUSE')
+        snapshot.stored.append(mon(19, box=0, position=4, nick=b'\x49\x50'))
+    else:
+        task, waits = Storage('DEPOSIT', 1, 2), None
+        run.blocked[task.key()] = run.clock + 100
+    assert quests.arrive(run, snapshot) == 'b'
+    assert run.menu is None
+    assert waits is None or standing_down(run, waits)
+    # Once the game takes the task again, the arrival sets it.
+    run.blocked, snapshot.stored = {}, snapshot.stored[:1]
+    assert quests.arrive(run, snapshot) in {'a', 'wait'} and run.menu == task
+
+
 class Zeros:
     """Work RAM that reads as all zeros."""
 
