@@ -424,7 +424,7 @@ def test_both_reloads_write_the_reload_row(tmp_path, monkeypatch):
                            policy=SimpleNamespace(recoveries=4, menu=None, on_restore=lambda: None, collection={},
                                                   goal=None, decisions=0, in_league=lambda snapshot: False),
                            reloads=0, last_reload=0, audio=SimpleNamespace(clear=lambda: None),
-                           statistics=SimpleNamespace(previous=None), options_applied=True, _tick=lambda n: None,
+                           statistics=SimpleNamespace(previous=None), options_written=(True, True), _tick=lambda n: None,
                            _reset_watch=lambda: None, _boot=lambda **_: SimpleNamespace(), _sync_clock=lambda: None,
                            pb=SimpleNamespace(stop=lambda save: None), _event=lambda event, snapshot: None)
     Gen2._unstick(gen2, 0.0, 'stuck')

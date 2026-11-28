@@ -27,7 +27,7 @@ def cartridge_game_data(rom, game, data_root):
 
 
 def write_options(pb, data):
-    """The text speed and battle animations the runtime sets after every load."""
+    """The text speed and battle animations the runtime sets after every load and every change."""
     bank, address = data.symbols['wOptions']
     value = pb.memory[bank, address]
     if config.FAST_TEXT:

@@ -626,6 +626,11 @@
   let shelfFor = null
   const shelfUsers = list => list.map(game => [game.id, game.rom_id, game.name, game.archived].join('\u0001')).join('\u0002')
   let supportedGames = 'Red, Blue, Yellow, Gold, Silver or Crystal'
+  // The server's BATTLE_ANIMATIONS, which a new adventure starts with.
+  let animationsDefault = true
+  // Each play setting's switch in the adventure settings, and its name in a pending notice.
+  const PLAY_SWITCHES = [['nicknames', '#settings-nicknames', 'nickname setting'],
+    ['battle_animations', '#settings-battle-animations', 'battle animations setting']]
   let shelfSignature = ''
   let pickerSignature = ''
   let uploadSlot = ''
@@ -694,6 +699,7 @@
     const data = await api('/api/v1/cartridges')
     shelfAt = Date.now()
     supportedGames = data.supported || supportedGames
+    animationsDefault = data.battle_animations !== false
     renderCartridges(data.slots || [])
   }
   async function uploadCartridge(file, slot) {
@@ -859,6 +865,7 @@
     await act(async () => {
       await refreshCartridges()
       renderGamePicker()
+      $('#new-battle-animations').checked = animationsDefault
       if (!$('#new-name').value.trim()) randomizeAdventure()
       if (!$('#new-trainer').value) randomizeTrainer('#new-trainer', '#new-rival')
       if (!$('#new-rival').value) randomizeTrainer('#new-rival', '#new-trainer')
@@ -919,8 +926,8 @@
       $('#settings-palette-note').textContent = refused ? `This adventure has not accepted the palette yet: ${refused}` : 'GBC-inspired colors applied to the whole screen. Changes apply immediately, including while paused.'
       $('#settings-palette').disabled = colour
       $('#settings-autostart').checked = Boolean(game.settings?.auto_start)
-      // Nicknames saves through the play route, so it stays editable while the adventure runs.
-      $('#settings-nicknames').checked = game.settings?.nicknames !== false
+      // Play settings save through the play route, so they stay editable while the adventure runs.
+      for (const [name, id] of PLAY_SWITCHES) $(id).checked = game.settings?.[name] !== false
       leaseEnd = null
       const handsOn = accounts && game.access === 'owner'
       $('#settings-lease-end-label').hidden = !handsOn
@@ -995,7 +1002,7 @@
       const startNow = $('#start-created').checked
       const result = await write('/api/v1/adventures', {name: $('#new-name').value.trim(), rom_id: romId, starter,
         trainer_name: $('#new-trainer').value.trim().toUpperCase(), rival_name: $('#new-rival').value.trim().toUpperCase(),
-        ...(randomizer ? {randomizer} : {}), ...(fairDvsOffered() && $('#new-fair-wild-dvs').checked ? {fair_wild_dvs: true} : {})})
+        battle_animations: $('#new-battle-animations').checked, ...(randomizer ? {randomizer} : {}), ...(fairDvsOffered() && $('#new-fair-wild-dvs').checked ? {fair_wild_dvs: true} : {})})
       const game = result.adventure || result
       $('#create-dialog').close()
       $('#create-form').reset()
@@ -1015,13 +1022,15 @@
       }
       const result = await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}`, {name: $('#settings-name').value.trim(),
         settings: {auto_start: $('#settings-autostart').checked, speed: Number($('#settings-speed').value), ...($('#settings-palette').disabled ? {} : {palette: $('#settings-palette').value || 'original'}), ...rewards}}, 'PATCH')
-      const nicknames = $('#settings-nicknames').checked
-      const play = game && nicknames !== (game.settings?.nicknames !== false) ? await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}/play`, {nicknames}, 'PATCH') : {}
+      // Only a switch that differs from the saved setting goes to the play route.
+      const changed = {}
+      for (const [name, id] of PLAY_SWITCHES) if (game && $(id).checked !== (game.settings?.[name] !== false)) changed[name] = $(id).checked
+      const play = Object.keys(changed).length ? await write(`/api/v1/adventures/${encodeURIComponent($('#settings-id').value)}/play`, changed, 'PATCH') : {}
       const end = $('#settings-lease-end').value
       // The lease route takes only its own fields, so this skips write and its request id.
       if (game && leaseEnd && end !== leaseEnd) await api(`${gameUrl(game.id)}api/lease`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'setting', end})})
       $('#adventure-settings').close()
-      const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette', result.fair_wild_dvs_pending && 'fair wild DVs setting', play.play_pending && 'nickname setting'].filter(Boolean).join(' and ')
+      const pending = [result.pace_pending && 'speed', result.palette_pending && 'palette', result.fair_wild_dvs_pending && 'fair wild DVs setting', ...(play.play_pending ? PLAY_SWITCHES.filter(([name]) => name in changed).map(([, , label]) => label) : [])].filter(Boolean).join(' and ')
       notice(pending ? `Settings saved. The ${pending} will apply when this adventure reconnects.` : 'Adventure settings saved.')
     }) }
   $('#notify-add').onclick = () => openIntegration()

@@ -150,8 +150,46 @@ def test_gen1_options_follow_the_text_and_animation_settings(monkeypatch):
     assert pb.memory[W_OPTIONS] == 0b001
     monkeypatch.setattr(config, 'BATTLE_ANIMATIONS', False)
     assert gen1_options(0b011) == 0b1000_0001
+    Decider(lambda: 0, write_gen1_options).ask(SimpleNamespace(step=lambda ctx: []), 'snapshot', pb)
+    assert pb.memory[W_OPTIONS] == 0b1000_0001
     monkeypatch.setattr(config, 'FAST_TEXT', False)
     assert gen1_options(0b011) == 0b1000_0011
+    # Turning animations back on while the game runs clears the bit at the next decision.
+    monkeypatch.setattr(config, 'BATTLE_ANIMATIONS', True)
+    assert gen1_options(0b1000_0011) == 0b011
+    Decider(lambda: 0, write_gen1_options).ask(SimpleNamespace(step=lambda ctx: []), 'snapshot', pb)
+    assert pb.memory[W_OPTIONS] == 0b001
+
+
+def test_gen2_options_are_written_after_a_load_and_after_a_live_change(monkeypatch):
+    """Gen II writes its options once after each load, so traces keep their steps, and again when a play
+    setting changes while it runs, so the switch reaches the game without a restart."""
+    from pokesim.gen2.emulator import Emulator
+    writes = []
+
+    class Memory(dict):
+        def __setitem__(self, key, value):
+            writes.append(value)
+            super().__setitem__(key, value)
+    game = SimpleNamespace(pb=SimpleNamespace(memory=Memory({(1, 0xD199): 0b011})), manual_mode=False,
+                           data=SimpleNamespace(symbols={'wOptions': (1, 0xD199)}), options_written=None)
+    monkeypatch.setattr(config, 'FAST_TEXT', True)
+    monkeypatch.setattr(config, 'BATTLE_ANIMATIONS', True)
+    Emulator._sync_options(game)
+    Emulator._sync_options(game)
+    assert writes == [0b001]
+    monkeypatch.setattr(config, 'BATTLE_ANIMATIONS', False)
+    Emulator._sync_options(game)
+    Emulator._sync_options(game)
+    assert writes == [0b001, 0b1000_0001]
+    monkeypatch.setattr(config, 'BATTLE_ANIMATIONS', True)
+    Emulator._sync_options(game)
+    assert writes == [0b001, 0b1000_0001, 0b001]
+    # A load forgets what was written, and hands-on play leaves the byte to the player.
+    game.options_written = None
+    game.manual_mode = True
+    Emulator._sync_options(game)
+    assert len(writes) == 3
 
 
 def test_gen2_asks_with_the_stack_pointer_and_never_writes_options():

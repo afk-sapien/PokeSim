@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 # Per-adventure play settings and their defaults. They change while the adventure runs
 # through PATCH /api/v1/adventures/{aid}/play, and a default is stored as absent.
-PLAY_SETTINGS = {'nicknames': True}
+PLAY_SETTINGS = {'nicknames': True, 'battle_animations': True}
 # Settings an earlier release stored that this one no longer has. An adventure that still holds one
 # opens and plays as if it were absent.
 RETIRED_SETTINGS = frozenset({'play_style'})
