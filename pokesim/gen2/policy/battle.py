@@ -729,7 +729,7 @@ class BattlePart:
         """Move the highest-level Pokémon to the front when the lead lags well behind it."""
         from ..quests import beasts_roaming
         from ..tower import holds_lead
-        from ..training import trainee_slot
+        from ..training import level_lead_slot, trainee_slot
         # Without an Exp. Share the partner in training leads instead, so it joins every battle.
         trainee = trainee_slot(self, snapshot)
         # The roaming-beast sleeper stays on record after the search is set aside for later, and the search
@@ -763,9 +763,8 @@ class BattlePart:
         if slot is not None:
             mon = snapshot.party[slot]
             return Lead(slot, (mon.trainer_id, mon.dvs)) if slot else None
-        strongest = max((i for i, mon in enumerate(snapshot.party) if not mon.egg),
-                        key=lambda i: snapshot.party[i].level, default=0)
-        if not strongest or snapshot.party[strongest].level <= snapshot.party[0].level + 5:
+        strongest = level_lead_slot(snapshot.party)
+        if strongest is None:
             return None
         mon = snapshot.party[strongest]
         return Lead(strongest, (mon.trainer_id, mon.dvs))

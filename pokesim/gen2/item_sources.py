@@ -61,11 +61,14 @@ def item_needs(policy, snapshot):
 
     An item counts for each held partner whose item evolution is missing from the Pokédex, is a
     prerequisite, or is asked for by a peer, the same rule training.projects uses to spend one. Kept in
-    the facts until the party, a box, the bag, the Pokédex or the demand changes.
+    the facts until the party, a box, the bag, the Pokédex, the demand or the party slots the peer
+    store would box change.
     """
+    from .collection import peer_store_slots
     demand = getattr(policy, 'demand', None) or {}
     inputs = (getattr(snapshot, 'party', ()), getattr(snapshot, 'stored', ()), getattr(snapshot, 'items', ()),
-              getattr(snapshot, 'owned', ()), tuple(sorted(demand.items())))
+              getattr(snapshot, 'owned', ()), tuple(sorted(demand.items())),
+              tuple(peer_store_slots(policy, snapshot, trainee=False)) if getattr(snapshot, 'party', ()) else ())
     return dict(facts(policy).answer('item needs', inputs, lambda: _item_needs(policy, snapshot, demand)))
 
 
@@ -85,7 +88,7 @@ def _item_needs(policy, snapshot, demand):
                 continue
             species = evo['species']
             if (species in owned and species not in needed
-                    and not requested(data, snapshot, demand, species, source=mon)):
+                    and not requested(policy, snapshot, demand, species, source=mon)):
                 continue
             item = data.items.get(evo['requirements'][0])
             if item is not None:
