@@ -92,6 +92,17 @@ def test_the_battle_budget_is_the_former_heal_line():
     assert not needs_healing((replace(full, pp=(6,)),))
 
 
+def test_a_whole_party_with_no_attack_is_never_sent_to_heal_for_pp():
+    # A randomized Ditto starter knows only Transform. A Pokémon Center gives it no attack uses, so a
+    # floor of three left the heal walk due after every heal.
+    ditto = mon(species=sid(132), hp=100, max_hp=100, moves=(144,), pp=(10,))
+    assert battle_room((ditto,))[PP] == 1
+    assert not needs_healing((ditto,))
+    policy = StrategicPolicy(7)
+    policy.heal.update(policy, state(party=(ditto,)))
+    assert not policy.heal.latched
+
+
 @pytest.mark.parametrize('project', [
     {'method': 'grass', 'species': sid(16), 'map': MAPS['ROUTE_1']},
     {'method': 'grass', 'species': sid(16), 'map': MAPS['ROUTE_1'], 'repeat': True},
