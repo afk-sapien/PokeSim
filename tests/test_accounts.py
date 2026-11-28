@@ -403,6 +403,47 @@ def test_members_see_only_their_own_and_granted_adventures(library, people):
     assert {row['id'] for row in admin.get('/api/v1/adventures').json()['adventures']} == {people.red, people.blue}
 
 
+def test_a_member_hears_only_about_problems_with_adventures_they_can_watch(library, people):
+    from pokesim.app.watchdog import Problem
+    with library.manager.watchdog.guard:
+        for key, aid in (('red', people.red), ('blue', people.blue), ('library', None)):
+            library.manager.watchdog.problems[key] = Problem(key, 'stall', f'{key} is stuck in a secret place', 1.0, aid)
+
+    def heard(client):
+        return {problem['adventure_id'] for problem in client.get('/api/v1/watchdog').json()['problems']}
+    alice = library.login('alice')
+    assert heard(alice) == {people.red}
+    library.manager.auth.grant(people.blue, people.alice['id'], 'viewer', people.bob['id'])
+    assert heard(alice) == {people.red, people.blue}
+    # The library list says the same, and library problems are for admins.
+    assert {problem['adventure_id'] for problem in alice.get('/api/v1/adventures').json()['attention']['problems']} \
+        == {people.red, people.blue}
+    assert heard(library.login('admin')) == {people.red, people.blue, None}
+
+
+def test_a_manager_changes_the_speed_and_the_running_game_gets_it(library, people):
+    sent = []
+
+    def request(method, path, body=None, **kwargs):
+        sent.append((method, path, body))
+        return dict(body)
+    with library.manager.supervisor.guard:
+        library.manager.supervisor.children[people.blue] = SimpleNamespace(request=request)
+    library.manager.auth.grant(people.blue, people.alice['id'], 'manager', people.bob['id'])
+    library.manager.auth.grant(people.blue, library.user('carol')['id'], 'player', people.bob['id'])
+    manager, player = library.login('alice'), library.login('carol')
+
+    changed = manager.patch(f'/api/v1/adventures/{people.blue}/speed', json={'speed': 4})
+    assert changed.status_code == 200, changed.text
+    assert library.manager.registry.adventure(people.blue)['settings']['speed'] == 4
+    assert sent == [('POST', '/internal/speed', {'speed': 4})]
+    # The rest of the settings stay the owner's, and a player cannot change the speed.
+    assert manager.patch(f'/api/v1/adventures/{people.blue}', json={'settings': {'speed': 2}}).status_code == 403
+    assert player.patch(f'/api/v1/adventures/{people.blue}/speed', json={'speed': 2}).status_code == 403
+    assert manager.patch(f'/api/v1/adventures/{people.blue}/speed', json={'speed': 2, 'seed': 1}).status_code == 409
+    assert library.manager.registry.adventure(people.blue)['settings']['speed'] == 4
+
+
 def test_watchers_read_the_game_but_only_whoever_holds_control_presses_buttons(library, people):
     library.manager.auth.grant(people.blue, people.alice['id'], 'viewer', people.bob['id'])
     alice, bob = library.login('alice'), library.login('bob')

@@ -279,10 +279,16 @@ class TradeBuilder:
             raise Conflict('Choose another adventure to trade with')
         request_id = validate_id(data.get('request_id') or identifier())
         try:
-            # Sending the same request again returns the trade it already queued.
-            return self.coordinator.manual_status(request_id)
+            # Sending the same request again returns the trade it already queued. Someone who saw only
+            # the ID, on an adventure shared with them, sends another choice and learns nothing.
+            queued = self.coordinator.manual_status(request_id)
         except KeyError:
             pass
+        else:
+            sides = {'left_id': 'from_id', 'left_key': 'from_key', 'right_id': 'to_id', 'right_key': 'to_key'}
+            if any(queued[name] != selection[field] for name, field in sides.items()):
+                raise Conflict('This request ID already belongs to another trade')
+            return queued
         for name in ('from_id', 'to_id'):
             self.registry.adventure(selection[name])
             self._writer(selection[name])

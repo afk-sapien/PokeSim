@@ -116,6 +116,30 @@ def test_abort_before_prepare_leaves_a_permanent_tombstone(tmp_path):
     store.close()
 
 
+@pytest.mark.parametrize('earlier', [None, 'aborted', 'released'])
+def test_a_late_gen2_answer_leaves_the_trade_preparing_now_alone(tmp_path, earlier):
+    """A retried abort or release of an earlier exchange, or an abort of one that never began here,
+    neither stops the preparation that runs now nor borrows its Time Capsule party."""
+    from pokesim.gen2.preparation import Preparation
+    from pokesim.gen2.trading import Participant as Gen2Participant
+    store = Store(tmp_path)
+    old, now = identifier(), identifier()
+    if earlier:
+        store.set(PREFIX + old, {'id': old, 'phase': earlier, 'decision': 'ABORT' if earlier == 'aborted' else 'COMMIT'})
+    state = {'id': now, 'phase': 'travelling', 'time_capsule': True, 'original_party': ['kept-team']}
+    store.set('interaction_preparation', state)
+    saves = []
+    emu = SimpleNamespace(generation=2, policy=SimpleNamespace(collection={}), _autosave=lambda: saves.append(1))
+    emu.preparation = live = Preparation(emu, state)
+    participant = Gen2Participant(SimpleNamespace(store=store, emulator=emu), SimpleNamespace())
+    answer = participant.release if earlier == 'released' else participant.abort
+    record = answer({'id': old})
+    assert emu.preparation is live
+    assert 'time_capsule_original' not in record and 'time_capsule_restore' not in emu.policy.collection
+    assert store.get('interaction_preparation') == state and saves == []
+    store.close()
+
+
 def test_startup_never_reads_finished_exchanges(tmp_path):
     """A released record holds a whole policy snapshot and recovery acts on none of it."""
     store = Store(tmp_path)

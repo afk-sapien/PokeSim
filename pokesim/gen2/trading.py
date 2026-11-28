@@ -460,7 +460,9 @@ class Participant(BaseParticipant):
             record['team_restore_scheduled'] = True
             self.emu._autosave()
             _save(self.store, record)
-        self.emu.preparation = None
+        # A late answer about an earlier exchange leaves the one preparing now alone.
+        if getattr(self.emu.preparation, 'state', {}).get('id') == record['id']:
+            self.emu.preparation = None
         return record
 
     def release(self, data):
@@ -469,7 +471,7 @@ class Participant(BaseParticipant):
     def abort(self, data):
         preparation = self.store.get('interaction_preparation') or {}
         record = super().abort(data)
-        if preparation.get('original_party'):
+        if preparation.get('id') == record['id'] and preparation.get('original_party'):
             record['time_capsule_original'] = preparation['original_party']
         return self.restore_team(record)
 
