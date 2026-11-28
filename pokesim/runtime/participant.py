@@ -183,7 +183,8 @@ def _compact_released(store):
 def _prune_finished(store, keep=KEEP_FINISHED):
     """Drop the checkpoint files of all but the newest finished exchanges.
 
-    A released exchange was promoted into the adventure's own saves and an aborted one
+    Startup and every release or abort run this, so an adventure that trades for weeks keeps only
+    ``keep`` folders. A released exchange was promoted into the adventure's own saves and an aborted one
     went back to its source save, so nothing reads these files again. A folder whose
     exchange is unfinished, or has no record at all, is left alone.
     """
@@ -665,6 +666,7 @@ class Participant:
             kv.put(db, PREFIX + record['id'], record)
             for key in ('interaction_preparation', 'trade_hold'):
                 kv.put(db, key, None)
+        _prune_finished(self.store)
         self.emu.paused = False
         if getattr(self.emu, 'generation', 1) == 1 and (pb := getattr(self.emu, 'pb', None)):
             # The game copies a received nickname byte for byte, damage included.
@@ -710,7 +712,9 @@ class Participant:
         record['phase'] = 'aborted'
         # Like a release: the snapshot is only ever promoted by a commit.
         record.pop('source_metadata', None)
-        return _save(self.store, record)
+        _save(self.store, record)
+        _prune_finished(self.store)
+        return record
 
 
 def install(app, runtime, participant_type=Participant):
