@@ -190,6 +190,13 @@ def test_live_status_without_data():
     assert gen2.live_status(None)['started'] is False and gen2.live_status(None)['version'] == 'crystal'
 
 
+def test_live_status_rates_each_pokemon_with_the_given_rule():
+    status = gen2.live_status({'party': [{'species': 1}], 'storage': {'pokemon': [{'species': 2}]}},
+                              {'plan': None}, rate=lambda mon: {**mon, 'rated': True})
+    assert status['party'] == [{'species': 1, 'rated': True, 'slot': 1}]
+    assert status['storage']['pokemon'] == [{'species': 2, 'rated': True}] and status['plan'] == []
+
+
 def test_screens():
     assert gen2.has_word('Wild PIDGEY appeared', 'PIDGEY')
     assert not gen2.has_word('PIDGEYOTTO', 'PIDGEY')

@@ -1,6 +1,7 @@
 """Read-only verification of Gen II cartridge trade results and save restarts."""
 from pokecore.gen2.save import checkpoint_clock, continue_save as core_continue_save
 from pokecore.identity import family_key as trade_key
+from pokecore.trade import gen2_evolved_species as evolved_species, gen2_untraded_party, verify_gen2_received
 
 from ..interactions.cable import checked
 from pokecore.gen2.ram import Memory, read_snapshot
@@ -23,16 +24,6 @@ def individual_key(row):
     raw = row['struct']
     dvs, _ = individual(raw)
     return trade_key(int.from_bytes(raw[6:8], 'big'), tuple(dvs), raw[0])
-
-
-def evolved_species(raw, data):
-    if raw[1] == data.items['EVERSTONE']:
-        return raw[0]
-    plain = {64: 65, 67: 68, 75: 76, 93: 94}
-    held = {(61, 'KINGS_ROCK'): 186, (79, 'KINGS_ROCK'): 199, (95, 'METAL_COAT'): 208,
-            (123, 'METAL_COAT'): 212, (117, 'DRAGON_SCALE'): 230, (137, 'UP_GRADE'): 233}
-    return next((result for (species, item), result in held.items()
-                 if raw[0] == species and raw[1] == data.items[item]), plain.get(raw[0], raw[0]))
 
 
 def available_trade_item(data, species, held_item, inventory, *, replace_held=False, held_species=()):
@@ -58,15 +49,7 @@ def untraded_party(before, slot, source, current):
     """Account for the native friendship point earned while walking to the link desk."""
     gain = (source.step_count > current.step_count
             and source.happiness_cycle == 1 and current.happiness_cycle == 0)
-    expected = []
-    for index, row in enumerate(before):
-        if index == slot:
-            continue
-        raw = bytearray(row['struct'])
-        if gain and not source.party[index].egg:
-            raw[27] = min(255, raw[27] + 1)
-        expected.append({**row, 'struct': bytes(raw)})
-    return expected
+    return gen2_untraded_party(before, slot, friendship_step=gain, eggs=[mon.egg for mon in source.party])
 
 
 def verify_exchange(side, before, incoming, slot, source_snapshot, *, time_capsule=False):
@@ -74,23 +57,9 @@ def verify_exchange(side, before, incoming, slot, source_snapshot, *, time_capsu
     snapshot = read_snapshot(side.pb.memory, side.data, side.frame)
     checked(len(after) == len(before), 'Trade changed party size')
     checked(after[:-1] == untraded_party(before, slot, source_snapshot, snapshot), 'Untraded party members changed')
-    received = after[-1]
-    source, target = incoming['struct'], received['struct']
-    species = evolved_species(source, side.data)
-    checked(target[0] == species, 'Unexpected trade evolution')
-    item = 0 if species != source[0] and source[0] not in (64, 67, 75, 93) else source[1]
-    checked(target[1] == item, 'Trade changed the held item unexpectedly')
-    checked(target[2:27] == source[2:27] and target[28:32] == source[28:32],
-            'Trade changed moves, identity, training or caught data')
-    checked(target[27] == 70, 'Trade did not reset friendship normally')
-    if species == source[0]:
-        checked(target[32] == source[32] and target[34:] == source[34:]
-                and (time_capsule or target[33] == source[33]), 'Trade changed battle stats or health')
-    nickname_changed = (species != source[0]
-                        and side.data.text(incoming['nickname']) == side.data.species[source[0]]['name'].upper()
-                        and side.data.text(received['nickname']) == side.data.species[species]['name'].upper())
-    checked(received['nickname'] == incoming['nickname'] or nickname_changed, 'Trade changed the nickname')
-    checked(received['trainer'] == incoming['trainer'], 'Trade changed original trainer name')
+    names = {number: entry['name'] for number, entry in side.data.species.items()}
+    evidence = verify_gen2_received(incoming, after[-1], time_capsule=time_capsule, names=names, decode=side.data.text)
+    source, species = incoming['struct'], evidence['species']
     expected_eggs = tuple(mon.egg for index, mon in enumerate(source_snapshot.party) if index != slot) + (False,)
     checked(tuple(mon.egg for mon in snapshot.party) == expected_eggs, 'Trade changed untraded Egg status')
     checked(snapshot.event_flags == source_snapshot.event_flags, 'Trade changed story events')
@@ -100,9 +69,7 @@ def verify_exchange(side, before, incoming, slot, source_snapshot, *, time_capsu
             (source_snapshot.badges, source_snapshot.money, source_snapshot.items), 'Trade changed adventure progress')
     checked(snapshot.owned == source_snapshot.owned | {source[0], species}, 'Trade did not update the Pokédex correctly')
     return after, {'party_preserved': True, 'storage_preserved': True, 'individual_preserved': True,
-                   'pokedex_updated': True, 'species': species, 'held_item': item,
-                   'received_species': species, 'incoming_species': source[0],
-                   'default_name_evolved': nickname_changed}
+                   'pokedex_updated': True, **evidence}
 
 
 def continue_save(rom, save, data, *, rtc=None):

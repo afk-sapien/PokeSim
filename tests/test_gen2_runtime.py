@@ -444,7 +444,29 @@ def test_snorlax_blocks_its_whole_footprint_until_the_battle(real_data):
     (64, 'EVERSTONE', 64), (95, None, 95)])
 def test_gen2_trade_evolution_requirements(real_data, species, item, result):
     from pokesim.gen2.cable_verification import evolved_species
-    assert evolved_species(bytes([species, real_data.items[item] if item else 0]), real_data) == result
+    assert evolved_species(bytes([species, real_data.items[item] if item else 0])) == result
+
+
+def test_a_gen2_exchange_is_checked_by_cores_trade_rules(monkeypatch):
+    # The app kept its own copy of core's evolution, friendship and received checks, free to drift from it.
+    from pokecore import trade
+    from pokesim.gen2 import cable_verification as verification
+    row = {'struct': bytes(48), 'nickname': b'A', 'trainer': b'B'}
+    snapshot = SimpleNamespace(step_count=0, happiness_cycle=0, party=[SimpleNamespace(egg=False)] * 2)
+    calls = []
+
+    def received(*args, **kwargs):
+        raise LookupError('core checked the received Pokemon')
+
+    monkeypatch.setattr(verification, 'party', lambda pb, data: [row, row])
+    monkeypatch.setattr(verification, 'read_snapshot', lambda *args: snapshot)
+    monkeypatch.setattr(verification, 'gen2_untraded_party', lambda *args, **kwargs: calls.append(kwargs) or [row])
+    monkeypatch.setattr(verification, 'verify_gen2_received', received)
+    side = SimpleNamespace(pb=SimpleNamespace(memory=None), data=SimpleNamespace(species={}, text=str), frame=0)
+    with pytest.raises(LookupError, match='core checked'):
+        verification.verify_exchange(side, [row, row], row, 1, snapshot)
+    assert calls == [{'friendship_step': False, 'eggs': [False, False]}]
+    assert verification.evolved_species is trade.gen2_evolved_species
 
 
 def test_battle_transition_graphics_do_not_open_the_pack(real_data):

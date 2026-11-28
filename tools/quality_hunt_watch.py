@@ -13,10 +13,9 @@ adventure has no trainee left, a better-DV hunt must start within its next 6 gam
 file keeps the game hour, wall time, decision count and hunt counts at which each adventure was first
 seen without a trainee, so the check carries across nights.
 
-A trainee follows ``trainee()`` in pokesim/gen2/postgame.py: the best copy of each held species by
-potential, below level 100, not about matched by a level 100 copy, not standing down, and not boxed
-while a full party meets full boxes. The wait for better-DV hunts below level 80 is left out, so a run
-whose last trainees wait on their hunts is not counted yet. The watch runs once a night, so a hunt
+A trainee is the copy ``pick_trainee()`` in pokesim/gen2/postgame.py picks for each held species,
+the rule the policy's ``trainee()`` trains by. The wait for better-DV hunts below level 80 is left
+out, so a run whose last trainees wait on their hunts is not counted yet. The watch runs once a night, so a hunt
 start is placed from the policy's decisions, or from its first catch for a hunt that already ended,
 both spread evenly between the first sighting and now.
 """
@@ -29,27 +28,26 @@ GEN2 = {'gold', 'silver', 'crystal'}
 LIMIT_HOURS = 6
 FRAMES_PER_HOUR = 60 * 60 * 60
 SHOWN = 3
-# MIN_UPGRADE of pokesim/investment.py, which needs Gen I game data the container keeps elsewhere.
-MIN_UPGRADE = 0.02
 
 
-def trainees(mons, standing_down, sealed, min_upgrade):
-    """Names and levels of the copies the postgame would still train, per ``trainee()``."""
+def trainees(mons, standing_down, sealed):
+    """Names and levels of the copies the postgame would still train, by the policy's own rule."""
+    from types import SimpleNamespace
+
+    # The policy loads Gen I game data on import, so this waits until saved_game has pointed
+    # GAME_DATA_DIR at the app's copy of it.
+    from pokesim.gen2.postgame import pick_trainee
     groups = {}
     for mon in mons:
         if not mon.get('egg'):
-            groups.setdefault(mon['species'], []).append(mon)
+            groups.setdefault(mon['species'], []).append(
+                SimpleNamespace(level=mon['level'], box=mon.get('box'), dvs=mon['dvs'], view=mon))
     left = []
     for copies in groups.values():
-        best = max(copies, key=lambda mon: (mon.get('potential_power') or 0, mon['level']))
-        if best['level'] >= 100 or best.get('box') is not None and sealed:
-            continue
-        top = max((mon.get('potential_power') or 0 for mon in copies if mon['level'] >= 100), default=None)
-        if top is not None and not best.get('perfect_dvs') and (best.get('potential_power') or 0) <= top * (1 + min_upgrade):
-            continue
-        if standing_down([best['trainer_id'], list(best['dvs'])]):
-            continue
-        left.append([best['name'], best['level']])
+        best = pick_trainee(copies, lambda copy: copy.view.get('potential_power') or 0, sealed,
+                            lambda copy: standing_down([copy.view['trainer_id'], list(copy.dvs)]))
+        if best is not None:
+            left.append([best.view['name'], best.level])
     return sorted(left, key=lambda row: -row[1])
 
 
@@ -142,7 +140,7 @@ def collect():
                    decisions=decisions, can_catch=bool(storage.get('can_catch')),
                    trainees=trainees(party + (storage.get('pokemon') or []),
                                      lambda identity: monitor.standing_down(train_key(identity), decisions),
-                                     sealed, MIN_UPGRADE),
+                                     sealed),
                    searches=postgame.get('searches') or {},
                    hunt={'species': activity['species'], 'started': activity.get('started', decisions)}
                    if activity.get('kind') == 'quality' else None,

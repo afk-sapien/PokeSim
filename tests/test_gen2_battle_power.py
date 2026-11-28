@@ -80,3 +80,13 @@ def test_real_gen2_data_rates_every_species(version):
     starter = {'species': 154, 'level': 100, 'dvs': [5, 4, 11, 12, 5], 'stat_exp': [65535] * 5,
                'moves': [70, 15, 231, 76], 'friendship': 255}
     assert battle_power(starter, data) > 1000
+
+
+def test_the_app_builds_its_status_on_cores(monkeypatch):
+    # Core kept its own copy of this builder, which drifted: no Hidden Power and no Pokédex plan.
+    from pokecore.gen2 import status
+    from pokesim.gen2 import web
+    calls = []
+    monkeypatch.setattr(status, 'live_status', lambda *args, **kwargs: calls.append(kwargs) or {'plan': ['kept']})
+    assert web.live_status({'party': []}, {}, data=None) == {'plan': ['kept']}
+    assert calls[0]['rate']({'species': 1}) == web.rate({'species': 1}, None)

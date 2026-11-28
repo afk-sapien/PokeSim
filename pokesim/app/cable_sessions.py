@@ -384,16 +384,6 @@ class CableSessions:
             if min(trades) < 1:
                 raise Conflict(NO_TRADE)
             # A trade can evolve the Pokémon that arrives, as Session.finish allows for.
-            data = self.game_data(row)
-            verify_parties(before, after, trades, lambda raw: evolved_species(raw, data))
+            verify_parties(before, after, trades, evolved_species)
         except (CableError, KeyError, TypeError, AttributeError) as error:
             raise Conflict(f'Cable session result failed verification: {error}') from error
-
-    def game_data(self, row):
-        """The Gen II game data for this session. Every Gen II cartridge numbers items the same."""
-        from ..gen2.data import GameData
-        version = self.registry.adventure(row['plan']['participants'][0])['version']
-        try:
-            return GameData.load(self.coordinator.manager.assets.game_data_dir, version)
-        except (OSError, ValueError) as error:
-            raise Conflict(f'Cable session result could not be checked without game data: {error}') from error
