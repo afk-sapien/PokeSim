@@ -289,8 +289,7 @@ class Session:
         trades = self.trades()
         checked(min(trades) > 0, 'Finished without a trade')
         after = [party(side.pb, side.data) for side in self.sides]
-        evidence = verify_parties(self.before, after, trades,
-                                  lambda raw: evolved_species(raw, self.sides[0].data))
+        evidence = verify_parties(self.before, after, trades, evolved_species)
         results = {}
         for index, side in enumerate(self.sides):
             snapshot = read_snapshot(side.pb.memory, side.data, side.frame)

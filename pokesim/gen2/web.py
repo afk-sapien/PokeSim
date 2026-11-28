@@ -2,13 +2,11 @@
 import json
 import re
 
+from pokecore.gen2 import status
 from pokecore.gen2.battle_power import battle_power, hidden_power
 from pokecore.gen2.ram import STAT_NAMES
 
 from ..dex_links import links
-
-VERSIONS = ('gold', 'silver', 'crystal')
-DEFAULT_VERSION = 'crystal'
 
 
 STAT_CONDITIONS = {'ATK_GT_DEF': 'Attack above Defense', 'ATK_LT_DEF': 'Attack below Defense',
@@ -147,23 +145,11 @@ def live_party(party, data):
 
 
 def live_status(game, collection=None, *, data=None, plan=True, **kwargs):
-    """The Pokédex, PC and Trading payload. ``plan=False`` skips the per-species Pokédex plan."""
-    collection = collection or {}
-    game = game or {}
+    """The Pokédex, PC and Trading payload. ``plan=False`` skips the per-species Pokédex plan.
 
-    def rated(mon):
-        return rate(mon, data)
-
-    storage = game.get('storage')
-    if storage:
-        storage = {**storage, 'pokemon': [rated(mon) for mon in storage.get('pokemon', [])]}
-    wanted, plan = plan, collection.get('plan') or []
-    if wanted and not plan and data is not None and getattr(data, 'game', None) in ('gold', 'silver', 'crystal'):
-        plan = dex_plan(game, collection, data)
-    return {'started': bool(game), 'version': collection.get('version', DEFAULT_VERSION),
-            'generation': 2, 'dex_total': 251, 'owned': game.get('dex_owned', []),
-            'seen': game.get('dex_seen', []), 'party': [{**rated(mon), 'slot': index + 1} for index, mon in enumerate(game.get('party', []))],
-            'storage': storage, 'player_name': game.get('player_name', ''),
-            'playtime': game.get('playtime', ''), 'plan': plan,
-            'phase': collection.get('phase', 'journey'), 'hunting': collection.get('hunting'),
-            'protected_species': collection.get('protected_species', []), 'catches': {}}
+    Core builds it, rating each Pokémon with ``rate``. Only the Pokédex plan is the app's own.
+    """
+    payload = status.live_status(game, collection, data=data, rate=lambda mon: rate(mon, data))
+    if plan and not payload['plan'] and data is not None and getattr(data, 'game', None) in status.VERSIONS:
+        payload['plan'] = dex_plan(game or {}, collection or {}, data)
+    return payload

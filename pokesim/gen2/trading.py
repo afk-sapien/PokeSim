@@ -131,7 +131,7 @@ def offers(emu, payload):
         raw = bytes([mon['species'], equip or mon.get('held_item', 0)])
         actual = next(member for member in snapshot.stored if member.box + 1 == mon['box'] and member.position + 1 == mon['position'])
         result.append({**mon, 'time_capsule_compatible': compatible(actual, emu.data), 'last_copy': held[mon['species']] == 1,
-                       'arrived_dex': evolved_species(raw, emu.data), 'equip_item': equip, 'cartridge_generation': 2})
+                       'arrived_dex': evolved_species(raw), 'equip_item': equip, 'cartridge_generation': 2})
     return result
 
 
@@ -371,7 +371,7 @@ class Participant(BaseParticipant):
         record['incoming_display'] = display(incoming, self.emu.data)
         record['incoming_trainers'] = [received(incoming['struct'], 2)]
         # The exchange never delivers an Egg. A trade evolution arrives as the evolved species.
-        record['incoming_shiny'] = ([evolved_species(incoming['struct'], self.emu.data)]
+        record['incoming_shiny'] = ([evolved_species(incoming['struct'])]
                                     if shiny_bytes(incoming['struct'][21:23]) else [])
         from .league import validate
         from pokecore.gen2.ram import decode_mon

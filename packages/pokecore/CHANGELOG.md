@@ -31,6 +31,9 @@
   the weaker one stayed in front.
 - `give_item(..., swap=True)` counts the pocket entry a last given copy frees, as the game takes
   that item out before the old one comes back. It refused that swap into a full pocket.
+- `pokecore.gen2.live_status` takes `rate`, which turns each Pokémon into the record the payload
+  lists, and gives an empty plan for a plan of None. PokeSim builds its payload on it, so the two
+  no longer drift. Its docstring claimed output identical to PokeSim's, which had stopped being true.
 
 ## 0.12.4
 
