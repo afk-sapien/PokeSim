@@ -48,7 +48,11 @@ def mon(data, species, level, moves, egg=False):
 
 
 def at(data, map_name, party, badges=1):
-    return SimpleNamespace(map=data.map_ids[map_name], x=5, y=5, frame=1000, badges=badges, party=party,
+    """On the map's first warp, where a walk in lands. A wall tile reads as a ledge jump, and a jump starts no
+    walk (training.walk_goal)."""
+    mid = data.map_ids[map_name]
+    door = data.maps[mid]['warps'][0]
+    return SimpleNamespace(map=mid, x=door['x'], y=door['y'], frame=1000, badges=badges, party=party,
                            event=lambda name: True)
 
 

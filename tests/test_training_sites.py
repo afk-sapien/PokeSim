@@ -63,6 +63,16 @@ def mid_jump_outside_silver_cave(data, *party):
     return SimpleNamespace(map=mid, x=20, y=20, badges=0xFF, party=party, stored=(), items=(), objects=())
 
 
+def mid_jump_on_route_33(data, *party):
+    """Halfway down the ledge at (10, 12) on Route 33, with the Zephyr and Hive Badges and the Sudowoodo
+    still on Route 36. The coordinates read the wall tile below the ledge until the player lands."""
+    mid = data.map_ids['ROUTE_33']
+    entry = data.maps[mid]
+    assert entry['collision'][12 * entry['width'] + 10] == 0xA3
+    return SimpleNamespace(data=data, map=mid, x=10, y=13, badges=3, party=party, stored=(), items=(),
+                           event=lambda name: False)
+
+
 def policy_for(data):
     from pokesim.gen2.policy import Policy
     policy = Policy(data)
@@ -115,6 +125,23 @@ def test_a_map_past_a_cut_tree_is_out_of_reach_until_a_party_member_knows_cut(da
     assert training.walk_goal(policy, snapshot, Goal, lambda: 'Train', map_name='ROUTE_34') is None
     cutter = outside_the_route_32_center(data, mon(20, moves=(33, 15, 0, 0)))
     assert training.walk_points(policy, cutter, route_34)
+
+
+def test_a_ledge_jump_starts_no_walk(data):
+    """A Crystal run returning the lost Farfetch'd jumped the ledge on Route 33 and, for that one step, walked
+    toward the training map past the tree in Ilex Forest it had no Cut for. The extra goal start moved the
+    rest of the run (#786)."""
+    from pokesim.gen2 import training
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.world import update
+    policy = policy_for(data)
+    snapshot = mid_jump_on_route_33(data, mon(20, moves=(33, 52, 0, 0)))
+    update(policy.nav.regions, snapshot)
+    policy.goal = Goal('farfetchd_1', 'Return the lost Farfetch’d', 'ILEX_FOREST', 1, 1)
+    assert training.walk_goal(policy, snapshot, Goal, lambda: 'Train', map_name='ROUTE_34') is None
+    landed = mid_jump_on_route_33(data, mon(20, moves=(33, 52, 0, 0)))
+    landed.y = 14
+    assert training.walk_goal(policy, landed, Goal, lambda: 'Train', map_name='ROUTE_34') is None
 
 
 @pytest.mark.parametrize('project', [{'map': 'VICTORY_ROAD'}, {}])
@@ -224,6 +251,8 @@ def test_a_trainee_mid_jump_keeps_its_site(data):
     trainee = mon(60)
     snapshot = mid_jump_outside_silver_cave(data, trainee)
     assert training.site(policy, snapshot, {}, trainee) == training.SITE
+    # The walk under way goes on through the jump.
+    policy.goal = Goal('collection_train', 'Train', training.SITE, 9, 31)
     goal = training.walk_goal(policy, snapshot, Goal, lambda: 'Train')
     assert goal is not None and goal.map_name == training.SITE
     # Once landed, the walk judges the route again.

@@ -55,6 +55,15 @@ def _wild_levels(encounters):
     return top
 
 
+def field_moves(snapshot):
+    """Whether Cut and Surf open the way, as they do for the walk itself, which needs the badge and a party
+    member that knows the move. With the badge alone, a Gold run aimed at Route 34 past the tree in Ilex
+    Forest before it had Cut, found no route on the walk and stalled."""
+    cut = bool(snapshot.badges & 2) and any(15 in mon.moves for mon in snapshot.party)
+    surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
+    return cut, surf
+
+
 def walk_points(policy, snapshot, mid):
     """The encounter tiles of map ``mid`` the player can reach from here.
 
@@ -69,11 +78,7 @@ def walk_points(policy, snapshot, mid):
     if not points:
         return []
     regions = policy.nav.regions
-    # Cut and Surf open the way as they do for the walk itself, which needs the badge and a party member
-    # that knows the move. With the badge alone, a Gold run aimed at Route 34 past the tree in Ilex Forest
-    # before it had Cut, found no route on the walk and stalled.
-    cut = bool(snapshot.badges & 2) and any(15 in mon.moves for mon in snapshot.party)
-    surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
+    cut, surf = field_moves(snapshot)
     if regions.between(snapshot, cut, surf):
         # Nothing can be judged until the player lands, so every tile counts for now. A Crystal run judged
         # from a ledge jump outside the Silver Cave, ended training and stood down one trainee after another.
@@ -482,6 +487,11 @@ def walk_goal(policy, snapshot, Goal, label, *, map_name=SITE):
     ``label`` names the walk once the grass is known. None when no encounter tile of the map can be reached.
     """
     data = policy.data
+    # A ledge jump neither starts a walk nor ends one under way, since nothing can be judged until the player
+    # lands (walk_points). A Crystal run that jumped the ledge on Route 33 with a story goal under way walked
+    # toward Route 34 for that one step, past the tree in Ilex Forest it had no Cut for (#786).
+    if getattr(policy.goal, 'key', None) != 'collection_train' and policy.nav.regions.between(snapshot, *field_moves(snapshot)):
+        return None
     mid = data.map_ids[map_name]
     points = walk_points(policy, snapshot, mid)
     if not points and snapshot.map != mid:

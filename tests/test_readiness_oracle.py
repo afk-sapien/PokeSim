@@ -140,8 +140,10 @@ def test_both_generations_get_one_verdict_from_the_same_facts(cartridge, verdict
     red = progression.boss_training(snap(map=MAPS[red_map], badges=badges, party=(mon(level=red_ace + over),)),
                                     SimpleNamespace(key=red_goal), red_losses)
     party = (gold_mon(cartridge, gold_ace + over),)
-    at = SimpleNamespace(map=cartridge.map_ids[gold_map], x=5, y=5, frame=1000, badges=badges, party=party,
-                         event=lambda name: True)
+    # On the map's first warp. A wall tile reads as a ledge jump, and a jump starts no walk.
+    door = cartridge.maps[cartridge.map_ids[gold_map]]['warps'][0]
+    at = SimpleNamespace(map=cartridge.map_ids[gold_map], x=door['x'], y=door['y'], frame=1000, badges=badges,
+                         party=party, event=lambda name: True)
     walk = gold.boss_training(at, gold_goal)
     (red_boss, red_team, red_verdict), (gold_boss, gold_team, gold_verdict) = verdicts
     # Each generation reads the same facts: only the boss's name, its ace and the levels set from it differ.
