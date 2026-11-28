@@ -31,6 +31,7 @@ from urllib.parse import quote
 from pokesim import config, state
 from pokesim.app.watchdog import Limits, Watchdog
 from pokesim.progress_events import HOUR, JOURNAL, NET
+from pokesim.runtime.supervision import STALL_TITLE
 from pokesim.stalls import (FRAMES_PER_GAME_MINUTE, GEN1_HELD_RISE, LOOP_EVENTS, LOOP_LIMIT, PROGRESS_EVENTS,
                             REAL_PROGRESS, LossLoop, LoopGuard, StallWatch, _RECEIVED, _RELEASED, species_key)
 
@@ -52,7 +53,9 @@ COURSES = {'Kanto': 11, 'Johto': 10}
 MARATHON = re.compile(r'^(Kanto|Johto) Marathon (is on!|finished!|called off)')
 GAME_HOURS = re.compile(r'^Stuck\? (\d+) game hours without progress')
 REAL_MINUTES = re.compile(r'after (\d+) real minutes')
-RELOADED = 'Stuck? The adventure had to reload twice'
+# The reload report's title, and the one Gold, Silver and Crystal wrote at the second reload before one
+# reload ladder served every game.
+RELOADED = (STALL_TITLE, 'Stuck? The adventure had to reload twice')
 GAVE_UP = re.compile(r'^Gave up on ')
 HATCHED = re.compile(r'^(.+?) hatched from its Egg')
 PLAYTIME = re.compile(r'^(\d+):(\d\d):(\d\d)$')
@@ -417,11 +420,11 @@ def ground_truth(adventure, axis, labels=()):
                 game, wall = bundle[1], bundle[2] or wall
             items.append(Episode(entry.ts - wall * 60, axis(entry.ts) - game * FRAMES_PER_GAME_MINUTE, entry.ts,
                                  axis(entry.ts), ['bundle' if bundle else 'stall alert']))
-        elif entry.title == RELOADED or GAVE_UP.match(entry.title):
-            # Two reloads each follow a stuck spell of STUCK_RELOAD_SECONDS.
+        elif entry.title in RELOADED or GAVE_UP.match(entry.title):
+            # At least two reloads came first, each after a stuck spell of STUCK_RELOAD_SECONDS.
             begun = entry.ts - 2 * config.STUCK_RELOAD_SECONDS
             items.append(Episode(begun, axis(begun), entry.ts, axis(entry.ts),
-                                 ['reload report' if entry.title == RELOADED else 'give-up']))
+                                 ['reload report' if entry.title in RELOADED else 'give-up']))
     for bundle in adventure.bundles:
         if bundle not in used and bundle[1] is not None:
             items.append(Episode(bundle[0] - (bundle[2] or 0) * 60, axis(bundle[0]) - bundle[1] * FRAMES_PER_GAME_MINUTE,
@@ -849,7 +852,7 @@ AMBIGUITIES = [
     'so the replayed StallWatch moves on fewer things than the live one and LoopGuard never counts reloads.',
 ]
 MISSING = [
-    'Help requests: the status builds them live and nothing stores them. Only Gen II reload reports reach the journal.',
+    'Help requests: the status builds them live and nothing stores them. Only the reload reports reach the journal.',
     'Owner restarts: the hosted backup copy holds no app database, and the local one keeps undated operations only.',
     'Stall bundles past the newest five per adventure: KEEP_STALL_BUNDLES prunes them, so the journal alerts stand in.',
 ]

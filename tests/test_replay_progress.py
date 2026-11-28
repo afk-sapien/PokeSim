@@ -188,6 +188,12 @@ def test_labels_add_and_clear_stalls(tmp_path):
     assert len(added) == 2 and added[0].sources == ['label']
 
 
+def test_the_reload_report_the_runtime_journals_is_a_stall(tmp_path):
+    from pokesim.runtime.supervision import report
+    adv = load(store(tmp_path / 'adv', events=[(T0, 'stall', *report('no progress', 'Route 1'))]))
+    assert [episode.sources for episode in ground_truth(adv, Axis([], 'wall'))] == [['reload report']]
+
+
 def test_segments_split_on_long_gaps(tmp_path):
     events = [(T0, 'map', 'a', ''), (T0 + 600, 'map', 'b', ''), (T0 + 20000, 'map', 'c', '')]
     assert len(segments(load(store(tmp_path / 'adv', events=events)))) == 2
