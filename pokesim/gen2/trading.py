@@ -15,7 +15,7 @@ from ..shiny import shiny_bytes
 from ..runtime import trace
 from ..runtime.participant import Participant as BaseParticipant, BUSY, PREFIX, _records, _save, _artifact, keeps, manual_rows, merge_partners
 from ..trade.partners import received
-from ..trade.preferences import answers, apply, base, find, name as setting_name, tagged
+from ..trade.preferences import answers, apply, base, find, name as setting_name, protected, tagged
 from .cable_verification import available_trade_item, checkpoint_clock, continue_save, evolved_species, individual_key, party, verify_exchange
 from .preparation import begin, reserves
 from pokecore.gen2.ram import Memory, read_snapshot
@@ -83,15 +83,9 @@ def _kept(mon, stock):
     if not mon.get('trade_key') or mon.get('trade_ambiguous'):
         from ..trade.preferences import blocked
         return blocked(mon)
-    if preference == 'locked':
-        return 'Set to Never trade by you'
-    if preference == 'withdrawn':
-        return 'Withdrawn by you'
-    if tuple(mon.get('dvs', ())) == (15,) * 5:
-        return 'Perfect DV partner preserved for the collection'
-    if mon.get('shiny'):
-        # Built-in automatic rule: shinies never travel automatically, even when set to Prefer to trade.
-        return 'Shiny partner preserved for the collection'
+    reason = protected(preference, mon.get('dvs', ()), mon.get('shiny'))
+    if reason:
+        return reason
     if mon.get('held_item') == EXP_SHARE:
         # The cartridge's only Exp. Share would leave with the trade, and training needs it.
         return 'Holds the Exp. Share'

@@ -244,13 +244,17 @@ class AuthStore:
             raise Conflict('Unknown role')
         hashed = self.hasher.hash(validate_password(password)) if password is not None else None
         uid = identifier()
-        display = str(display_name or username).strip()[:120] or username
         with self.lock, self.db:
-            if self.db.execute('SELECT 1 FROM users WHERE username=?', (username.casefold(),)).fetchone():
-                raise Conflict('That username is taken')
-            self.db.execute('''INSERT INTO users (id, username, display_name, role, can_create, password_hash, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)''', (uid, username.casefold(), display, role, int(bool(can_create)), hashed, time.time()))
+            self._insert_user(uid, username, hashed, role, can_create, display_name)
         return self.user(uid)
+
+    def _insert_user(self, uid, username, hashed, role, can_create, display_name=None):
+        """Add the account inside the caller's transaction."""
+        display = str(display_name or username).strip()[:120] or username
+        if self.db.execute('SELECT 1 FROM users WHERE username=?', (username.casefold(),)).fetchone():
+            raise Conflict('That username is taken')
+        self.db.execute('''INSERT INTO users (id, username, display_name, role, can_create, password_hash, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)''', (uid, username.casefold(), display, role, int(bool(can_create)), hashed, time.time()))
 
     def _admins(self):
         return self.db.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=0 AND id != ?",
@@ -578,17 +582,27 @@ class AuthStore:
         return self._public_invite(row) if row else None
 
     def accept_invite(self, raw, username, password):
+        """A member account for a pending invite.
+
+        The password hashes before the lock is taken, so the invite can be used, revoked or expire
+        meanwhile. The claim checks all three again and the account is added in the same transaction,
+        so a lost claim leaves no account.
+        """
+        lost = 'This invite link has expired or was already used'
         invite = self.invite(raw)
         if invite is None:
-            raise Conflict('This invite link has expired or was already used')
-        user = self.create_user(username, password, role='member', can_create=invite['can_create'])
+            raise Conflict(lost)
+        username = validate_username(username)
+        hashed = self.hasher.hash(validate_password(password))
+        uid = identifier()
         with self.lock, self.db:
-            claimed = self.db.execute('UPDATE invites SET used_by=?, used_at=? WHERE id=? AND used_by IS NULL',
-                                      (user['id'], time.time(), invite['id'])).rowcount
+            now = time.time()
+            claimed = self.db.execute('''UPDATE invites SET used_by=?, used_at=?
+                WHERE id=? AND used_by IS NULL AND revoked=0 AND expires > ?''', (uid, now, invite['id'], now)).rowcount
             if claimed != 1:
-                self.db.execute('DELETE FROM users WHERE id=?', (user['id'],))
-                raise Conflict('This invite link has expired or was already used')
-        return user
+                raise Conflict(lost)
+            self._insert_user(uid, username, hashed, 'member', invite['can_create'])
+        return self.user(uid)
 
     def revoke_invite(self, iid):
         with self.lock, self.db:

@@ -12,19 +12,37 @@ from pokecore.gen2.ram import Memory
 from pokecore.gen2.state import npc_trade_qualifies as qualifies
 from pokecore.gen2.tables import NPC_TRADES as TRADES, NpcTrade, npc_trades as trades  # noqa: F401  (re-exported)
 from ..planning.ledger import FIELD_MOVES
+from ..trade.preferences import AUTO, KEEP, protected
 
 
 def flags(memory, data):
     return Memory(memory, data).byte('wTradeFlags')
 
 
-def candidate(snapshot, trade):
-    """The copy to hand over: an untouched party member or box copy that no plan depends on."""
+def kept(policy):
+    """The identity keys no NPC trade hands over: the ones the owner set to Never trade and the ones a
+    running plan relies on (release.plan_partners)."""
+    from .release import plan_partners
+    preferences = policy.trade_preferences() if hasattr(policy, 'trade_preferences') else {}
+    keys = {key for key, value in preferences.items() if (value or {}).get('state') in (KEEP, 'withdrawn')}
+    return frozenset(keys | plan_partners(getattr(policy, 'collection', {})))
+
+
+def guarded(mon, keys):
+    """Whether the managed trade rule (trade.preferences.protected) keeps ``mon`` from every automatic
+    trade: its key is in ``keys`` (kept), or it is shiny or has perfect DVs."""
+    from .release import _keys
+    return bool(protected(KEEP if keys.intersection(_keys(mon)) else AUTO, mon.dvs))
+
+
+def candidate(snapshot, trade, keys=frozenset()):
+    """The copy to hand over: an untouched party member or box copy that no plan depends on and the
+    managed trade rule lets go (guarded)."""
     party = snapshot.party
     counts = {move: sum(move in mon.moves for mon in party if not mon.egg) for move in FIELD_MOVES}
     choices = []
     for mon in party + snapshot.stored:
-        if not qualifies(mon, trade) or mon.held_item:
+        if not qualifies(mon, trade) or mon.held_item or guarded(mon, keys):
             continue
         if mon.box is None and any(counts[move] == 1 for move in mon.moves if move in FIELD_MOVES):
             continue
@@ -50,23 +68,37 @@ def wild(data, species):
 def requests(policy, snapshot, memory):
     """Requested species worth catching because the trade would register a new species or a returned one.
 
-    Runs every step, so the set is kept in the facts until the wild table, the trade flags, the dex, a
-    held copy or the returned species change. Callers only read it.
+    A held copy the trade rule keeps (guarded) does not count, so a shiny or locked one asks for another.
+    Runs every step, so the open trades and their held copies are kept in the facts until the wild table,
+    the trade flags, the dex, a held copy or the returned species change. A read of the trade settings
+    parses every one, so they are read only while an open trade's species is held. Callers only read it.
     """
     if memory is None or 'wTradeFlags' not in policy.data.symbols:
         return frozenset()
     value = flags(memory, policy.data)
     returned = frozenset(getattr(policy, 'returned', ()))
     inputs = (policy.data.encounters, value, snapshot.owned, snapshot.party, snapshot.stored, returned)
-    return facts(policy).answer('trade requests', inputs,
-                                lambda: frozenset(_requests(policy, snapshot, value, returned)))
+    wanted, held = facts(policy).answer('trade requests', inputs, lambda: _requests(policy, snapshot, value, returned))
+    if not held:
+        return wanted
+    keys = kept(policy)
+    return wanted | {species for species, copies in held if all(guarded(mon, keys) for mon in copies)}
 
 
 def _requests(policy, snapshot, value, returned=frozenset()):
-    return {trade.request for trade in trades(policy.data.game)
-            if not value >> trade.index & 1 and (trade.give not in snapshot.owned or trade.give in returned)
-            and not any(qualifies(mon, trade) for mon in snapshot.party + snapshot.stored)
-            and wild(policy.data, trade.request)}
+    """The open trades' wild requests with no copy to give, and the others with the copies they have."""
+    wanted, held = set(), []
+    for trade in trades(policy.data.game):
+        if (value >> trade.index & 1 or trade.give in snapshot.owned and trade.give not in returned
+                or not wild(policy.data, trade.request)):
+            continue
+        copies = tuple(mon for mon in snapshot.party + snapshot.stored
+                       if qualifies(mon, trade) and not guarded(mon, frozenset()))
+        if copies:
+            held.append((trade.request, copies))
+        else:
+            wanted.add(trade.request)
+    return frozenset(wanted), tuple(held)
 
 
 def completed(memory, data, history):
@@ -101,8 +133,10 @@ def journey(policy, snapshot, mem, Goal):
     for trade in trades(data.game):
         if value >> trade.index & 1 or not worth_trading(policy, snapshot, trade):
             continue
-        mon = facts(policy).answer(('trade candidate', trade.index), (snapshot.party, snapshot.stored),
-                                   lambda: candidate(snapshot, trade))
+        # Read here, for a trade worth making, since a read of the trade settings parses every one.
+        keys = kept(policy)
+        mon = facts(policy).answer(('trade candidate', trade.index), (snapshot.party, snapshot.stored, keys),
+                                   lambda: candidate(snapshot, trade, keys))
         if mon is None:
             continue
         if mon.box is not None and len(snapshot.party) == 6 and free_slots(snapshot) < 1:
@@ -129,7 +163,7 @@ def arrive(policy, snapshot):
     trade = next((row for row in trades(policy.data.game) if row.index == index), None)
     if trade is None:
         return 'b'
-    mon = candidate(snapshot, trade)
+    mon = candidate(snapshot, trade, kept(policy))
     if mon is None:
         return 'b'
     if key == 'collection_npc_trade':
