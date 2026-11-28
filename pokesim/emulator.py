@@ -972,6 +972,8 @@ class Emulator(EmulatorBase):
         self.legendary_recovery = LegendaryRecovery()
         self.last_achievement = None
         self.play_clock = PlayClock()
+        # Gift spacing counts on the PlayClock, so the last game's gift frame means nothing on the new clock.
+        self._reward_frame = None
         self.snapshot = None
         # The restart's transaction dropped the old seed, so the new game draws its own starter and choices.
         self.adventure_seed = self.policy.seed = seeds.adventure_seed(self.store)
