@@ -63,7 +63,7 @@ SOURCES = [
     *_rows('static', [185], 'Sudowoodo', 'Route 36 with the SquirtBottle'),
     *_rows('static', [143], 'Snorlax', 'Vermilion City, woken by the Poké Flute channel'),
     *_rows('static', [101], 'Rocket hideout Electrode', 'Mahogany hideout B2F, three at once'),
-    *_rows('static', [131], 'Union Cave Lapras', 'Union Cave B2F every Friday', planned=True),
+    *_rows('static', [131], 'Union Cave Lapras', 'Union Cave B2F every Friday'),
     *_rows('roamer', [243, 244], 'Roaming beast', 'Wanders Johto after the Burned Tower'),
     *_rows('roamer', [245], 'Roaming Suicune', 'Wanders Johto after the Burned Tower', games=GS),
     *_rows('walking_reset', [243, 244, 245, 249, 250], 'Walking reset', 'The one-time encounter returns after a walk',
