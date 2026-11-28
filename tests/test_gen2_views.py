@@ -52,10 +52,10 @@ def test_mon_view_rates_an_egg_shown_the_way_the_game_does():
     assert {key: shown[key] for key in RATING} == {key: plain[key] for key in RATING}
 
 
-def test_a_team_key_is_the_signature_of_the_egg_view_and_changes_with_trainer_or_dvs():
-    # The key reads trainer and DVs straight from the Pokémon instead of building its rated view.
+def test_a_team_key_is_the_trade_key_of_the_view_and_changes_with_trainer_or_dvs():
+    # The key reads trainer, DVs and species straight from the Pokémon instead of building its rated view.
     from pokesim.gen2.teams import key
-    from pokesim.trade.preferences import signature
+    from pokesim.trade.preferences import identity
     data, keys = tables(), set()
     for species, attack_defense, speed_special, trainer, options in (
             (25, 0xFF, 0xFF, 4321, {}), (25, 0xFE, 0xFF, 4321, {}), (25, 0xFF, 0xFF, 4320, {}),
@@ -65,7 +65,7 @@ def test_a_team_key_is_the_signature_of_the_egg_view_and_changes_with_trainer_or
         raw[6:8] = trainer.to_bytes(2, 'big')
         raw[21], raw[22] = attack_defense, speed_special
         decoded = decode_mon(bytes(raw), NAME, data, **options)
-        assert key(decoded) == signature(mon_view(decoded, egg_view=True))
+        assert key(decoded) == identity(mon_view(decoded))
         keys.add(key(decoded))
     assert len(keys) == 5                    # one changed DV or a changed trainer is another key
 

@@ -1,14 +1,14 @@
 """Temporarily assemble an activity team through the cartridge PC.
 
-Pokémon are matched by trainer ID and DVs. Two Pokémon can share that identity (bred siblings
-often do), so every match counts copies instead of testing membership. A team that cannot be
-put together, because a partner is gone or storage has no room left, stands down for a while
-instead of pressing B at the PC forever.
+Pokémon are matched by trainer ID, DVs and evolution family. Two Pokémon can share all three
+(bred siblings often do), so every match counts copies instead of testing membership. A team that
+cannot be put together, because a partner is gone or storage has no room left, stands down for a
+while instead of pressing B at the PC forever.
 """
 from collections import Counter
 from dataclasses import replace
 
-from pokecore.identity import pokemon_identity
+from pokecore.identity import family_key, is_legacy, legacy
 
 from .menus import ChangeBox, Release, Storage
 from .standdown import exhausted, forget, pc_key, stand_down, standing_down, team_key
@@ -18,22 +18,33 @@ BLOCKED_LIMIT = 8
 
 
 def key(mon):
-    """The trainer and DV signature of ``mon``, the one ``signature`` gives for its egg view.
+    """The trade key of ``mon``: trainer ID, DVs and evolution family, the one ``identity`` gives for its
+    view. An egg's key holds the species it hatches as, which its egg view hides.
 
-    It reads the two fields straight from the Pokémon. Building the whole rated view of every party
-    and boxed Pokémon only to read them back took about a twentieth of a Gold run.
+    The family tells apart two Pokémon alike in trainer and DVs, as a Crystal party's Rhydon and
+    Electrode were (#705), and stays the same when one evolves. It reads the fields straight from the
+    Pokémon. Building the whole rated view of every party and boxed Pokémon only to read them back took
+    about a twentieth of a Gold run.
     """
-    return pokemon_identity(mon.trainer_id, mon.dvs)
+    return family_key(mon.trainer_id, mon.dvs, mon.species)
+
+
+def keys(mons, wanted):
+    """The keys of ``mons`` in the form ``wanted`` holds. A team saved before the family joined the key
+    holds trainer and DV signatures alone, so it is read that way."""
+    if any(is_legacy(value) for value in wanted):
+        return [legacy(key(mon)) for mon in mons]
+    return [key(mon) for mon in mons]
 
 
 def assembled(snapshot, wanted):
     """Whether the party is exactly the wanted team, copy for copy."""
-    return Counter(key(mon) for mon in snapshot.party) == Counter(wanted)
+    return Counter(keys(snapshot.party, wanted)) == Counter(wanted)
 
 
 def reachable(snapshot, wanted):
     """Whether every wanted copy is in the party or the PC."""
-    return not Counter(wanted) - Counter(key(mon) for mon in [*snapshot.party, *snapshot.stored])
+    return not Counter(wanted) - Counter(keys([*snapshot.party, *snapshot.stored], wanted))
 
 
 def no_room(policy, snapshot, wanted):
@@ -45,14 +56,14 @@ def no_room(policy, snapshot, wanted):
     """
     need = Counter(wanted)
     deposits = 0
-    for mon in snapshot.party:
-        if need[key(mon)] > 0:
-            need[key(mon)] -= 1
+    for value in keys(snapshot.party, wanted):
+        if need[value] > 0:
+            need[value] -= 1
         else:
             deposits += 1
     if not deposits:
         return False
-    withdrawals = sum((need & Counter(key(mon) for mon in snapshot.stored)).values())
+    withdrawals = sum((need & Counter(keys(snapshot.stored, wanted))).values())
     slots = deposits - withdrawals
     if withdrawals and len(snapshot.party) >= 6:
         slots = max(slots, 1)
@@ -64,16 +75,12 @@ def changes(snapshot, wanted):
     """The last party slot to deposit and the first stored Pokémon to withdraw, either may be None."""
     need = Counter(wanted)
     extra = None
-    for slot, mon in enumerate(snapshot.party):
-        if need[key(mon)] > 0:
-            need[key(mon)] -= 1
+    for slot, value in enumerate(keys(snapshot.party, wanted)):
+        if need[value] > 0:
+            need[value] -= 1
         else:
             extra = slot
-    missing = None
-    for mon in snapshot.stored:
-        if need[key(mon)] > 0:
-            missing = mon
-            break
+    missing = next((mon for mon, value in zip(snapshot.stored, keys(snapshot.stored, wanted)) if need[value] > 0), None)
     return extra, missing
 
 
