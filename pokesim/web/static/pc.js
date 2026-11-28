@@ -92,7 +92,9 @@ function render() {
   $('#pc-favor').disabled = viewer() || !fresh
   $('#pc-deadlock').hidden = !latest?.pc_deadlock
   $('#pc-deadlock').textContent = latest?.pc_deadlock || ''
-  const key = JSON.stringify([storage, party, selectedBox, query, all, sort, order, rating])
+  // The drawn cards, the picker counts and the receiving box, so a poll that only moves the
+  // party's HP leaves an open box alone.
+  const key = JSON.stringify([rows, counts, party.length, storage?.active_box, selectedBox, query, all, sort, order, rating])
   if (key === signature) return
   signature = key
   $('#mobile-box').innerHTML = `<option value="0">Party, ${party.length} / 6</option>` + counts.map((count, index) => `<option value="${index + 1}">Box ${index + 1}, ${count} / 20${index + 1 === storage?.active_box ? ', Receiving catches' : ''}</option>`).join('')

@@ -130,6 +130,8 @@ jobs:
   build:
     # Runs in parallel with the gate. It holds no credentials that can publish and uploads nothing public.
     # Each image is built and tested on a runner of its own architecture, so nothing runs under emulation.
+    # A publish of an earlier run's images pushes those, so it builds nothing.
+    if: ${{ !inputs.images_from_run }}
     needs: validate
     strategy:
       matrix:
@@ -205,10 +207,13 @@ jobs:
   rehearse:
     # The publish job repeats these steps against the registry image. Running them here without a registry
     # finds identity, checksum, and Compose problems before an image is pushed, and in a dry run.
+    # It rehearses the images the publish job will push, so a skipped build does not skip it.
+    if: ${{ !failure() && !cancelled() }}
     needs: [validate, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      actions: read
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -223,6 +228,8 @@ jobs:
           pattern: release-inputs-*
           merge-multiple: true
           path: rehearsal
+          run-id: ${{ inputs.images_from_run || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Rehearse release assembly before anything is published
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
@@ -244,7 +251,7 @@ jobs:
           fi
   publish:
     # The only job that can push an image or change a release. A dry run never reaches it.
-    if: ${{ inputs.dry_run != true }}
+    if: ${{ inputs.dry_run != true && !failure() && !cancelled() }}
     needs: [validate, gate, build, rehearse]
     runs-on: ubuntu-latest
     timeout-minutes: 20

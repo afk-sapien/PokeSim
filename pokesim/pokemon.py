@@ -92,10 +92,10 @@ def status_label(hp, status):
          if status & bit), "Healthy")
 
 
-def stored_condition(mon):
-    """HP, status and PP for a boxed Gen I record, which stores current HP and PP but not maximum HP."""
+def stored_condition(mon, stats):
+    """HP, status and PP for a boxed Gen I record, which stores current HP and PP but not maximum HP.
+    ``stats`` are its calculated stats (stored_strength), or None without them."""
     hp, pp = mon.get("hp"), mon.get("pp")
-    stats = stored_strength(mon)["calculated_stats"]
     out = {"move_details": move_details(mon.get("moves"), pp or None, mon.get("max_pp") or None)}
     if type(hp) is int and stats:
         out.update(hp=min(hp, stats["HP"]), max_hp=stats["HP"], status_label=status_label(hp, mon.get("status") or 0))

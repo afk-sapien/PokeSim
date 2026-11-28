@@ -161,12 +161,13 @@ def party_record(mon: dict, slot: int) -> dict:
 
 def stored_record(mon: dict) -> dict:
     """One boxed Pokémon as the PC page lists it."""
+    calculated = stored_strength(mon)
     return {**mon, "dex": SPECIES.get(mon["species"], {}).get("dex"),
             "type_names": species_types(mon["species"]),
-            **stored_condition(mon),
+            **stored_condition(mon, calculated["calculated_stats"]),
             "experience_progress": experience_details(
                 mon.get("experience"), mon.get("level"),
-                SPECIES.get(mon["species"], {}).get("growth")), **stored_strength(mon), **assessment(mon),
+                SPECIES.get(mon["species"], {}).get("growth")), **calculated, **assessment(mon),
             'battle_power': battle_power(mon)}
 
 
@@ -185,8 +186,9 @@ def live_party(party: list[dict]) -> list[dict]:
             for slot, mon in enumerate(party)]
 
 
-def live_status(game: dict | None, collection: dict | None = None, *, league_rewards=None) -> dict:
-    """The parts of a snapshot a Pokédex reader needs, without the rest of the state payload."""
+def live_status(game: dict | None, collection: dict | None = None, *, league_rewards=None, records=True) -> dict:
+    """The parts of a snapshot a Pokédex reader needs, without the rest of the state payload.
+    ``records=False`` gives each boxed Pokémon only its Pokédex number, for a page that never draws one."""
     # Only the fields the page reads: the planner's entries repeat on every poll.
     plan = {"plan": [{"dex": row.get("dex"), "species": row.get("species"),
                       "status": row.get("status"), "reason": row.get("reason")}
@@ -206,12 +208,13 @@ def live_status(game: dict | None, collection: dict | None = None, *, league_rew
         return {"started": False, "owned": [], "seen": [], "party": [], "storage": None, **plan}
     plan["protected_species"] = sorted(set(plan["protected_species"]) | field_move_partners(game))
     storage = game.get("storage") or {}
+    record = stored_record if records else lambda mon: {**mon, "dex": SPECIES.get(mon["species"], {}).get("dex")}
     return {
         "started": True,
         "owned": game.get("dex_owned", []), "seen": game.get("dex_seen", []),
         "player_name": game.get("player_name", ""), "playtime": game.get("playtime", ""),
         "party": [party_record(mon, slot + 1) for slot, mon in enumerate(game.get("party", []))],
-        "storage": {**storage, "pokemon": [stored_record(mon) for mon in storage.get("pokemon", [])]}
+        "storage": {**storage, "pokemon": [record(mon) for mon in storage.get("pokemon", [])]}
         if storage else None,
         **plan,
     }

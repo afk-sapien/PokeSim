@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 from collections import Counter
 from dataclasses import dataclass, field
+from functools import cached_property
 
 import httpx
 
@@ -84,14 +85,22 @@ class Inventory:
     def reachable(self) -> bool:
         return self.error is None
 
-    @property
+    # The fields never change, so each derived view is built once, on first use.
+    @cached_property
     def spare_slots(self) -> frozenset[tuple[int, int]]:
         return frozenset((copy.box, copy.position) for copy in self.spares)
 
-    @property
+    @cached_property
     def held(self) -> Counter:
         """How many of each species this run has anywhere — the party included."""
         return Counter(mon['species'] for mon in self.party) + Counter(copy.species for copy in self.stored)
+
+    @cached_property
+    def pc(self) -> dict:
+        """The party and boxes as trade/worth.py rates an offer against them."""
+        return {'owned': self.owned, 'version': self.version, 'party': list(self.party),
+                'storage': {'pokemon': [{**copy.as_side(), 'trade_preference': copy.trade_preference}
+                                        for copy in self.stored]}}
 
     def summary(self) -> dict:
         return {'instance': self.instance, 'url': self.url, 'started': self.started,
