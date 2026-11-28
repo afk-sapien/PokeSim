@@ -29,9 +29,18 @@ def test_wild_levels_are_read_again_once_the_wild_table_is_replaced():
     assert wild_levels(policy) == {1: 4, 2: 9}
 
 
-def mon(level, trainer_id=1, experience=1000):
+def mon(level, trainer_id=1, experience=1000, moves=(15, 57, 0, 0)):
+    """A party member. It knows Cut and Surf unless ``moves`` says otherwise, since a walk past a tree or
+    across water needs one that does."""
     return SimpleNamespace(species=155, level=level, egg=False, trainer_id=trainer_id, dvs=(level % 16,) * 5,
-                           experience=experience, name='MON')
+                           experience=experience, name='MON', moves=moves)
+
+
+def outside_the_route_32_center(data, *party):
+    """Where a Gold run blacked out to after losing to the rival in Azalea Town, with the Zephyr and Hive
+    Badges and the Sudowoodo still on Route 36."""
+    return SimpleNamespace(data=data, map=data.map_ids['ROUTE_32'], x=11, y=74, badges=3, party=party, stored=(),
+                           items=(), event=lambda name: False)
 
 
 def at_mr_pokemons_house(data, *party):
@@ -88,6 +97,24 @@ def test_a_victory_road_walk_aims_at_floor_it_can_reach(data):
     assert goal.map_name == 'VICTORY_ROAD' and (goal.x, goal.y) in {point[:2] for point in points}
     route = policy.nav.regions.route(snapshot, road, [(goal.x, goal.y)], cut=True, surf=True)
     assert route
+
+
+def test_a_map_past_a_cut_tree_is_out_of_reach_until_a_party_member_knows_cut(data):
+    """That Gold run planned training on Route 34. The Hive Badge alone opened the tree in Ilex Forest to
+    the training walk, but the walk itself needs a party member that knows Cut as well. It found no route,
+    stepped onto the Pokémon Center stairs looking for one, and went up and down them until it stalled."""
+    from pokesim.gen2 import training
+    from pokesim.gen2.policy import Goal
+    from pokesim.gen2.world import update
+    policy = policy_for(data)
+    route_34 = data.map_ids['ROUTE_34']
+    snapshot = outside_the_route_32_center(data, mon(20, moves=(33, 52, 0, 0)))
+    update(policy.nav.regions, snapshot)
+    assert policy.nav.toward(snapshot, route_34, [(14, 4)]) is None
+    assert training.walk_points(policy, snapshot, route_34) == []
+    assert training.walk_goal(policy, snapshot, Goal, lambda: 'Train', map_name='ROUTE_34') is None
+    cutter = outside_the_route_32_center(data, mon(20, moves=(33, 15, 0, 0)))
+    assert training.walk_points(policy, cutter, route_34)
 
 
 @pytest.mark.parametrize('project', [{'map': 'VICTORY_ROAD'}, {}])
@@ -210,7 +237,7 @@ def test_a_hunt_mid_jump_aims_at_a_tile_instead_of_giving_up(data):
     from pokesim.gen2.policy import Goal
     from pokesim.gen2.training import SITE
     policy = policy_for(data)
-    snapshot = mid_jump_outside_silver_cave(data, SimpleNamespace(**vars(mon(60)), moves=()))
+    snapshot = mid_jump_outside_silver_cave(data, mon(60, moves=()))
     # A search of the grass here, and one of the cave floor beyond.
     for name in ('SILVER_CAVE_OUTSIDE', SITE):
         goal = collection.hunt(policy, snapshot, Goal, target=dict(rows(data, name)[0], started=0), label='Search')

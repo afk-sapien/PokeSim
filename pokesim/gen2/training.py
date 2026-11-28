@@ -69,7 +69,11 @@ def walk_points(policy, snapshot, mid):
     if not points:
         return []
     regions = policy.nav.regions
-    cut, surf = bool(snapshot.badges & 2), bool(snapshot.badges & 8)
+    # Cut and Surf open the way as they do for the walk itself, which needs the badge and a party member
+    # that knows the move. With the badge alone, a Gold run aimed at Route 34 past the tree in Ilex Forest
+    # before it had Cut, found no route on the walk and stalled.
+    cut = bool(snapshot.badges & 2) and any(15 in mon.moves for mon in snapshot.party)
+    surf = bool(snapshot.badges & 8) and any(57 in mon.moves for mon in snapshot.party)
     if regions.between(snapshot, cut, surf):
         # Nothing can be judged until the player lands, so every tile counts for now. A Crystal run judged
         # from a ledge jump outside the Silver Cave, ended training and stood down one trainee after another.
