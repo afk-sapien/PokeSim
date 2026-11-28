@@ -364,11 +364,14 @@ class Manager:
             threading.Thread(target=self.resume_orphans, name='resume-manual', daemon=True).start()
 
     def loop_problems(self):
-        """Background loops whose thread died or whose heartbeat is too old, for /health/ready."""
+        """Background loops whose thread died or whose heartbeat is too old, for /health/ready.
+
+        A backup, a migration or an import holds the registry's lock until it ends, and the
+        supervisor's monitor waits for that lock, so while one runs only a dead loop counts."""
         owners = (self.supervisor, self.coordinator, self.watchdog, getattr(self, 'offers', None),
                   getattr(self, 'leases', None))
         found = [getattr(owner, 'monitor', None) or getattr(owner, 'loop', None) for owner in owners]
-        return loops.problems(found)
+        return loops.problems(found, held=self.suspended)
 
     def resume_orphans(self):
         """Leases do not survive a restart, so a worker still in manual mode goes back to the autopilot."""
