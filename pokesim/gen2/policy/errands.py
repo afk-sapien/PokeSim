@@ -89,6 +89,17 @@ class ErrandPart:
         from ..training import walk_goal
         return walk_goal(self, snapshot, Goal, lambda: label, map_name=plan.where)
 
+    def watch_losses(self, snapshot):
+        """Note a boss loss once the party has all fainted. The party reads all fainted only on the step
+        after the battle flag clears, when no trainer is named any more, so the battle under way is kept
+        until then and the loss reads it. A win or a wild battle clears it."""
+        if snapshot.in_battle:
+            self.battle_seen = snapshot
+        if getattr(snapshot, 'all_fainted', False):
+            self.note_boss_loss(snapshot if self.battle_seen is None else self.battle_seen)
+        if not snapshot.in_battle:
+            self.battle_seen = None
+
     def note_boss_loss(self, snapshot):
         """Remember the best fighter level that lost to the boss the goal names (planning/league.note_loss).
 

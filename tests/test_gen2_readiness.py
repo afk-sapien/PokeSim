@@ -108,6 +108,36 @@ def test_without_the_cartridge_tables_the_gyms_keep_their_level_rules(real_data,
     assert boss_ace(real_data, 'hive') == BOSS_TABLE.row('hive').ace
 
 
+def test_a_loss_to_the_azalea_rival_trains_the_team_before_the_retry(real_data, walks):
+    # Gold seeds 15 and 27: the party reads all fainted only on the step after the battle flag clears,
+    # so the rival's loss named no boss and set no loss bar. With the plan's map in reach (walks), the
+    # next plan now trains before the retry.
+    from pokesim.gen2.policy import Goal, Policy
+
+    def step(party, in_battle, **seen):
+        # The trainer class stays in memory after the battle, as it does on the cartridge.
+        return SimpleNamespace(**vars(at(real_data, 'AZALEA_TOWN', party)), in_battle=in_battle, trainer_class=9,
+                               enemy_level=16, all_fainted=not any(member.hp for member in party), **seen)
+
+    fighter = mon(real_data, 156, 20, (TACKLE, EMBER, 0, 0))
+    fainted = (SimpleNamespace(**{**vars(fighter), 'hp': 0}),)
+    goal = Goal('farfetchd_1', 'Herd the Farfetch’d in Ilex Forest', 'ILEX_FOREST', 5, 5, 'up')
+    policy = Policy(real_data)
+    policy.goal = goal
+    policy.watch_losses(step((fighter,), 2))
+    policy.watch_losses(step(fainted, 0))
+    training = policy.boss_training(step((fighter,), 0), goal)
+    assert training is not None and training.key == 'collection_train'
+    assert 'level 22 before another try' in training.label
+    # A win clears the battle, so a later blackout after a wild battle is no loss to the rival.
+    other = Policy(real_data)
+    other.goal = goal
+    for party, in_battle in (((fighter,), 2), ((fighter,), 0), ((fighter,), 1), (fainted, 0)):
+        other.watch_losses(step(party, in_battle))
+    assert other.losses.levels() == {}
+    assert other.boss_training(step((fighter,), 0), goal) is None
+
+
 def boss_ace(data, key):
     return aces(data)(BOSS_TABLE.row(key))
 

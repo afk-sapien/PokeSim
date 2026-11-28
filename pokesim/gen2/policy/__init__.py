@@ -107,6 +107,8 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
         # way, and counts over the whole run that the replay audit reads.
         self.flee_tries, self.fleeing = 0, False
         self.flees = Counter()
+        # The snapshot of the battle under way, which a loss reads to name its trainer (watch_losses).
+        self.battle_seen = None
         self.failure = None
         self.menu_ref, self.menu_steps = None, 0
         self.partner_move = None
@@ -269,8 +271,7 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
         observe_training(self, snapshot)
         self.backing_out = False
         self.shiny_missed = None
-        if getattr(snapshot, 'all_fainted', False):
-            self.note_boss_loss(snapshot)
+        self.watch_losses(snapshot)
         if not snapshot.in_battle:
             self.flee_tries, self.fleeing = 0, False
         if self.rescue:
