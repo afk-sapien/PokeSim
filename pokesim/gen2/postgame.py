@@ -363,7 +363,8 @@ def reachable(policy, snapshot, rows):
             ranked.append((search_expected(row['chance'], len(route)), key, row))
     for _, (mid, method, rare), row in sorted(ranked, key=lambda entry: entry[0])[:4]:
         points = encounter_points(policy, snapshot, mid, method, rare=rare)
-        if points and policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True):
+        # An empty route is a patch in the region the player stands in.
+        if points and policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True) is not None:
             return row
     return None
 
@@ -419,7 +420,7 @@ def shiny(policy, snapshot, current_time):
             ranked.append((mid in data['shiny_maps'], -len(species), len(route), mid))
     for _, _, maps, mid in sorted(ranked)[:4]:
         points = encounter_points(policy, snapshot, mid, 'grass')
-        if points and policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True):
+        if points and policy.nav.regions.route(snapshot, mid, [point[:2] for point in points], cut=True, surf=True) is not None:
             # Asking changes no saved state. The map counts as searched once the arbiter picks it.
             row = {'map': mid, 'method': 'grass', 'time': 'any', 'species': None,
                    'chance': 100, 'started': policy.decisions}

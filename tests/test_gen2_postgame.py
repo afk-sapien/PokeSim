@@ -415,3 +415,22 @@ def test_unloaded_encounter_tiles_get_a_bounded_retry(data, monkeypatch):
         assert postgame.state(policy)['activity'] is activity
     assert collection.hunt(policy, view, Goal, target=activity['row']) is None
     assert postgame.state(policy)['activity'] is None
+
+
+def test_both_hunts_take_the_grass_the_bot_already_stands_in(data, monkeypatch):
+    """The region router answers an empty route for a patch in the region the player is in."""
+    from pokesim.gen2 import collection, postgame
+    from pokesim.gen2.routes import Regions
+    mid = data.map_ids['ROUTE_29']
+    entry = data.maps[mid]
+    grass = [(x, y, None) for y in range(entry['height']) for x in range(entry['width'])
+             if entry['collision'][y * entry['width'] + x] in (0x10, 0x14, 0x18, 0x1C)]
+    policy = expedition(data)
+    policy.nav = SimpleNamespace(regions=Regions(data), walk=lambda snapshot, target: [] if target == snapshot.map else None)
+    view = snapshot([lead()])
+    view.map, (view.x, view.y, _) = mid, grass[0]
+    assert policy.nav.regions.route(view, mid, [point[:2] for point in grass], cut=True, surf=True) == []
+    monkeypatch.setattr(collection, 'encounter_points', lambda *args, **kwargs: grass)
+    monkeypatch.setattr(postgame, 'huntable', lambda *args: {16: [row(mid)]})
+    assert postgame.reachable(policy, view, [row(mid)])['map'] == mid
+    assert postgame.shiny(policy, view, 0)['row']['map'] == mid

@@ -1135,6 +1135,19 @@ def test_give_swaps_only_when_asked():
     assert result['shortcut']['returned_item'] == LEFTOVERS
 
 
+def test_a_swap_into_a_full_pocket_uses_the_entry_the_given_item_frees():
+    """The game takes the given item out of the bag before it puts the old one back, so a last
+    copy leaves its entry free for the returned item."""
+    filler = [(item, 1) for item in range(0x20, 0x100)
+              if gen2_pocket(item, 'crystal') == 'items' and item not in (POTION, LEFTOVERS)][:19]
+    game = Game2(items=[(POTION, 1), *filler], party=[mon('ONE', item=LEFTOVERS), mon('TWO')])
+    result = give_item(game.port(), POTION, 0, swap=True)
+    assert done(result) and game.party[0]['item'] == POTION and game.count(LEFTOVERS) == 1
+    # A copy left behind keeps its entry, so the pocket has no room.
+    game = Game2(items=[(POTION, 2), *filler], party=[mon('ONE', item=LEFTOVERS), mon('TWO')])
+    refused(give_item(game.port(), POTION, 0, swap=True), game, 'pocket is full')
+
+
 def test_held_item_prechecks_send_nothing():
     game = Game2(items=[(POTION, 1), (MAIL, 1)], key=[BICYCLE], tms=[(TM01, 1)],
                  party=[mon('ONE'), mon('EGG', egg=True)])

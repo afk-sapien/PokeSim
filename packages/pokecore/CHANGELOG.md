@@ -26,6 +26,8 @@
 
 - Gen I `BattlePower.damage` and `moveset_score` count Night Shade as the user's level in
   damage. Its data power is 0, so both scored it as a move that does nothing.
+- `give_item(..., swap=True)` counts the pocket entry a last given copy frees, as the game takes
+  that item out before the old one comes back. It refused that swap into a full pocket.
 
 ## 0.12.4
 

@@ -97,8 +97,11 @@ class GameShortcut(Shortcut):
     def is_key_item(self, item):
         return key_item(item, self.version)
 
-    def check_room(self):
-        """Refuse when the bag cannot take ``self.amount`` more of ``self.item_id``."""
+    def check_room(self, leaving=None):
+        """Refuse when the bag cannot take ``self.amount`` more of ``self.item_id``.
+
+        ``leaving`` is a Gen 2 item that loses one copy first, so a last copy frees its entry.
+        """
         if self.before + self.amount > 99:
             raise Abort('That would hold more than 99. No input sent.', cleanup=False)
         if self.before:
@@ -107,7 +110,9 @@ class GameShortcut(Shortcut):
             pocket = gen2_pocket(self.item_id, self.version)
             if pocket == 'tms_hms':
                 return
-            if len(self.pockets()[pocket]) >= GEN2_POCKET_SLOTS[pocket]:
+            freed = (leaving is not None and gen2_pocket(leaving, self.version) == pocket
+                     and self.quantity(leaving) == 1)
+            if len(self.pockets()[pocket]) - freed >= GEN2_POCKET_SLOTS[pocket]:
                 raise Abort(f'The {pocket} pocket is full. No input sent.', cleanup=False)
         elif len(self.bag()) >= BAG_SLOTS:
             raise Abort('The bag is full. No input sent.', cleanup=False)
@@ -1346,7 +1351,8 @@ class GiveItem(HeldItemShortcut):
             saved = self.item_id, self.before, getattr(self, 'amount', None)
             self.item_id, self.before, self.amount = self.held_before, self.quantity(self.held_before), 1
             try:
-                self.check_room()
+                # The game takes the given item out of the bag before the old one comes back.
+                self.check_room(leaving=saved[0])
             finally:
                 self.item_id, self.before, self.amount = saved
 

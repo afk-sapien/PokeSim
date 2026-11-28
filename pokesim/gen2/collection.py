@@ -1611,7 +1611,7 @@ def hunt(policy, snapshot, Goal, target=None, label=None):
             # No reachable tile yields it, so the next pick looks elsewhere until the stand-down ends.
             stand_down(policy, hunt_key(target['species']))
             state['target'] = None
-            return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[mid]['constant'], snapshot.x, snapshot.y)
+            return Goal('collection_wait', 'Replan the Pokédex expedition', data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
         x, y, face = point
     if label is None:
         name = data.species[target['species']]['name']

@@ -63,21 +63,21 @@ SOURCES = [
     *_rows('static', [185], 'Sudowoodo', 'Route 36 with the SquirtBottle'),
     *_rows('static', [143], 'Snorlax', 'Vermilion City, woken by the Poké Flute channel'),
     *_rows('static', [101], 'Rocket hideout Electrode', 'Mahogany hideout B2F, three at once'),
-    *_rows('static', [131], 'Union Cave Lapras', 'Union Cave B2F every Friday', planned=True),
+    *_rows('static', [131], 'Union Cave Lapras', 'Union Cave B2F every Friday'),
     *_rows('roamer', [243, 244], 'Roaming beast', 'Wanders Johto after the Burned Tower'),
     *_rows('roamer', [245], 'Roaming Suicune', 'Wanders Johto after the Burned Tower', games=GS),
     *_rows('walking_reset', [243, 244, 245, 249, 250], 'Walking reset', 'The one-time encounter returns after a walk',
            planned=True),
     *_rows('walking_reset', [185, 143], 'Walking reset', 'The one-time encounter returns after a walk', planned=True),
     *_rows('contest', [10, 11, 12, 13, 14, 15, 46, 48, 123, 127], 'Bug-Catching Contest',
-           'National Park, Tuesday, Thursday and Saturday', planned=True),
+           'National Park, Tuesday, Thursday and Saturday'),
     *_rows('swarm', [206], 'Swarm', 'Dark Cave, called in by a phone contact', planned=True),
     *_rows('swarm', [193], 'Swarm', 'Route 35, called in by a phone contact', planned=True),
     *_rows('swarm', [211], 'Swarm', 'Route 32 fishing, called in by a phone contact', planned=True),
     *_rows('swarm', [209], 'Swarm', 'Route 38, called in by a phone contact', games=GS, planned=True),
     *_rows('swarm', [183], 'Swarm', 'Mt. Mortar, called in by a phone contact', games=GS, planned=True),
     *_rows('swarm', [223], 'Swarm', 'Route 44 fishing, called in by a phone contact', games=CRYSTAL, planned=True),
-    *_rows('wild', [201], 'Unown hunt', 'Ruins of Alph inner chamber after the puzzles', planned=True),
+    *_rows('wild', [201], 'Unown hunt', 'Ruins of Alph inner chamber after the puzzles'),
     *_rows('league_reward', [152, 155, 158], 'League reward', 'A starter after a Hall of Fame entry',
            config='LEAGUE_REWARDS'),
     *_rows('event', [151], 'Mew event', 'Walking with the event Mew delivery', config='MEW_EVENT'),
@@ -85,9 +85,6 @@ SOURCES = [
            config='CELEBI_EVENT'),
     *_rows('event', [251], 'Distribution event', 'No in-game source in Gold or Silver', games=GS, external=True),
 ]
-
-# Wild data rows for these species exist, but the sim cannot use them until the named feature lands.
-PLANNED_WILD = {201}
 
 
 def register(species, source):
@@ -156,7 +153,7 @@ def _static(data):
     for (sid, mid, method), times in sorted(places.items(), key=lambda item: (item[0][0], _place(data, item[0][1]))):
         times = sorted(time for time in times if time)
         detail = f'{_place(data, mid)}, {method}' + (f' ({", ".join(times)})' if times else '')
-        table[sid].append(Source('wild', 'Wild encounter', detail, planned=sid in PLANNED_WILD))
+        table[sid].append(Source('wild', 'Wild encounter', detail))
     for sid, entries in _family(data).items():
         for parent, evo in entries:
             text = _evolution_text(data, parent, evo)

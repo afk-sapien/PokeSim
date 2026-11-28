@@ -234,8 +234,13 @@ class Preparation:
             button = self.menu.step(snapshot, mem)
             if button:
                 return Action(None, 0, 24) if button == 'wait' else Action(button, 8, 28)
-            self.menu = None
+            menu, self.menu = self.menu, None
             self.announce(snapshot)
+            # A deposit ahead of a copy followed by its party slot moves that copy up one slot.
+            if (isinstance(menu, Storage) and menu.operation == 'DEPOSIT' and len(snapshot.party) < menu.initial_count
+                    and state.get('slot') is not None and menu.slot < state['slot']):
+                state['slot'] -= 1
+                emu.store.set(KEY, state)
         if 'TURN OFF' in snapshot.text:
             return Action('b', 8, 32)
         if 'CHANGE BOX' in snapshot.text or 'Choose a' in snapshot.text or 'CANCEL' in snapshot.text:

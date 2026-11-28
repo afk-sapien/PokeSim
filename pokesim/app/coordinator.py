@@ -1124,11 +1124,13 @@ class Coordinator:
                     and incoming.get('arrived_dex', incoming.get('dex')) == evolved)
         return allowed(give, take, mine, theirs) and allowed(take, give, theirs, mine)
 
-    def _refresh_collection_demand(self, inventories, left_out=frozenset()):
+    def _refresh_collection_demand(self, inventories, left_out=frozenset(), paired=None):
         """Tell each linked game which species the others miss and which missing species they offer.
 
         A game in ``left_out`` is one automatic trading leaves out entirely for now, so it can neither
         take a Pokémon collected for it nor send one. It is still asked to collect for the others.
+        ``paired(aid, peer)`` says whether automatic trading may ever pair two games. Only such a peer's
+        offers count as supply, since a store purchase waiting on any other offer waits forever.
         """
         missing = {aid: set(range(1, inv.get('dex_total', 151) + 1)) - set(inv.get('owned', [])) for aid, inv in inventories}
         for aid, inventory in inventories:
@@ -1137,6 +1139,7 @@ class Coordinator:
                 for dex in missing[peer] if dex <= inventory.get('dex_total', 151)).items()}
             # Missing species another linked game offers, so a store purchase can wait for the trade.
             supply = sorted({dex for peer, inv in inventories if peer != aid and peer not in left_out
+                             and (paired is None or paired(aid, peer))
                              for offer in inv.get('offers', [])
                              if self._compatible_pair(inventory, inv, {'time_capsule_compatible': True}, offer)
                              and (dex := self._offer_for(offer, inventory).get('arrived_dex', offer.get('dex')))
@@ -1219,6 +1222,12 @@ class Coordinator:
         # Auto trading switched off stops only automatic trades. The game still counts towards
         # what the others are asked to collect, and hand-picked trades still reach it.
         settings = {aid: trade_settings.get(self.registry, aid) for aid, _ in inventories}
+
+        def paired(left_id, right_id):
+            # Adventures of two different people trade automatically only when both owners opted in.
+            return (settings[left_id]['enabled'] and settings[right_id]['enabled']
+                    and (owners[left_id] == owners[right_id]
+                         or settings[left_id]['across_owners'] and settings[right_id]['across_owners']))
         reserved = self.hand_picked_keys()
         # Automatic trading stops picking a Pokémon whose trades keep failing the same way.
         reserved = reserved | set(failure_backoff(history))
@@ -1236,7 +1245,7 @@ class Coordinator:
         # cannot take what the others collect for it. Live, a postgame Gold run spent two game hours
         # catching the same species for a stuck Red that never traded, and each copy left in a trade
         # with another game instead.
-        self._refresh_collection_demand(inventories, {aid for aid, key in reserved if key == WHOLE_GAME})
+        self._refresh_collection_demand(inventories, {aid for aid, key in reserved if key == WHOLE_GAME}, paired)
         self.refused_pairs = {pair: until for pair, until in self.refused_pairs.items() if until > now}
         pairs |= set(self.refused_pairs)
         waiting = {aid for entry in self._manual_entries() if entry['state'] in MANUAL_WAITING
@@ -1247,9 +1256,7 @@ class Coordinator:
         candidates = []
         for index, (left_id, left) in enumerate(inventories):
             for right_id, right in inventories[index + 1:]:
-                # Adventures of two different people trade automatically only when both owners opted in.
-                if owners[left_id] != owners[right_id] and not (
-                        settings[left_id]['across_owners'] and settings[right_id]['across_owners']):
+                if not paired(left_id, right_id):
                     continue
                 # Each gain rates a whole PC (trade/worth.py), so score every offer once per pair
                 # rather than once per combination.
