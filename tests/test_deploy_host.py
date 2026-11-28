@@ -192,10 +192,11 @@ def fake_host(tmp_path, shas, running=None):
     and returns the deploy's environment and the folder. The fake ssh answers the checks' read with the
     base commit on schema 1 and runs the host step in this shell. The fake docker logs each call, gives
     ``running``, by default the base commit, as the revision of the image the host runs, runs the alpine
-    tar here, waits in compose stop until the file HOLD names exists, and fails what the environment
-    names: FAIL_BACKUP for the archive, FAIL_UP for every start, FAIL_HEALTH for the new image's start and
-    FAIL_SMOKE for the smoke check. The new image moves app/app.sqlite to schema 2, which the old one
-    refuses to start on, and leaves a rollback journal, as a stop in the middle of a write does."""
+    tar here, waits in compose stop until the file HOLD names exists, lists one stale pokesim image, and
+    fails what the environment names: FAIL_BACKUP for the archive, FAIL_UP for every start, FAIL_HEALTH
+    for the new image's start, FAIL_SMOKE for the smoke check and FAIL_RMI for removing an image. The new
+    image moves app/app.sqlite to schema 2, which the old one refuses to start on, and leaves a rollback
+    journal, as a stop in the middle of a write does."""
     import json
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir(exist_ok=True)
@@ -211,6 +212,8 @@ def fake_host(tmp_path, shas, running=None):
         '  "image inspect") if echo "$*" | grep -q revision; then echo "$RUNNING"; else echo sha256:built; fi\n'
         '    exit 0 ;;\n'
         '  "compose stop") [ -z "${HOLD:-}" ] || while [ ! -e "$HOLD" ]; do sleep 0.1; done; exit 0 ;;\n'
+        '  "images --format") echo pokesim:0.6.0-local-abcdef0; exit 0 ;;\n'
+        '  "rmi "*) [ -z "${FAIL_RMI:-}" ]; exit ;;\n'
         '  "compose up") [ -z "${FAIL_UP:-}" ] || exit 1\n'
         '    if grep -qx POKESIM_IMAGE=pokesim:old .env; then [ "$(cat app/app.sqlite)" = 1 ]; exit; fi\n'
         '    echo 2 > app/app.sqlite; echo 2 > app/app.sqlite-journal; [ -z "${FAIL_HEALTH:-}" ]; exit ;;\nesac\n'
@@ -253,6 +256,19 @@ def test_a_clean_deploy_switches_the_image_and_logs_it(tmp_path, repo):
     assert f'POKESIM_IMAGE=pokesim:0.7.0.dev0-local-{shas["main"][:7]}' in (host / '.env').read_text()
     assert 'deployed, backup backups/pre-local-' in (host / 'deploy.log').read_text()
     assert not (host / 'deploy.lock').exists()
+
+
+@pytest.mark.parametrize('case', ['a backup with no json lists last', 'the last image cannot be removed'])
+def test_a_good_deploy_exits_0_whatever_the_prune_finds(tmp_path, repo, case):
+    repo, shas = repo
+    env, host = fake_host(tmp_path, shas)
+    if case == 'a backup with no json lists last':
+        (host / 'backups' / 'pre-local-fffffff-20260901T000000Z.tar.gz').write_bytes(b'')
+    else:
+        env['FAIL_RMI'] = '1'
+    result = subprocess.run(['sh', str(SCRIPT), shas['main']], cwd=repo, env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'deployed, backup backups/pre-local-' in (host / 'deploy.log').read_text()
 
 
 def test_a_failed_backup_starts_the_old_image_again(tmp_path, repo):

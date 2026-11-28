@@ -244,8 +244,12 @@ log "deployed, backup $BACKUP"
 
 # Keep the 5 newest backups, the json files beside them and the images that wrote them.
 ls -t backups/pre-*.tar.gz | tail -n +6 | while read -r old; do rm -f "$old" "${old%.tar.gz}.json"; done
+# Under set -e, a loop whose last command fails would stop the script after a good deploy, so no loop
+# here ends on an and-list.
 writers=$(for backup in backups/pre-*.tar.gz; do
-  [ -f "${backup%.tar.gz}.json" ] && sed -n 's/^ *"writer_image": "\(.*\)",$/\1/p' "${backup%.tar.gz}.json"
+  if [ -f "${backup%.tar.gz}.json" ]; then
+    sed -n 's/^ *"writer_image": "\(.*\)",$/\1/p' "${backup%.tar.gz}.json"
+  fi
 done)
 # A backup with no json was written by the commit the backup before it brought in.
 keep=$(previous=; ls -tr backups/pre-*.tar.gz | while read -r backup; do
@@ -263,7 +267,9 @@ docker images --format '{{.Repository}}:{{.Tag}}' | while read -r image; do
   echo "$writers" | grep -qxF "$image" && continue
   short=$(echo "${image##*:}" | sed -n 's/.*-\([0-9a-f]\{7\}\)$/\1/p')
   [ -n "$short" ] && echo "$keep" | grep -qx "$short" && continue
-  docker rmi "$image" >/dev/null && echo "deploy: removed $image"
+  if docker rmi "$image" >/dev/null; then
+    echo "deploy: removed $image"
+  fi
 done
 df -h . | tail -1
 REMOTE
