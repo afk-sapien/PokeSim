@@ -701,10 +701,12 @@ class Navigator:
                 # A step seen through a tree after Cut grows back with the map, so it needs Cut again.
                 if not self.can_cut and cut_tree(ts, front):
                     continue
-                # A step seen onto water needs Surf again, as one seen through a tree needs Cut.
+                # A step seen onto water needs Surf again, as one seen through a tree needs Cut. Vermilion
+                # Dock walks on a tile Surf also reads as water, so a tile the land passes needs no Surf.
                 landing = WORLD.get(q[0])
+                tile = self.active_tile(landing, q[1], q[2]) if landing else None
                 if (not self.can_surf and landing and landing["tileset"] in WATER_TILESETS
-                        and self.active_tile(landing, q[1], q[2]) in WATER_TILES):
+                        and tile in WATER_TILES and tile not in landing["passable"]):
                     continue
             if (m, x + dx, y + dy) in self.closed_passages or q in self.closed_passages:
                 continue

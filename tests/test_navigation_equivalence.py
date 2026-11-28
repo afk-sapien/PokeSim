@@ -232,6 +232,15 @@ def test_a_step_seen_on_water_needs_surf_again(terrain):
     assert_graph_parity(nav, terrain['WORLD'], 0)
 
 
+def test_a_step_seen_onto_a_water_tile_the_land_passes_needs_no_surf(terrain):
+    # Vermilion Dock walks on a tile Surf also reads as water, and the S.S. Anne is past it.
+    terrain['WORLD'][COAST]['passable'].append(0x14)
+    nav = navigation.Navigator()
+    nav.edges[(COAST, 1, 1)] = {'left': (COAST, 0, 1)}
+    assert ('left', (COAST, 0, 1)) in nav.neighbors((COAST, 1, 1), 0)
+    assert_graph_parity(nav, terrain['WORLD'], 0)
+
+
 def test_geometry_mutation_and_world_replacement_never_return_stale_neighbors(terrain, monkeypatch):
     nav = navigation.Navigator()
     source = (ROOM, 0, 0)
