@@ -226,8 +226,9 @@ class CheckpointStore:
             return None
 
     @staticmethod
-    def atomic_write(path: Path, data: bytes):
-        """Publish a complete file only after its contents reach disk."""
+    def staged(path: Path, data: bytes) -> Path:
+        """A hidden file beside ``path`` whose ``data`` has reached disk. The caller replaces ``path`` with it
+        or removes it."""
         fd, name = tempfile.mkstemp(prefix=".pending-", dir=path.parent)
         temporary = Path(name)
         try:
@@ -235,6 +236,16 @@ class CheckpointStore:
                 output.write(data)
                 output.flush()
                 os.fsync(output.fileno())
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+        return temporary
+
+    @staticmethod
+    def atomic_write(path: Path, data: bytes):
+        """Publish a complete file only after its contents reach disk."""
+        temporary = CheckpointStore.staged(path, data)
+        try:
             replace_file(temporary, path)
             sync_directory(path.parent)
         finally:
@@ -248,16 +259,28 @@ class CheckpointStore:
             state = compress_state(state)
         manifest = dict(metadata, format=1, sha256=hashlib.sha256(state).hexdigest())
         manifest_bytes = pack_manifest(manifest) if compress else json.dumps(manifest).encode()
+        manifest_path = path.with_suffix(".json")
+        # Both files reach disk before either replaces a save under this name, so a full disk leaves that
+        # save whole.
+        pending = []
         try:
-            self.atomic_write(path, state)
-            self.atomic_write(path.with_suffix(".json"), manifest_bytes)
-        except OSError:
-            for output in (path, path.with_suffix(".json")):
-                try:
-                    output.unlink(missing_ok=True)
-                except OSError:
-                    log.exception("Cannot remove incomplete checkpoint file %s", output)
-            raise
+            pending.append(self.staged(path, state))
+            pending.append(self.staged(manifest_path, manifest_bytes))
+            replace_file(pending[0], path)
+            try:
+                replace_file(pending[1], manifest_path)
+            except OSError:
+                # The new state does not match the old manifest, so neither may stay.
+                for output in (path, manifest_path):
+                    try:
+                        output.unlink(missing_ok=True)
+                    except OSError:
+                        log.exception("Cannot remove incomplete checkpoint file %s", output)
+                raise
+            sync_directory(path.parent)
+        finally:
+            for temporary in pending:
+                temporary.unlink(missing_ok=True)
         return path
 
     def keep_as(self, path: Path, name: str):

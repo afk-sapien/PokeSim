@@ -506,6 +506,46 @@ def test_an_invite_makes_one_member(library, people):
     assert library.browser().get(f'/invite/{token}').status_code == 404
 
 
+@pytest.mark.parametrize('lost_to', ['another accept', 'a revoke', 'expiry'])
+def test_an_invite_lost_while_the_password_hashes_makes_no_account(library, people, monkeypatch, lost_to):
+    from pokesim.app.errors import Conflict
+    auth = library.manager.auth
+    raw, invite = auth.create_invite(people.admin['id'])
+    real, raced = auth.hasher, []
+
+    class Hasher:
+        """The real hasher, except the first hash lets the invite go to ``lost_to`` meanwhile."""
+        def __getattr__(self, name):
+            return getattr(real, name)
+
+        def hash(self, password):
+            if not raced:
+                raced.append(lost_to)
+                if lost_to == 'another accept':
+                    auth.accept_invite(raw, 'dave', PASSWORD)
+                elif lost_to == 'a revoke':
+                    auth.revoke_invite(invite['id'])
+                else:
+                    with auth.lock, auth.db:
+                        auth.db.execute('UPDATE invites SET expires=? WHERE id=?', (time.time() - 1, invite['id']))
+            return real.hash(password)
+
+    monkeypatch.setattr(auth, 'hasher', Hasher())
+    with pytest.raises(Conflict):
+        auth.accept_invite(raw, 'carol', PASSWORD)
+    assert raced and auth.user_by_name('carol') is None
+    assert (auth.user_by_name('dave') is not None) == (lost_to == 'another accept')
+
+
+def test_a_taken_username_leaves_the_invite_unused(library, people):
+    from pokesim.app.errors import Conflict
+    auth = library.manager.auth
+    raw, _ = auth.create_invite(people.admin['id'])
+    with pytest.raises(Conflict, match='taken'):
+        auth.accept_invite(raw, 'alice', PASSWORD)
+    assert auth.invite(raw) is not None
+
+
 def test_a_share_link_opens_one_adventure_view_only(library, people):
     alice = library.login('alice')
     url = alice.post(f'/api/v1/adventures/{people.red}/shares', json={}).json()['url']
