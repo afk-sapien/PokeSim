@@ -100,11 +100,11 @@ def test_a_partner_that_needs_more_than_ten_battles_for_a_level_is_not_trained_h
     assert development_candidate(state(party=(STRONG, HIGH)), 15) == 1
 
 
-def starts_an_excursion(party, odds):
+def starts_an_excursion(party, odds, name='ROUTE_1', x=12, y=8):
     policy = StrategicPolicy(3)
     policy.collection.wild = odds
     policy.rng.random = lambda: 0.0
-    s = state(map=MAPS['ROUTE_1'], x=12, y=8, party=party, frame=10000)
+    s = state(map=MAPS[name], x=x, y=y, party=party, frame=10000)
     policy.detour.act(policy, s, bytearray(65536), Goal('story', 'Story', 'Story'))
     return policy.detour.development and policy.detour.development['partner'][1]
 
@@ -113,6 +113,14 @@ def test_a_route_whose_battles_cannot_raise_the_partner_starts_no_excursion():
     assert starts_an_excursion((STRONG, HIGH), grass(15)) is None
     assert starts_an_excursion((STRONG, HIGH), grass(40, base_exp=100)) == 'HIGH'
     assert starts_an_excursion((STRONG, HIGH, LOW), grass(15)) == 'LOW'
+
+
+@pytest.mark.parametrize('name, x, y', [('ROUTE_23', 12, 44), ('VIRIDIAN_FOREST', 2, 5)])
+def test_a_map_that_draws_grass_with_its_own_tile_still_trains_a_partner(name, x, y):
+    # The plateau and forest tilesets draw grass with other tiles than the overworld's, so these maps
+    # showed no grass to train on.
+    odds = grass(40, base_exp=100, map_id=MAPS[name])
+    assert starts_an_excursion((STRONG, HIGH), odds, name, x, y) == 'HIGH'
 
 
 def test_a_reload_keeps_the_wait_before_the_next_partner_training():

@@ -22,7 +22,7 @@ from .ledger import battle_room
 from .menus import tap
 from .navigation import DIRS, FACING
 from .pickups import Pickups, ground_item
-from .progression import Goal, healing_goal
+from .progression import GRASS_TILES, Goal, healing_goal
 from .puzzles import MANSION_MAPS, VICTORY_MAPS
 from .team import development_candidate
 
@@ -186,8 +186,10 @@ class Detour(Errand):
         wild = policy.collection.wild
         trainee = development_candidate(s, max((level for _, level in encounters), default=100),
                                         wild.battle_experience(s.map) if wild is not None else None)
+        # Each tileset draws grass with its own tile, so Route 23 and Viridian Forest have grass too.
+        grass_tile = GRASS_TILES.get(w.get('tileset'))
         grass = tuple((s.map, x, y) for y, row in enumerate(w.get('tiles', [])) for x, tile in enumerate(row)
-                      if tile == 0x52 and abs(x - s.x) + abs(y - s.y) <= 8)
+                      if tile == grass_tile and abs(x - s.x) + abs(y - s.y) <= 8)
         if trainee is not None and grass and policy.clock >= self.development_cooldown:
             goal = Goal('train_partner', 'Give a promising partner some experience',
                         f'Train {s.party[trainee].nick or s.party[trainee].name} in nearby manageable encounters', grass,
