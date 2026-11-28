@@ -111,7 +111,7 @@ def lose_attempt(snapshot, enemy, active, slot):
                if i != active and mon.hp > 0 and not foe_never_attacks(enemy, mon)]
     if targets:
         return Decision("switch", max(targets)[1], reason="Nobody can act, so let the foe end an attempt that cannot be won")
-    return Decision("fight", slot, reason=HOPELESS)
+    return Decision("fight", slot, reason=HOPELESS, hopeless=True)
 
 
 def damage_division_safe(move_id, attacker, defender):
@@ -432,6 +432,8 @@ class Decision:
     stance: bool = False
     # A run from a catch nobody can weaken, which leaves its species for a new move, member or ball.
     defer: bool = False
+    # A battle nobody here can end (lose_attempt), so only an earlier save ends it.
+    hopeless: bool = False
 
 
 # Why the battle stance runs, by goal kind, with the shiny case first.

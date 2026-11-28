@@ -1,7 +1,7 @@
 """An objective-driven policy that observes the game after every action."""
 import random
 from collections import Counter
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from functools import partial
 
 from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositItem, DepositPokemon, FieldMove, LearnMove,
@@ -11,7 +11,7 @@ from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositItem, Dep
 from ..runtime.policy import Action, Policy
 from ..planning.ledger import box_wanted
 from pokecore.textmatch import ScreenText
-from .battle import (BALLS, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
+from .battle import (BALLS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
                      enemy_dvs, field_cure, healing_item, hurts, needs_healing, ranked_moves, read_battler, replacement_slot,
                      useful_capture)
 from .navigation import DIRS, FACING, PAIR_COLLISIONS, WATER_TILESETS, Navigator
@@ -276,7 +276,7 @@ class StrategicPolicy(Policy):
     def hopeless_battle(self, snapshot):
         """The battle under way cannot end, so waiting out the battle timeout gains nothing. The battle
         decision already found it, so the snapshot is not read again."""
-        return bool(self.intent and self.intent.reason == HOPELESS)
+        return bool(self.intent and self.intent.hopeless)
 
     def on_restore(self):
         self.collection.last_frame = None
@@ -1984,8 +1984,10 @@ class StrategicPolicy(Policy):
             if actions:
                 if not MOVES.get(me.moves[slot], {}).get('power'):
                     self.used_status.add(me.moves[slot])
-                if intent is None or intent.kind == 'fight':
+                if intent is None:
                     self.intent = Decision('fight', slot, reason=reason)
+                elif intent.kind == 'fight':
+                    self.intent = replace(intent, index=slot, reason=reason)
                 return actions
         self.intent = None
         return self._run(s) or wait()
