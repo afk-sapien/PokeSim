@@ -58,14 +58,18 @@ def experience(mon):
     return value if type(value) is int else 0
 
 
-def entries(party, stored):
+def entries(party, stored, line=None):
     """PC value rows for a payload's party and boxed Pokémon, grouped by Pokédex number. Keep and
-    Never trade lock a Pokémon, and Prefer to trade marks an offered partner."""
+    Never trade lock a Pokémon, and Prefer to trade marks an offered partner. With ``line``, only the
+    Pokémon whose Pokédex number is in it get a row."""
     rows = []
     for index, mon in enumerate([*party, *stored]):
+        dex = mon.get('dex') or mon['species']
+        if line is not None and dex not in line:
+            continue
         preference = mon.get('trade_preference')
         rows.append(Entry(None if index < len(party) else (mon.get('box', 1), mon.get('position', index)),
-                          (mon.get('dex') or mon['species'], 0), mon.get('name', ''), mon.get('level', 0),
+                          (dex, 0), mon.get('name', ''), mon.get('level', 0),
                           experience(mon), tuple(mon.get('dvs') or ()), tuple(mon.get('stat_exp') or ()),
                           bool(mon.get('egg')), locked=preference in ('locked', 'withdrawn'),
                           stock=preference == 'offered', trade=preference == 'offered', record=mon))
@@ -100,10 +104,9 @@ def gain(inventory, mon):
     incoming = Entry((-1, 0), (dex, 0), mon.get('name', ''), mon.get('level', 5), dvs=tuple(mon.get('dvs') or ()),
                      stat_exp=tuple(mon.get('stat_exp') or ()), origin='traded')
     given_inputs = inputs(inventory)
-    # The new copy's own rating reads only its species and later stages (pcvalue.family_need), so the
-    # rest of the PC is left out. The coordinator rates every offer against every linked adventure.
-    line = _line(dex, given_inputs.evolutions)
-    rows = [row for row in entries(party, stored) if row.dex in line]
+    # The new copy's own rating reads only its species and later stages (pcvalue.family_need), so only
+    # their rows are built. The coordinator rates every offer against every linked adventure.
+    rows = entries(party, stored, _line(dex, given_inputs.evolutions))
     found = pcvalue.verdict(pcvalue.rate([*rows, incoming], given_inputs))
     return Gain(POINTS.get(found.reason, 0) if found.keep else 0, found.reason)
 
