@@ -13,7 +13,7 @@ from pokesim.trade import preferences
 from pokesim.trade import pair
 from pokesim.web import trading
 from pokesim.web.app import create_app
-from test_broker import status, MAGIKARP, ZUBAT
+from test_broker import status, MAGIKARP, RATTATA, ZUBAT
 
 
 def payload(version='red', dex=MAGIKARP):
@@ -69,6 +69,26 @@ def test_manual_duplicate_expands_offers_and_is_selected_automatically():
     deal, = routine.proposals([red, blue])
     assert deal['give']['trade_key'] == key
     assert deal['spends']['give'] == 'best copy'
+
+
+def test_each_offer_is_rated_once_for_each_adventure_that_could_take_it(monkeypatch):
+    """A side's gain reads only the copy it receives, so a pair is not rated again for every copy
+    the other side could give, and each adventure's PC is built once for all of its ratings."""
+    linked = []
+    for name, dex in (('red', MAGIKARP), ('blue', ZUBAT), ('green', RATTATA)):
+        data = payload(dex=dex)
+        key = preferences.identity(data['storage']['pokemon'][1])
+        linked.append(inventory.normalise(name, '', preferences.apply(data, {key: {'state': 'offered'}})))
+    assert [len(routine.offers(adventure, False)) for adventure in linked] == [2, 2, 2]
+    rated, gain = [], routine.gain
+    monkeypatch.setattr(routine, 'gain', lambda pc, mon: rated.append((pc, mon['instance'], mon['box'], mon['position']))
+                        or gain(pc, mon))
+    assert routine.proposals(linked)
+    # Each adventure rates the two offers of each of the other two.
+    assert len(rated) == 12
+    assert len({(id(pc), *copy) for pc, *copy in rated}) == 12
+    assert len({id(pc) for pc, *_ in rated}) == 3
+    assert linked[0].held is linked[0].held and linked[0].spare_slots is linked[0].spare_slots
 
 
 def test_manual_offer_does_not_bypass_project_or_last_copy_protection():
