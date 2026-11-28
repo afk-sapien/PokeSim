@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from pokecore.gen2.maps import ICE
-from pokecore.gen2.ram import Memory
+from pokecore.gen2.state import sliding
 
 from ...runtime.policy import Action, Hold
 from ..menus import Register, registered
@@ -229,8 +229,7 @@ class NavigationPart:
         grid = self.nav.collision(snapshot, memory)
         # The game holds the d-pad to a slide's direction until the player stops (CheckStandingOnIce), so a
         # press read mid-slide does nothing but outlast the stop and walk on from there. The walk waits.
-        if (grid[snapshot.y * entry['width'] + snapshot.x] in ICE
-                and Memory(memory, self.data).byte('wPlayerTurningDirection') not in (0, 0xF0)):
+        if grid[snapshot.y * entry['width'] + snapshot.x] in ICE and sliding(memory, self.data.game):
             return Action(None, 0, 8)
         # A Tower preparation walks outside a decision, with memory of its own.
         reads = getattr(self, 'reads', None)

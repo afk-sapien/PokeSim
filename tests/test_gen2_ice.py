@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokecore.gen2 import maps as ice
+from pokecore.gen2 import memory_map as ice_memory
 from pokesim.gen2.data import GameData
 from pokesim.gen2.navigation import Navigator
 from pokesim.gen2.policy import Policy
@@ -102,7 +103,7 @@ def test_a_policy_with_no_route_records_the_attempt_without_a_reload():
     assert policy.no_route_waiting(policy.goal) and policy.take_failure() is None and policy.stranded == 0
 
 
-TURNING = (0, 0xCF39)
+TURNING = ice_memory.symbols('silver')['wPlayerTurningDirection']
 
 
 class Wram:
@@ -130,7 +131,7 @@ def test_a_walk_waits_out_a_slide(tile, turning, button):
     grid = [tile] * 48
     host = object.__new__(NavigationPart)
     host.data = SimpleNamespace(maps={ROOM: dict(width=8, height=6, collision=grid, warps=[])}, game='silver',
-                                items={}, symbols={'wPlayerTurningDirection': TURNING})
+                                items={})
     host.nav = SimpleNamespace(collision=lambda snapshot, memory: grid, issued=lambda *args: None, blocked={})
     host.interaction = None
     memory = Wram({TURNING: turning})

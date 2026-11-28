@@ -235,6 +235,15 @@ def script_running(memory, version):
     return bool(memory_reader(memory, version).byte('wScriptFlags') & 0b100)
 
 
+def sliding(memory, version):
+    """Whether a step the player cannot steer is under way, as CheckStandingOnIce reads it.
+
+    ``wPlayerTurningDirection`` is neither 0 nor $f0 while a step is under way. On an ice tile the game then
+    holds the d-pad to the slide's direction until the player stops. The caller checks the tile.
+    """
+    return memory_reader(memory, version).byte('wPlayerTurningDirection') not in (0, 0xF0)
+
+
 class Walking(NamedTuple):
     """The few bytes a held direction is checked against, from :func:`walking`."""
     map: int
