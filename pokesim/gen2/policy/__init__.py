@@ -314,7 +314,7 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
             return Action('b', 8, 28)
         if getattr(self.menu, 'battle', False):
             # Remedies run in and out of battle. The other battle shortcuts end with the battle.
-            button = self.menu_step(snapshot, mem)
+            button = self.menu_step(snapshot, mem) if snapshot.in_battle or isinstance(self.menu, Remedy) else None
             if button:
                 self.mode = 'Heal the team' if isinstance(self.menu, Remedy) else 'battle'
                 return Action(None, 0, 24) if button == 'wait' else Action(button, 8, 28)
