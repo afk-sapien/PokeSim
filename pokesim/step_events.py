@@ -5,7 +5,6 @@ keeps each activity's walking clock, its fossil and dojo choice, the count at th
 guards that keep a spent room closed.
 """
 from dataclasses import dataclass
-import json
 from functools import lru_cache
 from pokecore.gen1 import W_COMPLETED_IN_GAME_TRADE_FLAGS
 from pokecore.resets import Flag, update_flags
@@ -136,14 +135,15 @@ def observe(store, snapshot, memory, keeps=None):
     from .progress_events import frame
     every = getattr(config, 'EVENT_RETURN_STEPS', 100000)
     total = walking.get('total', 0)
+    # Each get parses its own value, so value changes below while saved keeps what is stored.
     saved = store.get(KEY) or {'clocks': {}}
-    value = json.loads(json.dumps(saved))
+    value = store.get(KEY) or {'clocks': {}}
     fossil, dojo = 'helix', 106
     clocks = value['clocks']
     events, changed, now = [], False, frame(store)
     safe = not snapshot.in_battle and not snapshot.textbox and not snapshot.start_menu
     with store.transaction() as db:
-        found = return_claims.events(db)
+        found, writes = return_claims.events(db), db.total_changes
         for default in activities(fossil, dojo):
             clock, row = clocks.get(default.key), found.get(default.key)
             state = row['state'] if row else None
@@ -211,8 +211,10 @@ def observe(store, snapshot, memory, keeps=None):
                                     else f'{spec.name} available',
                                     'A walking milestone unlocked another visit.', priority=3))
         if safe:
-            opened = {key for key, row in return_claims.events(db).items()
-                      if row['state'] in (ledger.OPEN, ledger.DELIVERED)}
+            if db.total_changes != writes:
+                # A claim was marked above, so read the claims as they stand now.
+                found = return_claims.events(db)
+            opened = {key for key, row in found.items() if row['state'] in (ledger.OPEN, ledger.DELIVERED)}
             opened_bits = {bit for key, clock in clocks.items() if key in opened
                            for activity in activities(clock['choice'], clock['dojo']) if activity.key == key
                            for bit in activity.bits}
