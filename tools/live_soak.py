@@ -278,6 +278,15 @@ def _kv_bytes(db):
     return db.execute('SELECT COALESCE(SUM(LENGTH(k) + LENGTH(v)), 0) FROM kv').fetchone()[0]
 
 
+def _new_receipts(db, after):
+    """The capture receipts added after rowid `after`, oldest first, and the rowid to read after next.
+    A soak only adds receipts, since only an owner restart empties them, so a poll reads the new rows
+    and not the whole history again."""
+    rows = db.execute('SELECT rowid, fingerprint, dex, recorded_at FROM capture_receipts WHERE rowid > ? ORDER BY rowid',
+                      (after,)).fetchall()
+    return [tuple(row[1:]) for row in rows], rows[-1][0] if rows else after
+
+
 def _goal(states):
     """The collection project the policy works on, by its key, from the newest autosave's manifest."""
     from pokesim.state import manifests
@@ -701,8 +710,9 @@ def play_one(manager, aid, frames, progress):
     database = folder / 'pokesim.sqlite'
     with _readonly(database) as db:
         first_event = db.execute('SELECT COALESCE(MAX(id), 0) FROM events').fetchone()[0]
-        receipts_before = {row[0] for row in db.execute('SELECT fingerprint FROM capture_receipts')} if db.execute(
-            "SELECT 1 FROM sqlite_master WHERE name='capture_receipts'").fetchone() else set()
+        has_receipts = db.execute("SELECT 1 FROM sqlite_master WHERE name='capture_receipts'").fetchone()
+        receipts_before = {row[0] for row in db.execute('SELECT fingerprint FROM capture_receipts')} if has_receipts else set()
+        after = db.execute('SELECT COALESCE(MAX(rowid), 0) FROM capture_receipts').fetchone()[0] if has_receipts else 0
         kv_before = _kv_bytes(db)
     db.close()
     result = {'id': aid, 'name': adventure['name'], 'version': adventure['version'], 'failed': None}
@@ -720,7 +730,6 @@ def play_one(manager, aid, frames, progress):
     start = end = None
     held_start = held_end = None
     help_reason = None
-    seen = set(receipts_before)
     best, boxed = {}, None
     try:
         while True:
@@ -750,13 +759,11 @@ def play_one(manager, aid, frames, progress):
                 result['sample_mon'] = next(iter(((game.get('storage') or {}).get('pokemon')) or game.get('party') or [{}]), {})
             best = _held(game, dex_of)
             with _readonly(database) as db:
-                fresh = [row for row in db.execute('SELECT fingerprint, dex, recorded_at FROM capture_receipts '
-                                                   'ORDER BY recorded_at') if row[0] not in seen]
+                fresh, after = _new_receipts(db, after)
                 goal = _goal(database.parent / 'states')
                 released = db.execute("SELECT COUNT(*) FROM events WHERE id > ? AND type = 'release'",
                                       (first_event,)).fetchone()[0]
             db.close()
-            seen.update(row[0] for row in fresh)
             boxed, scores = _pc_scores(manager.supervisor.child(aid), game, boxed)
             try:
                 arrivals = copies.poll(game, dex_of, released - releases, scores)

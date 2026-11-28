@@ -155,3 +155,19 @@ def test_legacy_global_speed_migrates_once_and_preserves_other_settings(tmp_path
     assert store.adventure(first['id'])['settings']['speed'] == 0.5
     assert store.create('New', 'digest', {}, identifier())['settings']['speed'] == 1
     store.close()
+
+
+def test_the_interaction_reads_on_every_pass_walk_an_index_not_the_whole_history(tmp_path):
+    # The scheduler reads the newest interactions and the open ones on every pass, and the history
+    # only grows, so neither read may scan and sort every finished trade.
+    store = registry(tmp_path)
+    reads = []
+    store.db.set_trace_callback(lambda sql: reads.append(sql) if 'FROM interactions' in sql else None)
+    store.transactions()
+    store.transactions(unresolved=True)
+    store.db.set_trace_callback(None)
+    assert len(reads) == 2
+    for sql in reads:
+        plan = ' | '.join(row[3] for row in store.db.execute('EXPLAIN QUERY PLAN ' + sql))
+        assert 'USING INDEX' in plan and 'TEMP B-TREE' not in plan, (sql, plan)
+    store.close()

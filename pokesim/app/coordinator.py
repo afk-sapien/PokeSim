@@ -741,9 +741,10 @@ class Coordinator:
                 if manual:
                     raise Conflict('Cancelled: an adventure changed hands before the trade started')
                 raise Waiting('An adventure changed hands')
-        if not manual and not all(trade_settings.get(self.registry, aid)['enabled'] for aid in owners):
+        settings = trade_settings.many(self.registry, owners)
+        if not manual and not all(settings[aid]['enabled'] for aid in owners):
             raise Waiting('Auto trading was turned off')
-        if across is not None and across != all(trade_settings.get(self.registry, aid)['across_owners'] for aid in owners):
+        if across is not None and across != all(settings[aid]['across_owners'] for aid in owners):
             raise Waiting('Trading with other people changed')
 
     def _admit(self, tid, selection):
@@ -1221,7 +1222,7 @@ class Coordinator:
         self.trade_blocked = blocked
         # Auto trading switched off stops only automatic trades. The game still counts towards
         # what the others are asked to collect, and hand-picked trades still reach it.
-        settings = {aid: trade_settings.get(self.registry, aid) for aid, _ in inventories}
+        settings = trade_settings.many(self.registry, [aid for aid, _ in inventories])
 
         def paired(left_id, right_id):
             # Adventures of two different people trade automatically only when both owners opted in.

@@ -39,8 +39,13 @@ def _clean(entry):
 
 def get(registry, aid):
     """The automatic trading settings of one adventure. New adventures trade automatically."""
-    validate_id(aid)
-    return _clean(_all(registry).get(aid))
+    return many(registry, (aid,))[aid]
+
+
+def many(registry, ids):
+    """The settings of each adventure in `ids`, from one read of the value they all share."""
+    stored = _all(registry)
+    return {aid: _clean(stored.get(validate_id(aid))) for aid in ids}
 
 
 SWITCHES = {'enabled': 'Auto trading', 'open_to_offers': 'Open to offers', 'across_owners': 'Auto trading with other people'}
