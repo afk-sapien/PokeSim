@@ -158,6 +158,38 @@ def test_a_search_stops_when_the_ends_do_not_disagree(history, monkeypatch):
     assert len(set(played)) == 2
 
 
+def test_a_kept_run_is_used_again_only_for_the_frame_budget_it_played(tmp_path, monkeypatch):
+    ladder = tmp_path / 'ladder' / 'silver'
+    (ladder / 'badges_6').mkdir(parents=True)
+    (ladder / 'ladder.json').write_text('{"generation": 2}')
+    (ladder / 'badges_6' / 'start.state').write_bytes(b'')
+    options = Options(roms=tmp_path / 'roms', ladders=tmp_path / 'ladder', out=tmp_path / 'replay', frames=3600,
+                      log=lambda line: None)
+    sha = 'a' * 40
+
+    def keep(folder):
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / 'shim.json').write_text('{"code": 0, "attached": true, "head": "h"}')
+        (folder / 'summary.json').write_text('{"waste": 1.0, "stall": null}')
+
+    played = []
+
+    def run(command, cwd, **kwargs):
+        played.append(command[command.index('--frames') + 1])
+        keep(Path(command[command.index('gate-rung') + 3]))
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(search, 'tree', lambda sha, cache, root: tmp_path / 'checkout')
+    monkeypatch.setattr(search, 'environment', lambda *args, **kwargs: (tmp_path / 'env', '0.1'))
+    monkeypatch.setattr(search, 'python', lambda env: 'python')
+    monkeypatch.setattr(search.subprocess, 'run', run)
+    assert search.record(options, 'silver/badges_6', sha).ok
+    assert search.record(options, 'silver/badges_6', sha).ok
+    assert played == ['3600']
+    options.frames = 108000
+    assert search.record(options, 'silver/badges_6', sha).replay['frames'] == 108000
+    assert played == ['3600', '108000']
+
+
 # The diverge report.
 
 def _records(*items, start=100):

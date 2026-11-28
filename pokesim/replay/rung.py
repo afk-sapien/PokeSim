@@ -593,7 +593,7 @@ def mean_result(runs):
               'stalls': len(stalled), 'waste': _mean(run['waste'] for run in runs),
               **{kind: _mean(run[kind] for run in runs) for kind in SUPPORT},
               'milestones': _mean(len(run.get('story', [])) for run in runs), 'story': story,
-              'runs': [{key: run.get(key) for key in ('seed', 'errors', 'stall', 'waste', *SUPPORT, 'story')}
+              'runs': [{key: run.get(key) for key in ('seed', 'frames', 'errors', 'stall', 'waste', *SUPPORT, 'story')}
                        for run in runs]}
     pipelines = [run['pipeline'] for run in runs if run.get('pipeline')]
     if len(pipelines) == len(runs):

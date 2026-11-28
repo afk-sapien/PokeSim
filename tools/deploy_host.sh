@@ -23,12 +23,16 @@
 # here and needs no trial. The script stops the app, takes a cold backup of the folder, tests it with
 # gzip -t, starts the new image with up --wait and runs the smoke check. If any step from the stop on
 # fails, it puts .env back and starts the old image again, and the log says when that start failed too.
+# When the new image has started by then, the folder comes back from the backup first, since the new
+# image may have moved the data to a schema the old one refuses.
 # Beside each backup, a json file names the image that wrote its data, the one running before the
 # deploy, since only that image or a newer one can open it.
 # It keeps the 5 newest pre-*.tar.gz backups and the json files beside them, keeps the images that wrote
 # those backups and the running one, and removes every other pokesim, pokesim-local and
 # ghcr.io/afk-sapien/pokesim tag. Other images are never touched. A backup from before the json files
 # keeps the image it is named after and the one the backup before it is named after.
+# The host step holds a flock on DEPLOY_DIR, so a second deploy is refused while one runs. Under it, a
+# deploy is refused when the host no longer runs the commit its schema and ancestry checks read.
 # While it runs, DEPLOY_DIR/deploy.lock names the commit, so the alert watch stays quiet. Each deploy
 # appends one line to DEPLOY_DIR/deploy.log.
 set -eu
@@ -162,19 +166,30 @@ print('image ok, pokesim', m.version('pokesim'), 'pokecore', m.version('pokecore
 
 # The host step holds the lock from the first check to the last prune.
 docker save "$TAG" | nice -n 10 gzip -1 | ssh -o BatchMode=yes "$HOST" 'gunzip | docker load' >/dev/null
-ssh -o BatchMode=yes "$HOST" sh -s -- "$DIR" "$SHA" "$TAG" "$MIN_FREE_GB" "$COMPOSE_SHA" <<'REMOTE'
+ssh -o BatchMode=yes "$HOST" sh -s -- "$DIR" "$SHA" "$TAG" "$MIN_FREE_GB" "$DEPLOYED" "$COMPOSE_SHA" <<'REMOTE'
 set -eu
-DIR=$1 SHA=$2 TAG=$3 MIN_FREE_GB=$4 COMPOSE_SHA=${5:-}
+DIR=$1 SHA=$2 TAG=$3 MIN_FREE_GB=$4 DEPLOYED=${5:-} COMPOSE_SHA=${6:-}
 SHORT=$(echo "$SHA" | cut -c1-7)
 cd "$DIR"
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 log() { echo "$TS $SHA $TAG $1" >> deploy.log; echo "deploy: $1"; }
-if [ -e deploy.lock ] && [ -n "$(find deploy.lock -mmin -15)" ]; then
-  echo "deploy: another deploy holds $DIR/deploy.lock: $(cat deploy.lock)" >&2
+# A flock on the folder lets in one deploy at a time and lasts until it exits, however long it runs.
+# deploy.lock names its commit for the alert watch.
+exec 9<.
+if ! flock -n 9; then
+  echo "deploy: another deploy is running in $DIR: $(cat deploy.lock)" >&2
   exit 1
 fi
 echo "$SHA $TS" > deploy.lock
 trap 'rm -f "$DIR/deploy.lock"' EXIT
+# The schema and ancestry checks ran before the lock against the commit the host ran then. Another
+# deploy may have changed that commit and the data schema with it since, so the host must still run it.
+OLD=$(sed -n 's/^POKESIM_IMAGE=//p' .env)
+WRITER=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$OLD" || true)
+if [ "$WRITER" != "$DEPLOYED" ]; then
+  log "refused: the host runs $WRITER now, not the $DEPLOYED the checks read, so deploy again"
+  exit 1
+fi
 if [ -n "$COMPOSE_SHA" ] && [ "$(sha256sum compose.yaml | cut -d' ' -f1)" != "$COMPOSE_SHA" ]; then
   log "refused: compose.yaml is not the file the image trial ran"
   exit 1
@@ -190,14 +205,23 @@ if [ "$free_kb" -lt "$need_kb" ]; then
   exit 1
 fi
 
-OLD=$(sed -n 's/^POKESIM_IMAGE=//p' .env)
 BACKUP=backups/pre-local-$SHORT-$TS.tar.gz
 cp .env ".env.bak-$TS-pre-local-$SHORT"
 
 # From the stop on, a failed step puts .env back and starts the old image again, so a failed deploy
-# never leaves the app stopped without saying so.
+# never leaves the app stopped without saying so. Once the new image has started, it may have moved the
+# data to a schema the old image refuses, so a failure from then on names the backup as the second
+# argument, and the folder comes back from it before the old image starts. A rollback journal the new
+# image left would be played back into the restored database, so those go first and the backup brings
+# back its own.
 restore() {
   cp ".env.bak-$TS-pre-local-$SHORT" .env
+  if [ -n "${2:-}" ] && ! { docker compose stop -t 120 \
+      && docker run --rm -v "$DIR":/w -w /w alpine find app -name '*.sqlite-journal' -delete \
+      && docker run --rm -v "$DIR":/w -w /w alpine tar xzf "$2"; }; then
+    log "failed: $1, and the folder could not be put back from $2, so $OLD was not started"
+    exit 1
+  fi
   if docker compose up -d --wait; then
     log "failed: $1, $OLD runs again"
   else
@@ -209,19 +233,23 @@ docker compose stop -t 120 || restore "the app did not stop"
 docker run --rm -v "$DIR":/w -w /w alpine tar czf "$BACKUP" --exclude=./app/backups --exclude=./backups \
   --exclude='./backup-20260921*' --exclude='./releases/preview-*' . || restore "backup $BACKUP was not written"
 gzip -t "$BACKUP" || restore "backup $BACKUP does not pass gzip -t"
-WRITER=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$OLD" || true)
 printf '{\n  "archive": "%s",\n  "writer_image": "%s",\n  "writer_revision": "%s",\n  "image": "%s",\n  "revision": "%s"\n}\n' \
   "${BACKUP#backups/}" "$OLD" "$WRITER" "$TAG" "$SHA" > "${BACKUP%.tar.gz}.json" \
   || restore "the json beside backup $BACKUP was not written"
 sed -i "s|^POKESIM_IMAGE=.*|POKESIM_IMAGE=$TAG|" .env || restore "$TAG could not be set in .env"
-docker compose up -d --wait || restore "the new image did not become healthy, backup $BACKUP"
-docker exec "$(docker compose ps -q pokesim)" pokesim smoke --data-dir /data || restore "the smoke check failed, backup $BACKUP"
+docker compose up -d --wait || restore "the new image did not become healthy, backup $BACKUP" "$BACKUP"
+docker exec "$(docker compose ps -q pokesim)" pokesim smoke --data-dir /data \
+  || restore "the smoke check failed, backup $BACKUP" "$BACKUP"
 log "deployed, backup $BACKUP"
 
 # Keep the 5 newest backups, the json files beside them and the images that wrote them.
 ls -t backups/pre-*.tar.gz | tail -n +6 | while read -r old; do rm -f "$old" "${old%.tar.gz}.json"; done
+# Under set -e, a loop whose last command fails would stop the script after a good deploy, so no loop
+# here ends on an and-list.
 writers=$(for backup in backups/pre-*.tar.gz; do
-  [ -f "${backup%.tar.gz}.json" ] && sed -n 's/^ *"writer_image": "\(.*\)",$/\1/p' "${backup%.tar.gz}.json"
+  if [ -f "${backup%.tar.gz}.json" ]; then
+    sed -n 's/^ *"writer_image": "\(.*\)",$/\1/p' "${backup%.tar.gz}.json"
+  fi
 done)
 # A backup with no json was written by the commit the backup before it brought in.
 keep=$(previous=; ls -tr backups/pre-*.tar.gz | while read -r backup; do
@@ -239,7 +267,9 @@ docker images --format '{{.Repository}}:{{.Tag}}' | while read -r image; do
   echo "$writers" | grep -qxF "$image" && continue
   short=$(echo "${image##*:}" | sed -n 's/.*-\([0-9a-f]\{7\}\)$/\1/p')
   [ -n "$short" ] && echo "$keep" | grep -qx "$short" && continue
-  docker rmi "$image" >/dev/null && echo "deploy: removed $image"
+  if docker rmi "$image" >/dev/null; then
+    echo "deploy: removed $image"
+  fi
 done
 df -h . | tail -1
 REMOTE

@@ -37,7 +37,7 @@ A run ends at its first stall, nothing achieved for 20 game minutes, one battle 
 or a retry loop, and keeps a bundle. The gate judges each rung on its three runs together and compares
 how many stalled and the mean errors, story milestones and wasted share with the tracked
 tools/ladder/gate-baseline.json. It exits 1 on more stalls than the baseline, more errors, fewer story
-milestones, or a wasted share more than two points higher. A rung that earns more story milestones
+milestones, a wasted share more than two points higher, or a baseline rung with no save. A rung that earns more story milestones
 passes while its wasted share is at most ten points higher, and the gate lists it under past_baseline,
 since its baseline then wants a reviewed rewrite. The report also keeps each rung's share of frames under
 restock, heal and PC goals, and each gate line shows the restock share and its move from the baseline.
@@ -46,8 +46,9 @@ the three is judged, since each moves more from seed to seed than the paired lim
 
 A rung whose one problem is that wasted share plays seeds 7 to 29 on the merge base with origin/main,
 checked out in a temporary worktree with its own environment, and on the head, whose three runs stand
-for their seeds. It passes when the head wastes at most one point more on the mean of the 23 pairs, and
-keeps its baseline. A paired failure prints the pairs and the frames under each goal on both trees. With
+for their seeds. It passes when the head wastes at most one point more on the mean of the 23 pairs and
+has no more stalls or errors and no fewer story milestones on them than the merge base, and keeps its
+baseline. A paired failure prints the pairs and the frames under each goal on both trees. With
 more than five such rungs, or on main, where the merge base is the head, the screen's verdict stands.
 The story milestones are the ones the policy keeps in story order, ``progression.milestones`` in Red,
 Blue and Yellow and the checkpoints the Gold, Silver and Crystal story notes as it passes them. The gate
@@ -582,7 +583,8 @@ def pair(rungs, args, out, env, commit):
             played = list(zip(jobs, pool.map(play, jobs)))
     verdicts = {}
     for result in rungs:
-        runs = {'base': {}, 'head': {run['seed']: run for run in result['runs']}}
+        runs = {'base': {}, 'head': {run['seed']: dict(run, ladder=result['ladder'], rung=result['rung'])
+                                     for run in result['runs']}}
         for (owner, tree, seed), run in played:
             if owner is result:
                 runs[tree][seed] = run
@@ -592,8 +594,13 @@ def pair(rungs, args, out, env, commit):
         if failed:
             verdicts[name] = {'base': commit, 'passed': False, 'failed': ', '.join(failed)}
             continue
+        # Beside the waste, the head may stall, err or lose milestones on the paired seeds where the merge
+        # base does not, which the gate judges as on the screen with the merge base as the baseline.
+        means = {tree: mean_result([runs[tree][seed] for seed in GATE_PAIRED_SEEDS]) for tree in runs}
+        worse = compare([means['head']], {name: means['base']}, float('inf'), float('inf'))
         verdict = dict(paired([(seed, runs['base'][seed]['waste'], runs['head'][seed]['waste'])
-                               for seed in GATE_PAIRED_SEEDS]), base=commit)
+                               for seed in GATE_PAIRED_SEEDS]), base=commit,
+                       worse=[f'{problem} on the merge base {commit[:8]}' for problem in worse])
         if not verdict['passed']:
             verdict['goals'] = {tree: goal_frames(folder(tree, result, seed) for seed in GATE_PAIRED_SEEDS)
                                 for tree in runs}
@@ -640,6 +647,10 @@ def gate(args):
             and (not args.ladder or ladder.name in args.ladder) for seed in args.seeds]
     if not jobs:
         raise SystemExit(f'no rungs under {args.root}')
+    # A baseline rung with no save fails, so a lost save cannot pass the gate by playing fewer rungs.
+    played = {f'{ladder.name}/{rung}' for ladder, rung, _ in jobs}
+    missing = [f'{name}: in the baseline, but {args.root / name / "start.state"} is missing' for name in baseline
+               if name not in played and (not args.ladder or name.split('/')[0] in args.ladder)]
     out = args.out or args.root / 'gate' / time.strftime('%Y%m%d-%H%M%S')
     # Each rung sets its own Gen I variant and share code.
     env = {key: value for key, value in os.environ.items() if key not in ('POKESIM_GEN1_VARIANT', 'RANDOMIZER', 'ROM_PATH')}
@@ -680,6 +691,8 @@ def gate(args):
             print('\n'.join(lines), flush=True)
             if not verdict['passed']:
                 problems.append(lines[0])
+            problems += verdict.get('worse', [])
+    problems += missing
     further = past_baseline(results, baseline)
     commit = _commit()
     report = {'commit': commit, 'attempt': attempt(args.root / 'gate', commit), 'frames': args.frames,

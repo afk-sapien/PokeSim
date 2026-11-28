@@ -43,8 +43,9 @@ BEST_KEY = 'supervisor-best-v1'
 MONITOR_KEY = 'supervisor-monitor-v1'
 # Pokémon whose own bests are kept. A gift and release loop brings a new one each time.
 KEEP_MONS = 64
-# Reloads in a row without new progress before the run is reported as stalled.
+# Reloads in a row without new progress before the run is reported as stalled, and the report's title.
 STALL_RELOADS = 3
+STALL_TITLE = 'Stuck? The adventure had to reload three times'
 # The reload from which a run stuck inside the League restarts the attempt from its entry save.
 LEAGUE_RELOADS = 2
 # League attempts restarted from the entry save without a new Hall of Fame entry before the run is
@@ -205,8 +206,7 @@ class Rung:
 
 def report(why, place):
     """The title and body of the journal entry for a run that reloads for the third time in a row."""
-    return ('Stuck? The adventure had to reload three times',
-            f'{why.capitalize()} at {place} and {STALL_RELOADS - 1} reloads did not help.')
+    return STALL_TITLE, f'{why.capitalize()} at {place} and {STALL_RELOADS - 1} reloads did not help.'
 
 
 def mon_key(mon):

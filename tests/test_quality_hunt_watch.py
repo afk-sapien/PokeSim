@@ -194,6 +194,14 @@ def test_the_overnight_watch_reads_the_app_without_its_site():
     assert 'urllib' not in (ROOT / 'tools' / 'quality_hunt_watch.py').read_text(encoding='utf-8')
 
 
+def test_the_overnight_watch_lets_the_helper_check_gen2_data_it_already_has():
+    # The helper checks each game's manifest and prepares the data again when it fails, so no folder
+    # check may skip it.
+    script = (ROOT / 'tools' / 'overnight_watch.sh').read_text(encoding='utf-8')
+    assert 'tools/prepare_gen2_test_data.py .release-local/gen2-data' in script
+    assert '.release-local/gen2-data/gen2' not in script
+
+
 def test_the_overnight_watch_only_health_checks_the_hosted_app():
     """The tests and the quality hunts follow the local dev instance, so the hosted app gets one SSH call."""
     script = (ROOT / 'tools' / 'overnight_watch.sh').read_text(encoding='utf-8')

@@ -62,6 +62,12 @@ def expected_stuck(index=INDEX):
     return {row['name'] for row in rows if row.get('expect') == 'stuck'}
 
 
+def known_replays():
+    """The replays whose failure is the known baseline: the names in the scenarios folder's
+    known-failures.txt and the index rows that expect stuck. tools/nightly_tests.sh reads the same set."""
+    return known_failures(scenarios_dir() / 'known-failures.txt') | expected_stuck()
+
+
 def replay_outcomes(junit):
     """Each replay's scenario and whether it passed, failed or was skipped, from a pytest JUnit report."""
     outcomes = {}
@@ -135,13 +141,13 @@ def pushed(sha):
 
 
 def environment(roms):
-    """The environment both checks run in, with Gen II game data prepared once when none is set."""
+    """The environment both checks run in, with Gen II game data prepared when none is set. The helper
+    checks the data a run before left and prepares it again when it is stale or broken."""
     env = dict(os.environ, DATA_DIR=str(data_dir()), GEN2_CARTRIDGE_DIR=str(roms))
     if not env.get('GEN2_DATA_DIR'):
         prepared = ROOT / '.release-local' / 'gen2-data'
-        if not (prepared / 'gen2').is_dir():
-            subprocess.run([sys.executable, str(ROOT / 'tools' / 'prepare_gen2_test_data.py'), str(prepared)],
-                           cwd=ROOT, check=True)
+        subprocess.run([sys.executable, str(ROOT / 'tools' / 'prepare_gen2_test_data.py'), str(prepared)],
+                       cwd=ROOT, check=True)
         env['GEN2_DATA_DIR'] = str(prepared)
     return env
 
@@ -170,9 +176,8 @@ def main(argv=None):
     sha = head()
     if not args.no_post and not pushed(sha):
         raise SystemExit(f'{sha[:7]} is not on GitHub, so push it first or pass --no-post')
-    listed = known_failures(scenarios_dir() / 'known-failures.txt')
     stuck = expected_stuck()
-    known = listed | stuck
+    known = known_replays()
     began = time.monotonic()
     if not args.no_post:
         post(sha, 'pending', 'playing the ladder gate and the private replays')

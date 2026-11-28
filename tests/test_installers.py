@@ -2,12 +2,14 @@
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tomllib
 
 import pytest
 
+from pokesim.cartridges import supported_names
 from tools.check_container import compose_command, compose_environment
 from tools.release import installed_version
 
@@ -18,6 +20,14 @@ def test_installers_select_the_current_release():
     version = installed_version(ROOT)
     assert f'    version={version}\n' in (ROOT / 'install.sh').read_text()
     assert f"$version = '{version}'\n" in (ROOT / 'install.ps1').read_text()
+
+
+@pytest.mark.parametrize('name', ['install.sh', 'install.ps1'])
+def test_installers_name_the_pinned_release_and_every_supported_game(name):
+    text = (ROOT / name).read_text()
+    # The messages read the release from the pin, so a release bump leaves no other number behind.
+    assert re.findall(r'PokeSim \d\S*', text) == []
+    assert f'Add your own {supported_names()} ROM' in text
 
 
 @pytest.fixture
