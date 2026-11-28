@@ -626,7 +626,7 @@ class Emulator(EmulatorBase):
         if snap is not None and not snap.valid:
             log.warning("skipping autosave: game state looks glitched")
             return
-        self._write_autosave()
+        return self._write_autosave()
 
     def _reset_watch(self):
         """Restart the guard clocks from the current frame, which a reload has just rewound."""

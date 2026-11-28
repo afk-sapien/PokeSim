@@ -58,10 +58,12 @@ def test_emulator_reports_a_stall_as_a_notable_event_with_the_objective():
         snapshot=SimpleNamespace(valid=True, started=True, map_name='Safari Zone Gate'),
         policy=SimpleNamespace(details=lambda: {'objective': {'title': 'Find the secret house'}, 'recoveries': 9}),
         STALL_NOTE=Emulator.STALL_NOTE, _event=lambda event, snapshot: seen.append(event))
+    reloads = []
+    game._reload_in_place = lambda: reloads.append(game.play_clock.frames)
     game.stall.progress(0, 0)
     Emulator._check_stall(game, 600)
     Emulator._check_stall(game, 660)
-    assert len(seen) == 1 and seen[0].type == 'stall' and seen[0].notable and seen[0].priority == 4
+    assert len(seen) == 1 and seen[0].type == 'stall' and seen[0].notable and seen[0].priority == 4 and len(reloads) == 1
     assert 'Find the secret house' in seen[0].body and 'Safari Zone Gate' in seen[0].body and '9 recoveries' in seen[0].body
 
 

@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 import tomllib
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 
 import pytest
 
@@ -169,6 +169,7 @@ def gen2(tmp_path, seen, **extra):
                    battle_frame=None, STALL_NOTE=Gen2Emulator.STALL_NOTE, _event=lambda event, snapshot: seen.append(event),
                    **extra)
     playing.policy.recoveries, playing.policy.monitor_tables = 0, Tables()
+    playing._autosave = MethodType(Gen2Emulator._autosave, playing)
     return playing
 
 
@@ -185,10 +186,12 @@ def test_a_gen2_quiet_stretch_keeps_a_bundle_from_the_first_autosave_after_progr
     # The minutes are on the PlayClock. The emulator frame, still 0 here, goes back with every reload.
     assert report['quiet_game_minutes'] == 130
     assert report['has_before'] and report['party'] == [['Lapras', 40, 0, 0]] and len(seen) == 1
-    # The same stretch keeps no second bundle.
+    # Then the game is saved and loaded back, once.
+    assert playing.loads == [playing.store.latest_state()]
+    # The same stretch keeps no second bundle and loads nothing again.
     playing.play_clock.frames += MINUTE
     Gen2Emulator._check_stall(playing)
-    assert len(list(playing.store.stalls.iterdir())) == 1
+    assert len(list(playing.store.stalls.iterdir())) == 1 and len(playing.loads) == 1
 
 
 def test_a_gen2_give_up_keeps_a_bundle_before_the_rung_stands_down(tmp_path, monkeypatch):

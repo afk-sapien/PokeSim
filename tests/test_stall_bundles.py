@@ -87,10 +87,51 @@ def game(tmp_path, **extra):
     playing = SimpleNamespace(store=store, snapshot=snapshot, stall=StallWatch(game_minutes=120, real_minutes=0),
                               play_clock=SimpleNamespace(state_dict=dict, frames=0), policy=SimpleNamespace(state_dict=dict, details=dict),
                               _state_bytes=lambda: b'state', _manifest=lambda: dict(MANIFEST), _shot_png=lambda: b'png',
-                              reloads=3, frame=0, **extra)
+                              reloads=3, frame=0, loads=[], **extra)
     # Each generation's _autosave ends in the base's write, which reads the fake's own fields.
     playing._write_autosave = MethodType(EmulatorBase._write_autosave, playing)
+    playing._autosave = MethodType(Emulator._autosave, playing)
+    playing._reload_in_place = MethodType(EmulatorBase._reload_in_place, playing)
+    playing._load_state_file = playing.loads.append
     return playing
+
+
+def stalled(playing, minutes=130):
+    playing.stall.progress(0, 0)
+    playing.play_clock.frames = minutes * MINUTE
+    return playing
+
+
+def test_the_first_quiet_bundle_saves_the_game_and_loads_it_back_once_until_progress(tmp_path):
+    seen = []
+    playing = stalled(game(tmp_path, STALL_NOTE=Emulator.STALL_NOTE, _event=lambda event, snapshot: seen.append(event)))
+    Emulator._check_stall(playing, 600)
+    # The save of this moment, so the reload takes nothing back. It is never kept as the save from before the stall.
+    loaded, = playing.loads
+    assert loaded == playing.store.latest_state() and loaded.read_bytes() == b'state'
+    assert playing.store.state_path(BEFORE_STALL_CHECKPOINT) is None
+    # The bundle and the alert are as they were.
+    assert len(list(playing.store.stalls.iterdir())) == 1 and [event.type for event in seen] == ['stall']
+    # A reload is not progress, so the same quiet stretch goes on and never reloads again.
+    for minutes in (131, 300, 3000):
+        playing.play_clock.frames = minutes * MINUTE
+        Emulator._check_stall(playing, 600 + minutes * 60)
+    assert playing.loads == [loaded]
+    playing.stall.progress(3000 * MINUTE, 10 ** 6)
+    playing.play_clock.frames = 3130 * MINUTE
+    Emulator._check_stall(playing, 2 * 10 ** 6)
+    assert len(playing.loads) == 2 and playing.loads[1] != loaded
+
+
+def test_a_quiet_stretch_reloads_without_a_bundle_and_never_while_a_trade_holds_the_game(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, 'KEEP_STALL_BUNDLES', 0)
+    playing = stalled(game(tmp_path, STALL_NOTE='', _event=lambda event, snapshot: None))
+    Emulator._check_stall(playing, 600)
+    assert len(playing.loads) == 1 and not playing.store.stalls.exists()
+    held = stalled(game(tmp_path / 'held', STALL_NOTE='', _event=lambda event, snapshot: None))
+    held.store.get = lambda key: {'id': 'trade'} if key == 'trade_hold' else None
+    Emulator._check_stall(held, 600)
+    assert held.loads == [] and held.store.latest_state() is None
 
 
 def test_the_first_autosave_after_progress_is_kept_and_later_ones_leave_it_alone(tmp_path):

@@ -431,21 +431,41 @@ class EmulatorBase:
         now = time.time() if now is None else now
         stall, frames = getattr(self, 'stall', None), self.play_clock.frames
         quiet = stall.check(frames, now) if stall else None
-        if stall and stall.capture_due(frames):
+        # True once for each quiet stretch, since a reload is never progress.
+        due = stall and stall.capture_due(frames)
+        if due:
             # Kept as soon as game time says it is a stall. The alert waits for real time as well.
             capture.keep(self, 'quiet', f'no progress for {stall.game_minutes(frames)} game minutes', now)
-        if quiet is None:
+        if quiet is not None:
+            details = self.policy.details() if hasattr(self.policy, 'details') else {}
+            # Red, Blue and Yellow name the objective by its title, Gold, Silver and Crystal by its label.
+            objective = details.get('objective') or {}
+            objective = objective.get('title') or objective.get('label') or 'no objective'
+            hours = quiet[0] / 60
+            log.warning('no progress for %.1f game hours at %s: %s', hours, snapshot.map_name, objective)
+            self._event(Event('stall', f'Stuck? {hours:.0f} game hours without progress',
+                              f'Objective: {objective}. On {snapshot.map_name} after {quiet[1]} real minutes '
+                              f'and {details.get("recoveries", 0)} recoveries.{self.STALL_NOTE}',
+                              priority=HIGH, tags='warning'), snapshot)
+        if due:
+            self._reload_in_place()
+
+    def _reload_in_place(self):
+        """Save the stalled game as it stands and load that save back. A load runs the repairs, and
+        clears the policy's plans and menus, that playing on never does. It takes nothing back."""
+        # A save of the stalled game is never the one kept from before the stall.
+        self.stall.fresh = False
+        path = self._autosave()
+        if path is None:
+            log.warning('the stalled game cannot be saved now, so it is not reloaded in place')
             return
-        details = self.policy.details() if hasattr(self.policy, 'details') else {}
-        # Red, Blue and Yellow name the objective by its title, Gold, Silver and Crystal by its label.
-        objective = details.get('objective') or {}
-        objective = objective.get('title') or objective.get('label') or 'no objective'
-        hours = quiet[0] / 60
-        log.warning('no progress for %.1f game hours at %s: %s', hours, snapshot.map_name, objective)
-        self._event(Event('stall', f'Stuck? {hours:.0f} game hours without progress',
-                          f'Objective: {objective}. On {snapshot.map_name} after {quiet[1]} real minutes '
-                          f'and {details.get("recoveries", 0)} recoveries.{self.STALL_NOTE}',
-                          priority=HIGH, tags='warning'), snapshot)
+        try:
+            with trace.reason(self, 'reload'):
+                self._load_state_file(path)
+        except (ValueError, OSError, EOFError) as error:
+            log.warning('cannot reload the stalled game in place: %s', error)
+            return
+        log.warning('reloaded the stalled game in place from %s', path.name)
 
     # ---------------- commands ----------------
     def held_back(self, name):
