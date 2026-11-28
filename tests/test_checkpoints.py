@@ -1,6 +1,8 @@
+import errno
 import hashlib
 import json
 import os
+import stat
 import threading
 
 import pytest
@@ -18,22 +20,40 @@ def checkpoints(tmp_path):
     return CheckpointStore(tmp_path / 'states')
 
 
+def full_disk(monkeypatch, at):
+    """The disk fills on the ``at``-th file a write sends to disk: 1 is a checkpoint's state, 2 its manifest."""
+    real, files = os.fsync, []
+
+    def fsync(fd):
+        if stat.S_ISREG(os.fstat(fd).st_mode):
+            files.append(fd)
+            if len(files) == at:
+                raise OSError(errno.ENOSPC, 'No space left on device')
+        real(fd)
+
+    monkeypatch.setattr(os, 'fsync', fsync)
+
+
 def test_failed_manifest_write_keeps_previous_checkpoint(checkpoints, monkeypatch):
     metadata = {'policy_state': {}, 'run_memory': {}}
     previous = checkpoints.write_checkpoint(b'previous', metadata)
-    atomic_write = checkpoints.atomic_write
-
-    def fail_manifest(path, data):
-        if path.suffix == '.json':
-            raise OSError('disk full')
-        atomic_write(path, data)
-
-    monkeypatch.setattr(checkpoints, 'atomic_write', fail_manifest)
-    with pytest.raises(OSError, match='disk full'):
+    full_disk(monkeypatch, at=2)
+    with pytest.raises(OSError, match='No space'):
         checkpoints.write_checkpoint(b'new', metadata)
     assert checkpoints.autosaves() == [previous]
     assert set(checkpoints.states.iterdir()) == {previous, previous.with_suffix('.json')}
     assert checkpoints.checkpoint_metadata(previous)['policy_state'] == {}
+
+
+@pytest.mark.parametrize('at', [1, 2], ids=['state', 'manifest'])
+def test_a_full_disk_keeps_the_previous_save_under_that_name(checkpoints, monkeypatch, at):
+    previous = checkpoints.write_checkpoint(b'previous', {'policy_state': {'kept': 1}, 'run_memory': {}}, name='kept.state')
+    full_disk(monkeypatch, at)
+    with pytest.raises(OSError, match='No space'):
+        checkpoints.write_checkpoint(b'new', {'policy_state': {}, 'run_memory': {}}, name='kept.state')
+    assert sorted(path.name for path in checkpoints.states.iterdir()) == ['kept.json', 'kept.state']
+    assert previous.read_bytes() == b'previous'
+    assert checkpoints.checkpoint_metadata(previous)['policy_state'] == {'kept': 1}
 
 
 def test_unserializable_metadata_does_not_publish_state(checkpoints):

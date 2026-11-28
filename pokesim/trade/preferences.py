@@ -341,6 +341,25 @@ def blocked(mon):
     return ''
 
 
+def protected(state, dvs, shiny=False):
+    """Why the owner or the collection keeps a Pokémon out of every automatic trade, or ''.
+
+    ``state`` is the Pokémon's trade setting, ``dvs`` its five DVs and ``shiny`` a listing's own shiny
+    mark. The managed trades (gen2.trading) and the Gen II NPC trades (gen2.npc_trades) both ask it.
+    """
+    if state == KEEP:
+        return 'Set to Never trade by you'
+    if state == 'withdrawn':
+        return 'Withdrawn by you'
+    row = {'dvs': tuple(dvs)}
+    if is_perfect(row):
+        return 'Perfect DV partner preserved for the collection'
+    if shiny or is_shiny(row):
+        # Built-in automatic rule: shinies never travel automatically, even when set to Prefer to trade.
+        return 'Shiny partner preserved for the collection'
+    return ''
+
+
 def ambiguity(mon, twins):
     """Why one of several Pokémon with the same key cannot be picked out, in plain words."""
     name = mon.get('name') or 'Pokémon'
