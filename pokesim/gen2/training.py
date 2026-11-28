@@ -64,6 +64,11 @@ def field_moves(snapshot):
     return cut, surf
 
 
+def jumping(policy, snapshot):
+    """Whether the player is in a ledge jump, where the coordinates read the wall tile jumped over."""
+    return policy.nav.regions.between(snapshot, *field_moves(snapshot))
+
+
 def walk_points(policy, snapshot, mid):
     """The encounter tiles of map ``mid`` the player can reach from here.
 
@@ -487,11 +492,6 @@ def walk_goal(policy, snapshot, Goal, label, *, map_name=SITE):
     ``label`` names the walk once the grass is known. None when no encounter tile of the map can be reached.
     """
     data = policy.data
-    # A ledge jump neither starts a walk nor ends one under way, since nothing can be judged until the player
-    # lands (walk_points). A Crystal run that jumped the ledge on Route 33 with a story goal under way walked
-    # toward Route 34 for that one step, past the tree in Ilex Forest it had no Cut for (#786).
-    if getattr(policy.goal, 'key', None) != 'collection_train' and policy.nav.regions.between(snapshot, *field_moves(snapshot)):
-        return None
     mid = data.map_ids[map_name]
     points = walk_points(policy, snapshot, mid)
     if not points and snapshot.map != mid:
@@ -499,6 +499,11 @@ def walk_goal(policy, snapshot, Goal, label, *, map_name=SITE):
     if not points:
         return Goal('collection_train', 'Wait for the training map to finish loading',
                     data.maps[snapshot.map]['constant'], snapshot.x, snapshot.y)
+    # A ledge jump neither starts a walk nor ends one under way, since nothing can be judged until the player
+    # lands (walk_points). A Crystal run that jumped the ledge on Route 33 with a story goal under way walked
+    # toward Route 34 for that one step, past the tree in Ilex Forest it had no Cut for (#786).
+    if jumping(policy, snapshot) and getattr(policy.goal, 'key', None) != 'collection_train':
+        return None
     if snapshot.map == mid:
         candidates = [(policy.nav.local(snapshot, [point[:2]], policy.memory), point) for point in points
                       if 0 < abs(point[0] - snapshot.x) + abs(point[1] - snapshot.y) <= 3]

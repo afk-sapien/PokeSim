@@ -3192,10 +3192,12 @@ def test_scripted_uncatchable_shiny_does_not_retry_forbidden_escape(real_data, b
 
 @pytest.fixture
 def route_31_walk(real_data, monkeypatch):
-    """Route 31 has a reachable tile, since these snapshots carry no position to route from."""
+    """Route 31 has a reachable tile and no ledge jump is under way, since these snapshots carry no position to
+    route from."""
     from pokesim.gen2 import training
     route = real_data.map_ids['ROUTE_31']
     monkeypatch.setattr(training, 'walk_points', lambda policy, snapshot, mid: [(10, 10, 0)] if mid == route else [])
+    monkeypatch.setattr(training, 'jumping', lambda policy, snapshot: False)
 
 
 def test_first_gym_waits_for_a_level_fourteen_partner(real_data, route_31_walk):

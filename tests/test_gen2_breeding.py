@@ -18,11 +18,13 @@ def real_data(request):
 
 @pytest.fixture(autouse=True)
 def site(monkeypatch):
-    """These fakes carry no navigation, so every training site is taken as reachable (test_gen2_training_sites checks it)."""
+    """These fakes carry no navigation, so every training site is taken as reachable and no ledge jump is under
+    way (test_gen2_training_sites checks both)."""
     from pokesim.gen2 import collection, training
     monkeypatch.setattr(training, 'site', lambda policy, snapshot, project, mon: project.get('map') or training.SITE)
     monkeypatch.setattr(training, 'walk_points', lambda policy, snapshot, mid: collection.encounter_points(
         policy, snapshot, mid, 'grass'))
+    monkeypatch.setattr(training, 'jumping', lambda policy, snapshot: False)
 
 
 def mon(species, gender='Male', *, box=0, dvs=(10, 10, 10, 10, 10), level=30, **extra):
