@@ -72,6 +72,7 @@ jobs:
       - name: Run the pokecore suite without silent skips
         working-directory: packages/pokecore
         run: |
+          set -euo pipefail
           uv run pytest -rs -q -p no:cacheprovider --ignore=tests/test_real_roms.py | tee "$RUNNER_TEMP/pokecore.log"
           if grep -Eq '[0-9]+ skipped' "$RUNNER_TEMP/pokecore.log"; then echo "Unexpected skips"; exit 1; fi
       - name: Install the built pokecore wheel alone
