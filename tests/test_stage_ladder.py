@@ -384,6 +384,35 @@ def test_the_gate_takes_the_heavy_lock_and_plays_every_rung_niced_in_its_own_pro
         main(args)
 
 
+def test_the_gate_fails_and_names_a_baseline_rung_whose_save_is_missing(tmp_path, monkeypatch, capsys):
+    # A lost save must not pass the gate by playing fewer rungs, and a whole lost ladder counts too.
+    root = tmp_path / 'ladders'
+    _ladder(root, 'red', 1, '', ['badges_2'])
+    rung = {'stall': None, 'stalls': 0, 'errors': 0, 'waste': 10.0, 'restock': 5.0, 'milestones': 0, 'story': []}
+    (root / 'gate-baseline.json').write_text(json.dumps({
+        'frames': stage_ladder.GATE_FRAMES, 'seeds': [7, 8, 9],
+        'rungs': {'red/badges_2': rung, 'red/badges_4': rung, 'blue/badges_2': rung}}), encoding='utf-8')
+
+    def fake(command, env, **_):
+        at = command.index('gate-rung')
+        summary = dict(_result(command[at + 2], ladder='red'), frames=stage_ladder.GATE_FRAMES)
+        Path(command[at + 3], 'summary.json').write_text(json.dumps(summary), encoding='utf-8')
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(stage_ladder.subprocess, 'run', fake)
+    monkeypatch.setattr(stage_ladder, 'GATE_BASELINE', root / 'gate-baseline.json')
+    monkeypatch.setenv(stage_ladder.GATE_HELD, '1')
+    args = ['gate', str(tmp_path / 'roms'), str(root), '--out', str(tmp_path / 'out')]
+    assert main(args) == 1
+    out = capsys.readouterr().out
+    assert f'red/badges_4: in the baseline, but {root / "red" / "badges_4" / "start.state"} is missing' in out
+    assert f'blue/badges_2: in the baseline, but {root / "blue" / "badges_2" / "start.state"} is missing' in out
+    # A ladder left out with --ladder is not missing.
+    (root / 'red' / 'badges_4').mkdir()
+    (root / 'red' / 'badges_4' / 'start.state').write_bytes(b'state')
+    assert main(args + ['--ladder', 'red']) == 0
+
+
 def test_the_paired_judgment_passes_a_mean_rise_of_at_most_one_point():
     # The battle goal fix on blue/badges_4 moved the mean by +0.56 on 23 pairs, the first Mt. Moon
     # version red/badges_6 by +1.65. These pairs give the same means.

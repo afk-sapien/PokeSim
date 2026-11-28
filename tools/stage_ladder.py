@@ -37,7 +37,7 @@ A run ends at its first stall, nothing achieved for 20 game minutes, one battle 
 or a retry loop, and keeps a bundle. The gate judges each rung on its three runs together and compares
 how many stalled and the mean errors, story milestones and wasted share with the tracked
 tools/ladder/gate-baseline.json. It exits 1 on more stalls than the baseline, more errors, fewer story
-milestones, or a wasted share more than two points higher. A rung that earns more story milestones
+milestones, a wasted share more than two points higher, or a baseline rung with no save. A rung that earns more story milestones
 passes while its wasted share is at most ten points higher, and the gate lists it under past_baseline,
 since its baseline then wants a reviewed rewrite. The report also keeps each rung's share of frames under
 restock, heal and PC goals, and each gate line shows the restock share and its move from the baseline.
@@ -640,6 +640,10 @@ def gate(args):
             and (not args.ladder or ladder.name in args.ladder) for seed in args.seeds]
     if not jobs:
         raise SystemExit(f'no rungs under {args.root}')
+    # A baseline rung with no save fails, so a lost save cannot pass the gate by playing fewer rungs.
+    played = {f'{ladder.name}/{rung}' for ladder, rung, _ in jobs}
+    missing = [f'{name}: in the baseline, but {args.root / name / "start.state"} is missing' for name in baseline
+               if name not in played and (not args.ladder or name.split('/')[0] in args.ladder)]
     out = args.out or args.root / 'gate' / time.strftime('%Y%m%d-%H%M%S')
     # Each rung sets its own Gen I variant and share code.
     env = {key: value for key, value in os.environ.items() if key not in ('POKESIM_GEN1_VARIANT', 'RANDOMIZER', 'ROM_PATH')}
@@ -680,6 +684,7 @@ def gate(args):
             print('\n'.join(lines), flush=True)
             if not verdict['passed']:
                 problems.append(lines[0])
+    problems += missing
     further = past_baseline(results, baseline)
     commit = _commit()
     report = {'commit': commit, 'attempt': attempt(args.root / 'gate', commit), 'frames': args.frames,
