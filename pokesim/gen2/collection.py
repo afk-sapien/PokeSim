@@ -547,12 +547,13 @@ def league_trainees(policy, snapshot):
     attacks. A trainee at the lineup's lowest level joins the team and adds the depth the oracle asks
     for after a loss.
     """
-    from .training import identity
-    want = (getattr(policy, 'collection', {}).get('training') or {}).get('identity')
+    from .training import find
+    project = getattr(policy, 'collection', {}).get('training') or {}
+    want = project.get('identity')
     if want is None:
         return []
     low = league_run(policy, snapshot)[0].low or 0
-    mon = next((mon for mon in snapshot.party + snapshot.stored if identity(mon) == want), None)
+    mon = find(snapshot.party + snapshot.stored, want, project.get('species'))
     return [(mon, want)] if mon is not None and mon.level < low else []
 
 

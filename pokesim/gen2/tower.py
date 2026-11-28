@@ -10,7 +10,7 @@ from ..planning.monitor import STAND_DOWNS, STOOD_DOWN, Backoff
 from ..planning.stance import TRAVEL
 from .standdown import DECISION_FRAMES, monitor, stand_down, standing_down
 from . import kinds
-from .teams import assemble, assembled, key, no_room
+from .teams import assemble, assembled, key, keys, no_room
 
 MACHINES = ((70, 'HM04'), (57, 'HM03'), (19, 'HM02'), (94, 'TM29'), (89, 'TM26'), (188, 'TM36'), (247, 'TM30'))
 
@@ -116,7 +116,8 @@ def over_cap(snapshot, state):
     Silver Cave training toward the level can overshoot it in one battle. The receptionist then
     answers "A party POKéMON tops this level." and returns to the same level question forever.
     """
-    return any(mon.level > state['cap'] for mon in snapshot.party if key(mon) in state['team'])
+    return any(mon.level > state['cap'] for mon, value in zip(snapshot.party, keys(snapshot.party, state['team']))
+               if value in state['team'])
 
 
 def holds_lead(policy):
@@ -244,8 +245,9 @@ def journey(policy, snapshot, Goal):
         return None
     if not state.get('trained') and 'previous_training' in state:
         from .training import identity, journey as train
-        partner = next((mon for mon in snapshot.party + snapshot.stored
-                        if key(mon) in state['team'] and mon.level < state['cap']), None)
+        mons = snapshot.party + snapshot.stored
+        partner = next((mon for mon, value in zip(mons, keys(mons, state['team']))
+                        if value in state['team'] and mon.level < state['cap']), None)
         if partner:
             policy.collection['training'] = kinds.project({'identity': identity(partner), 'target': partner.species,
                 'item': None, 'species': partner.species, 'terminal': True, 'level_goal': state['cap']})

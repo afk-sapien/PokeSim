@@ -320,7 +320,9 @@ def candidate(policy, snapshot, activity):
         return Candidate('quality', HUNT_TIER, catch_value(odds) * needed, travel + per_catch * needed,
                          goal='postgame quality')
     if kind == 'train':
-        level = max((mon.level for mon in held(snapshot) if ident(mon) == activity['identity']), default=0)
+        from .training import find
+        trainee = find(held(snapshot), activity['identity'], activity.get('species'))
+        level = 0 if trainee is None else trainee.level
         steps = max(1, activity['level_goal'] - level)
         return Candidate('train', Tier.UPGRADE, values.level_step(level, activity['level_goal']),
                          TRAIN_DECISIONS * steps / 10, goal='postgame train')

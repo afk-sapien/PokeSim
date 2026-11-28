@@ -3,6 +3,7 @@ from dataclasses import replace
 
 from .menus import ChangeBox, Give, PutAway, Release, Remedy, Storage, Take, Toss
 from pokecore.gen2.ram import calculated_stats, experience_at
+from pokecore.identity import family
 from ..planning.ledger import FIELD_MOVES
 from ..planning.stance import TRAIN
 from .facts import facts
@@ -18,6 +19,23 @@ SITES = 8
 
 def identity(mon):
     return [mon.trainer_id, list(mon.dvs)]
+
+
+def find(mons, key, species=None):
+    """The first of ``mons`` with the trainer ID and DVs in ``key``, or None.
+
+    Two Pokémon can share both, as a Rhydon and an Electrode in a Crystal party did (#705). A known
+    species picks among them: that species first, then another of its evolution family, which is what
+    the Pokémon becomes when it evolves. A Pokémon of another family never answers.
+    """
+    root = None if species is None else family(species)
+    first = None
+    for mon in mons:
+        if identity(mon) == key and (root is None or family(mon.species) == root):
+            if species is None or mon.species == species:
+                return mon
+            first = first or mon
+    return first
 
 
 def wild_levels(policy):
@@ -120,7 +138,8 @@ def trainee_index(policy, snapshot):
     project = policy.collection.get('training')
     if not project:
         return None
-    return next((i for i, mon in enumerate(snapshot.party) if not mon.egg and identity(mon) == project['identity']), None)
+    mon = find((mon for mon in snapshot.party if not mon.egg), project['identity'], project.get('species'))
+    return None if mon is None else snapshot.party.index(mon)
 
 
 def trainee_slot(policy, snapshot):
@@ -346,8 +365,8 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
     demand = getattr(policy, 'demand', {})
     if (project and not project.get('terminal') and project['target'] in snapshot.owned
             and project['target'] not in prerequisites(policy, snapshot)):
-        source = next((mon for mon in snapshot.party + snapshot.stored
-                       if identity(mon) == project['identity']), None) if project.get('item') else None
+        source = find(snapshot.party + snapshot.stored, project['identity'],
+                      project.get('species')) if project.get('item') else None
         if not requested(data, snapshot, demand, project['target'], source=source):
             state['training'] = project = None
     if project and standing_down(policy, train_key(project['identity'])):
@@ -371,7 +390,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
         _, _, species, key, target, item = min(choices)
         project = state['training'] = kinds.project(
             {'identity': key, 'target': target, 'item': item, 'species': species, 'terminal': terminal_project})
-    mon = next((mon for mon in snapshot.party + snapshot.stored if identity(mon) == project['identity']), None)
+    mon = find(snapshot.party + snapshot.stored, project['identity'], project.get('species'))
     if (mon is None or mon.species != project['species'] and not project.get('terminal')
             or not project.get('item') and mon.level >= project.get('level_goal', 100)):
         state['training'] = None
@@ -492,8 +511,9 @@ def arrive(policy, snapshot):
     share = data.items['EXP_SHARE']
     mon = next((row for row in snapshot.party + snapshot.stored
                 if wanted and row.held_item == share and identity(row) == wanted), None)
+    species = None if wanted else project.get('species')
     wanted = wanted or project['identity']
-    mon = mon or next((row for row in snapshot.party + snapshot.stored if identity(row) == wanted), None)
+    mon = mon or find(snapshot.party + snapshot.stored, wanted, species)
     key = policy.goal.key
     if key == 'collection_tidy':
         item = state.get('tidy_item')
@@ -596,7 +616,7 @@ def observe(policy, snapshot):
     goal = getattr(policy, 'goal', None)
     if not project or goal is None or goal.key != 'collection_train':
         return
-    mon = next((mon for mon in snapshot.party if identity(mon) == project['identity']), None)
+    mon = find(snapshot.party, project['identity'], project.get('species'))
     if mon is None:
         return
     events = ('experience',) if mon.experience > project.get('experience', mon.experience) else ()

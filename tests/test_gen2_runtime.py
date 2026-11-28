@@ -1238,7 +1238,7 @@ def test_time_capsule_team_restoration_takes_priority_over_story(real_data):
     from pokesim.gen2.policy import Policy
     policy = Policy(real_data, seed=1, starter='cyndaquil')
     from pokesim.gen2.teams import key
-    original = SimpleNamespace(box=0, position=0, trainer_id=1, dvs=[1, 2, 3, 4],
+    original = SimpleNamespace(box=0, position=0, trainer_id=1, dvs=[1, 2, 3, 4], species=16,
                                to_dict=lambda **_: {'trainer_id': 1, 'dvs': [1, 2, 3, 4]})
     policy.collection['time_capsule_restore'] = [key(original)]
     from pokesim.gen2.policy import Goal
