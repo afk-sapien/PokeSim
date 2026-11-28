@@ -219,8 +219,8 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
-   "restock": 0.0,
-   "milestones": 0.33,
+   "restock": 6.23,
+   "milestones": 0.67,
    "story": [
     "cut"
    ]
@@ -292,9 +292,9 @@
    "stall": null,
    "stalls": 0,
    "errors": 0.0,
-   "waste": 5.31,
-   "restock": 6.67,
-   "milestones": 0.33,
+   "waste": 0.0,
+   "restock": 6.08,
+   "milestones": 0.67,
    "story": [
     "red"
    ]
@@ -564,8 +564,8 @@
    "stalls": 0,
    "errors": 0.0,
    "waste": 0.0,
-   "restock": 0.85,
-   "milestones": 0.33,
+   "restock": 3.96,
+   "milestones": 0.67,
    "story": [
     "red"
    ]
