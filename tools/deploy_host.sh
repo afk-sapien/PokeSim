@@ -23,6 +23,8 @@
 # here and needs no trial. The script stops the app, takes a cold backup of the folder, tests it with
 # gzip -t, starts the new image with up --wait and runs the smoke check. If any step from the stop on
 # fails, it puts .env back and starts the old image again, and the log says when that start failed too.
+# When the new image has started by then, the folder comes back from the backup first, since the new
+# image may have moved the data to a schema the old one refuses.
 # Beside each backup, a json file names the image that wrote its data, the one running before the
 # deploy, since only that image or a newer one can open it.
 # It keeps the 5 newest pre-*.tar.gz backups and the json files beside them, keeps the images that wrote
@@ -195,9 +197,19 @@ BACKUP=backups/pre-local-$SHORT-$TS.tar.gz
 cp .env ".env.bak-$TS-pre-local-$SHORT"
 
 # From the stop on, a failed step puts .env back and starts the old image again, so a failed deploy
-# never leaves the app stopped without saying so.
+# never leaves the app stopped without saying so. Once the new image has started, it may have moved the
+# data to a schema the old image refuses, so a failure from then on names the backup as the second
+# argument, and the folder comes back from it before the old image starts. A rollback journal the new
+# image left would be played back into the restored database, so those go first and the backup brings
+# back its own.
 restore() {
   cp ".env.bak-$TS-pre-local-$SHORT" .env
+  if [ -n "${2:-}" ] && ! { docker compose stop -t 120 \
+      && docker run --rm -v "$DIR":/w -w /w alpine find app -name '*.sqlite-journal' -delete \
+      && docker run --rm -v "$DIR":/w -w /w alpine tar xzf "$2"; }; then
+    log "failed: $1, and the folder could not be put back from $2, so $OLD was not started"
+    exit 1
+  fi
   if docker compose up -d --wait; then
     log "failed: $1, $OLD runs again"
   else
@@ -214,8 +226,9 @@ printf '{\n  "archive": "%s",\n  "writer_image": "%s",\n  "writer_revision": "%s
   "${BACKUP#backups/}" "$OLD" "$WRITER" "$TAG" "$SHA" > "${BACKUP%.tar.gz}.json" \
   || restore "the json beside backup $BACKUP was not written"
 sed -i "s|^POKESIM_IMAGE=.*|POKESIM_IMAGE=$TAG|" .env || restore "$TAG could not be set in .env"
-docker compose up -d --wait || restore "the new image did not become healthy, backup $BACKUP"
-docker exec "$(docker compose ps -q pokesim)" pokesim smoke --data-dir /data || restore "the smoke check failed, backup $BACKUP"
+docker compose up -d --wait || restore "the new image did not become healthy, backup $BACKUP" "$BACKUP"
+docker exec "$(docker compose ps -q pokesim)" pokesim smoke --data-dir /data \
+  || restore "the smoke check failed, backup $BACKUP" "$BACKUP"
 log "deployed, backup $BACKUP"
 
 # Keep the 5 newest backups, the json files beside them and the images that wrote them.

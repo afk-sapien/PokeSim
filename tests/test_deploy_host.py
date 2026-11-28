@@ -189,8 +189,10 @@ def test_an_unknown_deployed_commit_is_refused(tmp_path, repo):
 
 def deploy_to_host(tmp_path, repo, shas, **faults):
     """Deploys the main commit past every gate to a host folder here. The fake ssh runs the host step in
-    this shell, and the fake docker logs each call, writes the backup archive and fails what ``faults``
-    names: FAIL_BACKUP for the archive, FAIL_UP for every start."""
+    this shell, and the fake docker logs each call, runs the alpine tar here and fails what ``faults``
+    names: FAIL_BACKUP for the archive, FAIL_UP for every start, FAIL_HEALTH for the new image's start and
+    FAIL_SMOKE for the smoke check. The new image moves app/app.sqlite to schema 2, which the old one
+    refuses to start on, and leaves a rollback journal, as a stop in the middle of a write does."""
     import json
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir(exist_ok=True)
@@ -203,14 +205,19 @@ def deploy_to_host(tmp_path, repo, shas, **faults):
     (bin_dir / 'docker').write_text(
         '#!/bin/sh\necho "docker $*" >> "$CALLS"\n'
         'case "$1 $2" in\n  "image inspect") echo sha256:built; exit 0 ;;\n'
-        '  "compose up") [ -z "${FAIL_UP:-}" ]; exit ;;\nesac\n'
-        'if [ "$1" = run ] && echo " $* " | grep -q " alpine tar "; then\n'
-        '  [ -z "${FAIL_BACKUP:-}" ] || exit 1\n  while [ "$1" != czf ]; do shift; done\n'
-        '  echo data | gzip > "$2"\nfi\nexit 0\n')
+        '  "compose up") [ -z "${FAIL_UP:-}" ] || exit 1\n'
+        '    if grep -qx POKESIM_IMAGE=pokesim:old .env; then [ "$(cat app/app.sqlite)" = 1 ]; exit; fi\n'
+        '    echo 2 > app/app.sqlite; echo 2 > app/app.sqlite-journal; [ -z "${FAIL_HEALTH:-}" ]; exit ;;\nesac\n'
+        '[ "$1" = exec ] && [ -n "${FAIL_SMOKE:-}" ] && exit 1\n'
+        'if [ "$1" = run ] && echo " $* " | grep -q " alpine "; then\n'
+        '  [ -z "${FAIL_BACKUP:-}" ] || exit 1\n  while [ "$1" != alpine ]; do shift; done\n'
+        '  shift; exec "$@"\nfi\nexit 0\n')
     for tool in ('ssh', 'gh', 'docker'):
         (bin_dir / tool).chmod(0o755)
     host = tmp_path / 'host'
     (host / 'backups').mkdir(parents=True)
+    (host / 'app').mkdir()
+    (host / 'app' / 'app.sqlite').write_text('1\n')
     (host / 'compose.yaml').write_text('services: {}\n')
     (host / '.env').write_text('POKESIM_IMAGE=pokesim:old\n')
     sha = shas['main']
@@ -252,6 +259,18 @@ def test_a_failed_restart_says_the_app_is_down(tmp_path, repo):
     log = (host / 'deploy.log').read_text()
     assert 'pokesim:old did not come back up, the app is down' in log
     assert 'runs again' not in log and 'rolled back' not in log
+    assert (host / '.env').read_text() == 'POKESIM_IMAGE=pokesim:old\n'
+
+
+@pytest.mark.parametrize('fault', ['FAIL_HEALTH', 'FAIL_SMOKE'])
+def test_a_failure_after_the_new_image_started_brings_back_data_the_old_image_opens(tmp_path, repo, fault):
+    repo, shas = repo
+    result, host, calls = deploy_to_host(tmp_path, repo, shas, **{fault: True})
+    assert result.returncode == 1
+    assert 'pokesim:old runs again' in (host / 'deploy.log').read_text()
+    assert (host / 'app' / 'app.sqlite').read_text() == '1\n'
+    # SQLite would play the new image's journal back into the old database.
+    assert not (host / 'app' / 'app.sqlite-journal').exists()
     assert (host / '.env').read_text() == 'POKESIM_IMAGE=pokesim:old\n'
 
 
