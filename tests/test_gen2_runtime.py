@@ -1739,6 +1739,24 @@ def test_encounter_search_can_leave_and_reenter_a_disconnected_map(real_data, mo
     assert state['target']['species'] == 125
 
 
+def test_a_hunt_with_no_reachable_tile_on_another_map_waits_where_the_player_stands(real_data, monkeypatch):
+    # The wait names the player's own map and tile. The target map paired with the player's x and y
+    # named a tile there that nothing chose.
+    from pokesim.gen2 import collection
+    from pokesim.gen2.policy import Goal
+    here, there = real_data.map_ids['ROUTE_29'], real_data.map_ids['ROUTE_10_NORTH']
+    state = {'target': {'map': there, 'species': 125, 'method': 'grass', 'time': 'day'}}
+    regions = SimpleNamespace(route=lambda *args, **kwargs: None, memberships=lambda *args, **kwargs: set(),
+                              between=lambda *args: False)
+    policy = SimpleNamespace(data=real_data, collection=state, memory=None, monitor_tables={}, clock=0,
+                             nav=SimpleNamespace(regions=regions, visits={}))
+    snapshot = SimpleNamespace(map=here, x=40, y=9)
+    monkeypatch.setattr(collection, 'encounter_points', lambda *args, **kwargs: [(1, 1, None)])
+    goal = collection.hunt(policy, snapshot, Goal)
+    assert (goal.key, goal.map_name, goal.x, goal.y) == ('collection_wait', 'ROUTE_29', 40, 9)
+    assert state['target'] is None
+
+
 def test_roamer_search_steps_toward_a_neighbour_of_the_beasts_route(real_data, monkeypatch):
     from pokesim.gen2 import collection
     from pokesim.gen2.quests import roamers
