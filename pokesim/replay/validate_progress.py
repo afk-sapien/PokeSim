@@ -9,8 +9,10 @@ import time
 from types import SimpleNamespace
 
 from pokecore.emulator import Emulator as PyBoy
+from pokesim.adapter import Gen1Adapter
 from pokesim.checkpoints import CheckpointStore, open_state
 from pokesim.runtime.game_loop import Decider, GameLoop, write_gen1_options
+from pokesim.yellow import open_emulator
 
 
 def run(rom, checkpoint, frames):
@@ -22,17 +24,20 @@ def run(rom, checkpoint, frames):
     metadata = CheckpointStore(checkpoint.parent).checkpoint_metadata(checkpoint)
     if not metadata:
         raise ValueError('A checkpoint manifest is required for a faithful replay')
-    rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
+    raw = rom.read_bytes()
+    rom_sha1 = hashlib.sha1(raw).hexdigest()
     validate_runtime(metadata)
     if metadata['rom_sha1'] != rom_sha1:
         raise ValueError('ROM or emulator version does not match the checkpoint')
     if metadata['policy'] != 'strategic':
         raise ValueError('This replay requires a strategic checkpoint')
-    pb = PyBoy(str(rom), window='null', sound_emulated=False)
+    # The version and emulator a scripted run picks, which refuses Yellow under Red's game data.
+    cartridge = Gen1Adapter(raw, rom_sha1)
+    pb = open_emulator(str(rom), default=PyBoy, yellow=cartridge.yellow, window='null', sound_emulated=False)
     pb.set_emulation_speed(0)
     policy = StrategicPolicy(42)
     policy.load_state_dict(metadata['policy_state'])
-    policy.collection.version = 'blue' if rom_sha1 == 'd7037c83e1ae5b39bde3c30787637ba1d4c48ce2' else 'red'
+    policy.collection.version = cartridge.version
     memory = RunMemory.from_dict(metadata['run_memory'])
     frame = start = metadata.get('frame', 0)
     wall = time.monotonic()
