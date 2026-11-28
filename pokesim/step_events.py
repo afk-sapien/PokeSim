@@ -218,8 +218,10 @@ def observe(store, snapshot, memory, keeps=None):
             opened_bits = {bit for key, clock in clocks.items() if key in opened
                            for activity in activities(clock['choice'], clock['dojo']) if activity.key == key
                            for bit in activity.bits}
-            for guard in value.get('guards', {}).values():
-                if snapshot.map != guard['room']:
+            for name, guard in value.get('guards', {}).items():
+                # Every guard is set with a claim, and a restart clears the claims but not the guards.
+                # So a guard holds only an activity this game has claimed, never the last game's.
+                if snapshot.map != guard['room'] and name.split(':')[0] in found:
                     for bit, closed in zip(guard['bits'], guard['closed']):
                         if tuple(bit) not in opened_bits:
                             changed |= write(memory, bit, closed)

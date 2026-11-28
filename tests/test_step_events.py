@@ -133,6 +133,23 @@ def test_a_restart_lets_the_new_games_events_wait_for_their_story(world):
     assert fresh == bytes(len(memory)) and events.available(store) == {}
 
 
+def test_a_restart_leaves_the_new_games_eevee_where_its_story_put_it(world):
+    # The walking clocks carry into the new game, but the guard that kept the last game's taken Eevee hidden does not.
+    store, snapshot, memory = world
+    spec = events.activities()[0]
+    events.write(memory, spec.done[0], True)
+    events.observe(store, snapshot, memory)
+    steps(store, 5100)
+    events.observe(store, snapshot, memory)
+    events.write(memory, spec.done[0], True)
+    events.observe(store, replace(snapshot, party=(*snapshot.party, mon(species=sid(133)))), memory)
+    assert 'eevee' not in events.available(store) and store.get(events.KEY)['guards']
+    store.restart(1, {})
+    fresh = bytearray(len(memory))
+    assert events.observe(store, replace(snapshot, owned=frozenset()), fresh) == ([], False)
+    assert fresh == bytes(len(memory))
+
+
 def test_the_schema_moves_event_tickets_into_claims_rows_once(tmp_path):
     import json
     import sqlite3
