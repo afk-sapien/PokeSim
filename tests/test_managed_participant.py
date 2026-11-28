@@ -259,6 +259,27 @@ def test_startup_keeps_only_the_newest_finished_exchange_folders(tmp_path):
         store.close()
 
 
+@pytest.mark.parametrize('ending', ['release', 'abort'])
+def test_a_running_adventure_keeps_only_the_newest_finished_exchange_folders(tmp_path, ending):
+    from pokesim.runtime.participant import KEEP_FINISHED
+    store = Store(tmp_path)
+    try:
+        old = [finished(store, 'released', 1000 + index) for index in range(KEEP_FINISHED)]
+        record = committed(store)
+        if ending == 'release':
+            store.set(PREFIX + record['id'], {**record, 'phase': 'applied'})
+        else:
+            store.set(PREFIX + record['id'], {**record, 'decision': None, 'phase': 'staged'})
+        participant = Participant(SimpleNamespace(store=store, emulator=None), SimpleNamespace())
+        participant.emu = SimpleNamespace(paused=True, policy=SimpleNamespace(on_restore=lambda: None),
+                                          stuck_frame=0, preparation=None, manual_mode=False)
+        getattr(participant, ending)({'id': record['id']})
+        left = {path.name for path in (store.dir / 'interactions').iterdir()}
+        assert left == {*old[1:], record['id']}
+    finally:
+        store.close()
+
+
 def test_aborted_exchanges_lose_their_snapshot_like_released_ones(tmp_path):
     store = Store(tmp_path)
     try:

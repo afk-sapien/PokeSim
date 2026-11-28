@@ -509,10 +509,17 @@ class Store:
             rows = self.db.execute("SELECT id, shot, state FROM events WHERE ts < ?", (cutoff,)).fetchall()
             self.db.execute("DELETE FROM events WHERE ts < ?", (cutoff,))
         for row in rows:
-            for directory, name in ((self.shots, row["shot"]), (self.states, row["state"])):
-                if name and Path(name).name == name:
-                    (directory / name).unlink(missing_ok=True)
+            for path in self._attachment_files(row, ("shot", "state")):
+                path.unlink(missing_ok=True)
         return len(rows)
+
+    def _attachment_files(self, row, columns):
+        """The files ``columns`` of an event row name, with the manifest beside its save."""
+        folders = {"shot": self.shots, "state": self.states}
+        names = [(folders[column], row[column]) for column in columns]
+        if "state" in columns and row["state"]:
+            names.append((self.states, str(Path(row["state"]).with_suffix(".json"))))
+        return [directory / name for directory, name in names if name and Path(name).name == name]
 
     def prune_attachments(self, keep: int) -> int:
         """Keep the screenshot and save of only the newest ``keep`` routine entries, and return how many lost theirs.
@@ -561,7 +568,6 @@ class Store:
         """
         if keep <= 0:
             return 0
-        folders = {"shot": self.shots, "state": self.states}
         removed = 0
         while True:
             with self.lock:
@@ -573,13 +579,9 @@ class Store:
                                        (*params, min(total - keep, ATTACHMENT_ROUND))).fetchall()
                 cleared = []
                 for row in rows:
-                    names = [(folders[column], row[column]) for column in columns]
-                    if "state" in columns and row["state"]:
-                        names.append((self.states, str(Path(row["state"]).with_suffix(".json"))))
                     try:
-                        for directory, name in names:
-                            if name and Path(name).name == name:
-                                (directory / name).unlink(missing_ok=True)
+                        for path in self._attachment_files(row, columns):
+                            path.unlink(missing_ok=True)
                     except OSError:
                         log.exception("Cannot remove the attachments of event %d", row["id"])
                         continue

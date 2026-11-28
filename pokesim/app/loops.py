@@ -110,22 +110,23 @@ class Loop:
         except Exception as error:  # noqa: BLE001
             self.failures.failed(place, error)
 
-    def problem(self, now=None):
+    def problem(self, now=None, held=False):
         """Why readiness fails because of this loop, or None. A loop that never started or that
-        was told to stop is not a problem."""
+        was told to stop is not a problem. With `held` the loop waits for a lock by design, so
+        only a dead thread is."""
         thread = self.thread
         if thread is None or self.finished:
             return None
         if not thread.is_alive():
             return f'{self.name} stopped'
-        if self.stale is not None and self.heartbeat is not None:
+        if self.stale is not None and self.heartbeat is not None and not held:
             age = (self.clock() if now is None else now) - self.heartbeat
             if age > self.stale:
                 return f'{self.name} has made no progress for {age:.0f} seconds'
         return None
 
 
-def problems(loops, now=None):
+def problems(loops, now=None, held=False):
     """Readiness problems of the loops given, in order."""
-    found = (loop.problem(now) for loop in loops if loop is not None)
+    found = (loop.problem(now, held) for loop in loops if loop is not None)
     return [problem for problem in found if problem]

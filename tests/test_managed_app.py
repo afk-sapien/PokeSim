@@ -70,6 +70,30 @@ def test_health_answers_while_a_backup_holds_the_registry(client):
     assert answers['ready'].status_code == 200 and answers['ready'].json()['ok'] is True
 
 
+def test_readiness_holds_while_the_monitor_waits_behind_a_long_backup(client):
+    client, manager = client
+    monitor = manager.supervisor.monitor
+    monitor.thread = SimpleNamespace(is_alive=lambda: True)
+    # The monitor's pass waits for the registry's lock. Copying and zipping a library of 5 GB held it
+    # for 146 seconds, and starting its workers again takes about 10 seconds each.
+    monitor.heartbeat = monitor.clock() - 200
+    try:
+        with manager.maintenance, manager.registry.lock:
+            manager.suspended = True
+            try:
+                waiting = client.get('/health/ready')
+                monitor.thread = SimpleNamespace(is_alive=lambda: False)
+                dead = client.get('/health/ready')
+            finally:
+                manager.suspended = False
+        assert waiting.status_code == 200, waiting.json()
+        assert dead.json()['problems'] == ['adventure-supervisor stopped']
+        monitor.thread = SimpleNamespace(is_alive=lambda: True)
+        assert client.get('/health/ready').json()['problems'] == ['adventure-supervisor has made no progress for 200 seconds']
+    finally:
+        monitor.thread = None
+
+
 def login(client, manager):
     response = client.get('/api/v1/session')
     assert response.status_code == 200
