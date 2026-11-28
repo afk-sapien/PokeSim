@@ -46,8 +46,9 @@ the three is judged, since each moves more from seed to seed than the paired lim
 
 A rung whose one problem is that wasted share plays seeds 7 to 29 on the merge base with origin/main,
 checked out in a temporary worktree with its own environment, and on the head, whose three runs stand
-for their seeds. It passes when the head wastes at most one point more on the mean of the 23 pairs, and
-keeps its baseline. A paired failure prints the pairs and the frames under each goal on both trees. With
+for their seeds. It passes when the head wastes at most one point more on the mean of the 23 pairs and
+has no more stalls or errors and no fewer story milestones on them than the merge base, and keeps its
+baseline. A paired failure prints the pairs and the frames under each goal on both trees. With
 more than five such rungs, or on main, where the merge base is the head, the screen's verdict stands.
 The story milestones are the ones the policy keeps in story order, ``progression.milestones`` in Red,
 Blue and Yellow and the checkpoints the Gold, Silver and Crystal story notes as it passes them. The gate
@@ -582,7 +583,8 @@ def pair(rungs, args, out, env, commit):
             played = list(zip(jobs, pool.map(play, jobs)))
     verdicts = {}
     for result in rungs:
-        runs = {'base': {}, 'head': {run['seed']: run for run in result['runs']}}
+        runs = {'base': {}, 'head': {run['seed']: dict(run, ladder=result['ladder'], rung=result['rung'])
+                                     for run in result['runs']}}
         for (owner, tree, seed), run in played:
             if owner is result:
                 runs[tree][seed] = run
@@ -592,8 +594,13 @@ def pair(rungs, args, out, env, commit):
         if failed:
             verdicts[name] = {'base': commit, 'passed': False, 'failed': ', '.join(failed)}
             continue
+        # Beside the waste, the head may stall, err or lose milestones on the paired seeds where the merge
+        # base does not, which the gate judges as on the screen with the merge base as the baseline.
+        means = {tree: mean_result([runs[tree][seed] for seed in GATE_PAIRED_SEEDS]) for tree in runs}
+        worse = compare([means['head']], {name: means['base']}, float('inf'), float('inf'))
         verdict = dict(paired([(seed, runs['base'][seed]['waste'], runs['head'][seed]['waste'])
-                               for seed in GATE_PAIRED_SEEDS]), base=commit)
+                               for seed in GATE_PAIRED_SEEDS]), base=commit,
+                       worse=[f'{problem} on the merge base {commit[:8]}' for problem in worse])
         if not verdict['passed']:
             verdict['goals'] = {tree: goal_frames(folder(tree, result, seed) for seed in GATE_PAIRED_SEEDS)
                                 for tree in runs}
@@ -684,6 +691,7 @@ def gate(args):
             print('\n'.join(lines), flush=True)
             if not verdict['passed']:
                 problems.append(lines[0])
+            problems += verdict.get('worse', [])
     problems += missing
     further = past_baseline(results, baseline)
     commit = _commit()

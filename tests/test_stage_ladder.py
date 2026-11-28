@@ -461,10 +461,10 @@ def test_the_shares_of_a_run_count_restock_heal_and_pc_goals_by_their_key():
                                                                           'pc': 0.0}
 
 
-def _paired_gate(tmp_path, monkeypatch, base_waste, base='b' * 40):
+def _paired_gate(tmp_path, monkeypatch, base_waste, base='b' * 40, head_only=None):
     """A gate over red/badges_2 and red/badges_4 that plays no game. The head wastes 10% on badges_2 and
     13% on badges_4 on every seed, the merge base ``base`` ``base_waste`` on badges_4, and both baselines
-    are 10%."""
+    are 10%. ``head_only`` adds its stall or errors to the head's run on seed 12 alone."""
     root = tmp_path / 'ladders'
     _ladder(root, 'red', 1, '', ['badges_2', 'badges_4'])
     rung = {'stall': None, 'stalls': 0, 'errors': 0, 'waste': 10.0, 'restock': 5.0, 'milestones': 0, 'story': []}
@@ -479,7 +479,8 @@ def _paired_gate(tmp_path, monkeypatch, base_waste, base='b' * 40):
         tree = 'base' if command[3] == 'base-python' else 'head'
         calls.append((tree, rung, seed))
         waste = 10.0 if rung == 'badges_2' else base_waste if tree == 'base' else 13.0
-        summary = dict(_result(rung, waste, ladder='red'), frames=stage_ladder.GATE_FRAMES)
+        worse = (head_only or {}) if tree == 'head' and seed == 12 else {}
+        summary = dict(_result(rung, waste, ladder='red', story=[], **worse), frames=stage_ladder.GATE_FRAMES)
         (out / 'summary.json').write_text(json.dumps(summary), encoding='utf-8')
         frames = {'collection_hunt partner PIKACHU': 100, 'collection_hunt quality PIKACHU': 20,
                   'collection_restock': 50 if tree == 'base' else 80}
@@ -517,6 +518,17 @@ def test_a_rung_up_on_waste_alone_passes_on_paired_seeds_when_the_merge_base_was
     assert ('red/badges_4: +0.50 points wasted on the mean of 23 paired seeds against the merge base bbbbbbbb, '
             'standard error 0.00, median +0.50, within the 1.0 point limit') in out
     assert 'frames under each goal' not in out
+
+
+@pytest.mark.parametrize('head_only, problem', [
+    ({'stall': 'quiet'}, 'red/badges_4: a new stall, quiet, 1 of 23 seeds, 0 before'),
+    ({'errors': 1}, 'red/badges_4: 0.04 errors, 0 before')])
+def test_a_stall_or_error_the_head_alone_has_on_the_paired_seeds_fails_the_gate(tmp_path, monkeypatch, head_only,
+                                                                                 problem):
+    # The merge base wastes nearly as much, so the waste passes, and seed 12 on the head alone goes worse.
+    code, _, report = _paired_gate(tmp_path, monkeypatch, base_waste=12.5, head_only=head_only)
+    assert report['paired']['red/badges_4']['mean'] == 0.5
+    assert code == 1 and report['problems'] == [f'{problem} on the merge base bbbbbbbb']
 
 
 def test_a_paired_failure_prints_the_pairs_and_the_frames_under_each_goal(tmp_path, monkeypatch, capsys):
