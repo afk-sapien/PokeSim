@@ -32,7 +32,8 @@ def test_contest_only_species_are_available(real_data):
     assert only
     table = rows(real_data)
     assert {species: table[species]['status'] for species in only} == dict.fromkeys(only, 'available')
-    assert all('Bug-Catching Contest' in table[species]['reason'] for species in only)
+    assert all(not source['planned'] for species in only for source in table[species]['sources']
+               if source['kind'] == 'contest')
 
 
 def test_unown_is_available(real_data):

@@ -70,7 +70,7 @@ SOURCES = [
            planned=True),
     *_rows('walking_reset', [185, 143], 'Walking reset', 'The one-time encounter returns after a walk', planned=True),
     *_rows('contest', [10, 11, 12, 13, 14, 15, 46, 48, 123, 127], 'Bug-Catching Contest',
-           'National Park, Tuesday, Thursday and Saturday', planned=True),
+           'National Park, Tuesday, Thursday and Saturday'),
     *_rows('swarm', [206], 'Swarm', 'Dark Cave, called in by a phone contact', planned=True),
     *_rows('swarm', [193], 'Swarm', 'Route 35, called in by a phone contact', planned=True),
     *_rows('swarm', [211], 'Swarm', 'Route 32 fishing, called in by a phone contact', planned=True),
