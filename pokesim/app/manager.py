@@ -1044,7 +1044,9 @@ def create_app(manager, shutdown=lambda: None):
     @app.get('/api/v1/cartridges')
     def cartridges(request: Request):
         from ..cartridges import supported_names
-        return {'slots': manager.assets.cartridge_slots(shelf(request)), 'supported': supported_names()}
+        # The new adventure form reads its cartridges here, and with them the server's default for animations.
+        return {'slots': manager.assets.cartridge_slots(shelf(request)), 'supported': supported_names(),
+                'battle_animations': config.BATTLE_ANIMATIONS}
 
     @app.post('/api/v1/cartridges')
     async def upload_cartridge(request: Request, slot: str | None = None):
@@ -1072,6 +1074,7 @@ def create_app(manager, shutdown=lambda: None):
             'extra_store_items': data.get('extra_store_items', True),
             **({'fair_wild_dvs': data['fair_wild_dvs']} if 'fair_wild_dvs' in data else {}),
             **({'nicknames': data['nicknames']} if 'nicknames' in data else {}),
+            'battle_animations': data.get('battle_animations', config.BATTLE_ANIMATIONS),
             **({'randomizer': data['randomizer']} if data.get('randomizer') else {}),
             'legendary_return_steps': data.get('legendary_return_steps', 1000000),
             'event_return_steps': data.get('event_return_steps', 100000),
