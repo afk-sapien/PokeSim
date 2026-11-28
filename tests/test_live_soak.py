@@ -806,3 +806,23 @@ def test_an_environment_build_retries_offline_only_after_a_network_error(monkeyp
     assert bool(lines) is (tries == 2)
     if lines:
         assert 'retrying offline' in lines[0] and 'Failed to fetch' in lines[0]
+
+
+def test_the_staged_runner_gets_relative_cartridge_and_data_folders_from_the_callers_folder(monkeypatch, tmp_path):
+    """The runner starts inside the staged tree, so a relative folder must already point at the caller's."""
+    folder, calls = tmp_path / 'candidate', []
+    (folder / 'tree').mkdir(parents=True)
+    (folder / 'results.json').write_text('[]')
+
+    def run(command, cwd, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(live_soak, 'sync_environment', lambda tree, env, log: None)
+    monkeypatch.setattr(live_soak.subprocess, 'run', run)
+    monkeypatch.chdir(tmp_path)
+    args = SimpleNamespace(nice=10, roms=live_soak.Path('roms'), game_data=live_soak.Path('reference'), frames=1,
+                           parallel=1)
+    live_soak.play_staged(folder, {}, 'smoke-runner', tmp_path / 'inputs', args)
+    command = calls[0]
+    assert command[command.index('smoke-runner') + 3] == str(tmp_path / 'roms')
+    assert command[command.index('--game-data') + 1] == str(tmp_path / 'reference')

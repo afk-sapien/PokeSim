@@ -1372,13 +1372,14 @@ def stage(sha, folder, inputs, manifest):
 
 
 def play_staged(folder, env, inner, inputs, args):
-    """Sync a staged commit's environment and play the inputs there with the `inner` runner command."""
+    """Sync a staged commit's environment and play the inputs there with the `inner` runner command.
+    The runner starts in the staged tree, so the caller's folders go to it resolved."""
     sync_environment(folder / 'tree', env, lambda line: print(line, flush=True))
     command = ['nice', '-n', str(args.nice), 'uv', 'run', '--locked', '--no-dev', '--no-sync', '--project',
                str(folder / 'tree'), 'python', str(Path(__file__).resolve()), inner, str(inputs), str(folder),
-               str(args.roms), '--frames', str(args.frames), '--parallel', str(args.parallel)]
+               str(args.roms.resolve()), '--frames', str(args.frames), '--parallel', str(args.parallel)]
     if args.game_data:
-        command += ['--game-data', str(args.game_data)]
+        command += ['--game-data', str(args.game_data.resolve())]
     with open(folder / 'runner.log', 'w', encoding='utf-8') as log:
         code = subprocess.run(command, env=env, cwd=folder / 'tree', stdout=log, stderr=subprocess.STDOUT,
                               check=False).returncode
