@@ -17,6 +17,7 @@ from ..ram import read_snapshot
 from ..screen import Screen
 from ..shortcuts import ShortcutRunner, gen1_ui
 from pokecore.identity import dex_of, is_legacy, legacy, same
+from ..trade import PREPARATION_FRAMES
 from ..trade.preferences import KEEP, TWIN, answers, apply, base, identity, merged, stamped, tagged
 from ..web.pokedex import live_status
 
@@ -86,7 +87,7 @@ def selection(snapshot, preferences, key, copies=None, slot=None):
     return matches[0]
 
 
-def begin(emu, trade_key, transaction_id, max_frames=108000, manual=False, protect=(), wished=()):
+def begin(emu, trade_key, transaction_id, max_frames=PREPARATION_FRAMES, manual=False, protect=(), wished=()):
     previous = emu.store.get(KEY)
     if previous and previous.get('id') == transaction_id:
         if previous.get('trade_key') != trade_key:
@@ -164,7 +165,7 @@ def begin_restore(emu, prepared):
     state = {'id': prepared['id'], 'trade_key': holder, 'selected_key': holder,
              'received_key': received[0]['trade_key'], 'copies': len(answering(snapshot, preferences, holder)),
              'restore': True, 'phase': 'storage' if snapshot.map in CENTERS else 'travelling', 'started_at': time.time(),
-             'elapsed_frames': 0, 'max_frames': 108000, 'party_slot': None, 'protect': [], 'wished': []}
+             'elapsed_frames': 0, 'max_frames': PREPARATION_FRAMES, 'party_slot': None, 'protect': [], 'wished': []}
     emu.store.set(KEY, state)
     emu.preparation = Preparation(emu, state)
     emu.input_epoch += 1
