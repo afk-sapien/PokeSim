@@ -44,7 +44,7 @@ from .ledger import fighters, league_treatment
 from ..planning.arbiter import Candidate, Tier
 from ..planning.stance import FLEE_TRIES, STORY
 from .awareness import ActionWatch
-from .team import (held_requests, potential, readiness, release_note, requested_slots,
+from .team import (held_requests, next_opponent, potential, readiness, release_note, requested_slots,
                    reserve_to_deposit, storage_headroom, team_keys)
 from ..pcvalue import VisitTeam
 from ..screen import Screen, W_PLAYER_MON_NUMBER
@@ -673,7 +673,8 @@ class StrategicPolicy(Policy):
             self.goal = choice.offer(heal, choice.errand_candidate('heal', 'heal'), site='heal_latch')
         # The step ends with this choice's writes unless the overworld decision goes on weighing it.
         self.choice = self.committing = choice
-        token =(s.badges, tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
+        # The opponent covers the badges, the League room and its defeat flag, as readiness reads them.
+        token = (next_opponent(s), tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
         if s.party and token != self.assessment_token:
             self.readiness = readiness(s)
             self.assessment_token = token
