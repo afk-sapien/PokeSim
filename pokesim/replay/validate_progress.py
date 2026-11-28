@@ -9,7 +9,7 @@ import time
 from types import SimpleNamespace
 
 from pokecore.emulator import Emulator as PyBoy
-from pokesim.checkpoints import CheckpointStore
+from pokesim.checkpoints import CheckpointStore, open_state
 from pokesim.runtime.game_loop import Decider, GameLoop, write_gen1_options
 
 
@@ -53,7 +53,7 @@ def run(rom, checkpoint, frames):
 
     loop = GameLoop(host, Decider(lambda: host.frame, write_gen1_options), tick)
     try:
-        with checkpoint.open('rb') as stream:
+        with open_state(checkpoint) as stream:
             pb.load_state(stream)
         first = previous = read_snapshot(pb.memory, frame)
         while frame - start < frames:
