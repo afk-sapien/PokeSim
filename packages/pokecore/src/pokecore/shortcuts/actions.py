@@ -583,11 +583,13 @@ class ReorderParty(GameShortcut):
         if max(self.first, self.second) >= len(party):
             raise Abort('Party slot is unavailable. No input sent.', cleanup=False)
         self.ids = identity(party[self.first]), identity(party[self.second])
+        # Two catches can share the identity and differ in level or moves, so the swap compares whole records.
+        self.records = party[self.first], party[self.second]
 
     def effect(self, obs):
         party = self.party(obs)
-        return (max(self.first, self.second) < len(party) and identity(party[self.first]) == self.ids[1]
-                and identity(party[self.second]) == self.ids[0])
+        return (max(self.first, self.second) < len(party) and party[self.first] == self.records[1]
+                and party[self.second] == self.records[0])
 
     def success_outcome(self):
         return 'Swapped the two party members.'

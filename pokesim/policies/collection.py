@@ -637,8 +637,9 @@ class Collection:
         else:
             target = project.get('species') if project.get('repeat') else None
         if target == species and snapshot is not None and dvs is not None and not improves(snapshot, species, dvs, rated, watch):
-            if dex(species) in getattr(self, 'returned_legendaries', ()) and snapshot.in_battle:
+            if dex(species) in getattr(self, 'returned_legendaries', ()) and snapshot.in_battle == 1:
                 # Close the return so neither the plan nor the retry timers bring back a refused legendary.
+                # A trainer's copy is not the return, so only a wild battle's refusal closes it.
                 self.declined_returns = getattr(self, 'declined_returns', set()) | {dex(species)}
                 self.returned_legendaries = set(self.returned_legendaries) - {dex(species)}
             return None

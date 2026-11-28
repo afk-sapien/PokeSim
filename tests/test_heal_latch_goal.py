@@ -35,6 +35,19 @@ def test_the_league_keeps_its_own_goal_while_the_heal_is_latched():
     assert step(policy, s) != 'heal'
 
 
+def test_the_league_lead_is_picked_against_the_next_elite_four_member():
+    # Beating Lorelei leaves the party, the bag and the badges as they were, so the lead still faced her
+    # Lapras in Bruno's room.
+    from test_strategy import flags
+    party = (mon(hp=100, max_hp=100),)
+    policy = StrategicPolicy(7)
+    step(policy, snap(map=MAPS['LORELEIS_ROOM'], x=5, y=5, frame=1000, badges=255, party=party))
+    assert policy.readiness['opponent'] == 'Lorelei'
+    step(policy, snap(map=MAPS['LORELEIS_ROOM'], x=5, y=5, frame=1060, badges=255, party=party,
+                      event_flags=flags('EVENT_BEAT_LORELEIS_ROOM_TRAINER_0')))
+    assert policy.readiness['opponent'] == 'Bruno'
+
+
 def test_an_item_ball_a_step_away_comes_before_the_heal(monkeypatch):
     # Giovanni's battle ends one step from the Silph Scope and latches a heal. Healing first took the run
     # to Celadon and back down the hideout for the Scope.

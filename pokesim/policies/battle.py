@@ -111,7 +111,7 @@ def lose_attempt(snapshot, enemy, active, slot):
                if i != active and mon.hp > 0 and not foe_never_attacks(enemy, mon)]
     if targets:
         return Decision("switch", max(targets)[1], reason="Nobody can act, so let the foe end an attempt that cannot be won")
-    return Decision("fight", slot, reason=HOPELESS)
+    return Decision("fight", slot, reason=HOPELESS, hopeless=True)
 
 
 def damage_division_safe(move_id, attacker, defender):
@@ -432,6 +432,8 @@ class Decision:
     stance: bool = False
     # A run from a catch nobody can weaken, which leaves its species for a new move, member or ball.
     defer: bool = False
+    # A battle nobody here can end (lose_attempt), so only an earlier save ends it.
+    hopeless: bool = False
 
 
 # Why the battle stance runs, by goal kind, with the shiny case first.
@@ -477,26 +479,28 @@ def choose_battle(snapshot, me, enemy, active, used_status=(), can_switch=True, 
     known = SPECIES.get(enemy.species, {})
     missing_species = known.get("dex") not in snapshot.owned
     required = required_move in known.get('hms', []) if required_move else False
-    useful = useful_capture(snapshot, enemy.species, enemy.level, required_move, keeps)
+    # Only a wild battle ends in a catch, so a trainer's Pokémon asks neither the catch rules nor the
+    # reserve, whose refusal of a missing entry asks the owner for room (boxes_full).
+    wild = snapshot.in_battle == 1 and snapshot.battle_type == 0
+    useful = wild and useful_capture(snapshot, enemy.species, enemy.level, required_move, keeps)
     safe = me.hp > incoming * 1.5 and not me.status
     balls = [(i, item) for item in BALLS for i, (bag_item, qty) in enumerate(snapshot.items) if bag_item == item and qty > 0]
     legendary = known.get('dex') in (144,145,146,150)
     allowed_capture = capture_species is None or enemy.species == capture_species or legendary or shiny
     useful = useful and allowed_capture
-    collection_target = (collect_missing or legendary) and missing_species and allowed_capture
-    repeat_target = enemy.species == repeat_species and not missing_species
+    collection_target = wild and (collect_missing or legendary) and missing_species and allowed_capture
+    repeat_target = wild and enemy.species == repeat_species and not missing_species
     if getattr(snapshot, 'switch_box', None) is not None and not (missing_species or required or shiny or legendary):
         # The active box's last slot is kept for a shiny or a missing entry until the PC visit that
         # switches boxes (Snapshot.switch_box). A better copy waits for the next box, a legendary does not.
         useful = repeat_target = False
-    collection_target |= repeat_target or shiny
+    collection_target |= repeat_target or wild and shiny
     if ((collection_target and not repeat_target or useful and (missing_species or required))
             and reserve is not None and not reserve()):
         collection_target = useful = False
     from .ledger import LEGENDARY_THROWS, battle_ledger, catch_spent, legendary_retreat
     capture_limit = float('inf') if shiny else LEGENDARY_THROWS if legendary else 5 if repeat_target else 20
     master = next((i for i,(item,qty) in enumerate(snapshot.items) if item==ITEMS['MASTER_BALL'] and qty),None)
-    wild = snapshot.in_battle == 1 and snapshot.battle_type == 0
     # A frozen battler never acts, so the catch rules below give it no move to use.
     frozen = me.status & FROZEN
     exhausted = catch_spent(snapshot, catch_attempts, capture_limit)

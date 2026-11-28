@@ -1,7 +1,7 @@
 """An objective-driven policy that observes the game after every action."""
 import random
 from collections import Counter
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from functools import partial
 
 from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositItem, DepositPokemon, FieldMove, LearnMove,
@@ -11,10 +11,10 @@ from pokecore.shortcuts import (BuyItem, ChangeBox, ChooseMove, DepositItem, Dep
 from ..runtime.policy import Action, Policy
 from ..planning.ledger import box_wanted
 from pokecore.textmatch import ScreenText
-from .battle import (BALLS, HOPELESS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
+from .battle import (BALLS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
                      enemy_dvs, field_cure, healing_item, hurts, needs_healing, ranked_moves, read_battler, replacement_slot,
                      useful_capture)
-from .navigation import DIRS, FACING, PAIR_COLLISIONS, WATER_TILESETS, Navigator
+from .navigation import DIRS, FACING, PAIR_COLLISIONS, WATER_TILES, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
@@ -44,7 +44,7 @@ from .ledger import fighters, league_treatment
 from ..planning.arbiter import Candidate, Tier
 from ..planning.stance import FLEE_TRIES, STORY
 from .awareness import ActionWatch
-from .team import (held_requests, potential, readiness, release_note, requested_slots,
+from .team import (held_requests, next_opponent, potential, readiness, release_note, requested_slots,
                    reserve_to_deposit, storage_headroom, team_keys)
 from ..pcvalue import VisitTeam
 from ..screen import Screen, W_PLAYER_MON_NUMBER
@@ -72,7 +72,6 @@ HM_ITEM_MOVES = {ITEMS[f'HM0{number}']: move for number, move in zip(range(1, 6)
 # and makes the player walk on entering any other map.
 BIKE_TILESETS = frozenset(('OVERWORLD', 'FOREST', 'UNDERGROUND', 'SHIP_PORT', 'CAVERN'))
 BIKE_MAPS = frozenset((MAPS['ROUTE_23'], MAPS['INDIGO_PLATEAU']))
-WATER_TILES = (0x14, 0x32, 0x48)
 # Getting on costs about what the Bicycle saves over this many steps, so a shorter walk goes on foot.
 MOUNT_STEPS = 20
 # Victory Road's southern entrance, on Route 23.
@@ -276,7 +275,7 @@ class StrategicPolicy(Policy):
     def hopeless_battle(self, snapshot):
         """The battle under way cannot end, so waiting out the battle timeout gains nothing. The battle
         decision already found it, so the snapshot is not read again."""
-        return bool(self.intent and self.intent.reason == HOPELESS)
+        return bool(self.intent and self.intent.hopeless)
 
     def on_restore(self):
         self.collection.last_frame = None
@@ -673,7 +672,8 @@ class StrategicPolicy(Policy):
             self.goal = choice.offer(heal, choice.errand_candidate('heal', 'heal'), site='heal_latch')
         # The step ends with this choice's writes unless the overworld decision goes on weighing it.
         self.choice = self.committing = choice
-        token =(s.badges, tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
+        # The opponent covers the badges, the League room and its defeat flag, as readiness reads them.
+        token = (next_opponent(s), tuple((p.species, p.level, p.hp, p.status, p.moves, p.pp) for p in s.party), s.items)
         if s.party and token != self.assessment_token:
             self.readiness = readiness(s)
             self.assessment_token = token
@@ -1984,8 +1984,10 @@ class StrategicPolicy(Policy):
             if actions:
                 if not MOVES.get(me.moves[slot], {}).get('power'):
                     self.used_status.add(me.moves[slot])
-                if intent is None or intent.kind == 'fight':
+                if intent is None:
                     self.intent = Decision('fight', slot, reason=reason)
+                elif intent.kind == 'fight':
+                    self.intent = replace(intent, index=slot, reason=reason)
                 return actions
         self.intent = None
         return self._run(s) or wait()

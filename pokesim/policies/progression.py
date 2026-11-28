@@ -347,7 +347,8 @@ LAPRAS_DEX = 131
 # The key items whose use is over once these facts hold: event flags set, and Pokédex numbers owned.
 # Nothing else in the game reads them after that. Every other key item keeps a use: an HM teaches
 # again, the Bicycle, the rods, the Coin Case, the Itemfinder and the Exp. All have no last use, the
-# Silph Scope still unmasks the Pokémon Tower ghosts for a catch, and the lab revives a fossil at any time.
+# Silph Scope still unmasks the Pokémon Tower ghosts for a catch, the lab revives a fossil at any time,
+# and the Poké Flute wakes the Route 12 Snorlax each walking return puts back (step_events).
 SPENT_KEY_ITEMS = {
     # Once the S.S. Anne has sailed, the sailor at the dock turns everyone back, ticket or not.
     'S_S_TICKET': (('EVENT_SS_ANNE_LEFT',), ()),
@@ -357,8 +358,6 @@ SPENT_KEY_ITEMS = {
     'CARD_KEY': (('EVENT_BEAT_SILPH_CO_GIOVANNI',), (LAPRAS_DEX,)),
     # Only the Cinnabar Gym's door reads it.
     'SECRET_KEY': (('EVENT_BEAT_BLAINE',), ()),
-    # Only the two sleeping Snorlax read it.
-    'POKE_FLUTE': (('EVENT_BEAT_ROUTE12_SNORLAX', 'EVENT_BEAT_ROUTE16_SNORLAX'), ()),
 }
 
 

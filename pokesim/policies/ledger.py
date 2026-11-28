@@ -131,8 +131,9 @@ def battle_room(party):
 
     HP is the party's total HP above HEAL_LINE of its total, and none while any Pokémon has fainted or
     has a status. PP is the fewest uses of attacks left above either floor: the whole party's
-    (``PP_LINE`` of its total, at least ``PP_FLOOR``), and the lead's own ``LEAD_PP`` when it has an
-    attack. Either at zero means the heal walk is due.
+    (``PP_LINE`` of its total, at least ``PP_FLOOR`` but never more than that total, so a heal always
+    clears it and a party with no attack is never sent for PP), and the lead's own ``LEAD_PP`` when it
+    has an attack. Either at zero means the heal walk is due.
     """
     def power(move):
         return MOVES.get(move, {}).get('power', 0)
@@ -142,7 +143,7 @@ def battle_room(party):
         0, sum(mon.hp for mon in party) - math.ceil(sum(mon.max_hp for mon in party) * HEAL_LINE) + 1)
     available = sum(uses for mon in party if mon.hp for move, uses in zip(mon.moves, mon.pp) if power(move))
     maximum = sum(MOVES.get(move, {}).get('pp', 0) for mon in party if mon.hp for move in mon.moves if power(move))
-    room = available - math.ceil(max(PP_FLOOR, maximum * PP_LINE)) + 1
+    room = available - math.ceil(min(maximum, max(PP_FLOOR, maximum * PP_LINE))) + 1
     lead = party[0]
     if any(power(move) for move in lead.moves):
         room = min(room, sum(uses for move, uses in zip(lead.moves, lead.pp) if power(move)) - LEAD_PP + 1)

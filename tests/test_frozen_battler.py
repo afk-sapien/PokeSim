@@ -122,6 +122,21 @@ def test_a_party_that_cannot_act_hands_over_to_someone_the_foe_will_knock_out():
     assert choose_battle(alone, muk, lorelei_dewgong(), 0, can_switch=False).reason == HOPELESS
 
 
+def test_a_hopeless_battle_still_says_so_once_its_move_is_under_way():
+    # The emulator asks hopeless_battle after the policy has started the move, and a fresh decision
+    # that only named the move made it wait out the battle timeout against Lance's Dragonair.
+    from pokesim.policies.strategic import StrategicPolicy
+    from shortcut_fakes import PRESS, Recorder
+    muk = mon(status=FROZEN, types=(3, 3))
+    alone = snap(party=(muk, mon(hp=0)), in_battle=2, items=())
+    policy = StrategicPolicy(7)
+    Recorder.on(policy)
+    policy.intent = choose_battle(alone, muk, lorelei_dewgong(), 0, can_switch=False)
+    assert policy.hopeless_battle(alone)
+    assert policy._fight(alone, muk, lorelei_dewgong()) == [PRESS]
+    assert policy.intent.kind == 'fight' and policy.hopeless_battle(alone)
+
+
 def test_a_hopeless_battle_is_reloaded_without_waiting_for_the_timeout():
     from types import SimpleNamespace
     from pokesim.emulator import Emulator

@@ -35,6 +35,22 @@ def test_reward_retries_soon_but_success_keeps_gifts_spaced(monkeypatch, deliver
     assert (emu._reward_frame, emu._reward_wait) == (100, interval)
 
 
+def test_a_new_game_spaces_its_gifts_on_its_own_clock(tmp_path):
+    # The new game's PlayClock starts at zero, so the last game's gift frame held back every gift for as long as that game ran.
+    from pokesim.store import Store
+    store = Store(tmp_path)
+    try:
+        emu = Emulator.__new__(Emulator)
+        emu.store, emu.pb, emu.policy = store, Mock(), Mock()
+        emu._boot, emu._reset_transient = Mock(), Mock()
+        emu.play_clock = PlayClock({'frames': 9_000_000})
+        schedule(emu, {'phase': 'complete'})
+        emu._start_new_game()
+        assert reward_due(emu)
+    finally:
+        store.close()
+
+
 def test_gift_pacing_counts_frames_not_wall_seconds(monkeypatch):
     """An uncapped run must not starve gifts, and a reload neither restarts the spacing nor ends it."""
     emu = Emulator.__new__(Emulator)
