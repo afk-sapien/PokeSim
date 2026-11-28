@@ -11,8 +11,8 @@
 #   nightly <date> <sha7>: <N> passed, only the known <K> failed
 #   nightly <date> <sha7>: <N> passed, none failed
 #   nightly <date> <sha7>: NEW FAILURES <test ids>
-# A known failure is a scenario replay named in known-failures.txt in the scenarios folder, the same
-# baseline tools/preflight.py reads.
+# A known failure is a scenario replay in the baseline tools/preflight.py reads, named in
+# known-failures.txt in the scenarios folder or in a scenarios/index.toml row that expects stuck.
 # Private settings come from the file POKESIM_NIGHTLY_ENV names, by default operations/nightly.env in
 # the data folder of the checkout that runs install:
 #   POKESIM_NIGHTLY_ROMS        red.gb, blue.gb, yellow.gb and the Gen II cartridges
@@ -183,13 +183,12 @@ EOF
     esac
     [ -n "$summary" ] || broke "$ROOT" "pytest printed no summary"
     [ "$rc" -eq 0 ] || [ ${#bad[@]} -gt 0 ] || broke "$ROOT" "pytest failed but named no test"
+    [ -f "$SCENARIOS/known-failures.txt" ] \
+      || echo "-- no known-failures.txt in the scenarios folder, so only the index rows that expect stuck are known"
+    list=$(uv run -q --locked python -c 'from tools import preflight
+print(*sorted(preflight.known_replays()), sep="\n")') || broke "$ROOT" "could not read the known failures"
     known=()
-    baseline=$SCENARIOS/known-failures.txt
-    if [ -f "$baseline" ]; then
-      mapfile -t known < <(sed -E 's/#.*//; s/^[[:space:]]+//; s/[[:space:]]+$//' "$baseline" | grep -v '^$')
-    else
-      echo "-- no known-failures.txt in the scenarios folder, so every failure counts as new"
-    fi
+    [ -z "$list" ] || mapfile -t known <<<"$list"
     replay='tests/test_scenarios.py::test_the_player_gets_going_again['
     new=() seen=()
     for id in "${bad[@]}"; do
