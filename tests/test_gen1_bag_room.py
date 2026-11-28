@@ -17,7 +17,7 @@ from test_strategy import flags
 TICKET, CARD_KEY, FLUTE = ITEMS['S_S_TICKET'], ITEMS['CARD_KEY'], ITEMS['POKE_FLUTE']
 SPENT_IDS = {ITEMS[name] for name in SPENT_KEY_ITEMS}
 FILLER = tuple((item, 1) for item in range(1, 100) if item in ITEMS.values() and item not in SPENT_IDS
-               and item not in (ITEMS['BICYCLE'], ITEMS['BIKE_VOUCHER'], ITEMS['HM02']))
+               and item not in (ITEMS['BICYCLE'], ITEMS['BIKE_VOUCHER'], ITEMS['HM02'], FLUTE))
 SAILED = flags('EVENT_SS_ANNE_LEFT')
 
 
@@ -34,10 +34,11 @@ def test_a_key_item_is_spent_only_once_nothing_reads_it_again():
     beaten = flags('EVENT_BEAT_SILPH_CO_GIOVANNI')
     assert spent_items(snap(items=bag(CARD_KEY), event_flags=beaten)) == ()
     assert spent_items(snap(items=bag(CARD_KEY), event_flags=beaten, owned=frozenset({1, LAPRAS_DEX}))) == (CARD_KEY,)
-    # The flute wakes two Snorlax.
-    assert spent_items(snap(items=bag(FLUTE), event_flags=flags('EVENT_BEAT_ROUTE12_SNORLAX'))) == ()
-    assert spent_items(snap(items=bag(FLUTE), event_flags=flags('EVENT_BEAT_ROUTE12_SNORLAX',
-                                                                     'EVENT_BEAT_ROUTE16_SNORLAX'))) == (FLUTE,)
+    # A walking return puts the Route 12 Snorlax back on the road after both are beaten, and only the
+    # flute wakes it, so the flute is never stored.
+    both_snorlax = flags('EVENT_BEAT_ROUTE12_SNORLAX', 'EVENT_BEAT_ROUTE16_SNORLAX')
+    assert spent_items(snap(items=bag(FLUTE), event_flags=both_snorlax)) == ()
+    assert bicycle_goal(snap(items=bag(ITEMS['BIKE_VOUCHER'], FLUTE), event_flags=both_snorlax)) is None
     # Table order, and an item with a use left (the Silph Scope, an HM, the Bicycle) is never in it.
     both = flags('EVENT_SS_ANNE_LEFT', 'EVENT_BEAT_SILPH_CO_GIOVANNI')
     owned = frozenset({1, LAPRAS_DEX})
