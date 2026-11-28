@@ -467,8 +467,8 @@ def test_switch_in_battle_and_in_the_field():
     assert game.kind == 'overworld'
 
 
-def test_reorder_party_swaps_two_slots():
-    game = Game(party=[mon('ONE'), mon('TWO'), mon('THREE')])
+def reorder_game(*party):
+    game = Game(party=list(party))
     game.choices[('pause', 'POKéMON')] = 'party'
     game.switching = None
 
@@ -484,9 +484,21 @@ def test_reorder_party_swaps_two_slots():
     game.a['party'] = pick
     game.choices[('party_action', 'SWITCH')] = lambda: (setattr(game, 'switching', game.first),
                                                         game.go('party'))
+    return game
+
+
+def test_reorder_party_swaps_two_slots():
+    game = reorder_game(mon('ONE'), mon('TWO'), mon('THREE'))
     assert done(reorder_party(game.port(), 0, 2))
     assert [m['nick'] for m in game.party] == ['THREE', 'TWO', 'ONE']
     assert 'outside battle' in reorder_party(battle_game().port(), 0, 1)['outcome']
+
+
+def test_reorder_party_swaps_twins_that_differ_only_in_level():
+    # Two catches can share species, trainer ID, DVs and nickname. The swap is done only once they trade places.
+    game = reorder_game(mon('TWIN', level=10), mon('TWIN', level=40))
+    assert done(reorder_party(game.port(), 1, 0))
+    assert [m['level'] for m in game.party] == [40, 10]
 
 
 # Field moves --------------------------------------------------------------------

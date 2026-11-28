@@ -26,6 +26,9 @@
 
 - Gen I `BattlePower.damage` and `moveset_score` count Night Shade as the user's level in
   damage. Its data power is 0, so both scored it as a move that does nothing.
+- `ReorderParty` is done only once the two whole party records trade places. Two catches that
+  share species, trainer ID, DVs and nickname but differ in level read as already swapped, so
+  the weaker one stayed in front.
 
 ## 0.12.4
 
