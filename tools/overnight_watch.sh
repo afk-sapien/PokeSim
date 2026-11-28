@@ -117,7 +117,8 @@ else
 
   # PokeSim's whole suite with every private input, so a test CI skips for lack
   # of private saves cannot hide a regression for more than a night. The worktree
-  # keeps its generated Gen II data between nights.
+  # keeps its generated Gen II data between nights, and the helper checks it and
+  # prepares it again when it is stale or broken.
   [ -d "$DEPLOYED/.git" ] || [ -f "$DEPLOYED/.git" ] || git -C "$POKESIM" worktree add -q --detach "$DEPLOYED" "$revision"
   if git -C "$DEPLOYED" checkout -q --detach "$revision" && git -C "$DEPLOYED" reset -q --hard \
       && git -C "$DEPLOYED" clean -qfdx -e .venv -e .release-local; then
@@ -127,10 +128,9 @@ else
       echo "-- no private scenarios: $DATA/scenarios is missing"
       failed+=(pokesim)
     else
-      out=$(cd "$DEPLOYED" && {
-        [ -d .release-local/gen2-data/gen2 ] \
-          || nice -n 10 uv run -q --locked python tools/prepare_gen2_test_data.py .release-local/gen2-data
-      } && DATA_DIR=$DATA GEN2_DATA_DIR=$DEPLOYED/.release-local/gen2-data GEN2_CARTRIDGE_DIR=$ROMS \
+      out=$(cd "$DEPLOYED" \
+        && nice -n 10 uv run -q --locked python tools/prepare_gen2_test_data.py .release-local/gen2-data \
+        && DATA_DIR=$DATA GEN2_DATA_DIR=$DEPLOYED/.release-local/gen2-data GEN2_CARTRIDGE_DIR=$ROMS \
         ROM_PATH=$ROMS/red.gb BLUE_ROM_PATH=$ROMS/blue.gb YELLOW_ROM_PATH=$ROMS/yellow.gb \
         POKESIM_SCENARIO_TESTS=1 POKESIM_SCENARIOS=$DATA/scenarios \
         nice -n 10 uv run -q --locked --extra dev pytest -q -rf -p no:cacheprovider --ignore=tests/browser -n 10 2>&1)

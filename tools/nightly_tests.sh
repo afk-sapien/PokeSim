@@ -159,10 +159,10 @@ EOF
     [ -n "$ROMS" ] && [ -f "$ROMS/red.gb" ] || broke "$ROOT" "no ROM folder: set POKESIM_NIGHTLY_ROMS in $ENV_FILE"
     [ -n "$DATA" ] && [ -d "$DATA" ] || broke "$ROOT" "no data folder: set POKESIM_NIGHTLY_DATA in $ENV_FILE"
     [ -n "$SCENARIOS" ] && [ -d "$SCENARIOS" ] || broke "$ROOT" "no scenarios folder at ${SCENARIOS:-(unset)}"
-    if [ ! -d .release-local/gen2-data/gen2 ]; then
-      uv run -q --locked python tools/prepare_gen2_test_data.py .release-local/gen2-data \
-        || broke "$ROOT" "could not prepare the Gen II data"
-    fi
+    # The clone keeps its Gen II data between nights, and the helper checks it and prepares it again
+    # when it is stale or broken.
+    uv run -q --locked python tools/prepare_gen2_test_data.py .release-local/gen2-data \
+      || broke "$ROOT" "could not prepare the Gen II data"
     export DATA_DIR=$DATA GEN2_DATA_DIR=$ROOT/.release-local/gen2-data GEN2_CARTRIDGE_DIR=$ROMS \
       ROM_PATH=$ROMS/red.gb BLUE_ROM_PATH=$ROMS/blue.gb YELLOW_ROM_PATH=$ROMS/yellow.gb \
       POKESIM_SCENARIO_TESTS=1 POKESIM_SCENARIOS=$SCENARIOS POKESIM_SLOW_TESTS=1

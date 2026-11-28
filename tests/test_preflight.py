@@ -93,6 +93,19 @@ def test_changed_tracked_files_are_refused(tmp_path):
         preflight.head(tmp_path)
 
 
+def test_prepared_gen2_data_always_goes_through_its_helper(tmp_path, monkeypatch):
+    # A folder left by an older or broken preparation must still go through the helper, which checks each
+    # game's manifest and prepares the data again when it fails.
+    prepared = tmp_path / '.release-local' / 'gen2-data'
+    (prepared / 'gen2').mkdir(parents=True)
+    calls = []
+    monkeypatch.setattr(preflight, 'ROOT', tmp_path)
+    monkeypatch.delenv('GEN2_DATA_DIR', raising=False)
+    monkeypatch.setattr(preflight.subprocess, 'run', lambda command, **_: calls.append(command))
+    assert preflight.environment(tmp_path / 'roms')['GEN2_DATA_DIR'] == str(prepared)
+    assert calls == [[preflight.sys.executable, str(tmp_path / 'tools' / 'prepare_gen2_test_data.py'), str(prepared)]]
+
+
 @pytest.fixture
 def fake_run(tmp_path, monkeypatch):
     """Runs main with the gate, the replays and gh replaced, and returns the statuses it posted."""

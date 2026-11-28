@@ -135,13 +135,13 @@ def pushed(sha):
 
 
 def environment(roms):
-    """The environment both checks run in, with Gen II game data prepared once when none is set."""
+    """The environment both checks run in, with Gen II game data prepared when none is set. The helper
+    checks the data a run before left and prepares it again when it is stale or broken."""
     env = dict(os.environ, DATA_DIR=str(data_dir()), GEN2_CARTRIDGE_DIR=str(roms))
     if not env.get('GEN2_DATA_DIR'):
         prepared = ROOT / '.release-local' / 'gen2-data'
-        if not (prepared / 'gen2').is_dir():
-            subprocess.run([sys.executable, str(ROOT / 'tools' / 'prepare_gen2_test_data.py'), str(prepared)],
-                           cwd=ROOT, check=True)
+        subprocess.run([sys.executable, str(ROOT / 'tools' / 'prepare_gen2_test_data.py'), str(prepared)],
+                       cwd=ROOT, check=True)
         env['GEN2_DATA_DIR'] = str(prepared)
     return env
 
