@@ -313,6 +313,28 @@ def test_a_refused_iron_tail_lesson_is_not_asked_for_again_at_once(teaching_poli
     assert policy.menu is None
 
 
+def test_the_slot_the_move_deleter_frees_goes_to_waterfall(teaching_policy, real_data):
+    """Strength was deleted to make room for Waterfall. The lesson that follows taught Strength back
+    into the freed slot, so the next visit deleted it again and Waterfall was never learned."""
+    from pokesim.gen2.menus import Teach
+    policy = teaching_policy
+    policy.completed['ice_path'] = 1
+    policy.person = lambda snapshot, key, *args: Goal(key, 'Make room', 'MOVE_DELETERS_HOUSE', 1, 1)
+    events = {'EVENT_GOT_HM02_FLY', 'EVENT_GOT_HM03_SURF', 'EVENT_GOT_HM04_STRENGTH',
+              'EVENT_GOT_HM06_WHIRLPOOL', 'EVENT_GOT_HM07_WATERFALL'}
+    dragonite = SimpleNamespace(species=149, egg=False, level=55, moves=(19, 57, 250, 0))
+    assert {19, 57, 70, 127, 250} <= set(real_data.species[149]['machines'])
+    snapshot = teaching_snapshot(real_data, dragonite, events=events, badges=255)
+    policy.step(PolicyContext(snapshot, policy.clock, ZEROS))
+    assert isinstance(policy.menu, Teach) and (policy.menu.move, policy.menu.slot) == (127, 0)
+    # Strength is one of the moves the deleter removes, so it is no reason to delete another.
+    policy.menu = None
+    dragonite.moves = (19, 57, 250, 127)
+    with pytest.raises(Onward):
+        policy.step(PolicyContext(snapshot, policy.clock, ZEROS))
+    assert policy.menu is None and not policy.goal.key.startswith('delete_hm_')
+
+
 def test_a_stone_gone_before_the_evolution_drops_the_project(real_data):
     """The evolution step read the stone's count with a lookup that raised once the stone was gone."""
     from pokesim.gen2.menus import Remedy

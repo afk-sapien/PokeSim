@@ -32,6 +32,9 @@ from .story import StoryPart
 
 __all__ = ['Goal', 'Memory', 'Policy', 'SAVE_VERSION', 'SUBSTATUS_TRANSFORMED', 'Saved', 'transformed', 'update_world']
 
+# Cut, Strength and Whirlpool, the field moves the Move Deleter removes, in the order it picks them.
+DELETED = (15, 70, 250)
+
 
 class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPart, ItemPart, BattlePart, protocol.Policy):
     name = 'strategic'
@@ -391,9 +394,15 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
             # A refused reorder is retried later rather than holding up the journey.
             self.menu = lead
             return Action(None, 0, 24)
-        for event, move in ([] if self.collection.get('tower') or self.collection.get('contest') or self.collection.get('time_capsule_restore') else [('EVENT_GOT_HM01_CUT', 15), ('EVENT_GOT_HM02_FLY', 19), ('EVENT_GOT_HM03_SURF', 57),
-                            ('EVENT_GOT_HM04_STRENGTH', 70), ('EVENT_GOT_HM06_WHIRLPOOL', 250), ('EVENT_GOT_HM07_WATERFALL', 127),
-                            ('EVENT_GOT_HM05_FLASH', FLASH)]):
+        hms = [('EVENT_GOT_HM01_CUT', 15), ('EVENT_GOT_HM02_FLY', 19), ('EVENT_GOT_HM03_SURF', 57),
+               ('EVENT_GOT_HM04_STRENGTH', 70), ('EVENT_GOT_HM06_WHIRLPOOL', 250), ('EVENT_GOT_HM07_WATERFALL', 127),
+               ('EVENT_GOT_HM05_FLASH', FLASH)]
+        deleting = 'ice_path' in self.completed
+        if deleting:
+            # The Move Deleter frees a slot only for a move it keeps, so those are taught first and the
+            # freed slot goes to the move it was freed for.
+            hms.sort(key=lambda hm: hm[1] == FLASH or hm[1] in DELETED)
+        for event, move in ([] if self.collection.get('tower') or self.collection.get('contest') or self.collection.get('time_capsule_restore') else hms):
             if snapshot.event(event) and not any(move in mon.moves for mon in snapshot.party):
                 protected = FIELD_MOVES
                 ace = ace_slot(snapshot.party, self.move_power)
@@ -422,8 +431,10 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
                             self.partner_move = move
                         self.goal = ballot.errand(partner, 'partner', commit=commit)
                     break
-                if 'ice_path' in self.completed and move != FLASH:
+                if deleting and move != FLASH and move not in DELETED:
                     # A dark cave is walkable without Flash, so no field move is deleted to make room for it.
+                    # Nor is one deleted for a move the deleter would remove next, which only trades one for
+                    # the other.
                     candidates = [i for i, mon in enumerate(snapshot.party) if not mon.egg
                                   and move in self.data.species[mon.species]['machines']]
                     if candidates:
@@ -529,7 +540,7 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
                 return Action(None, 0, 24)
             if self.goal.key.startswith('delete_hm_') and self.interaction == self.goal.key:
                 slot = int(self.goal.key.rsplit('_', 1)[1])
-                move = next((move for move in (15, 70, 250) if move in snapshot.party[slot].moves), snapshot.party[slot].moves[0])
+                move = next((move for move in DELETED if move in snapshot.party[slot].moves), snapshot.party[slot].moves[0])
                 self.menu = Forget(slot, move)
                 return Action('a', 8, 36)
             if self.goal.key == 'storage' and self.interaction == self.goal.key:
