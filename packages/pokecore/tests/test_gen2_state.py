@@ -184,6 +184,16 @@ def test_walking(version):
     assert now.script and now.battle == 1
 
 
+@pytest.mark.parametrize('version', ['gold', 'silver', 'crystal'])
+def test_sliding(version):
+    memory = BankedMemory(version)
+    assert not state.sliding(memory, version)
+    # Mid-slide right and left on Silver's Ice Path B2F, then the game's $f0, which is no step.
+    for value, under_way in ((0x83, True), (0x82, True), (0xF0, False), (0, False)):
+        memory.put('wPlayerTurningDirection', [value])
+        assert state.sliding(memory, version) is under_way
+
+
 def test_pokerus_states():
     assert state.pokerus(0) == {'strain': 0, 'days': 0, 'infected': False, 'cured': False}
     assert state.pokerus(0x30)['cured']

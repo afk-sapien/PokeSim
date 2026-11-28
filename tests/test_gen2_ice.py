@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pokecore.gen2 import maps as ice
+from pokecore.gen2 import memory_map as ice_memory
 from pokesim.gen2.data import GameData
 from pokesim.gen2.navigation import Navigator
 from pokesim.gen2.policy import Policy
@@ -100,6 +101,42 @@ def test_a_policy_with_no_route_records_the_attempt_without_a_reload():
     # The ice pocket has no way out, so the first turn with no route records the attempt.
     assert policy.stranded_action(where, None, False).button is None
     assert policy.no_route_waiting(policy.goal) and policy.take_failure() is None and policy.stranded == 0
+
+
+TURNING = ice_memory.symbols('silver')['wPlayerTurningDirection']
+
+
+class Wram:
+    """Work RAM holding the bytes a test sets, zero elsewhere."""
+
+    def __init__(self, values):
+        self.values = values
+
+    def __getitem__(self, key):
+        bank, span = key
+        return bytes(self.values.get((bank, address), 0) for address in range(span.start, span.stop))
+
+
+@pytest.mark.parametrize('tile, turning, button', [
+    (ICE, 0x83, None), (ICE, 0x82, None),
+    # A slide that stopped, a step on plain floor and the game's $f0 are no slide.
+    (ICE, 0, 'left'), (FLOOR, 0x83, 'left'), (ICE, 0xF0, 'left'),
+], ids=['sliding_right', 'sliding_left', 'stopped', 'floor', 'f0'])
+def test_a_walk_waits_out_a_slide(tile, turning, button):
+    """The game holds the d-pad to a slide's direction until the player stops (CheckStandingOnIce). In Silver's
+    Ice Path B2F a left press read mid-slide, a tile before a ball, outlasted the stop there and slid the
+    player back across the row, about 180,000 frames over."""
+    from pokesim.gen2.policy.navigation import NavigationPart
+    from pokesim.runtime.policy import Action
+    grid = [tile] * 48
+    host = object.__new__(NavigationPart)
+    host.data = SimpleNamespace(maps={ROOM: dict(width=8, height=6, collision=grid, warps=[])}, game='silver',
+                                items={})
+    host.nav = SimpleNamespace(collision=lambda snapshot, memory: grid, issued=lambda *args: None, blocked={})
+    host.interaction = None
+    memory = Wram({TURNING: turning})
+    at = SimpleNamespace(**vars(snapshot(6, 4)), items=[])
+    assert host.walk(at, memory, ['left']) == (Action(None, 0, 8) if button is None else Action(button, 16, 16))
 
 
 @pytest.fixture(scope='module', params=['gold', 'silver', 'crystal'])
