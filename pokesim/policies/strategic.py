@@ -14,7 +14,7 @@ from pokecore.textmatch import ScreenText
 from .battle import (BALLS, W_BATTLE_MON, W_ENEMY_MON, Decision, choose_battle,
                      enemy_dvs, field_cure, healing_item, hurts, needs_healing, ranked_moves, read_battler, replacement_slot,
                      useful_capture)
-from .navigation import DIRS, FACING, PAIR_COLLISIONS, WATER_TILESETS, Navigator
+from .navigation import DIRS, FACING, PAIR_COLLISIONS, WATER_TILES, WATER_TILESETS, Navigator
 from .naming import NamingController
 from .pickups import Pickups
 from .puzzles import MANSION_MAPS, VICTORY_MAPS, BoulderPlanner, MansionPlanner, open_switches, seafoam_current_task
@@ -72,7 +72,6 @@ HM_ITEM_MOVES = {ITEMS[f'HM0{number}']: move for number, move in zip(range(1, 6)
 # and makes the player walk on entering any other map.
 BIKE_TILESETS = frozenset(('OVERWORLD', 'FOREST', 'UNDERGROUND', 'SHIP_PORT', 'CAVERN'))
 BIKE_MAPS = frozenset((MAPS['ROUTE_23'], MAPS['INDIGO_PLATEAU']))
-WATER_TILES = (0x14, 0x32, 0x48)
 # Getting on costs about what the Bicycle saves over this many steps, so a shorter walk goes on foot.
 MOUNT_STEPS = 20
 # Victory Road's southern entrance, on Route 23.

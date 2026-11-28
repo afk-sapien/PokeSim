@@ -18,6 +18,7 @@ DIRS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 FACING = {"down": 0, "up": 4, "left": 8, "right": 12}
 PAIR_COLLISIONS = {(ts, a, b) for ts, a, b in DATA["collision_pairs"]}
 WATER_TILESETS = {"OVERWORLD", "PLATEAU", "FOREST", "CAVERN", "SHIP_PORT"}
+WATER_TILES = (0x14, 0x32, 0x48)
 OPTIONAL_LIFTS = {MAPS[row.map] for row in HAND if row.kind == 'lift'}
 # Where Red, Blue and Yellow look at the tile in front of the player before a warp (pokered
 # home/overworld.asm, ExtraWarpCheck and CheckWarpsNoCollision). There a warp square whose own tile
@@ -700,6 +701,11 @@ class Navigator:
                 # A step seen through a tree after Cut grows back with the map, so it needs Cut again.
                 if not self.can_cut and cut_tree(ts, front):
                     continue
+                # A step seen onto water needs Surf again, as one seen through a tree needs Cut.
+                landing = WORLD.get(q[0])
+                if (not self.can_surf and landing and landing["tileset"] in WATER_TILESETS
+                        and self.active_tile(landing, q[1], q[2]) in WATER_TILES):
+                    continue
             if (m, x + dx, y + dy) in self.closed_passages or q in self.closed_passages:
                 continue
             if (m, x + dx, y + dy) in SEAFOAM_HOLES:
@@ -750,7 +756,7 @@ class Navigator:
                     other = WORLD[dest]
                     tx = x - offset * 2 if dx == 0 else other["width"] - 1 if dx < 0 else 0
                     ty = y - offset * 2 if dy == 0 else other["height"] - 1 if dy < 0 else 0
-                    water = self.can_surf and other["tileset"] in WATER_TILESETS and self.active_tile(other, tx, ty) in (0x14, 0x32, 0x48)
+                    water = self.can_surf and other["tileset"] in WATER_TILESETS and self.active_tile(other, tx, ty) in WATER_TILES
                     if self.active_tile(other, tx, ty) in other["passable"] or water:
                         yield dr, (dest, tx, ty)
                 continue
@@ -760,7 +766,7 @@ class Navigator:
                     yield dr, (m, lx, ly)
                 continue
             cuttable = self.can_cut and cut_tree(world["tileset"], tile)
-            water = self.can_surf and world["tileset"] in WATER_TILESETS and tile in (0x14, 0x32, 0x48)
+            water = self.can_surf and world["tileset"] in WATER_TILESETS and tile in WATER_TILES
             if (tile not in passable and not cuttable and not water) or (nx, ny) in static_objects:
                 # Some exits activate by pressing into the boundary from the warp square.
                 warp = warps.get((x, y))
