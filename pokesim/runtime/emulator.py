@@ -323,6 +323,7 @@ class EmulatorBase:
         self.store.prune_events(config.EVENT_RETENTION_DAYS)
         self.store.prune_attachments(config.EVENT_ATTACHMENT_KEEP)
         self.store.prune_milestone_saves(config.EVENT_MILESTONE_SAVE_KEEP)
+        self.store.prune_milestone_shots(config.EVENT_MILESTONE_SHOT_KEEP)
         self.store.prune_reward_results()
         return path
 
