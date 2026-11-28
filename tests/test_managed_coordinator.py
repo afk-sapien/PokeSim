@@ -804,6 +804,19 @@ def test_scheduler_preserves_quality_benefits_without_new_dex_entries():
     assert gain(inventory, {'dex': 25, 'level': 20}).points == 0
 
 
+def test_a_rating_builds_rows_only_for_the_offers_species_line(monkeypatch):
+    """The coordinator rates every offer against every linked adventure, so a rating builds the PC rows
+    of the offer's species and its later stages only. A deep Red holds 246 Pokémon."""
+    from pokesim.trade import worth
+    stored = [{'dex': 129, 'level': 5, 'box': 1, 'position': position} for position in range(1, 21)]
+    inventory = {'owned': [25, 26, 129], 'version': 'red', 'party': [{'dex': 25, 'level': 10}],
+                 'storage': {'pokemon': [*stored, {'dex': 26, 'level': 30, 'box': 2, 'position': 1}]}}
+    built, experience = [], worth.experience
+    monkeypatch.setattr(worth, 'experience', lambda mon: built.append(mon['dex']) or experience(mon))
+    worth.gain(inventory, {'dex': 25, 'level': 10, 'dvs': [0, 12, 12, 12, 12]})
+    assert sorted(built) == [25, 26]
+
+
 def test_gen2_experience_progress_rates_like_its_total():
     """Gold, Silver and Crystal payloads carry each Pokémon's experience as pokecore's progress dict, in
     the party, the boxes and the offers. Live, the first trade pass rated an offer against one and
