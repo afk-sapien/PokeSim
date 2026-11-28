@@ -124,7 +124,6 @@ def test_the_same_species_pair_waits_after_a_trade(setup, monkeypatch):
 
 
 def test_a_trade_the_receiver_would_release_is_skipped_and_its_pair_waits(setup, monkeypatch):
-    from pokesim.app.coordinator import pair_key
     left, right = setup.data['left_id'], setup.data['right_id']
     c = setup.coordinator
     asked = []
@@ -136,16 +135,53 @@ def test_a_trade_the_receiver_would_release_is_skipped_and_its_pair_waits(setup,
     inventories = {left: inventory(offer('spare', 25), offer('kept', 16, 30)), right: inventory(offer('new-right', 19))}
     selected = selection(setup, monkeypatch, inventories)
     assert 'kept' in selected.values() and (right, 25) in asked
-    assert pair_key(left, right, {'dex': 25}, {'dex': 19}) in c.refused_pairs
+    assert (right, 25) in c.refused_species
     # The refused pair is not asked about again while it waits.
     asked.clear()
     selection(setup, monkeypatch, inventories)
     assert (right, 25) not in asked
 
 
+def test_a_refused_species_is_not_asked_again_when_the_partner_gains_an_entry(setup, monkeypatch):
+    # In an 8-adventure library, a Gold adventure was asked about the same three refused species in
+    # every pass, because each partner would register a new Pokédex entry in that trade.
+    left, right = setup.data['left_id'], setup.data['right_id']
+    c = setup.coordinator
+    asked = []
+    def would_keep(aid, mon):
+        asked.append((aid, mon['dex']))
+        return mon['dex'] != 25
+    monkeypatch.setattr(c, '_would_keep', would_keep)
+    inventories = {left: inventory(offer('spare', 25)), right: inventory(offer('new-right', 19))}
+    inventories[left]['owned'] = [16, 25]
+    assert selection(setup, monkeypatch, inventories) is None
+    assert asked == [(right, 25)]
+    asked.clear()
+    assert selection(setup, monkeypatch, inventories) is None
+    assert asked == []
+
+
+def test_a_refusal_answered_behind_a_kept_trade_waits_too(setup, monkeypatch):
+    # The keep checks are asked together, so a refusal can arrive for a candidate behind the one chosen.
+    # Live, it was asked again in every pass.
+    left, right = setup.data['left_id'], setup.data['right_id']
+    c = setup.coordinator
+    asked = []
+    def would_keep(aid, mon):
+        asked.append((aid, mon['dex']))
+        return mon['dex'] != 16
+    monkeypatch.setattr(c, '_would_keep', would_keep)
+    # The lower level 25 ranks first and is kept. The 16 behind it is refused.
+    inventories = {left: inventory(offer('spare', 25), offer('kept', 16, 30)), right: inventory(offer('new-right', 19))}
+    assert 'spare' in selection(setup, monkeypatch, inventories).values()
+    assert (right, 16) in asked
+    asked.clear()
+    assert 'spare' in selection(setup, monkeypatch, inventories).values()
+    assert (right, 16) not in asked
+
+
 def test_the_keep_checks_ask_every_receiver_at_the_same_time(setup, monkeypatch):
     import threading
-    from pokesim.app.coordinator import pair_key
     left, right = setup.data['left_id'], setup.data['right_id']
     c = setup.coordinator
     # Two candidates with a small gain on both sides, so four receivers are asked.
@@ -162,7 +198,7 @@ def test_the_keep_checks_ask_every_receiver_at_the_same_time(setup, monkeypatch)
     assert not together.broken
     # The answers are still read from the best candidate down.
     assert 'kept' in selected.values()
-    assert pair_key(left, right, {'dex': 25}, {'dex': 19}) in c.refused_pairs
+    assert (right, 25) in c.refused_species
 
 
 def test_a_worker_that_cannot_answer_does_not_block_its_trade(setup, monkeypatch):
