@@ -462,7 +462,9 @@ def room(data, snapshot, goal, item):
 
 
 def fits(data, snapshot, item):
-    return room(data, snapshot, 'fits', item) == []
+    """Whether the bag takes one more ``item`` as it stands: a stack below 99 or a free pocket entry."""
+    return all(len(snapshot.pockets.get(name, ())) + count <= POCKET_SLOTS[name]
+               for name, count in needs(data, snapshot, item).pocket_slots.items())
 
 
 def catch_need(snapshot):

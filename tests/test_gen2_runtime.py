@@ -736,6 +736,32 @@ def test_postgame_restocking_reaches_a_mart_beyond_the_local_map_limit(real_data
     assert policy.shop.offer(policy, snapshot)[0].map_name == 'VIOLET_MART'
 
 
+def test_restocking_skips_medicine_a_full_items_pocket_cannot_take(real_data):
+    # The purchase shortcut refuses a pocket with no free entry, so a trip for medicine with 20 other
+    # items in the bag only repeated the refused purchase.
+    from pokesim.gen2.policy import Policy, Goal
+    policy = Policy(real_data)
+    policy.completed.update(ice_path=1)
+    hyper = real_data.items['HYPER_POTION']
+    mart = next(mid for mid, entry in real_data.maps.items() if any(hyper in shop['items'] for shop in entry['shops']))
+    policy.travel_region = lambda snapshot: real_data.maps[mart]['region']
+    policy.nav.walk = lambda snapshot, target: [(None, target, None, None)] * 6 if target == mart else None
+    policy.nav.regions.route = lambda snapshot, target, *args, **kwargs: [(None, (target, 0), None, 'warp')] * 6
+    policy.person = lambda snapshot, key, label, name, script: Goal(key, label, name, 1, 1)
+    medicine = {real_data.items[name] for name in ('FULL_RESTORE', 'MAX_POTION', 'HYPER_POTION', 'REVIVE')}
+    others = [item for item in real_data.items.values() if item not in medicine
+              and real_data.item_attributes.get(item, {}).get('pocket') == 'ITEM'][:20]
+    snapshot = SimpleNamespace(map=real_data.map_ids['SILVER_CAVE_ROOM_2'], party=(), money=20000, can_catch=False,
+        badges=65535, hall_of_fame_count=1, event=lambda name: True, owned=set())
+    snapshot.items = tuple((item, 1) for item in others[:19])
+    snapshot.pockets = {'items': snapshot.items, 'balls': ()}
+    goal, _ = policy.shop.offer(policy, snapshot)
+    assert goal is not None and goal.map_name == real_data.maps[mart]['constant']
+    snapshot.items = tuple((item, 1) for item in others)
+    snapshot.pockets = {'items': snapshot.items, 'balls': ()}
+    assert policy.shop.offer(policy, snapshot) == (None, None)
+
+
 def test_restock_does_not_walk_to_a_mart_through_ice_path(real_data):
     # Shopping is off inside Ice Path. The Blackthorn Mart is three maps from Route 44 through the
     # cave, nearer than Ecruteak's, but the trip was dropped at the cave mouth, the Radio Card goal
