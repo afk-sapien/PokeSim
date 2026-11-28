@@ -230,7 +230,7 @@ settings in the browser.
 | `SPEED` | `1` | emulation speed multiplier, `0` = unlimited |
 | `POLICY` | `strategic` | objective-driven play with verified menu actions, navigation, battle estimates, and resource management. `smart_random` and `guided_random` remain available as baselines |
 | `FAST_TEXT` | `1` | force the in-game text speed to FAST |
-| `BATTLE_ANIMATIONS` | `1` | `0` turns battle animations off (faster) |
+| `BATTLE_ANIMATIONS` | `1` | `0` turns battle animations off (faster). In the Library it is what new adventures start with, and each adventure has its own Battle animations switch |
 | `SEED` | random | RNG seed for the policy, starter choice, and random names. Unset, each adventure draws its own seed once and keeps it, and a restart draws a new one |
 | `STARTER` | `random` | new strategic adventures choose among all three starters. Set `bulbasaur`, `charmander`, or `squirtle` for a fixed choice. Saved adventures retain their choice |
 | `NTFY_URL` / `NTFY_TOKEN` | off | push notable events (with screenshot) to an ntfy topic, such as `https://ntfy.sh/my-topic`. Optional defaults for the Library's [Notifications](#notifications) page |
@@ -323,6 +323,11 @@ gifts placed in a box keep their species names too. Player and rival naming is n
 The switch applies at once, including while the adventure runs. The same happens when the
 saved Library nickname pool leaves no names, for example after unchecking every built-in
 word and name. A Library that never saved a pool uses the built-in names.
+
+Each adventure also has a Battle animations switch, in its settings and on the new adventure
+form. A new adventure starts with the server's `BATTLE_ANIMATIONS`. Off, battles skip move
+animations and play faster. The switch applies at once in every game, including while the
+adventure runs.
 
 New strategic adventures also choose a random starter. The choice is saved before the
 Pokémon is received, so restoring a checkpoint does not reroll it. `STARTER` selects a

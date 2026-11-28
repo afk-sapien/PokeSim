@@ -69,18 +69,17 @@ def play(pb, action, tick, wait=GEN1_WAIT, ready=None):
 
 
 def gen1_options(value):
-    """The Gen I options byte with fast text and, when the setting asks, no battle animations."""
+    """The Gen I options byte with fast text and battle animations as the settings ask."""
     if config.FAST_TEXT:
         value = (value & ~7) | 1
-    if not config.BATTLE_ANIMATIONS:
-        value |= 128
-    return value
+    return value & ~128 if config.BATTLE_ANIMATIONS else value | 128
 
 
 def write_gen1_options(pb):
     """Write the Gen I options byte. Red, Blue and Yellow write it before every decision, so a menu press
-    that slowed the text never lasts a decision. Gen II sets its options once after each load, since a
-    write before every decision would set every step of a trace apart from every trace before it."""
+    that slowed the text never lasts a decision. Gen II sets its options after each load and after a play
+    setting changes, since a write before every decision would set every step of a trace apart from every
+    trace before it."""
     from ..screen import W_OPTIONS
     pb.memory[W_OPTIONS] = gen1_options(pb.memory[W_OPTIONS])
 

@@ -588,6 +588,77 @@ test('the nicknames switch saves through the play route for both generations, ru
   assert.equal(view.calls.some(call => call.path.endsWith('/play')), false)
 })
 
+test('the battle animations switch saves through the play route, running or stopped', async () => {
+  for (const [version, state, play_pending] of [['red', 'running', false], ['gold', 'running', true], ['yellow', 'stopped', false]]) {
+    const game = {id: 'f'.repeat(32), name: 'Game', version, state, settings: {}}
+    const view = library({respond(path, options) {
+      if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+      if (path.endsWith('/play')) return {ok: true, json: async () => ({play_pending})}
+      if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+    }})
+    await settle()
+    for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+    view.click('settings', game.id)
+    assert.equal(view.element('#settings-battle-animations').checked, true)
+    assert.notEqual(view.element('#settings-battle-animations').disabled, true)
+    view.element('#settings-battle-animations').checked = false
+    view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+    await settle()
+    const patches = view.calls.filter(call => call.options.method === 'PATCH')
+    assert.equal('battle_animations' in JSON.parse(patches[0].options.body).settings, false)
+    assert.equal(patches[1].path, `/api/v1/adventures/${game.id}/play`)
+    assert.deepEqual(JSON.parse(patches[1].options.body), {battle_animations: false})
+    assert.equal(view.element('#notice').textContent, play_pending
+      ? 'Settings saved. The battle animations setting will apply when this adventure reconnects.' : 'Adventure settings saved.')
+  }
+  // A saved Off shows as off, and both switches go in one request.
+  const game = {id: 'f'.repeat(32), name: 'Game', version: 'crystal', state: 'running', settings: {battle_animations: false}}
+  const view = library({respond(path, options) {
+    if (path === '/api/v1/adventures') return {ok: true, json: async () => ({adventures: [game]})}
+    if (path.endsWith('/play')) return {ok: true, json: async () => ({play_pending: true})}
+    if (options.method === 'PATCH') return {ok: true, json: async () => ({})}
+  }})
+  await settle()
+  for (const name of ['legendary-steps', 'event-steps', 'fossil-preference', 'dojo-preference']) view.element(`#settings-${name}`).closest = () => ({})
+  view.click('settings', game.id)
+  assert.equal(view.element('#settings-battle-animations').checked, false)
+  view.element('#settings-battle-animations').checked = true
+  view.element('#settings-nicknames').checked = false
+  view.element('#adventure-settings-form').onsubmit({preventDefault() {}})
+  await settle()
+  const plays = view.calls.filter(call => call.path.endsWith('/play'))
+  assert.equal(plays.length, 1)
+  assert.deepEqual(JSON.parse(plays[0].options.body), {nicknames: false, battle_animations: true})
+  assert.equal(view.element('#notice').textContent,
+    'Settings saved. The nickname setting and battle animations setting will apply when this adventure reconnects.')
+})
+
+test('the new adventure form starts battle animations from the server default and sends the choice', async () => {
+  async function create(served, change) {
+    const view = library({respond(path) {
+      if (path === '/api/v1/cartridges') return {ok: true, json: async () => ({slots: [slot('red', 'rom')], ...served})}
+    }})
+    await settle()
+    view.element('#new-name').value = 'Animated'
+    await view.element('#new-adventure').onclick()
+    await settle()
+    const shown = view.element('#new-battle-animations').checked
+    change(view.element('#new-battle-animations'))
+    view.element('#create-form').onsubmit({preventDefault() {}})
+    await settle()
+    const request = view.calls.find(call => call.path === '/api/v1/adventures' && call.options.method === 'POST')
+    return {shown, sent: JSON.parse(request.options.body).battle_animations}
+  }
+  assert.deepEqual(await create({battle_animations: false}, () => {}), {shown: false, sent: false})
+  assert.deepEqual(await create({battle_animations: true}, () => {}), {shown: true, sent: true})
+  // A server from before the setting says nothing, and animations stay on.
+  assert.deepEqual(await create({}, () => {}), {shown: true, sent: true})
+  assert.deepEqual(await create({battle_animations: true}, box => { box.checked = false }), {shown: true, sent: false})
+  const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
+  assert.match(html, /id="settings-battle-animations" type="checkbox" role="switch" data-owner/)
+  assert.match(html, /id="new-battle-animations" type="checkbox" checked/)
+})
+
 test('the adventure settings have no play style, and a stored one sends nothing', async () => {
   const html = fs.readFileSync('pokesim/web/static/library.html', 'utf8')
   assert.doesNotMatch(html, /play-style|Play style|Story first|Collector/)
@@ -610,7 +681,7 @@ test('the adventure settings have no play style, and a stored one sends nothing'
 })
 
 test('a member who owns an adventure can change its play settings and rewards', async () => {
-  const controls = ['#settings-nicknames', '#settings-league-rewards', '#settings-mew-event']
+  const controls = ['#settings-nicknames', '#settings-battle-animations', '#settings-league-rewards', '#settings-mew-event']
   const game = {id: 'f'.repeat(32), name: 'Game', version: 'red', state: 'stopped', access: 'owner', settings: {}}
   const view = library({ownerControls: controls, respond(path) {
     if (path === '/api/v1/session') return {ok: true, json: async () => ({csrf_token: 'csrf', role: 'member', auth: 'accounts', authenticated: true, user: {id: 'm'}})}
