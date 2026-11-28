@@ -403,12 +403,12 @@ class TradeOffers(TradeBuilder):
         return self.public(self._settle(self.registry.trade_offer(validate_id(oid))))
 
     def for_adventure(self, aid):
-        """Offers this adventure received and sent: every open one and the latest finished ones."""
+        """Offers this adventure received and sent: every open one and the latest finished ones.
+        Only its own open offers are settled here. The sweep in `run` settles and prunes the rest."""
         validate_id(aid)
         self.registry.adventure(aid)
-        self.refresh()
+        offers = [self._settle(row) if row['status'] in OPEN else row for row in self.registry.trade_offers(aid)]
         games = {game['id']: game for game in self.registry.adventures()}
-        offers = self.registry.trade_offers(aid)
         names = {}
 
         def pick(direction):

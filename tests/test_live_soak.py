@@ -826,3 +826,19 @@ def test_the_staged_runner_gets_relative_cartridge_and_data_folders_from_the_cal
     command = calls[0]
     assert command[command.index('smoke-runner') + 3] == str(tmp_path / 'roms')
     assert command[command.index('--game-data') + 1] == str(tmp_path / 'reference')
+
+
+def test_a_capture_poll_reads_only_the_receipts_added_since_the_last_one(tmp_path):
+    """The soak polls every 2 s and an adventure can hold tens of thousands of receipts."""
+    db = sqlite3.connect(tmp_path / 'state.sqlite')
+    db.execute('CREATE TABLE capture_receipts (fingerprint TEXT PRIMARY KEY, dex INTEGER NOT NULL, recorded_at REAL NOT NULL)')
+    db.executemany('INSERT INTO capture_receipts VALUES (?, ?, ?)', [('a', 1, 5.0), ('b', 2, 6.0)])
+    fresh, after = live_soak._new_receipts(db, 0)
+    assert fresh == [('a', 1, 5.0), ('b', 2, 6.0)]
+    assert live_soak._new_receipts(db, after) == ([], after)
+    db.execute("INSERT OR IGNORE INTO capture_receipts VALUES ('a', 1, 7.0)")
+    db.execute("INSERT INTO capture_receipts VALUES ('c', 3, 8.0)")
+    queries = []
+    db.set_trace_callback(queries.append)
+    assert live_soak._new_receipts(db, after)[0] == [('c', 3, 8.0)]
+    assert all('rowid >' in query for query in queries)

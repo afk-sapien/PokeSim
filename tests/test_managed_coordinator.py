@@ -1516,3 +1516,18 @@ def test_the_scheduler_logs_a_count_of_its_passes_every_five_minutes(setup, capl
     assert not any(aid in line for aid in setup.peers)
     c._schedule()
     assert len(summaries()) == 1
+
+
+def test_finished_trade_visits_are_read_once_and_each_new_trade_adds_its_own(setup):
+    """The scheduler asks for every finished trade's visits on each pass, and the history only grows."""
+    c, registry, left, right = setup.coordinator, setup.registry, setup.data['left_id'], setup.data['right_id']
+    assert not registry.completed_trade_visits()
+    c.enqueue_manual(setup.data)
+    assert c.drain_manual()['phase'] == 'completed'
+    visits = registry.completed_trade_visits()
+    assert {(aid, key) for aid, _, key in visits} == {(left, '0'), (left, '1'), (right, '0'), (right, '1')}
+    queries = []
+    registry.db.set_trace_callback(queries.append)
+    assert registry.completed_trade_visits() == visits
+    registry.db.set_trace_callback(None)
+    assert not [query for query in queries if 'json_each' in query]
