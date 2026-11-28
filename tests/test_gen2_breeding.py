@@ -140,7 +140,7 @@ def test_kept_projects_answer_again_only_when_an_input_changes(real_data, monkey
     asked = []
     real = training.projects
     monkeypatch.setattr(training, 'projects', lambda *args: asked.append(args) or real(*args))
-    policy = SimpleNamespace(data=real_data, demand={197: 1})
+    policy = SimpleNamespace(data=real_data, demand={197: 1}, collection={})
     state = snapshot((mon(133, level=20, experience=8000, friendship=220),))
     first = training.kept_projects(policy, state, 'night')
     assert {row[4] for row in first} == {197}

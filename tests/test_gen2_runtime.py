@@ -563,6 +563,51 @@ def test_a_stone_for_a_peer_goes_only_to_a_copy_that_could_travel_once_evolved(r
     assert policy.collection['training'] is None
 
 
+def _clefs(real_data):
+    """A Silver party lead, a Clefable that could travel and a boxed Clefairy that could travel, with a
+    Moon Stone in the bag."""
+    def mon(species, box, level, dvs):
+        return SimpleNamespace(species=species, egg=False, level=level, experience=100000, friendship=70,
+                               box=box, trainer_id=13132, dvs=dvs, shiny=False, held_item=0,
+                               stat_exp=(0,) * 5, position=0, moves=())
+    lead = mon(157, None, 100, (9, 9, 9, 9, 9))
+    clefable, clefairy = mon(36, None, 8, (1, 12, 14, 14, 11)), mon(35, 11, 30, (3, 14, 8, 7, 15))
+    return lead, clefable, clefairy, real_data.items['MOON_STONE']
+
+
+def test_a_stone_for_a_peer_sees_a_party_copy_the_peer_store_would_box(real_data):
+    from pokesim.gen2.training import kept_projects, projects
+    lead, clefable, clefairy, stone = _clefs(real_data)
+    policy = SimpleNamespace(data=real_data, demand={36: 1}, monitor_tables={}, clock=0, decisions=0,
+                             collection={'training': {'identity': [13132, [1, 12, 14, 14, 11]], 'species': 36,
+                                                      'target': 36, 'postgame': True}})
+
+    def view(party, stored):
+        return SimpleNamespace(items=[(stone, 1)], party=party, stored=stored, owned=frozenset({35, 36, 157}))
+    # A peer asks for Clefable. A Silver run withdrew its Clefable to train, and the Clefable in the
+    # party started a Moon Stone project for the Clefairy, which dropped the training. The peer store
+    # then boxed the Clefable, and the boxed copy ended the stone project, so training withdrew it
+    # again, every minute for hours. The peer store boxes this Clefable, so the answer is the same
+    # with it in the party and in the box.
+    boxed_clefable = SimpleNamespace(**{**vars(clefable), 'box': 12, 'position': 4})
+    party, boxed = view((lead, clefable), (clefairy,)), view((lead,), (clefairy, boxed_clefable))
+    assert projects(policy, party, 'day', {36: 1}) == projects(policy, boxed, 'day', {36: 1}) == []
+    # The kept answer follows the peer store: once a plan keeps the Clefable, the stone project starts.
+    assert kept_projects(policy, party, 'day') == []
+    policy.collection['roam_lead'] = [13132, [1, 12, 14, 14, 11]]
+    assert [(row[4], row[5]) for row in kept_projects(policy, party, 'day')] == [(36, stone)]
+
+
+def test_a_stone_for_a_peer_still_starts_beside_a_lead_the_peer_store_keeps(real_data):
+    from pokesim.gen2.training import projects
+    _, clefable, clefairy, stone = _clefs(real_data)
+    policy = SimpleNamespace(data=real_data, demand={36: 1}, monitor_tables={}, clock=0, decisions=0, collection={})
+    snapshot = SimpleNamespace(items=[(stone, 1)], party=(clefable,), stored=(clefairy,), owned=frozenset({35, 36}))
+    # The peer store never boxes the party lead, so a lead Clefable never reaches the peer, and the
+    # Clefairy gets the stone.
+    assert [(row[4], row[5]) for row in projects(policy, snapshot, 'day', {36: 1})] == [(36, stone)]
+
+
 def test_real_move_and_machine_names_do_not_shift_at_alias_constants(real_data):
     assert real_data.moves[19]['name'] == 'Fly'
     assert real_data.items['HM02'] == real_data.items['HM_FLY'] == 244

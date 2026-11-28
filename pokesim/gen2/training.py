@@ -235,21 +235,27 @@ def happiness_levels(friendship):
     return levels
 
 
-def requested(data, snapshot, demand, species, *, source=None):
+def requested(policy, snapshot, demand, species, *, source=None):
     """Whether cable demand wants another evolved copy of a family with no wild source.
 
     An item evolution of ``source`` makes a copy for a peer even when the family has a wild source,
     if no copy here could travel: automatic trading keeps a trained partner, so a single veteran
-    never leaves. The new copy must be able to travel itself, or it is one more veteran.
+    never leaves. The new copy must be able to travel itself, or it is one more veteran. A copy in
+    the party could travel once the peer store boxes it, so it counts when the peer store would box
+    it after the training ends, the same answer as once it is boxed.
     """
     from pokecore.gen2.breeding import single_source
+    from .collection import peer_store_slots
+    data = policy.data
     copies = [mon for mon in snapshot.party + snapshot.stored if mon.species == species and not mon.egg]
     if not demand.get(species):
         return False
     if species in single_source(data) and len(copies) <= demand[species]:
         return True
     return (source is not None and could_travel(source)
-            and not any(spare_copy(data, mon) for mon in copies))
+            and not any(spare_copy(data, mon) for mon in copies)
+            and not any(snapshot.party[slot].species == species
+                        for slot in peer_store_slots(policy, snapshot, trainee=False)))
 
 
 def could_travel(mon):
@@ -289,7 +295,7 @@ def projects(policy, snapshot, current_time, demand=None):
             continue
         for evo in data.species[mon.species]['evolutions']:
             if (evo['species'] in snapshot.owned and evo['species'] not in needed
-                    and not requested(data, snapshot, demand, evo['species'],
+                    and not requested(policy, snapshot, demand, evo['species'],
                                       source=mon if evo['method'] == 'item' else None)
                     or evo['method'] == 'trade'):
                 continue
@@ -327,15 +333,17 @@ def projects(policy, snapshot, current_time, demand=None):
 def kept_projects(policy, snapshot, current_time):
     """``projects`` for this policy, kept in its facts until what it reads changes.
 
-    It reads the party, the boxes, the bag, the Pokédex, the time of day, the demand and the prerequisites.
-    The prerequisites go in as their answer, since they also read the Day Care, whose Pokémon gain
-    experience as the player walks. The snapshot's regions and the prerequisites are frozen, and the
+    It reads the party, the boxes, the bag, the Pokédex, the time of day, the demand, the prerequisites
+    and the party slots the peer store would box. The prerequisites go in as their answer, since they
+    also read the Day Care, whose Pokémon gain experience as the player walks, and so do the slots,
+    since they also read the plans. The snapshot's regions and the prerequisites are frozen, and the
     demand goes in as a copy, so nothing in the key is edited in place.
     """
-    from .collection import prerequisites
+    from .collection import peer_store_slots, prerequisites
     demand = getattr(policy, 'demand', None) or {}
     inputs = (snapshot.party, snapshot.stored, snapshot.items, snapshot.owned, current_time,
-              tuple(sorted(demand.items())), prerequisites(policy, snapshot))
+              tuple(sorted(demand.items())), prerequisites(policy, snapshot),
+              tuple(peer_store_slots(policy, snapshot, trainee=False)))
     return list(facts(policy).answer('training projects', inputs,
                                      lambda: projects(policy, snapshot, current_time, demand)))
 
@@ -371,7 +379,7 @@ def journey(policy, snapshot, mem, Goal, *, terminal=False):
             and project['target'] not in prerequisites(policy, snapshot)):
         source = find(snapshot.party + snapshot.stored, project['identity'],
                       project.get('species')) if project.get('item') else None
-        if not requested(data, snapshot, demand, project['target'], source=source):
+        if not requested(policy, snapshot, demand, project['target'], source=source):
             state['training'] = project = None
     if project and standing_down(policy, train_key(project['identity'])):
         state['training'] = project = None
