@@ -230,7 +230,7 @@ settings in the browser.
 | `SPEED` | `1` | emulation speed multiplier, `0` = unlimited |
 | `POLICY` | `strategic` | objective-driven play with verified menu actions, navigation, battle estimates, and resource management. `smart_random` and `guided_random` remain available as baselines |
 | `FAST_TEXT` | `1` | force the in-game text speed to FAST |
-| `BATTLE_ANIMATIONS` | `1` | `0` turns battle animations off (faster) |
+| `BATTLE_ANIMATIONS` | `1` | `0` turns battle animations off (faster). In the Library it is what new adventures start with, and each adventure has its own Battle animations switch |
 | `SEED` | random | RNG seed for the policy, starter choice, and random names. Unset, each adventure draws its own seed once and keeps it, and a restart draws a new one |
 | `STARTER` | `random` | new strategic adventures choose among all three starters. Set `bulbasaur`, `charmander`, or `squirtle` for a fixed choice. Saved adventures retain their choice |
 | `NTFY_URL` / `NTFY_TOKEN` | off | push notable events (with screenshot) to an ntfy topic, such as `https://ntfy.sh/my-topic`. Optional defaults for the Library's [Notifications](#notifications) page |
@@ -248,8 +248,9 @@ settings in the browser.
 | `HOST` / `PORT` | `127.0.0.1` / `8000` | native service bind address and port |
 | `VIEWER_ONLY` | `0` | disable browser game controls and preference writes |
 | `EVENT_RETENTION_DAYS` | `0` | journal retention, with `0` keeping all history |
-| `EVENT_ATTACHMENT_KEEP` | `500` | routine journal entries that keep their screenshot and save, newest first, with `0` keeping all. Milestones (notable entries of priority 4 or 5, such as badges, the League, new Pokédex entries and evolutions) keep their screenshot forever, and every entry keeps its text |
-| `EVENT_MILESTONE_SAVE_KEEP` | `1000` | repeat milestones that keep their save, newest first, with `0` keeping all. The oldest save of each kind of milestone stays forever: each badge, each new Pokédex entry, the first win over each trainer and the first League victory. A repeat past the cap keeps its text and screenshot and loses only its rewind |
+| `EVENT_ATTACHMENT_KEEP` | `500` | routine journal entries that keep their screenshot and save, newest first, with `0` keeping all. Milestones (notable entries of priority 4 or 5, such as badges, the League, new Pokédex entries and evolutions) follow the two settings below, and every entry keeps its text |
+| `EVENT_MILESTONE_SAVE_KEEP` | `1000` | repeat milestones that keep their save, newest first, with `0` keeping all. The oldest save of each kind of milestone stays forever: each badge, each new Pokédex entry, the first win over each trainer and the first League victory. A repeat past the cap keeps its text and loses its rewind |
+| `EVENT_MILESTONE_SHOT_KEEP` | `1000` | repeat milestones that keep their screenshot, newest first, with `0` keeping all. The oldest screenshot of each kind of milestone stays forever, as with saves. A repeat past the cap keeps its text, and the journal shows it with no screen. Older repeats lose theirs at the next autosave |
 | `TRADING_URL` / `TRADING_INSTANCE` | empty | broker URL and instance key for [trading](trading.md#connecting-an-installation) |
 | `TRADE_TOKEN` | empty | scoped peer authentication for [automatic exchanges](automatic-trading.md) |
 | `STREAM_FPS` | `15` | MJPEG frame rate |
@@ -323,6 +324,11 @@ gifts placed in a box keep their species names too. Player and rival naming is n
 The switch applies at once, including while the adventure runs. The same happens when the
 saved Library nickname pool leaves no names, for example after unchecking every built-in
 word and name. A Library that never saved a pool uses the built-in names.
+
+Each adventure also has a Battle animations switch, in its settings and on the new adventure
+form. A new adventure starts with the server's `BATTLE_ANIMATIONS`. Off, battles skip move
+animations and play faster. The switch applies at once in every game, including while the
+adventure runs.
 
 New strategic adventures also choose a random starter. The choice is saved before the
 Pokémon is received, so restoring a checkpoint does not reroll it. `STARTER` selects a
