@@ -1,10 +1,13 @@
 """Prepare a boxed Gen II offer with ordinary travel and PC controls."""
+from ..trade import PREPARATION_FRAMES
 from ..trade.preferences import TWIN, answers, apply, stamped, tagged
 from .teams import key as team_key
 from ..planning.ledger import FIELD_MOVES
 from ..runtime.policy import Action, PolicyContext, stack_pointer
 from .menus import ChangeBox, Give, Release, Storage
 from pokecore.gen2.ram import Memory, read_snapshot
+from pokecore.shortcuts import current_screen
+from pokecore.shortcuts.machine import BACKABLE
 from .views import mon_view
 from .world import update as update_world
 
@@ -15,6 +18,10 @@ RECOVERABLE = (250, 57, 127)
 # Field moves a party member is kept for. Flash only lights a dark cave, which is walkable without it, so
 # its only holder may go to the PC like any reserve.
 KEPT = FIELD_MOVES - {148}
+# Game frames on one spot, with the same party and boxes, after which a preparation has stopped making
+# progress. The longest such pause in 60 traced preparations that reached the Cable Club was 2,056
+# frames, at a PC. Gen I gives up after the same minute.
+STILL_FRAMES = 3600
 
 
 def only(party, index):
@@ -139,6 +146,8 @@ class Preparation:
         self.claimed = False
         self.released = None
         self.reviving = False
+        # Where the preparation last made progress, and the frame it got there.
+        self.still = None
 
     def step(self, snapshot):
         if not self.claimed:
@@ -191,6 +200,19 @@ class Preparation:
             from .emulator import Event
             log(Event('release', title, body, priority=3, species=spare.species), snapshot)
 
+    def walk(self, snapshot, path):
+        """The next press along ``path``.
+
+        A walk long enough to ride first registers the Bicycle to SELECT with a menu task of the policy's.
+        Preparation clears the policy's menu on every step, so it runs that task as its own. A Silver trade
+        with the Bicycle not yet registered otherwise waited in place until the deadline.
+        """
+        policy = self.emu.policy
+        action = policy.walk(snapshot, self.emu.pb.memory, path)
+        if policy.menu is not None:
+            self.menu, policy.menu = policy.menu, None
+        return action
+
     def heal(self, snapshot, mem):
         """Walk to the nurse and talk to her until the party is healed."""
         policy, data = self.emu.policy, self.emu.data
@@ -201,7 +223,7 @@ class Preparation:
         path = policy.nav.toward(snapshot, data.map_ids[goal.map_name], [(goal.x, goal.y)], self.emu.pb.memory, surf=surf)
         policy.mode = 'Heal the party before the Cable Club exchange'
         if path:
-            return policy.walk(snapshot, self.emu.pb.memory, path)
+            return self.walk(snapshot, path)
         if path is None:
             return Action(None, 0, 24)
         return Action('up' if mem.byte('wPlayerDirection') & 12 != 4 else 'a', 8, 32)
@@ -209,7 +231,7 @@ class Preparation:
     def advance(self, snapshot):
         emu, state = self.emu, self.state
         # The budget is game frames only, so a slow pace or a replay never changes when it runs out.
-        if emu.frame - state['started_frame'] > 108000:
+        if emu.frame - state['started_frame'] > PREPARATION_FRAMES:
             raise ValueError('The trainer did not reach the Cable Club before the preparation deadline')
         policy, data = emu.policy, emu.data
         mem = Memory(emu.pb.memory, data)
@@ -219,6 +241,8 @@ class Preparation:
             return policy.step(PolicyContext(snapshot, emu.play_clock.frames, emu.pb.memory, sp))[0]
 
         if snapshot.in_battle or policy.in_league(snapshot):
+            # The policy plays these, so the minute on one spot starts again after them.
+            self.still = None
             return decide()
         # A battle shortcut the policy started during that battle is never stepped again here.
         # Left in place, it would resume after an abort, wait on the open PC and freeze the screen.
@@ -227,7 +251,16 @@ class Preparation:
         # A reset back to the opening reads map 0, which has no layout. Looking up its collision
         # crashed a live Crystal run during a Cable Club walk. The policy presses through the opening.
         if snapshot.map not in data.maps:
+            self.still = None
             return decide()
+        # A preparation pressing A in the Pack stood on one spot until the deadline. The screen is left out
+        # because a loop through menus changes it on every press.
+        here = (snapshot.map, snapshot.x, snapshot.y, tuple(snapshot.box_counts), snapshot.active_box,
+                tuple((member.species, member.hp, member.status) for member in snapshot.party))
+        if self.still is None or self.still[0] != here:
+            self.still = (here, emu.frame)
+        elif emu.frame - self.still[1] > STILL_FRAMES:
+            raise ValueError('Cable Club preparation stopped making progress')
         policy.nav.regions.observe(snapshot.map, policy.nav.collision(snapshot, emu.pb.memory))
         policy.nav.observe(snapshot)
         if self.menu:
@@ -245,10 +278,10 @@ class Preparation:
             return Action('b', 8, 32)
         if 'CHANGE BOX' in snapshot.text or 'Choose a' in snapshot.text or 'CANCEL' in snapshot.text:
             return Action('b', 8, 32)
-        # A start menu the policy opened, say to Fly, runs as a script. Pressing A on it opened the
-        # party screen, B closed that back to the start menu, and a live Silver trade looped there
-        # until its deadline.
-        if 'PACK' in snapshot.text and 'SAVE' in snapshot.text:
+        # A menu left open when the trade began is closed before the walk. A live Silver trade began on the
+        # start menu the policy opened to Fly, and a Crystal one in the Pack on a key item. Both run as
+        # scripts, so the A below only cycled them until the deadline.
+        if current_screen(emu.pb.memory, data.game) in BACKABLE:
             return Action('b', 8, 32)
         if '┌' in snapshot.tiles[12] or mem.byte('wScriptRunning'):
             return Action('a', 8, 32)
@@ -285,7 +318,7 @@ class Preparation:
         if needs_storage and snapshot.map == data.map_ids['POKECENTER_2F']:
             path = policy.nav.toward(snapshot, snapshot.map, [(0, 7)], emu.pb.memory, surf=surf)
             policy.mode = 'Return downstairs for the next boxed exchange'
-            return policy.walk(snapshot, emu.pb.memory, path) if path else Action(None, 0, 24)
+            return self.walk(snapshot, path) if path else Action(None, 0, 24)
         if not needs_storage:
             target, point = data.map_ids['POKECENTER_2F'], (3, 4)
         else:
@@ -307,7 +340,7 @@ class Preparation:
         path = policy.nav.toward(snapshot, target, [point], emu.pb.memory, surf=surf)
         policy.mode = 'Prepare the Cable Club exchange'
         if path:
-            return policy.walk(snapshot, emu.pb.memory, path)
+            return self.walk(snapshot, path)
         if path is None:
             return Action(None, 0, 24)
         if not needs_storage:

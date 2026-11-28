@@ -1233,8 +1233,8 @@ def test_trade_preparation_closes_the_pc_after_link_closed_text(real_data, monke
     policy.nav.collision = lambda *args: []
     emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}))
     controller = preparation.Preparation(emu, {'started_frame': 0})
-    snapshot = SimpleNamespace(in_battle=False, map=real_data.map_ids['VIOLET_POKECENTER_1F'],
-        text='TURN OFF\nLink closed…')
+    snapshot = SimpleNamespace(in_battle=False, map=real_data.map_ids['VIOLET_POKECENTER_1F'], x=3, y=3,
+        party=(), active_box=0, box_counts=(0,), text='TURN OFF\nLink closed…')
     assert controller.advance(snapshot).button == 'b'
 
 
@@ -1242,6 +1242,7 @@ def test_trade_preparation_heals_poison_before_freezing_the_source(real_data, mo
     import time
     from pokesim.gen2 import preparation
     monkeypatch.setattr(preparation, 'update_world', lambda *args: None)
+    monkeypatch.setattr(preparation, 'current_screen', lambda *args: 'overworld')
     monkeypatch.setattr(preparation, 'Memory', lambda *args: SimpleNamespace(
         byte=lambda name: 4 if name == 'wPlayerDirection' else 0))
     policy = SimpleNamespace(in_league=lambda snapshot: False,
@@ -1250,8 +1251,9 @@ def test_trade_preparation_heals_poison_before_freezing_the_source(real_data, mo
             toward=lambda *args, **kwargs: [], regions=SimpleNamespace(observe=lambda *args: None)))
     emu = SimpleNamespace(policy=policy, data=real_data, frame=0, pb=SimpleNamespace(memory={}))
     controller = preparation.Preparation(emu, {'started_frame': 0})
-    snapshot = SimpleNamespace(in_battle=False, map=real_data.map_ids['VIOLET_POKECENTER_1F'],
-        text='', tiles=[''] * 18, badges=65535, party=(SimpleNamespace(status=8, egg=False, moves=()),))
+    snapshot = SimpleNamespace(in_battle=False, map=real_data.map_ids['VIOLET_POKECENTER_1F'], x=3, y=3,
+        text='', tiles=[''] * 18, badges=65535, active_box=0, box_counts=(0,),
+        party=(SimpleNamespace(species=25, hp=20, status=8, egg=False, moves=()),))
     assert controller.advance(snapshot).button == 'a'
     assert controller.state.get('phase') != 'ready'
 
@@ -1263,6 +1265,7 @@ def test_time_capsule_preparation_heals_before_depositing_the_last_pokemon_that_
     from pokesim.gen2 import preparation, timecapsule
     from pokesim.gen2.menus import Storage
     monkeypatch.setattr(preparation, 'update_world', lambda *args: None)
+    monkeypatch.setattr(preparation, 'current_screen', lambda *args: 'overworld')
     monkeypatch.setattr(preparation, 'Memory', lambda *args: SimpleNamespace(
         byte=lambda name: 4 if name == 'wPlayerDirection' else 0))
     offer = SimpleNamespace(species=27, box=3, position=1, hp=20, egg=False, status=0, moves=(10,))
@@ -1287,8 +1290,8 @@ def test_time_capsule_preparation_heals_before_depositing_the_last_pokemon_that_
     controller.center = (center, (9, 1))
     party = (SimpleNamespace(species=3, hp=0, egg=False, status=0, moves=(22,)),
              SimpleNamespace(species=143, hp=233, egg=False, status=0, moves=(156,)))
-    snapshot = SimpleNamespace(in_battle=False, map=center, text='', tiles=[''] * 18, badges=0, party=party,
-                               stored=(offer,), active_box=0, box_counts=(19,) + (20,) * 13)
+    snapshot = SimpleNamespace(in_battle=False, map=center, x=5, y=4, text='', tiles=[''] * 18, badges=0,
+                               party=party, stored=(offer,), active_box=0, box_counts=(19,) + (20,) * 13)
     assert controller.advance(snapshot).button == 'down'
     assert controller.menu is None and policy.mode == 'Heal the party before the Cable Club exchange'
     spot['at'] = None
@@ -1313,6 +1316,7 @@ def test_a_time_capsule_deposit_ahead_of_a_copy_followed_by_its_slot_moves_the_s
     from pokesim.gen2 import preparation, timecapsule
     from pokesim.gen2.menus import Storage
     monkeypatch.setattr(preparation, 'update_world', lambda *args: None)
+    monkeypatch.setattr(preparation, 'current_screen', lambda *args: 'overworld')
     monkeypatch.setattr(preparation, 'Memory', lambda *args: SimpleNamespace(
         byte=lambda name: 4 if name == 'wPlayerDirection' else 0))
     monkeypatch.setattr(timecapsule, 'compatible', lambda mon, data: mon.species != 152)
@@ -1336,7 +1340,7 @@ def test_a_time_capsule_deposit_ahead_of_a_copy_followed_by_its_slot_moves_the_s
     state = {'started_frame': 0, 'trade_key': 'k', 'manual': True, 'time_capsule': True, 'slot': 1}
     controller = preparation.Preparation(emu, state)
     controller.center = (center, (9, 1))
-    snapshot = SimpleNamespace(in_battle=False, map=center, text='', tiles=[''] * 18, badges=0,
+    snapshot = SimpleNamespace(in_battle=False, map=center, x=9, y=2, text='', tiles=[''] * 18, badges=0,
                                party=(chikorita, pikachu), stored=(), active_box=0, box_counts=(5,) * 14)
     assert controller.advance(snapshot).button == 'a'
     assert controller.menu == Storage('DEPOSIT', 0, 2)

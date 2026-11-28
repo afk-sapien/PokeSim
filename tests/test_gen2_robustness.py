@@ -548,26 +548,171 @@ def test_gen2_preparation_hands_an_unloaded_map_to_the_policy(monkeypatch):
     assert prep.advance(snapshot) is pressed
 
 
+def screen_memory(rows, version):
+    """A Gen II memory that shows ``rows``, so Core's own classifier names the screen."""
+    from collections import defaultdict
+    from pokecore.gen2.charmap import charmap
+    from pokecore.shortcuts import gen2ui
+    codes = {' ': 0x7F}
+    for tile, value in sorted(charmap(version).items()):
+        if len(value) == 1:
+            codes.setdefault(value, tile)
+    banks = defaultdict(lambda: bytearray(0x10000))
+    banks[0][0xFF40] = 0x80
+    symbols = gen2ui.tables(version).symbols
+    bank, address = symbols['wTilemap']
+    banks[bank][address:address + 360] = bytes(codes[char] for row in rows for char in row)
+    # The game has started.
+    bank, address = symbols['wGameTimerPaused']
+    banks[bank][address] = 1
+
+    class Memory:
+        def __getitem__(self, key):
+            bank, address = key if isinstance(key, tuple) else (0, key)
+            return banks[bank][address]
+    return Memory()
+
+
+def prepare_on_screen(monkeypatch, rows, version, script):
+    """Preparation's next press on a screen showing ``rows`` while ``script`` is in wScriptRunning."""
+    from pokesim.gen2 import preparation
+    monkeypatch.setattr(preparation, 'Memory', lambda memory, data: SimpleNamespace(byte=lambda name: script))
+    monkeypatch.setattr(preparation, 'update_world', lambda regions, snapshot: None)
+    regions = SimpleNamespace(observe=lambda mid, grid: None)
+    nav = SimpleNamespace(regions=regions, collision=lambda snapshot, memory: None, observe=lambda snapshot: None)
+    policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False,
+                             step=lambda ctx: pytest.fail('the policy is not asked during preparation'))
+    emu = SimpleNamespace(policy=policy, data=SimpleNamespace(maps={1: {}}, game=version),
+                          pb=SimpleNamespace(memory=screen_memory(rows, version)), frame=10,
+                          play_clock=SimpleNamespace(frames=10))
+    prep = preparation.Preparation(emu, {'started_frame': 0, 'protect': [], 'wished': []})
+    snapshot = SimpleNamespace(map=1, x=5, y=5, started=True, in_battle=False, tiles=rows, text='\n'.join(rows),
+                               party=(), box_counts=(0,), active_box=0)
+    return prep.advance(snapshot)
+
+
 def test_gen2_preparation_closes_a_start_menu_the_policy_left_open(monkeypatch):
     """A live Silver trade began while the policy had the start menu open to Fly.
 
     The menu runs as a script, so preparation pressed A and opened the party screen, then B closed it
     back to the start menu. The two repeated until the preparation deadline ran out.
     """
-    from pokesim.gen2 import preparation
-    monkeypatch.setattr(preparation, 'Memory', lambda memory, data: SimpleNamespace(byte=lambda name: 1))
-    monkeypatch.setattr(preparation, 'update_world', lambda regions, snapshot: None)
-    regions = SimpleNamespace(observe=lambda mid, grid: None)
-    nav = SimpleNamespace(regions=regions, collision=lambda snapshot, memory: None, observe=lambda snapshot: None)
-    policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False,
-                             step=lambda ctx: pytest.fail('the policy is not asked during preparation'))
-    emu = SimpleNamespace(policy=policy, data=SimpleNamespace(maps={1: {}}), pb=SimpleNamespace(memory=None), frame=10,
-                          play_clock=SimpleNamespace(frames=10))
-    prep = preparation.Preparation(emu, {'started_frame': 0, 'protect': [], 'wished': []})
     rows = ['          ┌────────┐', '          │        │', '          │ POKéDEX│', '          │        │',
             '          │▶POKéMON│', '          │        │', '          │ PACK   │', '          │        │',
             '          │ SILVER │', '          │        │', '          │ SAVE   │', '          │        │',
             '          │ OPTION │', '          │        │', '          │ EXIT   │', '          │        │',
             '          └────────┘', ' ' * 20]
-    snapshot = SimpleNamespace(map=1, started=True, in_battle=False, tiles=rows, text='\n'.join(rows), party=())
-    assert prep.advance(snapshot).button == 'b'
+    assert prepare_on_screen(monkeypatch, rows, 'silver', 1).button == 'b'
+
+
+def test_gen2_preparation_closes_the_pack_the_policy_left_open(monkeypatch):
+    """A live Crystal trade began with the Pack open on a key item, in Goldenrod City.
+
+    The item's description box and the running script both read as text to press A through, so
+    preparation opened the item menu, used or quit it, and came back to the Pack for 15 minutes,
+    until the Cable Club timeout. These are that screen's rows.
+    """
+    blank = ' ' * 20
+    rows = [blank, blank, '        SQUIRTBOTTLE', blank, '       ▶BASEMENT KEY', blank, '        CARD KEY    ', blank,
+            '        CLEAR BELL  ', blank, '        GOOD ROD    ', blank, '┌──────────────────┐',
+            '│                  │', '│Opens doors.      │', '│                  │', '│                  │',
+            '└──────────────────┘']
+    assert prepare_on_screen(monkeypatch, rows, 'crystal', 255).button == 'b'
+
+
+def test_gen2_preparation_runs_the_bicycle_registration_its_walk_starts(monkeypatch):
+    """A Silver trade owned the Bicycle with nothing registered to SELECT, in the Goldenrod Bike Shop.
+
+    The walk to the Pokémon Center gave the policy a task that registers it and waited a step. Preparation
+    clears the policy's menu on every step, so the task never ran and the trainer stood still until the
+    preparation deadline.
+    """
+    from pokesim.gen2 import preparation
+    from pokesim.runtime.policy import Action
+    monkeypatch.setattr(preparation, 'Memory', lambda memory, data: SimpleNamespace(byte=lambda name: 0))
+    monkeypatch.setattr(preparation, 'update_world', lambda regions, snapshot: None)
+    register = SimpleNamespace(step=lambda snapshot, mem: 'start')
+
+    def walk(snapshot, memory, path):
+        policy.menu = register
+        return Action(None, 0, 24)
+
+    regions = SimpleNamespace(observe=lambda mid, grid: None)
+    nav = SimpleNamespace(regions=regions, collision=lambda snapshot, memory: None, observe=lambda snapshot: None,
+                          toward=lambda snapshot, mid, goals, memory, surf=False: ['right'] * 24)
+    center = SimpleNamespace(map_name='GOLDENROD_POKECENTER_1F', x=9, y=2)
+    policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False, walk=walk,
+                             heal=SimpleNamespace(offer=lambda policy, snapshot: (center, None)),
+                             step=lambda ctx: pytest.fail('the policy is not asked during preparation'))
+    rows = [' ' * 20] * 18
+    emu = SimpleNamespace(policy=policy, data=SimpleNamespace(maps={1: {}}, game='crystal',
+                                                              map_ids={'GOLDENROD_POKECENTER_1F': 2836}),
+                          pb=SimpleNamespace(memory=screen_memory(rows, 'crystal')), frame=10,
+                          play_clock=SimpleNamespace(frames=10))
+    prep = preparation.Preparation(emu, {'started_frame': 0, 'protect': [], 'wished': []})
+    poisoned = SimpleNamespace(species=152, egg=False, status=8, hp=20, moves=(33,))
+    snapshot = SimpleNamespace(map=1, x=29, y=30, badges=0, started=True, in_battle=False, tiles=rows, text='',
+                               party=(poisoned,), box_counts=(0,), active_box=0)
+    assert prep.advance(snapshot).button is None
+    assert prep.advance(snapshot).button == 'start'
+
+
+def pressing_through(monkeypatch, frame=0):
+    """A preparation that presses A through a running script on one spot, as the live Pack stall did."""
+    from pokesim.gen2 import preparation
+    from pokesim.runtime.policy import Action
+    monkeypatch.setattr(preparation, 'Memory', lambda memory, data: SimpleNamespace(byte=lambda name: 1))
+    monkeypatch.setattr(preparation, 'update_world', lambda regions, snapshot: None)
+    monkeypatch.setattr(preparation, 'current_screen', lambda memory, game: 'overworld')
+    saved = {}
+    regions = SimpleNamespace(observe=lambda mid, grid: None)
+    nav = SimpleNamespace(regions=regions, collision=lambda snapshot, memory: None, observe=lambda snapshot: None)
+    policy = SimpleNamespace(nav=nav, menu=None, in_league=lambda snapshot: False, on_restore=lambda: None,
+                             step=lambda ctx: [Action('a', 8, 32)])
+    emu = SimpleNamespace(policy=policy, data=SimpleNamespace(maps={1: {}}, game='crystal'),
+                          pb=SimpleNamespace(memory=None), frame=frame, play_clock=SimpleNamespace(frames=frame),
+                          store=SimpleNamespace(set=saved.__setitem__))
+    emu.preparation = preparation.Preparation(emu, {'started_frame': 0, 'protect': [], 'wished': []})
+    rows = [' ' * 20] * 18
+    return emu, SimpleNamespace(map=1, x=5, y=5, started=True, in_battle=False, tiles=rows, text='', party=(),
+                                box_counts=(3,), active_box=0)
+
+
+def test_gen2_preparation_gives_up_once_it_stops_making_progress(monkeypatch):
+    """The live Crystal trade in the Pack pressed A on one spot for 15 minutes, until the coordinator gave up.
+
+    Nothing but the deadline ended a preparation that stood still. The longest pause in 120 traced Gen II
+    preparations that reached the Cable Club was 2,056 frames, at a PC, so a minute of game time on one
+    spot with the same party and boxes now ends it by name. A battle is the policy's, so it starts the
+    minute again.
+    """
+    emu, snapshot = pressing_through(monkeypatch)
+    prep = emu.preparation
+    for frame in range(0, 3000, 40):
+        emu.frame = frame
+        assert prep.step(snapshot).button == 'a'
+    emu.frame = 3000
+    prep.step(SimpleNamespace(**{**vars(snapshot), 'in_battle': True}))
+    for frame in range(3040, 6600, 40):
+        emu.frame = frame
+        assert prep.step(snapshot).button == 'a'
+    assert emu.preparation is prep
+    emu.frame = 6680
+    prep.step(snapshot)
+    assert emu.preparation is None
+    assert prep.state['phase'] == 'failed'
+    assert prep.state['error'] == 'Cable Club preparation stopped making progress'
+
+
+def test_preparations_give_up_inside_the_coordinators_wait(monkeypatch):
+    """The coordinator waits 900 real seconds for a preparation, and Gen I and Gen II gave themselves 108,000
+    frames, 1,800 seconds at normal speed. A slow walk ran out the coordinator's wait first, and it failed
+    without the preparation's own reason."""
+    import inspect
+    from pokesim.app.coordinator import Coordinator
+    from pokesim.runtime import preparation as gen1
+    waited = Coordinator(SimpleNamespace(registry=None)).prepare_timeout * 60
+    assert inspect.signature(gen1.begin).parameters['max_frames'].default < waited
+    emu, snapshot = pressing_through(monkeypatch, frame=waited)
+    with pytest.raises(ValueError, match='before the preparation deadline'):
+        emu.preparation.advance(snapshot)

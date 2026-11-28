@@ -29,6 +29,7 @@ from .errors import Conflict, NotFound, Refused
 from .loops import Loop
 from .registry import digest, identifier, validate_id
 from pokecore.identity import legacy
+from ..trade import PREPARE_SECONDS
 from ..trade.preferences import FIRST, find
 from ..trade.worth import gain
 
@@ -278,7 +279,7 @@ class Coordinator:
         self.pass_counts = Counter()
         self.pass_rated = set()
         self.summary_started = time.monotonic()
-        self.prepare_timeout = 900
+        self.prepare_timeout = PREPARE_SECONDS
         self.prepare_poll = 1
         self.session_timeout = 960
         self.display_species = None
