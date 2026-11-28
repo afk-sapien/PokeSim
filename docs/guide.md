@@ -248,8 +248,9 @@ settings in the browser.
 | `HOST` / `PORT` | `127.0.0.1` / `8000` | native service bind address and port |
 | `VIEWER_ONLY` | `0` | disable browser game controls and preference writes |
 | `EVENT_RETENTION_DAYS` | `0` | journal retention, with `0` keeping all history |
-| `EVENT_ATTACHMENT_KEEP` | `500` | routine journal entries that keep their screenshot and save, newest first, with `0` keeping all. Milestones (notable entries of priority 4 or 5, such as badges, the League, new Pokédex entries and evolutions) keep their screenshot forever, and every entry keeps its text |
-| `EVENT_MILESTONE_SAVE_KEEP` | `1000` | repeat milestones that keep their save, newest first, with `0` keeping all. The oldest save of each kind of milestone stays forever: each badge, each new Pokédex entry, the first win over each trainer and the first League victory. A repeat past the cap keeps its text and screenshot and loses only its rewind |
+| `EVENT_ATTACHMENT_KEEP` | `500` | routine journal entries that keep their screenshot and save, newest first, with `0` keeping all. Milestones (notable entries of priority 4 or 5, such as badges, the League, new Pokédex entries and evolutions) follow the two settings below, and every entry keeps its text |
+| `EVENT_MILESTONE_SAVE_KEEP` | `1000` | repeat milestones that keep their save, newest first, with `0` keeping all. The oldest save of each kind of milestone stays forever: each badge, each new Pokédex entry, the first win over each trainer and the first League victory. A repeat past the cap keeps its text and loses its rewind |
+| `EVENT_MILESTONE_SHOT_KEEP` | `1000` | repeat milestones that keep their screenshot, newest first, with `0` keeping all. The oldest screenshot of each kind of milestone stays forever, as with saves. A repeat past the cap keeps its text, and the journal shows it with no screen. Older repeats lose theirs at the next autosave |
 | `TRADING_URL` / `TRADING_INSTANCE` | empty | broker URL and instance key for [trading](trading.md#connecting-an-installation) |
 | `TRADE_TOKEN` | empty | scoped peer authentication for [automatic exchanges](automatic-trading.md) |
 | `STREAM_FPS` | `15` | MJPEG frame rate |
