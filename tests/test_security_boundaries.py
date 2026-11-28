@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 import httpx
 import pytest
 
-from pokesim.app.backup import extract_archive, file_checksum
+from pokesim.app.backup import ENTRY_BLOCK, extract_archive, file_checksum
 from pokesim.app.manager import Manager, create_app
 from pokesim.app.registry import identifier
 from pokesim.web.app import create_app as game_app
@@ -156,6 +156,28 @@ def test_archive_cannot_write_through_an_existing_symlink(tmp_path):
     with pytest.raises(ValueError, match='unsafe'):
         extract_archive(archive, output)
     assert not list(outside.iterdir())
+
+
+def test_archive_with_many_files_restores(tmp_path):
+    # A long adventure keeps hundreds of thousands of screenshots and saves (#756), and the
+    # count alone is no reason to refuse its backup.
+    archive = tmp_path / 'many.zip'
+    with zipfile.ZipFile(archive, 'w') as bundle:
+        for index in range(100001):
+            bundle.writestr(f'shots/{index}.png', b'')
+    output = extract_archive(archive, tmp_path / 'output')
+    assert sum(1 for _ in (output / 'shots').iterdir()) == 100001
+
+
+def test_archive_of_empty_files_still_meets_the_size_bound(tmp_path):
+    archive = tmp_path / 'empty.zip'
+    with zipfile.ZipFile(archive, 'w') as bundle:
+        for index in range(3):
+            bundle.writestr(f'{index}.txt', b'')
+    output = tmp_path / 'output'
+    with pytest.raises(ValueError, match='expanded size'):
+        extract_archive(archive, output, max_expanded=2 * ENTRY_BLOCK)
+    assert not any(output.iterdir())
 
 
 def test_backup_checksum_streams_large_members(tmp_path, monkeypatch):

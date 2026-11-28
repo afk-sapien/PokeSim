@@ -18,6 +18,7 @@ from .errors import Conflict, Refused
 from .registry import identifier
 
 MAX_EXPANDED = 16 * 1024**3
+ENTRY_BLOCK = 4096
 RESERVED_NAMES = {'CON', 'PRN', 'AUX', 'NUL', 'CONIN$', 'CONOUT$'} | {
     prefix + number for prefix in ('COM', 'LPT') for number in '123456789¹²³'
 }
@@ -31,14 +32,14 @@ def file_checksum(path):
 def extract_archive(archive, destination, max_expanded=MAX_EXPANDED):
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=True)
-    total = 0
     with zipfile.ZipFile(archive) as bundle:
-        if len(bundle.infolist()) > 100000:
-            raise Conflict('Archive has too many files')
+        # Each entry counts as at least one disk block, so many small or empty files meet the same
+        # bound as a few large ones, and nothing is written when the archive is over it.
+        if sum(max(info.file_size, ENTRY_BLOCK) for info in bundle.infolist()) > max_expanded:
+            raise Conflict('Archive exceeds the expanded size limit')
         for info in bundle.infolist():
             relative = PurePosixPath(info.filename)
             mode = info.external_attr >> 16
-            total += info.file_size
             components = info.orig_filename.rstrip('/').split('/')
             unsafe_component = any(
                 not part or part in {'.', '..'} or part.endswith((' ', '.'))
@@ -47,8 +48,8 @@ def extract_archive(archive, destination, max_expanded=MAX_EXPANDED):
                 for part in components)
             if (relative.is_absolute() or '..' in relative.parts or '\\' in info.orig_filename or '\x00' in info.orig_filename
                     or ':' in info.filename or unsafe_component
-                    or mode & 0o170000 == 0o120000 or total > max_expanded):
-                raise Conflict('Archive contains unsafe paths or exceeds the expanded size limit')
+                    or mode & 0o170000 == 0o120000):
+                raise Conflict('Archive contains unsafe paths')
             path = destination.joinpath(*relative.parts)
             if any(parent.is_symlink() for parent in (path, *path.parents) if parent != destination):
                 raise Conflict('Archive contains unsafe paths through a symbolic link')
