@@ -171,8 +171,8 @@ def legends(policy, snapshot, Goal, returned=frozenset()):
     if 249 not in owned and not snapshot.event('EVENT_FOUGHT_LUGIA') and ball_ready(policy, snapshot):
         return (static_lead(policy, snapshot, 249, Goal)
                 or hunt(policy.person(snapshot, 'legend_lugia', 'Seek Lugia in the Whirl Islands', 'WHIRL_ISLAND_LUGIA_CHAMBER', 'Lugia')))
-    if (data.game == 'crystal' and 250 not in snapshot.owned
-            and {243, 244, 245} <= snapshot.owned and data.items['RAINBOW_WING'] not in items):
+    if (data.game == 'crystal' and 250 not in snapshot.owned and data.items['RAINBOW_WING'] not in items
+            and holds_the_beasts(policy, snapshot)):
         return policy.person(snapshot, 'rainbow_wing', 'Return to the Tin Tower with the three beasts',
                              'TIN_TOWER_1F', 'TinTower1FSage5Script')
     if (250 not in owned and data.items['RAINBOW_WING'] in items and not snapshot.event('EVENT_FOUGHT_HO_OH')
@@ -180,6 +180,17 @@ def legends(policy, snapshot, Goal, returned=frozenset()):
         return (static_lead(policy, snapshot, 250, Goal)
                 or hunt(policy.person(snapshot, 'legend_ho_oh', 'Seek Ho-Oh above the Tin Tower', 'TIN_TOWER_ROOF', 'TinTowerHoOh')))
     return roamers(policy, snapshot, Goal, returned)
+
+
+def holds_the_beasts(policy, snapshot):
+    """Whether the party or a PC box holds Raikou, Entei and Suicune with the player's trainer ID.
+
+    Crystal's Tin Tower sage only stands there to give the Rainbow Wing then (pret BeastsCheck), so a
+    beast in the Pokédex that was traded away, or that came in a trade, does not count.
+    """
+    from pokecore.gen2.state import trainer_id
+    player = trainer_id(policy.memory, policy.data.game)
+    return {243, 244, 245} <= {mon.species for mon in snapshot.party + snapshot.stored if mon.trainer_id == player}
 
 
 def hunt(goal):
