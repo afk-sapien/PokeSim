@@ -115,6 +115,20 @@ def test_unanswered_offers_expire_after_a_day(offers):
     assert offers.coordinator.hand_picked_keys() == set()
 
 
+def test_reading_one_adventures_offers_settles_only_its_own_and_prunes_nothing(offers):
+    """The trading page reads this every 15 s. The five-minute sweep settles and prunes the whole Library."""
+    service, registry, right = offers.manager.offers, offers.registry, offers.data['right_id']
+    offer = service.create(offer_request(offers))
+    service.clock = Clock(offer['created_at'] + EXPIRE_SECONDS + 1)
+    queries = []
+    registry.db.set_trace_callback(queries.append)
+    incoming = service.for_adventure(right)['incoming']
+    registry.db.set_trace_callback(None)
+    assert [(row['id'], row['status']) for row in incoming] == [(offer['id'], 'expired')]
+    assert not [q for q in queries if q.startswith('DELETE FROM trade_offers')]
+    assert not [q for q in queries if q.startswith('SELECT * FROM trade_offers WHERE status IN')]
+
+
 def test_an_accepted_offer_whose_trade_never_starts_expires_and_leaves_the_line(offers):
     service, c = offers.manager.offers, offers.coordinator
     accepted = service.accept(service.create(offer_request(offers))['id'])

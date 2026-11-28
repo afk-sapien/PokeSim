@@ -1466,9 +1466,10 @@ def create_app(manager, shutdown=lambda: None):
         actor = request.state.actor
         sender = manager.registry.adventure(from_id)
         games = [row for row in manager.registry.adventures() if not row['archived']]
+        settings = None if actor.admin else trade_settings.many(manager.registry, [row['id'] for row in games])
         visible = None if actor.admin else {
             row['id'] for row in games if can(actor, 'adventure.manage', row)
-            or (can(actor, 'adventure.watch', row) and trade_settings.get(manager.registry, row['id'])['open_to_offers'])}
+            or (can(actor, 'adventure.watch', row) and settings[row['id']]['open_to_offers'])}
         result = manager.offers.targets(from_id, from_key, **({} if visible is None else {'visible': visible}))
         rows = {row['id']: row for row in games}
         names = {}

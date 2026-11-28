@@ -94,6 +94,19 @@ def test_an_old_stored_wish_list_is_ignored_and_kept(setup, monkeypatch):  # noq
     assert setup.registry.setting(trade_settings.KEY)[left] == {'enabled': False, 'wishlist': [2, 'bad', 999]}
 
 
+def test_a_scheduler_pass_decodes_the_trade_settings_once(setup, monkeypatch):  # noqa: F811
+    """Every adventure's switches share one stored value, so a pass reads it once and not once per adventure."""
+    trade_settings.update(setup.registry, setup.data['left_id'], enabled=False)
+    real, reads = trade_settings._all, []
+
+    def counted(registry):
+        reads.append(registry)
+        return real(registry)
+    monkeypatch.setattr(trade_settings, '_all', counted)
+    assert setup.coordinator.schedule_once() is None
+    assert len(reads) == 1
+
+
 def test_auto_off_stops_automatic_trades_only(setup):  # noqa: F811
     c, left = setup.coordinator, setup.data['left_id']
     trade_settings.update(setup.registry, left, enabled=False)

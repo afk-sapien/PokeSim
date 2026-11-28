@@ -50,6 +50,8 @@ class Registry:
         self.lock = threading.RLock()
         # Users being deleted, or deleted. Nothing new may belong to them.
         self.leaving = set()
+        # Every finished trade's visits, read once and then added to as each trade finishes.
+        self._trade_visits = None
         self.db = sqlite3.connect(self.root / 'app.sqlite', check_same_thread=False)
         try:
             # Library settings can hold an ntfy access token.
@@ -82,6 +84,11 @@ class Registry:
             self.db.execute('''CREATE TABLE IF NOT EXISTS interactions (
                 id TEXT PRIMARY KEY, plan TEXT NOT NULL, decision TEXT, phase TEXT NOT NULL,
                 result TEXT, error TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL)''')
+            # Every scheduler pass reads the newest interactions and the open ones, and finished
+            # trades are never deleted, so both reads walk an index instead of the whole history.
+            self.db.execute('CREATE INDEX IF NOT EXISTS interactions_created ON interactions (created_at)')
+            self.db.execute("CREATE INDEX IF NOT EXISTS interactions_open ON interactions (created_at) "
+                            "WHERE phase NOT IN ('completed','aborted')")
             # Offers one adventure makes to another. An accepted offer links to the manual trade it queued.
             self.db.execute('''CREATE TABLE IF NOT EXISTS trade_offers (
                 id TEXT PRIMARY KEY, from_id TEXT NOT NULL, from_key TEXT NOT NULL,
@@ -390,21 +397,23 @@ class Registry:
             rows = self.db.execute(query + ' ORDER BY created_at DESC LIMIT 1000', parameters).fetchall()
         return [self._interaction(row) for row in rows]
 
+    def _visits(self, only=None):
+        """(adventure, campaign, key) for both sides of each finished trade, or of the trade `only`."""
+        where = '' if only is None else ' AND interactions.id = ?'
+        query = ' UNION '.join(f'''SELECT participant.value,
+                   json_extract(interactions.plan, '$.campaign_ids.' || participant.value),
+                   json_extract(interactions.plan, '$.{side}_key')
+                   FROM interactions, json_each(interactions.plan, '$.participants') AS participant
+                   WHERE phase = 'completed' AND decision = 'COMMIT'{where}''' for side in ('left', 'right'))
+        return frozenset(tuple(row) for row in self.db.execute(query, () if only is None else (only, only)) if row[2])
+
     def completed_trade_visits(self):
-        """Individuals previously held by each campaign, including both trade sides."""
-        query = '''SELECT participant.value,
-                   json_extract(interactions.plan, '$.campaign_ids.' || participant.value),
-                   json_extract(interactions.plan, '$.left_key')
-                   FROM interactions, json_each(interactions.plan, '$.participants') AS participant
-                   WHERE phase = 'completed' AND decision = 'COMMIT'
-                   UNION
-                   SELECT participant.value,
-                   json_extract(interactions.plan, '$.campaign_ids.' || participant.value),
-                   json_extract(interactions.plan, '$.right_key')
-                   FROM interactions, json_each(interactions.plan, '$.participants') AS participant
-                   WHERE phase = 'completed' AND decision = 'COMMIT' '''
+        """Individuals previously held by each campaign, including both trade sides. The scheduler
+        asks on every pass, so the history is read once and each finished trade adds its own."""
         with self.lock:
-            return {tuple(row) for row in self.db.execute(query) if row[2]}
+            if self._trade_visits is None:
+                self._trade_visits = self._visits()
+            return self._trade_visits
 
     def create_transaction(self, tid, plan):
         validate_id(tid)
@@ -422,14 +431,20 @@ class Registry:
     def update_transaction(self, tid, **values):
         if not set(values) <= {'decision', 'phase', 'result', 'error'}:
             raise ValueError('Invalid interaction update')
-        with self.lock, self.db:
-            previous = self.transaction(tid)
-            if previous['decision'] and 'decision' in values and values['decision'] != previous['decision']:
-                raise Conflict('A durable interaction decision cannot change')
-            encoded = {key: json.dumps(value) if key == 'result' else value for key, value in values.items()}
-            encoded['updated_at'] = time.time()
-            self.db.execute('UPDATE interactions SET ' + ','.join(f'{key}=?' for key in encoded) + ' WHERE id=?',
-                            (*encoded.values(), tid))
+        with self.lock:
+            with self.db:
+                previous = self.transaction(tid)
+                if previous['decision'] and 'decision' in values and values['decision'] != previous['decision']:
+                    raise Conflict('A durable interaction decision cannot change')
+                encoded = {key: json.dumps(value) if key == 'result' else value for key, value in values.items()}
+                encoded['updated_at'] = time.time()
+                self.db.execute('UPDATE interactions SET ' + ','.join(f'{key}=?' for key in encoded) + ' WHERE id=?',
+                                (*encoded.values(), tid))
+            # Only here does a trade finish, so the visits read so far take this one's once it commits.
+            if self._trade_visits is not None:
+                found = self._visits(tid)
+                if not found <= self._trade_visits:
+                    self._trade_visits = self._trade_visits | found
         return self.transaction(tid)
 
     @staticmethod
