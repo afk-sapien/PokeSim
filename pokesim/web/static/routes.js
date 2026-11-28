@@ -40,10 +40,11 @@
     return response
   }
   const gameFetch = (path, options = {}) => request(url(path), options)
+  // A manager changes speed too, so it has its own route rather than the owner's settings.
   const setSpeed = speed => base && adventureId
-    ? request(`/api/v1/adventures/${encodeURIComponent(adventureId)}`, {
+    ? request(`/api/v1/adventures/${encodeURIComponent(adventureId)}/speed`, {
       method: 'PATCH', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({settings: {speed}}),
+      body: JSON.stringify({speed}),
     })
     : gameFetch('/api/control', {
       method: 'POST', headers: {'Content-Type': 'application/json'},

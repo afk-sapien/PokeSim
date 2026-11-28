@@ -165,6 +165,27 @@ def test_worker_marks_view_requests_view_only_and_scopes_pages(tmp_path):
     assert 'id="rewind"' in client.get('/events/42').text
 
 
+@pytest.mark.parametrize('public_url', ['https://pokesim.example', 'https://pokesim.example/games/red-two'])
+def test_a_watchers_feed_links_stay_under_the_view_link(tmp_path, monkeypatch, public_url):
+    # A watcher with only a view link cannot open /games/, so every link in their feed is a /view/ one.
+    from xml.etree import ElementTree
+    monkeypatch.setattr(config, 'PUBLIC_URL', public_url)
+    client = TestClient(worker(tmp_path))
+
+    def links(headers):
+        feed = ElementTree.fromstring(client.get('/feed.xml', headers=headers).content)
+        found = [element.attrib['href'] for element in feed.iter() if 'href' in element.attrib]
+        content = ''.join(element.text or '' for element in feed.iter() if element.tag.endswith('content'))
+        return found, content
+    watched, content = links({VIEWER_HEADER: '1'})
+    assert 'https://pokesim.example/view/red-two/events/42' in watched
+    assert 'https://pokesim.example/view/red-two/shots/42.png' in watched
+    assert all(link.startswith('https://pokesim.example/view/red-two/') for link in watched)
+    assert '/games/' not in content and 'https://pokesim.example/view/red-two/shots/42.png' in content
+    owned, _ = links({})
+    assert all(link.startswith('https://pokesim.example/games/red-two/') for link in owned)
+
+
 def test_instance_viewer_only_still_applies_everywhere(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'VIEWER_ONLY', True)
     client = TestClient(worker(tmp_path))

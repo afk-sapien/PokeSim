@@ -129,6 +129,21 @@ def test_a_built_trade_is_not_queued_for_an_adventure_its_owner_lost(quiet, peop
     assert queued == []
 
 
+def test_an_old_owner_cannot_set_the_trading_switches_once_the_adventure_moved(quiet, people, meanwhile):  # noqa: F811
+    from pokesim.app import trade_settings
+    manager = quiet.manager
+    admin = manager.actor_for(people.admin)
+    alice = quiet.login('alice')
+    meanwhile(lambda: ownership.transfer(manager, people.red, people.bob['id'], admin))
+    route = f'/api/v1/interactions/auto-settings?adventure_id={people.red}'
+    changed = alice.put(route, json={'enabled': True, 'across_owners': True})
+    assert changed.status_code == 403, changed.text
+    # The transfer reset the switches for the new owner, and they stay reset.
+    assert trade_settings.get(manager.registry, people.red)['across_owners'] is False
+    assert quiet.login('bob').put(route, json={'across_owners': True}).status_code == 200
+    assert trade_settings.get(manager.registry, people.red)['across_owners'] is True
+
+
 def test_a_proposed_trade_is_not_recorded_for_an_adventure_its_owner_lost(quiet, people, monkeypatch):  # noqa: F811
     manager = quiet.manager
     coordinator = manager.coordinator

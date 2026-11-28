@@ -32,6 +32,9 @@ def activate(emu):
         emu.store.set(CLAIM, 'already_available')
         return None
     source = emu._autosave()
+    if source is None:
+        # The autosave refused, so the ball waits for the next check and a save it can stand on.
+        return None
     metadata = emu.store.checkpoint_metadata(source)
     from .rewards import clone_emulator
     clone = clone_emulator(emu)

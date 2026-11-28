@@ -933,9 +933,8 @@ def create_app(emu, store, *, base_path: str = '', adventure_id: str = '', adven
     def feed(types: str | None = None, all: int = 0, limit: int = Query(50, ge=1, le=200), min_priority: int | None = None):
         evs = store.events(limit=min(limit, 200), notable_only=not all and not min_priority,
                            types=types.split(",") if types else None, min_priority=min_priority)
-        public_base = config.PUBLIC_URL.rstrip('/')
-        if base_path and not public_base.endswith(base_path):
-            public_base += base_path
+        # A watcher's links stay under their view link, which is all they can open.
+        public_base = config.PUBLIC_URL.rstrip('/').removesuffix(base_path) + base()
         return Response(render_feed(evs, public_base, adventure_name or config.FEED_TITLE),
                         media_type="application/atom+xml")
 

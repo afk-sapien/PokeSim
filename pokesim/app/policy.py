@@ -180,6 +180,7 @@ ROUTE_ACTIONS = {
     ('POST', '/api/v1/adventures/{aid}/archive'): 'adventure.own',
     ('PATCH', '/api/v1/adventures/{aid}'): 'adventure.own',
     ('PATCH', '/api/v1/adventures/{aid}/play'): 'adventure.manage',
+    ('PATCH', '/api/v1/adventures/{aid}/speed'): 'adventure.manage',
     ('GET', '/api/v1/settings'): 'library.read',
     ('PATCH', '/api/v1/settings'): 'library.settings',
     ('GET', '/api/v1/portraits'): 'library.read',
