@@ -25,27 +25,36 @@ def row(**extra):
     return {**base, **extra}
 
 
-def test_upgrade_margin_matches_the_policy():
-    from pokesim.investment import MIN_UPGRADE
-    assert tool.MIN_UPGRADE == MIN_UPGRADE
-
-
 def test_trainee_is_the_best_copy_below_level_100():
     mons = [mon(1, 100, 500), mon(2, 40, 600), mon(2, 100, 550)]
-    assert tool.trainees(mons, never, False, 0.02) == [['Mon2', 40]]
+    assert tool.trainees(mons, never, False) == [['Mon2', 40]]
 
 
 def test_a_level_100_copy_about_as_strong_leaves_no_trainee():
-    assert tool.trainees([mon(2, 40, 560), mon(2, 100, 550)], never, False, 0.02) == []
-    perfect = mon(2, 40, 560, perfect_dvs=True)
-    assert tool.trainees([perfect, mon(2, 100, 550)], never, False, 0.02) == [['Mon2', 40]]
+    assert tool.trainees([mon(2, 40, 560), mon(2, 100, 550)], never, False) == []
+    perfect = mon(2, 40, 560, dvs=(15,) * 5)
+    assert tool.trainees([perfect, mon(2, 100, 550)], never, False) == [['Mon2', 40]]
 
 
 def test_standing_down_and_sealed_boxes_and_eggs_leave_no_trainee():
-    assert tool.trainees([mon(3, 30, 400, tid=7)], lambda identity: identity[0] == 7, False, 0.02) == []
-    assert tool.trainees([mon(3, 30, 400, box=2)], never, True, 0.02) == []
-    assert tool.trainees([mon(3, 30, 400, box=2)], never, False, 0.02) == [['Mon3', 30]]
-    assert tool.trainees([mon(3, 5, 400, egg=True)], never, False, 0.02) == []
+    assert tool.trainees([mon(3, 30, 400, tid=7)], lambda identity: identity[0] == 7, False) == []
+    assert tool.trainees([mon(3, 30, 400, box=2)], never, True) == []
+    assert tool.trainees([mon(3, 30, 400, box=2)], never, False) == [['Mon3', 30]]
+    assert tool.trainees([mon(3, 5, 400, egg=True)], never, False) == []
+
+
+def test_a_party_copy_about_as_strong_as_a_boxed_one_trains_as_the_policy_does():
+    # The policy trains a party copy within MIN_UPGRADE of a better boxed one, so a full PC does not
+    # stop it. The watch's own copy of the rule lacked that and counted no trainee here.
+    from types import SimpleNamespace
+
+    from pokesim.gen2.postgame import pick_trainee
+    mons = [mon(5, 50, 100), mon(5, 30, 101, box=1)]
+    assert tool.trainees(mons, never, True) == [['Mon5', 50]]
+    assert tool.trainees(mons, never, False) == [['Mon5', 50]]
+    copies = [SimpleNamespace(level=row['level'], box=row['box'], dvs=row['dvs'], power=row['potential_power'])
+              for row in mons]
+    assert pick_trainee(copies, lambda copy: copy.power, True, lambda copy: False) is copies[0]
 
 
 def test_no_adventure_qualifies():

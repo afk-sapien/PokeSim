@@ -178,3 +178,15 @@ def test_every_allowed_swap_has_a_reason():
         assert isinstance(key, str) or len(key) == 3, key
         assert reason.strip().endswith('.'), key
     assert tool.CRYSTAL_ONLY <= {key if isinstance(key, str) else key[0] for key in tool.ALLOWED}
+
+
+def test_both_generations_decide_a_swap_with_one_flag_rule():
+    # Each tool once kept its own copy of the truth table, free to drift from the other.
+    spec = importlib.util.spec_from_file_location('gen1_map_facts_tool', ROOT / 'tools' / 'gen1_map_facts.py')
+    gen1 = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen1)
+    assert gen1.decide is tool.decide
+    assert not hasattr(gen1, '_decide') and not hasattr(tool, '_decide')
+    cases = [('open', [('EVENT_A', True)]), ('shut', [('EVENT_A', False), ('EVENT_B', False)]),
+             ('shut', [('EVENT_A', False), ('EVENT_B', True)])]
+    assert tool.decide('MAP', (1, 2), cases) == ('EVENT_A', 'open', 'shut')

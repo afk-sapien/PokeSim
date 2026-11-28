@@ -24,6 +24,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from swap_flags import decide  # noqa: E402
+
 # The maps whose block swaps the facts leave out, with the reason.
 ALLOWED = {
     'GAME_CORNER': 'Reading the poster opens the hideout stairs. Progression reads the poster as a story step.',
@@ -215,26 +219,6 @@ def swaps(src):
     return out
 
 
-def _decide(name, site, cases):
-    """(flag, block once set, block until set) for a site one flag decides. None draws nothing."""
-    flags = sorted({flag for _, conds in cases for flag, _ in conds})
-
-    def outcome(state):
-        blocks = {block for block, conds in cases if all(state[flag] == value for flag, value in conds)}
-        if len(blocks) > 1:
-            raise ValueError(f'{name} {site} draws {sorted(blocks)} under the same flags')
-        return next(iter(blocks), None)
-
-    states = [dict(zip(flags, values)) for values in itertools.product((False, True), repeat=len(flags))]
-    deciding = [flag for flag in flags if any(outcome(state) != outcome({**state, flag: not state[flag]})
-                                              for state in states)]
-    if len(deciding) != 1:
-        raise ValueError(f'{name} {site} depends on {deciding}, not on one flag')
-    flag = deciding[0]
-    rest = {other: False for other in flags}
-    return flag, outcome({**rest, flag: True}), outcome({**rest, flag: False})
-
-
 def toggled(src):
     """Flags one routine both sets and resets, as a switch the player flips both ways does."""
     code, _, _ = _link(src)
@@ -253,7 +237,7 @@ def tables(src):
 
     None means the script draws nothing in that state, so the map file's block stays.
     """
-    rows = tuple((name, x, y, *_decide(name, (x, y), cases))
+    rows = tuple((name, x, y, *decide(name, (x, y), cases))
                  for name, sites in swaps(src).items() if name not in ALLOWED
                  for (x, y), cases in sorted(sites.items()))
     flipped = toggled(src)

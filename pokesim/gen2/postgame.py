@@ -431,6 +431,31 @@ def shiny(policy, snapshot, current_time):
     return None
 
 
+def pick_trainee(copies, power, sealed, stood_down):
+    """The copy of one held species to train next, or None when none of them should train.
+
+    Each copy has `level`, `box` and `dvs`. `power` rates a copy, `stood_down` says whether its
+    training is standing down, and `sealed` means a full party with nowhere to put a catch.
+    tools/quality_hunt_watch.py counts the trainees left with this same rule.
+    """
+    best = max(copies, key=lambda mon: (power(mon), mon.level))
+    party = [mon for mon in copies if mon.box is None and mon.level < 100]
+    if best.box is not None and party:
+        # A party copy within MIN_UPGRADE of the best keeps training, so a boxed copy only a little
+        # better costs no PC trip. Silver hatched Cyndaquils one after another and trained each to a
+        # level 20 Quilava, since a boxed Quilava 0.3% stronger kept the party one from training and
+        # a boxed Cyndaquil's step was the cheapest, so each save made 4 to 6 PC withdrawals.
+        near = max(party, key=lambda mon: (power(mon), mon.level))
+        if power(near) * (1 + MIN_UPGRADE) >= power(best):
+            best = near
+    if best.level >= 100 or stood_down(best) or best.box is not None and sealed:
+        return None
+    top = max((power(mon) for mon in copies if mon.level >= 100), default=None)
+    if top is not None and not perfect(best) and power(best) <= top * (1 + MIN_UPGRADE):
+        return None
+    return best
+
+
 def trainee(policy, snapshot):
     """Train the best copy of a species to its next multiple of ten levels, as Gen I does.
 
@@ -446,20 +471,9 @@ def trainee(policy, snapshot):
         groups.setdefault(mon.species, []).append(mon)
     choices = []
     for species, copies in groups.items():
-        best = max(copies, key=lambda mon: (potential(data, mon), mon.level))
-        party = [mon for mon in copies if mon.box is None and mon.level < 100]
-        if best.box is not None and party:
-            # A party copy within MIN_UPGRADE of the best keeps training, so a boxed copy only a little
-            # better costs no PC trip. Silver hatched Cyndaquils one after another and trained each to a
-            # level 20 Quilava, since a boxed Quilava 0.3% stronger kept the party one from training and
-            # a boxed Cyndaquil's step was the cheapest, so each save made 4 to 6 PC withdrawals.
-            near = max(party, key=lambda mon: (potential(data, mon), mon.level))
-            if potential(data, near) * (1 + MIN_UPGRADE) >= potential(data, best):
-                best = near
-        if best.level >= 100 or standing_down(policy, train_key(ident(best))) or best.box is not None and sealed:
-            continue
-        top = max((potential(data, mon) for mon in copies if mon.level >= 100), default=None)
-        if top is not None and not perfect(best) and potential(data, best) <= top * (1 + MIN_UPGRADE):
+        best = pick_trainee(copies, lambda mon: potential(data, mon), sealed,
+                            lambda mon: standing_down(policy, train_key(ident(mon))))
+        if best is None:
             continue
         if (best.level < HUNT_FIRST_BELOW and species in rows and worth_hunting(tail(data, best), rows[species], effort(policy, species))
                 and searches.get(str(species), 0) < SEARCH_BUDGET):
