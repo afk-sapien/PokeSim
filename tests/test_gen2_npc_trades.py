@@ -38,9 +38,18 @@ def test_trade_table_matches_pret(real_data):
     assert TRADES['silver'] == TRADES['gold']
 
 
-def mon(species, *, level=10, box=None, position=None, held=0, moves=(33,), gender='Male', egg=False):
+def mon(species, *, level=10, box=None, position=None, held=0, moves=(33,), gender='Male', egg=False, dvs=None):
     return SimpleNamespace(species=species, level=level, box=box, position=position, held_item=held,
-                           moves=list(moves), gender=gender, egg=egg, trainer_id=1, dvs=(level,) * 4)
+                           moves=list(moves), gender=gender, egg=egg, trainer_id=1, dvs=dvs or (level,) * 4)
+
+
+def dvs(attack, defense, speed, special):
+    """Five DVs with the HP DV the game derives, so the copy has a trade key."""
+    hp = (attack & 1) << 3 | (defense & 1) << 2 | (speed & 1) << 1 | special & 1
+    return hp, attack, defense, speed, special
+
+
+SHINY, PERFECT = dvs(10, 10, 10, 10), dvs(15, 15, 15, 15)
 
 
 KYLE = TRADES['gold'][1]
@@ -57,6 +66,55 @@ def test_candidate_prefers_a_spare_party_copy_and_never_a_needed_one():
     spare = mon(69, level=8)
     snapshot.party.append(spare)
     assert candidate(snapshot, KYLE) is spare
+
+
+@pytest.mark.parametrize('dvs', [SHINY, PERFECT], ids=['shiny', 'perfect'])
+def test_candidate_never_gives_a_shiny_or_perfect_dv_copy(dvs):
+    snapshot = SimpleNamespace(party=[mon(155), mon(69, level=5, dvs=dvs)], stored=[])
+    assert candidate(snapshot, KYLE) is None
+    spare = mon(69, level=30, box=0, position=0)
+    snapshot.stored.append(spare)
+    assert candidate(snapshot, KYLE) is spare
+
+
+def kyle_policy(**fields):
+    data = SimpleNamespace(symbols={'wTradeFlags': [0, 0]}, game='gold', species={n: {'name': n} for n in range(252)})
+    return SimpleNamespace(data=data, demand={}, collection={}, person=lambda snapshot, key, *rest: key,
+                           storage_goal=lambda snapshot: None, **fields)
+
+
+@pytest.mark.parametrize('kept_by', ['owner', 'plan'])
+def test_journey_and_arrival_never_give_a_copy_the_owner_or_a_plan_keeps(monkeypatch, kept_by):
+    from pokesim.gen2.release import _keys
+    monkeypatch.setattr(npc_trades, 'flags', lambda memory, data: 0)
+    bellsprout = mon(69, dvs=dvs(5, 6, 7, 8))
+    assert _keys(bellsprout)[0]
+    snapshot = SimpleNamespace(party=(mon(155), bellsprout), stored=(), owned=frozenset())
+    mem, goal = SimpleNamespace(memory=b''), lambda key, *rest: key
+    assert npc_trades.journey(kyle_policy(), snapshot, mem, goal) == 'collection_npc_trade'
+    if kept_by == 'owner':
+        policy = kyle_policy(trade_preferences=lambda: {_keys(bellsprout)[0]: {'state': 'locked'}})
+    else:
+        policy = kyle_policy()
+        policy.collection['breeding'] = {'parents': [[bellsprout.trainer_id, list(bellsprout.dvs)]]}
+    assert npc_trades.journey(policy, snapshot, mem, goal) is None
+    # A trade goal set before the copy was kept stops at the partner instead of handing it over.
+    policy.goal, policy.collection['npc_trade'] = SimpleNamespace(key='collection_npc_trade'), KYLE.index
+    assert npc_trades.arrive(policy, snapshot) == 'b'
+
+
+def test_trade_requests_ask_for_another_copy_when_the_held_one_is_kept(monkeypatch):
+    from pokesim.gen2.release import _keys
+    monkeypatch.setattr(npc_trades, 'flags', lambda memory, data: 0)
+    data = SimpleNamespace(symbols={'wTradeFlags': [0, 0]}, game='gold', encounters=[{'species': 69}])
+    owned = frozenset(range(1, 252)) - {95}
+    locked = mon(69, dvs=dvs(5, 6, 7, 8))
+    policy = SimpleNamespace(data=data, trade_preferences=lambda: {_keys(locked)[0]: {'state': 'locked'}})
+    assert npc_trades.requests(policy, SimpleNamespace(owned=owned, party=(locked,), stored=()), b'') == {69}
+    shiny = SimpleNamespace(owned=owned, party=(mon(69, dvs=SHINY),), stored=())
+    assert npc_trades.requests(SimpleNamespace(data=data), shiny, b'') == {69}
+    spare = SimpleNamespace(owned=owned, party=(locked, mon(69, level=12, dvs=dvs(9, 6, 7, 8))), stored=())
+    assert not npc_trades.requests(policy, spare, b'')
 
 
 def test_female_only_trade_skips_males_and_eggs():
