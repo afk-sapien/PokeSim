@@ -41,8 +41,13 @@ def text(db, key):
 
 
 def starting(db, prefix):
-    """(key, JSON text) of every key that starts with ``prefix``."""
-    return db.execute('SELECT k,v FROM kv WHERE substr(k, 1, ?) = ?', (len(prefix), prefix)).fetchall()
+    """(key, JSON text) of every key that starts with ``prefix``, oldest first.
+
+    The keys run from ``prefix`` up to the prefix with its last character raised by one, a range the key's
+    index answers without reading the whole table.
+    """
+    end = prefix[:-1] + chr(ord(prefix[-1]) + 1)
+    return db.execute('SELECT k,v FROM kv WHERE k >= ? AND k < ? ORDER BY rowid', (prefix, end)).fetchall()
 
 
 def put_text(db, key, raw):
