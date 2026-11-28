@@ -4,6 +4,9 @@
 
 ### Added
 
+- `pokecore.gen2.state.map_loading(memory, version)` is true while a script has stopped and the map
+  it left is still loading, as after a battle or a warp: `wScriptRunning` is still set and bit 2 of
+  `wScriptFlags` is clear. The overworld reads no button until its next step clears `wScriptRunning`.
 - `pokecore.gen2.state.sliding(memory, version)` is true while a step is under way, as the game's
   CheckStandingOnIce reads `wPlayerTurningDirection`, which the Gen II memory map now names. On ice
   the game holds the d-pad to the slide's direction until that step ends.

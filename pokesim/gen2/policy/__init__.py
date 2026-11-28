@@ -10,10 +10,10 @@ from ..flash import FLASH, task as flash_task
 from ...planning.losses import ace_slot
 from ...planning.shadow import Shadow
 from ...runtime import policy as protocol
-from ...runtime.policy import Action
+from ...runtime.policy import Action, Hold
 from ..navigation import Navigator
 from pokecore.gen2.ram import Memory
-from pokecore.gen2.state import script_running
+from pokecore.gen2.state import map_loading, script_running
 from ..world import update as update_world
 from ..naming import Naming
 from ..menus import (TASKS, Buy, ChangeBox, DayCare, FieldMove, Fly, Forget, Give, Lead, PutAway, Radio, Register,
@@ -385,6 +385,11 @@ class Policy(MenuPart, PinPart, StoryPart, StoragePart, ErrandPart, NavigationPa
             answer = self.unknown_yes_no(snapshot)
             if answer:
                 return Action(answer, 8, 36)
+            if not starting and '┌' not in snapshot.tiles[12] and map_loading(memory, self.data.game):
+                # The script has stopped, as a battle's or a warp's does, and the overworld reads no button
+                # until its next step. So the walk waits for that step, with no press.
+                game = self.data.game
+                return Hold(None, 120, 0, stop=lambda held: not map_loading(memory, game))
             return Action('a', 8, 36)
         lead = self.level_lead(snapshot)
         if lead and self.allowed(lead, snapshot):

@@ -235,6 +235,16 @@ def script_running(memory, version):
     return bool(memory_reader(memory, version).byte('wScriptFlags') & 0b100)
 
 
+def map_loading(memory, version):
+    """Whether a script has stopped and the map it left behind is still loading, as after a battle or a warp.
+
+    ``wScriptRunning`` keeps the player event behind a script until the overworld's next step clears it, and
+    the overworld reads no button before that step. Bit 2 of ``wScriptFlags`` is clear once the script stops.
+    """
+    mem = memory_reader(memory, version)
+    return bool(mem.byte('wScriptRunning')) and not mem.byte('wScriptFlags') & 0b100
+
+
 def sliding(memory, version):
     """Whether a step the player cannot steer is under way, as CheckStandingOnIce reads it.
 
