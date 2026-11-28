@@ -344,7 +344,8 @@ def test_npc_trade_waits_while_the_party_and_every_box_are_full(monkeypatch):
                              person=lambda snapshot, key, *args: SimpleNamespace(key=key))
     party = [SimpleNamespace(species=155, level=40, box=None, position=None, held_item=0, moves=[33], gender='Male', egg=False)
              for _ in range(6)]
-    boxed = SimpleNamespace(species=69, level=5, box=0, position=0, held_item=0, moves=[33], gender='Male', egg=False)
+    boxed = SimpleNamespace(species=69, level=5, box=0, position=0, held_item=0, moves=[33], gender='Male', egg=False,
+                            trainer_id=1, dvs=(5, 6, 7, 8, 9))
     snapshot = SimpleNamespace(party=party, stored=[boxed], owned=set(), box_counts=(20,) * 14)
     goal = lambda key, *args: SimpleNamespace(key=key)
     mem = SimpleNamespace(memory=object())
