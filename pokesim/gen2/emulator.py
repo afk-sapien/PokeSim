@@ -162,7 +162,7 @@ class Emulator(EmulatorBase):
         self.data = cartridge_game_data(self.rom, self.profile.game, directory())
         self.isolated_ram = isolated_ram
         self.preparation = None
-        self.options_applied = False
+        self.options_written = None
         self.adventure_seed = seeds.adventure_seed(store)
         # The newest autosave's manifest gives the policy its state, and the journal its history, when it loads.
         self.policy = Policy(self.data, seed=self.adventure_seed, starter=config.STARTER)
@@ -474,7 +474,7 @@ class Emulator(EmulatorBase):
         # every earlier League win as new on the next win, and pay each gift out again.
         rewards.initialize(self.store, self.snapshot.hall_of_fame_count if self.snapshot else 0)
         self.audio.clear()
-        self.options_applied = False
+        self.options_written = None
         self._reset_watch()
         self._publish_frame()
 
@@ -510,6 +510,13 @@ class Emulator(EmulatorBase):
     def _read(self, observe=False):
         return count_league(self.history, self.data, read_snapshot(self.pb.memory, self.data, self.frame), observe=observe)
 
+    def _sync_options(self):
+        """Write the options byte after each load, and again when a play setting it holds changes."""
+        wanted = (config.FAST_TEXT, config.BATTLE_ANIMATIONS)
+        if self.options_written != wanted and not self.manual_mode:
+            write_options(self.pb, self.data)
+            self.options_written = wanted
+
     def _observe(self):
         snapshot = self._read(observe=True)
         self.snapshot = snapshot
@@ -517,9 +524,7 @@ class Emulator(EmulatorBase):
         if not snapshot.valid or not snapshot.started:
             self.stuck_frame = self.frame
             return
-        if not self.options_applied and not self.manual_mode:
-            write_options(self.pb, self.data)
-            self.options_applied = True
+        self._sync_options()
         self.play_clock.seed(snapshot.playtime_seconds)
         self.store.upgrade_trade_preferences(lambda: [mon_view(mon, egg_view=True) for mon in (*snapshot.party, *snapshot.stored)])
         self.game_clock = game_clock(self.pb.memory, self.data)
@@ -866,7 +871,7 @@ class Emulator(EmulatorBase):
             self.pb.stop(save=False)
             self.pb = self._boot(tracer=getattr(self, 'tracer', None))
             self._sync_clock()
-            self.options_applied = False
+            self.options_written = None
             self.previous = self.snapshot = None
             self.audio.clear()
             self.policy.on_restore()
@@ -961,7 +966,7 @@ class Emulator(EmulatorBase):
             watch.restart()
         self.pb = self._boot(tracer=getattr(self, 'tracer', None))
         self._sync_clock()
-        self.options_applied = False
+        self.options_written = None
         self.frame = 0
         self.previous = self.snapshot = None
         self.history = new_history()

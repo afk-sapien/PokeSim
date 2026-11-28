@@ -1,13 +1,16 @@
 """Routine journal entries keep their screenshot and save only for the newest few. Milestones keep their
-screenshot forever, and their save for the first of each kind and the newest repeats."""
+screenshot and their save for the first of each kind and the newest repeats."""
 import os
 import time
+from types import SimpleNamespace
 
 import pytest
 
 from pokesim import config
 from pokesim.events import Event
+from pokesim.runtime import emulator
 from pokesim.store import Store
+from pokesim.web.event_page import render_event
 from test_events import snap
 
 MANIFEST = {'policy_state': {}, 'run_memory': {}, 'generation': 2}
@@ -136,7 +139,71 @@ def test_zero_keeps_every_milestone_save(store):
 def test_routine_entries_are_left_to_the_routine_cap(store):
     ids = [routine(store) for _ in range(3)]
     assert store.prune_milestone_saves(1) == 0
+    assert store.prune_milestone_shots(1) == 0
     assert all(kept(store, eid) for eid in ids)
+
+
+def shot_kept(store, eid):
+    return store.event(eid)['shot'] == f'{eid}.png' and (store.shots / f'{eid}.png').exists()
+
+
+def test_the_default_keeps_a_thousand_repeat_milestone_screenshots():
+    assert config.EVENT_MILESTONE_SHOT_KEEP == 1000
+
+
+def test_repeat_milestones_past_the_cap_lose_only_their_screenshot_oldest_first(store):
+    wins = [milestone(store, 'champion', f'Champion! League victory #{number}') for number in range(1, 6)]
+    assert store.prune_milestone_shots(2) == 2
+    assert shot_kept(store, wins[0]), 'the first League victory keeps its screenshot forever'
+    for eid in wins[1:3]:
+        row = store.event(eid)
+        assert row['shot'] is None and row['title'].startswith('Champion!'), 'the journal keeps its text'
+        assert not (store.shots / f'{eid}.png').exists()
+        assert save_kept(store, eid), 'the save follows its own cap'
+    assert all(shot_kept(store, eid) for eid in wins[3:])
+    assert store.prune_milestone_shots(2) == 0
+
+
+def test_thousands_of_rematches_keep_each_first_and_the_newest_thousand(store):
+    firsts = [milestone(store, 'badge', 'Earned the Zephyr Badge'),
+              milestone(store, 'catch', 'Caught Sentret', priority=4),
+              milestone(store, 'evolve', 'Pidgey evolved into Pidgeotto', priority=4)]
+    rematches = [store.add_event(Event('trainer', 'Defeated Will', priority=4), snap(), b'png', None)
+                 for _ in range(3001)]
+    assert store.prune_milestone_shots(1000) == 2000, 'more than one round of the pass'
+    assert all(shot_kept(store, eid) for eid in firsts)
+    assert shot_kept(store, rematches[0]), 'the first win over Will keeps its screenshot'
+    assert not any(store.event(eid)['shot'] for eid in rematches[1:2001])
+    assert all(shot_kept(store, eid) for eid in rematches[2001:])
+    assert len(list(store.shots.iterdir())) == 3 + 1 + 1000
+    assert store.event(rematches[1])['title'] == 'Defeated Will'
+
+
+def test_a_milestone_with_no_screenshot_shows_none_on_its_page(store):
+    wins = [milestone(store, 'champion', f'Champion! League victory #{number}') for number in range(1, 4)]
+    store.prune_milestone_shots(1)
+    page = render_event(dict(store.event(wins[1])), can_rewind=False)
+    assert 'Champion! League victory #2' in page and '<img class="shot"' not in page
+
+
+def test_zero_keeps_every_milestone_screenshot(store):
+    wins = [milestone(store, 'champion', f'Champion! League victory #{number}') for number in range(1, 4)]
+    assert store.prune_milestone_shots(0) == 0
+    assert all(shot_kept(store, eid) for eid in wins)
+
+
+def test_the_autosave_trims_repeat_milestone_screenshots(monkeypatch):
+    calls = []
+    monkeypatch.setattr(config, 'EVENT_MILESTONE_SHOT_KEEP', 7)
+    store = SimpleNamespace(prune_milestone_shots=lambda keep: calls.append(keep))
+    for name in ('write_checkpoint', 'prune_autosaves', 'prune_events', 'prune_attachments', 'prune_milestone_saves',
+                 'prune_reward_results'):
+        setattr(store, name, lambda *a, **k: None)
+    playing = SimpleNamespace(store=store, _state_bytes=lambda: b'state', _manifest=dict, snapshot=None)
+    monkeypatch.setattr(emulator.capture, 'keep_before', lambda *a: None)
+    monkeypatch.setattr(emulator.capture, 'prune_trace', lambda *a: None)
+    emulator.EmulatorBase._write_autosave(playing)
+    assert calls == [7]
 
 
 def test_finished_custom_reward_saves_are_removed_and_the_pending_one_stays(store):

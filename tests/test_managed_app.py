@@ -413,6 +413,39 @@ def test_play_settings_save_running_or_stopped_and_push_live(client, monkeypatch
     assert manager.registry.adventure(row['id'])['settings'].get('nicknames', True) is True
 
 
+def test_battle_animations_start_from_the_server_default_and_change_live(client, monkeypatch):
+    from pokesim import config
+    client, manager = client
+    headers = login(client, manager)
+    pushed = []
+    monkeypatch.setattr(manager.supervisor, 'push_play', lambda aid: pushed.append(aid) or False)
+    manager.registry.add_rom('fixture-rom', 'sha1', 'red')
+
+    def create(name, **choices):
+        return client.post('/api/v1/adventures', headers=headers, json={'name': name, 'rom_id': 'fixture-rom', **choices})
+    # The new adventure form reads the server's default, and an adventure created without a choice takes it.
+    monkeypatch.setattr(config, 'BATTLE_ANIMATIONS', False)
+    assert client.get('/api/v1/cartridges', headers=headers).json()['battle_animations'] is False
+    quiet = create('Quiet').json()
+    assert quiet['settings']['battle_animations'] is False
+    # On is stored as absent, so older releases still open the adventure.
+    assert 'battle_animations' not in create('Shown', battle_animations=True).json()['settings']
+    monkeypatch.setattr(config, 'BATTLE_ANIMATIONS', True)
+    assert client.get('/api/v1/cartridges', headers=headers).json()['battle_animations'] is True
+    assert 'battle_animations' not in create('Default').json()['settings']
+    assert create('Odd', battle_animations='off').status_code == 409
+    # A running adventure takes the switch through the play route, and the worker gets it live.
+    manager.registry.transition(quiet['id'], 'running', 'test setup')
+    route = f"/api/v1/adventures/{quiet['id']}/play"
+    assert client.patch(route, headers=headers, json={'battle_animations': 1}).status_code == 409
+    on = client.patch(route, headers=headers, json={'battle_animations': True})
+    assert on.status_code == 200 and 'battle_animations' not in on.json()['settings']
+    off = client.patch(route, headers=headers, json={'battle_animations': False, 'nicknames': False})
+    assert off.status_code == 200 and off.json()['settings']['battle_animations'] is False
+    assert off.json()['settings']['nicknames'] is False
+    assert pushed == [quiet['id'], quiet['id']]
+
+
 def test_a_stored_play_style_is_dropped_and_the_route_takes_only_nicknames(client, monkeypatch):
     client, manager = client
     headers = login(client, manager)

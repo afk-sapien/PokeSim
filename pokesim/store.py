@@ -22,7 +22,8 @@ log = logging.getLogger(__name__)
 # Seconds between tries to move older trade settings while the collection cannot be read in full.
 TRADE_KEY_RETRY_SECONDS = 30
 # A notable entry at this priority or above is a milestone: badges, the League, new Pokédex entries,
-# evolutions, hatches, key items, the Elite Four and similar. It keeps its screenshot and save forever.
+# evolutions, hatches, key items, the Elite Four and similar. The first of each kind keeps its screenshot and
+# save forever, and repeats keep them only for the newest few (Store.prune_milestone_saves and prune_milestone_shots).
 MILESTONE_PRIORITY = 4
 ATTACHMENT_ROUND = 500
 
@@ -523,7 +524,8 @@ class Store:
     def prune_attachments(self, keep: int) -> int:
         """Keep the screenshot and save of only the newest ``keep`` routine entries, and return how many lost theirs.
 
-        Milestones are left to ``prune_milestone_saves`` and every entry keeps its text. The oldest go first.
+        Milestones are left to ``prune_milestone_saves`` and ``prune_milestone_shots``, and every entry keeps its
+        text. The oldest go first.
         """
         routine = "(shot IS NOT NULL OR state IS NOT NULL) AND NOT (notable=1 AND priority>=?)"
         return self._clear_oldest(routine, (MILESTONE_PRIORITY,), keep, ("shot", "state"))
@@ -534,13 +536,25 @@ class Store:
         The oldest save of each kind of milestone stays forever, so each badge, each new Pokédex entry,
         the first win over each trainer and the first League victory can still be loaded. A kind is the
         entry's type and title, and every League victory is one kind, since its title counts them.
-        Milestones keep their screenshot and text, so the journal only loses the rewind on old repeats.
+        The journal only loses the rewind on old repeats.
         """
+        return self._clear_repeats("state", keep)
+
+    def prune_milestone_shots(self, keep: int) -> int:
+        """Keep the screenshot of only the newest ``keep`` repeat milestones, and return how many lost theirs.
+
+        As ``prune_milestone_saves`` does for saves, the oldest screenshot of each kind of milestone stays
+        forever. An old repeat keeps its text, and the journal shows it with no screen.
+        """
+        return self._clear_repeats("shot", keep)
+
+    def _clear_repeats(self, column: str, keep: int) -> int:
+        """Clear ``column`` on the oldest repeat milestones past the newest ``keep``, leaving each kind's first."""
         milestone = "notable=1 AND priority>=?"
-        firsts = (f"SELECT MIN(id) FROM events WHERE state IS NOT NULL AND {milestone} "
+        firsts = (f"SELECT MIN(id) FROM events WHERE {column} IS NOT NULL AND {milestone} "
                   "GROUP BY type, CASE WHEN type='champion' THEN '' ELSE title END")
-        repeats = f"state IS NOT NULL AND {milestone} AND id NOT IN ({firsts})"
-        return self._clear_oldest(repeats, (MILESTONE_PRIORITY, MILESTONE_PRIORITY), keep, ("state",))
+        repeats = f"{column} IS NOT NULL AND {milestone} AND id NOT IN ({firsts})"
+        return self._clear_oldest(repeats, (MILESTONE_PRIORITY, MILESTONE_PRIORITY), keep, (column,))
 
     def _clear_oldest(self, where: str, params: tuple, keep: int, columns: tuple) -> int:
         """Clear ``columns`` and remove their files on the oldest entries matching ``where`` past the newest ``keep``.
