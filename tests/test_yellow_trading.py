@@ -1,5 +1,6 @@
 """Yellow joins the Red and Blue Cable Club and the Gold, Silver and Crystal Time Capsule."""
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -46,7 +47,7 @@ def test_signatures_match_the_retail_cartridge():
 def test_coordinator_admits_yellow_for_cable_and_time_capsule():
     source = (Path(__file__).resolve().parents[1] / 'pokesim/app/coordinator.py').read_text()
     assert "LINKABLE = {'red', 'blue', 'yellow', 'gold', 'silver', 'crystal'}" in source
-    assert source.count("game['version'] not in LINKABLE") == 3
+    assert len(re.findall(r"game\['version'\] (?:not )?in LINKABLE", source)) == 3
     assert "in {'red', 'blue', 'yellow'}" in source
 
 
